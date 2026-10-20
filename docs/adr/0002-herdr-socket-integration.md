@@ -9,7 +9,7 @@ Herdr は WSL2 上で動作し、BFF も同じ環境で動く。CLI のプロセ
 
 ## Decision
 
-Herdr のローカルソケット API を主経路とし、CLI は `herdr api schema` による型取得とデバッグに限定する。購読を張った接続はイベント専用になり、`session.snapshot` などのリクエストを同じ接続へ送るとサーバーが接続を閉じるため、購読用と通常リクエスト用で接続を分ける。
+Herdr のローカルソケット API を主経路とし、CLI は `herdr api schema` による型取得とデバッグに限定する。購読を張った接続はイベント専用になる。`session.snapshot` などのリクエストを同じ接続へ送るとサーバーが接続を閉じるため、購読用と通常リクエスト用で接続を分ける。
 
 ## Consequences
 
