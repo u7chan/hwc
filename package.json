@@ -7,7 +7,9 @@
     "start": "bun src/server.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
-    "fmt": "oxfmt ."
+    "fmt": "oxfmt .",
+    "fmt:check": "oxfmt --check .",
+    "test": "bun test --pass-with-no-tests"
   },
   "dependencies": {
     "hono": "^4.13.13",
