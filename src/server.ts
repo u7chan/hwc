@@ -2,7 +2,7 @@ import index from "../index.html";
 import app from "./server/app";
 
 const server = Bun.serve({
-  port: Number(process.env.PORT ?? 8787),
+  port: Number(process.env.PORT ?? 30000),
   hostname: process.env.HOST ?? "127.0.0.1",
   development: true,
   routes: {
