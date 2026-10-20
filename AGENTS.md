@@ -9,7 +9,7 @@ Herdr CLI（WSL2）を Web ブラウザから操作・閲覧するアプリ。TU
 - Hono（BFF、`hc` による RPC 型共有）
 - Preact（client）
 - SSE（BFF → client）、fetch（client → BFF）
-- 素の CSS + CSS 変数 + CSS Modules
+- 素の CSS + CSS 変数 + 接頭辞付きクラス名
 - oxlint / oxfmt / `tsc --noEmit`
 - Playwright CLI（エージェント経由の E2E）
 
