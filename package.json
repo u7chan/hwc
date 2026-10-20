@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt --check .",
-    "test": "bun test --pass-with-no-tests"
+    "test": "bun test"
   },
   "dependencies": {
     "hono": "^4.13.13",
