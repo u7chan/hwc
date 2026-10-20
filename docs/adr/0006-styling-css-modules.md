@@ -1,6 +1,6 @@
 # ADR 0006: スタイルは素の CSS と CSS Modules で書く
 
-- Status: Accepted
+- Status: Superseded
 - Date: 2026-10-20
 
 ## Context
@@ -20,3 +20,7 @@
 
 - Tailwind CSS: 依存が増え、Bun のバンドラではプラグインが必要
 - StyleX: `@stylexjs/unplugin` が必要で、この規模では利点を回収できない
+
+## Superseded by
+
+- [ADR 0011](0011-styling-plain-css.md)

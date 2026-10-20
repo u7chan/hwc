@@ -1,6 +1,6 @@
 ## Project
 
-Herdr CLI（WSL2）をローカル Web から操作・閲覧するアプリ。TUI で扱いづらい操作と表示を補うことが目的で、フル機能サポートは目指さない。
+Herdr CLI（WSL2）を Web ブラウザから操作・閲覧するアプリ。TUI では扱いにくい操作と表示を補うためのもので、全機能の再現は目指さない。主な利用端末はスマホ（iOS Chrome）で、LAN 内の端末から接続する（待ち受けは `0.0.0.0`）。
 
 ## Tech Stack
 
@@ -9,7 +9,7 @@ Herdr CLI（WSL2）をローカル Web から操作・閲覧するアプリ。TU
 - Hono（BFF、`hc` による RPC 型共有）
 - Preact（client）
 - SSE（BFF → client）、fetch（client → BFF）
-- 素の CSS + CSS 変数 + CSS Modules
+- 素の CSS + CSS 変数 + 接頭辞付きクラス名
 - oxlint / oxfmt / `tsc --noEmit`
 - Playwright CLI（エージェント経由の E2E）
 
@@ -59,6 +59,14 @@ Accepted ADRとタスクが衝突する場合、迂回実装で無理に両立�
 - コード: **How**
 - テストコード: **What**
 - コードコメント: **Why not**
+
+## State
+
+- 導出できる値は state にしない。描画中に計算する。
+- props・サーバー状態を state にコピーしない。識別子だけを持つ（例: 選択中ペインは id）。
+- `useEffect` は外部との同期（購読・タイマー・入力）に限る。派生値の計算や状態の連鎖更新に使わない。
+- サーバー状態の正は BFF。クライアントは受け取ったスナップショットで丸ごと置き換える。
+- 同じ状態を複数箇所に持たない。
 
 ## Language and Environment
 
