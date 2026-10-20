@@ -1,0 +1,29 @@
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: #111111;
+  color: #e6e6e6;
+  font:
+    14px/1.6 ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+.app {
+  padding: 24px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+}
+
+p {
+  margin: 0;
+  color: #8b8b8b;
+}
