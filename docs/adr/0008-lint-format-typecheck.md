@@ -5,11 +5,11 @@
 
 ## Context
 
-eslint と prettier は設定と依存が重い。Bun は型検査を行わないため、型検査は別途必要になる。
+eslint と prettier は設定と依存が重い。Bun は型検査を行わないため、別途ツールが必要になる。
 
 ## Decision
 
-lint は oxlint、format は oxfmt、型検査は `tsc --noEmit` で行う。Rust 製で実行が速く、eslint/prettier より依存が少ないため。
+lint は oxlint、format は oxfmt、型検査は `tsc --noEmit` で行う。oxlint と oxfmt は Rust 製で実行が速く、eslint/prettier より依存が少ないため。
 
 ## Consequences
 
