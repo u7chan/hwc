@@ -20,9 +20,9 @@ export function App() {
   }, []);
 
   return (
-    <main class="app">
-      <h1>hwc</h1>
-      <p>backend: {health}</p>
+    <main class="hwc-app">
+      <h1 class="hwc-title">hwc</h1>
+      <p class="hwc-status">backend: {health}</p>
     </main>
   );
 }

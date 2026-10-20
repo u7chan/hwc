@@ -1,29 +1,31 @@
 :root {
   color-scheme: dark;
+  --color-bg: #111111;
+  --color-fg: #e6e6e6;
+  --color-muted: #8b8b8b;
+  --color-accent: #7dd3fc;
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   margin: 0;
-  background: #111111;
-  color: #e6e6e6;
-  font:
-    14px/1.6 ui-sans-serif,
-    system-ui,
-    sans-serif;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: 14px/1.6 var(--font-sans);
 }
 
-.app {
+.hwc-app {
   padding: 24px;
 }
 
-h1 {
+.hwc-title {
   margin: 0 0 8px;
   font-size: 18px;
   letter-spacing: 0.08em;
-  color: #7dd3fc;
+  color: var(--color-accent);
 }
 
-p {
+.hwc-status {
   margin: 0;
-  color: #8b8b8b;
+  color: var(--color-muted);
 }
