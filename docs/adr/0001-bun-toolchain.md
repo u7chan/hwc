@@ -15,7 +15,7 @@ Bun を runtime、package manager、bundler、開発サーバー、test runner �
 
 - コンポーネント単位の Fast Refresh は使えず、開発中の編集はフルリロードになる
 - Node.js との互換性は部分的で、Bun 固有 API に寄る箇所ができる
-- `bun install` は依存の postinstall を既定で実行せず、サプライチェーン上は有利
+- `bun install` は未信頼の依存の postinstall を既定で実行せず、サプライチェーン上は有利（Bun が許可する組み込みのパッケージは例外）
 
 ## Alternatives
 
