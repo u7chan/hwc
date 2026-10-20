@@ -1,6 +1,27 @@
+## Project
+
+Herdr CLI（WSL2）をローカル Web から操作・閲覧するアプリ。TUI で扱いづらい操作と表示を補うことが目的で、フル機能サポートは目指さない。
+
 ## Tech Stack
 
-- TBD
+- TypeScript
+- Bun（runtime / package manager / bundler / dev server / test runner）
+- Hono（BFF、`hc` による RPC 型共有）
+- Preact（client）
+- SSE（BFF → client）、fetch（client → BFF）
+- 素の CSS + CSS 変数 + CSS Modules
+- oxlint / oxfmt / `tsc --noEmit`
+- Playwright CLI（エージェント経由の E2E）
+
+## Architecture Decisions
+
+設計判断は `docs/adr/` を参照する。
+
+- `Accepted`: 現在有効
+- `Proposed`: 検討中
+- `Superseded`: 過去の判断
+
+Accepted ADRとタスクが衝突する場合、迂回実装で無理に両立させず、衝突を明示してタスクまたはADRの見直しを判断する。
 
 ## Why / What / Constraints First
 
@@ -47,6 +68,10 @@
 ## Test Policy
 
 テストケースは生きるドキュメント（仕様書）として設計する。
+
+- unit: BFF（プロトコル・状態機械）を主対象。client は純粋な変換・selector のみ。
+- hooks はロジックを純関数に抽出してテストする。フック自体はテストしない。
+- DOM を必要とするテスト（コンポーネント・CSS・アニメーション）は書かない。エージェント E2E と人間の目視に任せる。
 
 ## Comment Policy
 
