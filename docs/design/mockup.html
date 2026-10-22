@@ -1,0 +1,1391 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Spaces — hwc</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%231b1e23'/%3E%3Cpath d='m9 10 6 6-6 6m9 0h6' stroke='%23f2f4f7' stroke-width='2' fill='none'/%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-accent: #255cd6;
+        --color-on-accent: #ffffff;
+        --color-selected: #e9f0ff;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-working: #4f5f73;
+        --color-working-bg: #eef1f5;
+        --color-blocked: #a34c0a;
+        --color-blocked-bg: #fff0da;
+        --color-done: #216549;
+        --color-done-bg: #e6f3ed;
+        --color-idle: #5d6878;
+        --color-idle-bg: #eef0f3;
+        --color-danger: #b3333c;
+        --color-code: #ffffff;
+        --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", sans-serif;
+        --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+        --type-caption: 0.8125rem;
+        --type-code: 0.9375rem;
+        --type-body: 1.0625rem;
+        --type-title: 1.75rem;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --color-bg: #101215;
+          --color-surface: #1b1e23;
+          --color-raised: #262a31;
+          --color-text: #f2f4f7;
+          --color-secondary: #a3aab5;
+          --color-accent: #94baff;
+          --color-on-accent: #101215;
+          --color-selected: #23334e;
+          --color-line: #32373f;
+          --color-control-line: #606976;
+          --color-working: #c9d1dd;
+          --color-working-bg: #2b3038;
+          --color-blocked: #f6c57f;
+          --color-blocked-bg: #352b1e;
+          --color-done: #8fdbb1;
+          --color-done-bg: #20392e;
+          --color-idle: #b6becb;
+          --color-idle-bg: #2b2f36;
+          --color-danger: #ff9ca4;
+          --color-code: #131619;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: var(--color-bg);
+        color: var(--color-text);
+        font: 400 var(--type-body)/1.5 var(--font-ui);
+        -webkit-font-smoothing: antialiased;
+      }
+      button,
+      textarea {
+        font: inherit;
+      }
+      button,
+      a,
+      textarea {
+        -webkit-tap-highlight-color: transparent;
+      }
+      button,
+      a {
+        touch-action: manipulation;
+      }
+      button {
+        border: 0;
+        padding: 0;
+        background: none;
+        color: inherit;
+        cursor: pointer;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button,
+      a {
+        transition:
+          background-color 120ms ease,
+          color 120ms ease;
+      }
+      button:active:not(:disabled),
+      a:active {
+        opacity: 0.72;
+      }
+      :focus-visible {
+        outline: 3px solid var(--color-accent);
+        outline-offset: 3px;
+      }
+      h1,
+      h2,
+      p,
+      pre,
+      dl,
+      dd {
+        margin: 0;
+      }
+      h1,
+      h2,
+      strong {
+        font-weight: 600;
+      }
+      h1[tabindex="-1"]:focus {
+        outline: none;
+      }
+      ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      svg {
+        display: block;
+        flex: none;
+      }
+      .hwc-icon,
+      .hwc-disclosure {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .hwc-icon {
+        width: 20px;
+        height: 20px;
+      }
+      .hwc-caption {
+        color: var(--color-secondary);
+        font-size: var(--type-caption);
+      }
+      .hwc-mono {
+        font-family: var(--font-mono);
+      }
+      .hwc-shell {
+        display: flex;
+        height: 100%;
+        height: 100dvh;
+        height: var(--hwc-viewport-height, 100dvh);
+        padding-top: env(safe-area-inset-top);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+      .hwc-sidebar {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        min-width: 0;
+        min-height: 0;
+      }
+      .hwc-topbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 16px;
+        padding: 16px 20px 8px;
+      }
+      .hwc-brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+      a.hwc-brand {
+        min-height: 44px;
+        border-radius: 8px;
+      }
+      .hwc-brand-mark {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--color-control-line);
+        border-radius: 10px;
+        background: var(--color-surface);
+      }
+      .hwc-topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .hwc-connection {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--color-secondary);
+        font-size: var(--type-caption);
+      }
+      .hwc-connection-mark {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--color-done);
+      }
+      .hwc-icon-button {
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--color-raised);
+        color: var(--color-text);
+      }
+      .hwc-sidebar-heading {
+        padding: 16px 24px 24px;
+      }
+      .hwc-page-title {
+        font-size: var(--type-title);
+        line-height: 1.2;
+        letter-spacing: -0.035em;
+      }
+      .hwc-sidebar-heading p {
+        margin-top: 8px;
+      }
+      .hwc-tree-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        overscroll-behavior-y: contain;
+      }
+      .hwc-tree {
+        padding: 0 16px;
+      }
+      .hwc-space-group {
+        margin-bottom: 16px;
+        border-radius: 16px;
+        background: var(--color-surface);
+      }
+      .hwc-space-button {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        min-height: 76px;
+        padding: 16px;
+        border-radius: 16px;
+        text-align: left;
+      }
+      .hwc-space-icon {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 32px;
+        height: 32px;
+        color: var(--color-secondary);
+      }
+      .hwc-space-copy {
+        flex: 1;
+        min-width: 0;
+      }
+      .hwc-space-name {
+        display: block;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .hwc-space-meta {
+        display: block;
+        margin-top: 4px;
+        font-size: var(--type-caption);
+        color: var(--color-secondary);
+      }
+      .hwc-disclosure {
+        width: 16px;
+        height: 16px;
+        color: var(--color-secondary);
+      }
+      [aria-expanded="true"] > .hwc-disclosure {
+        transform: rotate(90deg);
+      }
+      .hwc-space-content {
+        padding: 0 8px 8px;
+      }
+      .hwc-pane-item + .hwc-pane-item {
+        margin-top: 4px;
+      }
+      .hwc-pane-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 64px;
+        padding: 12px 8px;
+        border-radius: 12px;
+      }
+      .hwc-agent-icon {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--color-line);
+        border-radius: 10px;
+        color: var(--color-secondary);
+      }
+      .hwc-agent-icon .hwc-icon {
+        width: 16px;
+        height: 16px;
+      }
+      .hwc-pane-content {
+        display: flex;
+        flex: 1;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .hwc-pane-copy {
+        flex: 1 1 4rem;
+        min-width: 0;
+      }
+      .hwc-pane-name {
+        display: block;
+        overflow-wrap: anywhere;
+      }
+      .hwc-pane-meta {
+        display: block;
+        margin-top: 4px;
+        font-size: var(--type-caption);
+        color: var(--color-secondary);
+      }
+      .hwc-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 100%;
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-size: var(--type-caption);
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+      .hwc-status[data-status="working"] {
+        color: var(--color-working);
+        background: var(--color-working-bg);
+      }
+      .hwc-status[data-status="blocked"] {
+        color: var(--color-blocked);
+        background: var(--color-blocked-bg);
+      }
+      .hwc-status[data-status="done"] {
+        color: var(--color-done);
+        background: var(--color-done-bg);
+      }
+      .hwc-status[data-status="idle"] {
+        color: var(--color-idle);
+        background: var(--color-idle-bg);
+      }
+      .hwc-status-symbol {
+        display: inline-grid;
+        place-items: center;
+        width: 12px;
+        font-weight: 600;
+      }
+      .hwc-pane-row[aria-current="page"] {
+        background: var(--color-selected);
+      }
+      .hwc-pane-row[aria-current="page"] .hwc-pane-name {
+        color: var(--color-accent);
+        font-weight: 600;
+      }
+      .hwc-pane-row[aria-current="page"] .hwc-agent-icon {
+        border-color: var(--color-accent);
+        color: var(--color-accent);
+      }
+      .hwc-subgroup {
+        margin: 4px 0 0 16px;
+        border-left: 1px solid var(--color-line);
+        padding-left: 8px;
+      }
+      .hwc-subgroup .hwc-space-button {
+        min-height: 60px;
+        padding: 12px 8px;
+      }
+      .hwc-subgroup .hwc-space-name {
+        font-weight: 400;
+      }
+      .hwc-subgroup .hwc-space-content {
+        padding: 0 0 4px;
+      }
+      .hwc-subgroup .hwc-space-icon {
+        width: 20px;
+      }
+      .hwc-tab-button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 44px;
+        padding: 8px;
+        border-radius: 8px;
+        color: var(--color-secondary);
+        font-size: var(--type-caption);
+        text-align: left;
+      }
+      .hwc-tab-button span {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .hwc-tab-content {
+        margin-left: 16px;
+      }
+      .hwc-preview-note {
+        padding: 8px 24px max(24px, env(safe-area-inset-bottom));
+        font-size: var(--type-caption);
+        color: var(--color-secondary);
+      }
+      .hwc-sidebar-footer {
+        display: none;
+      }
+      .hwc-main {
+        display: none;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        flex-direction: column;
+      }
+      .hwc-screen {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+      }
+      body[data-view="session"] .hwc-sidebar,
+      body[data-view="settings"] .hwc-sidebar {
+        display: none;
+      }
+      body[data-view="session"] .hwc-main,
+      body[data-view="settings"] .hwc-main {
+        display: flex;
+      }
+      .hwc-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 76px;
+        padding: 16px;
+        border-bottom: 1px solid var(--color-line);
+      }
+      .hwc-session-heading {
+        flex-wrap: wrap;
+      }
+      .hwc-session-identity {
+        flex: 1 1 8rem;
+        min-width: 0;
+      }
+      .hwc-session-name {
+        font-size: var(--type-body);
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .hwc-session-context {
+        margin-top: 4px;
+        color: var(--color-secondary);
+        font-size: var(--type-caption);
+        overflow-wrap: anywhere;
+      }
+      .hwc-terminal {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-height: 0;
+        background: var(--color-code);
+      }
+      .hwc-terminal-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 16px 20px 8px;
+      }
+      .hwc-output {
+        flex: 1;
+        min-height: 0;
+        padding: 16px 20px 24px;
+        overflow: auto;
+        overscroll-behavior: contain;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font: 400 var(--type-code)/1.85 var(--font-mono);
+        tab-size: 2;
+      }
+      .hwc-output code {
+        font: inherit;
+      }
+      .hwc-output .hwc-log-success {
+        color: var(--color-done);
+      }
+      .hwc-output .hwc-log-muted {
+        color: var(--color-secondary);
+      }
+      .hwc-output .hwc-log-attention {
+        color: var(--color-blocked);
+      }
+      .hwc-composer {
+        padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+        border-top: 1px solid var(--color-line);
+        background: var(--color-surface);
+      }
+      .hwc-composer label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: var(--type-caption);
+        color: var(--color-secondary);
+      }
+      .hwc-input-frame {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid var(--color-control-line);
+        border-radius: 16px;
+        background: var(--color-code);
+      }
+      .hwc-input-frame:focus-within {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 2px;
+      }
+      .hwc-input-frame textarea {
+        flex: 1;
+        min-width: 0;
+        min-height: 64px;
+        max-height: 30dvh;
+        padding: 4px 8px;
+        border: 0;
+        background: none;
+        color: var(--color-text);
+        font-size: max(16px, var(--type-body));
+        line-height: 1.5;
+        resize: vertical;
+      }
+      .hwc-input-frame textarea:focus {
+        outline: none;
+      }
+      .hwc-input-frame textarea::placeholder {
+        color: var(--color-secondary);
+        opacity: 1;
+      }
+      .hwc-send {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        gap: 8px;
+        width: 44px;
+        min-height: 44px;
+        border-radius: 12px;
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+        font-weight: 600;
+      }
+      .hwc-send:disabled {
+        background: var(--color-raised);
+        color: var(--color-secondary);
+        cursor: default;
+      }
+      .hwc-send-label,
+      .hwc-keyboard-hint {
+        display: none;
+      }
+      .hwc-composer-foot {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 8px;
+        font-size: var(--type-caption);
+        color: var(--color-secondary);
+      }
+      .hwc-empty {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        text-align: center;
+      }
+      .hwc-empty-mark {
+        display: grid;
+        place-items: center;
+        width: 80px;
+        height: 80px;
+        margin-bottom: 24px;
+        border: 1px solid var(--color-line);
+        border-radius: 24px;
+        background: var(--color-surface);
+        color: var(--color-secondary);
+      }
+      .hwc-empty-mark .hwc-icon {
+        width: 32px;
+        height: 32px;
+      }
+      .hwc-empty h1 {
+        font-size: var(--type-title);
+        letter-spacing: -0.035em;
+      }
+      .hwc-empty p {
+        max-width: 28rem;
+        margin: 12px 0 16px;
+        color: var(--color-secondary);
+      }
+      .hwc-text-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 44px;
+        padding: 8px;
+        border-radius: 8px;
+        color: var(--color-accent);
+      }
+      .hwc-settings-toolbar .hwc-caption {
+        flex: 1;
+      }
+      .hwc-settings-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 32px 20px max(32px, env(safe-area-inset-bottom));
+      }
+      .hwc-settings-content {
+        width: 100%;
+        max-width: 560px;
+        margin: auto;
+      }
+      .hwc-settings-intro {
+        margin-top: 8px;
+        color: var(--color-secondary);
+      }
+      .hwc-settings-section {
+        margin-top: 32px;
+      }
+      .hwc-section-label {
+        margin: 0 16px 12px;
+        color: var(--color-secondary);
+        font-size: var(--type-caption);
+        font-weight: 400;
+      }
+      .hwc-settings-group {
+        border-radius: 16px;
+        background: var(--color-surface);
+      }
+      .hwc-setting-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 16px;
+        min-height: 64px;
+        margin: 0 16px;
+        padding: 16px 0;
+      }
+      .hwc-setting-row + .hwc-setting-row {
+        border-top: 1px solid var(--color-line);
+      }
+      .hwc-setting-value {
+        color: var(--color-secondary);
+        font-size: var(--type-caption);
+        overflow-wrap: anywhere;
+      }
+      .hwc-settings-note {
+        margin: 12px 16px 0;
+        color: var(--color-secondary);
+        font-size: var(--type-caption);
+      }
+      .hwc-logout {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 56px;
+        margin-top: 32px;
+        padding: 16px;
+        border-radius: 16px;
+        background: var(--color-surface);
+        color: var(--color-danger);
+      }
+      .hwc-login {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100%;
+        min-height: 100dvh;
+        padding: max(32px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+          max(32px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+      }
+      .hwc-login-content {
+        width: 100%;
+        max-width: 360px;
+      }
+      .hwc-login .hwc-brand {
+        margin-bottom: 48px;
+      }
+      .hwc-login h1 {
+        margin-bottom: 16px;
+        font-size: var(--type-title);
+        line-height: 1.4;
+        letter-spacing: -0.035em;
+      }
+      .hwc-login-description {
+        color: var(--color-secondary);
+      }
+      .hwc-primary {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 56px;
+        margin-top: 32px;
+        padding: 16px;
+        border-radius: 16px;
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+        font-weight: 600;
+      }
+      .hwc-login-note {
+        margin-top: 16px;
+        font-size: var(--type-caption);
+        color: var(--color-secondary);
+      }
+
+      @media (hover: hover) {
+        .hwc-icon-button:hover,
+        .hwc-space-button:hover,
+        .hwc-tab-button:hover,
+        .hwc-pane-row:hover,
+        .hwc-footer-link:hover {
+          background: var(--color-raised);
+        }
+        .hwc-pane-row[aria-current="page"]:hover {
+          background: var(--color-selected);
+        }
+        .hwc-text-link:hover {
+          background: var(--color-selected);
+        }
+        .hwc-logout:hover {
+          background: var(--color-raised);
+        }
+      }
+
+      @media (min-width: 900px) {
+        :root {
+          --type-body: 0.9375rem;
+          --type-code: 0.9375rem;
+          --type-title: 1.5rem;
+        }
+        .hwc-sidebar,
+        body[data-view="session"] .hwc-sidebar,
+        body[data-view="settings"] .hwc-sidebar {
+          display: flex;
+          flex: none;
+          width: 352px;
+          border-right: 1px solid var(--color-line);
+        }
+        .hwc-main {
+          display: flex;
+        }
+        .hwc-mobile-settings {
+          display: none;
+        }
+        .hwc-topbar {
+          min-height: 76px;
+          padding: 16px 24px;
+        }
+        .hwc-sidebar-heading {
+          padding-top: 24px;
+        }
+        .hwc-tree {
+          padding: 0 12px;
+        }
+        .hwc-space-group {
+          margin-bottom: 8px;
+          border-radius: 12px;
+          background: transparent;
+        }
+        .hwc-space-button {
+          min-height: 64px;
+          padding: 12px;
+          border-radius: 12px;
+        }
+        .hwc-space-content {
+          padding-right: 4px;
+          padding-left: 4px;
+        }
+        .hwc-pane-row {
+          min-height: 60px;
+        }
+        .hwc-preview-note {
+          padding-bottom: 24px;
+        }
+        .hwc-sidebar-footer {
+          display: block;
+          padding: 12px 16px max(16px, env(safe-area-inset-bottom));
+          border-top: 1px solid var(--color-line);
+        }
+        .hwc-footer-link {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-height: 44px;
+          padding: 12px;
+          border-radius: 12px;
+          color: var(--color-secondary);
+        }
+        .hwc-footer-link span {
+          flex: 1;
+        }
+        .hwc-footer-link[aria-current="page"] {
+          background: var(--color-selected);
+          color: var(--color-accent);
+        }
+        .hwc-toolbar {
+          padding-right: 32px;
+          padding-left: 32px;
+        }
+        .hwc-session-back {
+          display: none;
+        }
+        .hwc-terminal {
+          margin: 24px 24px 0;
+          border: 1px solid var(--color-line);
+          border-bottom: 0;
+          border-radius: 16px 16px 0 0;
+        }
+        .hwc-terminal-head {
+          padding: 16px 24px 8px;
+        }
+        .hwc-output {
+          padding: 16px 24px 24px;
+        }
+        .hwc-composer {
+          padding: 20px 24px 24px;
+          border-top: 0;
+          background: none;
+        }
+        .hwc-send {
+          width: auto;
+          padding: 0 16px;
+        }
+        .hwc-send-label,
+        .hwc-keyboard-hint {
+          display: inline;
+        }
+        .hwc-settings-scroll {
+          padding: 48px 40px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          transition: none !important;
+          scroll-behavior: auto !important;
+        }
+      }
+      @media (prefers-contrast: more) {
+        :root {
+          --color-secondary: #303b4b;
+          --color-line: #8490a1;
+        }
+        .hwc-space-group,
+        .hwc-settings-group,
+        .hwc-logout {
+          outline: 1px solid var(--color-line);
+        }
+      }
+      @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+        :root {
+          --color-secondary: #e1e5eb;
+          --color-line: #8792a1;
+        }
+      }
+    </style>
+  </head>
+  <body data-view="dashboard">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      style="position: absolute; width: 0; height: 0; overflow: hidden"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m5 6 6 6-6 6m10 0h5" /></symbol>
+      <symbol id="i-space" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <path d="M3 9h18M9 9v11" />
+      </symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="m14 5-7 7 7 7" /></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 20V4m-6 6 6-6 6 6" /></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6" /></symbol>
+      <symbol id="i-branch" viewBox="0 0 24 24">
+        <circle cx="6" cy="5" r="2" />
+        <circle cx="18" cy="5" r="2" />
+        <circle cx="6" cy="19" r="2" />
+        <path d="M6 7v10m12-10v1a6 6 0 0 1-6 6H6" />
+      </symbol>
+      <symbol id="i-tab" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <path d="M3 9h18m-12-5v5" />
+      </symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24">
+        <path
+          d="m9.5 3-.6 2.3-1.8 1-2.3-.6-2.5 4.4L4 11.8v2l-1.7 1.7 2.5 4.3 2.3-.6 1.8 1 .6 2.3h5l.6-2.3 1.8-1 2.3.6 2.5-4.3-1.7-1.7v-2l1.7-1.7-2.5-4.4-2.3.6-1.8-1L14.5 3z"
+          transform="translate(1 0) scale(.92)"
+        />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24">
+        <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4m6-13 5 5-5 5M8 12h12" />
+      </symbol>
+    </svg>
+
+    <section class="hwc-login" id="login-screen" hidden aria-labelledby="login-title">
+      <div class="hwc-login-content">
+        <div class="hwc-brand">
+          <span class="hwc-brand-mark"
+            ><svg class="hwc-icon" aria-hidden="true"><use href="#i-terminal" /></svg></span
+          >hwc
+        </div>
+        <h1 id="login-title" tabindex="-1">Herdr を、<br />手元から。</h1>
+        <p class="hwc-login-description">Space の様子を確認して、<br />Agent に次の指示を。</p>
+        <a class="hwc-primary" href="#/dashboard"
+          >ログイン（デモ）<svg class="hwc-icon" aria-hidden="true"><use href="#i-arrow" /></svg
+        ></a>
+        <p class="hwc-login-note">
+          画面確認用のプレビューです。<br />認証や Herdr への接続は行いません。
+        </p>
+      </div>
+    </section>
+
+    <div class="hwc-shell" id="app-shell">
+      <aside class="hwc-sidebar" aria-label="Spaces">
+        <header class="hwc-topbar">
+          <a class="hwc-brand" href="#/dashboard" aria-label="hwc — Spaces"
+            ><span class="hwc-brand-mark"
+              ><svg class="hwc-icon" aria-hidden="true"><use href="#i-terminal" /></svg></span
+            >hwc</a
+          >
+          <div class="hwc-topbar-actions">
+            <span class="hwc-connection"
+              ><span class="hwc-connection-mark" aria-hidden="true"></span>接続中 · デモ</span
+            >
+            <a class="hwc-icon-button hwc-mobile-settings" href="#/settings" aria-label="設定"
+              ><svg class="hwc-icon" aria-hidden="true"><use href="#i-gear" /></svg
+            ></a>
+          </div>
+        </header>
+        <div class="hwc-sidebar-heading">
+          <h1 class="hwc-page-title" id="spaces-title" tabindex="-1">Spaces</h1>
+          <p class="hwc-caption" id="space-summary"></p>
+        </div>
+        <div class="hwc-tree-scroll">
+          <nav aria-label="Space・Tab・Pane の一覧"><ul class="hwc-tree" id="space-tree"></ul></nav>
+          <p class="hwc-preview-note">UI プレビュー · ダミーデータ</p>
+        </div>
+        <footer class="hwc-sidebar-footer">
+          <a class="hwc-footer-link" id="settings-link" href="#/settings"
+            ><svg class="hwc-icon" aria-hidden="true"><use href="#i-gear" /></svg><span>設定</span
+            ><svg class="hwc-disclosure" aria-hidden="true"><use href="#i-chevron" /></svg
+          ></a>
+        </footer>
+      </aside>
+
+      <main class="hwc-main">
+        <section class="hwc-screen" id="dashboard-screen" aria-labelledby="dashboard-title">
+          <div class="hwc-empty">
+            <span class="hwc-empty-mark"
+              ><svg class="hwc-icon" aria-hidden="true"><use href="#i-space" /></svg
+            ></span>
+            <h1 id="dashboard-title">Pane を選択</h1>
+            <p>
+              左の Space を開くと、Agent の状態を確認できます。<br />Pane
+              を選んで出力の確認や入力へ。
+            </p>
+            <a class="hwc-text-link" href="#/session/w7W%3Ap2"
+              >hwc / impl を開く<svg class="hwc-icon" aria-hidden="true">
+                <use href="#i-arrow" /></svg
+            ></a>
+          </div>
+        </section>
+
+        <section class="hwc-screen" id="session-screen" hidden aria-labelledby="session-title">
+          <header class="hwc-toolbar hwc-session-heading">
+            <a
+              class="hwc-icon-button hwc-session-back"
+              href="#/dashboard"
+              aria-label="Spaces に戻る"
+              ><svg class="hwc-icon" aria-hidden="true"><use href="#i-back" /></svg
+            ></a>
+            <div class="hwc-session-identity">
+              <h1 class="hwc-session-name" id="session-title" tabindex="-1"></h1>
+              <p class="hwc-session-context" id="session-context"></p>
+            </div>
+            <span id="session-status"></span>
+          </header>
+          <div class="hwc-terminal">
+            <div class="hwc-terminal-head hwc-caption">
+              <span>出力</span><span class="hwc-mono" id="terminal-identity"></span>
+            </div>
+            <pre
+              class="hwc-output"
+              tabindex="0"
+              aria-label="Pane の出力（ダミーデータ）"
+            ><code id="pane-output"></code></pre>
+          </div>
+          <form class="hwc-composer" id="composer">
+            <label for="message" id="message-label"></label>
+            <div class="hwc-input-frame">
+              <textarea
+                id="message"
+                rows="2"
+                placeholder="メッセージを入力…"
+                aria-describedby="send-feedback"
+              ></textarea>
+              <button
+                class="hwc-send"
+                id="send-button"
+                type="submit"
+                aria-label="送信（プレビュー）"
+                disabled
+              >
+                <span class="hwc-send-label">送信</span
+                ><svg class="hwc-icon" aria-hidden="true"><use href="#i-send" /></svg>
+              </button>
+            </div>
+            <div class="hwc-composer-foot">
+              <span id="send-feedback" role="status"
+                >プレビューのため、Herdr には送信されません。</span
+              ><span class="hwc-keyboard-hint">⌘ / Ctrl + Enter</span>
+            </div>
+          </form>
+        </section>
+
+        <section class="hwc-screen" id="settings-screen" hidden aria-labelledby="settings-title">
+          <header class="hwc-toolbar hwc-settings-toolbar">
+            <a class="hwc-icon-button" href="#/dashboard" aria-label="Spaces に戻る"
+              ><svg class="hwc-icon" aria-hidden="true"><use href="#i-back" /></svg></a
+            ><span class="hwc-caption">Spaces に戻る</span>
+          </header>
+          <div class="hwc-settings-scroll">
+            <div class="hwc-settings-content">
+              <h1 class="hwc-page-title" id="settings-title" tabindex="-1">設定</h1>
+              <p class="hwc-settings-intro hwc-caption">表示と接続について</p>
+              <section class="hwc-settings-section" aria-labelledby="appearance-heading">
+                <h2 class="hwc-section-label" id="appearance-heading">表示</h2>
+                <dl class="hwc-settings-group">
+                  <div class="hwc-setting-row">
+                    <dt>外観</dt>
+                    <dd class="hwc-setting-value">システムに合わせる</dd>
+                  </div>
+                </dl>
+              </section>
+              <section class="hwc-settings-section" aria-labelledby="connection-heading">
+                <h2 class="hwc-section-label" id="connection-heading">接続情報</h2>
+                <dl class="hwc-settings-group">
+                  <div class="hwc-setting-row">
+                    <dt>接続先</dt>
+                    <dd class="hwc-setting-value hwc-mono">herdr.sock</dd>
+                  </div>
+                  <div class="hwc-setting-row">
+                    <dt>hwc</dt>
+                    <dd class="hwc-setting-value hwc-mono">0.0.0</dd>
+                  </div>
+                  <div class="hwc-setting-row">
+                    <dt>Herdr protocol</dt>
+                    <dd class="hwc-setting-value hwc-mono">22</dd>
+                  </div>
+                </dl>
+                <p class="hwc-settings-note">接続情報は表示例です。実際の接続は行っていません。</p>
+              </section>
+              <a class="hwc-logout" href="#/login"
+                ><svg class="hwc-icon" aria-hidden="true"><use href="#i-logout" /></svg
+                >ログアウト</a
+              >
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const spaces = [
+        {
+          id: "w7W",
+          name: "hwc",
+          expanded: true,
+          tabs: [
+            {
+              name: "Tab 1",
+              panes: [
+                { id: "w7W:p1", name: "pi", agent: "pi", status: "working" },
+                { id: "w7W:p2", name: "impl", agent: "pi", status: "blocked" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "w31",
+          name: "monorepo(u7agent)",
+          tabs: [
+            { name: "Tab 1", panes: [{ id: "w31:p1", name: "pi", agent: "pi", status: "done" }] },
+          ],
+          worktrees: [
+            {
+              id: "w70",
+              name: "worktree-quiet-stone-6635",
+              worktree: true,
+              tabs: [
+                {
+                  name: "Tab 1",
+                  panes: [
+                    { id: "w70:p1", name: "impl", agent: "pi", status: "working" },
+                    { id: "w70:p2", name: "review", agent: "codex", status: "done" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "w7T",
+          name: "pi-console",
+          tabs: [
+            { name: "Tab 1", panes: [{ id: "w7T:p1", name: "pi", agent: "pi", status: "idle" }] },
+          ],
+        },
+        {
+          id: "wV",
+          name: "workstation-config",
+          tabs: [
+            {
+              name: "dev",
+              panes: [
+                { id: "wV:p1", name: "codex", agent: "codex", status: "done" },
+                { id: "wV:p2", name: "pi", agent: "pi", status: "idle" },
+              ],
+            },
+            {
+              name: "logs",
+              panes: [{ id: "wV:p3", name: "shell", agent: "shell", status: "idle" }],
+            },
+          ],
+        },
+      ];
+      const allSpaces = spaces.flatMap((space) => [space, ...(space.worktrees ?? [])]);
+      const panes = allSpaces.flatMap((space) =>
+        space.tabs.flatMap((tab) => tab.panes.map((pane) => ({ ...pane, space, tab }))),
+      );
+      const paneById = new Map(panes.map((pane) => [pane.id, pane]));
+      const drafts = new Map();
+      const escape = (text) =>
+        String(text).replace(
+          /[&<>"']/g,
+          (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char],
+        );
+      const icon = (name, cls = "hwc-icon") =>
+        `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}" /></svg>`;
+      const statusSymbols = { working: "●", blocked: "!", done: "✓", idle: "Ⅱ" };
+      const status = (value) =>
+        `<span class="hwc-status" data-status="${value}"><span class="hwc-status-symbol" aria-hidden="true">${statusSymbols[value]}</span>${value}</span>`;
+      const paneRow = (
+        pane,
+      ) => `<li class="hwc-pane-item"><a class="hwc-pane-row" href="#/session/${encodeURIComponent(pane.id)}" data-pane="${pane.id}">
+        <span class="hwc-agent-icon">${icon("terminal")}</span>
+        <span class="hwc-pane-content"><span class="hwc-pane-copy"><span class="hwc-pane-name">${escape(pane.name)}</span><span class="hwc-pane-meta">${escape(pane.name === pane.agent ? pane.id : `${pane.agent} · ${pane.id}`)}</span></span>${status(pane.status)}</span>
+        ${icon("chevron", "hwc-disclosure")}</a></li>`;
+      const spaceRows = (space) => {
+        const count = space.tabs.reduce((sum, tab) => sum + tab.panes.length, 0);
+        const paneCount = `${count} ${count === 1 ? "pane" : "panes"}`;
+        const label = space.worktree
+          ? `Worktree · ${paneCount}`
+          : `${space.tabs.length} ${space.tabs.length === 1 ? "tab" : "tabs"} · ${paneCount}`;
+        const tabs = space.tabs
+          .map((tab, index) =>
+            space.tabs.length === 1
+              ? tab.panes.map(paneRow).join("")
+              : `<li>
+          <button class="hwc-tab-button" aria-expanded="true" aria-controls="${space.id}-tab-${index}">${icon("tab")}<span>${escape(tab.name)}</span>${icon("chevron", "hwc-disclosure")}</button>
+          <ul class="hwc-tab-content" id="${space.id}-tab-${index}">${tab.panes.map(paneRow).join("")}</ul></li>`,
+          )
+          .join("");
+        return `<li class="${space.worktree ? "hwc-subgroup" : "hwc-space-group"}">
+          <button class="hwc-space-button" aria-expanded="${Boolean(space.expanded)}" aria-controls="${space.id}-content">
+            <span class="hwc-space-icon">${icon(space.worktree ? "branch" : "space")}</span>
+            <span class="hwc-space-copy"><span class="hwc-space-name">${escape(space.name)}</span><span class="hwc-space-meta">${label}</span></span>
+            ${icon("chevron", "hwc-disclosure")}</button>
+          <ul class="hwc-space-content" id="${space.id}-content" ${space.expanded ? "" : "hidden"}>${tabs}${(space.worktrees ?? []).map(spaceRows).join("")}</ul></li>`;
+      };
+      document.querySelector("#space-tree").innerHTML = spaces.map(spaceRows).join("");
+      document.querySelector("#space-summary").textContent =
+        `${allSpaces.length} spaces · ${panes.length} panes`;
+
+      const route = () => {
+        const [page, id] = location.hash.replace(/^#\/?/, "").split("/");
+        let paneId;
+        try {
+          paneId = decodeURIComponent(id ?? "w7W:p2");
+        } catch {
+          paneId = "w7W:p2";
+        }
+        return {
+          page: ["login", "settings", "session"].includes(page) ? page : "dashboard",
+          pane: paneById.get(paneId) ?? paneById.get("w7W:p2"),
+        };
+      };
+      const sampleOutput = (pane) => {
+        if (pane.status === "blocked")
+          return [
+            "$ bun test",
+            "bun test v1.3.14",
+            "",
+            "src/server/socket.test.ts",
+            "✓ request returns a result",
+            "✓ error response is rejected",
+            "✓ request times out",
+            "",
+            "3 pass · 0 fail",
+            "",
+            "── 確認待ち ──",
+            "テストはすべて通りました。",
+            "タイムアウトの方針を確認したいです。",
+            "",
+            "自前タイマーに統一して進めてよいですか？",
+          ].join("\n");
+        if (pane.status === "working")
+          return [
+            `$ ${pane.agent}`,
+            "",
+            "依頼内容を確認しています。",
+            "",
+            "› src/server/socket.ts を確認",
+            "› 接続処理とエラーハンドリングを整理",
+            "",
+            "実装を進めています。",
+          ].join("\n");
+        if (pane.status === "done")
+          return [
+            "$ bun test",
+            "",
+            "✓ すべてのテストが成功しました",
+            "",
+            "変更内容の確認が完了しました。",
+            "次の指示を待っています。",
+          ].join("\n");
+        return [`$ ${pane.agent}`, "", "次の入力を待っています。", "", "›"].join("\n");
+      };
+      const message = document.querySelector("#message");
+      const sendButton = document.querySelector("#send-button");
+      const render = (focus = false) => {
+        const { page, pane } = route();
+        document.body.dataset.view = page;
+        document.querySelector("#login-screen").hidden = page !== "login";
+        document.querySelector("#app-shell").hidden = page === "login";
+        for (const screen of ["dashboard", "session", "settings"])
+          document.querySelector(`#${screen}-screen`).hidden = screen !== page;
+        for (const link of document.querySelectorAll("[data-pane]")) {
+          if (page === "session" && link.dataset.pane === pane.id)
+            link.setAttribute("aria-current", "page");
+          else link.removeAttribute("aria-current");
+        }
+        const settingsLink = document.querySelector("#settings-link");
+        if (page === "settings") settingsLink.setAttribute("aria-current", "page");
+        else settingsLink.removeAttribute("aria-current");
+        if (page === "session") {
+          document.querySelector("#session-title").textContent = pane.name;
+          document.querySelector("#session-context").textContent =
+            `${pane.space.name} / ${pane.tab.name}`;
+          document.querySelector("#session-status").innerHTML = status(pane.status);
+          document.querySelector("#terminal-identity").textContent = `${pane.agent} · ${pane.id}`;
+          document.querySelector("#message-label").textContent = `${pane.name} に送信`;
+          document.querySelector("#pane-output").innerHTML = sampleOutput(pane)
+            .split("\n")
+            .map((line) => {
+              const cls = line.startsWith("✓")
+                ? "hwc-log-success"
+                : line.startsWith("──")
+                  ? "hwc-log-attention"
+                  : line.startsWith("$")
+                    ? "hwc-log-muted"
+                    : "";
+              return `<span class="${cls}">${escape(line)}</span>`;
+            })
+            .join("\n");
+          message.value = drafts.get(pane.id) ?? "";
+          sendButton.disabled = !message.value.trim();
+          document.querySelector("#send-feedback").textContent =
+            "プレビューのため、Herdr には送信されません。";
+          for (
+            let parent = document.querySelector(`[data-pane="${pane.id}"]`).parentElement;
+            parent;
+            parent = parent.parentElement
+          ) {
+            if (!parent.matches("ul[id]")) continue;
+            parent.hidden = false;
+            document
+              .querySelector(`[aria-controls="${parent.id}"]`)
+              ?.setAttribute("aria-expanded", "true");
+          }
+        }
+        document.title = `${page === "session" ? pane.name : page === "settings" ? "設定" : page === "login" ? "ログイン" : "Spaces"} — hwc`;
+        if (focus) {
+          const title =
+            page === "dashboard"
+              ? "spaces-title"
+              : page === "session"
+                ? "session-title"
+                : page === "settings"
+                  ? "settings-title"
+                  : "login-title";
+          document.getElementById(title).focus({ preventScroll: true });
+        }
+      };
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest("[aria-controls]");
+        if (!button) return;
+        const content = document.getElementById(button.getAttribute("aria-controls"));
+        content.hidden = !content.hidden;
+        button.setAttribute("aria-expanded", String(!content.hidden));
+      });
+      message.addEventListener("input", () => {
+        drafts.set(route().pane.id, message.value);
+        sendButton.disabled = !message.value.trim();
+      });
+      document.querySelector("#composer").addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (!message.value.trim()) return;
+        document.querySelector("#send-feedback").textContent =
+          "入力を確認しました。Herdr への送信は行っていません。";
+      });
+      message.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.isComposing) {
+          event.preventDefault();
+          document.querySelector("#composer").requestSubmit();
+        }
+      });
+      addEventListener("hashchange", () => render(true));
+      const syncViewport = () =>
+        document.documentElement.style.setProperty(
+          "--hwc-viewport-height",
+          `${window.visualViewport.height}px`,
+        );
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", syncViewport);
+        syncViewport();
+      }
+      render();
+    </script>
+  </body>
+</html>

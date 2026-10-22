@@ -5,6 +5,8 @@
 ## 内部
 
 - [ADR](adr/) - 重要な技術判断の記録
+- [DESIGN スキル](../.agents/skills/design/SKILL.md) - 再利用可能な UI デザイン仕様
+- [画面モック](design/mockup.html) - 合意済みのアプリ画面
 
 ## 外部
 
