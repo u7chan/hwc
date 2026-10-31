@@ -15,7 +15,7 @@ gh actions-lock --verify # CI と同じ検証
 
 - action / workflow を追加・変更したら、同じ PR で lockfile も更新する
 - `ci.yml` の `actions-lock` job が `--verify` で stale な lockfile を fail させる。固定漏れは PR 時点でここが検出する
-- `actions-lock` は required status check ではないため、fail しても merge はできる。所定の ruleset に追加すれば遮断できる
+- `actions-lock` は required status check ではないため、fail しても merge はできる。リポジトリの ruleset で required status check に追加すれば遮断できる
 - lockfile に載っている workflow では、lockfile に pin が無い `uses:` は実行時に落ちる。lockfile に未登録の新しい workflow は、リポジトリの Require lockfile ポリシーが Active でない限り実行時には止まらない
 - Dependabot（`.github/dependabot.yml`）が action 更新の PR で lockfile も同じ PR で更新する。lockfile に未登録の workflow は Dependabot では onboard されない
 - ref は narrow される（`@v4` → `@v4.4.0`）。再生成だけでは新しい patch / minor を追わない。追従は Dependabot の更新 PR で行う
