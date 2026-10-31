@@ -184,9 +184,10 @@ test("subscribe keeps the connection event-only and forwards pushed events", asy
   ]);
 });
 
-test("subscribe reports a lost subscription and resubscribes", async () => {
-  const herdr = await startFakeHerdr((message, socket) => {
+test("subscribe reports every lost subscription and resubscribes", async () => {
+  const herdr = await startFakeHerdr((message, socket, connection) => {
     reply(socket, { id: message.id, result: { type: "subscription_started" } });
+    if (connection >= 2) return;
     reply(socket, { id: message.id, error: { code: "events_lost", message: "buffer overflow" } });
     socket.destroy();
   });
@@ -206,11 +207,10 @@ test("subscribe reports a lost subscription and resubscribes", async () => {
     },
   });
 
-  await waitFor(() => started === 2);
+  await waitFor(() => started === 3);
   stop();
 
-  expect(lost).toBeGreaterThanOrEqual(1);
-  expect(herdr.connectionCount()).toBeGreaterThanOrEqual(2);
+  expect(lost).toBe(2);
 });
 
 test("subscribe resubscribes after the connection drops unexpectedly", async () => {
@@ -259,7 +259,6 @@ test("subscribe stops reconnecting after stop()", async () => {
 
   await waitFor(() => started === 1);
   stop();
-  await herdr.close();
   await Bun.sleep(50);
 
   expect(herdr.connectionCount()).toBe(1);
