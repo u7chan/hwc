@@ -389,7 +389,10 @@ export function PaneDetail(props: PaneDetailProps) {
                     type="button"
                     class="hwc-attachment-remove"
                     aria-label={`${file.name} を外す`}
-                    onClick={() => setAttachments((current) => removeAttachment(current, file.id))}
+                    onClick={() => {
+                      setAttachments((current) => removeAttachment(current, file.id));
+                      setRejected(0);
+                    }}
                   >
                     <CloseIcon size={14} />
                   </button>
@@ -399,9 +402,19 @@ export function PaneDetail(props: PaneDetailProps) {
           </ul>
         ) : null}
         {rejected > 0 ? (
-          <p class="hwc-attachments-warning" role="status">
-            添付は {ATTACHMENT_LIMIT} 件までです（{rejected} 件は追加できませんでした）
-          </p>
+          <div class="hwc-attachments-warning" role="status">
+            <span class="hwc-attachments-warning-text">
+              添付は {ATTACHMENT_LIMIT} 件までです（{rejected} 件は追加できませんでした）
+            </span>
+            <button
+              type="button"
+              class="hwc-attachments-warning-close"
+              aria-label="警告を閉じる"
+              onClick={() => setRejected(0)}
+            >
+              <CloseIcon size={14} />
+            </button>
+          </div>
         ) : null}
         {attachments.length > 0 ? (
           <p class="hwc-attachments-note">添付はまだ送信されません</p>

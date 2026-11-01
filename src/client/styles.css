@@ -2017,9 +2017,35 @@ button {
 }
 
 .hwc-attachments-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: calc(var(--space-1) * -1) 0 var(--space-2);
   color: var(--color-attention);
   font-size: var(--text-secondary);
+}
+
+.hwc-attachments-warning-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.hwc-attachments-warning-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-mark);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.hwc-attachments-warning-close:hover {
+  background: var(--color-raised);
 }
 
 .hwc-attachment-remove {
