@@ -313,7 +313,6 @@ export function PaneList(props: PaneListProps) {
               <ChevronDownIcon />
               下へ移動
             </button>
-            <div class="hwc-menu-sep" />
             <button
               type="button"
               role="menuitem"
