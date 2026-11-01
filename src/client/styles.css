@@ -804,17 +804,17 @@ button {
   list-style: none;
 }
 
-.hwc-tab-block {
+/* 親から子への案内線は、ワークスペースのアイコンの中心から 1 本だけ通す。 */
+.hwc-group-block > .hwc-group-children > .hwc-children-inner {
   position: relative;
 }
 
-/* 親から子への案内線。タブの列に 1 本だけ通す。 */
-.hwc-tab-block::before {
+.hwc-group-block > .hwc-group-children > .hwc-children-inner::before {
   content: "";
   position: absolute;
   top: 0;
-  bottom: 0;
-  left: calc(var(--space-4) + var(--space-2));
+  bottom: var(--space-2);
+  left: calc(var(--space-4) + var(--icon-frame) / 2);
   width: 1px;
   background: var(--color-line);
 }
@@ -827,7 +827,7 @@ button {
   width: 100%;
   min-height: var(--row-tab);
   padding: var(--space-2) var(--space-4) var(--space-2)
-    calc(var(--space-4) + var(--space-2) + var(--space-4));
+    calc(var(--space-4) + var(--icon-frame) / 2 + var(--space-3));
   border: 0;
   background: transparent;
   color: var(--color-text);
@@ -863,7 +863,7 @@ button {
 
 .hwc-panes {
   margin: 0;
-  padding: 0 0 var(--space-2) calc(var(--space-4) + var(--space-2));
+  padding: 0 0 var(--space-2) calc(var(--space-4) + var(--icon-frame) / 2 + var(--space-3));
   list-style: none;
   display: flex;
   flex-direction: column;
@@ -886,7 +886,7 @@ button {
   align-items: center;
   gap: var(--space-3);
   /* 左は見出し行より 8px 下げて親子を表す。右は記号の列をそろえる。 */
-  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-4) + var(--space-2));
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-3);
   border: 0;
   background: transparent;
   color: var(--color-text);
