@@ -2,6 +2,7 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
 import { Confirm } from "./Confirm";
+import { copyText } from "./copy";
 import {
   AgentGlyphIcon,
   ChevronDownIcon,
@@ -123,10 +124,7 @@ export function PaneList(props: PaneListProps) {
   const closeMenu = () => setMenu(null);
 
   const copyId = (paneId: string) => {
-    void navigator.clipboard
-      ?.writeText(paneId)
-      .then(() => setCopied(true))
-      .catch(() => setCopied(false));
+    void copyText(paneId).then((done) => setCopied(done));
   };
 
   useEffect(() => {
