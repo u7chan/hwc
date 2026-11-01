@@ -57,7 +57,6 @@
   --row-tab: 60px;
   --row-pane: 64px;
   --icon-frame: 32px;
-  --chevron-slot: 28px;
 
   /* 一覧の幅。広い画面では JS が実際の幅で上書きする。 */
   --hwc-sidebar-width: 352px;
@@ -788,8 +787,8 @@ button {
   flex: none;
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: var(--space-8);
+  height: var(--space-8);
   color: var(--color-secondary);
   transition: transform 180ms ease;
 }
@@ -814,7 +813,7 @@ button {
   display: flex;
   align-items: center;
   min-height: var(--row-pane);
-  padding-right: var(--space-2);
+  padding-right: var(--space-4);
 }
 
 .hwc-pane-open {
@@ -823,9 +822,8 @@ button {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  /* 左は見出し行より 8px 下げて親子を表す。右は状態の記号の列をそろえる。 */
-  padding: var(--space-3) calc(var(--space-4) + var(--chevron-slot)) var(--space-3)
-    calc(var(--space-4) + var(--space-2));
+  /* 左は見出し行より 8px 下げて親子を表す。右は記号の列をそろえる。 */
+  padding: var(--space-3) var(--space-3) var(--space-3) calc(var(--space-4) + var(--space-2));
   border: 0;
   background: transparent;
   color: var(--color-text);
