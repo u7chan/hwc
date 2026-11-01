@@ -152,5 +152,5 @@ NO_SUBMIT_CHECKecho SUBMIT_CHECK
 };
 
 export function previewOutput(paneId: string): string {
-  return previewOutputs[paneId] ?? "（出力はまだありません）";
+  return previewOutputs[paneId] ?? "";
 }

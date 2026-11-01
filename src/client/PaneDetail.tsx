@@ -1,9 +1,31 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
-import { ArrowDownIcon, ChevronLeftIcon, CollapseIcon, ExpandIcon, SendIcon } from "./icons";
+import {
+  ArrowDownIcon,
+  CheckIcon,
+  ChevronLeftIcon,
+  CollapseIcon,
+  CopyIcon,
+  ExpandIcon,
+  TerminalIcon,
+  SendIcon,
+} from "./icons";
 import { statusLabel } from "./select";
 import { Spinner } from "./Spinner";
 import { StatusIcon } from "./StatusLabel";
+
+// 出力がまだ無いときは、空の枠だけ置いても意味がないので案内を出す。
+function OutputEmpty() {
+  return (
+    <div class="hwc-output-empty">
+      <span class="hwc-output-empty-mark">
+        <TerminalIcon size={22} />
+      </span>
+      <p class="hwc-output-empty-title">まだ出力はありません</p>
+      <p class="hwc-output-empty-text">エージェントが動くと、その様子がここに流れます。</p>
+    </div>
+  );
+}
 
 // 中身が届くまでの置き。行数を多めにして、下から伸びるように見せる。
 function OutputSkeleton() {
@@ -33,11 +55,26 @@ export function PaneDetail(props: PaneDetailProps) {
   const [expanded, setExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
+  const [copied, setCopied] = useState(false);
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const tabList = useRef<HTMLDivElement>(null);
 
   const canSend = draft.trim() !== "";
+
+  const copyId = () => {
+    void navigator.clipboard
+      ?.writeText(pane.id)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
+
+  // コピーの知らせは数秒で戻す。
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
   // 入力量に合わせて高さを伸ばす。広げている間は CSS の高さに任せる。
   const fit = (field: HTMLTextAreaElement | null, open: boolean) => {
@@ -115,21 +152,36 @@ export function PaneDetail(props: PaneDetailProps) {
             );
           })}
         </div>
-        <span class="hwc-pane-id" title={pane.id}>
-          {pane.id}
+        <span class="hwc-pane-id">
+          <span class="hwc-pane-id-text">{pane.id}</span>
+          <button
+            type="button"
+            class="hwc-pane-id-copy"
+            aria-label={copied ? "コピーしました" : "ペイン ID をコピー"}
+            onClick={copyId}
+          >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+          </button>
         </span>
       </div>
 
       <div class="hwc-output-wrap">
         <div
           class="hwc-output-scroll"
+          data-empty={output !== null && output.trim() === ""}
           ref={scroller}
           onScroll={(event) => {
             const element = event.currentTarget;
             setAtBottom(element.scrollHeight - element.scrollTop - element.clientHeight <= 8);
           }}
         >
-          {output === null ? <OutputSkeleton /> : <pre class="hwc-output">{output}</pre>}
+          {output === null ? (
+            <OutputSkeleton />
+          ) : output.trim() === "" ? (
+            <OutputEmpty />
+          ) : (
+            <pre class="hwc-output">{output}</pre>
+          )}
         </div>
         <button
           type="button"

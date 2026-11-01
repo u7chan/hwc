@@ -80,6 +80,23 @@ export function WorktreeIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function CopyIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="9" y="9" width="11" height="11" rx="2.5" />
+      <path d="M15 6.5A2.5 2.5 0 0 0 12.5 4h-7A2.5 2.5 0 0 0 3 6.5v7A2.5 2.5 0 0 0 5.5 16" />
+    </Svg>
+  );
+}
+
+export function CheckIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M5 12.5l4.5 4.5L19 7" />
+    </Svg>
+  );
+}
+
 export function TabIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
@@ -118,18 +135,17 @@ export function CodexIcon({ size = 18 }: IconProps) {
   );
 }
 
-// 縦長のマークなので、正方形に押し込めず縦横比を保つ。
 export function OpenCodeIcon({ size = 18 }: IconProps) {
   return (
     <svg
-      width={size * 0.8}
+      width={size}
       height={size}
-      viewBox="0 0 24 30"
+      viewBox="0 0 24 24"
       fill="currentColor"
+      fill-rule="evenodd"
       aria-hidden="true"
     >
-      <path fill-rule="evenodd" d="M0 0h24v30H0zM6 6h12v18H6z" />
-      <path d="M6 12h12v12H6z" />
+      <path d="M16 6H8v12h8V6zm4 16H4V2h16v20z" />
     </svg>
   );
 }
@@ -156,6 +172,16 @@ export function AgentGlyphIcon({ agent, size = 18 }: { agent: string | null; siz
     default:
       return <AgentIcon size={size} />;
   }
+}
+
+export function TerminalIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <path d="M7.5 10l2.5 2-2.5 2" />
+      <path d="M13 14h3.5" />
+    </Svg>
+  );
 }
 
 export function PaneIcon({ size = 16 }: IconProps) {
