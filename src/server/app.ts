@@ -92,7 +92,8 @@ export function createApp(options: { store: StateStore; panes: PaneClient }) {
       }
 
       // body は JSON として読み切ってから text のバイト数で上限を見る。Content-Type の検証で
-      // cross-origin は preflight に落ちるため、ここに来るのは自前の client だけ。
+      // browser の cross-origin は preflight に落ちるが、LAN の非 browser client はここまで
+      // 到達し得る。その場合の巨大 body は Bun の body 読み込みに任せる。
       const body = await c.req.json().catch(() => null);
       const input = parseInputBody(body);
       if (!input.ok) return c.json({ error: input.error }, input.status);
