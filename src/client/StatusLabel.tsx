@@ -1,6 +1,6 @@
 import type { AgentStatus } from "../server/herdr/state";
-import { AttentionMark, StatusMark } from "./icons";
-import { SpinnerDots } from "./Spinner";
+import { StatusMark } from "./icons";
+import { AttentionMark, SpinnerDots } from "./Spinner";
 import { statusLabel, statusTone } from "./select";
 
 // 動きを減らす設定では止める。要対応だけは静止した記号で示す。
@@ -11,7 +11,7 @@ export function StatusLabel({ status }: { status: AgentStatus }) {
   const tone = statusTone(status);
   const animated = !reducedMotion();
   return (
-    <span class={`hwc-status hwc-status--${tone}`}>
+    <span class={`hwc-status hwc-status--${tone}`} role="img" aria-label={statusLabel(status)}>
       {animated && tone === "active" ? (
         <SpinnerDots />
       ) : animated && tone === "attention" ? (
@@ -19,7 +19,7 @@ export function StatusLabel({ status }: { status: AgentStatus }) {
       ) : (
         <StatusMark tone={tone} />
       )}
-      <span>{statusLabel(status)}</span>
+      <span class="hwc-status-text">{statusLabel(status)}</span>
     </span>
   );
 }

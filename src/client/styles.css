@@ -479,36 +479,109 @@ button {
 
 /* 状態ラベル */
 
+/* 状態は記号だけで示し、文言はホバー中だけ添える。 */
 .hwc-status {
+  position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
+  justify-content: center;
+  width: var(--space-6);
+  height: var(--space-6);
   border-radius: var(--radius-sm);
+  color: var(--color-neutral);
+}
+
+.hwc-status-text {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  display: none;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
   font-size: var(--text-secondary);
   line-height: 1.4;
   white-space: nowrap;
 }
 
+.hwc-status:hover .hwc-status-text,
+.hwc-status:focus-within .hwc-status-text {
+  display: block;
+}
+
 .hwc-status--active {
   color: var(--color-active);
-  background: var(--color-active-bg);
 }
 
 .hwc-status--attention {
   color: var(--color-attention);
-  background: var(--color-attention-bg);
 }
 
 .hwc-status--success {
   color: var(--color-success);
-  background: var(--color-success-bg);
 }
 
 .hwc-status--neutral {
   color: var(--color-neutral);
-  background: var(--color-neutral-bg);
+}
+
+/* 12 個の点を順に光らせる。delay は要素側でずらす。 */
+@keyframes hwc-dot-pulse {
+  0%,
+  100% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1);
+  }
+}
+
+.hwc-dots circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hwc-dot-pulse 0.6s linear infinite;
+}
+
+@keyframes hwc-attention-fill {
+  0% {
+    transform: scaleY(1);
+  }
+  72.2%,
+  100% {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes hwc-attention-rotate {
+  0%,
+  72.2% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(180deg);
+  }
+}
+
+.hwc-attention-outline,
+.hwc-attention-fill {
+  transform-box: fill-box;
+  animation-duration: 1.8s;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+
+.hwc-attention-fill {
+  transform-origin: top;
+  animation-name: hwc-attention-fill;
+}
+
+.hwc-attention-outline {
+  transform-origin: center;
+  animation-name: hwc-attention-rotate;
 }
 
 /* 詳細 */
@@ -942,6 +1015,13 @@ button {
   .hwc-detail-inner,
   .hwc-app[data-view="list"] .hwc-list {
     animation: none;
+  }
+
+  .hwc-dots circle,
+  .hwc-attention-outline,
+  .hwc-attention-fill {
+    animation: none;
+    transform: none;
   }
 }
 

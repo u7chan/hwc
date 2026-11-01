@@ -165,38 +165,6 @@ export function CollapseIcon({ size = 20 }: IconProps) {
   );
 }
 
-export function AttentionMark({ size = 12 }: IconProps) {
-  const id = useId();
-  const fill = `${id}-fill`;
-  const rotate = `${id}-rotate`;
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-      <rect fill="none" stroke="currentColor" stroke-width="4" x="25" y="25" width="50" height="50">
-        <animateTransform
-          attributeName="transform"
-          dur="0.5s"
-          from="0 50 50"
-          to="180 50 50"
-          type="rotate"
-          id={rotate}
-          begin={`${fill}.end`}
-        />
-      </rect>
-      <rect x="27" y="27" fill="currentColor" width="46" height="50">
-        <animate
-          attributeName="height"
-          dur="1.3s"
-          from="50"
-          to="0"
-          id={fill}
-          fill="freeze"
-          begin={`0s;${rotate}.end`}
-        />
-      </rect>
-    </svg>
-  );
-}
-
 export function StatusMark({ tone }: { tone: string }) {
   return (
     <svg
