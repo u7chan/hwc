@@ -1504,7 +1504,8 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hwc-pane-id[data-copied="true"] {
+  .hwc-pane-id[data-copied="true"],
+  .hwc-msg-copy[data-copied="true"] {
     animation: none;
   }
 
@@ -1887,6 +1888,14 @@ button {
 .hwc-msg-copy:hover {
   background: var(--color-raised);
   color: var(--color-text);
+}
+
+/* 押した結果は、記号の入れ替えに加えて面の色と弾みでも示す。 */
+.hwc-msg-copy[data-copied="true"] {
+  opacity: 1;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  animation: hwc-badge-pop 320ms ease;
 }
 
 .hwc-msg-copy:focus-visible {

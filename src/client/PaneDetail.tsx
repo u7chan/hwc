@@ -63,6 +63,7 @@ function ChatLog(props: {
     <button
       type="button"
       class="hwc-msg-copy"
+      data-copied={props.copiedId === message.id}
       aria-label={props.copiedId === message.id ? "コピーしました" : "このメッセージをコピー"}
       onClick={() => props.onCopy(message.id, message.text)}
     >
