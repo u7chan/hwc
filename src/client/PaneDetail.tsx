@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import {
   ArrowDownIcon,
@@ -45,7 +45,7 @@ type PaneDetailProps = {
   onSelectPane: (paneId: string) => void;
   onBack: () => void;
   onSubmit: (text: string) => void | Promise<void>;
-  onDropPane: (paneId: string, targetPaneId: string) => void;
+  onDropPane: (paneId: string, targetPaneId: string, after: boolean) => void;
   feedback: string | null;
 };
 
@@ -57,7 +57,39 @@ export function PaneDetail(props: PaneDetailProps) {
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [dropTab, setDropTab] = useState<string | null>(null);
+  // タブの並びも PC だけで動かす。触れる画面ではドラッグが発火しない。
+  const [draggedTab, setDraggedTab] = useState<string | null>(null);
+  const [tabDrop, setTabDrop] = useState<{ paneId: string; after: boolean } | null>(null);
+  const tabPositions = useRef<Map<string, number>>(new Map());
+
+  // 並びが変わったタブだけ、前の位置から滑らせる（FLIP）。
+  useLayoutEffect(() => {
+    const chips = [...document.querySelectorAll<HTMLElement>(".hwc-tab[data-pane-id]")];
+    const next = new Map<string, number>();
+    const animate =
+      typeof window !== "undefined" &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    for (const chip of chips) {
+      const id = chip.dataset.paneId;
+      if (!id) continue;
+      const left = chip.getBoundingClientRect().left;
+      next.set(id, left);
+      const before = tabPositions.current.get(id);
+      if (!animate || before === undefined || Math.abs(before - left) < 1) continue;
+
+      chip.style.transition = "none";
+      chip.style.transform = `translateX(${before - left}px)`;
+      void chip.offsetWidth;
+      chip.style.transition = "transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1)";
+      chip.style.transform = "";
+    }
+
+    tabPositions.current = next;
+    return () => {
+      for (const chip of chips) chip.style.transition = "";
+    };
+  });
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const tabList = useRef<HTMLDivElement>(null);
@@ -146,21 +178,42 @@ export function PaneDetail(props: PaneDetailProps) {
                 key={item.id}
                 aria-selected={selected}
                 aria-label={`${item.title ?? item.agent ?? item.id} (${item.id}, ${statusLabel(item.agentStatus)})`}
+                data-pane-id={item.id}
+                data-dragging={draggedTab === item.id}
+                data-drop={
+                  tabDrop?.paneId === item.id ? (tabDrop.after ? "after" : "before") : undefined
+                }
+                draggable
                 onClick={() => onSelectPane(item.id)}
-                data-drop={dropTab === item.id}
-                onDragOver={(event) => {
-                  if (!event.dataTransfer?.types.includes("text/plain")) return;
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = "move";
-                  setDropTab(item.id);
+                onDragStart={(event) => {
+                  event.dataTransfer?.setData("text/plain", item.id);
+                  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+                  setDraggedTab(item.id);
                 }}
-                onDragLeave={() => setDropTab((current) => (current === item.id ? null : current))}
+                onDragEnd={() => {
+                  setDraggedTab(null);
+                  setTabDrop(null);
+                }}
+                onDragOver={(event) => {
+                  if (draggedTab === null || draggedTab === item.id) return;
+                  event.preventDefault();
+                  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setTabDrop({
+                    paneId: item.id,
+                    after: event.clientX > rect.left + rect.width / 2,
+                  });
+                }}
+                onDragLeave={() =>
+                  setTabDrop((current) => (current?.paneId === item.id ? null : current))
+                }
                 onDrop={(event) => {
                   event.preventDefault();
-                  setDropTab(null);
-                  const dragged = event.dataTransfer?.getData("text/plain");
-                  // タブ自身を落としても何も起きない。
-                  if (dragged && dragged !== item.id) onDropPane(dragged, item.id);
+                  const moved = event.dataTransfer?.getData("text/plain") ?? draggedTab;
+                  const after = event.currentTarget.dataset.drop === "after";
+                  setDraggedTab(null);
+                  setTabDrop(null);
+                  if (moved && moved !== item.id) onDropPane(moved, item.id, after);
                 }}
               >
                 <span class="hwc-tab-label">{item.title ?? item.agent ?? item.id}</span>

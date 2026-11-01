@@ -1433,10 +1433,28 @@ button {
   opacity: 1;
 }
 
-/* ペインを掴んでタブの上に来たときの受け皿。 */
-.hwc-tab[data-drop="true"] {
-  background: var(--color-raised);
-  color: var(--color-text);
+/* タブの並び替え。掴んでいるタブを薄くし、落とす位置に縦線を出す。 */
+.hwc-tab[data-dragging="true"] {
+  opacity: 0.45;
+}
+
+.hwc-tab[data-drop="before"]::before,
+.hwc-tab[data-drop="after"]::before {
+  content: "";
+  position: absolute;
+  top: var(--space-3);
+  bottom: var(--space-3);
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.hwc-tab[data-drop="before"]::before {
+  left: 0;
+}
+
+.hwc-tab[data-drop="after"]::before {
+  right: 0;
 }
 
 .hwc-detail-bar {

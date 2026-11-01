@@ -98,16 +98,6 @@ export function App() {
     });
   };
 
-  // タブへ落としたら、そのタブの末尾に移す。
-  const dropOnTab = (paneId: string, targetPaneId: string) => {
-    setState((current) => {
-      const tab = current.workspaces
-        .flatMap((workspace) => workspace.tabs)
-        .find((item) => item.panes.some((pane) => pane.id === targetPaneId));
-      return tab ? movePane(current, paneId, tab.id, tab.panes.length) : current;
-    });
-  };
-
   const closePane = (paneId: string) => {
     setState((current) => removePane(current, paneId));
     if (selectedPaneId === paneId) setSelectedPaneId(null);
@@ -148,7 +138,8 @@ export function App() {
       item.tabs.some((tab) => tab.panes.some((candidate) => candidate.id === pane.id)),
     );
     return workspace ? workspace.tabs.flatMap((tab) => tab.panes) : [];
-  }, [pane?.id]);
+    // 並べ替えで状態そのものが変わる。
+  }, [pane?.id, state]);
 
   // 画面が狭くなったら一覧も詰める。詳細が読めない幅にはしない。
   useEffect(() => {
@@ -272,7 +263,7 @@ export function App() {
                 await new Promise((resolve) => setTimeout(resolve, 600));
                 setFeedback("プレビュー：送信はまだ繋がっていません");
               }}
-              onDropPane={dropOnTab}
+              onDropPane={dropOnPane}
               feedback={feedback}
             />
           ) : (
