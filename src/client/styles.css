@@ -872,15 +872,38 @@ button {
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    opacity 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
 .hwc-pane-more:hover {
+  background: var(--color-surface);
   color: var(--color-text);
+}
+
+.hwc-pane-more:active {
+  background: var(--color-line);
 }
 
 .hwc-pane-more[aria-expanded="true"] {
   background: var(--color-surface);
   color: var(--color-text);
+}
+
+/* ポインタの画面では行に乗ったときだけ出す。触れる画面では常に出す。 */
+@media (hover: hover) {
+  .hwc-pane-more {
+    opacity: 0;
+  }
+
+  .hwc-pane:hover .hwc-pane-more,
+  .hwc-pane:focus-within .hwc-pane-more,
+  .hwc-pane[data-current="true"] .hwc-pane-more,
+  .hwc-pane-more[aria-expanded="true"] {
+    opacity: 1;
+  }
 }
 
 /* 行き場のない場所を押したら閉じる。 */
