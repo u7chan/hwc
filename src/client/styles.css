@@ -623,7 +623,6 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 var(--space-4);
 }
 
 /* 画面を切り替えたときだけ、入ってくる側を短く動かす。 */
@@ -722,7 +721,8 @@ button {
 }
 
 .hwc-group-block {
-  margin-bottom: var(--space-4);
+  /* 余白はカード側に持たせる。一覧に padding を付けると、スクロールバーが端から離れる。 */
+  margin: 0 var(--space-4) var(--space-4);
   background: var(--color-surface);
   border-radius: var(--radius-panel);
   overflow: hidden;
@@ -2064,7 +2064,11 @@ button {
   .hwc-list {
     flex: none;
     width: var(--hwc-sidebar-width);
-    padding: 0 var(--space-3);
+  }
+
+  /* 一覧の余白はカード側が持つ。ここで padding を足すとスクロールバーが端から離れる。 */
+  .hwc-group-block {
+    margin-inline: var(--space-3);
   }
 
   .hwc-resizer {
@@ -2076,7 +2080,7 @@ button {
   }
 
   .hwc-group-block {
-    margin-bottom: var(--space-2);
+    margin: 0 var(--space-4) var(--space-2);
     background: transparent;
     border-radius: 0;
   }
