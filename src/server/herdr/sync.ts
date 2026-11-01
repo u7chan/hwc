@@ -1,5 +1,6 @@
 import { request, subscribe } from "./socket";
-import { type AppState, type HerdrSnapshot, parseSnapshot, type StateStore } from "./state";
+import { type HerdrSnapshot, parseSnapshot } from "./contract";
+import type { AppState, StateStore } from "./state";
 
 // layout / scroll / output / token は state に載せない。購読すると出力のたびにスナップショットを
 // 取り直すことになり、費用に見合わない。

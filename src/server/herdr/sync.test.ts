@@ -4,7 +4,8 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { request, type SubscriptionSpec } from "./socket";
-import { createStateStore, type HerdrSnapshot } from "./state";
+import type { HerdrSnapshot } from "./contract";
+import { createStateStore } from "./state";
 import { loadSnapshot, startStateSync } from "./sync";
 
 type FakeHerdr = {

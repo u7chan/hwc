@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import { isPaneNotFound, type PaneClient, parseInputBody, parseOutputQuery } from "./herdr/panes";
 import type { AppState, StateStore } from "./herdr/state";
 
-export function createApp(options: { store: StateStore }) {
-  const { store } = options;
+export function createApp(options: { store: StateStore; panes: PaneClient }) {
+  const { store, panes } = options;
 
   const current = async (): Promise<AppState | null> =>
     store.get() ??
@@ -58,7 +59,32 @@ export function createApp(options: { store: StateStore }) {
           stream.onAbort(detach);
         });
       }),
-    );
+    )
+    .get("/api/panes/:id/output", async (c) => {
+      const query = parseOutputQuery(new URL(c.req.url).searchParams);
+      if (!query.ok) return c.json({ error: query.error }, 400);
+
+      try {
+        const output = await panes.read({ paneId: c.req.param("id"), ...query.value });
+        return c.json(output);
+      } catch (error) {
+        if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
+        return c.json({ error: "herdr_unavailable" }, 502);
+      }
+    })
+    .post("/api/panes/:id/input", async (c) => {
+      const body = await c.req.json().catch(() => null);
+      const input = parseInputBody(body);
+      if (!input.ok) return c.json({ error: input.error }, 400);
+
+      try {
+        await panes.send({ paneId: c.req.param("id"), ...input.value });
+        return c.json({ ok: true });
+      } catch (error) {
+        if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
+        return c.json({ error: "herdr_unavailable" }, 502);
+      }
+    });
 }
 
 export type AppType = ReturnType<typeof createApp>;

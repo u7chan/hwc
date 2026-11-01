@@ -1,3 +1,4 @@
+import { createPaneClient } from "./server/herdr/panes";
 import { createStateStore } from "./server/herdr/state";
 import { loadSnapshot, startStateSync } from "./server/herdr/sync";
 import { createApp } from "./server/app";
@@ -10,7 +11,7 @@ startStateSync({
   onError: (error) => console.error(`herdr sync: ${error.message}`),
 });
 
-const app = createApp({ store });
+const app = createApp({ store, panes: createPaneClient() });
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 30000),
