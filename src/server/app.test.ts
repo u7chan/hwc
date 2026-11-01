@@ -379,3 +379,103 @@ test("POST /api/panes/:id/input returns 502 when Herdr cannot be reached", async
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });
+
+test("POST /api/panes/:id/input rejects a body that is not sent as JSON", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+
+  for (const contentType of ["text/plain", "application/x-www-form-urlencoded"]) {
+    const response = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": contentType },
+      body: JSON.stringify({ text: "rm -rf /", submit: true }),
+    });
+    expect(response.status).toBe(415);
+    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
+  }
+
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/input sends without submit", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(seen).toEqual([{ paneId: "w1:p1", text: "ls", submit: false }]);
+});
+
+test("POST /api/panes/:id/input rejects a text that is too long", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "a".repeat(16_385) }),
+  });
+
+  expect(response.status).toBe(413);
+  expect(await response.json()).toEqual({ error: "text must be at most 16384 characters" });
+});
+
+test("POST /api/panes/:id/input returns 404 when the pane is gone", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async () => {
+        throw new HerdrError("pane_not_found", "pane w1:p9 not found");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p9/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
+});
+
+test("GET /api/panes/:id/output returns 400 when Herdr rejects the request", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      read: async () => {
+        throw new HerdrError("invalid_params", "pane_id is required");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/output");
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_request" });
+});
+
+test("GET /api/panes/:id/output rejects an unknown source", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/output?source=scrollback");
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({
+    error: "source must be one of visible, recent, recent_unwrapped, detection",
+  });
+});

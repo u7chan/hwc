@@ -1,4 +1,4 @@
-import type { AgentStatus } from "./state";
+export type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
 
 export type HerdrSnapshot = {
   focused_workspace_id?: string | null;
@@ -129,19 +129,27 @@ export function parseSnapshot(value: unknown): HerdrSnapshot {
 }
 
 export type PaneRead = {
+  paneId: string;
   text: string;
   truncated: boolean;
   revision: number;
 };
 
-export function parsePaneRead(value: unknown): PaneRead {
-  const raw = expectRecord(expectRecord(value, "pane_read").read, "pane_read.read");
-  if (typeof raw.text !== "string") throw new Error("snapshot: pane_read.text must be a string");
+export function parsePaneRead(value: unknown, paneId: string): PaneRead {
+  const record = expectRecord(value, "pane_read");
+  if (record.type !== "pane_read") {
+    throw new Error(`pane_read: type must be pane_read, got ${String(record.type)}`);
+  }
+
+  const raw = expectRecord(record.read, "pane_read.read");
+  if (raw.pane_id !== paneId) throw new Error(`pane_read: pane_id must be ${paneId}`);
+  if (typeof raw.text !== "string") throw new Error("pane_read: text must be a string");
   if (typeof raw.truncated !== "boolean") {
-    throw new Error("snapshot: pane_read.truncated must be a boolean");
+    throw new Error("pane_read: truncated must be a boolean");
   }
-  if (typeof raw.revision !== "number") {
-    throw new Error("snapshot: pane_read.revision must be a number");
+  if (typeof raw.revision !== "number" || !Number.isInteger(raw.revision) || raw.revision < 0) {
+    throw new Error("pane_read: revision must be a non-negative integer");
   }
-  return { text: raw.text, truncated: raw.truncated, revision: raw.revision };
+
+  return { paneId, text: raw.text, truncated: raw.truncated, revision: raw.revision };
 }

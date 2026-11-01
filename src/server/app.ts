@@ -1,6 +1,12 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
-import { isPaneNotFound, type PaneClient, parseInputBody, parseOutputQuery } from "./herdr/panes";
+import {
+  isInvalidRequest,
+  isPaneNotFound,
+  type PaneClient,
+  parseInputBody,
+  parseOutputQuery,
+} from "./herdr/panes";
 import type { AppState, StateStore } from "./herdr/state";
 
 export function createApp(options: { store: StateStore; panes: PaneClient }) {
@@ -12,6 +18,12 @@ export function createApp(options: { store: StateStore; panes: PaneClient }) {
       // 取得に失敗した時点で状態は無い。呼び出し側がエラーを返す。
       return null;
     });
+
+  const paneFailure = (c: Context, error: unknown) => {
+    if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
+    if (isInvalidRequest(error)) return c.json({ error: "invalid_request" }, 400);
+    return c.json({ error: "herdr_unavailable" }, 502);
+  };
 
   return new Hono()
     .get("/api/health", (c) => c.json({ ok: true, service: "hwc" }))
@@ -62,27 +74,32 @@ export function createApp(options: { store: StateStore; panes: PaneClient }) {
     )
     .get("/api/panes/:id/output", async (c) => {
       const query = parseOutputQuery(new URL(c.req.url).searchParams);
-      if (!query.ok) return c.json({ error: query.error }, 400);
+      if (!query.ok) return c.json({ error: query.error }, query.status);
 
       try {
         const output = await panes.read({ paneId: c.req.param("id"), ...query.value });
         return c.json(output);
       } catch (error) {
-        if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
-        return c.json({ error: "herdr_unavailable" }, 502);
+        return paneFailure(c, error);
       }
     })
     .post("/api/panes/:id/input", async (c) => {
+      // ペインへ入力を流す唯一のエンドポイントなので、simple request で叩かれないよう
+      // application/json に限る。CORS を返さないので、cross-origin は preflight で止まる。
+      const contentType = c.req.header("content-type") ?? "";
+      if (!contentType.toLowerCase().startsWith("application/json")) {
+        return c.json({ error: "content-type must be application/json" }, 415);
+      }
+
       const body = await c.req.json().catch(() => null);
       const input = parseInputBody(body);
-      if (!input.ok) return c.json({ error: input.error }, 400);
+      if (!input.ok) return c.json({ error: input.error }, input.status);
 
       try {
         await panes.send({ paneId: c.req.param("id"), ...input.value });
         return c.json({ ok: true });
       } catch (error) {
-        if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
-        return c.json({ error: "herdr_unavailable" }, 502);
+        return paneFailure(c, error);
       }
     });
 }

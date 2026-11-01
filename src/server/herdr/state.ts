@@ -1,6 +1,6 @@
-import type { HerdrAgent, HerdrSnapshot } from "./contract";
+import type { AgentStatus, HerdrAgent, HerdrSnapshot } from "./contract";
 
-export type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
+export type { AgentStatus };
 
 export type PaneState = {
   id: string;

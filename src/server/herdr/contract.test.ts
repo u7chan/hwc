@@ -58,24 +58,56 @@ test("parseSnapshot rejects a record without its id", () => {
   );
 });
 
+function paneRead(overrides: Record<string, unknown> = {}, read: Record<string, unknown> = {}) {
+  return {
+    type: "pane_read",
+    ...overrides,
+    read: {
+      pane_id: "w1:p1",
+      text: "hello\n",
+      truncated: true,
+      revision: 7,
+      format: "text",
+      source: "recent",
+      ...read,
+    },
+  };
+}
+
 test("parsePaneRead keeps the output text and how much was cut off", () => {
-  expect(
-    parsePaneRead({
-      type: "pane_read",
-      read: { text: "hello\n", truncated: true, revision: 7, format: "text", source: "recent" },
-    }),
-  ).toEqual({ text: "hello\n", truncated: true, revision: 7 });
+  expect(parsePaneRead(paneRead(), "w1:p1")).toEqual({
+    paneId: "w1:p1",
+    text: "hello\n",
+    truncated: true,
+    revision: 7,
+  });
 });
 
 test("parsePaneRead rejects a result without the read record", () => {
-  expect(() => parsePaneRead({ type: "pane_read" })).toThrow("pane_read.read");
-  expect(() => parsePaneRead({ type: "pane_read", read: { text: 1 } })).toThrow(
-    "pane_read.text must be a string",
+  expect(() => parsePaneRead({ type: "pane_read" }, "w1:p1")).toThrow("pane_read.read");
+  expect(() => parsePaneRead(paneRead({}, { text: 1 }), "w1:p1")).toThrow(
+    "pane_read: text must be a string",
   );
-  expect(() =>
-    parsePaneRead({ type: "pane_read", read: { text: "", truncated: "no", revision: 0 } }),
-  ).toThrow("pane_read.truncated must be a boolean");
-  expect(() =>
-    parsePaneRead({ type: "pane_read", read: { text: "", truncated: false, revision: null } }),
-  ).toThrow("pane_read.revision must be a number");
+  expect(() => parsePaneRead(paneRead({}, { truncated: "no" }), "w1:p1")).toThrow(
+    "pane_read: truncated must be a boolean",
+  );
+});
+
+test("parsePaneRead rejects a revision that is not a non-negative integer", () => {
+  for (const revision of [null, -1, 1.5, Number.NaN, "7"]) {
+    expect(() => parsePaneRead(paneRead({}, { revision }), "w1:p1")).toThrow(
+      "pane_read: revision must be a non-negative integer",
+    );
+  }
+});
+
+test("parsePaneRead rejects another pane than the one that was asked for", () => {
+  expect(() => parsePaneRead(paneRead(), "w1:p9")).toThrow("pane_read: pane_id must be w1:p9");
+});
+
+test("parsePaneRead rejects a result that is not a pane read", () => {
+  expect(() => parsePaneRead({ type: "ok" }, "w1:p1")).toThrow(
+    "pane_read: type must be pane_read, got ok",
+  );
+  expect(() => parsePaneRead(null, "w1:p1")).toThrow("pane_read must be an object");
 });
