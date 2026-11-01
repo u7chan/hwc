@@ -22,9 +22,11 @@ import {
   SendIcon,
 } from "./icons";
 import { statusLabel } from "./select";
+import type { ChatMessage } from "./chat";
 import { readDraft, storage, writeDraft } from "./drafts";
 import { Preview } from "./Preview";
 import { Spinner } from "./Spinner";
+import { formatClock } from "./time";
 import { StatusIcon } from "./StatusLabel";
 
 // 出力がまだ無いときは、空の枠だけ置いても意味がないので案内を出す。
@@ -37,6 +39,33 @@ function OutputEmpty() {
       <p class="hwc-output-empty-title">まだ出力はありません</p>
       <p class="hwc-output-empty-text">エージェントが動くと、その様子がここに流れます。</p>
     </div>
+  );
+}
+
+// 会話として読むための並び。ユーザーは右、エージェントは左。
+function ChatLog(props: { messages: readonly ChatMessage[]; replying: boolean }) {
+  return (
+    <ol class="hwc-chat">
+      {props.messages.map((message) => (
+        <li class="hwc-msg" data-role={message.role} key={message.id}>
+          {message.role === "agent" ? (
+            <pre class="hwc-msg-text">{message.text}</pre>
+          ) : (
+            <p class="hwc-msg-text">{message.text}</p>
+          )}
+          <span class="hwc-msg-time">{formatClock(message.at)}</span>
+        </li>
+      ))}
+      {props.replying ? (
+        <li class="hwc-msg" data-role="agent" data-typing="true" aria-label="返答を待っています">
+          <span class="hwc-typing">
+            <span />
+            <span />
+            <span />
+          </span>
+        </li>
+      ) : null}
+    </ol>
   );
 }
 
@@ -53,6 +82,8 @@ function OutputSkeleton() {
 
 type PaneDetailProps = {
   pane: PaneState;
+  messages: readonly ChatMessage[] | null;
+  replying: boolean;
   context: { workspaceLabel: string; tabLabel: string };
   panes: readonly PaneState[];
   output: string | null;
@@ -64,8 +95,19 @@ type PaneDetailProps = {
 };
 
 export function PaneDetail(props: PaneDetailProps) {
-  const { pane, context, panes, output, onSelectPane, onBack, onSubmit, onDropPane, feedback } =
-    props;
+  const {
+    pane,
+    messages,
+    replying,
+    context,
+    panes,
+    output,
+    onSelectPane,
+    onBack,
+    onSubmit,
+    onDropPane,
+    feedback,
+  } = props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expanded, setExpanded] = useState(false);
@@ -263,7 +305,7 @@ export function PaneDetail(props: PaneDetailProps) {
   useEffect(() => {
     const element = scroller.current;
     if (element && atBottom) element.scrollTop = element.scrollHeight;
-  }, [output, atBottom]);
+  }, [output, messages, replying, atBottom]);
 
   const jumpToLatest = () => {
     setAtBottom(true);
@@ -369,14 +411,16 @@ export function PaneDetail(props: PaneDetailProps) {
       <div class="hwc-output-wrap">
         <div
           class="hwc-output-scroll"
-          data-empty={output !== null && output.trim() === ""}
+          data-empty={messages === null && output !== null && output.trim() === ""}
           ref={scroller}
           onScroll={(event) => {
             const element = event.currentTarget;
             setAtBottom(element.scrollHeight - element.scrollTop - element.clientHeight <= 8);
           }}
         >
-          {output === null ? (
+          {messages !== null ? (
+            <ChatLog messages={messages} replying={replying} />
+          ) : output === null ? (
             <OutputSkeleton />
           ) : output.trim() === "" ? (
             <OutputEmpty />

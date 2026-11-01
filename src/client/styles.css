@@ -1829,6 +1829,97 @@ button {
   white-space: nowrap;
 }
 
+/* 会話。ユーザーは右、エージェントは左に置いて、誰の発話かを行の寄せで示す。 */
+.hwc-chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  list-style: none;
+}
+
+.hwc-msg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+.hwc-msg[data-role="user"] {
+  align-items: flex-end;
+}
+
+.hwc-msg-text {
+  margin: 0;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.hwc-msg[data-role="user"] .hwc-msg-text {
+  max-width: 85%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-panel) var(--radius-panel) var(--radius-sm) var(--radius-panel);
+  background: var(--color-accent);
+  color: var(--color-surface);
+  font-size: var(--text-body);
+  line-height: var(--line-body);
+}
+
+.hwc-msg[data-role="agent"] .hwc-msg-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  line-height: 1.55;
+  color: var(--color-text);
+}
+
+.hwc-msg-time {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 返答待ちの 3 点。行の高さを保って、返答が来たときに跳ねないようにする。 */
+.hwc-typing {
+  display: inline-flex;
+  gap: 5px;
+  padding: var(--space-2) 0;
+}
+
+.hwc-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-secondary);
+  animation: hwc-typing 1s ease-in-out infinite;
+}
+
+.hwc-typing span:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.hwc-typing span:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+@keyframes hwc-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
 /* プレビューは確認ダイアログと同じ層に、見るための広い面として出す。 */
 .hwc-preview {
   display: flex;

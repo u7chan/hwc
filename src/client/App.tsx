@@ -3,7 +3,8 @@ import type { AppState } from "../server/herdr/state";
 import { PaneDetail } from "./PaneDetail";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
-import { previewOutput, previewState } from "./fixtures";
+import { appendMessage, mockReply, type ChatMessage } from "./chat";
+import { previewChat, previewChats, previewOutput, previewState } from "./fixtures";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import {
   findPane,
@@ -165,6 +166,41 @@ export function App() {
     setSettingsOpen(false);
   };
 
+  // 会話はプレビュー用に手元で積む。TODO: #14 で実データに置き換える。
+  const [chats, setChats] = useState<Record<string, ChatMessage[]>>({ ...previewChats });
+  const [replyingPaneId, setReplyingPaneId] = useState<string | null>(null);
+
+  const askPane = async (paneId: string, text: string) => {
+    const at = Date.now();
+    setChats((current) => ({
+      ...current,
+      [paneId]: appendMessage(current[paneId] ?? [], {
+        id: `u-${at}`,
+        role: "user",
+        text,
+        at,
+      }),
+    }));
+    setReplyingPaneId(paneId);
+    // 返答までの間を空けて、待っている様子を見せる。
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const answeredAt = Date.now();
+    setChats((current) => {
+      const turn = (current[paneId] ?? []).filter((message) => message.role === "agent").length;
+      return {
+        ...current,
+        [paneId]: appendMessage(current[paneId] ?? [], {
+          id: `a-${answeredAt}`,
+          role: "agent",
+          text: mockReply(text, turn),
+          at: answeredAt,
+        }),
+      };
+    });
+    setReplyingPaneId(null);
+    setFeedback("プレビュー：返答はモックです");
+  };
+
   // TODO: #14 で API 取得（または SSE）に置き換える。いまは往復を待つ様子だけ再現する。
   const [output, setOutput] = useState<string | null>(null);
   useEffect(() => {
@@ -311,11 +347,9 @@ export function App() {
               onSelectPane={select}
               output={output}
               onBack={() => setSelectedPaneId(null)}
-              onSubmit={async () => {
-                // 配線前でも送信中の見た目を確かめられるように、往復ぶんだけ待つ。
-                await new Promise((resolve) => setTimeout(resolve, 600));
-                setFeedback("プレビュー：送信はまだ繋がっていません");
-              }}
+              messages={chats[pane.id] ?? previewChat(pane.id)}
+              replying={replyingPaneId === pane.id}
+              onSubmit={(text) => askPane(pane.id, text)}
               onDropPane={dropOnPane}
               feedback={feedback}
             />

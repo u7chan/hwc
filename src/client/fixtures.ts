@@ -1,4 +1,5 @@
 import type { AppState } from "../server/herdr/state";
+import type { ChatMessage } from "./chat";
 
 // 配線前のプレビュー用。API の形（AppState）に合わせてあるので、実データに差し替えるだけで動く。
 export const previewState: AppState = {
@@ -219,6 +220,57 @@ NO_SUBMIT_CHECKecho SUBMIT_CHECK
 ❯ `,
 };
 
+export function previewChat(paneId: string): ChatMessage[] | null {
+  return previewChats[paneId] ?? null;
+}
+
 export function previewOutput(paneId: string): string {
   return previewOutputs[paneId] ?? "";
 }
+
+// 会話の見え方を確かめるためのプレビュー。返答は本物のエージェントではない。
+export const previewChats: Record<string, ChatMessage[]> = {
+  "w80:p2": [
+    {
+      id: "c1",
+      role: "user",
+      text: "一覧の並びを、ワークツリーごとにまとめたい。まずは構造を見せて。",
+      at: new Date(2026, 10, 1, 9, 12).getTime(),
+    },
+    {
+      id: "c2",
+      role: "agent",
+      text: `いまの構造はこうなっています。
+
+hwc                     3 ワークツリー
+  clear-harbor-afa2     3 ペイン
+  silver-meadow-cb6f    4 ペイン
+  hwc-ui                hwc · 2 ペイン
+  hwc-sse               hwc · 2 ペイン
+
+本体のチェックアウトを親にして、linked worktree を子に置くと、同じリポジトリの
+作業が 1 か所にまとまります。`,
+      at: new Date(2026, 10, 1, 9, 12, 40).getTime(),
+    },
+    {
+      id: "c3",
+      role: "user",
+      text: "いいね。親がペインを持っている場合も崩れない？",
+      at: new Date(2026, 10, 1, 9, 14).getTime(),
+    },
+    {
+      id: "c4",
+      role: "agent",
+      text: `崩れません。親の行の下に、そのままタブとペインが並びます。
+
+  親 hwc
+    └ タブ / ペイン（1 枚持ちでも同じ形）
+    └ 子 hwc-ui
+        └ タブ / ペイン
+
+束ねるのは worktree が 2 つ以上あるときだけにして、単独なら今までどおり
+1 ブロックのままにします。`,
+      at: new Date(2026, 10, 1, 9, 15, 10).getTime(),
+    },
+  ],
+};
