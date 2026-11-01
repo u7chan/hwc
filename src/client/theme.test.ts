@@ -5,6 +5,7 @@ import {
   parseThemePreference,
   resolveTheme,
   saveThemePreference,
+  themeGroups,
 } from "./theme";
 
 test("every listed theme can be stored as a preference", () => {
@@ -69,4 +70,15 @@ test("saving writes the preference and survives a refused write", () => {
     },
   };
   expect(() => saveThemePreference(blocked, "light")).not.toThrow();
+});
+
+test("the picker lists the brightness modes first, then the palettes by scheme", () => {
+  const { modes, light, dark } = themeGroups();
+
+  expect(modes.map((theme) => theme.id)).toEqual(["light", "dark"]);
+  expect(light.every((theme) => theme.scheme === "light")).toBe(true);
+  expect(dark.every((theme) => theme.scheme === "dark")).toBe(true);
+  expect(light.length + dark.length + modes.length).toBe(THEMES.length);
+  expect(light.length).toBeGreaterThan(0);
+  expect(dark.length).toBeGreaterThan(0);
 });

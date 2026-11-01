@@ -2302,6 +2302,43 @@ button {
   gap: var(--space-2);
 }
 
+/* 狭い画面では面と余白を詰めて、長い名前が入る幅を残す。 */
+@media (max-width: 480px) {
+  .hwc-theme {
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-1);
+  }
+
+  .hwc-theme-swatch {
+    width: var(--space-6);
+  }
+
+  /* 入り切らない長い名前は 2 行にして、省略記号で切らない。 */
+  .hwc-themes:not(.hwc-themes--modes) .hwc-theme-name {
+    white-space: normal;
+    line-height: 1.25;
+  }
+}
+
+/* 明るさの切り替えは 3 つ並べる。狭くても入るよう、面の下に名前を置く。 */
+.hwc-themes--modes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hwc-themes--modes .hwc-theme {
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  text-align: center;
+}
+
+.hwc-divider {
+  height: 1px;
+  margin: var(--space-4) 0;
+  background: var(--color-line);
+}
+
 .hwc-theme {
   display: flex;
   align-items: center;

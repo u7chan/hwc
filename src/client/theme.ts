@@ -28,13 +28,13 @@ export type ThemeMeta = {
 export const THEMES: readonly ThemeMeta[] = [
   {
     id: "light",
-    label: "ライト",
+    label: "Light",
     scheme: "light",
     swatch: { bg: "#f4f5f7", surface: "#ffffff", accent: "#255cd6" },
   },
   {
     id: "dark",
-    label: "ダーク",
+    label: "Dark",
     scheme: "dark",
     swatch: { bg: "#101215", surface: "#1b1e23", accent: "#94baff" },
   },
@@ -123,6 +123,21 @@ export const THEMES: readonly ThemeMeta[] = [
     swatch: { bg: "#002b36", surface: "#073642", accent: "#268bd2" },
   },
 ];
+
+// 明るさの切り替え（Light / Dark）を先に、色テーマは明るい順に並べる。
+export function themeGroups(): {
+  modes: ThemeMeta[];
+  light: ThemeMeta[];
+  dark: ThemeMeta[];
+} {
+  const modes = THEMES.filter((theme) => theme.id === "light" || theme.id === "dark");
+  const palettes = THEMES.filter((theme) => theme.id !== "light" && theme.id !== "dark");
+  return {
+    modes,
+    light: palettes.filter((theme) => theme.scheme === "light"),
+    dark: palettes.filter((theme) => theme.scheme === "dark"),
+  };
+}
 
 const THEME_IDS = new Set<string>(THEMES.map((theme) => theme.id));
 
