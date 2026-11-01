@@ -655,23 +655,29 @@ export function PaneDetail(props: PaneDetailProps) {
             <span class="hwc-feedback" aria-live="polite">
               {feedback}
             </span>
-            {agentInfo ? (
-              <span
-                class="hwc-input-info"
-                title={`${agentInfo.model} · effort ${agentInfo.effort}`}
+            <span class="hwc-input-tail">
+              {agentInfo ? (
+                <span
+                  class="hwc-input-info"
+                  title={`${agentInfo.model} · effort ${agentInfo.effort}`}
+                >
+                  <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
+                    <AgentGlyphIcon agent={pane.agent} size={14} />
+                  </span>
+                  <span class="hwc-input-model">{agentInfo.model}</span>
+                  <span class="hwc-input-effort">{agentInfo.effort}</span>
+                </span>
+              ) : null}
+              <button
+                type="submit"
+                class="hwc-send"
+                data-sending={sending}
+                aria-label={sending ? "送信中" : "送信"}
+                disabled={!canSend || sending}
               >
-                {agentInfo.model} · {agentInfo.effort}
-              </span>
-            ) : null}
-            <button
-              type="submit"
-              class="hwc-send"
-              data-sending={sending}
-              aria-label={sending ? "送信中" : "送信"}
-              disabled={!canSend || sending}
-            >
-              {sending ? <Spinner /> : <SendIcon />}
-            </button>
+                {sending ? <Spinner /> : <SendIcon />}
+              </button>
+            </span>
           </div>
         </div>
       </form>

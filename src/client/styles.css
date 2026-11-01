@@ -1866,10 +1866,7 @@ button {
   place-items: center;
   width: var(--space-5);
   height: var(--space-5);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-mark);
-  background: var(--color-raised);
-  color: var(--color-text);
+  color: var(--color-secondary);
 }
 
 .hwc-msg-copy {
@@ -1932,10 +1929,6 @@ button {
   .hwc-msg:focus-within .hwc-msg-copy {
     opacity: 1;
   }
-}
-
-.hwc-msg-avatar[data-agent="claude"] {
-  color: var(--color-agent-claude);
 }
 
 .hwc-msg[data-role="user"] {
@@ -2363,22 +2356,62 @@ button {
   color: var(--color-secondary);
 }
 
-/* いまのモデルと effort。送信の左に、読める範囲で短く置く。 */
-.hwc-input-info {
+/* 送信の手前にモデルと effort を並べる。行の右端に寄せる。 */
+.hwc-input-tail {
   flex: none;
+  display: flex;
+  align-items: center;
+  /* 札と送信ボタンが近いと息苦しいので、間を空ける。 */
+  gap: var(--space-3);
+  margin-left: auto;
   min-width: 0;
-  max-width: 45%;
-  overflow: hidden;
+  /* 幅は中身なり。狭いときだけモデル名が省略される。 */
+  max-width: 100%;
+}
+
+.hwc-input-info {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
   color: var(--color-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-secondary);
+}
+
+.hwc-input-model {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* 記号は枠を付けず、モデル名の手前に小さく置く。 */
+.hwc-input-agent {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--color-secondary);
+}
+
+.hwc-input-agent[data-agent="claude"],
+.hwc-msg-avatar[data-agent="claude"] {
+  color: var(--color-agent-claude);
+}
+
+/* effort は名前と混ざらないよう、小さな札にする。 */
+.hwc-input-effort {
+  flex: none;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-control-line);
+  border-radius: 999px;
+  color: var(--color-secondary);
+  font-size: 0.6875rem;
+  line-height: 1.25rem;
+}
+
 .hwc-send {
   flex: none;
-  margin-left: auto;
   display: grid;
   place-items: center;
   width: var(--tap);
