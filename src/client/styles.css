@@ -565,7 +565,7 @@ button {
 .hwc-grid rect {
   transform-box: fill-box;
   transform-origin: center;
-  animation: hwc-grid-pulse 0.6s linear infinite;
+  animation: hwc-grid-pulse 1.2s ease-in-out infinite;
 }
 
 /* 詳細 */
