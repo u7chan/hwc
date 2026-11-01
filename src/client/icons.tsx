@@ -1,3 +1,5 @@
+import { agentGlyph } from "./select";
+
 type IconProps = { size?: number };
 
 function Svg(props: { size: number; children: preact.ComponentChildren }) {
@@ -51,12 +53,84 @@ export function WorkspaceIcon({ size = 16 }: IconProps) {
   );
 }
 
+// git 管理下のワークスペース。枝分かれの形で表す。
+export function RepoIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="7" cy="6" r="2.4" />
+      <circle cx="7" cy="18" r="2.4" />
+      <circle cx="17" cy="9" r="2.4" />
+      <path d="M7 8.4v7.2" />
+      <path d="M17 11.4v.6a4 4 0 0 1-4 4H9.4" />
+    </Svg>
+  );
+}
+
+// 追加のチェックアウト（linked worktree）は、枝の隣に別の面を添えて示す。
+export function WorktreeIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="6" cy="6" r="2.2" />
+      <circle cx="6" cy="18" r="2.2" />
+      <path d="M6 8.2v7.6" />
+      <path d="M6 11h3.5a3 3 0 0 0 3-3V7.4" />
+      <circle cx="12.5" cy="5.2" r="1.8" />
+      <rect x="13.5" y="13" width="7" height="7" rx="1.8" />
+    </Svg>
+  );
+}
+
 export function TabIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
       <path d="M4 7h6l2 3h8" />
       <path d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V10" />
     </Svg>
+  );
+}
+
+// エージェントの見分けは、公式マークの形で付ける（色は行の色に合わせる）。
+export function PiIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 800 800" fill="currentColor" aria-hidden="true">
+      <path
+        fill-rule="evenodd"
+        d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+      />
+      <path d="M517.36 400H634.72V634.72H517.36Z" />
+    </svg>
+  );
+}
+
+export function ClaudeIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+      <path d="m100.5 340.4 100.7-56.5 1.7-4.9-1.7-2.7h-4.9l-16.9-1-57.6-1.6-49.8-2.1-48.4-2.6-12.2-2.6-11.4-15 1.2-7.5 10.2-6.8 14.6 1.3 32.4 2.2L107 244l35.2 2.1 52.2 5.4h8.3l1.2-3.3-2.9-2.1-2.2-2.1-50.3-34-54.4-36-28.5-20.7-15.4-10.5-7.8-9.9-3.4-21.5L53 96l18.8 1.3 4.8 1.3 19.1 14.6 40.7 31.5 53.1 39.1 7.8 6.5 3.1-2.2.4-1.6-3.5-5.8-28.9-52.2-30.8-53.1-13.7-22-3.6-13.4c-1.4-5.1-2.1-10.3-2.2-15.6l16-21.6 8.8-2.9 21.2 2.9 9 7.8 13.2 30.2 21.4 47.6 33.2 64.6 9.7 19.2 5.2 17.7 1.9 5.4h3.4v-3.1l2.7-36.4 5.1-44.7 4.9-57.5 1.7-16.2 8-19.4 15.9-10.5 12.5 6 10.2 14.6-1.4 9.5-6.1 39.5-11.9 61.9-7.8 41.4h4.5l5.2-5.2 21-27.9 35.2-44 15.6-17.5 18.1-19.3 11.7-9.2h22l16.2 24.1-7.3 24.9-22.7 28.7-18.8 24.4-27 36.3-16.9 29 1.6 2.3 4-.4 60.9-12.9 32.9-6 39.3-6.7 17.8 8.3 1.9 8.4-7 17.2-42 10.4-49.3 9.9-73.4 17.3-.9.6 1 1.3 33 3.1 14.1.8h34.6l64.4 4.8 16.9 11.1 10.1 13.6-1.7 10.3-25.9 13.2-35-8.3-81.7-19.4-28-7h-3.9v2.3l23.3 22.8 42.8 38.6L455 410l2.7 12.3-6.9 9.7-7.3-1-47-35.3-18.2-15.9-41.1-34.6h-2.7v3.6l9.5 13.8 50 75.1 2.6 23-3.6 7.5-13 4.5-14.3-2.6-28.7-40.7-30.2-46.2-24.4-41.5-3 1.7L265 498.2l-6.7 7.9-15.6 6-12.9-9.8-6.9-15.9 6.9-31.5 8.3-41 6.7-32.6 6.1-40.5 3.6-13.5-.3-.9-3 .4-30.6 42-46.5 62.8-36.8 39.4-8.8 3.5-15.3-7.9 1.4-14.1 8.6-12.6 50.9-64.8 30.7-40.1 19.8-23.2-.1-3.4h-1.2L88.1 395.9 64 399.1l-10.4-9.7 1.3-15.9 4.9-5.2 40.7-28c.1-.1 0 .1 0 .1" />
+    </svg>
+  );
+}
+
+export function CodexIcon({ size = 18 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M22.282 9.821a6 6 0 0 0-.516-4.91 6.05 6.05 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a6 6 0 0 0-3.998 2.9 6.05 6.05 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.05 6.05 0 0 0 6.515 2.9A6 6 0 0 0 13.26 24a6.06 6.06 0 0 0 5.772-4.206 6 6 0 0 0 3.997-2.9 6.06 6.06 0 0 0-.747-7.073M13.26 22.43a4.48 4.48 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.8.8 0 0 0 .392-.681v-6.737l2.02 1.168a.07.07 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494M3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.77.77 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646M2.34 7.896a4.5 4.5 0 0 1 2.366-1.973V11.6a.77.77 0 0 0 .388.677l5.815 3.355-2.02 1.168a.08.08 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872m16.597 3.855-5.833-3.387L15.119 7.2a.08.08 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667m2.01-3.023-.141-.085-4.774-2.782a.78.78 0 0 0-.785 0L9.409 9.23V6.897a.07.07 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.8.8 0 0 0-.393.681zm1.097-2.365 2.603-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
+    </svg>
+  );
+}
+
+// 縦長のマークなので、正方形に押し込めず縦横比を保つ。
+export function OpenCodeIcon({ size = 18 }: IconProps) {
+  return (
+    <svg
+      width={size * 0.8}
+      height={size}
+      viewBox="0 0 24 30"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path fill-rule="evenodd" d="M0 0h24v30H0zM6 6h12v18H6z" />
+      <path d="M6 12h12v12H6z" />
+    </svg>
   );
 }
 
@@ -67,6 +141,21 @@ export function AgentIcon({ size = 16 }: IconProps) {
       <path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
     </Svg>
   );
+}
+
+export function AgentGlyphIcon({ agent, size = 18 }: { agent: string | null; size?: number }) {
+  switch (agentGlyph(agent)) {
+    case "pi":
+      return <PiIcon size={size} />;
+    case "claude":
+      return <ClaudeIcon size={size} />;
+    case "codex":
+      return <CodexIcon size={size} />;
+    case "opencode":
+      return <OpenCodeIcon size={size} />;
+    default:
+      return <AgentIcon size={size} />;
+  }
 }
 
 export function PaneIcon({ size = 16 }: IconProps) {

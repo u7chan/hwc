@@ -10,11 +10,17 @@ export type HerdrSnapshot = {
   agents?: readonly HerdrAgent[];
 };
 
+export type HerdrWorktree = {
+  repo_name: string;
+  is_linked_worktree: boolean;
+};
+
 export type HerdrWorkspace = {
   workspace_id: string;
   label?: string | null;
   agent_status?: AgentStatus;
   focused?: boolean;
+  worktree?: HerdrWorktree | null;
 };
 
 export type HerdrTab = {
@@ -73,6 +79,16 @@ function optionalFlag(value: unknown): boolean {
   return value === true;
 }
 
+// git 管理下でないワークスペースは worktree を持たない。
+function optionalWorktree(value: unknown, path: string): HerdrWorktree | null {
+  if (value === undefined || value === null) return null;
+  const record = expectRecord(value, path);
+  return {
+    repo_name: expectId(record.repo_name, `${path}.repo_name`),
+    is_linked_worktree: optionalFlag(record.is_linked_worktree),
+  };
+}
+
 export function parseSnapshot(value: unknown): HerdrSnapshot {
   const raw = expectRecord(value, "snapshot");
 
@@ -84,6 +100,7 @@ export function parseSnapshot(value: unknown): HerdrSnapshot {
       label: optionalText(record.label),
       agent_status: optionalStatus(record.agent_status),
       focused: optionalFlag(record.focused),
+      worktree: optionalWorktree(record.worktree, `${path}.worktree`),
     };
   });
 

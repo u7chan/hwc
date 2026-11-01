@@ -115,6 +115,9 @@ export function PaneDetail(props: PaneDetailProps) {
             );
           })}
         </div>
+        <span class="hwc-pane-id" title={pane.id}>
+          {pane.id}
+        </span>
       </div>
 
       <div class="hwc-output-wrap">

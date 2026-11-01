@@ -1,7 +1,14 @@
 import type { ComponentChildren } from "preact";
-import type { AppState } from "../server/herdr/state";
-import { AgentIcon, ChevronRightIcon, PaneIcon, WorkspaceIcon } from "./icons";
-import { countPanes, countWorkspacePanes } from "./select";
+import type { AppState, WorktreeState } from "../server/herdr/state";
+import {
+  AgentGlyphIcon,
+  ChevronRightIcon,
+  PaneIcon,
+  RepoIcon,
+  WorkspaceIcon,
+  WorktreeIcon,
+} from "./icons";
+import { agentGlyph, countPanes, countWorkspacePanes } from "./select";
 import { StatusLabel } from "./StatusLabel";
 
 type PaneListProps = {
@@ -12,8 +19,15 @@ type PaneListProps = {
   onToggle: (groupId: string) => void;
 };
 
+// git 管理下でない / 通常のリポジトリ / linked worktree を形で見分ける。
+function WorkspaceGlyph({ worktree }: { worktree: WorktreeState | null }) {
+  if (!worktree) return <WorkspaceIcon />;
+  return worktree.isLinkedWorktree ? <WorktreeIcon /> : <RepoIcon />;
+}
+
 function WorkspaceRow(props: {
   label: string;
+  worktree: WorktreeState | null;
   count: number;
   status: ComponentChildren;
   expanded: boolean;
@@ -29,7 +43,7 @@ function WorkspaceRow(props: {
       onClick={props.onToggle}
     >
       <span class="hwc-group-icon">
-        <WorkspaceIcon />
+        <WorkspaceGlyph worktree={props.worktree} />
       </span>
       <span class="hwc-group-main">
         <span class="hwc-group-name">{props.label}</span>
@@ -79,6 +93,7 @@ export function PaneList(props: PaneListProps) {
           <section class="hwc-group-block" key={workspace.id}>
             <WorkspaceRow
               label={workspace.label}
+              worktree={workspace.worktree}
               count={countWorkspacePanes(workspace.id, state)}
               // 開いているときは各ペインの状態が見えるので、まとめの状態は消す。
               // 位置がずれないように、消すときも場所は残して透明度だけ落とす。
@@ -101,12 +116,16 @@ export function PaneList(props: PaneListProps) {
                       aria-current={pane.id === selectedPaneId ? "true" : undefined}
                       onClick={() => onSelect(pane.id)}
                     >
-                      <span class="hwc-pane-icon">{pane.agent ? <AgentIcon /> : <PaneIcon />}</span>
+                      <span
+                        class="hwc-pane-icon"
+                        data-agent={agentGlyph(pane.agent)}
+                        data-working={pane.agentStatus === "working"}
+                      >
+                        {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
+                      </span>
                       <span class="hwc-pane-main">
                         <span class="hwc-pane-name">{pane.title ?? pane.agent ?? pane.id}</span>
-                        <span class="hwc-pane-sub">
-                          {tabLabel} · {pane.id}
-                        </span>
+                        <span class="hwc-pane-sub">{tabLabel}</span>
                       </span>
                       <StatusLabel status={pane.agentStatus} />
                     </button>

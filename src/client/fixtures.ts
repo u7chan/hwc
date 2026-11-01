@@ -11,6 +11,7 @@ export const previewState: AppState = {
       label: "hwc",
       agentStatus: "working",
       focused: true,
+      worktree: { repoName: "hwc", isLinkedWorktree: true },
       tabs: [
         {
           id: "w80:t1",
@@ -36,6 +37,21 @@ export const previewState: AppState = {
           focused: false,
           panes: [
             { id: "w80:p4", title: "bash", agent: null, agentStatus: "idle", focused: false },
+            {
+              id: "w80:p5",
+              title: "claude",
+              agent: "claude",
+              agentStatus: "working",
+              focused: false,
+            },
+            { id: "w80:p6", title: "codex", agent: "codex", agentStatus: "idle", focused: false },
+            {
+              id: "w80:p7",
+              title: "opencode",
+              agent: "opencode",
+              agentStatus: "idle",
+              focused: false,
+            },
           ],
         },
       ],
@@ -45,6 +61,7 @@ export const previewState: AppState = {
       label: "hwc-verify",
       agentStatus: "blocked",
       focused: false,
+      worktree: null,
       tabs: [
         {
           id: "w92:t1",

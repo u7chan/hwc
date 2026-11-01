@@ -14,6 +14,7 @@ const state: AppState = {
       label: "hwc",
       agentStatus: "idle",
       focused: true,
+      worktree: null,
       tabs: [
         {
           id: "w1:t1",

@@ -5,7 +5,15 @@ const snapshot: HerdrSnapshot = {
   focused_workspace_id: "w1",
   focused_tab_id: "w1:t1",
   focused_pane_id: "w1:p2",
-  workspaces: [{ workspace_id: "w1", label: "hwc", agent_status: "working", focused: true }],
+  workspaces: [
+    {
+      workspace_id: "w1",
+      label: "hwc",
+      agent_status: "working",
+      focused: true,
+      worktree: { repo_name: "hwc", is_linked_worktree: true },
+    },
+  ],
   tabs: [
     { tab_id: "w1:t1", workspace_id: "w1", label: "main", agent_status: "working", focused: true },
   ],
@@ -48,6 +56,18 @@ test("parseSnapshot rejects a payload that is not a snapshot", () => {
   expect(() => parseSnapshot(null)).toThrow("must be an object");
   expect(() => parseSnapshot([{ workspaces: [] }])).toThrow("must be an object");
   expect(() => parseSnapshot({ workspaces: "w1" })).toThrow("must be an array");
+});
+
+test("parseSnapshot keeps workspaces that are not in git without a worktree", () => {
+  const parsed = parseSnapshot({ workspaces: [{ workspace_id: "w1", label: "notes" }] });
+
+  expect(parsed.workspaces?.[0]?.worktree).toBeNull();
+});
+
+test("parseSnapshot rejects a worktree without a repo name", () => {
+  expect(() => parseSnapshot({ workspaces: [{ workspace_id: "w1", worktree: {} }] })).toThrow(
+    "snapshot.workspaces[0].worktree.repo_name",
+  );
 });
 
 test("parseSnapshot rejects a record without its id", () => {

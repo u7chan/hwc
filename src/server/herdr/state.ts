@@ -18,11 +18,17 @@ export type TabState = {
   panes: PaneState[];
 };
 
+export type WorktreeState = {
+  repoName: string;
+  isLinkedWorktree: boolean;
+};
+
 export type WorkspaceState = {
   id: string;
   label: string;
   agentStatus: AgentStatus;
   focused: boolean;
+  worktree: WorktreeState | null;
   tabs: TabState[];
 };
 
@@ -75,6 +81,12 @@ export function toAppState(snapshot: HerdrSnapshot): AppState {
       label: workspace.label ?? "",
       agentStatus: workspace.agent_status ?? "unknown",
       focused: workspace.focused ?? false,
+      worktree: workspace.worktree
+        ? {
+            repoName: workspace.worktree.repo_name,
+            isLinkedWorktree: workspace.worktree.is_linked_worktree,
+          }
+        : null,
       tabs,
     });
   }

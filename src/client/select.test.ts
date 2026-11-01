@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { AppState } from "../server/herdr/state";
 import {
+  agentGlyph,
   countPanes,
   countWorkspacePanes,
   findPane,
@@ -20,6 +21,7 @@ const state: AppState = {
       label: "hwc",
       agentStatus: "working",
       focused: true,
+      worktree: null,
       tabs: [
         {
           id: "w1:t1",
@@ -45,6 +47,7 @@ const state: AppState = {
       label: "hwc-verify",
       agentStatus: "blocked",
       focused: false,
+      worktree: null,
       tabs: [
         {
           id: "w2:t1",
@@ -95,4 +98,18 @@ test("status maps to a tone and a label", () => {
 
 test("only the focused workspace starts expanded", () => {
   expect([...initialExpanded(state)]).toEqual(["w1"]);
+});
+
+test("agentGlyph picks the icon for a known agent", () => {
+  expect(agentGlyph("pi")).toBe("pi");
+  expect(agentGlyph("claude")).toBe("claude");
+  expect(agentGlyph("codex")).toBe("codex");
+  expect(agentGlyph("opencode")).toBe("opencode");
+});
+
+test("agentGlyph matches the agent name loosely", () => {
+  expect(agentGlyph("Claude Code")).toBe("claude");
+  expect(agentGlyph("openai-codex")).toBe("codex");
+  expect(agentGlyph(null)).toBe("generic");
+  expect(agentGlyph("vim")).toBe("generic");
 });

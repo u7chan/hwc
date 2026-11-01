@@ -78,3 +78,22 @@ export function initialExpanded(state: AppState): Set<string> {
     state.workspaces.filter((workspace) => workspace.focused).map((workspace) => workspace.id),
   );
 }
+
+export type AgentGlyph = "pi" | "claude" | "codex" | "opencode" | "generic";
+
+// 一覧のアイコンを決める。opencode は "pi" を含まないが、順序に依存しないよう先に見る。
+export function agentGlyph(agent: string | null): AgentGlyph {
+  const name = (agent ?? "").toLowerCase();
+  if (name.includes("opencode")) return "opencode";
+  if (name.includes("claude") || name.includes("anthropic")) return "claude";
+  if (name.includes("codex") || name.includes("openai") || name.includes("gpt")) return "codex";
+  if (
+    name === "pi" ||
+    name.startsWith("pi-") ||
+    name.startsWith("pi ") ||
+    name.includes("coding-agent")
+  ) {
+    return "pi";
+  }
+  return "generic";
+}
