@@ -20,6 +20,8 @@ export type TabState = {
 
 export type WorktreeState = {
   repoName: string;
+  repoRoot: string | null;
+  checkoutPath: string | null;
   isLinkedWorktree: boolean;
 };
 
@@ -84,6 +86,8 @@ export function toAppState(snapshot: HerdrSnapshot): AppState {
       worktree: workspace.worktree
         ? {
             repoName: workspace.worktree.repo_name,
+            repoRoot: workspace.worktree.repo_root ?? null,
+            checkoutPath: workspace.worktree.checkout_path ?? null,
             isLinkedWorktree: workspace.worktree.is_linked_worktree,
           }
         : null,

@@ -11,7 +11,13 @@ export const previewState: AppState = {
       label: "hwc",
       agentStatus: "working",
       focused: true,
-      worktree: { repoName: "hwc", isLinkedWorktree: true },
+      // hwc の本体チェックアウト。
+      worktree: {
+        repoName: "hwc",
+        repoRoot: "/home/dev/workspaces/hwc",
+        checkoutPath: "/home/dev/workspaces/hwc",
+        isLinkedWorktree: false,
+      },
       tabs: [
         {
           id: "w80:t1",
@@ -57,16 +63,78 @@ export const previewState: AppState = {
       ],
     },
     {
-      id: "w92",
-      label: "hwc-verify",
+      id: "w81",
+      label: "hwc-ui",
+      agentStatus: "working",
+      focused: false,
+      // hwc の linked worktree。ラベルはチェックアウト先のフォルダ名になる。
+      worktree: {
+        repoName: "hwc",
+        repoRoot: "/home/dev/workspaces/hwc",
+        checkoutPath: "/home/dev/worktrees/hwc-ui",
+        isLinkedWorktree: true,
+      },
+      tabs: [
+        {
+          id: "w81:t1",
+          label: "main",
+          agentStatus: "working",
+          focused: false,
+          panes: [
+            {
+              id: "w81:p1",
+              title: "π - hwc-ui",
+              agent: "pi",
+              agentStatus: "working",
+              focused: false,
+            },
+            { id: "w81:p2", title: "bash", agent: null, agentStatus: "idle", focused: false },
+          ],
+        },
+      ],
+    },
+    {
+      id: "w82",
+      label: "hwc-sse",
       agentStatus: "blocked",
       focused: false,
+      worktree: {
+        repoName: "hwc",
+        repoRoot: "/home/dev/workspaces/hwc",
+        checkoutPath: "/home/dev/worktrees/hwc-sse",
+        isLinkedWorktree: true,
+      },
+      tabs: [
+        {
+          id: "w82:t1",
+          label: "main",
+          agentStatus: "blocked",
+          focused: false,
+          panes: [
+            {
+              id: "w82:p1",
+              title: "claude",
+              agent: "claude",
+              agentStatus: "blocked",
+              focused: false,
+            },
+            { id: "w82:p2", title: "bash", agent: null, agentStatus: "idle", focused: false },
+          ],
+        },
+      ],
+    },
+    {
+      id: "w92",
+      label: "scratch",
+      agentStatus: "idle",
+      focused: false,
+      // git 管理外。ワークツリーの情報は付かない。
       worktree: null,
       tabs: [
         {
           id: "w92:t1",
           label: "main",
-          agentStatus: "blocked",
+          agentStatus: "idle",
           focused: false,
           panes: [
             {

@@ -11,7 +11,12 @@ const snapshot: HerdrSnapshot = {
       label: "hwc",
       agent_status: "working",
       focused: true,
-      worktree: { repo_name: "hwc", is_linked_worktree: true },
+      worktree: {
+        repo_name: "hwc",
+        repo_root: "/home/dev/workspaces/hwc",
+        checkout_path: "/home/dev/worktrees/hwc-ui",
+        is_linked_worktree: true,
+      },
     },
   ],
   tabs: [
@@ -62,6 +67,19 @@ test("parseSnapshot keeps workspaces that are not in git without a worktree", ()
   const parsed = parseSnapshot({ workspaces: [{ workspace_id: "w1", label: "notes" }] });
 
   expect(parsed.workspaces?.[0]?.worktree).toBeNull();
+});
+
+test("a worktree without paths keeps nulls for them", () => {
+  const parsed = parseSnapshot({
+    workspaces: [{ workspace_id: "w1", worktree: { repo_name: "hwc" } }],
+  });
+
+  expect(parsed.workspaces?.[0].worktree).toEqual({
+    repo_name: "hwc",
+    repo_root: null,
+    checkout_path: null,
+    is_linked_worktree: false,
+  });
 });
 
 test("parseSnapshot rejects a worktree without a repo name", () => {

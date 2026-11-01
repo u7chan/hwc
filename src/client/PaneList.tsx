@@ -51,6 +51,7 @@ function WorkspaceRow(props: {
     <button
       type="button"
       class="hwc-group"
+      title={props.worktree?.checkoutPath ?? undefined}
       aria-expanded={props.expanded}
       aria-controls={props.controlsId}
       onClick={props.onToggle}
@@ -60,7 +61,10 @@ function WorkspaceRow(props: {
       </span>
       <span class="hwc-group-main">
         <span class="hwc-group-name">{props.label}</span>
-        <span class="hwc-group-sub">{props.count} ペイン</span>
+        <span class="hwc-group-sub">
+          {props.worktree && props.worktree.isLinkedWorktree ? `${props.worktree.repoName} · ` : ""}
+          {props.count} ペイン
+        </span>
       </span>
       {props.status}
       <span class="hwc-chevron" data-open={props.expanded}>

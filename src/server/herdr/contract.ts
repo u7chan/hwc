@@ -12,6 +12,8 @@ export type HerdrSnapshot = {
 
 export type HerdrWorktree = {
   repo_name: string;
+  repo_root?: string | null;
+  checkout_path?: string | null;
   is_linked_worktree: boolean;
 };
 
@@ -85,6 +87,8 @@ function optionalWorktree(value: unknown, path: string): HerdrWorktree | null {
   const record = expectRecord(value, path);
   return {
     repo_name: expectId(record.repo_name, `${path}.repo_name`),
+    repo_root: optionalText(record.repo_root),
+    checkout_path: optionalText(record.checkout_path),
     is_linked_worktree: optionalFlag(record.is_linked_worktree),
   };
 }
