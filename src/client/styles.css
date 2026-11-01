@@ -738,8 +738,9 @@ button {
   --indent: 0px;
 }
 
+/* 親の案内線から子のアイコンまで 12px 空ける。線とアイコンがくっつかないように。 */
 [data-depth="1"] {
-  --indent: var(--space-5);
+  --indent: calc(var(--space-5) + var(--space-2));
 }
 
 .hwc-group-block {
@@ -748,6 +749,11 @@ button {
   background: var(--color-surface);
   border-radius: var(--radius-panel);
   overflow: hidden;
+}
+
+/* 子のブロックは親の内側に収める。外側の余白を重ねると字下げが二重になる。 */
+.hwc-group-block[data-depth="1"] {
+  margin-inline: 0;
 }
 
 .hwc-group-children {
@@ -2467,7 +2473,7 @@ button {
 
   .hwc-group {
     min-height: var(--row-pane);
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + var(--indent, 0px));
   }
 
   .hwc-back {
