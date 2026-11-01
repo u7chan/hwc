@@ -1895,7 +1895,25 @@ button {
   opacity: 1;
   background: var(--color-success-bg);
   color: var(--color-success);
-  animation: hwc-badge-pop 320ms ease;
+  animation: hwc-copy-bounce 380ms cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+
+@keyframes hwc-copy-bounce {
+  0% {
+    transform: scale(1);
+  }
+
+  35% {
+    transform: scale(1.18);
+  }
+
+  70% {
+    transform: scale(0.96);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .hwc-msg-copy:focus-visible {
@@ -1949,10 +1967,16 @@ button {
   color: var(--color-text);
 }
 
-.hwc-msg-time {
+.hwc-msg-time,
+.hwc-msg-elapsed {
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+/* 返答までの時間は、時刻と区別できるよう等幅で添える。 */
+.hwc-msg-elapsed {
+  font-family: var(--font-mono);
 }
 
 /* 返答待ちの 3 点。行の高さを保って、返答が来たときに跳ねないようにする。 */
@@ -2630,8 +2654,9 @@ button {
   color: var(--color-secondary);
 }
 
-.hwc-empty-glyph {
-  font: 600 1.25rem/1 var(--font-mono);
+/* アプリの空状態はロゴを出す。何のアプリかがそのまま分かる。 */
+.hwc-empty-mark--app {
+  color: var(--color-text);
 }
 
 .hwc-empty-title {

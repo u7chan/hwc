@@ -5,6 +5,8 @@ export type ChatMessage = {
   role: ChatRole;
   text: string;
   at: number;
+  // ユーザーの送信から返答までの時間。返答にだけ入る。
+  elapsedMs?: number;
 };
 
 export function appendMessage(list: readonly ChatMessage[], message: ChatMessage): ChatMessage[] {

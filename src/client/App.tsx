@@ -169,6 +169,7 @@ export function App() {
   // 会話はプレビュー用に手元で積む。TODO: #14 で実データに置き換える。
   const [chats, setChats] = useState<Record<string, ChatMessage[]>>({ ...previewChats });
   const [replyingPaneId, setReplyingPaneId] = useState<string | null>(null);
+  const [replyStartedAt, setReplyStartedAt] = useState<number | null>(null);
 
   const askPane = async (paneId: string, text: string) => {
     const at = Date.now();
@@ -182,8 +183,9 @@ export function App() {
       }),
     }));
     setReplyingPaneId(paneId);
+    setReplyStartedAt(at);
     // 返答までの間を空けて、待っている様子を見せる。
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await new Promise((resolve) => setTimeout(resolve, 4500));
     const answeredAt = Date.now();
     setChats((current) => {
       const turn = (current[paneId] ?? []).filter((message) => message.role === "agent").length;
@@ -194,10 +196,12 @@ export function App() {
           role: "agent",
           text: mockReply(text, turn),
           at: answeredAt,
+          elapsedMs: answeredAt - at,
         }),
       };
     });
     setReplyingPaneId(null);
+    setReplyStartedAt(null);
     setFeedback("プレビュー：返答はモックです");
   };
 

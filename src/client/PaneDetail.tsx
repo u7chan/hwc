@@ -28,7 +28,7 @@ import { useCopy } from "./copy";
 import { readDraft, storage, writeDraft } from "./drafts";
 import { Preview } from "./Preview";
 import { Spinner } from "./Spinner";
-import { formatClock } from "./time";
+import { formatClock, formatElapsed } from "./time";
 import { StatusIcon } from "./StatusLabel";
 
 // 出力がまだ無いときは、空の枠だけ置いても意味がないので案内を出す。
@@ -48,6 +48,7 @@ function OutputEmpty() {
 function ChatLog(props: {
   messages: readonly ChatMessage[];
   replying: boolean;
+  waitingMs: number | null;
   agent: string | null;
   copiedId: string | null;
   onCopy: (id: string, text: string) => void;
@@ -80,6 +81,9 @@ function ChatLog(props: {
             <div class="hwc-msg-meta">
               {avatar}
               <span class="hwc-msg-time">{formatClock(message.at)}</span>
+              {message.elapsedMs === undefined ? null : (
+                <span class="hwc-msg-elapsed">{formatElapsed(message.elapsedMs)}</span>
+              )}
               {copyButton(message)}
             </div>
           </li>
@@ -102,6 +106,9 @@ function ChatLog(props: {
               <span />
               <span />
             </span>
+            {props.waitingMs === null ? null : (
+              <span class="hwc-msg-elapsed">{formatElapsed(props.waitingMs)}</span>
+            )}
           </div>
         </li>
       ) : null}
@@ -124,6 +131,7 @@ type PaneDetailProps = {
   pane: PaneState;
   messages: readonly ChatMessage[] | null;
   replying: boolean;
+  waitingMs: number | null;
   context: { workspaceLabel: string; tabLabel: string };
   panes: readonly PaneState[];
   output: string | null;
@@ -139,6 +147,7 @@ export function PaneDetail(props: PaneDetailProps) {
     pane,
     messages,
     replying,
+    waitingMs,
     context,
     panes,
     output,
@@ -451,6 +460,7 @@ export function PaneDetail(props: PaneDetailProps) {
             <ChatLog
               messages={messages}
               replying={replying}
+              waitingMs={waitingMs}
               agent={pane.agent}
               copiedId={copiedId}
               onCopy={copy}
