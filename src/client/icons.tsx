@@ -248,6 +248,25 @@ export function ArrowDownIcon({ size = 20 }: IconProps) {
   );
 }
 
+export function EyeIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M2.5 12s3.6-6.5 9.5-6.5S21.5 12 21.5 12s-3.6 6.5-9.5 6.5S2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </Svg>
+  );
+}
+
+export function ExternalLinkIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M14 4h6v6" />
+      <path d="M20 4l-8.5 8.5" />
+      <path d="M18 14.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V8.5A1.5 1.5 0 0 1 5 7h4.5" />
+    </Svg>
+  );
+}
+
 export function PaperclipIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

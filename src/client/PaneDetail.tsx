@@ -1,6 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
-import { addAttachments, formatBytes, removeAttachment, type Attachment } from "./files";
+import {
+  ATTACHMENT_LIMIT,
+  addAttachments,
+  attachmentKind,
+  formatBytes,
+  removeAttachment,
+  type Attachment,
+} from "./files";
 import {
   ArrowDownIcon,
   ChevronLeftIcon,
@@ -8,11 +15,14 @@ import {
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
+  ExternalLinkIcon,
+  EyeIcon,
   PaperclipIcon,
   TerminalIcon,
   SendIcon,
 } from "./icons";
 import { statusLabel } from "./select";
+import { Preview } from "./Preview";
 import { Spinner } from "./Spinner";
 import { StatusIcon } from "./StatusLabel";
 
@@ -62,6 +72,36 @@ export function PaneDetail(props: PaneDetailProps) {
   const [copied, setCopied] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dropping, setDropping] = useState(false);
+  const [rejected, setRejected] = useState(0);
+  const [previewing, setPreviewing] = useState<string | null>(null);
+
+  const previewed = attachments.find((file) => file.id === previewing) ?? null;
+
+  const takeFiles = (files: readonly File[]) => {
+    setAttachments((current) => {
+      const next = addAttachments(
+        current,
+        files.map((file) => ({
+          name: file.name,
+          size: file.size,
+          lastModified: file.lastModified,
+          type: file.type,
+          blob: file,
+        })),
+      );
+      setRejected(next.rejected);
+      return next.attachments;
+    });
+  };
+
+  // PDF は中で描画するとブラウザ差が出るので、別のタブに任せる。
+  const openInTab = (attachment: Attachment) => {
+    if (!attachment.blob) return;
+    const url = URL.createObjectURL(attachment.blob);
+    window.open(url, "_blank", "noopener");
+    // 開いたタブが読み込むまで URL は生かしておく。
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
   // タブの並びも PC だけで動かす。触れる画面ではドラッグが発火しない。
   const [draggedTab, setDraggedTab] = useState<string | null>(null);
   const [tabDrop, setTabDrop] = useState<{ paneId: string; after: boolean } | null>(null);
@@ -295,7 +335,7 @@ export function PaneDetail(props: PaneDetailProps) {
           if (!transfer?.types.includes("Files")) return;
           event.preventDefault();
           setDropping(false);
-          setAttachments((current) => addAttachments(current, [...transfer.files]));
+          takeFiles([...transfer.files]);
         }}
       >
         <button
@@ -312,22 +352,65 @@ export function PaneDetail(props: PaneDetailProps) {
         </label>
         {attachments.length > 0 ? (
           <ul class="hwc-attachments" aria-label="添付">
-            {attachments.map((file) => (
-              <li class="hwc-attachment" key={file.id}>
-                <PaperclipIcon />
-                <span class="hwc-attachment-name">{file.name}</span>
-                <span class="hwc-attachment-size">{formatBytes(file.size)}</span>
-                <button
-                  type="button"
-                  class="hwc-attachment-remove"
-                  aria-label={`${file.name} を外す`}
-                  onClick={() => setAttachments((current) => removeAttachment(current, file.id))}
-                >
-                  <CloseIcon size={14} />
-                </button>
-              </li>
-            ))}
+            {attachments.map((file) => {
+              const kind = attachmentKind(file);
+              const body = (
+                <>
+                  {kind === "image" || kind === "text" ? (
+                    <EyeIcon />
+                  ) : kind === "pdf" ? (
+                    <ExternalLinkIcon />
+                  ) : (
+                    <PaperclipIcon />
+                  )}
+                  <span class="hwc-attachment-name">{file.name}</span>
+                  <span class="hwc-attachment-size">{formatBytes(file.size)}</span>
+                </>
+              );
+              return (
+                <li class="hwc-attachment" key={file.id} data-kind={kind}>
+                  {kind === "image" || kind === "text" ? (
+                    <button
+                      type="button"
+                      class="hwc-attachment-open"
+                      title={file.name}
+                      aria-label={`${file.name} をプレビュー`}
+                      onClick={() => setPreviewing(file.id)}
+                    >
+                      {body}
+                    </button>
+                  ) : kind === "pdf" ? (
+                    <button
+                      type="button"
+                      class="hwc-attachment-open"
+                      title={file.name}
+                      aria-label={`${file.name} を新しいタブで開く`}
+                      onClick={() => openInTab(file)}
+                    >
+                      {body}
+                    </button>
+                  ) : (
+                    <span class="hwc-attachment-static" title={file.name}>
+                      {body}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    class="hwc-attachment-remove"
+                    aria-label={`${file.name} を外す`}
+                    onClick={() => setAttachments((current) => removeAttachment(current, file.id))}
+                  >
+                    <CloseIcon size={14} />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
+        ) : null}
+        {rejected > 0 ? (
+          <p class="hwc-attachments-warning" role="status">
+            添付は {ATTACHMENT_LIMIT} 件までです（{rejected} 件は追加できませんでした）
+          </p>
         ) : null}
         {attachments.length > 0 ? (
           <p class="hwc-attachments-note">添付はまだ送信されません</p>
@@ -372,6 +455,16 @@ export function PaneDetail(props: PaneDetailProps) {
           </div>
         </div>
       </form>
+      {previewed ? (
+        <Preview
+          attachment={previewed}
+          onClose={() => setPreviewing(null)}
+          onRemove={() => {
+            setAttachments((current) => removeAttachment(current, previewed.id));
+            setPreviewing(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

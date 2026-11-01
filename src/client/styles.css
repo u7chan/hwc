@@ -1130,6 +1130,10 @@ button {
   padding: var(--space-4);
 }
 
+.hwc-dialog:focus {
+  outline: none;
+}
+
 .hwc-dialog {
   width: 100%;
   max-width: 320px;
@@ -1762,6 +1766,11 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  /* 10 件積んでも入力欄が潰れないよう、3 行で頭打ちにする。 */
+  max-height: 132px;
+  overflow-y: auto;
+  /* 右上の拡大ボタンに重ならないよう、右端を空ける。 */
+  padding-right: calc(var(--tap) + var(--space-2));
   margin: 0 0 var(--space-2);
   padding: 0;
   list-style: none;
@@ -1770,10 +1779,10 @@ button {
 .hwc-attachment {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   max-width: 100%;
   height: var(--space-8);
-  padding: 0 var(--space-1) 0 var(--space-3);
+  padding: 0 var(--space-1);
   border: 1px solid var(--color-control-line);
   border-radius: var(--radius-mark);
   background: var(--color-raised);
@@ -1791,6 +1800,154 @@ button {
   white-space: nowrap;
 }
 
+/* プレビューは確認ダイアログと同じ層に、見るための広い面として出す。 */
+.hwc-preview {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 720px;
+  max-height: min(80dvh, 720px);
+  padding: 0;
+  overflow: hidden;
+}
+
+.hwc-preview-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--row-pane);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.hwc-preview-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--color-secondary);
+}
+
+.hwc-preview-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-preview-size {
+  flex: none;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hwc-preview-close {
+  flex: none;
+  color: var(--color-secondary);
+}
+
+.hwc-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-raised);
+}
+
+/* 透過を含む画像でも、どこが空いているか分かるように市松を敷く。 */
+.hwc-preview-image {
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  background-image:
+    linear-gradient(
+      45deg,
+      var(--color-line) 25%,
+      transparent 25%,
+      transparent 75%,
+      var(--color-line) 75%
+    ),
+    linear-gradient(
+      45deg,
+      var(--color-line) 25%,
+      transparent 25%,
+      transparent 75%,
+      var(--color-line) 75%
+    );
+  background-position:
+    0 0,
+    8px 8px;
+  background-size: 16px 16px;
+}
+
+.hwc-preview-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.hwc-preview-text {
+  margin: 0;
+  padding: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.hwc-preview-loading,
+.hwc-preview-note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-preview-actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-line);
+}
+
+.hwc-preview-remove {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hwc-preview-remove:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-control);
+}
+
+.hwc-preview-remove:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.hwc-preview-done {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0 var(--space-6);
+  border: 0;
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
 .hwc-attachments-note {
   margin: calc(var(--space-1) * -1) 0 var(--space-2);
   color: var(--color-secondary);
@@ -1800,6 +1957,46 @@ button {
 .hwc-attachment-size {
   flex: none;
   font-variant-numeric: tabular-nums;
+}
+
+/* 中身を見られるものだけ押せる。押せないものはホバーも付けない。 */
+.hwc-attachment-open,
+.hwc-attachment-static {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-secondary);
+  font: inherit;
+  text-align: left;
+}
+
+.hwc-attachment-open {
+  cursor: pointer;
+}
+
+.hwc-attachment-open:hover {
+  color: var(--color-text);
+}
+
+.hwc-attachment-open:hover .hwc-attachment-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hwc-attachment-open:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-radius: var(--radius-mark);
+}
+
+.hwc-attachments-warning {
+  margin: calc(var(--space-1) * -1) 0 var(--space-2);
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
 }
 
 .hwc-attachment-remove {
