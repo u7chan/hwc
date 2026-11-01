@@ -1116,6 +1116,16 @@ button {
   overflow-wrap: anywhere;
 }
 
+/* 経過は目安。数字が揺れないよう等幅の数字で出す。 */
+.hwc-pane-elapsed {
+  flex: none;
+  margin-left: var(--space-2);
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 状態ラベル */
 
 /* 状態は記号だけで示し、文言はホバー中だけ添える。 */

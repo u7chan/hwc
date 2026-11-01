@@ -5,6 +5,7 @@ import { Settings } from "./Settings";
 import { previewOutput, previewState } from "./fixtures";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import { findPane, findPaneContext, initialExpanded, removePane } from "./select";
+import { trackWorking } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -69,6 +70,19 @@ export function App() {
     setTheme(next);
     if (typeof localStorage !== "undefined") saveThemePreference(localStorage, next);
   };
+
+  // 稼働に入った時刻は手元で覚える。1 秒ごとに数え直して経過として出す。
+  const [workingSince, setWorkingSince] = useState<ReadonlyMap<string, number>>(new Map());
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    setWorkingSince((current) => trackWorking(current, state, Date.now()));
+  }, [state]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const closePane = (paneId: string) => {
     setState((current) => removePane(current, paneId));
@@ -171,6 +185,8 @@ export function App() {
             onSelect={select}
             onToggle={toggle}
             onClosePane={closePane}
+            workingSince={workingSince}
+            now={now}
           />
         </aside>
 

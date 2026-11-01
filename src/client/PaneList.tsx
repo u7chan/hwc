@@ -14,6 +14,7 @@ import {
 } from "./icons";
 import { Confirm } from "./Confirm";
 import { agentGlyph, countPanes, countWorkspacePanes } from "./select";
+import { formatElapsed } from "./time";
 import { StatusLabel } from "./StatusLabel";
 
 type PaneListProps = {
@@ -23,6 +24,8 @@ type PaneListProps = {
   onSelect: (paneId: string) => void;
   onToggle: (groupId: string) => void;
   onClosePane: (paneId: string) => void;
+  workingSince: ReadonlyMap<string, number>;
+  now: number;
 };
 
 // git 管理下でない / 通常のリポジトリ / linked worktree を形で見分ける。
@@ -112,7 +115,8 @@ export function PaneList(props: PaneListProps) {
       window.removeEventListener("resize", onMove);
     };
   }, [menu]);
-  const { state, selectedPaneId, expanded, onSelect, onToggle, onClosePane } = props;
+  const { state, selectedPaneId, expanded, onSelect, onToggle, onClosePane, workingSince, now } =
+    props;
 
   if (countPanes(state) === 0) {
     return (
@@ -153,41 +157,47 @@ export function PaneList(props: PaneListProps) {
             />
             <GroupChildren id={groupId} open={open}>
               <ul class="hwc-panes">
-                {panes.map(({ pane, tabLabel }) => (
-                  <li key={pane.id}>
-                    <div class="hwc-pane" data-current={pane.id === selectedPaneId}>
-                      <button
-                        type="button"
-                        class="hwc-pane-open"
-                        aria-current={pane.id === selectedPaneId ? "true" : undefined}
-                        onClick={() => onSelect(pane.id)}
-                      >
-                        <span
-                          class="hwc-pane-icon"
-                          data-agent={agentGlyph(pane.agent)}
-                          data-working={pane.agentStatus === "working"}
+                {panes.map(({ pane, tabLabel }) => {
+                  const startedAt = workingSince.get(pane.id);
+                  return (
+                    <li key={pane.id}>
+                      <div class="hwc-pane" data-current={pane.id === selectedPaneId}>
+                        <button
+                          type="button"
+                          class="hwc-pane-open"
+                          aria-current={pane.id === selectedPaneId ? "true" : undefined}
+                          onClick={() => onSelect(pane.id)}
                         >
-                          {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
-                        </span>
-                        <span class="hwc-pane-main">
-                          <span class="hwc-pane-name">{pane.title ?? pane.agent ?? pane.id}</span>
-                          <span class="hwc-pane-sub">{tabLabel}</span>
-                        </span>
-                        <StatusLabel status={pane.agentStatus} />
-                      </button>
-                      <button
-                        type="button"
-                        class="hwc-pane-more"
-                        aria-label={`${pane.id} のメニュー`}
-                        aria-haspopup="menu"
-                        aria-expanded={menu?.paneId === pane.id}
-                        onClick={(event) => openMenu(event, pane.id)}
-                      >
-                        <MoreIcon />
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                          <span
+                            class="hwc-pane-icon"
+                            data-agent={agentGlyph(pane.agent)}
+                            data-working={pane.agentStatus === "working"}
+                          >
+                            {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
+                          </span>
+                          <span class="hwc-pane-main">
+                            <span class="hwc-pane-name">{pane.title ?? pane.agent ?? pane.id}</span>
+                            <span class="hwc-pane-sub">{tabLabel}</span>
+                          </span>
+                          {startedAt === undefined ? null : (
+                            <span class="hwc-pane-elapsed">{formatElapsed(now - startedAt)}</span>
+                          )}
+                          <StatusLabel status={pane.agentStatus} />
+                        </button>
+                        <button
+                          type="button"
+                          class="hwc-pane-more"
+                          aria-label={`${pane.id} のメニュー`}
+                          aria-haspopup="menu"
+                          aria-expanded={menu?.paneId === pane.id}
+                          onClick={(event) => openMenu(event, pane.id)}
+                        >
+                          <MoreIcon />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </GroupChildren>
           </section>
