@@ -486,7 +486,32 @@ button {
   display: inline-flex;
 }
 
+/* ワークスペースを開くとまとめの状態は引っ込む。場所は残して淡く消す。 */
+.hwc-group-status {
+  flex: none;
+  display: inline-flex;
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+
+.hwc-group-status[data-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes hwc-status-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .hwc-status {
+  animation: hwc-status-in 160ms ease-out;
   position: relative;
   flex: none;
   display: inline-flex;
@@ -610,7 +635,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: 48px;
+  height: 56px;
   padding: 0 var(--space-3);
   border: 0;
   background: transparent;
@@ -737,6 +762,29 @@ button {
 
 .hwc-jump[data-visible="true"]:active {
   opacity: 0.72;
+}
+
+@keyframes hwc-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.hwc-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hwc-skeleton-line {
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+  animation: hwc-skeleton-pulse 1.4s ease-in-out infinite;
 }
 
 .hwc-output {
@@ -986,7 +1034,9 @@ button {
 
   .hwc-arc,
   .hwc-arc-turn,
-  .hwc-bars rect {
+  .hwc-bars rect,
+  .hwc-skeleton-line,
+  .hwc-status {
     animation: none;
     transform: none;
   }

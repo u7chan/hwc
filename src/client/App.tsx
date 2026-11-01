@@ -87,7 +87,14 @@ export function App() {
     setSettingsOpen(false);
   };
 
-  const output = useMemo(() => (pane ? previewOutput(pane.id) : ""), [pane?.id]);
+  // 配線前のプレビュー。実 API では取得中を null で表し、skeleton を出す。
+  const [output, setOutput] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pane) return;
+    setOutput(null);
+    const timer = setTimeout(() => setOutput(previewOutput(pane.id)), 450);
+    return () => clearTimeout(timer);
+  }, [pane?.id]);
 
   // タブは選択中ペインのワークスペースにあるペイン全部。
   const siblings = useMemo(() => {

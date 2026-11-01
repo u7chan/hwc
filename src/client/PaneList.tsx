@@ -80,8 +80,13 @@ export function PaneList(props: PaneListProps) {
             <WorkspaceRow
               label={workspace.label}
               count={countWorkspacePanes(workspace.id, state)}
-              // 開いているときは各ペインの状態が見えるので、まとめの状態は出さない。
-              status={open ? null : <StatusLabel status={workspace.agentStatus} />}
+              // 開いているときは各ペインの状態が見えるので、まとめの状態は消す。
+              // 位置がずれないように、消すときも場所は残して透明度だけ落とす。
+              status={
+                <span class="hwc-group-status" data-hidden={open}>
+                  <StatusLabel status={workspace.agentStatus} />
+                </span>
+              }
               expanded={open}
               controlsId={groupId}
               onToggle={() => onToggle(workspace.id)}

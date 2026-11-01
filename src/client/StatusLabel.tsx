@@ -26,7 +26,7 @@ export function StatusIcon({ status }: { status: AgentStatus }) {
 export function StatusLabel({ status }: { status: AgentStatus }) {
   return (
     <span class="hwc-status-label">
-      <StatusIcon status={status} />
+      <StatusIcon status={status} key={status} />
       <span class="hwc-status-text">{statusLabel(status)}</span>
     </span>
   );

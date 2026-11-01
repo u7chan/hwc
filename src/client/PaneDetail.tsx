@@ -5,11 +5,22 @@ import { statusLabel } from "./select";
 import { Spinner } from "./Spinner";
 import { StatusIcon } from "./StatusLabel";
 
+// 中身が届くまでの置き。行数を多めにして、下から伸びるように見せる。
+function OutputSkeleton() {
+  return (
+    <div class="hwc-skeleton" aria-hidden="true">
+      {[92, 78, 86, 64, 88, 72, 40].map((width, index) => (
+        <span class="hwc-skeleton-line" key={index} style={{ width: `${width}%` }} />
+      ))}
+    </div>
+  );
+}
+
 type PaneDetailProps = {
   pane: PaneState;
   context: { workspaceLabel: string; tabLabel: string };
   panes: readonly PaneState[];
-  output: string;
+  output: string | null;
   onSelectPane: (paneId: string) => void;
   onBack: () => void;
   onSubmit: (text: string) => void | Promise<void>;
@@ -115,7 +126,7 @@ export function PaneDetail(props: PaneDetailProps) {
             setAtBottom(element.scrollHeight - element.scrollTop - element.clientHeight <= 8);
           }}
         >
-          <pre class="hwc-output">{output}</pre>
+          {output === null ? <OutputSkeleton /> : <pre class="hwc-output">{output}</pre>}
         </div>
         <button
           type="button"
