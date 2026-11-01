@@ -2363,6 +2363,19 @@ button {
   color: var(--color-secondary);
 }
 
+/* いまのモデルと effort。送信の左に、読める範囲で短く置く。 */
+.hwc-input-info {
+  flex: none;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hwc-send {
   flex: none;
   margin-left: auto;

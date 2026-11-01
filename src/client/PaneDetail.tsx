@@ -132,6 +132,7 @@ type PaneDetailProps = {
   messages: readonly ChatMessage[] | null;
   replying: boolean;
   waitingMs: number | null;
+  agentInfo: { model: string; effort: string } | null;
   context: { workspaceLabel: string; tabLabel: string };
   panes: readonly PaneState[];
   output: string | null;
@@ -148,6 +149,7 @@ export function PaneDetail(props: PaneDetailProps) {
     messages,
     replying,
     waitingMs,
+    agentInfo,
     context,
     panes,
     output,
@@ -653,6 +655,14 @@ export function PaneDetail(props: PaneDetailProps) {
             <span class="hwc-feedback" aria-live="polite">
               {feedback}
             </span>
+            {agentInfo ? (
+              <span
+                class="hwc-input-info"
+                title={`${agentInfo.model} · effort ${agentInfo.effort}`}
+              >
+                {agentInfo.model} · {agentInfo.effort}
+              </span>
+            ) : null}
             <button
               type="submit"
               class="hwc-send"

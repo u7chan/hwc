@@ -220,6 +220,19 @@ NO_SUBMIT_CHECKecho SUBMIT_CHECK
 ❯ `,
 };
 
+// どのモデルをどの effort で走らせているか。Herdr の snapshot には無いので、
+// 配線するときはエージェントの設定から取る。いまはプレビュー用の値。
+export type AgentInfo = { model: string; effort: string };
+
+export const previewAgentInfo: Record<string, AgentInfo> = {
+  "w80:p2": { model: "claude-opus-4-6", effort: "high" },
+  "w80:p9": { model: "claude-opus-4-6", effort: "high" },
+  "w80:p5": { model: "claude-sonnet-4-5", effort: "medium" },
+  "w80:p6": { model: "gpt-5-codex", effort: "low" },
+  "w80:p7": { model: "qwen3-coder", effort: "medium" },
+  "w81:p1": { model: "claude-opus-4-6", effort: "high" },
+};
+
 export function previewChat(paneId: string): ChatMessage[] | null {
   return previewChats[paneId] ?? null;
 }

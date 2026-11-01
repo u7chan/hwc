@@ -4,7 +4,13 @@ import { PaneDetail } from "./PaneDetail";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
 import { appendMessage, mockReply, type ChatMessage } from "./chat";
-import { previewChat, previewChats, previewOutput, previewState } from "./fixtures";
+import {
+  previewAgentInfo,
+  previewChat,
+  previewChats,
+  previewOutput,
+  previewState,
+} from "./fixtures";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import {
   findPane,
@@ -352,6 +358,7 @@ export function App() {
               output={output}
               onBack={() => setSelectedPaneId(null)}
               messages={chats[pane.id] ?? previewChat(pane.id)}
+              agentInfo={previewAgentInfo[pane.id] ?? null}
               replying={replyingPaneId === pane.id}
               waitingMs={replyStartedAt === null ? null : now - replyStartedAt}
               onSubmit={(text) => askPane(pane.id, text)}
