@@ -59,6 +59,25 @@ export function movePane(
   return changed ? { ...state, workspaces } : state;
 }
 
+// 一覧に並ぶ順（ワークスペース内のタブを横断した順）で、前後のペインへ 1 つ動かす。
+export function movePaneStep(state: AppState, paneId: string, delta: -1 | 1): AppState {
+  for (const workspace of state.workspaces) {
+    const flat = workspace.tabs.flatMap((tab) =>
+      tab.panes.map((pane, index) => ({ pane, tabId: tab.id, index })),
+    );
+    const at = flat.findIndex((item) => item.pane.id === paneId);
+    if (at === -1) continue;
+    const target = flat[at + delta];
+    if (!target) return state;
+    return movePane(state, paneId, target.tabId, target.index + (delta > 0 ? 1 : 0));
+  }
+  return state;
+}
+
+export function canMovePane(state: AppState, paneId: string, delta: -1 | 1): boolean {
+  return movePaneStep(state, paneId, delta) !== state;
+}
+
 // ペインを 1 枚だけ取り除く。空になったタブとワークスペースも一緒に落とす。
 export function removePane(state: AppState, paneId: string): AppState {
   return {

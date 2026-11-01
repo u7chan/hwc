@@ -1000,6 +1000,16 @@ button {
   background: var(--color-raised);
 }
 
+.hwc-menu-item:disabled {
+  color: var(--color-secondary);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hwc-menu-item:disabled:hover {
+  background: transparent;
+}
+
 .hwc-menu-item--danger {
   color: var(--color-danger);
 }

@@ -36,6 +36,14 @@ export function ChevronRightIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function ChevronUpIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M6 14.5l6-6 6 6" />
+    </Svg>
+  );
+}
+
 export function ChevronDownIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

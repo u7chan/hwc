@@ -6,8 +6,10 @@ import {
   countWorkspacePanes,
   findPane,
   findPaneContext,
+  canMovePane,
   initialExpanded,
   movePane,
+  movePaneStep,
   removePane,
   statusLabel,
   statusTone,
@@ -113,6 +115,24 @@ test("reordering inside a tab accounts for the pane leaving its slot", () => {
 
   const up = movePane(state, "w1:p2", "w1:t1", 0);
   expect(up.workspaces[0].tabs[0].panes.map((pane) => pane.id)).toEqual(["w1:p2", "w1:p1"]);
+});
+
+test("a pane moves one step along the list, across tabs", () => {
+  const down = movePaneStep(state, "w1:p1", 1);
+  expect(down.workspaces[0].tabs[0].panes.map((pane) => pane.id)).toEqual(["w1:p2", "w1:p1"]);
+
+  // タブの境目を越えると、隣のタブの頭に入る。
+  const across = movePaneStep(state, "w1:p2", 1);
+  expect(across.workspaces[0].tabs[0].panes.map((pane) => pane.id)).toEqual(["w1:p1"]);
+  expect(across.workspaces[0].tabs[1].panes.map((pane) => pane.id)).toEqual(["w1:p3", "w1:p2"]);
+});
+
+test("the ends of the list have no further step", () => {
+  expect(canMovePane(state, "w1:p1", -1)).toBe(false);
+  expect(canMovePane(state, "w1:p1", 1)).toBe(true);
+  expect(canMovePane(state, "w2:p1", 1)).toBe(false);
+  expect(canMovePane(state, "w9:p9", 1)).toBe(false);
+  expect(movePaneStep(state, "w1:p1", -1)).toEqual(state);
 });
 
 test("moving a pane that does not exist changes nothing", () => {

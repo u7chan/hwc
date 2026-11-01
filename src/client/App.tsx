@@ -4,7 +4,14 @@ import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
 import { previewOutput, previewState } from "./fixtures";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
-import { findPane, findPaneContext, initialExpanded, movePane, removePane } from "./select";
+import {
+  findPane,
+  findPaneContext,
+  initialExpanded,
+  movePane,
+  movePaneStep,
+  removePane,
+} from "./select";
 import { trackWorking } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
@@ -96,6 +103,10 @@ export function App() {
       }
       return current;
     });
+  };
+
+  const movePaneOne = (paneId: string, delta: -1 | 1) => {
+    setState((current) => movePaneStep(current, paneId, delta));
   };
 
   const closePane = (paneId: string) => {
@@ -201,6 +212,7 @@ export function App() {
             onToggle={toggle}
             onClosePane={closePane}
             onDropPane={dropOnPane}
+            onMovePaneStep={movePaneOne}
             workingSince={workingSince}
             now={now}
           />

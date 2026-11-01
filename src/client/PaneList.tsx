@@ -3,7 +3,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { AppState, WorktreeState } from "../server/herdr/state";
 import {
   AgentGlyphIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
+  ChevronUpIcon,
   CloseIcon,
   CopyGlyph,
   MoreIcon,
@@ -13,7 +15,7 @@ import {
   WorktreeIcon,
 } from "./icons";
 import { Confirm } from "./Confirm";
-import { agentGlyph, countPanes, countWorkspacePanes } from "./select";
+import { agentGlyph, canMovePane, countPanes, countWorkspacePanes } from "./select";
 import { formatElapsed } from "./time";
 import { StatusLabel } from "./StatusLabel";
 
@@ -25,6 +27,7 @@ type PaneListProps = {
   onToggle: (groupId: string) => void;
   onClosePane: (paneId: string) => void;
   onDropPane: (paneId: string, targetPaneId: string, after: boolean) => void;
+  onMovePaneStep: (paneId: string, delta: -1 | 1) => void;
   workingSince: ReadonlyMap<string, number>;
   now: number;
 };
@@ -120,7 +123,7 @@ export function PaneList(props: PaneListProps) {
     const rect = target.getBoundingClientRect();
     setCopied(false);
     // 画面の下で切れないように、はみ出す分だけ上へ寄せる。
-    const height = 150;
+    const height = 250;
     const top = Math.min(rect.bottom + 4, window.innerHeight - height - 8);
     setMenu({ paneId, top, right: window.innerWidth - rect.right });
   };
@@ -290,6 +293,27 @@ export function PaneList(props: PaneListProps) {
             style={{ top: `${menu.top}px`, right: `${menu.right}px` }}
           >
             <p class="hwc-menu-head">{menu.paneId}</p>
+            <button
+              type="button"
+              role="menuitem"
+              class="hwc-menu-item"
+              disabled={!canMovePane(state, menu.paneId, -1)}
+              onClick={() => props.onMovePaneStep(menu.paneId, -1)}
+            >
+              <ChevronUpIcon />
+              上へ移動
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="hwc-menu-item"
+              disabled={!canMovePane(state, menu.paneId, 1)}
+              onClick={() => props.onMovePaneStep(menu.paneId, 1)}
+            >
+              <ChevronDownIcon />
+              下へ移動
+            </button>
+            <div class="hwc-menu-sep" />
             <button
               type="button"
               role="menuitem"
