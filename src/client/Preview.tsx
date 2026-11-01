@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { DialogShell } from "./Dialog";
 import { TEXT_PREVIEW_BYTES, formatBytes, type Attachment } from "./files";
 import { PaperclipIcon } from "./icons";
@@ -9,12 +9,20 @@ type PreviewProps = {
   onRemove: () => void;
 };
 
+// 表示に必要な URL は、描画の途中ではなく effect で作り、片付けと対にする。
 function useObjectUrl(blob: Blob | null): string | null {
-  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
+  const [url, setUrl] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!url) return;
-    return () => URL.revokeObjectURL(url);
-  }, [url]);
+    if (!blob) {
+      setUrl(null);
+      return;
+    }
+    const next = URL.createObjectURL(blob);
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [blob]);
+
   return url;
 }
 

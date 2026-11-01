@@ -79,18 +79,16 @@ export function App() {
 
   // どの版を見ているかを画面で確かめられるようにする。取れなくても表示だけ諦める。
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/health")
+    const controller = new AbortController();
+    fetch("/api/health", { signal: controller.signal })
       .then((response) => response.json())
       .then((data: { revision?: unknown }) => {
-        if (!cancelled && typeof data.revision === "string") setRevision(data.revision);
+        if (typeof data.revision === "string") setRevision(data.revision);
       })
       .catch(() => {
         // 取れないときはラベルを出さない。
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, []);
 
   // 端末の外観に追従するかは利用者の選択で決まる。解決した結果だけを attribute に出す。

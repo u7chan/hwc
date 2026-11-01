@@ -210,19 +210,20 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const canSend = draft.trim() !== "";
 
+  // コピーの知らせは数秒で戻す。押した操作の結果なので、その場で時間を計る。
+  const copiedTimer = useRef<number | undefined>(undefined);
   const copyId = () => {
     void navigator.clipboard
       ?.writeText(pane.id)
-      .then(() => setCopied(true))
+      .then(() => {
+        setCopied(true);
+        clearTimeout(copiedTimer.current);
+        copiedTimer.current = window.setTimeout(() => setCopied(false), 1500);
+      })
       .catch(() => setCopied(false));
   };
 
-  // コピーの知らせは数秒で戻す。
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(timer);
-  }, [copied]);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
   // 入力量に合わせて高さを伸ばす。広げている間は CSS の高さに任せる。
   const fit = (field: HTMLTextAreaElement | null, open: boolean) => {
