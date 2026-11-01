@@ -25,11 +25,7 @@ export function StatusIcon({ status }: { status: AgentStatus }) {
 
 export function StatusLabel({ status }: { status: AgentStatus }) {
   return (
-    <span
-      class={`hwc-status hwc-status--${statusTone(status)}`}
-      role="img"
-      aria-label={statusLabel(status)}
-    >
+    <span class="hwc-status-label">
       <StatusIcon status={status} />
       <span class="hwc-status-text">{statusLabel(status)}</span>
     </span>

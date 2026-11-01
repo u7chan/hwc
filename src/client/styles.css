@@ -480,10 +480,10 @@ button {
 /* 状態ラベル */
 
 /* 状態は記号だけで示し、文言はホバー中だけ添える。 */
-/* 状態の中身だけを持つ版（タブ内など、文言を添えない場所で使う）。 */
-.hwc-status > .hwc-status {
-  width: auto;
-  height: auto;
+.hwc-status-label {
+  position: relative;
+  flex: none;
+  display: inline-flex;
 }
 
 .hwc-status {
@@ -515,8 +515,8 @@ button {
   white-space: nowrap;
 }
 
-.hwc-status:hover .hwc-status-text,
-.hwc-status:focus-within .hwc-status-text {
+.hwc-status-label:hover .hwc-status-text,
+.hwc-status-label:focus-within .hwc-status-text {
   display: block;
 }
 
@@ -552,20 +552,17 @@ button {
   animation: hwc-arc-turn 0.75s linear infinite;
 }
 
-@keyframes hwc-grid-pulse {
-  0%,
-  100% {
-    transform: scale(1);
+@keyframes hwc-bars-fade {
+  from {
+    opacity: 1;
   }
-  50% {
-    transform: scale(0.18);
+  to {
+    opacity: 0.2;
   }
 }
 
-.hwc-grid rect {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: hwc-grid-pulse 1.2s ease-in-out infinite;
+.hwc-bars rect {
+  animation: hwc-bars-fade 0.75s linear infinite;
 }
 
 /* 詳細 */
@@ -989,7 +986,7 @@ button {
 
   .hwc-arc,
   .hwc-arc-turn,
-  .hwc-grid rect {
+  .hwc-bars rect {
     animation: none;
     transform: none;
   }
@@ -1109,77 +1106,6 @@ button {
     border-top-right-radius: var(--radius-panel);
     overflow: hidden;
     background: var(--color-content);
-  }
-
-  .hwc-tabbar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    border-bottom: 1px solid var(--color-line);
-  }
-
-  .hwc-tabs {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .hwc-tabs::-webkit-scrollbar {
-    display: none;
-  }
-
-  .hwc-tab {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    min-height: var(--tap);
-    padding: 0 var(--space-3);
-    border: 0;
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--color-secondary);
-    white-space: nowrap;
-    cursor: pointer;
-  }
-
-  .hwc-tab:hover {
-    background: var(--color-raised);
-  }
-
-  .hwc-tab[aria-selected="true"] {
-    background: var(--color-raised);
-    color: var(--color-text);
-    font-weight: 600;
-  }
-
-  .hwc-dot {
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-
-  .hwc-dot--active {
-    color: var(--color-active);
-  }
-
-  .hwc-dot--attention {
-    color: var(--color-attention);
-  }
-
-  .hwc-dot--success {
-    color: var(--color-success);
-  }
-
-  .hwc-dot--neutral {
-    color: var(--color-neutral);
   }
 
   .hwc-detail-bar {

@@ -41,24 +41,17 @@ export function WorkingMark({ size = 12 }: SpinnerProps) {
   );
 }
 
-// 3×3 の四角が斜めに縮んでいく。
-// 3 拍目までを右へ流し、最後に右下で止まる。速いとせわしないので 1.2s 周期。
-const SQUARE_GRID: [number, number, number][] = [
-  [1, 1, 0],
-  [8.33, 1, 0.2],
-  [1, 8.33, 0.2],
-  [15.66, 1, 0.4],
-  [8.33, 8.33, 0.4],
-  [1, 15.66, 0.4],
-  [15.66, 8.33, 0.6],
-  [8.33, 15.66, 0.6],
-  [15.66, 15.66, 0.8],
+// 3 本の棒が順に薄くなる。SMIL の id 参照に頼らず CSS で回す。
+const ATTENTION_BARS: [number, number][] = [
+  [1, 0],
+  [9, 0.15],
+  [17, 0.3],
 ];
 
 export function AttentionMark({ size = 12 }: SpinnerProps) {
   return (
     <svg
-      class="hwc-grid"
+      class="hwc-bars"
       width={size}
       height={size}
       viewBox="0 0 24 24"
@@ -66,8 +59,8 @@ export function AttentionMark({ size = 12 }: SpinnerProps) {
       aria-hidden="true"
       focusable="false"
     >
-      {SQUARE_GRID.map(([x, y, delay]) => (
-        <rect x={x} y={y} width="7.33" height="7.33" style={{ animationDelay: `${delay}s` }} />
+      {ATTENTION_BARS.map(([x, delay]) => (
+        <rect x={x} y="4" width="6" height="14" style={{ animationDelay: `${delay}s` }} />
       ))}
     </svg>
   );
