@@ -1,24 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { AppState } from "../server/herdr/state";
+import type { AppState, PaneState } from "../server/herdr/state";
 import { PaneDetail } from "./PaneDetail";
+import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
 import { appendMessage, mockReply, type ChatMessage } from "./chat";
-import {
-  previewAgentInfo,
-  previewChat,
-  previewChats,
-  previewOutput,
-  previewState,
-} from "./fixtures";
+import { previewAgentInfo, previewChat, previewChats, previewState } from "./fixtures";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import {
   findPane,
   findPaneContext,
   initialExpanded,
+  isShellPane,
   movePane,
   movePaneStep,
   removePane,
+  splitPanes,
 } from "./select";
 import { trackWorking } from "./time";
 import {
@@ -36,6 +33,8 @@ import {
   saveThemePreference,
   type ThemePreference,
 } from "./theme";
+
+const SPLIT_STORAGE_KEY = "hwc-split";
 
 // 壁時計との同期。1 秒ごとに数え直し、稼働に入った時刻は手元で覚える。
 function useWorkingClock(state: AppState) {
@@ -72,7 +71,8 @@ export function App() {
   const [state, setState] = useState(previewState);
   const [selectedPaneId, setSelectedPaneId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => initialExpanded(state));
-  const [feedback, setFeedback] = useState<string | null>(null);
+  // 入力欄の補足は、送ったペインにだけ出す。分割表示で隣の欄に漏れないように。
+  const [feedback, setFeedback] = useState<Record<string, string | null>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [revision, setRevision] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
@@ -83,6 +83,14 @@ export function App() {
   const [theme, setTheme] = useState<ThemePreference>(() =>
     loadThemePreference(typeof localStorage === "undefined" ? null : localStorage),
   );
+  const [split, setSplit] = useState(() => {
+    if (typeof localStorage === "undefined") return false;
+    try {
+      return localStorage.getItem(SPLIT_STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
 
   // どの版を見ているかを画面で確かめられるようにする。取れなくても表示だけ諦める。
   useEffect(() => {
@@ -113,6 +121,19 @@ export function App() {
   const changeTheme = (next: ThemePreference) => {
     setTheme(next);
     if (typeof localStorage !== "undefined") saveThemePreference(localStorage, next);
+  };
+
+  const toggleSplit = () => {
+    setSplit((current) => {
+      if (typeof localStorage !== "undefined") {
+        try {
+          localStorage.setItem(SPLIT_STORAGE_KEY, String(!current));
+        } catch {
+          // 保存できなくてもその場の表示は変える。
+        }
+      }
+      return !current;
+    });
   };
 
   const { workingSince, now } = useWorkingClock(state);
@@ -151,7 +172,11 @@ export function App() {
   const closePane = (paneId: string) => {
     setState((current) => removePane(current, paneId));
     if (selectedPaneId === paneId) setSelectedPaneId(null);
-    setFeedback(`ペイン ${paneId} を閉じました`);
+    setFeedback((current) => {
+      const next = { ...current };
+      delete next[paneId];
+      return next;
+    });
   };
 
   const pane = findPane(state, selectedPaneId);
@@ -168,16 +193,52 @@ export function App() {
 
   const select = (paneId: string) => {
     setSelectedPaneId(paneId);
-    setFeedback(null);
+    setFeedback((current) => ({ ...current, [paneId]: null }));
     setSettingsOpen(false);
   };
 
   // 会話はプレビュー用に手元で積む。TODO: #14 で実データに置き換える。
   const [chats, setChats] = useState<Record<string, ChatMessage[]>>({ ...previewChats });
-  const [replyingPaneId, setReplyingPaneId] = useState<string | null>(null);
-  const [replyStartedAt, setReplyStartedAt] = useState<number | null>(null);
+  // 返答待ちのペインと、待ち始めた時刻。同じペインに続けて送ると複数が並ぶ。
+  const [replying, setReplying] = useState<Record<string, number>>({});
+  const replyTimers = useRef(new Map<string, Set<number>>());
+
+  // 待ちを外す。timer を渡さなければ、そのペインの待ちをすべて止める。
+  const clearReply = (paneId: string, timer?: number) => {
+    const timers = replyTimers.current.get(paneId);
+    if (timers === undefined) return false;
+    if (timer === undefined) {
+      for (const each of timers) window.clearTimeout(each);
+      timers.clear();
+    } else {
+      window.clearTimeout(timer);
+      timers.delete(timer);
+    }
+    if (timers.size > 0) return true;
+
+    replyTimers.current.delete(paneId);
+    setReplying((current) => {
+      if (!(paneId in current)) return current;
+      const next = { ...current };
+      delete next[paneId];
+      return next;
+    });
+    return true;
+  };
+
+  const stopPane = (paneId: string) => {
+    if (!clearReply(paneId)) return;
+    setFeedback((current) => ({ ...current, [paneId]: "プレビュー：停止しました" }));
+  };
 
   const askPane = async (paneId: string, text: string) => {
+    // 端末のペインは返答を待たない。プレビューでは送っていないことだけ伝える。
+    const target = findPane(state, paneId);
+    if (target !== null && isShellPane(target)) {
+      setFeedback((current) => ({ ...current, [paneId]: "プレビュー：コマンドは実行されません" }));
+      return;
+    }
+
     const at = Date.now();
     setChats((current) => ({
       ...current,
@@ -188,37 +249,32 @@ export function App() {
         at,
       }),
     }));
-    setReplyingPaneId(paneId);
-    setReplyStartedAt(at);
-    // 返答までの間を空けて、待っている様子を見せる。
-    await new Promise((resolve) => setTimeout(resolve, 4500));
-    const answeredAt = Date.now();
-    setChats((current) => {
-      const turn = (current[paneId] ?? []).filter((message) => message.role === "agent").length;
-      return {
-        ...current,
-        [paneId]: appendMessage(current[paneId] ?? [], {
-          id: `a-${answeredAt}`,
-          role: "agent",
-          text: mockReply(text, turn),
-          at: answeredAt,
-          elapsedMs: answeredAt - at,
-        }),
-      };
-    });
-    setReplyingPaneId(null);
-    setReplyStartedAt(null);
-    setFeedback("プレビュー：返答はモックです");
-  };
+    setReplying((current) => (paneId in current ? current : { ...current, [paneId]: at }));
 
-  // TODO: #14 で API 取得（または SSE）に置き換える。いまは往復を待つ様子だけ再現する。
-  const [output, setOutput] = useState<string | null>(null);
-  useEffect(() => {
-    if (!pane) return;
-    setOutput(null);
-    const timer = setTimeout(() => setOutput(previewOutput(pane.id)), 450);
-    return () => clearTimeout(timer);
-  }, [pane?.id]);
+    // 返答までの間を空けて、待っている様子を見せる。止められるよう、待ちはタイマーで持つ。
+    const timer = window.setTimeout(() => {
+      clearReply(paneId, timer);
+      const answeredAt = Date.now();
+      setChats((current) => {
+        const turn = (current[paneId] ?? []).filter((message) => message.role === "agent").length;
+        return {
+          ...current,
+          [paneId]: appendMessage(current[paneId] ?? [], {
+            id: `a-${answeredAt}`,
+            role: "agent",
+            text: mockReply(text, turn),
+            at: answeredAt,
+            elapsedMs: answeredAt - at,
+          }),
+        };
+      });
+      setFeedback((current) => ({ ...current, [paneId]: "プレビュー：返答はモックです" }));
+    }, 4500);
+
+    const timers = replyTimers.current.get(paneId) ?? new Set<number>();
+    timers.add(timer);
+    replyTimers.current.set(paneId, timers);
+  };
 
   // 詳細のタブバーは、選択中ペインが属するタブのペインだけを出す。
   const siblings = useMemo(() => {
@@ -270,6 +326,25 @@ export function App() {
         {settingsOpen ? <CloseIcon /> : <SettingsIcon />}
       </button>
     </>
+  );
+
+  // 分割は広い画面だけ。狭い画面では今までどおり 1 枚ずつ見る。
+  const shown = splitPanes(siblings, pane?.id ?? "");
+  const splitOn = wide && split && shown.length > 1;
+
+  const renderPane = (item: PaneState, where: { workspaceLabel: string; tabLabel: string }) => (
+    <PaneDetail
+      key={item.id}
+      pane={item}
+      context={where}
+      messages={chats[item.id] ?? previewChat(item.id)}
+      agentInfo={previewAgentInfo[item.id] ?? null}
+      replying={replying[item.id] !== undefined}
+      waitingMs={replying[item.id] === undefined ? null : now - replying[item.id]}
+      feedback={feedback[item.id] ?? null}
+      onSubmit={(text) => askPane(item.id, text)}
+      onStop={() => stopPane(item.id)}
+    />
   );
 
   return (
@@ -349,22 +424,28 @@ export function App() {
               revision={revision}
             />
           ) : pane && context ? (
-            <PaneDetail
-              key={pane.id}
-              pane={pane}
-              context={context}
-              panes={siblings}
-              onSelectPane={select}
-              output={output}
-              onBack={() => setSelectedPaneId(null)}
-              messages={chats[pane.id] ?? previewChat(pane.id)}
-              agentInfo={previewAgentInfo[pane.id] ?? null}
-              replying={replyingPaneId === pane.id}
-              waitingMs={replyStartedAt === null ? null : now - replyStartedAt}
-              onSubmit={(text) => askPane(pane.id, text)}
-              onDropPane={dropOnPane}
-              feedback={feedback}
-            />
+            <div class="hwc-detail-inner">
+              <TabBar
+                pane={pane}
+                panes={siblings}
+                split={splitOn}
+                onSelectPane={select}
+                onBack={() => setSelectedPaneId(null)}
+                onDropPane={dropOnPane}
+                onToggleSplit={toggleSplit}
+              />
+              {splitOn ? (
+                <div class="hwc-split" data-count={shown.length}>
+                  {shown.map((item) => (
+                    <section class="hwc-split-cell" key={item.id}>
+                      {renderPane(item, context)}
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                renderPane(pane, context)
+              )}
+            </div>
           ) : (
             <div class="hwc-empty hwc-empty--detail">
               <div class="hwc-empty-mark hwc-empty-mark--app">

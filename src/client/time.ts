@@ -17,6 +17,13 @@ export function formatClock(at: number): string {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+// 補足では日付まで出す。どの日の会話かを確かめられるように。
+export function formatDateTime(at: number): string {
+  const date = new Date(at);
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${formatClock(at)}:${seconds}`;
+}
+
 // 稼働に入った時刻を覚えておく。Herdr は変化の順序だけを返すので、開始時刻はこちらで持つ。
 export function trackWorking(
   since: ReadonlyMap<string, number>,

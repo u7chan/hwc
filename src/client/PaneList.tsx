@@ -320,8 +320,8 @@ export function PaneList(props: PaneListProps) {
             })
           : null}
         <GroupChildren id={groupId} open={withHeader ? open : true}>
-          <ul class="hwc-tabs-list" data-depth={depth}>
-            {workspace.tabs.map((tab) => renderTabs(tab, depth))}
+          <ul class="hwc-tabs-list" data-depth={withHeader ? depth + 1 : depth}>
+            {workspace.tabs.map((tab) => renderTabs(tab, withHeader ? depth + 1 : depth))}
           </ul>
         </GroupChildren>
       </section>

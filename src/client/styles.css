@@ -56,6 +56,8 @@
   --row-workspace: 76px;
   --row-tab: 60px;
   --row-pane: 64px;
+  /* 詳細の上部は、タブバーと設定の見出しで高さをそろえる。 */
+  --row-head: 56px;
   --icon-frame: 32px;
 
   /* 一覧の幅。広い画面では JS が実際の幅で上書きする。 */
@@ -743,6 +745,11 @@ button {
   --indent: calc(var(--space-5) + var(--space-2));
 }
 
+/* グループの見出しの下に並ぶタブは、見出しの名前より 1 段深く置く。 */
+[data-depth="2"] {
+  --indent: calc((var(--space-5) + var(--space-2)) * 2);
+}
+
 .hwc-group-block {
   /* 余白はカード側に持たせる。一覧に padding を付けると、スクロールバーが端から離れる。 */
   margin: 0 var(--space-4) var(--space-4);
@@ -1346,8 +1353,6 @@ button {
   z-index: 2;
   top: 50%;
   right: calc(100% + var(--space-2));
-  transform: translateY(-50%);
-  display: none;
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
@@ -1356,11 +1361,26 @@ button {
   font-size: var(--text-secondary);
   line-height: 1.4;
   white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  /* 目印の側から離れる向きに、少しだけ動かす。 */
+  transform: translate(var(--space-1), -50%);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 140ms;
 }
 
 .hwc-status-label:hover .hwc-status-text,
 .hwc-status-label:focus-within .hwc-status-text {
-  display: block;
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s;
 }
 
 .hwc-status--active {
@@ -1419,6 +1439,82 @@ button {
   animation: hwc-view-in 200ms ease-out;
 }
 
+/* 2x2 までの分割。区切り線はセルの隙間から見せる。 */
+.hwc-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--color-line);
+}
+
+.hwc-split[data-count="2"] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.hwc-split[data-count="3"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* 3 枚のときは、1 枚目を左に縦いっぱい、残りを右に積む。 */
+.hwc-split[data-count="3"] > .hwc-split-cell:first-child {
+  grid-row: span 2;
+}
+
+.hwc-split[data-count="4"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.hwc-split-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-content);
+}
+
+/* 半分の幅になるので、見出しと入力欄の左右は詰める。 */
+.hwc-split-cell .hwc-pane-head,
+.hwc-split-cell .hwc-input {
+  padding-right: var(--space-4);
+  padding-left: var(--space-4);
+}
+
+/* ペインの見出し。名前と ID を上端に置き、分割したときもどのセルか分かるようにする。 */
+.hwc-pane-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-8);
+  padding: 0 var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-pane-head-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.hwc-pane-head-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-pane-head .hwc-pane-id {
+  margin-left: auto;
+}
+
 .hwc-tabbar {
   display: flex;
   align-items: stretch;
@@ -1427,35 +1523,26 @@ button {
   border-bottom: 1px solid var(--color-line);
 }
 
-.hwc-tabbar > .hwc-back,
-.hwc-tabbar > .hwc-status,
-.hwc-tabbar > .hwc-pane-id {
+.hwc-tabbar > .hwc-back {
   align-self: center;
 }
 
 /* ペイン ID は詳細の右端に置く。すぐコピーできるようにボタンを添える。 */
+/* ID は面を付けない。見出しの名前と並んでも重くならないように。 */
 .hwc-pane-id {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   max-width: 40%;
-  height: var(--space-8);
-  margin-left: var(--space-2);
-  padding: 0 var(--space-1) 0 var(--space-3);
-  border-radius: var(--radius-mark);
-  background: var(--color-raised);
   color: var(--color-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-secondary);
-  transition:
-    background-color 180ms ease,
-    color 180ms ease;
+  transition: color 180ms ease;
 }
 
 /* コピーできたことは色と記号で返す。一瞬だけ弾ませて目で追えるように。 */
 .hwc-pane-id[data-copied="true"] {
-  background: var(--color-success-bg);
   color: var(--color-success);
   animation: hwc-badge-pop 320ms ease;
 }
@@ -1492,15 +1579,37 @@ button {
   background: transparent;
   color: inherit;
   cursor: pointer;
-  transition: transform 120ms ease;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 120ms ease;
 }
 
 .hwc-pane-id-copy:hover {
+  background: var(--color-raised);
   color: var(--color-text);
 }
 
 .hwc-pane-id-copy:active {
   transform: scale(0.9);
+}
+
+/* 触れる画面には hover が無いので、ID は常に出す。 */
+@media (hover: hover) {
+  .hwc-pane-id {
+    opacity: 0;
+    transform: translateX(var(--space-1));
+    transition:
+      opacity 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      color 180ms ease;
+  }
+
+  .hwc-pane-head:hover .hwc-pane-id,
+  .hwc-pane-id:focus-within {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1513,6 +1622,36 @@ button {
   .hwc-pane-id-copy {
     transition: none;
   }
+}
+
+/* 分割表示は広い画面だけ。狭い画面では 1 枚ずつ見る。 */
+.hwc-split-toggle {
+  flex: none;
+  display: none;
+  align-self: center;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+}
+
+.hwc-split-toggle:disabled {
+  color: var(--color-neutral);
+  cursor: default;
+}
+
+.hwc-split-toggle:not(:disabled):hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-split-toggle[aria-pressed="true"] {
+  background: var(--color-raised);
+  color: var(--color-accent);
 }
 
 .hwc-tabs {
@@ -1536,7 +1675,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: 56px;
+  height: var(--row-head);
   padding: 0 var(--space-3);
   border: 0;
   background: transparent;
@@ -1606,8 +1745,9 @@ button {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: var(--row-workspace);
-  padding: var(--space-4);
+  min-height: var(--row-head);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .hwc-icon-button {
@@ -1836,8 +1976,6 @@ button {
   flex-direction: column;
   gap: var(--space-4);
   width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
   padding: var(--space-4);
   list-style: none;
 }
@@ -1962,6 +2100,72 @@ button {
 /* 返答までの時間は、時刻と区別できるよう等幅で添える。 */
 .hwc-msg-elapsed {
   font-family: var(--font-mono);
+}
+
+/* 時刻は小さいので、触れる範囲だけ広げる。行の高さは変えない。 */
+.hwc-tip-anchor {
+  position: relative;
+}
+
+.hwc-tip-anchor::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--space-2)) calc(-1 * var(--space-1));
+}
+
+/* 時刻の補足は、面と線で浮かせる。影や半透明に頼らない。 */
+.hwc-tip {
+  position: fixed;
+  z-index: 25;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 140ms;
+}
+
+/* 目の前のものから少し離れる向きに動かす。 */
+.hwc-tip[data-side="above"] {
+  transform: translateY(calc(-100% - var(--space-1)));
+}
+
+.hwc-tip[data-side="below"] {
+  transform: translateY(var(--space-1));
+}
+
+.hwc-tip[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s;
+}
+
+.hwc-tip[data-open="true"][data-side="above"] {
+  transform: translateY(calc(-100% - var(--space-2)));
+}
+
+.hwc-tip[data-open="true"][data-side="below"] {
+  transform: translateY(var(--space-2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-tip,
+  .hwc-status-text {
+    transition: none;
+  }
 }
 
 /* 返答待ちの 3 点。行の高さを保って、返答が来たときに跳ねないようにする。 */
@@ -2344,6 +2548,59 @@ button {
   max-height: 60dvh;
 }
 
+/* 端末のペインは会話ではない。パスと記号、1 行の入力だけを置く。 */
+.hwc-input--term {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* 行が空でも高さを保つ。パスが届いたときに欄全体が動かないように。 */
+.hwc-term-path {
+  min-height: 1.5em;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-term {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+}
+
+/* 記号と入力の間は、端末のプロンプトと同じく 1 文字ぶん空ける。 */
+.hwc-term-mark {
+  flex: none;
+  margin-right: var(--space-1);
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: max(16px, var(--text-mono));
+  font-weight: 600;
+}
+
+.hwc-term-field {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: 400 max(16px, var(--text-mono)) / var(--line-body) var(--font-mono);
+  caret-color: var(--color-accent);
+}
+
+.hwc-term-field:focus-visible {
+  outline: none;
+}
+
 .hwc-input-field::placeholder {
   color: var(--color-secondary);
 }
@@ -2514,7 +2771,7 @@ button {
   top: 0;
   z-index: 1;
   margin: 0 0 var(--space-3);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) 0;
   background: var(--settings-bg);
   color: var(--color-secondary);
   font-size: var(--text-secondary);
@@ -2523,7 +2780,6 @@ button {
 
 .hwc-section-note {
   margin: var(--space-3) 0 0;
-  padding: 0 var(--space-4);
   color: var(--color-secondary);
   font-size: var(--text-secondary);
 }
@@ -2754,6 +3010,10 @@ button {
     display: none;
   }
 
+  .hwc-split-toggle {
+    display: grid;
+  }
+
   .hwc-detail {
     padding: var(--space-6);
   }
@@ -2772,9 +3032,8 @@ button {
   }
 
   .hwc-detail-bar {
-    padding: var(--space-4) var(--space-8);
+    padding: 0 var(--space-8);
     background: var(--color-content);
-    border-bottom: 1px solid var(--color-line);
     border-radius: var(--radius-panel) var(--radius-panel) 0 0;
   }
 
@@ -2792,5 +3051,9 @@ button {
   .hwc-input {
     padding: var(--space-4) var(--space-6);
     border-top-color: var(--color-line);
+  }
+
+  .hwc-pane-head {
+    padding: 0 var(--space-6);
   }
 }

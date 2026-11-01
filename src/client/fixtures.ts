@@ -61,6 +61,38 @@ export const previewState: AppState = {
             },
           ],
         },
+        {
+          // 分割表示が 4 枚で足りなくなる並び。5 枚目はタブで選んだときに入れ替わる。
+          id: "w80:t3",
+          label: "cobalt-fern-5b08",
+          agentStatus: "working",
+          focused: false,
+          panes: [
+            {
+              id: "w80:p10",
+              title: "π - hwc",
+              agent: "pi",
+              agentStatus: "working",
+              focused: false,
+            },
+            { id: "w80:p11", title: "π - hwc", agent: "pi", agentStatus: "idle", focused: false },
+            { id: "w80:p12", title: "bash", agent: null, agentStatus: "idle", focused: false },
+            {
+              id: "w80:p13",
+              title: "claude",
+              agent: "claude",
+              agentStatus: "idle",
+              focused: false,
+            },
+            {
+              id: "w80:p14",
+              title: "codex",
+              agent: "codex",
+              agentStatus: "working",
+              focused: false,
+            },
+          ],
+        },
       ],
     },
     {
@@ -211,6 +243,12 @@ u7dev@wsl:~/workspace/hwc$ `,
 [tick] 11:16:59
 `,
 
+  "w80:p12": `u7dev@wsl:~/workspace/hwc$ git status --short
+ M src/client/App.tsx
+ M src/client/PaneDetail.tsx
+?? src/client/TabBar.tsx
+u7dev@wsl:~/workspace/hwc$ `,
+
   "w92:p1": `❯ echo HWC_API_OK
 HWC_API_OK
 
@@ -230,6 +268,10 @@ export const previewAgentInfo: Record<string, AgentInfo> = {
   "w80:p5": { model: "claude-sonnet-4-5", effort: "medium" },
   "w80:p6": { model: "gpt-5-codex", effort: "low" },
   "w80:p7": { model: "qwen3-coder", effort: "medium" },
+  "w80:p10": { model: "claude-opus-4-6", effort: "high" },
+  "w80:p11": { model: "claude-opus-4-6", effort: "high" },
+  "w80:p13": { model: "claude-sonnet-4-5", effort: "medium" },
+  "w80:p14": { model: "gpt-5-codex", effort: "low" },
   "w81:p1": { model: "claude-opus-4-6", effort: "high" },
 };
 
@@ -303,6 +345,178 @@ hwc                     3 ワークツリー
 
 1 は先に直します。2 はテスト側の更新で足ります。`,
       at: new Date(2026, 10, 1, 10, 3, 20).getTime(),
+    },
+  ],
+  "w80:p10": [
+    {
+      id: "e1",
+      role: "user",
+      text: "分割表示の並び、4 枚まででいい？",
+      at: new Date(2026, 10, 1, 11, 20).getTime(),
+    },
+    {
+      id: "e2",
+      role: "agent",
+      text: `4 枚までで足ります。2x2 を上限にして、それ以上はタブで切り替える形にします。
+
+- 2 枚: 左右
+- 3 枚: 左に 1 枚、右に 2 枚を上下
+- 4 枚: 2x2
+
+区切りは 1px の線で、セルの隙間から見せます。`,
+      at: new Date(2026, 10, 1, 11, 21).getTime(),
+    },
+    {
+      id: "e3",
+      role: "user",
+      text: "3 枚のときの並べ方は、左がメインで右が上下ね。",
+      at: new Date(2026, 10, 1, 11, 22, 10).getTime(),
+    },
+    {
+      id: "e4",
+      role: "agent",
+      text: `その形にしました。左のセルは行を 2 つぶん使い、右は上下に分けます。
+
+セルごとに入力欄を持つので、どのペインにもそのまま送れます。`,
+      at: new Date(2026, 10, 1, 11, 23).getTime(),
+    },
+    {
+      id: "e5",
+      role: "user",
+      text: "5 枚目以降はどうなる？",
+      at: new Date(2026, 10, 1, 11, 25).getTime(),
+    },
+    {
+      id: "e6",
+      role: "agent",
+      text: `枠は 4 つです。5 枚目以降はタブで選んだときに、最後の枠と入れ替えて表示します。
+
+選んだペインが必ず見えるので、一覧から開いたのに何も出ない、ということは起きません。`,
+      at: new Date(2026, 10, 1, 11, 26).getTime(),
+    },
+    {
+      id: "e7",
+      role: "user",
+      text: "5 枚あるタブのテストデータも足して。会話はスクロールするくらいで。",
+      at: new Date(2026, 10, 1, 11, 30).getTime(),
+    },
+    {
+      id: "e8",
+      role: "agent",
+      text: `足しました。cobalt-fern-5b08 のタブに 5 枚あります。
+
+- π 2 枚（片方は会話つき）
+- bash 1 枚
+- claude 1 枚
+- codex 1 枚
+
+分割したときの見え方を確かめる用です。`,
+      at: new Date(2026, 10, 1, 11, 31).getTime(),
+    },
+    {
+      id: "e9",
+      role: "user",
+      text: "会話のスクロール量は足りてる？",
+      at: new Date(2026, 10, 1, 11, 33).getTime(),
+    },
+    {
+      id: "e10",
+      role: "agent",
+      text: `半分の高さでも 1 画面ぶんは超えるようにしてあります。
+
+スクロールの位置はセルごとに持ちます。片方を読み返している間に、もう片方が最新へ飛ぶことはありません。
+
+追従するのは「最新が見えている間」だけです。上に戻っているときは止まります。`,
+      at: new Date(2026, 10, 1, 11, 34).getTime(),
+    },
+    {
+      id: "e11",
+      role: "user",
+      text: "タブの見分けはどうする？色を変える？",
+      at: new Date(2026, 10, 1, 11, 36).getTime(),
+    },
+    {
+      id: "e12",
+      role: "agent",
+      text: `色は増やさず、エージェントの記号を添えるのがよさそうです。
+
+一覧と同じ記号なので、どこでも同じ形で読めます。状態は右側の輪で分かります。`,
+      at: new Date(2026, 10, 1, 11, 37).getTime(),
+    },
+  ],
+  "w80:p11": [
+    {
+      id: "f1",
+      role: "user",
+      text: "こっちは別の作業。返答の待ち時間を測りたい。",
+      at: new Date(2026, 10, 1, 11, 24).getTime(),
+    },
+    {
+      id: "f2",
+      role: "agent",
+      text: `測ります。送信から返答までの時間を、返答の行に小さく添えます。
+
+1 分を超えたら秒は落として、目安として読みやすくします。`,
+      at: new Date(2026, 10, 1, 11, 24, 40).getTime(),
+    },
+    {
+      id: "f3",
+      role: "user",
+      text: "待っている間の表示は？",
+      at: new Date(2026, 10, 1, 11, 26).getTime(),
+    },
+    {
+      id: "f4",
+      role: "agent",
+      text: `3 点が順に灯る表示にしてあります。返答が来たら消えます。
+
+止めたいときは、送信ボタンが停止に変わるのでそこで止められます。`,
+      at: new Date(2026, 10, 1, 11, 27).getTime(),
+    },
+    {
+      id: "f5",
+      role: "user",
+      text: "止めたときは返答は来ない？",
+      at: new Date(2026, 10, 1, 11, 29).getTime(),
+    },
+    {
+      id: "f6",
+      role: "agent",
+      text: `来ません。待ちを捨てて、入力欄に「停止しました」とだけ残します。
+
+会話には何も積まないので、履歴が食い違うことはありません。`,
+      at: new Date(2026, 10, 1, 11, 30).getTime(),
+    },
+  ],
+  "w80:p13": [
+    {
+      id: "g1",
+      role: "user",
+      text: "PR の差分を見て。判定だけほしい。",
+      at: new Date(2026, 10, 1, 11, 18).getTime(),
+    },
+    {
+      id: "g2",
+      role: "agent",
+      text: `判定: must 0 / should 1 / nit 2。
+
+should は、分割したときに選択中のセルが分からない点です。タブの選択とセルの対応を、何かしら見える形にした方がよさそうです。`,
+      at: new Date(2026, 10, 1, 11, 20).getTime(),
+    },
+    {
+      id: "g3",
+      role: "user",
+      text: "nit は？",
+      at: new Date(2026, 10, 1, 11, 21).getTime(),
+    },
+    {
+      id: "g4",
+      role: "agent",
+      text: `1. 4 枚のとき、上段のタブとセルの順が読み取りにくい
+2. 5 枚以上のタブで、選んだペインが枠外のときに何が起きるか説明がほしい
+
+どちらも表示の話なので、動きは変えずに直せます。`,
+      at: new Date(2026, 10, 1, 11, 22).getTime(),
     },
   ],
 };

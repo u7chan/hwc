@@ -219,6 +219,11 @@ export function initialExpanded(state: AppState): Set<string> {
 
 export type AgentGlyph = "pi" | "claude" | "codex" | "opencode" | "generic";
 
+// Herdr は端末だけのペインにエージェントを割り当てない。入力の形を選ぶのに使う。
+export function isShellPane(pane: PaneState): boolean {
+  return pane.agent === null;
+}
+
 // 一覧のアイコンを決める。opencode は "pi" を含まないが、順序に依存しないよう先に見る。
 export function agentGlyph(agent: string | null): AgentGlyph {
   const name = (agent ?? "").toLowerCase();
@@ -234,4 +239,14 @@ export function agentGlyph(agent: string | null): AgentGlyph {
     return "pi";
   }
   return "generic";
+}
+
+// 分割表示は最大 2x2。5 枚目からはタブで切り替えて見る。
+export function splitPanes(panes: readonly PaneState[], selectedId: string): readonly PaneState[] {
+  if (panes.length <= 4) return panes;
+  const shown = panes.slice(0, 4);
+  if (shown.some((pane) => pane.id === selectedId)) return shown;
+  const selected = panes.find((pane) => pane.id === selectedId);
+  if (selected === undefined) return shown;
+  return [...shown.slice(0, 3), selected];
 }

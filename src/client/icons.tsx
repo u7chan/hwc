@@ -239,6 +239,37 @@ export function SendIcon({ size = 20 }: IconProps) {
   );
 }
 
+// 端末へ渡す改行。送信の矢印とは意味が違うので、↵ の形にする。
+export function ReturnIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M20 6v5a3 3 0 0 1-3 3H5" />
+      <path d="M9 10l-4 4 4 4" />
+    </Svg>
+  );
+}
+
+// 2x2 の分割表示。押している間はアクセント色で表す。
+export function SplitIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </Svg>
+  );
+}
+
+// 処理を止める。送信と同じ面に置くので、形だけで違いを見せる。
+export function StopIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="4.5" y="4.5" width="15" height="15" rx="3.5" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
 export function ArrowDownIcon({ size = 20 }: IconProps) {
   return (
     <Svg size={size}>

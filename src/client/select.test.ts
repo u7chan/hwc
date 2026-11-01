@@ -10,9 +10,11 @@ import {
   countGroupPanes,
   groupWorkspaces,
   initialExpanded,
+  isShellPane,
   movePane,
   movePaneStep,
   removePane,
+  splitPanes,
   statusLabel,
   statusTone,
 } from "./select";
@@ -224,4 +226,44 @@ test("agentGlyph matches the agent name loosely", () => {
   expect(agentGlyph("openai-codex")).toBe("codex");
   expect(agentGlyph(null)).toBe("generic");
   expect(agentGlyph("vim")).toBe("generic");
+});
+
+test("a pane without an agent is a shell", () => {
+  expect(
+    isShellPane({ id: "w1:p3", title: "bash", agent: null, agentStatus: "idle", focused: false }),
+  ).toBe(true);
+  expect(
+    isShellPane({
+      id: "w1:p1",
+      title: "π - hwc",
+      agent: "pi",
+      agentStatus: "idle",
+      focused: false,
+    }),
+  ).toBe(false);
+});
+
+test("the split view shows at most four panes of the tab", () => {
+  const panes = [1, 2, 3, 4, 5].map((index) => ({
+    id: `w1:p${index}`,
+    title: `p${index}`,
+    agent: "pi",
+    agentStatus: "idle" as const,
+    focused: false,
+  }));
+
+  expect(splitPanes(panes, "w1:p2").map((pane) => pane.id)).toEqual([
+    "w1:p1",
+    "w1:p2",
+    "w1:p3",
+    "w1:p4",
+  ]);
+  // 画面に入らないペインを選んだら、最後の枠と入れ替えてでも見せる。
+  expect(splitPanes(panes, "w1:p5").map((pane) => pane.id)).toEqual([
+    "w1:p1",
+    "w1:p2",
+    "w1:p3",
+    "w1:p5",
+  ]);
+  expect(splitPanes(panes.slice(0, 3), "w1:p9")).toHaveLength(3);
 });

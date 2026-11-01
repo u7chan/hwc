@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { AppState } from "../server/herdr/state";
-import { formatClock, formatElapsed, trackWorking } from "./time";
+import { formatClock, formatDateTime, formatElapsed, trackWorking } from "./time";
 
 test("elapsed reads as seconds, minutes and hours", () => {
   expect(formatElapsed(0)).toBe("0s");
@@ -75,4 +75,9 @@ test("the clock shows hours and minutes", () => {
   expect(formatClock(at)).toBe("09:05");
   const evening = new Date(2026, 10, 1, 21, 40).getTime();
   expect(formatClock(evening)).toBe("21:40");
+});
+
+test("the full stamp adds the date and seconds", () => {
+  const at = new Date(2026, 10, 1, 9, 5, 7).getTime();
+  expect(formatDateTime(at)).toBe("2026年11月1日 09:05:07");
 });
