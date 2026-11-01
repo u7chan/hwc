@@ -79,25 +79,35 @@ function createSseReader(body: ReadableStream<Uint8Array>) {
   const decoder = new TextDecoder();
   let buffer = "";
 
+  type SseEvent = { event: string | null; data: string };
+
   return {
-    async next(): Promise<AppState> {
+    async nextEvent(): Promise<SseEvent> {
       for (;;) {
         const boundary = buffer.indexOf("\n\n");
         if (boundary >= 0) {
           const raw = buffer.slice(0, boundary);
           buffer = buffer.slice(boundary + 2);
-          const data = raw
-            .split("\n")
+          const lines = raw.split("\n");
+          const event =
+            lines
+              .find((line) => line.startsWith("event:"))
+              ?.slice(6)
+              .trim() ?? null;
+          const data = lines
             .filter((line) => line.startsWith("data:"))
             .map((line) => line.slice(5).trim())
             .join("");
-          if (data) return JSON.parse(data) as AppState;
+          if (event || data) return { event, data };
           continue;
         }
         const { value, done } = await reader.read();
         if (done) throw new Error("stream ended");
         buffer += decoder.decode(value, { stream: true });
       }
+    },
+    async next(): Promise<AppState> {
+      return JSON.parse((await this.nextEvent()).data) as AppState;
     },
     cancel: () => reader.cancel(),
   };
@@ -166,6 +176,8 @@ test("GET /api/events stays open and sends the state once Herdr becomes readable
   expect(response.headers.get("content-type")).toContain("text/event-stream");
   if (!response.body) throw new Error("response has no body");
   const events = createSseReader(response.body);
+
+  expect(await events.nextEvent()).toEqual({ event: "unavailable", data: "" });
 
   store.push(state);
   expect(await events.next()).toEqual(state);

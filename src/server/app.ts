@@ -21,10 +21,11 @@ export function createApp(options: { store: StateStore }) {
     })
     .get("/api/events", (c) =>
       streamSSE(c, async (stream) => {
-        const send = (state: AppState) =>
-          stream.writeSSE({ data: JSON.stringify(state) }).catch(() => {
+        const write = (event: string | null, data: string) =>
+          stream.writeSSE(event ? { event, data } : { data }).catch(() => {
             // 切断済みのクライアントへの書き込みは失敗する。購読解除は切断の検出側で行う。
           });
+        const send = (state: AppState) => write(null, JSON.stringify(state));
 
         // 初期状態の送信中に届いた更新を取りこぼさないよう、購読を先に張って溜めておく。
         let ready = false;
@@ -39,6 +40,7 @@ export function createApp(options: { store: StateStore }) {
         // 状態が無くてもストリームは開いたままにする。ここで 502 を返すと EventSource は
         // 接続失敗として扱い、以後再接続しない（Herdr 復帰後も画面が止まる）。
         if (initial) await send(initial);
+        else await write("unavailable", "");
         ready = true;
         if (buffered && buffered !== initial) await send(buffered);
 

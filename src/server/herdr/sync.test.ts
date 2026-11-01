@@ -16,6 +16,7 @@ type FakeHerdr = {
   setRejectedPaneIds: (ids: string[]) => void;
   setAutoRelease: (enabled: boolean) => void;
   setMalformedSnapshot: (enabled: boolean) => void;
+  setPaneStatus: (status: string) => void;
   rejectedSubscriptions: () => number;
   dropStatusConnections: () => void;
   releaseSnapshots: () => void;
@@ -44,6 +45,7 @@ async function startFakeHerdr(): Promise<FakeHerdr> {
   let rejectedPaneIds: string[] = [];
   let autoRelease = false;
   let malformed = false;
+  let paneStatus = "unknown";
   let rejections = 0;
   let replies: Array<() => void> = [];
 
@@ -75,6 +77,7 @@ async function startFakeHerdr(): Promise<FakeHerdr> {
             pane_id: paneId,
             workspace_id: workspaceId,
             tab_id: `${workspaceId}:t1`,
+            agent_status: paneStatus,
           }));
           const reply = () =>
             socket.write(
@@ -142,6 +145,9 @@ async function startFakeHerdr(): Promise<FakeHerdr> {
     setMalformedSnapshot: (enabled) => {
       malformed = enabled;
     },
+    setPaneStatus: (status) => {
+      paneStatus = status;
+    },
     rejectedSubscriptions: () => rejections,
     dropStatusConnections: () => {
       for (const [socket, specs] of subscriptionSockets) {
@@ -174,6 +180,9 @@ async function waitFor(condition: () => boolean, timeoutMs = 2_000) {
   }
   throw new Error("condition was not met in time");
 }
+
+const paneStatus = (store: ReturnType<typeof createStateStore>) =>
+  store.get()?.workspaces[0]?.tabs[0]?.panes[0]?.agentStatus;
 
 function start(herdr: FakeHerdr) {
   const store = createStateStore({
@@ -342,21 +351,28 @@ test("stop ends both subscriptions", async () => {
   expect(herdr.snapshotRequests()).toBe(before);
 });
 
-test("a dropped agent status connection reloads the state", async () => {
+test("a dropped agent status connection reloads after it resubscribes", async () => {
   const herdr = await startFakeHerdr();
   herdr.setAutoRelease(true);
   const { store } = start(herdr);
 
   await waitFor(() => store.get() !== null);
   await waitFor(() => herdr.subscriptions().length === 2);
+  expect(paneStatus(store)).toBe("unknown");
 
-  const before = herdr.snapshotRequests();
+  const methodsBefore = herdr.methods().length;
+  const snapshotsBefore = herdr.snapshotRequests();
+
+  // 切断中に起きた状態変化はイベントで届かない。購読が戻ってから取り直して追いつく。
+  herdr.setPaneStatus("working");
   herdr.dropStatusConnections();
 
-  // 切断中の状態変化はイベントで届かないので、再接続時に取り直す。
-  await waitFor(() => herdr.snapshotRequests() > before);
-  expect(store.get()).not.toBeNull();
-  await waitFor(() => herdr.subscriptions().length >= 3);
+  await waitFor(() => paneStatus(store) === "working");
+  expect(herdr.snapshotRequests()).toBeGreaterThan(snapshotsBefore);
+
+  const after = herdr.methods().slice(methodsBefore);
+  expect(after[0]).toBe("events.subscribe");
+  expect(after.indexOf("session.snapshot")).toBeGreaterThan(0);
 });
 
 test("loadSnapshot requests session.snapshot and parses the payload", async () => {

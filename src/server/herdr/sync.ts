@@ -69,13 +69,22 @@ export function startStateSync(options: SyncOptions): () => void {
     statusStop = null;
     if (panes.length === 0) return;
 
+    let connected = false;
     statusStop = subscribe({
       events: panes.map((pane_id) => ({ type: AGENT_STATUS_EVENT, pane_id })),
       path: options.path,
       reconnectDelayMs: options.reconnectDelayMs,
       onEvent: reload,
-      // 切断中に起きた状態変化はイベントで届かない。再接続したら状態を取り直して追いつく。
-      onLost: reload,
+      onLost: () => {},
+      // 切断中の状態変化はイベントで届かない。購読が復帰してから取り直す。切断直後に取ると、
+      // 取得から購読開始までの間に起きた変化を落とす。
+      onStarted: () => {
+        if (!connected) {
+          connected = true;
+          return;
+        }
+        reload();
+      },
       onError: (error) => {
         // ペインが消えた可能性がある。状態を取り直し、新しいペイン集合で張り直す。
         rejectedPanes = subscribedPanes;
