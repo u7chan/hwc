@@ -52,7 +52,7 @@ export function SpinnerDots({ size = 12 }: SpinnerProps) {
       focusable="false"
     >
       {DOT_RING.map(([cx, cy], index) => (
-        <circle cx={cx} cy={cy} r="2" style={{ animationDelay: `${index * 0.05}s` }} />
+        <circle cx={cx} cy={cy} r="2.6" style={{ animationDelay: `${index * 0.05}s` }} />
       ))}
     </svg>
   );

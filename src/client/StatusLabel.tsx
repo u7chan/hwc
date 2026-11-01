@@ -13,11 +13,11 @@ export function StatusLabel({ status }: { status: AgentStatus }) {
   return (
     <span class={`hwc-status hwc-status--${tone}`} role="img" aria-label={statusLabel(status)}>
       {animated && tone === "active" ? (
-        <SpinnerDots />
+        <SpinnerDots size={18} />
       ) : animated && tone === "attention" ? (
-        <AttentionMark />
+        <AttentionMark size={18} />
       ) : (
-        <StatusMark tone={tone} />
+        <StatusMark tone={tone} size={18} />
       )}
       <span class="hwc-status-text">{statusLabel(status)}</span>
     </span>

@@ -163,11 +163,11 @@ export function CollapseIcon({ size = 20 }: IconProps) {
   );
 }
 
-export function StatusMark({ tone }: { tone: string }) {
+export function StatusMark({ tone, size = 16 }: { tone: string; size?: number }) {
   return (
     <svg
-      width="12"
-      height="12"
+      width={size}
+      height={size}
       viewBox="0 0 12 12"
       fill="none"
       stroke="currentColor"

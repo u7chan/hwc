@@ -486,8 +486,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--space-6);
-  height: var(--space-6);
+  width: var(--space-8);
+  height: var(--space-8);
   border-radius: var(--radius-sm);
   color: var(--color-neutral);
 }
