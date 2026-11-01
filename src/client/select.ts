@@ -154,10 +154,17 @@ export function statusLabel(status: AgentStatus): string {
 }
 
 // フォーカス中の workspace だけを開いた状態で始める。
+// 開いた状態はワークスペースとタブの id を同じ集合で持つ。id は階層をまたいで重ならない。
 export function initialExpanded(state: AppState): Set<string> {
-  return new Set(
+  const open = new Set(
     state.workspaces.filter((workspace) => workspace.focused).map((workspace) => workspace.id),
   );
+  for (const workspace of state.workspaces) {
+    for (const tab of workspace.tabs) {
+      if (tab.focused) open.add(tab.id);
+    }
+  }
+  return open;
 }
 
 export type AgentGlyph = "pi" | "claude" | "codex" | "opencode" | "generic";

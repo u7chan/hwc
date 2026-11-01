@@ -21,7 +21,7 @@ export const previewState: AppState = {
       tabs: [
         {
           id: "w80:t1",
-          label: "main",
+          label: "clear-harbor-afa2",
           agentStatus: "working",
           focused: true,
           panes: [
@@ -38,7 +38,7 @@ export const previewState: AppState = {
         },
         {
           id: "w80:t2",
-          label: "verify",
+          label: "silver-meadow-cb6f",
           agentStatus: "idle",
           focused: false,
           panes: [
@@ -77,7 +77,7 @@ export const previewState: AppState = {
       tabs: [
         {
           id: "w81:t1",
-          label: "main",
+          label: "quiet-pine-19a2",
           agentStatus: "working",
           focused: false,
           panes: [
@@ -107,7 +107,7 @@ export const previewState: AppState = {
       tabs: [
         {
           id: "w82:t1",
-          label: "main",
+          label: "brave-otter-77f1",
           agentStatus: "blocked",
           focused: false,
           panes: [
@@ -133,7 +133,7 @@ export const previewState: AppState = {
       tabs: [
         {
           id: "w92:t1",
-          label: "main",
+          label: "plain-shell-0c3d",
           agentStatus: "idle",
           focused: false,
           panes: [

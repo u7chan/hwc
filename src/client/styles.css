@@ -797,11 +797,73 @@ button {
   transform: rotate(90deg);
 }
 
+/* タブの行。ワークスペースの下に 1 段下げて置く。 */
+.hwc-tabs-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-tab-block {
+  position: relative;
+}
+
+/* 親から子への案内線。タブの列に 1 本だけ通す。 */
+.hwc-tab-block::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--space-4) + var(--space-2));
+  width: 1px;
+  background: var(--color-line);
+}
+
+.hwc-tabrow {
+  display: flex;
+  align-items: center;
+  /* 状態の記号をワークスペースやペインと同じ列にそろえる。 */
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--row-tab);
+  padding: var(--space-2) var(--space-4) var(--space-2)
+    calc(var(--space-4) + var(--space-2) + var(--space-4));
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-tabrow:hover {
+  background: var(--color-raised);
+}
+
+.hwc-tabrow-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hwc-tabrow-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-tabrow-sub {
+  margin-top: 2px;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
 /* ペインの行 */
 
 .hwc-panes {
   margin: 0;
-  padding: 0 0 var(--space-2);
+  padding: 0 0 var(--space-2) calc(var(--space-4) + var(--space-2));
   list-style: none;
   display: flex;
   flex-direction: column;

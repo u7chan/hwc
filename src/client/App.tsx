@@ -142,13 +142,15 @@ export function App() {
     return () => clearTimeout(timer);
   }, [pane?.id]);
 
-  // タブは選択中ペインのワークスペースにあるペイン全部。
+  // 詳細のタブバーは、選択中ペインが属するタブのペインだけを出す。
   const siblings = useMemo(() => {
     if (!pane) return [];
-    const workspace = state.workspaces.find((item) =>
-      item.tabs.some((tab) => tab.panes.some((candidate) => candidate.id === pane.id)),
-    );
-    return workspace ? workspace.tabs.flatMap((tab) => tab.panes) : [];
+    for (const workspace of state.workspaces) {
+      for (const tab of workspace.tabs) {
+        if (tab.panes.some((candidate) => candidate.id === pane.id)) return tab.panes;
+      }
+    }
+    return [];
     // 並べ替えで状態そのものが変わる。
   }, [pane?.id, state]);
 

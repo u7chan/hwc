@@ -157,8 +157,8 @@ test("status maps to a tone and a label", () => {
   expect(statusLabel("unknown")).toBe("不明");
 });
 
-test("only the focused workspace starts expanded", () => {
-  expect([...initialExpanded(state)]).toEqual(["w1"]);
+test("the focused workspace and the focused tab start expanded", () => {
+  expect([...initialExpanded(state)]).toEqual(["w1", "w1:t1"]);
 });
 
 test("agentGlyph picks the icon for a known agent", () => {
