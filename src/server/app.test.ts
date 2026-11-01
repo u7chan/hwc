@@ -391,7 +391,11 @@ test("POST /api/panes/:id/input rejects a body that is not sent as JSON", async 
     }),
   });
 
-  for (const contentType of ["text/plain", "application/x-www-form-urlencoded"]) {
+  for (const contentType of [
+    "text/plain",
+    "application/x-www-form-urlencoded",
+    "application/jsonx",
+  ]) {
     const response = await app.request("/api/panes/w1:p1/input", {
       method: "POST",
       headers: { "content-type": contentType },
@@ -402,6 +406,37 @@ test("POST /api/panes/:id/input rejects a body that is not sent as JSON", async 
   }
 
   expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/input accepts a JSON content type with parameters", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+});
+
+test("POST /api/panes/:id/input returns 400 when Herdr rejects the request", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async () => {
+        throw new HerdrError("invalid_params", "text is required");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_request" });
 });
 
 test("POST /api/panes/:id/input sends without submit", async () => {

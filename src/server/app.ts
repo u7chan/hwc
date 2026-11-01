@@ -91,6 +91,8 @@ export function createApp(options: { store: StateStore; panes: PaneClient }) {
         return c.json({ error: "content-type must be application/json" }, 415);
       }
 
+      // body は JSON として読み切ってから text のバイト数で上限を見る。Content-Type の検証で
+      // cross-origin は preflight に落ちるため、ここに来るのは自前の client だけ。
       const body = await c.req.json().catch(() => null);
       const input = parseInputBody(body);
       if (!input.ok) return c.json({ error: input.error }, input.status);
