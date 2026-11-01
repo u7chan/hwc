@@ -164,9 +164,10 @@ export function PaneDetail(props: PaneDetailProps) {
     field.style.height = `${field.scrollHeight}px`;
   };
 
+  // 送信で空にしたときも、高さを初期状態へ戻す。
   useEffect(() => {
     fit(input.current, expanded);
-  }, [expanded]);
+  }, [draft, expanded]);
 
   // 選択中のタブが隠れていたら見える位置まで送る。
   useEffect(() => {
@@ -198,7 +199,15 @@ export function PaneDetail(props: PaneDetailProps) {
     setSending(true);
     // 送信したらキーボードを閉じて出力を見せる。
     input.current?.blur();
-    Promise.resolve(onSubmit(draft)).finally(() => setSending(false));
+    Promise.resolve(onSubmit(draft))
+      .then(() => {
+        // 送れたときだけ空にする。失敗したら書き直せるよう残す。
+        setDraft("");
+        setAttachments([]);
+        setRejected(0);
+      })
+      .catch(() => undefined)
+      .finally(() => setSending(false));
   };
 
   return (
@@ -440,10 +449,7 @@ export function PaneDetail(props: PaneDetailProps) {
             rows={2}
             value={draft}
             placeholder="メッセージを入力"
-            onInput={(event) => {
-              setDraft(event.currentTarget.value);
-              fit(event.currentTarget, expanded);
-            }}
+            onInput={(event) => setDraft(event.currentTarget.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.isComposing) {
                 event.preventDefault();
