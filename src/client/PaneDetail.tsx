@@ -338,15 +338,6 @@ export function PaneDetail(props: PaneDetailProps) {
           takeFiles([...transfer.files]);
         }}
       >
-        <button
-          type="button"
-          class="hwc-input-toggle"
-          aria-expanded={expanded}
-          aria-label={expanded ? "入力を折りたたむ" : "入力を広げる"}
-          onClick={() => setExpanded((current) => !current)}
-        >
-          {expanded ? <CollapseIcon /> : <ExpandIcon />}
-        </button>
         <label class="hwc-visually-hidden" for="hwc-input-field">
           {context.workspaceLabel} / {context.tabLabel} のペインへ送る
         </label>
@@ -420,6 +411,15 @@ export function PaneDetail(props: PaneDetailProps) {
           ドロップして添付
         </div>
         <div class="hwc-input-frame">
+          <button
+            type="button"
+            class="hwc-input-toggle"
+            aria-expanded={expanded}
+            aria-label={expanded ? "入力を折りたたむ" : "入力を広げる"}
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {expanded ? <CollapseIcon /> : <ExpandIcon />}
+          </button>
           <textarea
             id="hwc-input-field"
             ref={input}
