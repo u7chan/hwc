@@ -1,8 +1,11 @@
 import type { ComponentChildren } from "preact";
+import { useEffect, useState } from "preact/hooks";
 import type { AppState, WorktreeState } from "../server/herdr/state";
 import {
   AgentGlyphIcon,
   ChevronRightIcon,
+  CopyIcon,
+  MoreIcon,
   PaneIcon,
   RepoIcon,
   WorkspaceIcon,
@@ -67,6 +70,44 @@ function GroupChildren(props: { id: string; open: boolean; children: ComponentCh
 }
 
 export function PaneList(props: PaneListProps) {
+  // メニューは行の中に置くと一覧のスクロールで切れる。画面に固定して出す。
+  const [menu, setMenu] = useState<{ paneId: string; top: number; right: number } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const openMenu = (event: MouseEvent, paneId: string) => {
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    setCopied(false);
+    // 画面の下で切れないように、はみ出す分だけ上へ寄せる。
+    const height = 150;
+    const top = Math.min(rect.bottom + 4, window.innerHeight - height - 8);
+    setMenu({ paneId, top, right: window.innerWidth - rect.right });
+  };
+
+  const closeMenu = () => setMenu(null);
+
+  const copyId = (paneId: string) => {
+    void navigator.clipboard
+      ?.writeText(paneId)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
+
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    const onMove = () => setMenu(null);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+  }, [menu]);
   const { state, selectedPaneId, expanded, onSelect, onToggle } = props;
 
   if (countPanes(state) === 0) {
@@ -110,25 +151,37 @@ export function PaneList(props: PaneListProps) {
               <ul class="hwc-panes">
                 {panes.map(({ pane, tabLabel }) => (
                   <li key={pane.id}>
-                    <button
-                      type="button"
-                      class="hwc-pane"
-                      aria-current={pane.id === selectedPaneId ? "true" : undefined}
-                      onClick={() => onSelect(pane.id)}
-                    >
-                      <span
-                        class="hwc-pane-icon"
-                        data-agent={agentGlyph(pane.agent)}
-                        data-working={pane.agentStatus === "working"}
+                    <div class="hwc-pane" data-current={pane.id === selectedPaneId}>
+                      <button
+                        type="button"
+                        class="hwc-pane-open"
+                        aria-current={pane.id === selectedPaneId ? "true" : undefined}
+                        onClick={() => onSelect(pane.id)}
                       >
-                        {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
-                      </span>
-                      <span class="hwc-pane-main">
-                        <span class="hwc-pane-name">{pane.title ?? pane.agent ?? pane.id}</span>
-                        <span class="hwc-pane-sub">{tabLabel}</span>
-                      </span>
-                      <StatusLabel status={pane.agentStatus} />
-                    </button>
+                        <span
+                          class="hwc-pane-icon"
+                          data-agent={agentGlyph(pane.agent)}
+                          data-working={pane.agentStatus === "working"}
+                        >
+                          {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
+                        </span>
+                        <span class="hwc-pane-main">
+                          <span class="hwc-pane-name">{pane.title ?? pane.agent ?? pane.id}</span>
+                          <span class="hwc-pane-sub">{tabLabel}</span>
+                        </span>
+                        <StatusLabel status={pane.agentStatus} />
+                      </button>
+                      <button
+                        type="button"
+                        class="hwc-pane-more"
+                        aria-label={`${pane.id} のメニュー`}
+                        aria-haspopup="menu"
+                        aria-expanded={menu?.paneId === pane.id}
+                        onClick={(event) => openMenu(event, pane.id)}
+                      >
+                        <MoreIcon />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -136,6 +189,40 @@ export function PaneList(props: PaneListProps) {
           </section>
         );
       })}
+      {menu ? (
+        <>
+          <div class="hwc-menu-backdrop" onPointerDown={closeMenu} />
+          <div
+            class="hwc-menu"
+            role="menu"
+            aria-label={`${menu.paneId} の操作`}
+            style={{ top: `${menu.top}px`, right: `${menu.right}px` }}
+          >
+            <p class="hwc-menu-head">{menu.paneId}</p>
+            <button
+              type="button"
+              role="menuitem"
+              class="hwc-menu-item"
+              onClick={() => {
+                onSelect(menu.paneId);
+                closeMenu();
+              }}
+            >
+              <ChevronRightIcon />
+              ペインを開く
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="hwc-menu-item"
+              onClick={() => copyId(menu.paneId)}
+            >
+              <CopyIcon />
+              {copied ? "コピーしました" : "ペイン ID をコピー"}
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

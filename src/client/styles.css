@@ -809,26 +809,35 @@ button {
   gap: var(--space-1);
 }
 
+/* 行は「開く」と「メニュー」の 2 つのボタンで持つ。 */
 .hwc-pane {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  width: 100%;
   min-height: var(--row-pane);
-  /* 左は見出し行より 8px 下げて親子を表す。右は状態ラベルの列をそろえる。 */
+  padding-right: var(--space-2);
+}
+
+.hwc-pane-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* 左は見出し行より 8px 下げて親子を表す。右は状態の記号の列をそろえる。 */
   padding: var(--space-3) calc(var(--space-4) + var(--chevron-slot)) var(--space-3)
     calc(var(--space-4) + var(--space-2));
   border: 0;
   background: transparent;
+  color: var(--color-text);
   text-align: left;
   cursor: pointer;
 }
 
-.hwc-pane[aria-current="true"] {
+.hwc-pane[data-current="true"] {
   background: var(--color-selected);
 }
 
-.hwc-pane[aria-current="true"] .hwc-pane-name {
+.hwc-pane[data-current="true"] .hwc-pane-name {
   color: var(--color-accent);
   font-weight: 600;
 }
@@ -843,13 +852,80 @@ button {
   color: var(--color-agent-claude);
 }
 
-.hwc-pane[aria-current="true"] .hwc-pane-icon {
+.hwc-pane[data-current="true"] .hwc-pane-icon {
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
 
-.hwc-pane[aria-current="true"] .hwc-pane-icon[data-working="true"][data-agent="claude"] {
+.hwc-pane[data-current="true"] .hwc-pane-icon[data-working="true"][data-agent="claude"] {
   color: var(--color-agent-claude);
+}
+
+.hwc-pane-more {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-pane-more:hover {
+  color: var(--color-text);
+}
+
+.hwc-pane-more[aria-expanded="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+/* 行き場のない場所を押したら閉じる。 */
+.hwc-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.hwc-menu {
+  position: fixed;
+  z-index: 21;
+  min-width: 220px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.hwc-menu-head {
+  margin: 0 0 var(--space-1);
+  padding: 0 var(--space-2);
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+}
+
+.hwc-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-menu-item:hover {
+  background: var(--color-raised);
 }
 
 .hwc-pane-name {

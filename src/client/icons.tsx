@@ -80,6 +80,16 @@ export function WorktreeIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function MoreIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="5.5" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="18.5" r="1.6" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
 export function CopyIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
