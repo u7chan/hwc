@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { createApp } from "./app";
+import type { PaneClient } from "./herdr/panes";
+import { HerdrError } from "./herdr/socket";
 import type { AppState, StateStore } from "./herdr/state";
 
 const state: AppState = {
@@ -65,6 +67,14 @@ function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
   };
 }
 
+function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
+  return {
+    read: async ({ paneId }) => ({ paneId, text: "hello\n", truncated: false, revision: 3 }),
+    send: async () => {},
+    ...overrides,
+  };
+}
+
 async function waitFor(condition: () => boolean, timeoutMs = 2_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -114,7 +124,7 @@ function createSseReader(body: ReadableStream<Uint8Array>) {
 }
 
 test("GET /api/health returns ok", async () => {
-  const app = createApp({ store: createFakeStore(state) });
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
   const response = await app.request("/api/health");
 
   expect(response.status).toBe(200);
@@ -122,7 +132,7 @@ test("GET /api/health returns ok", async () => {
 });
 
 test("GET /api/state returns the current state", async () => {
-  const app = createApp({ store: createFakeStore(state) });
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
   const response = await app.request("/api/state");
 
   expect(response.status).toBe(200);
@@ -130,7 +140,7 @@ test("GET /api/state returns the current state", async () => {
 });
 
 test("GET /api/state loads the state when the store is still empty", async () => {
-  const app = createApp({ store: createFakeStore(null) });
+  const app = createApp({ store: createFakeStore(null), panes: createFakePanes() });
   const response = await app.request("/api/state");
 
   expect(response.status).toBe(200);
@@ -138,7 +148,10 @@ test("GET /api/state loads the state when the store is still empty", async () =>
 });
 
 test("GET /api/state returns 502 when Herdr cannot be read", async () => {
-  const app = createApp({ store: createFakeStore(null, new Error("socket closed")) });
+  const app = createApp({
+    store: createFakeStore(null, new Error("socket closed")),
+    panes: createFakePanes(),
+  });
   const response = await app.request("/api/state");
 
   expect(response.status).toBe(502);
@@ -147,7 +160,7 @@ test("GET /api/state returns 502 when Herdr cannot be read", async () => {
 
 test("GET /api/events streams the current state first, then every update", async () => {
   const store = createFakeStore(state);
-  const app = createApp({ store });
+  const app = createApp({ store, panes: createFakePanes() });
   const controller = new AbortController();
   const response = await app.request("/api/events", { signal: controller.signal });
 
@@ -168,7 +181,7 @@ test("GET /api/events streams the current state first, then every update", async
 
 test("GET /api/events stays open and sends the state once Herdr becomes readable", async () => {
   const store = createFakeStore(null, new Error("socket closed"));
-  const app = createApp({ store });
+  const app = createApp({ store, panes: createFakePanes() });
   const controller = new AbortController();
   const response = await app.request("/api/events", { signal: controller.signal });
 
@@ -190,7 +203,7 @@ test("GET /api/events stays open and sends the state once Herdr becomes readable
 test("GET /api/events uses an update that arrived first instead of reporting unavailability", async () => {
   const store = createFakeStore(null, new Error("socket closed"));
   store.fireOnSubscribe(state);
-  const app = createApp({ store });
+  const app = createApp({ store, panes: createFakePanes() });
   const controller = new AbortController();
   const response = await app.request("/api/events", { signal: controller.signal });
   if (!response.body) throw new Error("response has no body");
@@ -207,7 +220,7 @@ test("GET /api/events flushes an update that arrives while the initial state is 
   const store = createFakeStore(state);
   const next: AppState = { ...state, focusedPaneId: "w1:p9" };
   store.fireOnSubscribe(next);
-  const app = createApp({ store });
+  const app = createApp({ store, panes: createFakePanes() });
   const controller = new AbortController();
   const response = await app.request("/api/events", { signal: controller.signal });
   if (!response.body) throw new Error("response has no body");
@@ -223,7 +236,7 @@ test("GET /api/events flushes an update that arrives while the initial state is 
 
 test("GET /api/events unsubscribes when the client is gone before the initial state is sent", async () => {
   const store = createFakeStore(state);
-  const app = createApp({ store });
+  const app = createApp({ store, panes: createFakePanes() });
   const controller = new AbortController();
   const response = await app.request("/api/events", { signal: controller.signal });
   if (!response.body) throw new Error("response has no body");
@@ -232,4 +245,272 @@ test("GET /api/events unsubscribes when the client is gone before the initial st
   controller.abort();
 
   await waitFor(() => store.listenerCount() === 0);
+});
+
+test("GET /api/panes/:id/output returns the pane output", async () => {
+  const output = { paneId: "w1:p1", text: "hello\n", truncated: true, revision: 3 };
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({ read: async () => output }),
+  });
+  const response = await app.request("/api/panes/w1:p1/output?lines=20");
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual(output);
+});
+
+test("GET /api/panes/:id/output forwards the parsed query to the pane client", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      read: async (options) => {
+        seen.push(options);
+        return { paneId: options.paneId, text: "", truncated: false, revision: 0 };
+      },
+    }),
+  });
+
+  await app.request("/api/panes/w1:p1/output?source=visible&lines=5");
+
+  expect(seen).toEqual([{ paneId: "w1:p1", source: "visible", lines: 5 }]);
+});
+
+test("GET /api/panes/:id/output rejects a lines value that is out of range", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/output?lines=0");
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({
+    error: "lines must be an integer between 1 and 4294967295",
+  });
+});
+
+test("GET /api/panes/:id/output returns 404 when the pane is gone", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      read: async () => {
+        throw new HerdrError("pane_not_found", "pane w1:p9 not found");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p9/output");
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
+});
+
+test("GET /api/panes/:id/output returns 502 when Herdr cannot be reached", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      read: async () => {
+        throw new Error("socket closed");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/output");
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+test("POST /api/panes/:id/input sends the text and submits it", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "ls -la", submit: true }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual([{ paneId: "w1:p1", text: "ls -la", submit: true }]);
+});
+
+test("POST /api/panes/:id/input rejects a blank text", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "  " }),
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "text must be a non-empty string" });
+});
+
+test("POST /api/panes/:id/input rejects a body that is not JSON", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "not json",
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "body must be an object" });
+});
+
+test("POST /api/panes/:id/input returns 502 when Herdr cannot be reached", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async () => {
+        throw new Error("socket closed");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+test("POST /api/panes/:id/input rejects a body that is not sent as JSON", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+
+  for (const contentType of [
+    "text/plain",
+    "application/x-www-form-urlencoded",
+    "application/jsonx",
+  ]) {
+    const response = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": contentType },
+      body: JSON.stringify({ text: "rm -rf /", submit: true }),
+    });
+    expect(response.status).toBe(415);
+    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
+  }
+
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/input accepts a JSON content type with parameters", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+});
+
+test("POST /api/panes/:id/input returns 400 when Herdr rejects the request", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async () => {
+        throw new HerdrError("invalid_params", "text is required");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_request" });
+});
+
+test("POST /api/panes/:id/input sends without submit", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(seen).toEqual([{ paneId: "w1:p1", text: "ls", submit: false }]);
+});
+
+test("POST /api/panes/:id/input rejects a text that is too long", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "a".repeat(16_385) }),
+  });
+
+  expect(response.status).toBe(413);
+  expect(await response.json()).toEqual({ error: "text must be at most 16384 bytes" });
+});
+
+test("POST /api/panes/:id/input returns 404 when the pane is gone", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      send: async () => {
+        throw new HerdrError("pane_not_found", "pane w1:p9 not found");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p9/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "ls" }),
+  });
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
+});
+
+test("GET /api/panes/:id/output returns 400 when Herdr rejects the request", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      read: async () => {
+        throw new HerdrError("invalid_params", "pane_id is required");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/output");
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_request" });
+});
+
+test("GET /api/panes/:id/output rejects an unknown source", async () => {
+  const app = createApp({ store: createFakeStore(state), panes: createFakePanes() });
+  const response = await app.request("/api/panes/w1:p1/output?source=scrollback");
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({
+    error: "source must be one of visible, recent, recent_unwrapped, detection",
+  });
 });
