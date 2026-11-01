@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import {
   ArrowDownIcon,
-  CheckIcon,
   ChevronLeftIcon,
   CollapseIcon,
-  CopyIcon,
+  CopyGlyph,
   ExpandIcon,
   TerminalIcon,
   SendIcon,
@@ -152,7 +151,7 @@ export function PaneDetail(props: PaneDetailProps) {
             );
           })}
         </div>
-        <span class="hwc-pane-id">
+        <span class="hwc-pane-id" data-copied={copied}>
           <span class="hwc-pane-id-text">{pane.id}</span>
           <button
             type="button"
@@ -160,7 +159,7 @@ export function PaneDetail(props: PaneDetailProps) {
             aria-label={copied ? "コピーしました" : "ペイン ID をコピー"}
             onClick={copyId}
           >
-            {copied ? <CheckIcon /> : <CopyIcon />}
+            <CopyGlyph copied={copied} />
           </button>
         </span>
       </div>

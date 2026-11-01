@@ -107,6 +107,24 @@ export function CheckIcon({ size = 16 }: IconProps) {
   );
 }
 
+// コピーの結果を記号で返す。入れ替わりが分かるように重ねておく。
+export function CopyGlyph({ copied, size = 16 }: IconProps & { copied: boolean }) {
+  return (
+    <span
+      class="hwc-copy-glyph"
+      data-copied={copied}
+      style={{ width: `${size}px`, height: `${size}px` }}
+    >
+      <span class="hwc-copy-glyph-layer hwc-copy-glyph-copy">
+        <CopyIcon size={size} />
+      </span>
+      <span class="hwc-copy-glyph-layer hwc-copy-glyph-check">
+        <CheckIcon size={size} />
+      </span>
+    </span>
+  );
+}
+
 export function TabIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

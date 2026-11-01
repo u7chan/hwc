@@ -4,7 +4,7 @@ import type { AppState, WorktreeState } from "../server/herdr/state";
 import {
   AgentGlyphIcon,
   ChevronRightIcon,
-  CopyIcon,
+  CopyGlyph,
   MoreIcon,
   PaneIcon,
   RepoIcon,
@@ -217,7 +217,7 @@ export function PaneList(props: PaneListProps) {
               class="hwc-menu-item"
               onClick={() => copyId(menu.paneId)}
             >
-              <CopyIcon />
+              <CopyGlyph copied={copied} />
               {copied ? "コピーしました" : "ペイン ID をコピー"}
             </button>
           </div>
