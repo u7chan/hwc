@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { type AppState, createStateStore, type HerdrSnapshot, toAppState } from "./state";
+import {
+  type AppState,
+  createStateStore,
+  type HerdrSnapshot,
+  parseSnapshot,
+  toAppState,
+} from "./state";
 
 const snapshot: HerdrSnapshot = {
   focused_workspace_id: "w1",
@@ -132,6 +138,43 @@ test("toAppState drops tabs whose workspace is gone and panes whose tab is gone"
   expect(state.workspaces[0]?.tabs[0]?.panes.map((pane) => pane.id)).toEqual(["w1:p1"]);
 });
 
+test("parseSnapshot keeps the fields the state needs", () => {
+  expect(parseSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot);
+});
+
+test("parseSnapshot accepts a snapshot without the optional collections", () => {
+  expect(parseSnapshot({ focused_workspace_id: "w1" })).toMatchObject({
+    focused_workspace_id: "w1",
+    focused_tab_id: null,
+    workspaces: [],
+    tabs: [],
+    panes: [],
+    agents: [],
+  });
+});
+
+test("parseSnapshot maps an unknown agent status to unknown", () => {
+  const parsed = parseSnapshot({
+    panes: [{ pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1", agent_status: "sleeping" }],
+  });
+
+  expect(parsed.panes?.[0]?.agent_status).toBe("unknown");
+});
+
+test("parseSnapshot rejects a payload that is not a snapshot", () => {
+  expect(() => parseSnapshot(null)).toThrow("must be an object");
+  expect(() => parseSnapshot([{ workspaces: [] }])).toThrow("must be an object");
+  expect(() => parseSnapshot({ workspaces: "w1" })).toThrow("must be an array");
+});
+
+test("parseSnapshot rejects a record without its id", () => {
+  expect(() => parseSnapshot({ workspaces: [{ label: "hwc" }] })).toThrow("workspace_id");
+  expect(() => parseSnapshot({ tabs: [{ tab_id: "w1:t1" }] })).toThrow("tab.workspace_id");
+  expect(() => parseSnapshot({ panes: [{ pane_id: "w1:p1", workspace_id: "w1" }] })).toThrow(
+    "pane.tab_id",
+  );
+});
+
 async function waitFor(condition: () => boolean, timeoutMs = 2_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -249,4 +292,27 @@ test("a load failure does not leave the store stuck for the next refresh", async
   await retried;
 
   expect(workspaceIds(store.get())).toEqual(["w1"]);
+});
+
+test("a request that arrives while a load fails is retried once", async () => {
+  const loads: Array<ReturnType<typeof deferred<HerdrSnapshot>>> = [];
+  const store = createStateStore({
+    retryDelayMs: 1,
+    load: () => {
+      const load = deferred<HerdrSnapshot>();
+      loads.push(load);
+      return load.promise;
+    },
+  });
+
+  const first = store.refresh();
+  void store.refresh();
+  loads[0]?.reject(new Error("socket closed"));
+  await expect(first).rejects.toThrow("socket closed");
+
+  await waitFor(() => loads.length === 2);
+  loads[1]?.resolve(snapshotWith("w9"));
+
+  await waitFor(() => workspaceIds(store.get())?.join() === "w9");
+  expect(loads).toHaveLength(2);
 });

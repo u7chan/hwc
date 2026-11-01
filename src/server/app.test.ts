@@ -25,11 +25,16 @@ const state: AppState = {
   ],
 };
 
-type FakeStore = StateStore & { push: (state: AppState) => void };
+type FakeStore = StateStore & {
+  push: (state: AppState) => void;
+  listenerCount: () => number;
+  fireOnSubscribe: (state: AppState) => void;
+};
 
 function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
   const listeners = new Set<(state: AppState) => void>();
   let current = initial;
+  let pendingOnSubscribe: AppState | null = null;
 
   return {
     get: () => current,
@@ -40,15 +45,33 @@ function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
     },
     onChange: (listener) => {
       listeners.add(listener);
+      if (pendingOnSubscribe) {
+        const pending = pendingOnSubscribe;
+        pendingOnSubscribe = null;
+        listener(pending);
+      }
       return () => {
         listeners.delete(listener);
       };
+    },
+    listenerCount: () => listeners.size,
+    fireOnSubscribe: (state) => {
+      pendingOnSubscribe = state;
     },
     push: (next) => {
       current = next;
       for (const listener of listeners) listener(next);
     },
   };
+}
+
+async function waitFor(condition: () => boolean, timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await Bun.sleep(5);
+  }
+  throw new Error("condition was not met in time");
 }
 
 function createSseReader(body: ReadableStream<Uint8Array>) {
@@ -130,4 +153,44 @@ test("GET /api/events streams the current state first, then every update", async
 
   await events.cancel();
   controller.abort();
+  await waitFor(() => store.listenerCount() === 0);
+});
+
+test("GET /api/events returns 502 when Herdr cannot be read", async () => {
+  const app = createApp({ store: createFakeStore(null, new Error("socket closed")) });
+  const response = await app.request("/api/events");
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+test("GET /api/events flushes an update that arrives while the initial state is being sent", async () => {
+  const store = createFakeStore(state);
+  const next: AppState = { ...state, focusedPaneId: "w1:p9" };
+  store.fireOnSubscribe(next);
+  const app = createApp({ store });
+  const controller = new AbortController();
+  const response = await app.request("/api/events", { signal: controller.signal });
+  if (!response.body) throw new Error("response has no body");
+  const events = createSseReader(response.body);
+
+  expect(await events.next()).toEqual(state);
+  expect(await events.next()).toEqual(next);
+
+  await events.cancel();
+  controller.abort();
+  await waitFor(() => store.listenerCount() === 0);
+});
+
+test("GET /api/events unsubscribes when the client is gone before the initial state is sent", async () => {
+  const store = createFakeStore(state);
+  const app = createApp({ store });
+  const controller = new AbortController();
+  const response = await app.request("/api/events", { signal: controller.signal });
+  if (!response.body) throw new Error("response has no body");
+
+  await response.body.cancel();
+  controller.abort();
+
+  await waitFor(() => store.listenerCount() === 0);
 });

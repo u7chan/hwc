@@ -134,7 +134,7 @@ export function request<T>(
   });
 }
 
-export type SubscriptionSpec = { type: string; [filter: string]: unknown };
+export type SubscriptionSpec = { type: string; pane_id?: string };
 
 export type SubscribeOptions = {
   events: readonly SubscriptionSpec[];

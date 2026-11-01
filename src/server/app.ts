@@ -19,11 +19,15 @@ export function createApp(options: { store: StateStore }) {
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
       return c.json(state);
     })
-    .get("/api/events", (c) =>
-      streamSSE(c, async (stream) => {
+    .get("/api/events", async (c) => {
+      const initial = await current();
+      // 状態が無いまま SSE を開くと、client から「取得中」と区別できない。再接続は EventSource に任せる。
+      if (!initial) return c.json({ error: "herdr_unavailable" }, 502);
+
+      return streamSSE(c, async (stream) => {
         const send = (state: AppState) =>
           stream.writeSSE({ data: JSON.stringify(state) }).catch(() => {
-            // 切断済みのクライアントへの書き込みは失敗する。購読解除は onAbort が行う。
+            // 切断済みのクライアントへの書き込みは失敗する。購読解除は切断の検出側で行う。
           });
 
         // 初期状態の送信中に届いた更新を取りこぼさないよう、購読を先に張って溜めておく。
@@ -34,24 +38,24 @@ export function createApp(options: { store: StateStore }) {
           else buffered = state;
         });
 
-        const initial = await current();
-        if (initial) await send(initial);
+        await send(initial);
         ready = true;
         if (buffered && buffered !== initial) await send(buffered);
 
         // ハンドラが返るとストリームが閉じるので、切断されるまで待つ。
         await new Promise<void>((resolve) => {
-          if (stream.aborted) {
-            resolve();
-            return;
-          }
-          stream.onAbort(() => {
+          const detach = () => {
             unsubscribe();
             resolve();
-          });
+          };
+          if (stream.aborted) {
+            detach();
+            return;
+          }
+          stream.onAbort(detach);
         });
-      }),
-    );
+      });
+    });
 }
 
 export type AppType = ReturnType<typeof createApp>;

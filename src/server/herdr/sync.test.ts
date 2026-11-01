@@ -13,7 +13,9 @@ type FakeHerdr = {
   subscriptions: () => Array<{ subscriptions: SubscriptionSpec[] }>;
   snapshotRequests: () => number;
   setPaneIds: (ids: string[]) => void;
+  setRejectedPaneIds: (ids: string[]) => void;
   setAutoRelease: (enabled: boolean) => void;
+  rejectedSubscriptions: () => number;
   releaseSnapshots: () => void;
   pushEvent: (name: string, data?: unknown) => void;
   close: () => Promise<void>;
@@ -36,7 +38,9 @@ async function startFakeHerdr(): Promise<FakeHerdr> {
   const subscriptions: Array<{ subscriptions: SubscriptionSpec[] }> = [];
   let snapshots = 0;
   let paneIds = ["w1:p1"];
+  let rejectedPaneIds: string[] = [];
   let autoRelease = false;
+  let rejections = 0;
   let replies: Array<() => void> = [];
 
   const server = net.createServer((socket) => {
@@ -85,8 +89,20 @@ async function startFakeHerdr(): Promise<FakeHerdr> {
         }
 
         if (message.method === "events.subscribe") {
+          const params = message.params as { subscriptions: SubscriptionSpec[] };
+          if (params.subscriptions.some((item) => rejectedPaneIds.includes(item.pane_id ?? ""))) {
+            rejections += 1;
+            socket.write(
+              `${JSON.stringify({
+                id: message.id,
+                error: { code: "invalid_params", message: "pane not found" },
+              })}\n`,
+            );
+            socket.destroy();
+            continue;
+          }
           eventSockets.add(socket);
-          subscriptions.push(message.params as { subscriptions: SubscriptionSpec[] });
+          subscriptions.push(params);
           socket.write(
             `${JSON.stringify({ id: message.id, result: { type: "subscription_started" } })}\n`,
           );
@@ -108,9 +124,13 @@ async function startFakeHerdr(): Promise<FakeHerdr> {
     setPaneIds: (ids) => {
       paneIds = ids;
     },
+    setRejectedPaneIds: (ids) => {
+      rejectedPaneIds = ids;
+    },
     setAutoRelease: (enabled) => {
       autoRelease = enabled;
     },
+    rejectedSubscriptions: () => rejections,
     releaseSnapshots: () => {
       const releasing = replies;
       replies = [];
@@ -146,12 +166,12 @@ function start(herdr: FakeHerdr) {
   });
   const stop = startStateSync({ store, path: herdr.path, reconnectDelayMs: 10 });
   stops.push(stop);
-  return store;
+  return { store, stop };
 }
 
 test("startStateSync subscribes to state events and loads a snapshot when the subscription starts", async () => {
   const herdr = await startFakeHerdr();
-  const store = start(herdr);
+  const { store } = start(herdr);
 
   await waitFor(() => herdr.snapshotRequests() === 1);
   herdr.releaseSnapshots();
@@ -167,7 +187,7 @@ test("startStateSync subscribes to state events and loads a snapshot when the su
 
 test("startStateSync subscribes to agent status changes of the panes it knows", async () => {
   const herdr = await startFakeHerdr();
-  const store = start(herdr);
+  const { store } = start(herdr);
 
   await waitFor(() => herdr.snapshotRequests() === 1);
   herdr.releaseSnapshots();
@@ -183,7 +203,7 @@ test("startStateSync subscribes to agent status changes of the panes it knows", 
 test("startStateSync resubscribes when the pane set changes", async () => {
   const herdr = await startFakeHerdr();
   herdr.setAutoRelease(true);
-  const store = start(herdr);
+  const { store } = start(herdr);
 
   await waitFor(() => store.get() !== null);
   await waitFor(() => herdr.subscriptions().length === 2);
@@ -202,7 +222,7 @@ test("startStateSync resubscribes when the pane set changes", async () => {
 
 test("an event after the subscription starts reloads the snapshot", async () => {
   const herdr = await startFakeHerdr();
-  const store = start(herdr);
+  const { store } = start(herdr);
 
   await waitFor(() => herdr.snapshotRequests() === 1);
   herdr.releaseSnapshots();
@@ -217,7 +237,7 @@ test("an event after the subscription starts reloads the snapshot", async () => 
 
 test("consecutive events coalesce into a single extra reload", async () => {
   const herdr = await startFakeHerdr();
-  const store = start(herdr);
+  const { store } = start(herdr);
 
   await waitFor(() => herdr.snapshotRequests() === 1);
   herdr.releaseSnapshots();
@@ -235,4 +255,69 @@ test("consecutive events coalesce into a single extra reload", async () => {
 
   await waitFor(() => store.get()?.focusedWorkspaceId === "w3");
   expect(herdr.snapshotRequests()).toBe(3);
+});
+
+test("a rejected agent status subscription does not stop lifecycle events", async () => {
+  const herdr = await startFakeHerdr();
+  herdr.setAutoRelease(true);
+  herdr.setPaneIds(["w1:p1", "w1:p9"]);
+  herdr.setRejectedPaneIds(["w1:p9"]);
+  const { store } = start(herdr);
+
+  await waitFor(() => store.get() !== null);
+  await waitFor(() => herdr.rejectedSubscriptions() === 1);
+
+  const before = herdr.snapshotRequests();
+  herdr.pushEvent("tab.renamed");
+  await waitFor(() => herdr.snapshotRequests() > before);
+
+  // 拒否 → 取得 → 同じペイン集合で再試行、を往復し続けない。
+  expect(herdr.snapshotRequests()).toBeLessThan(6);
+});
+
+test("after a rejected pane disappears the status subscription is re-established", async () => {
+  const herdr = await startFakeHerdr();
+  herdr.setAutoRelease(true);
+  herdr.setPaneIds(["w1:p1", "w1:p9"]);
+  herdr.setRejectedPaneIds(["w1:p9"]);
+  const { store } = start(herdr);
+
+  await waitFor(() => herdr.rejectedSubscriptions() === 1);
+  herdr.setPaneIds(["w1:p1"]);
+  herdr.pushEvent("pane.closed");
+
+  await waitFor(() =>
+    herdr
+      .subscriptions()
+      .some(
+        (item) =>
+          item.subscriptions.length === 1 &&
+          item.subscriptions[0]?.type === "pane.agent_status_changed",
+      ),
+  );
+  const statusSubscriptions = herdr
+    .subscriptions()
+    .flatMap((item) => item.subscriptions)
+    .filter((item) => item.type === "pane.agent_status_changed");
+  expect(statusSubscriptions.at(-1)).toEqual({
+    type: "pane.agent_status_changed",
+    pane_id: "w1:p1",
+  });
+  expect(store.get()).not.toBeNull();
+});
+
+test("stop ends both subscriptions", async () => {
+  const herdr = await startFakeHerdr();
+  herdr.setAutoRelease(true);
+  const { store, stop } = start(herdr);
+
+  await waitFor(() => store.get() !== null);
+  await waitFor(() => herdr.subscriptions().length === 2);
+
+  stop();
+  const before = herdr.snapshotRequests();
+  herdr.pushEvent("tab.renamed");
+  await Bun.sleep(50);
+
+  expect(herdr.snapshotRequests()).toBe(before);
 });
