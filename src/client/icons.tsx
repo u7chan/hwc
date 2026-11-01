@@ -97,15 +97,6 @@ export function ArrowDownIcon({ size = 20 }: IconProps) {
   );
 }
 
-export function CloseSmallIcon({ size = 16 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M6 6l12 12" />
-      <path d="M18 6L6 18" />
-    </Svg>
-  );
-}
-
 export function CloseIcon({ size = 20 }: IconProps) {
   return (
     <Svg size={size}>

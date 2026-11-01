@@ -599,58 +599,25 @@ button {
   flex: none;
   display: inline-flex;
   align-items: center;
+  gap: var(--space-2);
   min-height: var(--tap);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-3);
+  border: 0;
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-secondary);
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .hwc-tab:hover {
   background: var(--color-raised);
 }
 
-.hwc-tab[data-selected="true"] {
+.hwc-tab[aria-selected="true"] {
   background: var(--color-raised);
   color: var(--color-text);
   font-weight: 600;
-}
-
-.hwc-tab-main {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: var(--tap);
-  padding: 0 var(--space-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.hwc-tab-close {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  margin-left: var(--space-1);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-secondary);
-  cursor: pointer;
-}
-
-.hwc-tab-close:hover {
-  background: var(--color-line);
-  color: var(--color-text);
-}
-
-.hwc-tab-close:active {
-  opacity: 0.72;
 }
 
 .hwc-dot {
