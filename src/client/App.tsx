@@ -4,7 +4,7 @@ import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
 import { previewOutput, previewState } from "./fixtures";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
-import { findPane, findPaneContext, initialExpanded } from "./select";
+import { findPane, findPaneContext, initialExpanded, removePane } from "./select";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -21,7 +21,8 @@ import {
 } from "./theme";
 
 export function App() {
-  const state = previewState;
+  // プレビューでは閉じたペインを手元で落とす。実 API に繋いだらサーバーの状態で置き換わる。
+  const [state, setState] = useState(previewState);
   const [selectedPaneId, setSelectedPaneId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => initialExpanded(state));
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -67,6 +68,12 @@ export function App() {
   const changeTheme = (next: ThemePreference) => {
     setTheme(next);
     if (typeof localStorage !== "undefined") saveThemePreference(localStorage, next);
+  };
+
+  const closePane = (paneId: string) => {
+    setState((current) => removePane(current, paneId));
+    if (selectedPaneId === paneId) setSelectedPaneId(null);
+    setFeedback(`ペイン ${paneId} を閉じました`);
   };
 
   const pane = findPane(state, selectedPaneId);
@@ -163,6 +170,7 @@ export function App() {
             expanded={expanded}
             onSelect={select}
             onToggle={toggle}
+            onClosePane={closePane}
           />
         </aside>
 

@@ -4,6 +4,7 @@ import type { AppState, WorktreeState } from "../server/herdr/state";
 import {
   AgentGlyphIcon,
   ChevronRightIcon,
+  CloseIcon,
   CopyGlyph,
   MoreIcon,
   PaneIcon,
@@ -11,6 +12,7 @@ import {
   WorkspaceIcon,
   WorktreeIcon,
 } from "./icons";
+import { Confirm } from "./Confirm";
 import { agentGlyph, countPanes, countWorkspacePanes } from "./select";
 import { StatusLabel } from "./StatusLabel";
 
@@ -20,6 +22,7 @@ type PaneListProps = {
   expanded: Set<string>;
   onSelect: (paneId: string) => void;
   onToggle: (groupId: string) => void;
+  onClosePane: (paneId: string) => void;
 };
 
 // git 管理下でない / 通常のリポジトリ / linked worktree を形で見分ける。
@@ -73,6 +76,7 @@ export function PaneList(props: PaneListProps) {
   // メニューは行の中に置くと一覧のスクロールで切れる。画面に固定して出す。
   const [menu, setMenu] = useState<{ paneId: string; top: number; right: number } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [closing, setClosing] = useState<string | null>(null);
 
   const openMenu = (event: MouseEvent, paneId: string) => {
     const target = event.currentTarget as HTMLElement;
@@ -108,7 +112,7 @@ export function PaneList(props: PaneListProps) {
       window.removeEventListener("resize", onMove);
     };
   }, [menu]);
-  const { state, selectedPaneId, expanded, onSelect, onToggle } = props;
+  const { state, selectedPaneId, expanded, onSelect, onToggle, onClosePane } = props;
 
   if (countPanes(state) === 0) {
     return (
@@ -203,25 +207,42 @@ export function PaneList(props: PaneListProps) {
               type="button"
               role="menuitem"
               class="hwc-menu-item"
-              onClick={() => {
-                onSelect(menu.paneId);
-                closeMenu();
-              }}
-            >
-              <ChevronRightIcon />
-              ペインを開く
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              class="hwc-menu-item"
               onClick={() => copyId(menu.paneId)}
             >
               <CopyGlyph copied={copied} />
               {copied ? "コピーしました" : "ペイン ID をコピー"}
             </button>
+            <div class="hwc-menu-sep" />
+            <button
+              type="button"
+              role="menuitem"
+              class="hwc-menu-item hwc-menu-item--danger"
+              onClick={() => {
+                setClosing(menu.paneId);
+                closeMenu();
+              }}
+            >
+              <CloseIcon size={16} />
+              ペインを閉じる
+            </button>
           </div>
         </>
+      ) : null}
+      {closing ? (
+        <Confirm
+          title="ペインを閉じますか？"
+          description={
+            <>
+              <span class="hwc-dialog-id">{closing}</span> を閉じます。開いていた作業は失われます。
+            </>
+          }
+          confirmLabel="閉じる"
+          onCancel={() => setClosing(null)}
+          onConfirm={() => {
+            onClosePane(closing);
+            setClosing(null);
+          }}
+        />
       ) : null}
     </div>
   );

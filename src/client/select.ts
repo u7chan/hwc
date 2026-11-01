@@ -12,6 +12,21 @@ export function findPane(state: AppState, paneId: string | null): PaneState | nu
   return null;
 }
 
+// ペインを 1 枚だけ取り除く。空になったタブとワークスペースも一緒に落とす。
+export function removePane(state: AppState, paneId: string): AppState {
+  return {
+    ...state,
+    workspaces: state.workspaces
+      .map((workspace) => ({
+        ...workspace,
+        tabs: workspace.tabs
+          .map((tab) => ({ ...tab, panes: tab.panes.filter((pane) => pane.id !== paneId) }))
+          .filter((tab) => tab.panes.length > 0),
+      }))
+      .filter((workspace) => workspace.tabs.length > 0),
+  };
+}
+
 export function countPanes(state: AppState): number {
   return state.workspaces.reduce(
     (total, workspace) =>

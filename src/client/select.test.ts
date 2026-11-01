@@ -7,6 +7,7 @@ import {
   findPane,
   findPaneContext,
   initialExpanded,
+  removePane,
   statusLabel,
   statusTone,
 } from "./select";
@@ -80,6 +81,26 @@ test("findPaneContext names the workspace and tab of a pane", () => {
 test("the counts follow the nesting", () => {
   expect(countPanes(state)).toBe(4);
   expect(countWorkspacePanes("w1", state)).toBe(3);
+});
+
+test("closing a pane leaves its neighbours alone", () => {
+  const after = removePane(state, "w1:p2");
+
+  expect(after.workspaces[0].tabs[0].panes.map((pane) => pane.id)).toEqual(["w1:p1"]);
+  expect(countPanes(after)).toBe(3);
+  expect(findPane(after, "w1:p2")).toBeNull();
+});
+
+test("closing the last pane of a tab drops the tab, then the workspace", () => {
+  const afterTab = removePane(state, "w1:p3");
+  expect(afterTab.workspaces[0].tabs.map((tab) => tab.id)).toEqual(["w1:t1"]);
+
+  const afterWorkspace = removePane(state, "w2:p1");
+  expect(afterWorkspace.workspaces.map((workspace) => workspace.id)).toEqual(["w1"]);
+});
+
+test("closing an unknown pane changes nothing", () => {
+  expect(removePane(state, "w9:p9")).toEqual(state);
 });
 
 test("status maps to a tone and a label", () => {
