@@ -11,7 +11,10 @@ startStateSync({
   onError: (error) => console.error(`herdr sync: ${error.message}`),
 });
 
-const app = createApp({ store, panes: createPaneClient() });
+// 開発中はどの版かを画面で確かめられるように、起動時のコミットを出す。
+const revision = readRevision();
+
+const app = createApp({ store, panes: createPaneClient(), revision });
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 30000),
@@ -23,4 +26,11 @@ const server = Bun.serve({
   },
 });
 
-console.log(`hwc ready: http://${server.hostname}:${server.port}`);
+console.log(`hwc ready: http://${server.hostname}:${server.port} (${revision})`);
+
+function readRevision(): string {
+  if (process.env.HWC_REVISION) return process.env.HWC_REVISION;
+  const result = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"]);
+  const hash = result.success ? result.stdout.toString().trim() : "";
+  return hash === "" ? "dev" : hash;
+}
