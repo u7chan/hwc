@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { DialogShell } from "./Dialog";
 import { TEXT_PREVIEW_BYTES, formatBytes, type Attachment } from "./files";
-import { CloseIcon, PaperclipIcon } from "./icons";
+import { PaperclipIcon } from "./icons";
 
 type PreviewProps = {
   attachment: Attachment;
@@ -80,14 +80,6 @@ export function Preview(props: PreviewProps) {
           {props.attachment.name}
         </span>
         <span class="hwc-preview-size">{formatBytes(props.attachment.size)}</span>
-        <button
-          type="button"
-          class="hwc-icon-button hwc-preview-close"
-          aria-label="閉じる"
-          onClick={props.onClose}
-        >
-          <CloseIcon size={18} />
-        </button>
       </div>
 
       {isImage ? (
