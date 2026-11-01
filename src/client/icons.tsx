@@ -1,5 +1,3 @@
-import { useId } from "preact/hooks";
-
 type IconProps = { size?: number };
 
 function Svg(props: { size: number; children: preact.ComponentChildren }) {
