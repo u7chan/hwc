@@ -29,7 +29,9 @@ export function ThemePicker(props: ThemePickerProps) {
         <span class="hwc-theme-swatch hwc-theme-swatch--system">
           <span class="hwc-theme-split" />
         </span>
-        <span class="hwc-theme-name">システム</span>
+        <span class="hwc-theme-name" title="システム">
+          システム
+        </span>
       </button>
       {THEMES.map((theme) => (
         <button
@@ -42,7 +44,9 @@ export function ThemePicker(props: ThemePickerProps) {
           onClick={() => props.onChange(theme.id)}
         >
           <Swatch {...theme.swatch} />
-          <span class="hwc-theme-name">{theme.label}</span>
+          <span class="hwc-theme-name" title={theme.label}>
+            {theme.label}
+          </span>
         </button>
       ))}
     </div>
