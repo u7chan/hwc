@@ -542,6 +542,17 @@ button {
   letter-spacing: 0.02em;
 }
 
+/* 広い画面では、上部のバーではなく一覧の下端に操作を置く。 */
+.hwc-sidebar-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+
 .hwc-top-actions {
   display: flex;
   align-items: center;
@@ -701,6 +712,15 @@ button {
 
 /* 一覧のグループ */
 
+/* 入れ子の深さ。子のブロックは 1 段ぶん字下げする。 */
+[data-depth="0"] {
+  --indent: 0px;
+}
+
+[data-depth="1"] {
+  --indent: var(--space-5);
+}
+
 .hwc-group-block {
   margin-bottom: var(--space-4);
   background: var(--color-surface);
@@ -755,7 +775,7 @@ button {
 .hwc-group {
   width: 100%;
   min-height: var(--row-workspace);
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) + var(--indent, 0px));
 }
 
 .hwc-group:hover,
@@ -825,7 +845,7 @@ button {
   position: absolute;
   top: 0;
   bottom: var(--space-2);
-  left: calc(var(--space-4) + var(--icon-frame) / 2);
+  left: calc(var(--space-4) + var(--indent, 0px) + var(--icon-frame) / 2);
   width: 1px;
   background: var(--color-line);
 }
@@ -838,7 +858,7 @@ button {
   width: 100%;
   min-height: var(--row-tab);
   padding: var(--space-2) var(--space-4) var(--space-2)
-    calc(var(--space-4) + var(--icon-frame) / 2 + var(--space-3));
+    calc(var(--space-4) + var(--indent, 0px) + var(--icon-frame) / 2 + var(--space-3));
   border: 0;
   background: transparent;
   color: var(--color-text);
@@ -874,7 +894,8 @@ button {
 
 .hwc-panes {
   margin: 0;
-  padding: 0 0 var(--space-2) calc(var(--space-4) + var(--icon-frame) / 2 + var(--space-3));
+  padding: 0 0 var(--space-2)
+    calc(var(--space-4) + var(--indent, 0px) + var(--icon-frame) / 2 + var(--space-3));
   list-style: none;
   display: flex;
   flex-direction: column;

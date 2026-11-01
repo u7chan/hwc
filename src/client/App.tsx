@@ -18,6 +18,7 @@ import {
   SIDEBAR_MIN_WIDTH,
   SIDEBAR_STEP,
   SIDEBAR_STORAGE_KEY,
+  WIDE_LAYOUT_QUERY,
   clampSidebarWidth,
   parseSidebarWidth,
 } from "./layout";
@@ -175,6 +176,35 @@ export function App() {
 
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
 
+  // 広い画面では操作を一覧の下端へ寄せる。狭い画面では上部のバーに残す。
+  const [wide, setWide] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(WIDE_LAYOUT_QUERY).matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia(WIDE_LAYOUT_QUERY);
+    const apply = () => setWide(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+
+  const actions = (
+    <>
+      <span class="hwc-conn">
+        <span class="hwc-conn-dot" />
+        プレビュー
+      </span>
+      <button
+        type="button"
+        class="hwc-icon-button hwc-top-button"
+        aria-label={settingsOpen ? "設定を閉じる" : "設定"}
+        onClick={() => setSettingsOpen((open) => !open)}
+      >
+        {settingsOpen ? <CloseIcon /> : <SettingsIcon />}
+      </button>
+    </>
+  );
+
   return (
     <div
       class="hwc-app"
@@ -188,20 +218,7 @@ export function App() {
           </span>
           <span class="hwc-brand-name">HWC</span>
         </div>
-        <div class="hwc-top-actions">
-          <span class="hwc-conn">
-            <span class="hwc-conn-dot" />
-            プレビュー
-          </span>
-          <button
-            type="button"
-            class="hwc-icon-button hwc-top-button"
-            aria-label={settingsOpen ? "設定を閉じる" : "設定"}
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
-            {settingsOpen ? <CloseIcon /> : <SettingsIcon />}
-          </button>
-        </div>
+        {wide ? null : <div class="hwc-top-actions">{actions}</div>}
       </header>
 
       <div class="hwc-body">
@@ -218,6 +235,7 @@ export function App() {
             workingSince={workingSince}
             now={now}
           />
+          {wide ? <div class="hwc-sidebar-foot">{actions}</div> : null}
         </aside>
 
         <div

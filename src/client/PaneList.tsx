@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { AppState, WorktreeState } from "../server/herdr/state";
+import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
+import { Confirm } from "./Confirm";
 import {
   AgentGlyphIcon,
   ChevronDownIcon,
@@ -14,10 +15,15 @@ import {
   WorkspaceIcon,
   WorktreeIcon,
 } from "./icons";
-import { Confirm } from "./Confirm";
-import { agentGlyph, canMovePane, countPanes, countWorkspacePanes } from "./select";
-import { formatElapsed } from "./time";
+import {
+  agentGlyph,
+  canMovePane,
+  countPanes,
+  countWorkspacePanes,
+  groupWorkspaces,
+} from "./select";
 import { StatusLabel } from "./StatusLabel";
+import { formatElapsed } from "./time";
 
 type PaneListProps = {
   state: AppState;
@@ -38,71 +44,6 @@ function WorkspaceGlyph({ worktree }: { worktree: WorktreeState | null }) {
   return worktree.isLinkedWorktree ? <WorktreeIcon /> : <RepoIcon />;
 }
 
-function WorkspaceRow(props: {
-  label: string;
-  worktree: WorktreeState | null;
-  count: number;
-  status: ComponentChildren;
-  expanded: boolean;
-  controlsId: string;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      class="hwc-group"
-      title={props.worktree?.checkoutPath ?? undefined}
-      aria-expanded={props.expanded}
-      aria-controls={props.controlsId}
-      onClick={props.onToggle}
-    >
-      <span class="hwc-group-icon">
-        <WorkspaceGlyph worktree={props.worktree} />
-      </span>
-      <span class="hwc-group-main">
-        <span class="hwc-group-name">{props.label}</span>
-        <span class="hwc-group-sub">
-          {props.worktree && props.worktree.isLinkedWorktree ? `${props.worktree.repoName} · ` : ""}
-          {props.count} ペイン
-        </span>
-      </span>
-      {props.status}
-      <span class="hwc-chevron" data-open={props.expanded}>
-        <ChevronRightIcon />
-      </span>
-    </button>
-  );
-}
-
-function TabRow(props: {
-  label: string;
-  count: number;
-  status: ComponentChildren;
-  expanded: boolean;
-  controlsId: string;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      class="hwc-tabrow"
-      aria-expanded={props.expanded}
-      aria-controls={props.controlsId}
-      onClick={props.onToggle}
-    >
-      <span class="hwc-tabrow-main">
-        <span class="hwc-tabrow-name">{props.label}</span>
-        <span class="hwc-tabrow-sub">{props.count} ペイン</span>
-      </span>
-      {props.status}
-      <span class="hwc-chevron" data-open={props.expanded}>
-        <ChevronRightIcon />
-      </span>
-    </button>
-  );
-}
-
-// 高さを 0fr → 1fr で動かすため、閉じていても中身は描画したままにする。
 function GroupChildren(props: { id: string; open: boolean; children: ComponentChildren }) {
   return (
     <div id={props.id} class="hwc-group-children" data-open={props.open}>
@@ -111,15 +52,25 @@ function GroupChildren(props: { id: string; open: boolean; children: ComponentCh
   );
 }
 
+// 折りたたみの状態は、開いている間は子の状態で分かるので、まとめは淡く消して場所だけ残す。
+function GroupStatus(props: { status: PaneState["agentStatus"]; hidden: boolean }) {
+  return (
+    <span class="hwc-group-status" data-hidden={props.hidden}>
+      <StatusLabel status={props.status} />
+    </span>
+  );
+}
+
 export function PaneList(props: PaneListProps) {
+  const { state, selectedPaneId, expanded, onSelect, onToggle, workingSince, now } = props;
+
   // メニューは行の中に置くと一覧のスクロールで切れる。画面に固定して出す。
   const [menu, setMenu] = useState<{ paneId: string; top: number; right: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [closing, setClosing] = useState<string | null>(null);
-  // ドラッグは PC の操作。触れる画面では発火しないので、そのまま置いておく。
-  const positions = useRef<Map<string, number>>(new Map());
   const [dragged, setDragged] = useState<string | null>(null);
   const [dropAt, setDropAt] = useState<{ paneId: string; after: boolean } | null>(null);
+  const positions = useRef<Map<string, number>>(new Map());
 
   // 並びが変わったら、前の位置から今の位置まで滑らせる（FLIP）。
   useLayoutEffect(() => {
@@ -184,8 +135,191 @@ export function PaneList(props: PaneListProps) {
       window.removeEventListener("resize", onMove);
     };
   }, [menu]);
-  const { state, selectedPaneId, expanded, onSelect, onToggle, onClosePane, workingSince, now } =
-    props;
+
+  const toggle = (id: string) => () => onToggle(id);
+
+  function renderHeader(props2: {
+    id: string;
+    depth: number;
+    icon: ComponentChildren;
+    label: string;
+    sub: string;
+    title?: string;
+    status: PaneState["agentStatus"];
+    controlsId: string;
+  }) {
+    const open = expanded.has(props2.id);
+    return (
+      <button
+        type="button"
+        class="hwc-group"
+        data-depth={props2.depth}
+        title={props2.title}
+        aria-expanded={open}
+        aria-controls={props2.controlsId}
+        onClick={toggle(props2.id)}
+      >
+        <span class="hwc-group-icon">{props2.icon}</span>
+        <span class="hwc-group-main">
+          <span class="hwc-group-name">{props2.label}</span>
+          <span class="hwc-group-sub">{props2.sub}</span>
+        </span>
+        <GroupStatus status={props2.status} hidden={open} />
+        <span class="hwc-chevron" data-open={open}>
+          <ChevronRightIcon />
+        </span>
+      </button>
+    );
+  }
+
+  function renderTabs(tab: TabState, depth: number) {
+    const tabOpen = expanded.has(tab.id);
+    const tabGroupId = `hwc-group-${tab.id}`;
+    return (
+      <li class="hwc-tab-block" key={tab.id}>
+        <button
+          type="button"
+          class="hwc-tabrow"
+          data-depth={depth}
+          aria-expanded={tabOpen}
+          aria-controls={tabGroupId}
+          onClick={toggle(tab.id)}
+        >
+          <span class="hwc-tabrow-main">
+            <span class="hwc-tabrow-name">{tab.label}</span>
+            <span class="hwc-tabrow-sub">{tab.panes.length} ペイン</span>
+          </span>
+          <GroupStatus status={tab.agentStatus} hidden={tabOpen} />
+          <span class="hwc-chevron" data-open={tabOpen}>
+            <ChevronRightIcon />
+          </span>
+        </button>
+        <GroupChildren id={tabGroupId} open={tabOpen}>
+          {renderPanes(tab, depth)}
+        </GroupChildren>
+      </li>
+    );
+  }
+
+  function renderPanes(tab: TabState, depth: number) {
+    return (
+      <ul class="hwc-panes" data-depth={depth}>
+        {tab.panes.map((pane) => {
+          const startedAt = workingSince.get(pane.id);
+          return (
+            <li key={pane.id}>
+              <div
+                class="hwc-pane"
+                data-pane-id={pane.id}
+                data-current={pane.id === selectedPaneId}
+                data-dragging={dragged === pane.id}
+                data-drop={
+                  dropAt?.paneId === pane.id ? (dropAt.after ? "after" : "before") : undefined
+                }
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer?.setData("text/plain", pane.id);
+                  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+                  setDragged(pane.id);
+                }}
+                onDragEnd={() => {
+                  setDragged(null);
+                  setDropAt(null);
+                }}
+                onDragOver={(event) => {
+                  if (dragged === null || dragged === pane.id) return;
+                  event.preventDefault();
+                  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setDropAt({
+                    paneId: pane.id,
+                    after: event.clientY > rect.top + rect.height / 2,
+                  });
+                }}
+                onDragLeave={() =>
+                  setDropAt((current) => (current?.paneId === pane.id ? null : current))
+                }
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const moved = event.dataTransfer?.getData("text/plain") ?? dragged;
+                  const after = event.currentTarget.dataset.drop === "after";
+                  setDragged(null);
+                  setDropAt(null);
+                  if (moved && moved !== pane.id) props.onDropPane(moved, pane.id, after);
+                }}
+              >
+                <button
+                  type="button"
+                  class="hwc-pane-open"
+                  aria-current={pane.id === selectedPaneId ? "true" : undefined}
+                  onClick={() => onSelect(pane.id)}
+                >
+                  <span
+                    class="hwc-pane-icon"
+                    data-agent={agentGlyph(pane.agent)}
+                    data-working={pane.agentStatus === "working"}
+                  >
+                    {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
+                  </span>
+                  <span class="hwc-pane-main">
+                    <span class="hwc-pane-name">{pane.title ?? pane.agent ?? pane.id}</span>
+                  </span>
+                  {startedAt === undefined ? null : (
+                    <span class="hwc-pane-elapsed">{formatElapsed(now - startedAt)}</span>
+                  )}
+                  <StatusLabel status={pane.agentStatus} />
+                </button>
+                <button
+                  type="button"
+                  class="hwc-pane-more"
+                  aria-label={`${pane.id} のメニュー`}
+                  aria-haspopup="menu"
+                  aria-expanded={menu?.paneId === pane.id}
+                  onClick={(event) => openMenu(event, pane.id)}
+                >
+                  <MoreIcon />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  // ワークスペース 1 つ分。ワークツリーが 1 つだけなら、これが一覧の 1 ブロックになる。
+  function renderWorkspace(
+    workspace: AppState["workspaces"][number],
+    depth: number,
+    withHeader: boolean,
+  ) {
+    const groupId = `hwc-group-${workspace.id}`;
+    const open = expanded.has(workspace.id);
+    return (
+      <section class="hwc-group-block" data-depth={depth} key={workspace.id}>
+        {withHeader
+          ? renderHeader({
+              id: workspace.id,
+              depth,
+              icon: <WorkspaceGlyph worktree={workspace.worktree} />,
+              label: workspace.label,
+              sub:
+                workspace.worktree?.isLinkedWorktree === true
+                  ? `${workspace.worktree.repoName} · ${countWorkspacePanes(workspace.id, state)} ペイン`
+                  : `${countWorkspacePanes(workspace.id, state)} ペイン`,
+              title: workspace.worktree?.checkoutPath ?? undefined,
+              status: workspace.agentStatus,
+              controlsId: groupId,
+            })
+          : null}
+        <GroupChildren id={groupId} open={withHeader ? open : true}>
+          <ul class="hwc-tabs-list" data-depth={depth}>
+            {workspace.tabs.map((tab) => renderTabs(tab, depth))}
+          </ul>
+        </GroupChildren>
+      </section>
+    );
+  }
 
   if (countPanes(state) === 0) {
     return (
@@ -201,153 +335,34 @@ export function PaneList(props: PaneListProps) {
 
   return (
     <div class="hwc-list-scroll">
-      {state.workspaces.map((workspace) => {
-        const open = expanded.has(workspace.id);
-        const groupId = `hwc-group-${workspace.id}`;
+      {groupWorkspaces(state).map((group) => {
+        // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
+        if (group.repoName === null || group.linked.length === 0) {
+          const only = group.host ?? group.linked[0];
+          return renderWorkspace(only, 0, true);
+        }
+
+        const open = expanded.has(group.key);
+        const groupId = `hwc-group-${group.key}`;
         return (
-          <section class="hwc-group-block" key={workspace.id}>
-            <WorkspaceRow
-              label={workspace.label}
-              worktree={workspace.worktree}
-              count={countWorkspacePanes(workspace.id, state)}
-              // 開いているときは各タブの状態が見えるので、まとめの状態は消す。
-              // 位置がずれないように、消すときも場所は残して透明度だけ落とす。
-              status={
-                <span class="hwc-group-status" data-hidden={open}>
-                  <StatusLabel status={workspace.agentStatus} />
-                </span>
-              }
-              expanded={open}
-              controlsId={groupId}
-              onToggle={() => onToggle(workspace.id)}
-            />
+          <section class="hwc-group-block" data-depth={0} key={group.key}>
+            {renderHeader({
+              id: group.key,
+              depth: 0,
+              icon: <RepoIcon />,
+              label: group.repoName,
+              sub: `${group.linked.length + (group.host ? 1 : 0)} ワークツリー`,
+              title: group.host?.worktree?.repoRoot ?? undefined,
+              status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
+              controlsId: groupId,
+            })}
             <GroupChildren id={groupId} open={open}>
-              <ul class="hwc-tabs-list">
-                {workspace.tabs.map((tab) => {
-                  const tabOpen = expanded.has(tab.id);
-                  const tabGroupId = `hwc-group-${tab.id}`;
-                  return (
-                    <li class="hwc-tab-block" key={tab.id}>
-                      <TabRow
-                        label={tab.label}
-                        count={tab.panes.length}
-                        status={
-                          <span class="hwc-group-status" data-hidden={tabOpen}>
-                            <StatusLabel status={tab.agentStatus} />
-                          </span>
-                        }
-                        expanded={tabOpen}
-                        controlsId={tabGroupId}
-                        onToggle={() => onToggle(tab.id)}
-                      />
-                      <GroupChildren id={tabGroupId} open={tabOpen}>
-                        <ul class="hwc-panes">
-                          {tab.panes.map((pane) => {
-                            const startedAt = workingSince.get(pane.id);
-                            return (
-                              <li key={pane.id}>
-                                <div
-                                  class="hwc-pane"
-                                  data-pane-id={pane.id}
-                                  data-current={pane.id === selectedPaneId}
-                                  data-dragging={dragged === pane.id}
-                                  data-drop={
-                                    dropAt?.paneId === pane.id
-                                      ? dropAt.after
-                                        ? "after"
-                                        : "before"
-                                      : undefined
-                                  }
-                                  draggable
-                                  onDragStart={(event) => {
-                                    event.dataTransfer?.setData("text/plain", pane.id);
-                                    if (event.dataTransfer) {
-                                      event.dataTransfer.effectAllowed = "move";
-                                    }
-                                    setDragged(pane.id);
-                                  }}
-                                  onDragEnd={() => {
-                                    setDragged(null);
-                                    setDropAt(null);
-                                  }}
-                                  onDragOver={(event) => {
-                                    if (dragged === null || dragged === pane.id) return;
-                                    event.preventDefault();
-                                    if (event.dataTransfer) {
-                                      event.dataTransfer.dropEffect = "move";
-                                    }
-                                    const rect = event.currentTarget.getBoundingClientRect();
-                                    setDropAt({
-                                      paneId: pane.id,
-                                      after: event.clientY > rect.top + rect.height / 2,
-                                    });
-                                  }}
-                                  onDragLeave={() =>
-                                    setDropAt((current) =>
-                                      current?.paneId === pane.id ? null : current,
-                                    )
-                                  }
-                                  onDrop={(event) => {
-                                    event.preventDefault();
-                                    const moved =
-                                      event.dataTransfer?.getData("text/plain") ?? dragged;
-                                    const after = event.currentTarget.dataset.drop === "after";
-                                    setDragged(null);
-                                    setDropAt(null);
-                                    if (moved && moved !== pane.id) {
-                                      props.onDropPane(moved, pane.id, after);
-                                    }
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    class="hwc-pane-open"
-                                    aria-current={pane.id === selectedPaneId ? "true" : undefined}
-                                    onClick={() => onSelect(pane.id)}
-                                  >
-                                    <span
-                                      class="hwc-pane-icon"
-                                      data-agent={agentGlyph(pane.agent)}
-                                      data-working={pane.agentStatus === "working"}
-                                    >
-                                      {pane.agent ? (
-                                        <AgentGlyphIcon agent={pane.agent} />
-                                      ) : (
-                                        <PaneIcon />
-                                      )}
-                                    </span>
-                                    <span class="hwc-pane-main">
-                                      <span class="hwc-pane-name">
-                                        {pane.title ?? pane.agent ?? pane.id}
-                                      </span>
-                                    </span>
-                                    {startedAt === undefined ? null : (
-                                      <span class="hwc-pane-elapsed">
-                                        {formatElapsed(now - startedAt)}
-                                      </span>
-                                    )}
-                                    <StatusLabel status={pane.agentStatus} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    class="hwc-pane-more"
-                                    aria-label={`${pane.id} のメニュー`}
-                                    aria-haspopup="menu"
-                                    aria-expanded={menu?.paneId === pane.id}
-                                    onClick={(event) => openMenu(event, pane.id)}
-                                  >
-                                    <MoreIcon />
-                                  </button>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </GroupChildren>
-                    </li>
-                  );
-                })}
-              </ul>
+              {group.host ? (
+                <ul class="hwc-tabs-list" data-depth={1}>
+                  {group.host.tabs.map((tab) => renderTabs(tab, 1))}
+                </ul>
+              ) : null}
+              {group.linked.map((workspace) => renderWorkspace(workspace, 1, true))}
             </GroupChildren>
           </section>
         );
@@ -418,7 +433,7 @@ export function PaneList(props: PaneListProps) {
           confirmLabel="閉じる"
           onCancel={() => setClosing(null)}
           onConfirm={() => {
-            onClosePane(closing);
+            props.onClosePane(closing);
             setClosing(null);
           }}
         />

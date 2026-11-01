@@ -101,6 +101,54 @@ export function countPanes(state: AppState): number {
   );
 }
 
+export type WorkspaceGroup = {
+  key: string;
+  // git 管理外のワークスペースは単独で 1 グループ。repoName があれば同じリポジトリの束。
+  repoName: string | null;
+  host: AppState["workspaces"][number] | null;
+  linked: AppState["workspaces"];
+};
+
+// 同じリポジトリのワークスペースは 1 つに束ねる。本体（linked でないもの）を親に置く。
+export function groupWorkspaces(state: AppState): WorkspaceGroup[] {
+  const groups: WorkspaceGroup[] = [];
+  const byRepo = new Map<string, WorkspaceGroup>();
+
+  for (const workspace of state.workspaces) {
+    const worktree = workspace.worktree;
+    if (!worktree) {
+      groups.push({ key: workspace.id, repoName: null, host: workspace, linked: [] });
+      continue;
+    }
+
+    const existing = byRepo.get(worktree.repoName);
+    if (!existing) {
+      const group: WorkspaceGroup = {
+        key: `repo:${worktree.repoName}`,
+        repoName: worktree.repoName,
+        host: worktree.isLinkedWorktree ? null : workspace,
+        linked: worktree.isLinkedWorktree ? [workspace] : [],
+      };
+      byRepo.set(worktree.repoName, group);
+      groups.push(group);
+      continue;
+    }
+
+    if (worktree.isLinkedWorktree || existing.host) {
+      existing.linked = [...existing.linked, workspace];
+    } else {
+      existing.host = workspace;
+    }
+  }
+
+  return groups;
+}
+
+export function countGroupPanes(group: WorkspaceGroup, state: AppState): number {
+  const ids = [group.host, ...group.linked].filter((workspace) => workspace !== null);
+  return ids.reduce((total, workspace) => total + countWorkspacePanes(workspace.id, state), 0);
+}
+
 export function countWorkspacePanes(workspaceId: string, state: AppState): number {
   const workspace = state.workspaces.find((item) => item.id === workspaceId);
   if (!workspace) return 0;
@@ -160,6 +208,8 @@ export function initialExpanded(state: AppState): Set<string> {
     state.workspaces.filter((workspace) => workspace.focused).map((workspace) => workspace.id),
   );
   for (const workspace of state.workspaces) {
+    // 同じリポジトリのワークツリーを束ねている行も開いておく。
+    if (workspace.worktree) open.add(`repo:${workspace.worktree.repoName}`);
     for (const tab of workspace.tabs) {
       if (tab.focused) open.add(tab.id);
     }

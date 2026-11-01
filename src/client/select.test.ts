@@ -7,6 +7,8 @@ import {
   findPane,
   findPaneContext,
   canMovePane,
+  countGroupPanes,
+  groupWorkspaces,
   initialExpanded,
   movePane,
   movePaneStep,
@@ -159,6 +161,55 @@ test("status maps to a tone and a label", () => {
 
 test("the focused workspace and the focused tab start expanded", () => {
   expect([...initialExpanded(state)]).toEqual(["w1", "w1:t1"]);
+});
+
+test("workspaces of the same repo are grouped under the repo", () => {
+  const root = {
+    ...state.workspaces[0],
+    worktree: {
+      repoName: "hwc",
+      repoRoot: "/repo",
+      checkoutPath: "/repo",
+      isLinkedWorktree: false,
+    },
+  };
+  const linked = {
+    ...state.workspaces[1],
+    worktree: {
+      repoName: "hwc",
+      repoRoot: "/repo",
+      checkoutPath: "/repo-wt",
+      isLinkedWorktree: true,
+    },
+  };
+  const flat = { ...state, workspaces: [root, linked, state.workspaces[1]] };
+  const groups = groupWorkspaces(flat);
+
+  // 本体を親に、linked worktree と git 管理外はそれぞれの位置に残す。
+  expect(groups.map((group) => [group.repoName, group.host?.id ?? null])).toEqual([
+    ["hwc", "w1"],
+    [null, "w2"],
+  ]);
+  expect(groups[0].linked.map((workspace) => workspace.id)).toEqual(["w2"]);
+  expect(countGroupPanes(groups[0], flat)).toBe(4);
+});
+
+test("a repo without a main checkout still forms one group", () => {
+  const linked = {
+    ...state.workspaces[1],
+    worktree: {
+      repoName: "hwc",
+      repoRoot: "/repo",
+      checkoutPath: "/repo-wt",
+      isLinkedWorktree: true,
+    },
+  };
+  const groups = groupWorkspaces({ ...state, workspaces: [linked] });
+
+  expect(groups).toHaveLength(1);
+  expect(groups[0].host).toBeNull();
+  expect(groups[0].linked.map((workspace) => workspace.id)).toEqual(["w2"]);
+  expect([...initialExpanded({ ...state, workspaces: [linked] })]).toContain("repo:hwc");
 });
 
 test("agentGlyph picks the icon for a known agent", () => {
