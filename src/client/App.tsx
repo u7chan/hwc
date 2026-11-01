@@ -209,6 +209,9 @@ export function App() {
               context={context}
               panes={siblings}
               onSelectPane={select}
+              onClosePane={() =>
+                setFeedback("プレビュー：ペインを閉じる操作はまだ繋がっていません")
+              }
               output={output}
               onBack={() => setSelectedPaneId(null)}
               onSubmit={() => setFeedback("プレビュー：送信はまだ繋がっていません")}

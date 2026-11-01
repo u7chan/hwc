@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
-import { ArrowDownIcon, ChevronLeftIcon, CollapseIcon, ExpandIcon, SendIcon } from "./icons";
+import {
+  ArrowDownIcon,
+  ChevronLeftIcon,
+  CloseSmallIcon,
+  CollapseIcon,
+  ExpandIcon,
+  SendIcon,
+} from "./icons";
 import { statusTone } from "./select";
 import { StatusLabel } from "./StatusLabel";
 
@@ -10,13 +17,15 @@ type PaneDetailProps = {
   panes: readonly PaneState[];
   output: string;
   onSelectPane: (paneId: string) => void;
+  onClosePane: (paneId: string) => void;
   onBack: () => void;
   onSubmit: (text: string) => void;
   feedback: string | null;
 };
 
 export function PaneDetail(props: PaneDetailProps) {
-  const { pane, context, panes, output, onSelectPane, onBack, onSubmit, feedback } = props;
+  const { pane, context, panes, output, onSelectPane, onClosePane, onBack, onSubmit, feedback } =
+    props;
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
@@ -83,19 +92,34 @@ export function PaneDetail(props: PaneDetailProps) {
           <ChevronLeftIcon />
         </button>
         <div class="hwc-tabs" role="tablist" aria-label="ペイン" ref={tabList}>
-          {panes.map((item) => (
-            <button
-              type="button"
-              role="tab"
-              class="hwc-tab"
-              aria-selected={item.id === pane.id}
-              aria-label={`${item.title ?? item.agent ?? item.id} (${item.id})`}
-              onClick={() => onSelectPane(item.id)}
-            >
-              <span class={`hwc-dot hwc-dot--${statusTone(item.agentStatus)}`} />
-              <span class="hwc-tab-label">{item.title ?? item.agent ?? item.id}</span>
-            </button>
-          ))}
+          {panes.map((item) => {
+            const selected = item.id === pane.id;
+            return (
+              <span class="hwc-tab" key={item.id} data-selected={selected}>
+                <button
+                  type="button"
+                  role="tab"
+                  class="hwc-tab-main"
+                  aria-selected={selected}
+                  aria-label={`${item.title ?? item.agent ?? item.id} (${item.id})`}
+                  onClick={() => onSelectPane(item.id)}
+                >
+                  <span class={`hwc-dot hwc-dot--${statusTone(item.agentStatus)}`} />
+                  <span class="hwc-tab-label">{item.title ?? item.agent ?? item.id}</span>
+                </button>
+                {selected && (
+                  <button
+                    type="button"
+                    class="hwc-tab-close"
+                    aria-label={`${item.title ?? item.agent ?? item.id} を閉じる`}
+                    onClick={() => onClosePane(item.id)}
+                  >
+                    <CloseSmallIcon />
+                  </button>
+                )}
+              </span>
+            );
+          })}
         </div>
         <StatusLabel status={pane.agentStatus} />
       </div>

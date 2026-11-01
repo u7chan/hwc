@@ -548,25 +548,58 @@ button {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
   min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border: 0;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-secondary);
   white-space: nowrap;
-  cursor: pointer;
 }
 
 .hwc-tab:hover {
   background: var(--color-raised);
 }
 
-.hwc-tab[aria-selected="true"] {
+.hwc-tab[data-selected="true"] {
   background: var(--color-raised);
   color: var(--color-text);
   font-weight: 600;
+}
+
+.hwc-tab-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hwc-tab-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-tab-close:hover {
+  background: var(--color-line);
+  color: var(--color-text);
+}
+
+.hwc-tab-close:active {
+  opacity: 0.72;
 }
 
 .hwc-dot {
@@ -647,10 +680,7 @@ button {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  margin: 0 var(--space-4);
   padding: var(--space-4) var(--space-4) var(--space-6);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-panel);
   background: var(--color-content);
   overscroll-behavior: contain;
 }
@@ -1117,10 +1147,7 @@ button {
   }
 
   .hwc-output-scroll {
-    margin: 0;
     padding: var(--space-4) var(--space-6) var(--space-6);
-    border: 0;
-    border-radius: 0;
   }
 
   .hwc-input {
