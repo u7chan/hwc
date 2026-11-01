@@ -1,5 +1,5 @@
-import { subscribe } from "./socket";
-import type { AppState, StateStore } from "./state";
+import { request, subscribe } from "./socket";
+import { type AppState, type HerdrSnapshot, parseSnapshot, type StateStore } from "./state";
 
 // layout / scroll / output / token は state に載せない。購読すると出力のたびにスナップショットを
 // 取り直すことになり、費用に見合わない。
@@ -34,6 +34,15 @@ export type SyncOptions = {
   onError?: (error: Error) => void;
 };
 
+export async function loadSnapshot(options: { path?: string } = {}): Promise<HerdrSnapshot> {
+  const result = await request<{ snapshot: unknown }>(
+    "session.snapshot",
+    {},
+    { path: options.path },
+  );
+  return parseSnapshot(result?.snapshot);
+}
+
 function paneIds(state: AppState): string[] {
   return state.workspaces
     .flatMap((workspace) => workspace.tabs.flatMap((tab) => tab.panes.map((pane) => pane.id)))
@@ -65,7 +74,8 @@ export function startStateSync(options: SyncOptions): () => void {
       path: options.path,
       reconnectDelayMs: options.reconnectDelayMs,
       onEvent: reload,
-      onLost: () => {},
+      // 切断中に起きた状態変化はイベントで届かない。再接続したら状態を取り直して追いつく。
+      onLost: reload,
       onError: (error) => {
         // ペインが消えた可能性がある。状態を取り直し、新しいペイン集合で張り直す。
         rejectedPanes = subscribedPanes;

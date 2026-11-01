@@ -19,12 +19,8 @@ export function createApp(options: { store: StateStore }) {
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
       return c.json(state);
     })
-    .get("/api/events", async (c) => {
-      const initial = await current();
-      // 状態が無いまま SSE を開くと、client から「取得中」と区別できない。再接続は EventSource に任せる。
-      if (!initial) return c.json({ error: "herdr_unavailable" }, 502);
-
-      return streamSSE(c, async (stream) => {
+    .get("/api/events", (c) =>
+      streamSSE(c, async (stream) => {
         const send = (state: AppState) =>
           stream.writeSSE({ data: JSON.stringify(state) }).catch(() => {
             // 切断済みのクライアントへの書き込みは失敗する。購読解除は切断の検出側で行う。
@@ -38,7 +34,11 @@ export function createApp(options: { store: StateStore }) {
           else buffered = state;
         });
 
-        await send(initial);
+        const initial = await current();
+
+        // 状態が無くてもストリームは開いたままにする。ここで 502 を返すと EventSource は
+        // 接続失敗として扱い、以後再接続しない（Herdr 復帰後も画面が止まる）。
+        if (initial) await send(initial);
         ready = true;
         if (buffered && buffered !== initial) await send(buffered);
 
@@ -54,8 +54,8 @@ export function createApp(options: { store: StateStore }) {
           }
           stream.onAbort(detach);
         });
-      });
-    });
+      }),
+    );
 }
 
 export type AppType = ReturnType<typeof createApp>;

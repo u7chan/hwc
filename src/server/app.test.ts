@@ -156,12 +156,23 @@ test("GET /api/events streams the current state first, then every update", async
   await waitFor(() => store.listenerCount() === 0);
 });
 
-test("GET /api/events returns 502 when Herdr cannot be read", async () => {
-  const app = createApp({ store: createFakeStore(null, new Error("socket closed")) });
-  const response = await app.request("/api/events");
+test("GET /api/events stays open and sends the state once Herdr becomes readable", async () => {
+  const store = createFakeStore(null, new Error("socket closed"));
+  const app = createApp({ store });
+  const controller = new AbortController();
+  const response = await app.request("/api/events", { signal: controller.signal });
 
-  expect(response.status).toBe(502);
-  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toContain("text/event-stream");
+  if (!response.body) throw new Error("response has no body");
+  const events = createSseReader(response.body);
+
+  store.push(state);
+  expect(await events.next()).toEqual(state);
+
+  await events.cancel();
+  controller.abort();
+  await waitFor(() => store.listenerCount() === 0);
 });
 
 test("GET /api/events flushes an update that arrives while the initial state is being sent", async () => {

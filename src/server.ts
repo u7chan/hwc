@@ -1,13 +1,9 @@
-import { createStateStore, parseSnapshot } from "./server/herdr/state";
-import { request } from "./server/herdr/socket";
-import { startStateSync } from "./server/herdr/sync";
+import { createStateStore } from "./server/herdr/state";
+import { loadSnapshot, startStateSync } from "./server/herdr/sync";
 import { createApp } from "./server/app";
 import index from "../index.html";
 
-const store = createStateStore({
-  load: async () =>
-    parseSnapshot((await request<{ snapshot: unknown }>("session.snapshot")).snapshot),
-});
+const store = createStateStore({ load: () => loadSnapshot() });
 
 startStateSync({
   store,
