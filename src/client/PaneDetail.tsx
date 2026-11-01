@@ -22,6 +22,7 @@ import {
   SendIcon,
 } from "./icons";
 import { statusLabel } from "./select";
+import { readDraft, storage, writeDraft } from "./drafts";
 import { Preview } from "./Preview";
 import { Spinner } from "./Spinner";
 import { StatusIcon } from "./StatusLabel";
@@ -65,7 +66,8 @@ type PaneDetailProps = {
 export function PaneDetail(props: PaneDetailProps) {
   const { pane, context, panes, output, onSelectPane, onBack, onSubmit, onDropPane, feedback } =
     props;
-  const [draft, setDraft] = useState("");
+  // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
+  const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expanded, setExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
@@ -209,6 +211,13 @@ export function PaneDetail(props: PaneDetailProps) {
     field.style.height = "auto";
     field.style.height = `${field.scrollHeight}px`;
   };
+
+  // 打つたびに書くと重いので、手が止まってから残す。
+  useEffect(() => {
+    const text = draft;
+    const timer = setTimeout(() => writeDraft(storage(), pane.id, text), 250);
+    return () => clearTimeout(timer);
+  }, [draft, pane.id]);
 
   // 送信で空にしたときも、高さを初期状態へ戻す。
   useEffect(() => {
