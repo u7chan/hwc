@@ -7,7 +7,7 @@ import { statusLabel, statusTone } from "./select";
 const reducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-export function StatusLabel({ status }: { status: AgentStatus }) {
+export function StatusIcon({ status }: { status: AgentStatus }) {
   const tone = statusTone(status);
   const animated = !reducedMotion();
   return (
@@ -19,6 +19,18 @@ export function StatusLabel({ status }: { status: AgentStatus }) {
       ) : (
         <StatusMark tone={tone} size={18} />
       )}
+    </span>
+  );
+}
+
+export function StatusLabel({ status }: { status: AgentStatus }) {
+  return (
+    <span
+      class={`hwc-status hwc-status--${statusTone(status)}`}
+      role="img"
+      aria-label={statusLabel(status)}
+    >
+      <StatusIcon status={status} />
       <span class="hwc-status-text">{statusLabel(status)}</span>
     </span>
   );

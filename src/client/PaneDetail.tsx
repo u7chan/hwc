@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import { ArrowDownIcon, ChevronLeftIcon, CollapseIcon, ExpandIcon, SendIcon } from "./icons";
-import { statusTone } from "./select";
+import { statusLabel } from "./select";
 import { Spinner } from "./Spinner";
-import { StatusLabel } from "./StatusLabel";
+import { StatusIcon } from "./StatusLabel";
 
 type PaneDetailProps = {
   pane: PaneState;
@@ -95,16 +95,15 @@ export function PaneDetail(props: PaneDetailProps) {
                 class="hwc-tab"
                 key={item.id}
                 aria-selected={selected}
-                aria-label={`${item.title ?? item.agent ?? item.id} (${item.id})`}
+                aria-label={`${item.title ?? item.agent ?? item.id} (${item.id}, ${statusLabel(item.agentStatus)})`}
                 onClick={() => onSelectPane(item.id)}
               >
-                <span class={`hwc-dot hwc-dot--${statusTone(item.agentStatus)}`} />
                 <span class="hwc-tab-label">{item.title ?? item.agent ?? item.id}</span>
+                <StatusIcon status={item.agentStatus} />
               </button>
             );
           })}
         </div>
-        <StatusLabel status={pane.agentStatus} />
       </div>
 
       <div class="hwc-output-wrap">
@@ -118,11 +117,17 @@ export function PaneDetail(props: PaneDetailProps) {
         >
           <pre class="hwc-output">{output}</pre>
         </div>
-        {!atBottom && (
-          <button type="button" class="hwc-jump" aria-label="最新へ" onClick={jumpToLatest}>
-            <ArrowDownIcon />
-          </button>
-        )}
+        <button
+          type="button"
+          class="hwc-jump"
+          data-visible={!atBottom}
+          aria-label="最新へ"
+          aria-hidden={atBottom}
+          tabIndex={atBottom ? -1 : 0}
+          onClick={jumpToLatest}
+        >
+          <ArrowDownIcon />
+        </button>
       </div>
 
       <form

@@ -480,6 +480,12 @@ button {
 /* 状態ラベル */
 
 /* 状態は記号だけで示し、文言はホバー中だけ添える。 */
+/* 状態の中身だけを持つ版（タブ内など、文言を添えない場所で使う）。 */
+.hwc-status > .hwc-status {
+  width: auto;
+  height: auto;
+}
+
 .hwc-status {
   position: relative;
   flex: none;
@@ -575,17 +581,22 @@ button {
 
 .hwc-tabbar {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: 0 var(--space-2);
   border-bottom: 1px solid var(--color-line);
+}
+
+.hwc-tabbar > .hwc-back,
+.hwc-tabbar > .hwc-status {
+  align-self: center;
 }
 
 .hwc-tabs {
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-1);
   overflow-x: auto;
   scrollbar-width: none;
@@ -595,53 +606,46 @@ button {
   display: none;
 }
 
+/* タブは下線で示す。面を塗らないので一覧の状態色と競合しない。 */
 .hwc-tab {
+  position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: var(--tap);
+  height: 48px;
   padding: 0 var(--space-3);
   border: 0;
-  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-secondary);
   white-space: nowrap;
   cursor: pointer;
 }
 
+.hwc-tab::after {
+  content: "";
+  position: absolute;
+  right: var(--space-3);
+  bottom: 0;
+  left: var(--space-3);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
 .hwc-tab:hover {
-  background: var(--color-raised);
+  color: var(--color-text);
 }
 
 .hwc-tab[aria-selected="true"] {
-  background: var(--color-raised);
   color: var(--color-text);
   font-weight: 600;
 }
 
-.hwc-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.hwc-dot--active {
-  color: var(--color-active);
-}
-
-.hwc-dot--attention {
-  color: var(--color-attention);
-}
-
-.hwc-dot--success {
-  color: var(--color-success);
-}
-
-.hwc-dot--neutral {
-  color: var(--color-neutral);
+.hwc-tab[aria-selected="true"]::after {
+  opacity: 1;
 }
 
 .hwc-detail-bar {
@@ -707,7 +711,14 @@ button {
   position: absolute;
   left: 50%;
   bottom: var(--space-4);
-  transform: translateX(-50%);
+  transform: translate(-50%, var(--space-1));
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 0s linear 160ms;
   display: grid;
   place-items: center;
   width: var(--tap);
@@ -719,7 +730,15 @@ button {
   cursor: pointer;
 }
 
-.hwc-jump:active {
+.hwc-jump[data-visible="true"] {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+.hwc-jump[data-visible="true"]:active {
   opacity: 0.72;
 }
 
