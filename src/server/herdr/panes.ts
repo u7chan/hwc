@@ -8,9 +8,9 @@ export type ReadSource = (typeof READ_SOURCES)[number];
 const MAX_LINES = 4_294_967_295;
 
 // ペインへの入力を丸ごとソケットへ流す前に止める。手元の長文プロンプトには十分な大きさ。
-const MAX_TEXT_LENGTH = 16_384;
+const MAX_TEXT_BYTES = 16_384;
 
-export type PaneOutput = { paneId: string } & PaneRead;
+export type PaneOutput = PaneRead;
 
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
 
@@ -50,12 +50,9 @@ export function parseInputBody(body: unknown): Parsed<Omit<SendOptions, "paneId"
   if (typeof record.text !== "string" || record.text.trim() === "") {
     return { ok: false, status: 400, error: "text must be a non-empty string" };
   }
-  if (record.text.length > MAX_TEXT_LENGTH) {
-    return {
-      ok: false,
-      status: 413,
-      error: `text must be at most ${MAX_TEXT_LENGTH} characters`,
-    };
+  // 文字数ではなくバイト数で測る。絵文字などを含む場合に上限の意味がぶれないように。
+  if (new TextEncoder().encode(record.text).length > MAX_TEXT_BYTES) {
+    return { ok: false, status: 413, error: `text must be at most ${MAX_TEXT_BYTES} bytes` };
   }
   if (record.submit !== undefined && typeof record.submit !== "boolean") {
     return { ok: false, status: 400, error: "submit must be a boolean" };

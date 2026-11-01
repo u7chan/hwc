@@ -64,7 +64,7 @@ test("read fails when Herdr answers with something else than a pane read", async
   const client = createPaneClient({ call });
 
   await expect(client.read({ paneId: "w1:p1", source: "recent" })).rejects.toThrow(
-    "pane_read: type must be pane_read",
+    "pane_read.type must be pane_read",
   );
 });
 
@@ -177,9 +177,11 @@ test("parseInputBody rejects a text that is too long", () => {
   expect(parseInputBody({ text: "a".repeat(16_385) })).toEqual({
     ok: false,
     status: 413,
-    error: "text must be at most 16384 characters",
+    error: "text must be at most 16384 bytes",
   });
   expect(parseInputBody({ text: "a".repeat(16_384) }).ok).toBe(true);
+  // 3 バイト文字はバイト数で数える。
+  expect(parseInputBody({ text: "あ".repeat(5_462) }).ok).toBe(false);
 });
 
 test("parseInputBody rejects a submit that is not a boolean", () => {

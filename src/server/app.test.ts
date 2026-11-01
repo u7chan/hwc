@@ -433,7 +433,7 @@ test("POST /api/panes/:id/input rejects a text that is too long", async () => {
   });
 
   expect(response.status).toBe(413);
-  expect(await response.json()).toEqual({ error: "text must be at most 16384 characters" });
+  expect(await response.json()).toEqual({ error: "text must be at most 16384 bytes" });
 });
 
 test("POST /api/panes/:id/input returns 404 when the pane is gone", async () => {

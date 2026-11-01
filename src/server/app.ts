@@ -86,8 +86,8 @@ export function createApp(options: { store: StateStore; panes: PaneClient }) {
     .post("/api/panes/:id/input", async (c) => {
       // ペインへ入力を流す唯一のエンドポイントなので、simple request で叩かれないよう
       // application/json に限る。CORS を返さないので、cross-origin は preflight で止まる。
-      const contentType = c.req.header("content-type") ?? "";
-      if (!contentType.toLowerCase().startsWith("application/json")) {
+      const contentType = (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
+      if (contentType !== "application/json") {
         return c.json({ error: "content-type must be application/json" }, 415);
       }
 
