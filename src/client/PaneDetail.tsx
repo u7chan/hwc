@@ -24,6 +24,7 @@ import {
 } from "./icons";
 import { agentGlyph, statusLabel } from "./select";
 import type { ChatMessage } from "./chat";
+import { useCopy } from "./copy";
 import { readDraft, storage, writeDraft } from "./drafts";
 import { Preview } from "./Preview";
 import { Spinner } from "./Spinner";
@@ -48,12 +49,25 @@ function ChatLog(props: {
   messages: readonly ChatMessage[];
   replying: boolean;
   agent: string | null;
+  copiedId: string | null;
+  onCopy: (id: string, text: string) => void;
 }) {
-  // 返答の先頭に、どのエージェントかを見せる。
+  // 記号は本文の幅を削らないよう、時刻の行に置く。
   const avatar = (
     <span class="hwc-msg-avatar" data-agent={agentGlyph(props.agent)}>
       <AgentGlyphIcon agent={props.agent} size={16} />
     </span>
+  );
+
+  const copyButton = (message: ChatMessage) => (
+    <button
+      type="button"
+      class="hwc-msg-copy"
+      aria-label={props.copiedId === message.id ? "コピーしました" : "このメッセージをコピー"}
+      onClick={() => props.onCopy(message.id, message.text)}
+    >
+      <CopyGlyph copied={props.copiedId === message.id} size={14} />
+    </button>
   );
 
   return (
@@ -61,23 +75,27 @@ function ChatLog(props: {
       {props.messages.map((message) =>
         message.role === "agent" ? (
           <li class="hwc-msg" data-role="agent" key={message.id}>
-            {avatar}
-            <div class="hwc-msg-body">
-              <pre class="hwc-msg-text">{message.text}</pre>
+            <pre class="hwc-msg-text">{message.text}</pre>
+            <div class="hwc-msg-meta">
+              {avatar}
               <span class="hwc-msg-time">{formatClock(message.at)}</span>
+              {copyButton(message)}
             </div>
           </li>
         ) : (
           <li class="hwc-msg" data-role="user" key={message.id}>
             <p class="hwc-msg-text">{message.text}</p>
-            <span class="hwc-msg-time">{formatClock(message.at)}</span>
+            <div class="hwc-msg-meta">
+              <span class="hwc-msg-time">{formatClock(message.at)}</span>
+              {copyButton(message)}
+            </div>
           </li>
         ),
       )}
       {props.replying ? (
         <li class="hwc-msg" data-role="agent" aria-label="返答を待っています">
-          {avatar}
-          <div class="hwc-msg-body">
+          <div class="hwc-msg-meta">
+            {avatar}
             <span class="hwc-typing">
               <span />
               <span />
@@ -134,7 +152,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const [expanded, setExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
-  const [copied, setCopied] = useState(false);
+
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dropping, setDropping] = useState(false);
   const [rejected, setRejected] = useState(0);
@@ -273,20 +291,9 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const canSend = draft.trim() !== "";
 
-  // コピーの知らせは数秒で戻す。押した操作の結果なので、その場で時間を計る。
-  const copiedTimer = useRef<number | undefined>(undefined);
-  const copyId = () => {
-    void navigator.clipboard
-      ?.writeText(pane.id)
-      .then(() => {
-        setCopied(true);
-        clearTimeout(copiedTimer.current);
-        copiedTimer.current = window.setTimeout(() => setCopied(false), 1500);
-      })
-      .catch(() => setCopied(false));
-  };
-
-  useEffect(() => () => clearTimeout(copiedTimer.current), []);
+  const { copiedId, copy } = useCopy();
+  const copied = copiedId === "pane";
+  const copyId = () => copy("pane", pane.id);
 
   // 入力量に合わせて高さを伸ばす。広げている間は CSS の高さに任せる。
   const fit = (field: HTMLTextAreaElement | null, open: boolean) => {
@@ -440,7 +447,13 @@ export function PaneDetail(props: PaneDetailProps) {
           }}
         >
           {messages !== null ? (
-            <ChatLog messages={messages} replying={replying} agent={pane.agent} />
+            <ChatLog
+              messages={messages}
+              replying={replying}
+              agent={pane.agent}
+              copiedId={copiedId}
+              onCopy={copy}
+            />
           ) : output === null ? (
             <OutputSkeleton />
           ) : output.trim() === "" ? (

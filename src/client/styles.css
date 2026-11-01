@@ -1848,31 +1848,63 @@ button {
   max-width: 100%;
 }
 
-/* 返答は、記号・本文の 2 列。記号は本文の 1 行目にそろえる。 */
-.hwc-msg[data-role="agent"] {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+/* 記号は本文の下の行へ。本文の幅を削らない。 */
+.hwc-msg-meta {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
-  align-items: start;
+  min-height: var(--space-6);
 }
 
-.hwc-msg-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
+.hwc-msg[data-role="user"] .hwc-msg-meta {
+  justify-content: flex-end;
 }
 
 .hwc-msg-avatar {
   display: grid;
   place-items: center;
-  width: var(--space-6);
-  height: var(--space-6);
-  margin-top: 2px;
+  width: var(--space-5);
+  height: var(--space-5);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-mark);
   background: var(--color-raised);
   color: var(--color-text);
+}
+
+.hwc-msg-copy {
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-mark);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-msg-copy:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-msg-copy:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* 掴める画面では、行をなぞったときだけ出す。常時 2 つ並ぶと騒がしい。 */
+@media (hover: hover) {
+  .hwc-msg-copy {
+    opacity: 0;
+    transition: opacity 140ms ease;
+  }
+
+  .hwc-msg:hover .hwc-msg-copy,
+  .hwc-msg:focus-within .hwc-msg-copy {
+    opacity: 1;
+  }
 }
 
 .hwc-msg-avatar[data-agent="claude"] {
