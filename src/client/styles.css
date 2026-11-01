@@ -2256,13 +2256,6 @@ button {
   display: none;
 }
 
-.hwc-input-hint {
-  display: none;
-  flex: none;
-  color: var(--color-secondary);
-  font-size: var(--text-secondary);
-}
-
 /* 設定 */
 
 .hwc-settings-scroll {
@@ -2514,9 +2507,5 @@ button {
   .hwc-input {
     padding: var(--space-4) var(--space-6);
     border-top-color: var(--color-line);
-  }
-
-  .hwc-input-hint {
-    display: block;
   }
 }

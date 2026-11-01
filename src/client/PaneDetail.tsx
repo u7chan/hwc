@@ -533,7 +533,6 @@ export function PaneDetail(props: PaneDetailProps) {
             <span class="hwc-feedback" aria-live="polite">
               {feedback}
             </span>
-            <span class="hwc-input-hint">Enter は改行・⌘/Ctrl + Enter で送信</span>
             <button
               type="submit"
               class="hwc-send"
