@@ -1861,14 +1861,6 @@ button {
   justify-content: flex-end;
 }
 
-.hwc-msg-avatar {
-  display: grid;
-  place-items: center;
-  width: var(--space-5);
-  height: var(--space-5);
-  color: var(--color-secondary);
-}
-
 .hwc-msg-copy {
   display: grid;
   place-items: center;
@@ -2394,8 +2386,7 @@ button {
   color: var(--color-secondary);
 }
 
-.hwc-input-agent[data-agent="claude"],
-.hwc-msg-avatar[data-agent="claude"] {
+.hwc-input-agent[data-agent="claude"] {
   color: var(--color-agent-claude);
 }
 

@@ -45,21 +45,14 @@ function OutputEmpty() {
 }
 
 // 会話として読むための並び。ユーザーは右、エージェントは左。
+// どのエージェントかは入力欄の側に出しているので、ここでは繰り返さない。
 function ChatLog(props: {
   messages: readonly ChatMessage[];
   replying: boolean;
   waitingMs: number | null;
-  agent: string | null;
   copiedId: string | null;
   onCopy: (id: string, text: string) => void;
 }) {
-  // 記号は本文の幅を削らないよう、時刻の行に置く。
-  const avatar = (
-    <span class="hwc-msg-avatar" data-agent={agentGlyph(props.agent)}>
-      <AgentGlyphIcon agent={props.agent} size={16} />
-    </span>
-  );
-
   const copyButton = (message: ChatMessage) => (
     <button
       type="button"
@@ -74,33 +67,25 @@ function ChatLog(props: {
 
   return (
     <ol class="hwc-chat">
-      {props.messages.map((message) =>
-        message.role === "agent" ? (
-          <li class="hwc-msg" data-role="agent" key={message.id}>
+      {props.messages.map((message) => (
+        <li class="hwc-msg" data-role={message.role} key={message.id}>
+          {message.role === "agent" ? (
             <pre class="hwc-msg-text">{message.text}</pre>
-            <div class="hwc-msg-meta">
-              {avatar}
-              <span class="hwc-msg-time">{formatClock(message.at)}</span>
-              {message.elapsedMs === undefined ? null : (
-                <span class="hwc-msg-elapsed">{formatElapsed(message.elapsedMs)}</span>
-              )}
-              {copyButton(message)}
-            </div>
-          </li>
-        ) : (
-          <li class="hwc-msg" data-role="user" key={message.id}>
+          ) : (
             <p class="hwc-msg-text">{message.text}</p>
-            <div class="hwc-msg-meta">
-              <span class="hwc-msg-time">{formatClock(message.at)}</span>
-              {copyButton(message)}
-            </div>
-          </li>
-        ),
-      )}
+          )}
+          <div class="hwc-msg-meta">
+            <span class="hwc-msg-time">{formatClock(message.at)}</span>
+            {message.elapsedMs === undefined ? null : (
+              <span class="hwc-msg-elapsed">{formatElapsed(message.elapsedMs)}</span>
+            )}
+            {copyButton(message)}
+          </div>
+        </li>
+      ))}
       {props.replying ? (
         <li class="hwc-msg" data-role="agent" aria-label="返答を待っています">
           <div class="hwc-msg-meta">
-            {avatar}
             <span class="hwc-typing">
               <span />
               <span />
@@ -463,7 +448,6 @@ export function PaneDetail(props: PaneDetailProps) {
               messages={messages}
               replying={replying}
               waitingMs={waitingMs}
-              agent={pane.agent}
               copiedId={copiedId}
               onCopy={copy}
             />
