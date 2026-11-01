@@ -92,6 +92,19 @@ export function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // 入力欄の外にファイルを落とすと、ブラウザがそのファイルを開いて画面を離れる。
+  useEffect(() => {
+    const block = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+    window.addEventListener("dragover", block);
+    window.addEventListener("drop", block);
+    return () => {
+      window.removeEventListener("dragover", block);
+      window.removeEventListener("drop", block);
+    };
+  }, []);
+
   // 行に落としたら、その行の前後に入れる。タブへ落としたら末尾に足す。
   const dropOnPane = (paneId: string, targetPaneId: string, after: boolean) => {
     setState((current) => {

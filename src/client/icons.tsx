@@ -248,6 +248,14 @@ export function ArrowDownIcon({ size = 20 }: IconProps) {
   );
 }
 
+export function PaperclipIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M20.4 8.8l-7.9 7.9a3.6 3.6 0 0 1-5.1-5.1l8-8a2.4 2.4 0 0 1 3.4 3.4l-7.9 7.9a1.2 1.2 0 0 1-1.7-1.7l6.9-6.9" />
+    </Svg>
+  );
+}
+
 export function CloseIcon({ size = 20 }: IconProps) {
   return (
     <Svg size={size}>

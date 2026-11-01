@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
+import { addAttachments, formatBytes, removeAttachment, type Attachment } from "./files";
 import {
   ArrowDownIcon,
   ChevronLeftIcon,
+  CloseIcon,
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
+  PaperclipIcon,
   TerminalIcon,
   SendIcon,
 } from "./icons";
@@ -57,6 +60,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [dropping, setDropping] = useState(false);
   // タブの並びも PC だけで動かす。触れる画面ではドラッグが発火しない。
   const [draggedTab, setDraggedTab] = useState<string | null>(null);
   const [tabDrop, setTabDrop] = useState<{ paneId: string; after: boolean } | null>(null);
@@ -269,9 +274,28 @@ export function PaneDetail(props: PaneDetailProps) {
       <form
         class="hwc-input"
         data-expanded={expanded}
+        data-dropping={dropping}
         onSubmit={(event) => {
           event.preventDefault();
           send();
+        }}
+        onDragOver={(event) => {
+          if (!event.dataTransfer?.types.includes("Files")) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          setDropping(true);
+        }}
+        onDragLeave={(event) => {
+          const next = event.relatedTarget;
+          if (next instanceof Node && event.currentTarget.contains(next)) return;
+          setDropping(false);
+        }}
+        onDrop={(event) => {
+          const transfer = event.dataTransfer;
+          if (!transfer?.types.includes("Files")) return;
+          event.preventDefault();
+          setDropping(false);
+          setAttachments((current) => addAttachments(current, [...transfer.files]));
         }}
       >
         <button
@@ -286,6 +310,32 @@ export function PaneDetail(props: PaneDetailProps) {
         <label class="hwc-visually-hidden" for="hwc-input-field">
           {context.workspaceLabel} / {context.tabLabel} のペインへ送る
         </label>
+        {attachments.length > 0 ? (
+          <ul class="hwc-attachments" aria-label="添付">
+            {attachments.map((file) => (
+              <li class="hwc-attachment" key={file.id}>
+                <PaperclipIcon />
+                <span class="hwc-attachment-name">{file.name}</span>
+                <span class="hwc-attachment-size">{formatBytes(file.size)}</span>
+                <button
+                  type="button"
+                  class="hwc-attachment-remove"
+                  aria-label={`${file.name} を外す`}
+                  onClick={() => setAttachments((current) => removeAttachment(current, file.id))}
+                >
+                  <CloseIcon size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {attachments.length > 0 ? (
+          <p class="hwc-attachments-note">添付はまだ送信されません</p>
+        ) : null}
+        <div class="hwc-drop-hint" aria-hidden={!dropping}>
+          <PaperclipIcon size={18} />
+          ドロップして添付
+        </div>
         <div class="hwc-input-frame">
           <textarea
             id="hwc-input-field"

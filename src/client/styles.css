@@ -1757,6 +1757,101 @@ button {
   gap: var(--space-1);
 }
 
+/* 添付は送信欄の上に積む。名前が長くても 1 行で切る。 */
+.hwc-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  height: var(--space-8);
+  padding: 0 var(--space-1) 0 var(--space-3);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-mark);
+  background: var(--color-raised);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-attachment-name {
+  min-width: 0;
+  max-width: 30ch;
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-attachments-note {
+  margin: calc(var(--space-1) * -1) 0 var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-attachment-size {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.hwc-attachment-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-mark);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-attachment-remove:hover {
+  background: var(--color-line);
+  color: var(--color-text);
+}
+
+/* ファイルを掴んでいる間だけ、入力欄の上に受け口を出す。 */
+.hwc-drop-hint {
+  position: absolute;
+  inset: var(--space-2);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 2px dashed var(--color-accent);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    visibility 0s linear 120ms;
+}
+
+.hwc-input[data-dropping="true"] .hwc-drop-hint {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 120ms ease,
+    visibility 0s;
+}
+
 .hwc-input-toggle {
   position: absolute;
   top: var(--space-1);
