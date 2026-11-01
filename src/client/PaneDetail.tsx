@@ -9,6 +9,7 @@ import {
   type Attachment,
 } from "./files";
 import {
+  AgentGlyphIcon,
   ArrowDownIcon,
   ChevronLeftIcon,
   CloseIcon,
@@ -21,7 +22,7 @@ import {
   TerminalIcon,
   SendIcon,
 } from "./icons";
-import { statusLabel } from "./select";
+import { agentGlyph, statusLabel } from "./select";
 import type { ChatMessage } from "./chat";
 import { readDraft, storage, writeDraft } from "./drafts";
 import { Preview } from "./Preview";
@@ -43,26 +44,46 @@ function OutputEmpty() {
 }
 
 // 会話として読むための並び。ユーザーは右、エージェントは左。
-function ChatLog(props: { messages: readonly ChatMessage[]; replying: boolean }) {
+function ChatLog(props: {
+  messages: readonly ChatMessage[];
+  replying: boolean;
+  agent: string | null;
+}) {
+  // 返答の先頭に、どのエージェントかを見せる。
+  const avatar = (
+    <span class="hwc-msg-avatar" data-agent={agentGlyph(props.agent)}>
+      <AgentGlyphIcon agent={props.agent} size={16} />
+    </span>
+  );
+
   return (
     <ol class="hwc-chat">
-      {props.messages.map((message) => (
-        <li class="hwc-msg" data-role={message.role} key={message.id}>
-          {message.role === "agent" ? (
-            <pre class="hwc-msg-text">{message.text}</pre>
-          ) : (
+      {props.messages.map((message) =>
+        message.role === "agent" ? (
+          <li class="hwc-msg" data-role="agent" key={message.id}>
+            {avatar}
+            <div class="hwc-msg-body">
+              <pre class="hwc-msg-text">{message.text}</pre>
+              <span class="hwc-msg-time">{formatClock(message.at)}</span>
+            </div>
+          </li>
+        ) : (
+          <li class="hwc-msg" data-role="user" key={message.id}>
             <p class="hwc-msg-text">{message.text}</p>
-          )}
-          <span class="hwc-msg-time">{formatClock(message.at)}</span>
-        </li>
-      ))}
+            <span class="hwc-msg-time">{formatClock(message.at)}</span>
+          </li>
+        ),
+      )}
       {props.replying ? (
-        <li class="hwc-msg" data-role="agent" data-typing="true" aria-label="返答を待っています">
-          <span class="hwc-typing">
-            <span />
-            <span />
-            <span />
-          </span>
+        <li class="hwc-msg" data-role="agent" aria-label="返答を待っています">
+          {avatar}
+          <div class="hwc-msg-body">
+            <span class="hwc-typing">
+              <span />
+              <span />
+              <span />
+            </span>
+          </div>
         </li>
       ) : null}
     </ol>
@@ -419,7 +440,7 @@ export function PaneDetail(props: PaneDetailProps) {
           }}
         >
           {messages !== null ? (
-            <ChatLog messages={messages} replying={replying} />
+            <ChatLog messages={messages} replying={replying} agent={pane.agent} />
           ) : output === null ? (
             <OutputSkeleton />
           ) : output.trim() === "" ? (
