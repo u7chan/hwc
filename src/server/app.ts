@@ -35,7 +35,8 @@ export function createApp(options: { store: StateStore }) {
           else buffered = state;
         });
 
-        const initial = await current();
+        // 初期取得の間に届いた更新があればそれが最新なので、初回状態として使う。
+        const initial = (await current()) ?? buffered;
 
         // 状態が無くてもストリームは開いたままにする。ここで 502 を返すと EventSource は
         // 接続失敗として扱い、以後再接続しない（Herdr 復帰後も画面が止まる）。

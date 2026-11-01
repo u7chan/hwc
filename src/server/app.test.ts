@@ -187,6 +187,22 @@ test("GET /api/events stays open and sends the state once Herdr becomes readable
   await waitFor(() => store.listenerCount() === 0);
 });
 
+test("GET /api/events uses an update that arrived first instead of reporting unavailability", async () => {
+  const store = createFakeStore(null, new Error("socket closed"));
+  store.fireOnSubscribe(state);
+  const app = createApp({ store });
+  const controller = new AbortController();
+  const response = await app.request("/api/events", { signal: controller.signal });
+  if (!response.body) throw new Error("response has no body");
+  const events = createSseReader(response.body);
+
+  expect(await events.nextEvent()).toMatchObject({ event: null });
+
+  await events.cancel();
+  controller.abort();
+  await waitFor(() => store.listenerCount() === 0);
+});
+
 test("GET /api/events flushes an update that arrives while the initial state is being sent", async () => {
   const store = createFakeStore(state);
   const next: AppState = { ...state, focusedPaneId: "w1:p9" };

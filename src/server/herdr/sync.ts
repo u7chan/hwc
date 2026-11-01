@@ -75,7 +75,10 @@ export function startStateSync(options: SyncOptions): () => void {
       path: options.path,
       reconnectDelayMs: options.reconnectDelayMs,
       onEvent: reload,
-      onLost: () => {},
+      onLost: () => {
+        // 初回の subscription_started 前に切れた場合も、次の開始で取り直す。
+        connected = true;
+      },
       // 切断中の状態変化はイベントで届かない。購読が復帰してから取り直す。切断直後に取ると、
       // 取得から購読開始までの間に起きた変化を落とす。
       onStarted: () => {

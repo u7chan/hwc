@@ -220,6 +220,9 @@ test("startStateSync subscribes to agent status changes of the panes it knows", 
   await waitFor(() => store.get() !== null);
 
   await waitFor(() => herdr.subscriptions().length === 2);
+  await Bun.sleep(30);
+  // 購読した時点の状態は新しいので、初回接続では取り直さない。
+  expect(herdr.snapshotRequests()).toBe(1);
   const statusSubscriptions = (herdr.subscriptions()[1]?.subscriptions ?? []).filter(
     (item) => item.type === "pane.agent_status_changed",
   );
@@ -364,8 +367,8 @@ test("a dropped agent status connection reloads after it resubscribes", async ()
   const snapshotsBefore = herdr.snapshotRequests();
 
   // 切断中に起きた状態変化はイベントで届かない。購読が戻ってから取り直して追いつく。
-  herdr.setPaneStatus("working");
   herdr.dropStatusConnections();
+  herdr.setPaneStatus("working");
 
   await waitFor(() => paneStatus(store) === "working");
   expect(herdr.snapshotRequests()).toBeGreaterThan(snapshotsBefore);
