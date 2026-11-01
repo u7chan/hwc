@@ -192,6 +192,7 @@ export function PaneDetail(props: PaneDetailProps) {
             <button
               type="submit"
               class="hwc-send"
+              data-sending={sending}
               aria-label={sending ? "送信中" : "送信"}
               disabled={!canSend || sending}
             >

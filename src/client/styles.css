@@ -495,8 +495,9 @@ button {
 .hwc-status-text {
   position: absolute;
   z-index: 2;
-  top: calc(100% + var(--space-1));
-  right: 0;
+  top: 50%;
+  right: calc(100% + var(--space-2));
+  transform: translateY(-50%);
   display: none;
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-line);
@@ -529,59 +530,36 @@ button {
   color: var(--color-neutral);
 }
 
-/* 12 個の点を順に光らせる。delay は要素側でずらす。 */
-@keyframes hwc-dot-pulse {
+@keyframes hwc-arc-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hwc-arc {
+  animation: hwc-arc-turn 0.75s linear infinite;
+}
+
+.hwc-arc-turn {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hwc-arc-turn 0.75s linear infinite;
+}
+
+@keyframes hwc-grid-pulse {
   0%,
   100% {
-    transform: scale(0);
-  }
-  50% {
     transform: scale(1);
   }
+  50% {
+    transform: scale(0.18);
+  }
 }
 
-.hwc-dots circle {
+.hwc-grid rect {
   transform-box: fill-box;
   transform-origin: center;
-  animation: hwc-dot-pulse 0.6s linear infinite;
-}
-
-@keyframes hwc-attention-fill {
-  0% {
-    transform: scaleY(1);
-  }
-  72.2%,
-  100% {
-    transform: scaleY(0);
-  }
-}
-
-@keyframes hwc-attention-rotate {
-  0%,
-  72.2% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(180deg);
-  }
-}
-
-.hwc-attention-outline,
-.hwc-attention-fill {
-  transform-box: fill-box;
-  animation-duration: 1.8s;
-  animation-iteration-count: infinite;
-  animation-timing-function: linear;
-}
-
-.hwc-attention-fill {
-  transform-origin: top;
-  animation-name: hwc-attention-fill;
-}
-
-.hwc-attention-outline {
-  transform-origin: center;
-  animation-name: hwc-attention-rotate;
+  animation: hwc-grid-pulse 0.6s linear infinite;
 }
 
 /* 詳細 */
@@ -892,6 +870,12 @@ button {
   cursor: default;
 }
 
+/* 送信中もボタンの面は残す。押せないが処理中であることが見えるように。 */
+.hwc-send[data-sending="true"]:disabled {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
 .hwc-visually-hidden {
   position: absolute;
   width: 1px;
@@ -1017,9 +1001,9 @@ button {
     animation: none;
   }
 
-  .hwc-dots circle,
-  .hwc-attention-outline,
-  .hwc-attention-fill {
+  .hwc-arc,
+  .hwc-arc-turn,
+  .hwc-grid rect {
     animation: none;
     transform: none;
   }
