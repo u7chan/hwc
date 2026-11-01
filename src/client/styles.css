@@ -1241,8 +1241,16 @@ button {
   background: var(--color-line);
 }
 
-.hwc-pane-name {
-  overflow-wrap: anywhere;
+/* 名前は 1 行に保つ。狭い画面で 1 文字ずつ折れると読めなくなる。 */
+.hwc-pane-name,
+.hwc-group-name,
+.hwc-tabrow-name,
+.hwc-group-sub,
+.hwc-tabrow-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 経過は目安。数字が揺れないよう等幅の数字で出す。 */

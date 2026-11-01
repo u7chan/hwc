@@ -1,5 +1,6 @@
 export const SIDEBAR_DEFAULT_WIDTH = 352;
-export const SIDEBAR_MIN_WIDTH = 300;
+// 3 段の字下げを引いてもペイン名が数文字は残る幅。これ以上狭くすると名前が潰れる。
+export const SIDEBAR_MIN_WIDTH = 340;
 export const SIDEBAR_MAX_WIDTH = 560;
 export const DETAIL_MIN_WIDTH = 360;
 export const SIDEBAR_STORAGE_KEY = "hwc-sidebar-width";
