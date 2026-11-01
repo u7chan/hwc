@@ -71,6 +71,8 @@ export function PaneList(props: PaneListProps) {
   const [dragged, setDragged] = useState<string | null>(null);
   const [dropAt, setDropAt] = useState<{ paneId: string; after: boolean } | null>(null);
   const positions = useRef<Map<string, number>>(new Map());
+  const order = useRef("");
+  const listScroller = useRef<HTMLDivElement>(null);
 
   // 並びが変わったら、前の位置から今の位置まで滑らせる（FLIP）。
   useLayoutEffect(() => {
@@ -79,14 +81,21 @@ export function PaneList(props: PaneListProps) {
     const animate =
       typeof window !== "undefined" &&
       !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // 位置は毎回測り直す（折りたたみでも動く）。動かすのは並びが変わったときだけ。
+    const nextOrder = rows.map((row) => row.dataset.paneId ?? "").join(",");
+    const reordered = nextOrder !== order.current;
+    order.current = nextOrder;
+
+    // 画面座標はスクロールで動く。動いたのは並びだけを見るため、スクロール量を足して測る。
+    const scrolled = listScroller.current?.scrollTop ?? 0;
 
     for (const row of rows) {
       const id = row.dataset.paneId;
       if (!id) continue;
-      const top = row.getBoundingClientRect().top;
+      const top = row.getBoundingClientRect().top + scrolled;
       next.set(id, top);
       const before = positions.current.get(id);
-      if (!animate || before === undefined || Math.abs(before - top) < 1) continue;
+      if (!animate || !reordered || before === undefined || Math.abs(before - top) < 1) continue;
 
       row.style.transition = "none";
       row.style.transform = `translateY(${before - top}px)`;
@@ -334,7 +343,7 @@ export function PaneList(props: PaneListProps) {
   }
 
   return (
-    <div class="hwc-list-scroll">
+    <div class="hwc-list-scroll" ref={listScroller}>
       {groupWorkspaces(state).map((group) => {
         // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
         if (group.repoName === null || group.linked.length === 0) {

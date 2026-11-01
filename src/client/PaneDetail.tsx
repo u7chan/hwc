@@ -79,6 +79,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // 消える途中の添付は、animation が終わるまで一覧に残す。
   const [leaving, setLeaving] = useState<readonly string[]>([]);
   const chipPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const chipOrder = useRef("");
   const picker = useRef<HTMLInputElement>(null);
 
   const previewed = attachments.find((file) => file.id === previewing) ?? null;
@@ -89,13 +90,23 @@ export function PaneDetail(props: PaneDetailProps) {
     const next = new Map<string, { x: number; y: number }>();
     const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    const nextOrder = chips.map((chip) => chip.dataset.attachmentId ?? "").join(",");
+    const reordered = nextOrder !== chipOrder.current;
+    chipOrder.current = nextOrder;
+
+    // 添付の一覧は縦にスクロールする。スクロール量を足して、並びの変化だけを見る。
+    const list = document.querySelector<HTMLElement>(".hwc-attachments");
+    const scrolledX = list?.scrollLeft ?? 0;
+    const scrolledY = list?.scrollTop ?? 0;
+
     for (const chip of chips) {
       const id = chip.dataset.attachmentId;
       if (!id) continue;
-      const rect = chip.getBoundingClientRect();
+      const raw = chip.getBoundingClientRect();
+      const rect = { left: raw.left + scrolledX, top: raw.top + scrolledY };
       next.set(id, { x: rect.left, y: rect.top });
       const before = chipPositions.current.get(id);
-      if (!animate || !before) continue;
+      if (!animate || !reordered || !before) continue;
       const dx = before.x - rect.left;
       const dy = before.y - rect.top;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
@@ -155,6 +166,9 @@ export function PaneDetail(props: PaneDetailProps) {
   const [tabDrop, setTabDrop] = useState<{ paneId: string; after: boolean } | null>(null);
   const tabPositions = useRef<Map<string, number>>(new Map());
 
+  const tabList = useRef<HTMLDivElement>(null);
+  const tabOrder = useRef("");
+
   // 並びが変わったタブだけ、前の位置から滑らせる（FLIP）。
   useLayoutEffect(() => {
     const chips = [...document.querySelectorAll<HTMLElement>(".hwc-tab[data-pane-id]")];
@@ -163,13 +177,21 @@ export function PaneDetail(props: PaneDetailProps) {
       typeof window !== "undefined" &&
       !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    // 並びが変わったときだけ動かす。位置は毎回測り直して、次の比較に使う。
+    const nextOrder = chips.map((chip) => chip.dataset.paneId ?? "").join(",");
+    const reordered = nextOrder !== tabOrder.current;
+    tabOrder.current = nextOrder;
+
+    // タブバーは横にスクロールする。画面座標のままだと、送っただけで動いたと誤認する。
+    const scrolled = tabList.current?.scrollLeft ?? 0;
+
     for (const chip of chips) {
       const id = chip.dataset.paneId;
       if (!id) continue;
-      const left = chip.getBoundingClientRect().left;
+      const left = chip.getBoundingClientRect().left + scrolled;
       next.set(id, left);
       const before = tabPositions.current.get(id);
-      if (!animate || before === undefined || Math.abs(before - left) < 1) continue;
+      if (!animate || !reordered || before === undefined || Math.abs(before - left) < 1) continue;
 
       chip.style.transition = "none";
       chip.style.transform = `translateX(${before - left}px)`;
@@ -185,7 +207,6 @@ export function PaneDetail(props: PaneDetailProps) {
   });
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const tabList = useRef<HTMLDivElement>(null);
 
   const canSend = draft.trim() !== "";
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { AppState } from "../server/herdr/state";
 import { PaneDetail } from "./PaneDetail";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
@@ -28,6 +29,36 @@ import {
   saveThemePreference,
   type ThemePreference,
 } from "./theme";
+
+// 壁時計との同期。1 秒ごとに数え直し、稼働に入った時刻は手元で覚える。
+function useWorkingClock(state: AppState) {
+  const [now, setNow] = useState(() => Date.now());
+  // 覚えた時刻は描画のたびに引き継ぐ。同じ入力なら同じ結果になるので、描画中に進めてよい。
+  const workingSince = useRef<ReadonlyMap<string, number>>(new Map());
+  workingSince.current = trackWorking(workingSince.current, state, now);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return { workingSince: workingSince.current, now };
+}
+
+// 端末の幅は React の外にある。購読して、変わったときだけ描き直す。
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const apply = () => setMatches(media.matches);
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [query]);
+
+  return matches;
+}
 
 export function App() {
   // プレビューでは閉じたペインを手元で落とす。実 API に繋いだらサーバーの状態で置き換わる。
@@ -79,18 +110,7 @@ export function App() {
     if (typeof localStorage !== "undefined") saveThemePreference(localStorage, next);
   };
 
-  // 稼働に入った時刻は手元で覚える。1 秒ごとに数え直して経過として出す。
-  const [workingSince, setWorkingSince] = useState<ReadonlyMap<string, number>>(new Map());
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    setWorkingSince((current) => trackWorking(current, state, Date.now()));
-  }, [state]);
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const { workingSince, now } = useWorkingClock(state);
 
   // 入力欄の外にファイルを落とすと、ブラウザがそのファイルを開いて画面を離れる。
   useEffect(() => {
@@ -147,7 +167,7 @@ export function App() {
     setSettingsOpen(false);
   };
 
-  // 配線前のプレビュー。実 API では取得中を null で表し、skeleton を出す。
+  // TODO: #14 で API 取得（または SSE）に置き換える。いまは往復を待つ様子だけ再現する。
   const [output, setOutput] = useState<string | null>(null);
   useEffect(() => {
     if (!pane) return;
@@ -189,17 +209,7 @@ export function App() {
 
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  // 広い画面では操作を一覧の下端へ寄せる。狭い画面では上部のバーに残す。
-  const [wide, setWide] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(WIDE_LAYOUT_QUERY).matches,
-  );
-  useEffect(() => {
-    const media = window.matchMedia(WIDE_LAYOUT_QUERY);
-    const apply = () => setWide(media.matches);
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, []);
+  const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
 
   const actions = (
     <>

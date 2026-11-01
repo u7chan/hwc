@@ -15,21 +15,24 @@ export function DialogShell(props: DialogShellProps) {
   const card = useRef<HTMLDivElement>(null);
   const restore = useRef<HTMLElement | null>(null);
 
+  // 開いたときに焦点を移し、閉じたら元の場所へ戻す。
   useEffect(() => {
     restore.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const target = card.current?.querySelector<HTMLElement>("[data-autofocus]") ?? card.current;
     target?.focus();
+    return () => {
+      restore.current?.focus?.();
+    };
+  }, []);
 
+  // Esc は開いたままの handler を呼ぶ。依存に入れて、差し替わったら貼り直す。
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") props.onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      // 閉じたら元の場所へ戻す。開いたボタンを見失わないように。
-      restore.current?.focus?.();
-    };
-  }, []);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [props.onClose]);
 
   return (
     <div class="hwc-dialog-layer">
