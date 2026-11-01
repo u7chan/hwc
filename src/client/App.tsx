@@ -349,14 +349,15 @@ export function App() {
               onBack={() => setSelectedPaneId(null)}
               messages={chats[pane.id] ?? previewChat(pane.id)}
               replying={replyingPaneId === pane.id}
+              waitingMs={replyStartedAt === null ? null : now - replyStartedAt}
               onSubmit={(text) => askPane(pane.id, text)}
               onDropPane={dropOnPane}
               feedback={feedback}
             />
           ) : (
             <div class="hwc-empty hwc-empty--detail">
-              <div class="hwc-empty-mark">
-                <span class="hwc-empty-glyph">›_</span>
+              <div class="hwc-empty-mark hwc-empty-mark--app">
+                <HerdrMark size={40} />
               </div>
               <h2 class="hwc-empty-title">ペインを選んでください</h2>
               <p class="hwc-empty-text">一覧からペインを選ぶと、出力と入力欄が出ます。</p>
