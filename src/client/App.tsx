@@ -214,7 +214,11 @@ export function App() {
               }
               output={output}
               onBack={() => setSelectedPaneId(null)}
-              onSubmit={() => setFeedback("プレビュー：送信はまだ繋がっていません")}
+              onSubmit={async () => {
+                // 配線前でも送信中の見た目を確かめられるように、往復ぶんだけ待つ。
+                await new Promise((resolve) => setTimeout(resolve, 600));
+                setFeedback("プレビュー：送信はまだ繋がっていません");
+              }}
               feedback={feedback}
             />
           ) : (

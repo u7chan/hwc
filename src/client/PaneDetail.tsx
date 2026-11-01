@@ -9,6 +9,7 @@ import {
   SendIcon,
 } from "./icons";
 import { statusTone } from "./select";
+import { Spinner } from "./Spinner";
 import { StatusLabel } from "./StatusLabel";
 
 type PaneDetailProps = {
@@ -19,7 +20,7 @@ type PaneDetailProps = {
   onSelectPane: (paneId: string) => void;
   onClosePane: (paneId: string) => void;
   onBack: () => void;
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string) => void | Promise<void>;
   feedback: string | null;
 };
 
@@ -28,6 +29,7 @@ export function PaneDetail(props: PaneDetailProps) {
     props;
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -74,10 +76,11 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   const send = () => {
-    if (!canSend) return;
-    onSubmit(draft);
+    if (!canSend || sending) return;
+    setSending(true);
     // 送信したらキーボードを閉じて出力を見せる。
     input.current?.blur();
+    Promise.resolve(onSubmit(draft)).finally(() => setSending(false));
   };
 
   return (
@@ -186,8 +189,13 @@ export function PaneDetail(props: PaneDetailProps) {
               {feedback}
             </span>
             <span class="hwc-input-hint">Enter は改行・⌘/Ctrl + Enter で送信</span>
-            <button type="submit" class="hwc-send" aria-label="送信" disabled={!canSend}>
-              <SendIcon />
+            <button
+              type="submit"
+              class="hwc-send"
+              aria-label={sending ? "送信中" : "送信"}
+              disabled={!canSend || sending}
+            >
+              {sending ? <Spinner /> : <SendIcon />}
             </button>
           </div>
         </div>

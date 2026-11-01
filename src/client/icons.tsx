@@ -1,3 +1,5 @@
+import { useId } from "preact/hooks";
+
 type IconProps = { size?: number };
 
 function Svg(props: { size: number; children: preact.ComponentChildren }) {
@@ -160,6 +162,38 @@ export function CollapseIcon({ size = 20 }: IconProps) {
       <path d="M4 14h6v6" />
       <path d="M10 14l-7 7" />
     </Svg>
+  );
+}
+
+export function AttentionMark({ size = 12 }: IconProps) {
+  const id = useId();
+  const fill = `${id}-fill`;
+  const rotate = `${id}-rotate`;
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <rect fill="none" stroke="currentColor" stroke-width="4" x="25" y="25" width="50" height="50">
+        <animateTransform
+          attributeName="transform"
+          dur="0.5s"
+          from="0 50 50"
+          to="180 50 50"
+          type="rotate"
+          id={rotate}
+          begin={`${fill}.end`}
+        />
+      </rect>
+      <rect x="27" y="27" fill="currentColor" width="46" height="50">
+        <animate
+          attributeName="height"
+          dur="1.3s"
+          from="50"
+          to="0"
+          id={fill}
+          fill="freeze"
+          begin={`0s;${rotate}.end`}
+        />
+      </rect>
+    </svg>
   );
 }
 
