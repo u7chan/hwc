@@ -549,7 +549,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-2) 0 var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-3);
   border-top: 1px solid var(--color-line);
 }
 
@@ -2072,11 +2072,6 @@ button {
   .hwc-list {
     flex: none;
     width: var(--hwc-sidebar-width);
-  }
-
-  /* 一覧の余白はカード側が持つ。ここで padding を足すとスクロールバーが端から離れる。 */
-  .hwc-group-block {
-    margin-inline: var(--space-3);
   }
 
   .hwc-resizer {
