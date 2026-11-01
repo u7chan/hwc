@@ -74,8 +74,53 @@ export function PaneDetail(props: PaneDetailProps) {
   const [dropping, setDropping] = useState(false);
   const [rejected, setRejected] = useState(0);
   const [previewing, setPreviewing] = useState<string | null>(null);
+  // 消える途中の添付は、animation が終わるまで一覧に残す。
+  const [leaving, setLeaving] = useState<readonly string[]>([]);
+  const chipPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   const previewed = attachments.find((file) => file.id === previewing) ?? null;
+
+  // 消えたものだけを動かし、残りは前の位置から滑らせる（FLIP）。
+  useLayoutEffect(() => {
+    const chips = [...document.querySelectorAll<HTMLElement>(".hwc-attachment")];
+    const next = new Map<string, { x: number; y: number }>();
+    const animate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    for (const chip of chips) {
+      const id = chip.dataset.attachmentId;
+      if (!id) continue;
+      const rect = chip.getBoundingClientRect();
+      next.set(id, { x: rect.left, y: rect.top });
+      const before = chipPositions.current.get(id);
+      if (!animate || !before) continue;
+      const dx = before.x - rect.left;
+      const dy = before.y - rect.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+
+      chip.style.transition = "none";
+      chip.style.transform = `translate(${dx}px, ${dy}px)`;
+      void chip.offsetHeight;
+      chip.style.transition = "transform 180ms ease";
+      chip.style.transform = "";
+    }
+
+    chipPositions.current = next;
+  });
+
+  const dropAttachment = (id: string) => {
+    if (leaving.includes(id)) return;
+    setRejected(0);
+    // 動きを止めている環境では待たずに消す。
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setAttachments((current) => removeAttachment(current, id));
+      return;
+    }
+    setLeaving((current) => [...current, id]);
+    setTimeout(() => {
+      setAttachments((current) => removeAttachment(current, id));
+      setLeaving((current) => current.filter((item) => item !== id));
+    }, 170);
+  };
 
   const takeFiles = (files: readonly File[]) => {
     setAttachments((current) => {
@@ -368,7 +413,13 @@ export function PaneDetail(props: PaneDetailProps) {
                 </>
               );
               return (
-                <li class="hwc-attachment" key={file.id} data-kind={kind}>
+                <li
+                  class="hwc-attachment"
+                  key={file.id}
+                  data-kind={kind}
+                  data-attachment-id={file.id}
+                  data-leaving={leaving.includes(file.id)}
+                >
                   {kind === "image" || kind === "text" ? (
                     <button
                       type="button"
@@ -398,10 +449,7 @@ export function PaneDetail(props: PaneDetailProps) {
                     type="button"
                     class="hwc-attachment-remove"
                     aria-label={`${file.name} を外す`}
-                    onClick={() => {
-                      setAttachments((current) => removeAttachment(current, file.id));
-                      setRejected(0);
-                    }}
+                    onClick={() => dropAttachment(file.id)}
                   >
                     <CloseIcon size={14} />
                   </button>
@@ -479,7 +527,7 @@ export function PaneDetail(props: PaneDetailProps) {
           attachment={previewed}
           onClose={() => setPreviewing(null)}
           onRemove={() => {
-            setAttachments((current) => removeAttachment(current, previewed.id));
+            dropAttachment(previewed.id);
             setPreviewing(null);
           }}
         />

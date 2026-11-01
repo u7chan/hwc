@@ -1966,6 +1966,25 @@ button {
   color: var(--color-surface);
 }
 
+/* 消えた添付は、その場で縮んで淡くなる。残りは FLIP で寄る。 */
+.hwc-attachment[data-leaving="true"] {
+  pointer-events: none;
+  transform-origin: left center;
+  animation: hwc-attachment-out 170ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes hwc-attachment-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(0.9) translateY(-2px);
+  }
+}
+
 .hwc-attachments-note {
   margin: calc(var(--space-1) * -1) 0 var(--space-2);
   color: var(--color-secondary);
