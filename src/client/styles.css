@@ -810,6 +810,7 @@ button {
 
 /* 行は「開く」と「メニュー」の 2 つのボタンで持つ。 */
 .hwc-pane {
+  position: relative;
   display: flex;
   align-items: center;
   min-height: var(--row-pane);
@@ -833,6 +834,30 @@ button {
 
 .hwc-pane[data-current="true"] {
   background: var(--color-selected);
+}
+
+/* ドラッグ中は掴んでいる行を薄くし、落とす位置に線を出す。 */
+.hwc-pane[data-dragging="true"] {
+  opacity: 0.45;
+}
+
+.hwc-pane[data-drop="before"]::before,
+.hwc-pane[data-drop="after"]::after {
+  content: "";
+  position: absolute;
+  right: var(--space-3);
+  left: var(--space-3);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.hwc-pane[data-drop="before"]::before {
+  top: -1px;
+}
+
+.hwc-pane[data-drop="after"]::after {
+  bottom: -1px;
 }
 
 .hwc-pane[data-current="true"] .hwc-pane-name {
@@ -1406,6 +1431,12 @@ button {
 
 .hwc-tab[aria-selected="true"]::after {
   opacity: 1;
+}
+
+/* ペインを掴んでタブの上に来たときの受け皿。 */
+.hwc-tab[data-drop="true"] {
+  background: var(--color-raised);
+  color: var(--color-text);
 }
 
 .hwc-detail-bar {

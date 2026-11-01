@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { AppState, WorktreeState } from "../server/herdr/state";
 import {
   AgentGlyphIcon,
@@ -24,6 +24,7 @@ type PaneListProps = {
   onSelect: (paneId: string) => void;
   onToggle: (groupId: string) => void;
   onClosePane: (paneId: string) => void;
+  onDropPane: (paneId: string, targetPaneId: string, after: boolean) => void;
   workingSince: ReadonlyMap<string, number>;
   now: number;
 };
@@ -80,6 +81,39 @@ export function PaneList(props: PaneListProps) {
   const [menu, setMenu] = useState<{ paneId: string; top: number; right: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [closing, setClosing] = useState<string | null>(null);
+  // ドラッグは PC の操作。触れる画面では発火しないので、そのまま置いておく。
+  const positions = useRef<Map<string, number>>(new Map());
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<{ paneId: string; after: boolean } | null>(null);
+
+  // 並びが変わったら、前の位置から今の位置まで滑らせる（FLIP）。
+  useLayoutEffect(() => {
+    const rows = [...document.querySelectorAll<HTMLElement>(".hwc-pane[data-pane-id]")];
+    const next = new Map<string, number>();
+    const animate =
+      typeof window !== "undefined" &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    for (const row of rows) {
+      const id = row.dataset.paneId;
+      if (!id) continue;
+      const top = row.getBoundingClientRect().top;
+      next.set(id, top);
+      const before = positions.current.get(id);
+      if (!animate || before === undefined || Math.abs(before - top) < 1) continue;
+
+      row.style.transition = "none";
+      row.style.transform = `translateY(${before - top}px)`;
+      void row.offsetHeight;
+      row.style.transition = "transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1)";
+      row.style.transform = "";
+    }
+
+    positions.current = next;
+    return () => {
+      for (const row of rows) row.style.transition = "";
+    };
+  });
 
   const openMenu = (event: MouseEvent, paneId: string) => {
     const target = event.currentTarget as HTMLElement;
@@ -161,7 +195,50 @@ export function PaneList(props: PaneListProps) {
                   const startedAt = workingSince.get(pane.id);
                   return (
                     <li key={pane.id}>
-                      <div class="hwc-pane" data-current={pane.id === selectedPaneId}>
+                      <div
+                        class="hwc-pane"
+                        data-pane-id={pane.id}
+                        data-current={pane.id === selectedPaneId}
+                        data-dragging={dragged === pane.id}
+                        data-drop={
+                          dropAt?.paneId === pane.id
+                            ? dropAt.after
+                              ? "after"
+                              : "before"
+                            : undefined
+                        }
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer?.setData("text/plain", pane.id);
+                          if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+                          setDragged(pane.id);
+                        }}
+                        onDragEnd={() => {
+                          setDragged(null);
+                          setDropAt(null);
+                        }}
+                        onDragOver={(event) => {
+                          if (dragged === null || dragged === pane.id) return;
+                          event.preventDefault();
+                          if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          setDropAt({
+                            paneId: pane.id,
+                            after: event.clientY > rect.top + rect.height / 2,
+                          });
+                        }}
+                        onDragLeave={() =>
+                          setDropAt((current) => (current?.paneId === pane.id ? null : current))
+                        }
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          const moved = event.dataTransfer?.getData("text/plain") ?? dragged;
+                          const after = dropAt?.after ?? false;
+                          setDragged(null);
+                          setDropAt(null);
+                          if (moved && moved !== pane.id) props.onDropPane(moved, pane.id, after);
+                        }}
+                      >
                         <button
                           type="button"
                           class="hwc-pane-open"

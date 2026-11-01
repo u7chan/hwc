@@ -4,7 +4,7 @@ import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
 import { previewOutput, previewState } from "./fixtures";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
-import { findPane, findPaneContext, initialExpanded, removePane } from "./select";
+import { findPane, findPaneContext, initialExpanded, movePane, removePane } from "./select";
 import { trackWorking } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
@@ -83,6 +83,30 @@ export function App() {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // 行に落としたら、その行の前後に入れる。タブへ落としたら末尾に足す。
+  const dropOnPane = (paneId: string, targetPaneId: string, after: boolean) => {
+    setState((current) => {
+      for (const workspace of current.workspaces) {
+        for (const tab of workspace.tabs) {
+          const index = tab.panes.findIndex((item) => item.id === targetPaneId);
+          if (index === -1) continue;
+          return movePane(current, paneId, tab.id, index + (after ? 1 : 0));
+        }
+      }
+      return current;
+    });
+  };
+
+  // タブへ落としたら、そのタブの末尾に移す。
+  const dropOnTab = (paneId: string, targetPaneId: string) => {
+    setState((current) => {
+      const tab = current.workspaces
+        .flatMap((workspace) => workspace.tabs)
+        .find((item) => item.panes.some((pane) => pane.id === targetPaneId));
+      return tab ? movePane(current, paneId, tab.id, tab.panes.length) : current;
+    });
+  };
 
   const closePane = (paneId: string) => {
     setState((current) => removePane(current, paneId));
@@ -185,6 +209,7 @@ export function App() {
             onSelect={select}
             onToggle={toggle}
             onClosePane={closePane}
+            onDropPane={dropOnPane}
             workingSince={workingSince}
             now={now}
           />
@@ -247,6 +272,7 @@ export function App() {
                 await new Promise((resolve) => setTimeout(resolve, 600));
                 setFeedback("プレビュー：送信はまだ繋がっていません");
               }}
+              onDropPane={dropOnTab}
               feedback={feedback}
             />
           ) : (

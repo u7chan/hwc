@@ -7,6 +7,7 @@ import {
   findPane,
   findPaneContext,
   initialExpanded,
+  movePane,
   removePane,
   statusLabel,
   statusTone,
@@ -97,6 +98,25 @@ test("closing the last pane of a tab drops the tab, then the workspace", () => {
 
   const afterWorkspace = removePane(state, "w2:p1");
   expect(afterWorkspace.workspaces.map((workspace) => workspace.id)).toEqual(["w1"]);
+});
+
+test("a pane can be dragged into another tab", () => {
+  const after = movePane(state, "w1:p1", "w1:t2", 0);
+
+  expect(after.workspaces[0].tabs[0].panes.map((pane) => pane.id)).toEqual(["w1:p2"]);
+  expect(after.workspaces[0].tabs[1].panes.map((pane) => pane.id)).toEqual(["w1:p1", "w1:p3"]);
+});
+
+test("reordering inside a tab accounts for the pane leaving its slot", () => {
+  const down = movePane(state, "w1:p1", "w1:t1", 2);
+  expect(down.workspaces[0].tabs[0].panes.map((pane) => pane.id)).toEqual(["w1:p2", "w1:p1"]);
+
+  const up = movePane(state, "w1:p2", "w1:t1", 0);
+  expect(up.workspaces[0].tabs[0].panes.map((pane) => pane.id)).toEqual(["w1:p2", "w1:p1"]);
+});
+
+test("moving a pane that does not exist changes nothing", () => {
+  expect(movePane(state, "w9:p9", "w1:t1", 0)).toEqual(state);
 });
 
 test("closing an unknown pane changes nothing", () => {

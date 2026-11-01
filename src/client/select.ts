@@ -12,6 +12,53 @@ export function findPane(state: AppState, paneId: string | null): PaneState | nu
   return null;
 }
 
+// ペインを別のタブへ移す。同じタブの中なら並び順の入れ替えになる。
+export function movePane(
+  state: AppState,
+  paneId: string,
+  targetTabId: string,
+  targetIndex: number,
+): AppState {
+  let moved: PaneState | null = null;
+  let sourceTabId: string | null = null;
+  let sourceIndex = -1;
+
+  for (const workspace of state.workspaces) {
+    for (const tab of workspace.tabs) {
+      const index = tab.panes.findIndex((pane) => pane.id === paneId);
+      if (index === -1) continue;
+      moved = tab.panes[index];
+      sourceTabId = tab.id;
+      sourceIndex = index;
+    }
+  }
+  if (!moved || !sourceTabId) return state;
+
+  // 同じタブの中で後ろへ動かすときは、自分が抜けた分だけ前へ詰まる。
+  const sameTab = sourceTabId === targetTabId;
+  const insertAt = sameTab && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  const pane = moved;
+  let changed = false;
+
+  const workspaces = state.workspaces.map((workspace) => ({
+    ...workspace,
+    tabs: workspace.tabs.map((tab) => {
+      const without = tab.panes.filter((item) => item.id !== paneId);
+      if (tab.id !== targetTabId) {
+        if (without.length === tab.panes.length) return tab;
+        changed = true;
+        return { ...tab, panes: without };
+      }
+      const next = [...without];
+      next.splice(Math.max(0, Math.min(insertAt, next.length)), 0, pane);
+      changed = true;
+      return { ...tab, panes: next };
+    }),
+  }));
+
+  return changed ? { ...state, workspaces } : state;
+}
+
 // ペインを 1 枚だけ取り除く。空になったタブとワークスペースも一緒に落とす。
 export function removePane(state: AppState, paneId: string): AppState {
   return {

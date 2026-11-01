@@ -45,16 +45,19 @@ type PaneDetailProps = {
   onSelectPane: (paneId: string) => void;
   onBack: () => void;
   onSubmit: (text: string) => void | Promise<void>;
+  onDropPane: (paneId: string, targetPaneId: string) => void;
   feedback: string | null;
 };
 
 export function PaneDetail(props: PaneDetailProps) {
-  const { pane, context, panes, output, onSelectPane, onBack, onSubmit, feedback } = props;
+  const { pane, context, panes, output, onSelectPane, onBack, onSubmit, onDropPane, feedback } =
+    props;
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [dropTab, setDropTab] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const tabList = useRef<HTMLDivElement>(null);
@@ -144,6 +147,21 @@ export function PaneDetail(props: PaneDetailProps) {
                 aria-selected={selected}
                 aria-label={`${item.title ?? item.agent ?? item.id} (${item.id}, ${statusLabel(item.agentStatus)})`}
                 onClick={() => onSelectPane(item.id)}
+                data-drop={dropTab === item.id}
+                onDragOver={(event) => {
+                  if (!event.dataTransfer?.types.includes("text/plain")) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDropTab(item.id);
+                }}
+                onDragLeave={() => setDropTab((current) => (current === item.id ? null : current))}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDropTab(null);
+                  const dragged = event.dataTransfer?.getData("text/plain");
+                  // タブ自身を落としても何も起きない。
+                  if (dragged && dragged !== item.id) onDropPane(dragged, item.id);
+                }}
               >
                 <span class="hwc-tab-label">{item.title ?? item.agent ?? item.id}</span>
                 <StatusIcon status={item.agentStatus} />
