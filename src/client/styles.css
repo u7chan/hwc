@@ -718,16 +718,27 @@ button {
   grid-template-rows: 1fr;
 }
 
+/* 開くときは高さに合わせて中身を淡く出す。閉じるときは高さだけで切る。 */
 .hwc-children-inner {
   min-height: 0;
   overflow: hidden;
   visibility: hidden;
-  transition: visibility 0s linear 180ms;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 180ms;
 }
 
-.hwc-group-children[data-open="true"] .hwc-children-inner {
+.hwc-group-children[data-open="true"] > .hwc-children-inner {
   visibility: visible;
-  transition-delay: 0s;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 180ms ease 30ms,
+    transform 180ms ease 30ms,
+    visibility 0s;
 }
 
 .hwc-group {
