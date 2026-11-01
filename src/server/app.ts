@@ -9,8 +9,8 @@ import {
 } from "./herdr/panes";
 import type { AppState, StateStore } from "./herdr/state";
 
-export function createApp(options: { store: StateStore; panes: PaneClient }) {
-  const { store, panes } = options;
+export function createApp(options: { store: StateStore; panes: PaneClient; revision?: string }) {
+  const { store, panes, revision = "dev" } = options;
 
   const current = async (): Promise<AppState | null> =>
     store.get() ??
@@ -26,7 +26,7 @@ export function createApp(options: { store: StateStore; panes: PaneClient }) {
   };
 
   return new Hono()
-    .get("/api/health", (c) => c.json({ ok: true, service: "hwc" }))
+    .get("/api/health", (c) => c.json({ ok: true, service: "hwc", revision }))
     .get("/api/state", async (c) => {
       const state = await current();
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);

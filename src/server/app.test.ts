@@ -14,6 +14,7 @@ const state: AppState = {
       label: "hwc",
       agentStatus: "idle",
       focused: true,
+      worktree: null,
       tabs: [
         {
           id: "w1:t1",
@@ -128,7 +129,18 @@ test("GET /api/health returns ok", async () => {
   const response = await app.request("/api/health");
 
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ ok: true, service: "hwc" });
+  expect(await response.json()).toEqual({ ok: true, service: "hwc", revision: "dev" });
+});
+
+test("GET /api/health reports the revision it was built from", async () => {
+  const app = createApp({
+    store: createFakeStore(state),
+    panes: createFakePanes(),
+    revision: "abc1234",
+  });
+  const response = await app.request("/api/health");
+
+  expect(await response.json()).toEqual({ ok: true, service: "hwc", revision: "abc1234" });
 });
 
 test("GET /api/state returns the current state", async () => {
