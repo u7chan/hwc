@@ -134,8 +134,10 @@ export function request<T>(
   });
 }
 
+export type SubscriptionSpec = { type: string; [filter: string]: unknown };
+
 export type SubscribeOptions = {
-  events: readonly string[];
+  events: readonly SubscriptionSpec[];
   onEvent: (event: string, data: unknown) => void;
   onLost: () => void;
   onStarted?: () => void;
@@ -216,9 +218,8 @@ export function subscribe(options: SubscribeOptions): () => void {
     );
 
     current.on("connect", () => {
-      const subscriptions = events.map((type) => ({ type }));
       current.write(
-        `${JSON.stringify({ id, method: "events.subscribe", params: { subscriptions } })}\n`,
+        `${JSON.stringify({ id, method: "events.subscribe", params: { subscriptions: events } })}\n`,
       );
     });
     current.on("data", (chunk: string) => reader.push(chunk));

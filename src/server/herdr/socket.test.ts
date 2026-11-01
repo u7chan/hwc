@@ -160,7 +160,7 @@ test("subscribe keeps the connection event-only and forwards pushed events", asy
   const events: Array<[string, unknown]> = [];
   let started = 0;
   const stop = subscribe({
-    events: ["pane.updated"],
+    events: [{ type: "pane.updated" }],
     path: herdr.path,
     reconnectDelayMs: 10,
     onStarted: () => {
@@ -195,7 +195,7 @@ test("subscribe reports every lost subscription and resubscribes", async () => {
   let lost = 0;
   let started = 0;
   const stop = subscribe({
-    events: ["pane.updated"],
+    events: [{ type: "pane.updated" }],
     path: herdr.path,
     reconnectDelayMs: 10,
     onStarted: () => {
@@ -222,7 +222,7 @@ test("subscribe resubscribes after the connection drops unexpectedly", async () 
   let lost = 0;
   let started = 0;
   const stop = subscribe({
-    events: ["pane.updated"],
+    events: [{ type: "pane.updated" }],
     path: herdr.path,
     reconnectDelayMs: 10,
     onStarted: () => {
@@ -247,7 +247,7 @@ test("subscribe stops reconnecting after stop()", async () => {
 
   let started = 0;
   const stop = subscribe({
-    events: ["pane.updated"],
+    events: [{ type: "pane.updated" }],
     path: herdr.path,
     reconnectDelayMs: 10,
     onStarted: () => {
@@ -271,7 +271,7 @@ test("subscribe does not retry a rejected subscription", async () => {
 
   const errors: Error[] = [];
   const stop = subscribe({
-    events: ["not.an.event"],
+    events: [{ type: "not.an.event" }],
     path: herdr.path,
     reconnectDelayMs: 10,
     onStarted: () => {},
