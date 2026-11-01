@@ -77,6 +77,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // 消える途中の添付は、animation が終わるまで一覧に残す。
   const [leaving, setLeaving] = useState<readonly string[]>([]);
   const chipPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const picker = useRef<HTMLInputElement>(null);
 
   const previewed = attachments.find((file) => file.id === previewing) ?? null;
 
@@ -506,6 +507,29 @@ export function PaneDetail(props: PaneDetailProps) {
             }}
           />
           <div class="hwc-input-actions">
+            <button
+              type="button"
+              class="hwc-attach"
+              aria-label="ファイルを添付"
+              title="ファイルを添付"
+              onClick={() => picker.current?.click()}
+            >
+              <PaperclipIcon size={18} />
+            </button>
+            <input
+              ref={picker}
+              class="hwc-visually-hidden"
+              type="file"
+              multiple
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={(event) => {
+                const target = event.currentTarget;
+                if (target.files) takeFiles([...target.files]);
+                // 同じファイルをもう一度選んでも拾えるように戻す。
+                target.value = "";
+              }}
+            />
             <span class="hwc-feedback" aria-live="polite">
               {feedback}
             </span>

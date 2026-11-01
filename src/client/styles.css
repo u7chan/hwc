@@ -2216,6 +2216,35 @@ button {
   padding: 0 0 var(--space-1) var(--space-2);
 }
 
+/* 添付は入力欄の左端に置く。掴めない画面でもここから選べる。 */
+.hwc-attach {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-mark);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-attach:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-attach:active {
+  transform: scale(0.94);
+}
+
+.hwc-attach:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
 .hwc-feedback {
   flex: 1;
   min-width: 0;
