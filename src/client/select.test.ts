@@ -221,7 +221,7 @@ test("workspaces of the same repo are grouped under the repo", () => {
     },
   };
   const flat = { ...state, workspaces: [root, linked, state.workspaces[1]] };
-  const groups = groupWorkspaces(flat);
+  const groups = groupWorkspaces(flat.workspaces);
 
   // 本体を親に、linked worktree と git 管理外はそれぞれの位置に残す。
   expect(groups.map((group) => [group.repoName, group.host?.id ?? null])).toEqual([
@@ -242,7 +242,7 @@ test("a repo without a main checkout still forms one group", () => {
       isLinkedWorktree: true,
     },
   };
-  const groups = groupWorkspaces({ ...state, workspaces: [linked] });
+  const groups = groupWorkspaces([linked]);
 
   expect(groups).toHaveLength(1);
   expect(groups[0].host).toBeNull();
