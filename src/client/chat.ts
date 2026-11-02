@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ChatSnapshot } from "../server/chat/contract";
+import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, readChat } from "./api";
 
@@ -49,6 +49,21 @@ export function paneBody(props: {
   if (!props.chat || props.blocked || props.failed) return { kind: "output" };
   if (props.snapshot === null) return { kind: "skeleton" };
   return { kind: "chat", snapshot: props.snapshot };
+}
+
+export type PendingMessage = ChatMessage & { from: number; waiting: boolean };
+
+export function latestUserAt(messages: ChatMessage[]): number {
+  return messages.reduce(
+    (latest, message) => (message.role === "user" ? Math.max(latest, message.at) : latest),
+    0,
+  );
+}
+
+// 本文は pi 側で trim やテンプレート展開されることがあるため、送信時点の最後の user 発話より後に
+// 新しい user 発話が現れたかで対応付ける。
+export function isPendingConfirmed(pending: PendingMessage, messages: ChatMessage[]): boolean {
+  return messages.some((message) => message.role === "user" && message.at > pending.from);
 }
 
 export type AgentInfo = { model: string | null; effort: string | null };

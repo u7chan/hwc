@@ -1933,6 +1933,7 @@ button {
 .hwc-chat {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: var(--space-4);
   width: 100%;
   margin: 0;
@@ -1943,6 +1944,7 @@ button {
 .hwc-msg {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: var(--space-1);
   max-width: 100%;
 }
@@ -2033,7 +2035,11 @@ button {
   user-select: text;
 }
 
-.hwc-msg[data-role="user"] .hwc-msg-text {
+.hwc-msg[data-role="user"] .hwc-msg-bubble {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: var(--space-1);
   max-width: 85%;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-panel) var(--radius-panel) var(--radius-sm) var(--radius-panel);
@@ -2041,6 +2047,75 @@ button {
   color: var(--color-surface);
   font-size: var(--text-body);
   line-height: var(--line-body);
+}
+
+.hwc-msg-body {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  transition: max-height 220ms ease;
+}
+
+.hwc-msg-more {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: 4rem;
+  height: 1.6em;
+  padding-right: var(--space-1);
+  background: linear-gradient(90deg, transparent, var(--color-accent) 60%);
+  color: inherit;
+  pointer-events: none;
+}
+
+.hwc-msg-expand {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 2px;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-secondary);
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.hwc-msg-expand:hover {
+  opacity: 1;
+}
+
+.hwc-msg-expand:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: var(--radius-mark);
+}
+
+.hwc-msg-expand-icon {
+  display: grid;
+  place-items: center;
+  transition: transform 220ms ease;
+}
+
+.hwc-msg-expand[aria-expanded="true"] .hwc-msg-expand-icon {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-msg-body,
+  .hwc-msg-expand-icon {
+    transition: none;
+  }
 }
 
 .hwc-msg[data-role="agent"] .hwc-msg-text {

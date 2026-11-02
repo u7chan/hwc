@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
-import type { ChatSnapshot } from "../server/chat/contract";
+import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
+import type { PendingMessage } from "./chat";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
 import {
   agentInfo,
   agentInfoLabel,
   chatPollDelay,
   isAbortError,
+  isPendingConfirmed,
+  latestUserAt,
   paneBody,
   pollOnStatusChange,
 } from "./chat";
@@ -111,4 +114,37 @@ test("the label shows the parts that exist", () => {
   expect(agentInfoLabel({ model: "pi-large", effort: "high" })).toBe("pi-large · effort high");
   expect(agentInfoLabel({ model: "pi-large", effort: null })).toBe("pi-large");
   expect(agentInfoLabel({ model: null, effort: "low" })).toBe("effort low");
+});
+
+const pending: PendingMessage = {
+  id: "pending-1",
+  role: "user",
+  text: "  steer  ",
+  at: 1_000_000,
+  from: 990_000,
+  waiting: true,
+};
+
+test("the latest user message sets the pending baseline", () => {
+  const messages: ChatMessage[] = [
+    { id: "u1", role: "user", text: "old", at: 100 },
+    { id: "a1", role: "agent", text: "reply", at: 200 },
+    { id: "u2", role: "user", text: "last", at: 300 },
+  ];
+  expect(latestUserAt(messages)).toBe(300);
+  expect(latestUserAt([])).toBe(0);
+  expect(latestUserAt(messages.filter((message) => message.role === "agent"))).toBe(0);
+});
+
+test("a pending message is confirmed by a new user message after its baseline", () => {
+  expect(
+    isPendingConfirmed(pending, [{ id: "m2", role: "user", text: "steer", at: pending.from + 1 }]),
+  ).toBe(true);
+  expect(
+    isPendingConfirmed(pending, [{ id: "m2", role: "user", text: "steer", at: pending.from }]),
+  ).toBe(false);
+  expect(
+    isPendingConfirmed(pending, [{ id: "m2", role: "agent", text: "steer", at: pending.from + 1 }]),
+  ).toBe(false);
+  expect(isPendingConfirmed(pending, [])).toBe(false);
 });
