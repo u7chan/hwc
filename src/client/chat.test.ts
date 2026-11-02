@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import type { ChatSnapshot } from "../server/chat/contract";
+import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
 import {
   agentInfo,
   agentInfoLabel,
   chatPollDelay,
   isAbortError,
+  isPendingConfirmed,
   paneBody,
   pollOnStatusChange,
 } from "./chat";
@@ -111,4 +112,18 @@ test("the label shows the parts that exist", () => {
   expect(agentInfoLabel({ model: "pi-large", effort: "high" })).toBe("pi-large · effort high");
   expect(agentInfoLabel({ model: "pi-large", effort: null })).toBe("pi-large");
   expect(agentInfoLabel({ model: null, effort: "low" })).toBe("effort low");
+});
+
+const pending: ChatMessage = { id: "pending-1", role: "user", text: "steer", at: 1_000_000 };
+
+test("a pending message is replaced only by a matching user message", () => {
+  expect(isPendingConfirmed(pending, [{ ...pending, id: "m2", at: pending.at + 500 }])).toBe(true);
+  expect(isPendingConfirmed(pending, [{ ...pending, id: "m2", at: pending.at - 30_000 }])).toBe(
+    true,
+  );
+  expect(isPendingConfirmed(pending, [{ ...pending, id: "m2", at: pending.at - 120_000 }])).toBe(
+    false,
+  );
+  expect(isPendingConfirmed(pending, [{ ...pending, id: "m2", role: "agent" }])).toBe(false);
+  expect(isPendingConfirmed(pending, [{ ...pending, id: "m2", text: "other" }])).toBe(false);
 });

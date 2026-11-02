@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ChatSnapshot } from "../server/chat/contract";
+import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, readChat } from "./api";
 
@@ -49,6 +49,18 @@ export function paneBody(props: {
   if (!props.chat || props.blocked || props.failed) return { kind: "output" };
   if (props.snapshot === null) return { kind: "skeleton" };
   return { kind: "chat", snapshot: props.snapshot };
+}
+
+const PENDING_CONFIRM_WINDOW_MS = 60_000;
+
+// セッションの時刻は送信直後より少し前になることがある。同じ本文で、直前 60 秒までを同じ発話とみなす。
+export function isPendingConfirmed(pending: ChatMessage, messages: ChatMessage[]): boolean {
+  return messages.some(
+    (message) =>
+      message.role === "user" &&
+      message.text === pending.text &&
+      message.at >= pending.at - PENDING_CONFIRM_WINDOW_MS,
+  );
 }
 
 export type AgentInfo = { model: string | null; effort: string | null };

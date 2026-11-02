@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { OUTPUT_LINES } from "./api";
-import { agentInfo, agentInfoLabel, paneBody, usePaneChat } from "./chat";
+import { agentInfo, agentInfoLabel, isPendingConfirmed, paneBody, usePaneChat } from "./chat";
 import { useCopy } from "./copy";
 import { readDraft, storage, writeDraft } from "./drafts";
 import {
@@ -56,6 +57,76 @@ function OutputSkeleton() {
   );
 }
 
+const USER_MESSAGE_CLAMP_LINES = 5;
+const USER_MESSAGE_CLAMP_FALLBACK = 128;
+
+function UserMessage(props: {
+  message: ChatMessage;
+  copyButton: ComponentChildren;
+  pending?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [lineHeight, setLineHeight] = useState(0);
+  const content = useRef<HTMLDivElement>(null);
+  const textId = `hwc-msg-text-${props.message.id}`;
+
+  useLayoutEffect(() => {
+    const element = content.current;
+    if (!element) return;
+    const measure = () => {
+      setContentHeight(element.scrollHeight);
+      setLineHeight(Number.parseFloat(getComputedStyle(element).lineHeight) || 0);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [props.message.text]);
+
+  const clampHeight =
+    lineHeight > 0 ? lineHeight * USER_MESSAGE_CLAMP_LINES : USER_MESSAGE_CLAMP_FALLBACK;
+  const overflowing = contentHeight > clampHeight + 1;
+
+  return (
+    <>
+      <div class="hwc-msg-bubble">
+        <div
+          class="hwc-msg-body"
+          id={textId}
+          ref={content}
+          style={{ maxHeight: `${expanded ? contentHeight : clampHeight}px` }}
+        >
+          {props.message.text}
+          {overflowing && !expanded ? (
+            <span class="hwc-msg-more" aria-hidden="true">
+              …
+            </span>
+          ) : null}
+        </div>
+        {overflowing ? (
+          <button
+            type="button"
+            class="hwc-msg-expand"
+            aria-expanded={expanded}
+            aria-controls={textId}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            <span>{expanded ? "閉じる" : "もっとみる"}</span>
+            <span class="hwc-msg-expand-icon">
+              <ArrowDownIcon size={12} />
+            </span>
+          </button>
+        ) : null}
+      </div>
+      <div class="hwc-msg-meta">
+        <span class="hwc-msg-time">{props.pending ? "送信中" : formatClock(props.message.at)}</span>
+        {props.copyButton}
+      </div>
+    </>
+  );
+}
+
 // 会話として読むための並び。ユーザーは右、エージェントは左。
 // どのエージェントかは入力欄の側に出しているので、ここでは繰り返さない。
 function ChatLog(props: {
@@ -64,6 +135,7 @@ function ChatLog(props: {
   waitingMs: number | null;
   copiedId: string | null;
   onCopy: (id: string, text: string) => void;
+  pending: ChatMessage[];
 }) {
   const copyButton = (message: ChatMessage) => {
     const copied = props.copiedId === message.id;
@@ -81,21 +153,27 @@ function ChatLog(props: {
   };
 
   // ツール実行だけのターンは会話に残らない。返答待ちの表示だけが動いていることを示す。
-  if (props.snapshot.messages.length === 0 && !props.replying) return <ChatEmpty />;
+  const rows = [
+    ...props.snapshot.messages.map((message) => ({ message, pending: false })),
+    ...props.pending.map((message) => ({ message, pending: true })),
+  ];
+  if (rows.length === 0 && !props.replying) return <ChatEmpty />;
 
   return (
     <ol class="hwc-chat">
-      {props.snapshot.messages.map((message) => (
+      {rows.map(({ message, pending }) => (
         <li class="hwc-msg" data-role={message.role} key={message.id}>
           {message.role === "agent" ? (
-            <pre class="hwc-msg-text">{message.text}</pre>
+            <>
+              <pre class="hwc-msg-text">{message.text}</pre>
+              <div class="hwc-msg-meta">
+                <span class="hwc-msg-time">{formatClock(message.at)}</span>
+                {copyButton(message)}
+              </div>
+            </>
           ) : (
-            <p class="hwc-msg-text">{message.text}</p>
+            <UserMessage message={message} copyButton={copyButton(message)} pending={pending} />
           )}
-          <div class="hwc-msg-meta">
-            <span class="hwc-msg-time">{formatClock(message.at)}</span>
-            {copyButton(message)}
-          </div>
         </li>
       ))}
       {props.replying ? (
@@ -131,6 +209,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const [expanded, setExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
+  const [pending, setPending] = useState<ChatMessage[]>([]);
 
   // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
   const blocked = pane.agentStatus === "blocked";
@@ -140,12 +219,19 @@ export function PaneDetail(props: PaneDetailProps) {
     pane.agentStatus,
   );
   const body = paneBody({ chat: pane.chat, blocked, failed: chatFailed, snapshot });
+  const pendingMessages = pending.filter(
+    (item) => !isPendingConfirmed(item, snapshot?.messages ?? []),
+  );
 
   const { read, failed } = usePaneOutput(body.kind === "output" ? pane.id : null);
   const output = read?.text ?? null;
   const outputEmpty = output !== null && output.trim() === "";
   const replying = pane.agentStatus === "working";
-  const chatEmpty = body.kind === "chat" && body.snapshot.messages.length === 0 && !replying;
+  const chatEmpty =
+    body.kind === "chat" &&
+    body.snapshot.messages.length === 0 &&
+    pendingMessages.length === 0 &&
+    !replying;
   const empty = body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty;
   const info = agentInfo(snapshot);
   const content = body.kind === "chat" ? body.snapshot.messages : output;
@@ -186,7 +272,16 @@ export function PaneDetail(props: PaneDetailProps) {
   useEffect(() => {
     const element = scroller.current;
     if (element && atBottom) element.scrollTop = element.scrollHeight;
-  }, [content, replying, atBottom]);
+  }, [content, replying, atBottom, pendingMessages.length]);
+
+  useEffect(() => {
+    if (pending.length === 0) return;
+    const messages = snapshot?.messages ?? [];
+    setPending((items) => {
+      const next = items.filter((item) => !isPendingConfirmed(item, messages));
+      return next.length === items.length ? items : next;
+    });
+  }, [snapshot, pending.length]);
 
   const jumpToLatest = () => {
     setAtBottom(true);
@@ -197,11 +292,18 @@ export function PaneDetail(props: PaneDetailProps) {
   const send = async () => {
     if (!canSend || sending) return;
     const text = draft;
+    const at = Date.now();
     setSending(true);
     // 送信したらキーボードを閉じて出力を見せる。
     input.current?.blur();
     // 送れたときだけ空にする。失敗したら書き直せるよう残す。
-    if (await onSubmit(text)) setDraft("");
+    if (await onSubmit(text)) {
+      setDraft("");
+      setPending((items) => [
+        ...items,
+        { id: `pending-${at}-${items.length}`, role: "user", text, at },
+      ]);
+    }
     setSending(false);
   };
 
@@ -250,6 +352,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 waitingMs={waitingMs}
                 copiedId={copiedId}
                 onCopy={copy}
+                pending={pendingMessages}
               />
             </>
           ) : (
@@ -317,7 +420,7 @@ export function PaneDetail(props: PaneDetailProps) {
             placeholder={shell ? "コマンドを入力" : "メッセージを入力"}
             onInput={(event) => setDraft(event.currentTarget.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.isComposing) {
+              if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
                 event.preventDefault();
                 void send();
               }
