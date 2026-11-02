@@ -14,6 +14,7 @@ import {
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import { findPane, findPaneContext, initialExpanded, splitPanes } from "./select";
+import { LIST_SCOPE_STORAGE_KEY, parseListScope, type ListScope } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import { trackWorking, workingMs } from "./time";
 import {
@@ -109,6 +110,11 @@ export function App() {
       typeof localStorage === "undefined" ? null : localStorage.getItem(HIDDEN_STORAGE_KEY),
     ),
   );
+  const [scope, setScope] = useState<ListScope>(() =>
+    parseListScope(
+      typeof localStorage === "undefined" ? null : localStorage.getItem(LIST_SCOPE_STORAGE_KEY),
+    ),
+  );
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
@@ -196,6 +202,18 @@ export function App() {
     if (typeof localStorage !== "undefined") {
       try {
         localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // 保存できなくてもその場の表示は変える。
+      }
+    }
+  };
+
+  // 一覧をどこまで出すかは端末ごとの見え方。Herdr 側には持たせない。
+  const changeScope = (next: ListScope) => {
+    setScope(next);
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem(LIST_SCOPE_STORAGE_KEY, next);
       } catch {
         // 保存できなくてもその場の表示は変える。
       }
@@ -376,6 +394,8 @@ export function App() {
             <PaneList
               state={state}
               selectedPaneId={selectedPaneId}
+              scope={scope}
+              onScope={changeScope}
               expanded={expanded}
               onSelect={select}
               onToggle={toggle}

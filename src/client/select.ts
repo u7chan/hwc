@@ -1,4 +1,4 @@
-import type { AgentStatus, AppState, PaneState } from "../server/herdr/state";
+import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server/herdr/state";
 
 export function findPane(state: AppState, paneId: string | null): PaneState | null {
   if (paneId === null) return null;
@@ -110,11 +110,11 @@ export type WorkspaceGroup = {
 };
 
 // 同じリポジトリのワークスペースは 1 つに束ねる。本体（linked でないもの）を親に置く。
-export function groupWorkspaces(state: AppState): WorkspaceGroup[] {
+export function groupWorkspaces(workspaces: readonly WorkspaceState[]): WorkspaceGroup[] {
   const groups: WorkspaceGroup[] = [];
   const byRepo = new Map<string, WorkspaceGroup>();
 
-  for (const workspace of state.workspaces) {
+  for (const workspace of workspaces) {
     const worktree = workspace.worktree;
     if (!worktree) {
       groups.push({ key: workspace.id, repoName: null, host: workspace, linked: [] });

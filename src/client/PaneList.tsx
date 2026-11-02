@@ -20,12 +20,15 @@ import {
   paneName,
   paneSubLabel,
 } from "./select";
+import { scopeWorkspaces, type ListScope } from "./scope";
 import { StatusLabel } from "./StatusLabel";
 import { formatElapsed } from "./time";
 
 type PaneListProps = {
   state: AppState;
   selectedPaneId: string | null;
+  scope: ListScope;
+  onScope: (scope: ListScope) => void;
   expanded: ReadonlySet<string>;
   onSelect: (paneId: string) => void;
   onToggle: (groupId: string) => void;
@@ -57,7 +60,10 @@ function GroupStatus(props: { status: PaneState["agentStatus"]; hidden: boolean 
 }
 
 export function PaneList(props: PaneListProps) {
-  const { state, selectedPaneId, expanded, onSelect, onToggle, workingSince, now } = props;
+  const { state, selectedPaneId, scope, onScope, expanded, onSelect, onToggle, workingSince, now } =
+    props;
+
+  const visible = scopeWorkspaces(state.workspaces, scope, selectedPaneId);
 
   // メニューは行の中に置くと一覧のスクロールで切れる。画面に固定して出す。
   const [menu, setMenu] = useState<{ paneId: string; top: number; right: number } | null>(null);
@@ -261,61 +267,88 @@ export function PaneList(props: PaneListProps) {
   }
 
   return (
-    <div class="hwc-list-scroll">
-      {groupWorkspaces(state).map((group) => {
-        // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
-        if (group.repoName === null || group.linked.length === 0) {
-          const only = group.host ?? group.linked[0];
-          return renderWorkspace(only, 0, true);
-        }
+    <>
+      <div class="hwc-scope" role="group" aria-label="表示するスペース">
+        <button
+          type="button"
+          class="hwc-scope-option"
+          aria-pressed={scope === "agent"}
+          onClick={() => onScope("agent")}
+        >
+          エージェント
+        </button>
+        <button
+          type="button"
+          class="hwc-scope-option"
+          aria-pressed={scope === "all"}
+          onClick={() => onScope("all")}
+        >
+          すべて
+        </button>
+      </div>
+      {visible.length === 0 ? (
+        <div class="hwc-list-note">
+          <p class="hwc-list-note-title">エージェントのあるスペースがありません</p>
+          <p class="hwc-list-note-text">「すべて」に切り替えると、ターミナルのスペースも出ます。</p>
+        </div>
+      ) : (
+        <div class="hwc-list-scroll">
+          {groupWorkspaces(visible).map((group) => {
+            // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
+            if (group.repoName === null || group.linked.length === 0) {
+              const only = group.host ?? group.linked[0];
+              return renderWorkspace(only, 0, true);
+            }
 
-        const open = expanded.has(group.key);
-        const groupId = `hwc-group-${group.key}`;
-        return (
-          <section class="hwc-group-block" data-depth={0} key={group.key}>
-            {renderHeader({
-              id: group.key,
-              depth: 0,
-              icon: <RepoIcon />,
-              label: group.repoName,
-              sub: `${group.linked.length + (group.host ? 1 : 0)} ワークツリー`,
-              title: group.host?.worktree?.repoRoot ?? undefined,
-              status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
-              controlsId: groupId,
-            })}
-            <GroupChildren id={groupId} open={open}>
-              {group.host ? (
-                <ul class="hwc-tabs-list" data-depth={1}>
-                  {group.host.tabs.map((tab) => renderTabs(tab, 1))}
-                </ul>
-              ) : null}
-              {group.linked.map((workspace) => renderWorkspace(workspace, 1, true))}
-            </GroupChildren>
-          </section>
-        );
-      })}
-      {menu ? (
-        <>
-          <div class="hwc-menu-backdrop" onPointerDown={closeMenu} />
-          <div
-            class="hwc-menu"
-            role="menu"
-            aria-label={`${menu.paneId} の操作`}
-            style={{ top: `${menu.top}px`, right: `${menu.right}px` }}
-          >
-            <p class="hwc-menu-head">{menu.paneId}</p>
-            <button
-              type="button"
-              role="menuitem"
-              class="hwc-menu-item"
-              onClick={() => copyId(menu.paneId)}
-            >
-              <CopyGlyph copied={copied} />
-              {copied ? "コピーしました" : "ペイン ID をコピー"}
-            </button>
-          </div>
-        </>
-      ) : null}
-    </div>
+            const open = expanded.has(group.key);
+            const groupId = `hwc-group-${group.key}`;
+            return (
+              <section class="hwc-group-block" data-depth={0} key={group.key}>
+                {renderHeader({
+                  id: group.key,
+                  depth: 0,
+                  icon: <RepoIcon />,
+                  label: group.repoName,
+                  sub: `${group.linked.length + (group.host ? 1 : 0)} ワークツリー`,
+                  title: group.host?.worktree?.repoRoot ?? undefined,
+                  status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
+                  controlsId: groupId,
+                })}
+                <GroupChildren id={groupId} open={open}>
+                  {group.host ? (
+                    <ul class="hwc-tabs-list" data-depth={1}>
+                      {group.host.tabs.map((tab) => renderTabs(tab, 1))}
+                    </ul>
+                  ) : null}
+                  {group.linked.map((workspace) => renderWorkspace(workspace, 1, true))}
+                </GroupChildren>
+              </section>
+            );
+          })}
+          {menu ? (
+            <>
+              <div class="hwc-menu-backdrop" onPointerDown={closeMenu} />
+              <div
+                class="hwc-menu"
+                role="menu"
+                aria-label={`${menu.paneId} の操作`}
+                style={{ top: `${menu.top}px`, right: `${menu.right}px` }}
+              >
+                <p class="hwc-menu-head">{menu.paneId}</p>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="hwc-menu-item"
+                  onClick={() => copyId(menu.paneId)}
+                >
+                  <CopyGlyph copied={copied} />
+                  {copied ? "コピーしました" : "ペイン ID をコピー"}
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+    </>
   );
 }
