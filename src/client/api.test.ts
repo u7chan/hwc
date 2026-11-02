@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { OUTPUT_LINES, outputUrl, parseAppState, toAppState, toPaneRead } from "./api";
+import {
+  OUTPUT_LINES,
+  chatOutcome,
+  chatUrl,
+  outputUrl,
+  parseAppState,
+  toAppState,
+  toChatSnapshot,
+  toPaneRead,
+} from "./api";
 
 const state = {
   focusedWorkspaceId: null,
@@ -50,4 +59,51 @@ test("empty output is still valid output", () => {
     truncated: true,
     revision: 0,
   });
+});
+
+test("the chat request names the pane and carries nothing else", () => {
+  const url = new URL(chatUrl("w1:p2"), "http://localhost");
+
+  expect(url.pathname).toBe("/api/panes/w1%3Ap2/chat");
+  expect(url.search).toBe("");
+});
+
+test("a 304 keeps the messages already in hand", () => {
+  expect(chatOutcome(304)).toBe("unchanged");
+  expect(chatOutcome(200)).toBe("snapshot");
+});
+
+test("a pane without a session or without herdr falls back to the output", () => {
+  expect(chatOutcome(404)).toBe("unavailable");
+  expect(chatOutcome(502)).toBe("unavailable");
+  expect(chatOutcome(500)).toBe("unavailable");
+});
+
+const chatBody = {
+  etag: "abc",
+  messages: [{ id: "m1", role: "agent" as const, text: "hi", at: 1_000 }],
+  model: "pi-large",
+  effort: null,
+  truncated: false,
+};
+
+test("a chat body is accepted as the contract describes it", () => {
+  expect(toChatSnapshot(chatBody)).toEqual(chatBody);
+  expect(toChatSnapshot({ ...chatBody, messages: [] })).toEqual({ ...chatBody, messages: [] });
+  expect(toChatSnapshot({ ...chatBody, model: null })).toEqual({ ...chatBody, model: null });
+});
+
+test("a chat body that breaks the contract is dropped", () => {
+  expect(toChatSnapshot(null)).toBeNull();
+  expect(toChatSnapshot({ ...chatBody, etag: undefined })).toBeNull();
+  expect(toChatSnapshot({ ...chatBody, truncated: "no" })).toBeNull();
+  // null と文字列以外は「無い」と区別できないので受けない。
+  expect(toChatSnapshot({ ...chatBody, effort: undefined })).toBeNull();
+  expect(toChatSnapshot({ ...chatBody, messages: null })).toBeNull();
+  expect(
+    toChatSnapshot({ ...chatBody, messages: [{ ...chatBody.messages[0], role: "system" }] }),
+  ).toBeNull();
+  expect(
+    toChatSnapshot({ ...chatBody, messages: [{ ...chatBody.messages[0], at: "1" }] }),
+  ).toBeNull();
 });

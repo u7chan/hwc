@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { OUTPUT_LINES } from "./api";
+import { agentInfo, agentInfoLabel, paneBody, usePaneChat } from "./chat";
 import { useCopy } from "./copy";
 import { readDraft, storage, writeDraft } from "./drafts";
 import {
@@ -16,6 +18,7 @@ import {
 import { usePaneOutput } from "./output";
 import { agentGlyph, isShellPane, paneName, paneSubLabel } from "./select";
 import { Spinner } from "./Spinner";
+import { formatClock, formatElapsed } from "./time";
 
 // 出力がまだ無いときは、空の枠だけ置いても意味がないので案内を出す。
 function OutputEmpty() {
@@ -26,6 +29,18 @@ function OutputEmpty() {
       </span>
       <p class="hwc-output-empty-title">まだ出力はありません</p>
       <p class="hwc-output-empty-text">エージェントが動くと、その様子がここに流れます。</p>
+    </div>
+  );
+}
+
+function ChatEmpty() {
+  return (
+    <div class="hwc-output-empty">
+      <span class="hwc-output-empty-mark">
+        <TerminalIcon size={22} />
+      </span>
+      <p class="hwc-output-empty-title">まだ会話はありません</p>
+      <p class="hwc-output-empty-text">メッセージを送ると、やり取りがここに並びます。</p>
     </div>
   );
 }
@@ -41,24 +56,99 @@ function OutputSkeleton() {
   );
 }
 
+// 会話として読むための並び。ユーザーは右、エージェントは左。
+// どのエージェントかは入力欄の側に出しているので、ここでは繰り返さない。
+function ChatLog(props: {
+  snapshot: ChatSnapshot;
+  replying: boolean;
+  waitingMs: number | null;
+  copiedId: string | null;
+  onCopy: (id: string, text: string) => void;
+}) {
+  const copyButton = (message: ChatMessage) => {
+    const copied = props.copiedId === message.id;
+    return (
+      <button
+        type="button"
+        class="hwc-msg-copy"
+        data-copied={copied}
+        aria-label={copied ? "コピーしました" : "このメッセージをコピー"}
+        onClick={() => props.onCopy(message.id, message.text)}
+      >
+        <CopyGlyph copied={copied} size={14} />
+      </button>
+    );
+  };
+
+  // ツール実行だけのターンは会話に残らない。返答待ちの表示だけが動いていることを示す。
+  if (props.snapshot.messages.length === 0 && !props.replying) return <ChatEmpty />;
+
+  return (
+    <ol class="hwc-chat">
+      {props.snapshot.messages.map((message) => (
+        <li class="hwc-msg" data-role={message.role} key={message.id}>
+          {message.role === "agent" ? (
+            <pre class="hwc-msg-text">{message.text}</pre>
+          ) : (
+            <p class="hwc-msg-text">{message.text}</p>
+          )}
+          <div class="hwc-msg-meta">
+            <span class="hwc-msg-time">{formatClock(message.at)}</span>
+            {copyButton(message)}
+          </div>
+        </li>
+      ))}
+      {props.replying ? (
+        <li class="hwc-msg" data-role="agent" aria-label="返答を待っています">
+          <div class="hwc-msg-meta">
+            <span class="hwc-typing">
+              <span />
+              <span />
+              <span />
+            </span>
+            {props.waitingMs === null ? null : (
+              <span class="hwc-msg-elapsed">{formatElapsed(props.waitingMs)}</span>
+            )}
+          </div>
+        </li>
+      ) : null}
+    </ol>
+  );
+}
+
 type PaneDetailProps = {
   pane: PaneState;
   context: { workspaceLabel: string; tabLabel: string };
   feedback: string | null;
+  waitingMs: number | null;
   onSubmit: (text: string) => Promise<boolean>;
 };
 
 export function PaneDetail(props: PaneDetailProps) {
-  const { pane, context, feedback, onSubmit } = props;
+  const { pane, context, feedback, waitingMs, onSubmit } = props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expanded, setExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
 
-  const { read, failed } = usePaneOutput(pane.id);
+  // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
+  const blocked = pane.agentStatus === "blocked";
+  const { snapshot, failed: chatFailed } = usePaneChat(
+    pane.id,
+    pane.chat && !blocked,
+    pane.agentStatus,
+  );
+  const body = paneBody({ chat: pane.chat, blocked, failed: chatFailed, snapshot });
+
+  const { read, failed } = usePaneOutput(body.kind === "output" ? pane.id : null);
   const output = read?.text ?? null;
-  const empty = output !== null && output.trim() === "";
+  const outputEmpty = output !== null && output.trim() === "";
+  const replying = pane.agentStatus === "working";
+  const chatEmpty = body.kind === "chat" && body.snapshot.messages.length === 0 && !replying;
+  const empty = body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty;
+  const info = agentInfo(snapshot);
+  const content = body.kind === "chat" ? body.snapshot.messages : output;
 
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -96,7 +186,7 @@ export function PaneDetail(props: PaneDetailProps) {
   useEffect(() => {
     const element = scroller.current;
     if (element && atBottom) element.scrollTop = element.scrollHeight;
-  }, [output, atBottom]);
+  }, [content, replying, atBottom]);
 
   const jumpToLatest = () => {
     setAtBottom(true);
@@ -147,22 +237,41 @@ export function PaneDetail(props: PaneDetailProps) {
             setAtBottom(element.scrollHeight - element.scrollTop - element.clientHeight <= 8);
           }}
         >
-          {read?.truncated ? (
-            <p class="hwc-output-notice">最新の {OUTPUT_LINES} 行を表示しています</p>
-          ) : null}
-          {failed ? (
-            <p class="hwc-output-notice" role="status">
-              出力を取得できません。接続が戻ると自動で更新します。
-            </p>
-          ) : null}
-          {output === null ? (
-            failed ? null : (
-              <OutputSkeleton />
-            )
-          ) : empty ? (
-            <OutputEmpty />
+          {body.kind === "skeleton" ? (
+            <OutputSkeleton />
+          ) : body.kind === "chat" ? (
+            <>
+              {body.snapshot.truncated ? (
+                <p class="hwc-output-notice">古い会話は省略されています</p>
+              ) : null}
+              <ChatLog
+                snapshot={body.snapshot}
+                replying={replying}
+                waitingMs={waitingMs}
+                copiedId={copiedId}
+                onCopy={copy}
+              />
+            </>
           ) : (
-            <pre class="hwc-output">{output}</pre>
+            <>
+              {read?.truncated ? (
+                <p class="hwc-output-notice">最新の {OUTPUT_LINES} 行を表示しています</p>
+              ) : null}
+              {failed ? (
+                <p class="hwc-output-notice" role="status">
+                  出力を取得できません。接続が戻ると自動で更新します。
+                </p>
+              ) : null}
+              {output === null ? (
+                failed ? null : (
+                  <OutputSkeleton />
+                )
+              ) : outputEmpty ? (
+                <OutputEmpty />
+              ) : (
+                <pre class="hwc-output">{output}</pre>
+              )}
+            </>
           )}
         </div>
         <button
@@ -219,6 +328,17 @@ export function PaneDetail(props: PaneDetailProps) {
               {feedback}
             </span>
             <span class="hwc-input-tail">
+              {info === null ? null : (
+                <span class="hwc-input-info" title={agentInfoLabel(info)}>
+                  <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
+                    <AgentGlyphIcon agent={pane.agent} size={14} />
+                  </span>
+                  {info.model === null ? null : <span class="hwc-input-model">{info.model}</span>}
+                  {info.effort === null ? null : (
+                    <span class="hwc-input-effort">{info.effort}</span>
+                  )}
+                </span>
+              )}
               <button
                 type="submit"
                 class="hwc-send"
