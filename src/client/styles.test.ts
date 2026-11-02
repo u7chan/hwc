@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-const css = await Bun.file("src/client/styles.css").text();
+const tokens = await Bun.file("src/client/styles/tokens.css").text();
+const app = await Bun.file("src/client/styles/app.css").text();
+// 2 ファイルは同じページに読み込まれる。解決と接頭辞は全体で見る。
+const css = `${tokens}\n${app}`;
 
 // 素の値と役割トークンが混ざると、同じ意図の値が少しずつずれる。機械で見張れる範囲はここで止める。
 const SPACING_SCALE = new Set([
@@ -16,13 +19,13 @@ const SPACING_SCALE = new Set([
 ]);
 const RADIUS_SCALE = new Set(["8px", "10px", "12px", "16px", "24px"]);
 
-// パレットは :root とテーマ別の :root[...] にだけ書く。
-function paletteBlocks(): string[] {
-  return [...css.matchAll(/:root[^{]*\{[^}]*\}/g)].map((match) => match[0]);
+// パレットは tokens.css の :root とテーマ別の :root[...] にだけ書く。
+function paletteBlocks(text: string): string[] {
+  return [...text.matchAll(/:root[^{]*\{[^}]*\}/g)].map((match) => match[0]);
 }
 
-function declarations(properties: RegExp): string[] {
-  return css
+function declarations(text: string, properties: RegExp): string[] {
+  return text
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => properties.test(line));
@@ -36,13 +39,15 @@ test("every var() reference resolves to a declared token", () => {
   expect(missing).toEqual([]);
 });
 
-test("colors are literals only inside the palette blocks", () => {
-  const palettes = paletteBlocks();
-  let rest = css;
+test("colors are literals only inside the token palettes", () => {
+  const palettes = paletteBlocks(tokens);
+  let rest = tokens;
   for (const block of palettes) rest = rest.replace(block, "");
-  const literals = [...rest.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g)].map(
-    (match) => match[0],
-  );
+  const pattern = /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/g;
+  const literals = [
+    ...[...rest.matchAll(pattern)].map((match) => match[0]),
+    ...[...app.matchAll(pattern)].map((match) => match[0]),
+  ];
 
   expect(literals).toEqual([]);
   expect(palettes.length).toBeGreaterThan(1);
@@ -51,13 +56,13 @@ test("colors are literals only inside the palette blocks", () => {
 });
 
 test("spacing and radius come from the tokens", () => {
-  const spacing = declarations(/^(padding|margin|gap|row-gap|column-gap)[a-z-]*:/).filter(
+  const spacing = declarations(app, /^(padding|margin|gap|row-gap|column-gap)[a-z-]*:/).filter(
     (line) => {
       const values = line.match(/\b\d+px\b/g) ?? [];
       return values.some((value) => SPACING_SCALE.has(value));
     },
   );
-  const radius = declarations(/^border(-[a-z]+)*-radius:/).filter((line) => {
+  const radius = declarations(app, /^border(-[a-z]+)*-radius:/).filter((line) => {
     const values = line.match(/\b\d+px\b/g) ?? [];
     return values.some((value) => RADIUS_SCALE.has(value));
   });
