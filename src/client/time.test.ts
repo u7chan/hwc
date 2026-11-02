@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { AppState } from "../server/herdr/state";
-import { formatElapsed, trackWorking } from "./time";
+import { formatClock, formatElapsed, trackWorking, workingMs } from "./time";
 
 test("elapsed reads as seconds, minutes and hours", () => {
   expect(formatElapsed(0)).toBe("0s");
@@ -10,6 +10,21 @@ test("elapsed reads as seconds, minutes and hours", () => {
   expect(formatElapsed(3_600_000)).toBe("1h 0m");
   expect(formatElapsed(2 * 3_600_000 + 2 * 60_000 + 5_000)).toBe("2h 2m");
   expect(formatElapsed(-5_000)).toBe("0s");
+});
+
+test("a message time reads as hours and minutes", () => {
+  expect(formatClock(new Date(2026, 10, 2, 9, 5).getTime())).toBe("09:05");
+  expect(formatClock(new Date(2026, 10, 2, 23, 59).getTime())).toBe("23:59");
+});
+
+test("the wait for a reply counts from the moment the pane started working", () => {
+  const since = new Map([["w1:p1", 1_000]]);
+
+  expect(workingMs(since, "w1:p1", 31_000)).toBe(30_000);
+  // 覚えていないペインには経過を出さない。
+  expect(workingMs(since, "w1:p2", 31_000)).toBeNull();
+  // 端末の時計が戻っても負の値は出さない。
+  expect(workingMs(since, "w1:p1", 0)).toBe(0);
 });
 
 const state: AppState = {

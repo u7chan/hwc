@@ -14,7 +14,7 @@ import {
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import { findPane, findPaneContext, initialExpanded, splitPanes } from "./select";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
-import { trackWorking } from "./time";
+import { trackWorking, workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -293,6 +293,7 @@ export function App() {
       pane={item}
       context={where}
       feedback={feedback[item.id] ?? null}
+      waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
       onSubmit={(text) => sendToPane(item.id, text)}
     />
   );
