@@ -1,3 +1,6 @@
+import { existsSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createChatClient } from "./server/chat/pi";
 import { createPaneClient } from "./server/herdr/panes";
 import { createStateStore } from "./server/herdr/state";
@@ -27,7 +30,47 @@ const server = Bun.serve({
   },
 });
 
-console.log(`hwc ready: http://${server.hostname}:${server.port} (${revision})`);
+const port = server.port ?? Number(process.env.PORT ?? 30000);
+const localHost =
+  server.hostname === "0.0.0.0" || server.hostname === "::" ? "localhost" : server.hostname;
+const localUrl = `http://${localHost}:${port}`;
+console.log(`hwc ready: ${localUrl} (${revision})`);
+if (server.hostname === "0.0.0.0" || server.hostname === "::") {
+  console.log(`LAN bind: ${server.hostname}:${port}`);
+}
+openBrowserOnce(localUrl, port);
+
+function openBrowserOnce(url: string, port: number): void {
+  if (process.env.HWC_NO_OPEN === "1" || process.env.CI || !process.stdout.isTTY) return;
+  // watch の再起動で開き直さないよう、起動元プロセス単位で一度だけにする。
+  const marker = join(tmpdir(), `hwc-open-${port}-${process.ppid}`);
+  if (existsSync(marker)) return;
+  writeFileSync(marker, "");
+  openBrowser(url);
+}
+
+function openBrowser(url: string): void {
+  const wsl =
+    process.platform === "linux" && Boolean(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP);
+  const command =
+    process.platform === "darwin"
+      ? ["open", url]
+      : process.platform === "win32"
+        ? ["cmd", "/c", "start", "", url]
+        : wsl
+          ? ["cmd.exe", "/c", "start", "", url]
+          : ["xdg-open", url];
+  try {
+    Bun.spawn(command, {
+      cwd: wsl ? "/mnt/c/Windows" : undefined,
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+  } catch {
+    // 起動ログの URL を手で開けるので、自動オープンの失敗は致命にしない。
+  }
+}
 
 function readRevision(): string {
   if (process.env.HWC_REVISION) return process.env.HWC_REVISION;
