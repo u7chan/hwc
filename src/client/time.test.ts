@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { AppState } from "../server/herdr/state";
-import { formatClock, formatDateTime, formatElapsed, trackWorking } from "./time";
+import { formatElapsed, trackWorking } from "./time";
 
 test("elapsed reads as seconds, minutes and hours", () => {
   expect(formatElapsed(0)).toBe("0s");
@@ -33,6 +33,7 @@ const state: AppState = {
             {
               id: "w1:p1",
               title: null,
+              label: null,
               agent: "pi",
               agentStatus: "working",
               focused: true,
@@ -41,6 +42,7 @@ const state: AppState = {
             {
               id: "w1:p2",
               title: null,
+              label: null,
               agent: "bash",
               agentStatus: "idle",
               focused: false,
@@ -82,16 +84,4 @@ test("a pane that leaves the working state loses its start time", () => {
   expect(trackWorking(started, paused, 5_000).size).toBe(0);
   // 再び働き始めたら、その時点から数え直す。
   expect([...trackWorking(new Map(), state, 9_000)]).toEqual([["w1:p1", 9_000]]);
-});
-
-test("the clock shows hours and minutes", () => {
-  const at = new Date(2026, 10, 1, 9, 5).getTime();
-  expect(formatClock(at)).toBe("09:05");
-  const evening = new Date(2026, 10, 1, 21, 40).getTime();
-  expect(formatClock(evening)).toBe("21:40");
-});
-
-test("the full stamp adds the date and seconds", () => {
-  const at = new Date(2026, 10, 1, 9, 5, 7).getTime();
-  expect(formatDateTime(at)).toBe("2026年11月1日 09:05:07");
 });

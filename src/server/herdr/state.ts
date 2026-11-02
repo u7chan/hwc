@@ -5,6 +5,7 @@ export type { AgentStatus };
 export type PaneState = {
   id: string;
   title: string | null;
+  label: string | null;
   agent: string | null;
   agentStatus: AgentStatus;
   focused: boolean;
@@ -62,6 +63,7 @@ export function toAppState(snapshot: HerdrSnapshot): AppState {
     panes.push({
       id: pane.pane_id,
       title: agent?.terminal_title_stripped ?? null,
+      label: pane.label ?? null,
       agent: agent?.agent ?? null,
       agentStatus: pane.agent_status ?? "unknown",
       focused: pane.focused ?? false,

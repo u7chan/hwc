@@ -27,6 +27,7 @@ const snapshot: HerdrSnapshot = {
       pane_id: "w1:p2",
       workspace_id: "w1",
       tab_id: "w1:t1",
+      label: "impl-client-api",
       agent_status: "working",
       focused: true,
       agent_session: {
@@ -84,11 +85,21 @@ test("toAppState carries labels, agent names and agent statuses", () => {
   expect(panes[1]).toEqual({
     id: "w1:p2",
     title: "π - hwc",
+    label: "impl-client-api",
     agent: "pi",
     agentStatus: "working",
     focused: true,
     chat: true,
   });
+});
+
+test("toAppState keeps the pane label so panes in one tab can be told apart", () => {
+  const state = toAppState(snapshot);
+  const panes = state.workspaces[0]?.tabs[0]?.panes ?? [];
+
+  // 同じ端末タイトルでも、ラベルがあれば一覧で区別できる。
+  expect(panes.map((pane) => pane.label)).toEqual([null, "impl-client-api"]);
+  expect(panes[0]?.title).toBeNull();
 });
 
 test("toAppState leaves agent fields empty for a pane without an agent", () => {
@@ -97,6 +108,7 @@ test("toAppState leaves agent fields empty for a pane without an agent", () => {
   expect(state.workspaces[0]?.tabs[0]?.panes[0]).toEqual({
     id: "w1:p1",
     title: null,
+    label: null,
     agent: null,
     agentStatus: "idle",
     focused: false,

@@ -13,6 +13,7 @@ import type { AppState, PaneState, StateStore } from "./herdr/state";
 const pane: PaneState = {
   id: "w1:p1",
   title: null,
+  label: null,
   agent: null,
   agentStatus: "idle",
   focused: true,
@@ -309,6 +310,39 @@ test("GET /api/events flushes an update that arrives while the initial state is 
   await events.cancel();
   controller.abort();
   await waitFor(() => store.listenerCount() === 0);
+});
+
+test("GET /api/events keeps the stream alive with a heartbeat comment", async () => {
+  const store = createFakeStore(state);
+  const app = createApp({
+    chat: createFakeChat(),
+    store,
+    panes: createFakePanes(),
+    sseHeartbeatMs: 10,
+  });
+  const controller = new AbortController();
+  const response = await app.request("/api/events", { signal: controller.signal });
+  if (!response.body) throw new Error("response has no body");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let received = "";
+  const deadline = Date.now() + 2_000;
+  while (!received.includes(": ping") && Date.now() < deadline) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    received += decoder.decode(value, { stream: true });
+  }
+
+  await reader.cancel();
+  controller.abort();
+  await waitFor(() => store.listenerCount() === 0);
+
+  // 状態は先に届き、その後にコメント行が続く。
+  expect(received).toContain(JSON.stringify(state));
+  expect(received).toContain(": ping");
+  // event: を付けると client の onmessage ではなく専用の listener に飛ぶ。付けてはいけない。
+  expect(received).not.toContain("event: ping");
 });
 
 test("GET /api/events unsubscribes when the client is gone before the initial state is sent", async () => {

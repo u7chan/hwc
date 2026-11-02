@@ -1,14 +1,10 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
-import { Confirm } from "./Confirm";
 import { copyText } from "./copy";
 import {
   AgentGlyphIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
-  ChevronUpIcon,
-  CloseIcon,
   CopyGlyph,
   MoreIcon,
   PaneIcon,
@@ -18,10 +14,11 @@ import {
 } from "./icons";
 import {
   agentGlyph,
-  canMovePane,
   countPanes,
   countWorkspacePanes,
   groupWorkspaces,
+  paneName,
+  paneSubLabel,
 } from "./select";
 import { StatusLabel } from "./StatusLabel";
 import { formatElapsed } from "./time";
@@ -29,12 +26,9 @@ import { formatElapsed } from "./time";
 type PaneListProps = {
   state: AppState;
   selectedPaneId: string | null;
-  expanded: Set<string>;
+  expanded: ReadonlySet<string>;
   onSelect: (paneId: string) => void;
   onToggle: (groupId: string) => void;
-  onClosePane: (paneId: string) => void;
-  onDropPane: (paneId: string, targetPaneId: string, after: boolean) => void;
-  onMovePaneStep: (paneId: string, delta: -1 | 1) => void;
   workingSince: ReadonlyMap<string, number>;
   now: number;
 };
@@ -68,55 +62,13 @@ export function PaneList(props: PaneListProps) {
   // メニューは行の中に置くと一覧のスクロールで切れる。画面に固定して出す。
   const [menu, setMenu] = useState<{ paneId: string; top: number; right: number } | null>(null);
   const [copied, setCopied] = useState(false);
-  const [closing, setClosing] = useState<string | null>(null);
-  const [dragged, setDragged] = useState<string | null>(null);
-  const [dropAt, setDropAt] = useState<{ paneId: string; after: boolean } | null>(null);
-  const positions = useRef<Map<string, number>>(new Map());
-  const order = useRef("");
-  const listScroller = useRef<HTMLDivElement>(null);
-
-  // 並びが変わったら、前の位置から今の位置まで滑らせる（FLIP）。
-  useLayoutEffect(() => {
-    const rows = [...document.querySelectorAll<HTMLElement>(".hwc-pane[data-pane-id]")];
-    const next = new Map<string, number>();
-    const animate =
-      typeof window !== "undefined" &&
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // 位置は毎回測り直す（折りたたみでも動く）。動かすのは並びが変わったときだけ。
-    const nextOrder = rows.map((row) => row.dataset.paneId ?? "").join(",");
-    const reordered = nextOrder !== order.current;
-    order.current = nextOrder;
-
-    // 画面座標はスクロールで動く。動いたのは並びだけを見るため、スクロール量を足して測る。
-    const scrolled = listScroller.current?.scrollTop ?? 0;
-
-    for (const row of rows) {
-      const id = row.dataset.paneId;
-      if (!id) continue;
-      const top = row.getBoundingClientRect().top + scrolled;
-      next.set(id, top);
-      const before = positions.current.get(id);
-      if (!animate || !reordered || before === undefined || Math.abs(before - top) < 1) continue;
-
-      row.style.transition = "none";
-      row.style.transform = `translateY(${before - top}px)`;
-      void row.offsetHeight;
-      row.style.transition = "transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1)";
-      row.style.transform = "";
-    }
-
-    positions.current = next;
-    return () => {
-      for (const row of rows) row.style.transition = "";
-    };
-  });
 
   const openMenu = (event: MouseEvent, paneId: string) => {
     const target = event.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     setCopied(false);
     // 画面の下で切れないように、はみ出す分だけ上へ寄せる。
-    const height = 250;
+    const height = 96;
     const top = Math.min(rect.bottom + 4, window.innerHeight - height - 8);
     setMenu({ paneId, top, right: window.innerWidth - rect.right });
   };
@@ -213,47 +165,14 @@ export function PaneList(props: PaneListProps) {
       <ul class="hwc-panes" data-depth={depth}>
         {tab.panes.map((pane) => {
           const startedAt = workingSince.get(pane.id);
+          const subLabel = paneSubLabel(pane);
           return (
-            <li key={pane.id}>
+            // 狭い行の判定は、行そのものではなくこの枠の幅で行う。
+            <li key={pane.id} class="hwc-pane-row">
               <div
                 class="hwc-pane"
                 data-pane-id={pane.id}
                 data-current={pane.id === selectedPaneId}
-                data-dragging={dragged === pane.id}
-                data-drop={
-                  dropAt?.paneId === pane.id ? (dropAt.after ? "after" : "before") : undefined
-                }
-                draggable
-                onDragStart={(event) => {
-                  event.dataTransfer?.setData("text/plain", pane.id);
-                  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-                  setDragged(pane.id);
-                }}
-                onDragEnd={() => {
-                  setDragged(null);
-                  setDropAt(null);
-                }}
-                onDragOver={(event) => {
-                  if (dragged === null || dragged === pane.id) return;
-                  event.preventDefault();
-                  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  setDropAt({
-                    paneId: pane.id,
-                    after: event.clientY > rect.top + rect.height / 2,
-                  });
-                }}
-                onDragLeave={() =>
-                  setDropAt((current) => (current?.paneId === pane.id ? null : current))
-                }
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const moved = event.dataTransfer?.getData("text/plain") ?? dragged;
-                  const after = event.currentTarget.dataset.drop === "after";
-                  setDragged(null);
-                  setDropAt(null);
-                  if (moved && moved !== pane.id) props.onDropPane(moved, pane.id, after);
-                }}
               >
                 <button
                   type="button"
@@ -269,7 +188,8 @@ export function PaneList(props: PaneListProps) {
                     {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
                   </span>
                   <span class="hwc-pane-main">
-                    <span class="hwc-pane-name">{pane.title ?? pane.agent ?? pane.id}</span>
+                    <span class="hwc-pane-name">{paneName(pane)}</span>
+                    {subLabel === null ? null : <span class="hwc-pane-sub">{subLabel}</span>}
                   </span>
                   {startedAt === undefined ? null : (
                     <span class="hwc-pane-elapsed">{formatElapsed(now - startedAt)}</span>
@@ -341,7 +261,7 @@ export function PaneList(props: PaneListProps) {
   }
 
   return (
-    <div class="hwc-list-scroll" ref={listScroller}>
+    <div class="hwc-list-scroll">
       {groupWorkspaces(state).map((group) => {
         // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
         if (group.repoName === null || group.linked.length === 0) {
@@ -388,62 +308,13 @@ export function PaneList(props: PaneListProps) {
               type="button"
               role="menuitem"
               class="hwc-menu-item"
-              disabled={!canMovePane(state, menu.paneId, -1)}
-              onClick={() => props.onMovePaneStep(menu.paneId, -1)}
-            >
-              <ChevronUpIcon />
-              上へ移動
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              class="hwc-menu-item"
-              disabled={!canMovePane(state, menu.paneId, 1)}
-              onClick={() => props.onMovePaneStep(menu.paneId, 1)}
-            >
-              <ChevronDownIcon />
-              下へ移動
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              class="hwc-menu-item"
               onClick={() => copyId(menu.paneId)}
             >
               <CopyGlyph copied={copied} />
               {copied ? "コピーしました" : "ペイン ID をコピー"}
             </button>
-            <div class="hwc-menu-sep" />
-            <button
-              type="button"
-              role="menuitem"
-              class="hwc-menu-item hwc-menu-item--danger"
-              onClick={() => {
-                setClosing(menu.paneId);
-                closeMenu();
-              }}
-            >
-              <CloseIcon size={16} />
-              ペインを閉じる
-            </button>
           </div>
         </>
-      ) : null}
-      {closing ? (
-        <Confirm
-          title="ペインを閉じますか？"
-          description={
-            <>
-              <span class="hwc-dialog-id">{closing}</span> を閉じます。開いていた作業は失われます。
-            </>
-          }
-          confirmLabel="閉じる"
-          onCancel={() => setClosing(null)}
-          onConfirm={() => {
-            props.onClosePane(closing);
-            setClosing(null);
-          }}
-        />
       ) : null}
     </div>
   );

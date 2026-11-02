@@ -10,13 +10,18 @@ import {
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore } from "./herdr/state";
 
+// Bun.serve は 10 秒間何も書かれない chunked 応答を打ち切る。状態が変わらない間も接続を
+// 保つため、これより短い間隔でハートビートを送る。
+export const SSE_HEARTBEAT_MS = 5_000;
+
 export function createApp(options: {
   store: StateStore;
   panes: PaneClient;
   chat: ChatClient;
   revision?: string;
+  sseHeartbeatMs?: number;
 }) {
-  const { store, panes, chat, revision = "dev" } = options;
+  const { store, panes, chat, revision = "dev", sseHeartbeatMs = SSE_HEARTBEAT_MS } = options;
 
   const current = async (): Promise<AppState | null> =>
     store.get() ??
@@ -91,7 +96,14 @@ export function createApp(options: {
 
         // ハンドラが返るとストリームが閉じるので、切断されるまで待つ。
         await new Promise<void>((resolve) => {
+          // 状態の変化が無い間も書き続ける。無名イベントのコメント行は EventSource が
+          // 読み飛ばすので、状態を受ける onmessage は反応しない。
+          const heartbeat = setInterval(() => {
+            void stream.write(": ping\n\n");
+          }, sseHeartbeatMs);
+
           const detach = () => {
+            clearInterval(heartbeat);
             unsubscribe();
             resolve();
           };

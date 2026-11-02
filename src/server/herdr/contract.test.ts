@@ -27,6 +27,7 @@ const snapshot: HerdrSnapshot = {
       pane_id: "w1:p2",
       workspace_id: "w1",
       tab_id: "w1:t1",
+      label: "impl-client-api",
       agent_status: "working",
       focused: true,
       agent_session: null,
@@ -56,6 +57,19 @@ test("parseSnapshot maps an unknown agent status to unknown", () => {
   });
 
   expect(parsed.panes?.[0]?.agent_status).toBe("unknown");
+});
+
+test("parseSnapshot keeps a pane label and folds an unset one into null", () => {
+  const parsed = parseSnapshot({
+    panes: [
+      { pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1", label: "impl-client-api" },
+      { pane_id: "w1:p2", workspace_id: "w1", tab_id: "w1:t1", label: "" },
+      { pane_id: "w1:p3", workspace_id: "w1", tab_id: "w1:t1" },
+      { pane_id: "w1:p4", workspace_id: "w1", tab_id: "w1:t1", label: null },
+    ],
+  });
+
+  expect(parsed.panes?.map((pane) => pane.label)).toEqual(["impl-client-api", null, null, null]);
 });
 
 test("parseSnapshot rejects a payload that is not a snapshot", () => {

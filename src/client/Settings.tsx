@@ -1,3 +1,4 @@
+import { connectionLabel, type ConnectionStatus } from "./connection";
 import { ThemePicker } from "./ThemePicker";
 import type { ThemePreference } from "./theme";
 
@@ -5,6 +6,7 @@ type SettingsProps = {
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
   revision: string | null;
+  connection: ConnectionStatus;
 };
 
 export function Settings(props: SettingsProps) {
@@ -27,11 +29,13 @@ export function Settings(props: SettingsProps) {
             <div class="hwc-setting-group">
               <div class="hwc-setting-row">
                 <span class="hwc-setting-label">状態</span>
-                <span class="hwc-setting-value">プレビュー</span>
+                <span class="hwc-setting-value" data-status={props.connection}>
+                  {connectionLabel(props.connection)}
+                </span>
               </div>
             </div>
             <p class="hwc-section-note">
-              いまはダミーデータを表示しています。Herdr への接続は次の変更で有効になります。
+              Herdr から届いた状態をそのまま表示しています。切断するとブラウザが自動で再接続します。
             </p>
           </section>
 
