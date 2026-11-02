@@ -1,3 +1,4 @@
+import { createChatClient } from "./server/chat/pi";
 import { createPaneClient } from "./server/herdr/panes";
 import { createStateStore } from "./server/herdr/state";
 import { loadSnapshot, startStateSync } from "./server/herdr/sync";
@@ -14,7 +15,7 @@ startStateSync({
 // 開発中はどの版かを画面で確かめられるように、起動時のコミットを出す。
 const revision = readRevision();
 
-const app = createApp({ store, panes: createPaneClient(), revision });
+const app = createApp({ store, panes: createPaneClient(), chat: createChatClient(), revision });
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 30000),

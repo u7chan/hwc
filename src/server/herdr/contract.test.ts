@@ -29,6 +29,7 @@ const snapshot: HerdrSnapshot = {
       tab_id: "w1:t1",
       agent_status: "working",
       focused: true,
+      agent_session: null,
     },
   ],
   agents: [{ pane_id: "w1:p2", agent: "pi", terminal_title_stripped: "π - hwc" }],
@@ -152,4 +153,58 @@ test("parsePaneRead rejects a result that is not a pane read", () => {
     "pane_read.type must be pane_read, got ok",
   );
   expect(() => parsePaneRead(null, "w1:p1")).toThrow("pane_read must be an object");
+});
+
+test("parseSnapshot reads the agent session of a pane", () => {
+  const parsed = parseSnapshot({
+    panes: [
+      {
+        pane_id: "w1:p1",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: {
+          agent: "pi",
+          source: "herdr:pi",
+          kind: "path",
+          value: "/sessions/--home-dev--/2026-01-01.jsonl",
+        },
+      },
+    ],
+  });
+
+  expect(parsed.panes?.[0]?.agent_session).toEqual({
+    agent: "pi",
+    source: "herdr:pi",
+    kind: "path",
+    value: "/sessions/--home-dev--/2026-01-01.jsonl",
+  });
+});
+
+test("parseSnapshot keeps a broken agent session as null instead of failing", () => {
+  const parsed = parseSnapshot({
+    panes: [
+      { pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1", agent_session: "pi" },
+      { pane_id: "w1:p2", workspace_id: "w1", tab_id: "w1:t1", agent_session: null },
+      {
+        pane_id: "w1:p3",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: { agent: "pi", kind: "path" },
+      },
+    ],
+  });
+
+  expect(parsed.panes?.map((pane) => pane.agent_session)).toEqual([
+    null,
+    null,
+    { agent: "pi", source: null, kind: "path", value: null },
+  ]);
+});
+
+test("parseSnapshot leaves a pane without an agent session as null", () => {
+  const parsed = parseSnapshot({
+    panes: [{ pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1" }],
+  });
+
+  expect(parsed.panes?.[0]?.agent_session).toBeNull();
 });
