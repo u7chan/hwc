@@ -13,6 +13,7 @@ import {
 } from "./connection";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import { findPane, findPaneContext, initialExpanded, splitPanes } from "./select";
+import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import { trackWorking } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
@@ -103,10 +104,20 @@ export function App() {
     }
   });
 
-  // 状態は SSE で届くが、初回は取りに行って待ち時間を縮める。失敗しても SSE が追いつく。
+  // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
+  // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
+  const snapshotWriter = useRef<SnapshotOrigin>("initial-fetch");
+
   useEffect(() => {
     const controller = new AbortController();
-    fetchState(controller.signal).then(setState, () => undefined);
+    fetchState(controller.signal).then(
+      (next) => {
+        const decision = gateSnapshot(snapshotWriter.current, "initial-fetch");
+        snapshotWriter.current = decision.writer;
+        if (decision.apply) setState(next);
+      },
+      () => undefined,
+    );
     return () => controller.abort();
   }, []);
 
@@ -116,6 +127,9 @@ export function App() {
     events.onmessage = (event) => {
       const next = parseAppState(event.data);
       if (next === null) return;
+      const decision = gateSnapshot(snapshotWriter.current, "stream");
+      snapshotWriter.current = decision.writer;
+      if (!decision.apply) return;
       setState(next);
       setConnection(connectionAfter("snapshot"));
     };
