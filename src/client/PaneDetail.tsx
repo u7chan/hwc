@@ -301,15 +301,18 @@ export function PaneDetail(props: PaneDetailProps) {
   }, [replying, pending.length]);
 
   useEffect(() => {
-    if (pending.length === 0) return;
+    const idle = pending.filter((item) => !item.waiting);
+    if (idle.length === 0) return;
+    const oldest = Math.min(...idle.map((item) => item.at));
+    const delay = Math.max(0, oldest + PENDING_TIMEOUT_MS - Date.now());
     const timer = setTimeout(() => {
-      setPending((items) => {
-        const next = items.filter((item) => item.waiting);
-        return next.length === items.length ? items : next;
-      });
-    }, PENDING_TIMEOUT_MS);
+      const now = Date.now();
+      setPending((items) =>
+        items.filter((item) => item.waiting || item.at + PENDING_TIMEOUT_MS > now),
+      );
+    }, delay);
     return () => clearTimeout(timer);
-  }, [pending.length]);
+  }, [pending]);
 
   const jumpToLatest = () => {
     setAtBottom(true);
