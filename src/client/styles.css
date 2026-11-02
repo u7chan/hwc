@@ -935,6 +935,8 @@ button {
   align-items: center;
   min-height: var(--row-pane);
   padding-right: var(--space-4);
+  /* 狭いかどうかは画面ではなく行の幅で決める。広い画面でも一覧の列は狭い。 */
+  container-type: inline-size;
 }
 
 .hwc-pane-open {
@@ -1022,6 +1024,20 @@ button {
   .hwc-pane[data-current="true"] .hwc-pane-more,
   .hwc-pane-more[aria-expanded="true"] {
     opacity: 1;
+  }
+}
+
+/* 名前の幅を最優先で残す。経過時間とラベルで埋まると、実行中の行だけ名前が読めなくなる。 */
+@container (max-width: 320px) {
+  /* 経過とメニューは、名前の幅が確保できてから出す。状態の記号は残す。 */
+  .hwc-pane-elapsed,
+  .hwc-pane-more {
+    display: none;
+  }
+
+  .hwc-pane-open {
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-2);
   }
 }
 
