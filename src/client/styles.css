@@ -718,37 +718,35 @@ button {
   position: relative;
   flex: none;
   display: flex;
-  gap: 2px;
-  margin: 0 var(--space-3) var(--space-1);
-  padding: 2px;
+  margin: 0 var(--space-4) var(--space-2);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-control);
   background: var(--color-raised);
 }
 
-/* 選んだ側へつまみが滑る。文字はつまみの上に残す。 */
+/* 選んだ側へつまみが滑る。左半分をそのまま覆うので、幅は半分で足りる。 */
 .hwc-scope-thumb {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  width: calc(50% - 3px);
-  border-radius: calc(var(--radius-control) - 3px);
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 50%;
+  border-radius: calc(var(--radius-control) - 1px);
   background: var(--color-surface);
   pointer-events: none;
   transition: transform 180ms ease;
 }
 
 .hwc-scope[data-scope="all"] .hwc-scope-thumb {
-  transform: translateX(calc(100% + 2px));
+  transform: translateX(100%);
 }
 
 .hwc-scope-option {
   position: relative;
   flex: 1;
-  min-height: calc(var(--tap) - var(--space-1));
+  min-height: var(--tap);
   border: 0;
-  border-radius: calc(var(--radius-control) - 3px);
+  border-radius: calc(var(--radius-control) - 1px);
   background: transparent;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
