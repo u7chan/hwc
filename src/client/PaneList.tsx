@@ -268,7 +268,8 @@ export function PaneList(props: PaneListProps) {
 
   return (
     <>
-      <div class="hwc-scope" role="group" aria-label="表示するスペース">
+      <div class="hwc-scope" role="group" aria-label="表示するスペース" data-scope={scope}>
+        <span class="hwc-scope-thumb" aria-hidden="true" />
         <button
           type="button"
           class="hwc-scope-option"
