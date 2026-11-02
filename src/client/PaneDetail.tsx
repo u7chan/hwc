@@ -14,7 +14,7 @@ import {
   TerminalIcon,
 } from "./icons";
 import { usePaneOutput } from "./output";
-import { agentGlyph, isShellPane, paneName } from "./select";
+import { agentGlyph, isShellPane, paneName, paneSubLabel } from "./select";
 import { Spinner } from "./Spinner";
 
 // 出力がまだ無いときは、空の枠だけ置いても意味がないので案内を出す。
@@ -65,6 +65,7 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const canSend = draft.trim() !== "";
   const shell = isShellPane(pane);
+  const subLabel = paneSubLabel(pane);
 
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
@@ -120,7 +121,10 @@ export function PaneDetail(props: PaneDetailProps) {
         <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
           {pane.agent ? <AgentGlyphIcon agent={pane.agent} size={14} /> : <PaneIcon size={14} />}
         </span>
-        <span class="hwc-pane-head-name">{paneName(pane)}</span>
+        <span class="hwc-pane-head-main">
+          <span class="hwc-pane-head-name">{paneName(pane)}</span>
+          {subLabel === null ? null : <span class="hwc-pane-head-sub">{subLabel}</span>}
+        </span>
         <span class="hwc-pane-id" data-copied={copied}>
           <span class="hwc-pane-id-text">{pane.id}</span>
           <button

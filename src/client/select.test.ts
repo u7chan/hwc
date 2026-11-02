@@ -349,3 +349,48 @@ test("the label is shown as a subtitle only when it differs from the name", () =
   expect(paneSubLabel({ ...base, label: "impl" })).toBeNull();
   expect(paneSubLabel({ ...base, title: "π - hwc" })).toBeNull();
 });
+
+test("the tab chip and the detail header tell panes apart by their label", () => {
+  const base = {
+    id: "w1:p9",
+    title: "π - feat-client-api-connection",
+    label: null,
+    agent: "pi",
+    agentStatus: "idle" as const,
+    focused: false,
+    chat: false,
+  };
+  const labels = [
+    "orchestrator-issue14",
+    "impl-client-api",
+    "review-client-api",
+    "ui-tester-client-api",
+  ];
+
+  const shown = labels.map((label, index) => {
+    const pane = { ...base, id: `w1:p${index}`, label };
+    return { name: paneName(pane), sub: paneSubLabel(pane) };
+  });
+
+  // 名前は同じでも、副題で 4 枚を見分けられる。
+  expect(new Set(shown.map((pane) => pane.name))).toEqual(
+    new Set(["π - feat-client-api-connection"]),
+  );
+  expect(shown.map((pane) => pane.sub)).toEqual(labels);
+});
+
+test("a label that repeats the name is not shown twice", () => {
+  const pane = {
+    id: "w1:p9",
+    title: null,
+    label: "bash",
+    agent: null,
+    agentStatus: "idle" as const,
+    focused: false,
+    chat: false,
+  };
+
+  expect(paneName(pane)).toBe("bash");
+  expect(paneSubLabel(pane)).toBeNull();
+  expect(paneSubLabel({ ...pane, agent: "bash" })).toBeNull();
+});

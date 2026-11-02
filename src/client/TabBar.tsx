@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import { ChevronLeftIcon, SplitIcon } from "./icons";
-import { paneName, statusLabel } from "./select";
+import { paneName, paneSubLabel, statusLabel } from "./select";
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
@@ -43,6 +43,8 @@ export function TabBar(props: TabBarProps) {
       <div class="hwc-tabs" role="tablist" aria-label="ペイン" ref={tabList}>
         {props.panes.map((item) => {
           const selected = item.id === props.pane.id;
+          const name = paneName(item);
+          const sub = paneSubLabel(item);
           return (
             <button
               type="button"
@@ -50,11 +52,15 @@ export function TabBar(props: TabBarProps) {
               class="hwc-tab"
               key={item.id}
               aria-selected={selected}
-              aria-label={`${paneName(item)} (${item.id}, ${statusLabel(item.agentStatus)})`}
+              // 同じ端末タイトルのペインが並ぶので、読み上げにもラベルを添える。
+              aria-label={`${sub === null ? name : `${name} (${sub})`} (${item.id}, ${statusLabel(item.agentStatus)})`}
               data-pane-id={item.id}
               onClick={() => props.onSelectPane(item.id)}
             >
-              <span class="hwc-tab-label">{paneName(item)}</span>
+              <span class="hwc-tab-main">
+                <span class="hwc-tab-label">{name}</span>
+                {sub === null ? null : <span class="hwc-tab-sub">{sub}</span>}
+              </span>
               <StatusIcon status={item.agentStatus} />
             </button>
           );
