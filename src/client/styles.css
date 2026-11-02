@@ -1935,6 +1935,8 @@ button {
   flex-direction: column;
   gap: var(--space-4);
   width: 100%;
+  margin: 0;
+  padding: 0;
   list-style: none;
 }
 

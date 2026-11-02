@@ -12,6 +12,22 @@ export function chatPollDelay(
   return status === "working" ? CHAT_POLL_ACTIVE_MS : CHAT_POLL_IDLE_MS;
 }
 
+export type PollChange = "load" | "ignore";
+
+// 状態が変わったら、予約を待たずに 1 回読む。間隔を張り直すだけでは、待っている最中の変化に
+// 追いつけない（idle の 5 秒待機中にターンが始まると、最初の取得が最大 5 秒遅れる）。
+export function pollOnStatusChange(props: {
+  last: AgentStatus;
+  next: AgentStatus;
+  visible: boolean;
+}): PollChange {
+  // 隠れている間は読まない。復帰したときの 1 回で追いつく。
+  if (!props.visible) return "ignore";
+  // マウント直後とペイン切替直後は、最初の取得と同じ状態でここへ来る。読み直す理由が無い。
+  if (props.next === props.last) return "ignore";
+  return "load";
+}
+
 // 打ち切りは失敗ではない。端末出力へも切り替えない。
 export function isAbortError(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
@@ -62,10 +78,14 @@ export function usePaneChat(
   // 失敗したペインを覚える。切り替えた直後に前のペインの失敗を出さない。
   const [failedPane, setFailedPane] = useState<string | null>(null);
 
-  // 間隔だけを描画のたびに更新する。effect の依存に入れると、状態が変わるたびに張り直して
-  // etag を失い、同じ本文を取り直すことになる。
+  // 間隔や nudge の判断だけを描画のたびに更新する。effect の依存に入れると、状態が変わる
+  // たびに張り直して etag を失い、同じ本文を取り直すことになる。
   const statusRef = useRef(status);
   statusRef.current = status;
+  // 直近の予約が前提にした状態。状態変化を拾うためだけに持つ。
+  const lastStatus = useRef(status);
+  // effect の外から「今すぐ 1 回読む」を呼ぶための口。effect の寿命と一致させる。
+  const nudge = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -85,6 +105,7 @@ export function usePaneChat(
     function schedule() {
       stop();
       const delay = chatPollDelay(statusRef.current, document.visibilityState);
+      lastStatus.current = statusRef.current;
       if (delay !== null) timer = window.setTimeout(() => void load(), delay);
     }
 
@@ -101,11 +122,24 @@ export function usePaneChat(
         }
         setFailedPane(read.kind === "unavailable" ? id : null);
       } catch (error) {
-        // 隠れたことで打ち切った場合は失敗ではない。
+        // 隠れたことで打ち切った場合も、読み直しに置き換えられた場合も失敗ではない。
         if (!active || isAbortError(error)) return;
         setFailedPane(id);
+      } finally {
+        // 追い越された要求が、後から始まった要求の持ち物を消さないようにする。
+        if (controller === current) controller = null;
       }
       if (active) schedule();
+    }
+
+    // 状態が変わったら、予約済みのタイマーを捨ててその場で読む。取得中の要求は打ち切る。
+    function onStatusChange() {
+      const change = pollOnStatusChange({
+        last: lastStatus.current,
+        next: statusRef.current,
+        visible: document.visibilityState !== "hidden",
+      });
+      if (change === "load") void load();
     }
 
     function onVisibility() {
@@ -117,16 +151,24 @@ export function usePaneChat(
       void load();
     }
 
+    nudge.current = onStatusChange;
+    lastStatus.current = statusRef.current;
     document.addEventListener("visibilitychange", onVisibility);
-    void load();
+    // 開いた直後に隠れている場合も読まない。見えるようになったときの 1 回で追いつく。
+    if (document.visibilityState !== "hidden") void load();
 
     return () => {
       active = false;
+      nudge.current = null;
       stop();
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [paneId, enabled]);
+
+  useEffect(() => {
+    nudge.current?.();
+  }, [status]);
 
   // ペインを切り替えた直後に、前のペインの会話を出さない。
   return {

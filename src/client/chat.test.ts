@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
 import type { ChatSnapshot } from "../server/chat/contract";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
-import { agentInfo, agentInfoLabel, chatPollDelay, isAbortError, paneBody } from "./chat";
+import {
+  agentInfo,
+  agentInfoLabel,
+  chatPollDelay,
+  isAbortError,
+  paneBody,
+  pollOnStatusChange,
+} from "./chat";
 
 const snapshot: ChatSnapshot = {
   etag: "abc",
@@ -23,6 +30,27 @@ test("a working pane is read more often than an idle one", () => {
 test("a hidden page stops reading the conversation", () => {
   expect(chatPollDelay("working", "hidden")).toBeNull();
   expect(chatPollDelay("idle", "hidden")).toBeNull();
+});
+
+test("a turn that starts while the pane waits is read without waiting", () => {
+  // idle の 5 秒待機中に working へ変わる。予約を待たずに読む。
+  expect(pollOnStatusChange({ last: "idle", next: "working", visible: true })).toBe("load");
+  expect(pollOnStatusChange({ last: "blocked", next: "working", visible: true })).toBe("load");
+});
+
+test("the end of a turn is read without waiting", () => {
+  expect(pollOnStatusChange({ last: "working", next: "done", visible: true })).toBe("load");
+  expect(pollOnStatusChange({ last: "working", next: "idle", visible: true })).toBe("load");
+});
+
+test("the first load is not asked for twice", () => {
+  // マウント直後とペイン切替直後は、最初の取得と同じ状態でここへ来る。
+  expect(pollOnStatusChange({ last: "working", next: "working", visible: true })).toBe("ignore");
+  expect(pollOnStatusChange({ last: "idle", next: "idle", visible: true })).toBe("ignore");
+});
+
+test("a status change does not read while the page is hidden", () => {
+  expect(pollOnStatusChange({ last: "idle", next: "working", visible: false })).toBe("ignore");
 });
 
 test("a cancellation is not a failure", () => {
