@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
-import { ChevronLeftIcon, SplitIcon } from "./icons";
+import { ChevronLeftIcon, EyeIcon, EyeOffIcon, SplitIcon } from "./icons";
 import { paneName, paneSubLabel, statusLabel } from "./select";
 import { StatusIcon } from "./StatusLabel";
 
@@ -8,7 +8,9 @@ type TabBarProps = {
   pane: PaneState;
   panes: readonly PaneState[];
   split: boolean;
+  hidden: ReadonlySet<string>;
   onSelectPane: (paneId: string) => void;
+  onToggleHidden: (paneId: string) => void;
   onBack: () => void;
   onToggleSplit: () => void;
 };
@@ -20,10 +22,12 @@ export function TabBar(props: TabBarProps) {
   // 選択中のタブが隠れていたら見える位置まで送る。
   useLayoutEffect(() => {
     const list = tabList.current;
-    const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    const selected = list?.querySelector<HTMLElement>('[data-selected="true"]');
     if (!list || !selected) return;
-    const left = selected.offsetLeft;
-    const right = left + selected.offsetWidth;
+    const listRect = list.getBoundingClientRect();
+    const rect = selected.getBoundingClientRect();
+    const left = rect.left - listRect.left + list.scrollLeft;
+    const right = left + rect.width;
     if (left < list.scrollLeft) list.scrollLeft = left - 8;
     else if (right > list.scrollLeft + list.clientWidth) {
       list.scrollLeft = right - list.clientWidth + 8;
@@ -43,26 +47,43 @@ export function TabBar(props: TabBarProps) {
       <div class="hwc-tabs" role="tablist" aria-label="ペイン" ref={tabList}>
         {props.panes.map((item) => {
           const selected = item.id === props.pane.id;
+          const hidden = props.hidden.has(item.id);
           const name = paneName(item);
           const sub = paneSubLabel(item);
+          // 開いているペインは分割に必ず出るので、隠す操作を持たせない。
+          const eye = props.split && !selected;
           return (
-            <button
-              type="button"
-              role="tab"
-              class="hwc-tab"
-              key={item.id}
-              aria-selected={selected}
-              // 同じ端末タイトルのペインが並ぶので、読み上げにもラベルを添える。
-              aria-label={`${sub === null ? name : `${name} (${sub})`} (${item.id}, ${statusLabel(item.agentStatus)})`}
-              data-pane-id={item.id}
-              onClick={() => props.onSelectPane(item.id)}
-            >
-              <span class="hwc-tab-main">
-                <span class="hwc-tab-label">{name}</span>
-                {sub === null ? null : <span class="hwc-tab-sub">{sub}</span>}
-              </span>
-              <StatusIcon status={item.agentStatus} />
-            </button>
+            <div class="hwc-tab-item" key={item.id} data-selected={selected} data-hidden={hidden}>
+              <button
+                type="button"
+                role="tab"
+                class="hwc-tab"
+                aria-selected={selected}
+                // 同じ端末タイトルのペインが並ぶので、読み上げにもラベルを添える。
+                aria-label={`${sub === null ? name : `${name} (${sub})`} (${item.id}, ${statusLabel(item.agentStatus)}${hidden ? ", 分割で非表示" : ""})`}
+                data-pane-id={item.id}
+                data-eye={eye}
+                onClick={() => props.onSelectPane(item.id)}
+              >
+                <span class="hwc-tab-main">
+                  <span class="hwc-tab-label">{name}</span>
+                  {sub === null ? null : <span class="hwc-tab-sub">{sub}</span>}
+                </span>
+                <StatusIcon status={item.agentStatus} />
+              </button>
+              {eye ? (
+                <button
+                  type="button"
+                  class="hwc-tab-eye"
+                  aria-pressed={!hidden}
+                  aria-label="分割に表示"
+                  data-pane-id={item.id}
+                  onClick={() => props.onToggleHidden(item.id)}
+                >
+                  {hidden ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </div>

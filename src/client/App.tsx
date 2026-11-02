@@ -12,6 +12,7 @@ import {
   type ConnectionStatus,
 } from "./connection";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
+import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import { findPane, findPaneContext, initialExpanded, splitPanes } from "./select";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import { trackWorking, workingMs } from "./time";
@@ -103,6 +104,11 @@ export function App() {
       return false;
     }
   });
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() =>
+    parseHiddenPanes(
+      typeof localStorage === "undefined" ? null : localStorage.getItem(HIDDEN_STORAGE_KEY),
+    ),
+  );
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
@@ -181,6 +187,19 @@ export function App() {
       }
       return !current;
     });
+  };
+
+  // 隠すのは分割の並びからだけ。Herdr の状態は変えない。
+  const toggleHidden = (paneId: string) => {
+    const next = toggleHiddenPanes(hidden, paneId);
+    setHidden(next);
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // 保存できなくてもその場の表示は変える。
+      }
+    }
   };
 
   const { workingSince, now } = useWorkingClock(state);
@@ -284,7 +303,7 @@ export function App() {
   );
 
   // 分割は広い画面だけ。狭い画面では 1 枚ずつ見る。
-  const shown = splitPanes(siblings, pane?.id ?? "");
+  const shown = splitPanes(siblings, pane?.id ?? "", hidden);
   const splitOn = wide && split && shown.length > 1;
 
   const renderPane = (item: PaneState, where: { workspaceLabel: string; tabLabel: string }) => (
@@ -418,8 +437,10 @@ export function App() {
               <TabBar
                 pane={pane}
                 panes={siblings}
-                split={splitOn}
+                split={wide && split}
+                hidden={hidden}
                 onSelectPane={select}
+                onToggleHidden={toggleHidden}
                 onBack={back}
                 onToggleSplit={toggleSplit}
               />
