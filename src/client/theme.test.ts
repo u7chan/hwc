@@ -19,7 +19,7 @@ test("every listed theme can be stored as a preference", () => {
 });
 
 test("the listed themes match the palettes in the stylesheet", async () => {
-  const css = await Bun.file("src/client/styles.css").text();
+  const css = await Bun.file("src/client/styles/tokens.css").text();
   // ライトは :root 自体のパレットなので、テーマ別のブロックを持たない。
   const ids = new Set(
     [...css.matchAll(/:root\[data-theme="([a-z0-9-]+)"\]/g)].map((match) => match[1]),

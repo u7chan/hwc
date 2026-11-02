@@ -5,7 +5,7 @@ export const SIDEBAR_MAX_WIDTH = 560;
 export const DETAIL_MIN_WIDTH = 360;
 export const SIDEBAR_STORAGE_KEY = "hwc-sidebar-width";
 export const SIDEBAR_STEP = 16;
-// styles.css の @media (min-width: 900px) と同じ境目。片方を変えたらもう片方も変える。
+// app.css の @media (min-width: 900px) と同じ境目。片方を変えたらもう片方も変える。
 export const WIDE_LAYOUT_QUERY = "(min-width: 900px)";
 
 export function clampSidebarWidth(width: number, viewportWidth = Number.POSITIVE_INFINITY): number {
