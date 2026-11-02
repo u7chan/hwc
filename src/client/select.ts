@@ -230,6 +230,8 @@ export function initialExpanded(state: AppState): Set<string> {
 
 export type AgentGlyph = "pi" | "claude" | "codex" | "opencode" | "generic";
 
+const NO_HIDDEN: ReadonlySet<string> = new Set();
+
 // Herdr は端末だけのペインにエージェントを割り当てない。入力の形を選ぶのに使う。
 export function isShellPane(pane: PaneState): boolean {
   return pane.agent === null;
@@ -253,11 +255,17 @@ export function agentGlyph(agent: string | null): AgentGlyph {
 }
 
 // 分割表示は最大 2x2。5 枚目からはタブで切り替えて見る。
-export function splitPanes(panes: readonly PaneState[], selectedId: string): readonly PaneState[] {
-  if (panes.length <= 4) return panes;
-  const shown = panes.slice(0, 4);
+// 隠したペインは並べないが、いま開いているペインは必ず出す（消えたように見せない）。
+export function splitPanes(
+  panes: readonly PaneState[],
+  selectedId: string,
+  hidden: ReadonlySet<string> = NO_HIDDEN,
+): readonly PaneState[] {
+  const visible = panes.filter((pane) => pane.id === selectedId || !hidden.has(pane.id));
+  if (visible.length <= 4) return visible;
+  const shown = visible.slice(0, 4);
   if (shown.some((pane) => pane.id === selectedId)) return shown;
-  const selected = panes.find((pane) => pane.id === selectedId);
+  const selected = visible.find((pane) => pane.id === selectedId);
   if (selected === undefined) return shown;
   return [...shown.slice(0, 3), selected];
 }

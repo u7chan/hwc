@@ -316,6 +316,32 @@ test("the split view shows at most four panes of the tab", () => {
   expect(splitPanes(panes.slice(0, 3), "w1:p9")).toHaveLength(3);
 });
 
+test("hidden panes stay out of the split until they are opened", () => {
+  const panes = [1, 2, 3].map((index) => ({
+    id: `w1:p${index}`,
+    title: `p${index}`,
+    label: null,
+    agent: "pi",
+    agentStatus: "idle" as const,
+    focused: false,
+    chat: false,
+  }));
+  const hidden = new Set(["w1:p2"]);
+
+  expect(splitPanes(panes, "w1:p1", hidden).map((pane) => pane.id)).toEqual(["w1:p1", "w1:p3"]);
+  // 隠したペインを開いている間は出す。読んでいるものが消えるほうが困る。
+  expect(splitPanes(panes, "w1:p2", hidden).map((pane) => pane.id)).toEqual([
+    "w1:p1",
+    "w1:p2",
+    "w1:p3",
+  ]);
+  // 隠れて 1 枚だけ残っても、その 1 枚は返す。
+  expect(splitPanes(panes, "w1:p1", new Set(["w1:p2", "w1:p3"])).map((pane) => pane.id)).toEqual([
+    "w1:p1",
+  ]);
+  expect(splitPanes(panes, "w1:p1", new Set())).toHaveLength(3);
+});
+
 test("the pane name prefers the terminal title, then the Herdr label", () => {
   const base = {
     id: "w1:p9",
