@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createApp } from "./app";
 import type { ChatClient } from "./chat/pi";
 import { createChatClient } from "./chat/pi";
@@ -792,4 +795,43 @@ test("GET /api/panes/:id/chat returns 200 after the pane session switched", asyn
   expect(first.status).toBe(200);
   expect(second.status).toBe(200);
   expect(seen).toEqual([sessionPath, "/sessions/--home-dev--/2026-02-02.jsonl"]);
+});
+
+test("GET /api/panes/:id/chat answers 304 while the session file stays gone", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "hwc-chat-"));
+  const file = join(dir, "session.jsonl");
+  const lines = [
+    { type: "session", version: 3, id: "session-1", timestamp: "2026-01-01T00:00:00.000Z" },
+    {
+      type: "message",
+      id: "u1",
+      parentId: null,
+      timestamp: "2026-01-01T00:00:01.000Z",
+      message: { role: "user", content: "hello", timestamp: 1_700_000_000_000 },
+    },
+  ];
+  await writeFile(file, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`);
+
+  try {
+    const store = createFakeStore(chatState);
+    store.setSessionPath("w1:p1", file);
+    const app = createApp({ store, panes: createFakePanes(), chat: createChatClient() });
+
+    const first = await app.request("/api/panes/w1:p1/chat");
+    expect(first.status).toBe(200);
+
+    await rm(file);
+    const gone = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": first.headers.get("etag") ?? "" },
+    });
+    expect(gone.status).toBe(200);
+    expect(await gone.json()).toMatchObject({ messages: [], truncated: false });
+
+    const repeated = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": gone.headers.get("etag") ?? "" },
+    });
+    expect(repeated.status).toBe(304);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

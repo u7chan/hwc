@@ -325,7 +325,25 @@ test("treats a session that does not exist yet as an empty conversation", async 
 
   expect(first.messages).toEqual([]);
   expect(first).toMatchObject({ model: null, effort: null, truncated: false });
+  // 一度もファイルを見ていない path は世代 0 のまま。
+  expect(first.etag).toEndWith("-0");
   expect(second.etag).toBe(first.etag);
+});
+
+test("keeps the etag stable while the session file stays gone", async () => {
+  const path = await writeSession(header(), user("u1", null, "hello"));
+  const chat = createChatClient();
+
+  const before = await chat.snapshot(path);
+  await rm(path);
+
+  const gone = await chat.snapshot(path);
+  const stillGone = await chat.snapshot(path);
+
+  expect(gone.messages).toEqual([]);
+  // 消えたことは 1 度だけ世代に反映する。ENOENT が続く間は同じ内容を返す。
+  expect(gone.etag).not.toBe(before.etag);
+  expect(stillGone.etag).toBe(gone.etag);
 });
 
 test("keeps the etag stable until a complete line is appended", async () => {

@@ -35,7 +35,6 @@ export type ChatReader = {
   entries: Map<string, SessionEntry>;
   leafId: string | null;
   headerId: string | null;
-  headerVersion: number | null;
   inode: number | null;
   generation: number;
   etagPrefix: string;
@@ -49,7 +48,6 @@ function createReader(path: string): ChatReader {
     entries: new Map(),
     leafId: null,
     headerId: null,
-    headerVersion: null,
     inode: null,
     generation: 0,
     // path のハッシュだけでなく、BFF の起動ごとに変わる id を混ぜる。
@@ -115,19 +113,18 @@ async function readSessionFile(reader: ChatReader): Promise<ChatSnapshot> {
 
   try {
     const stat = await handle.stat();
-    const header = await readHeader(handle);
-    // pi は v1/v2 を開くと v3 へ rewrite する。同一 inode の truncate で長くなることも
-    // あるため、ヘッダの id / version の変化でも検知する。
+    const headerId = await readHeader(handle);
+    // pi は v1/v2 のセッションを開くと v3 へ rewrite する。同じ inode の truncate で
+    // 前より長くなることがあるため、size と inode では書き換えを検出できない。
+    // ヘッダ id は毎回読んで比べる。
     const replaced =
-      (reader.headerId !== null &&
-        (reader.headerId !== header.id || reader.headerVersion !== header.version)) ||
+      (reader.headerId !== null && reader.headerId !== headerId) ||
       (reader.inode !== null && reader.inode !== stat.ino) ||
       reader.offset > stat.size;
     if (replaced) reset(reader);
 
     reader.inode = stat.ino;
-    reader.headerId = header.id;
-    reader.headerVersion = header.version;
+    reader.headerId = headerId;
     await consume(reader, handle, stat.size);
     return snapshotOf(reader);
   } finally {
@@ -137,7 +134,7 @@ async function readSessionFile(reader: ChatReader): Promise<ChatSnapshot> {
   }
 }
 
-async function readHeader(handle: FileHandle): Promise<{ id: string; version: number }> {
+async function readHeader(handle: FileHandle): Promise<string> {
   const probe = Buffer.alloc(HEADER_PROBE_BYTES);
   const { bytesRead } = await handle.read(probe, 0, probe.length, 0);
   const slice = probe.subarray(0, bytesRead);
@@ -154,7 +151,7 @@ async function readHeader(handle: FileHandle): Promise<{ id: string; version: nu
   if (typeof header.id !== "string" || header.id === "") {
     throw new ChatUnavailableError("session header id is missing");
   }
-  return { id: header.id, version: CURRENT_VERSION };
+  return header.id;
 }
 
 function parseHeader(line: string): Record<string, unknown> | null {
@@ -370,12 +367,12 @@ function reset(reader: ChatReader): void {
   reader.generation += 1;
 }
 
-// ファイルが消えたら中身も世代も捨てる。一度もファイルを見ていない path は世代 0 のまま。
+// ファイルが消えた瞬間だけ世代を進める。ENOENT が続く間は同じ etag を返し、
+// 一度もファイルを見ていない path は世代 0 のまま。
 function forget(reader: ChatReader): void {
-  if (reader.headerId === null && reader.generation === 0) return;
+  if (reader.headerId === null) return;
   reset(reader);
   reader.headerId = null;
-  reader.headerVersion = null;
   reader.inode = null;
 }
 
