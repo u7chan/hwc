@@ -475,12 +475,24 @@ html {
 body {
   background: var(--color-bg);
   color: var(--color-text);
-  /* 画面の部品は選べないようにする。選ばせたいのは出力と入力だけ。 */
+  /* 画面の部品は選べないようにする。選ばせたい本文と入力だけ下で戻す。 */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   font: 400 var(--text-body) / var(--line-body) var(--font-ui);
   -webkit-text-size-adjust: 100%;
+}
+
+/* body 全体で許可するとボタンや一覧のラベルまで選べてしまうので、本文と入力に限る。
+   iOS は body の user-select と touch-callout を継承するため、接頭辞付きの指定と
+   callout の解除も必要。 */
+.hwc-output,
+.hwc-msg-text,
+.hwc-msg-body,
+.hwc-input-field {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 #app {
@@ -1919,14 +1931,11 @@ button {
 }
 
 .hwc-output {
-  user-select: text;
-  -webkit-user-select: text;
   margin: 0;
   font: 400 var(--text-mono) / var(--line-mono) var(--font-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   tab-size: 2;
-  user-select: text;
 }
 
 /* 会話。ユーザーは右、エージェントは左に置いて、誰の発話かを行の寄せで示す。 */
@@ -2032,7 +2041,6 @@ button {
   min-width: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  user-select: text;
 }
 
 .hwc-msg[data-role="user"] .hwc-msg-bubble {
@@ -2056,7 +2064,6 @@ button {
   overflow: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  user-select: text;
   transition: max-height 220ms ease;
 }
 
@@ -2226,8 +2233,6 @@ button {
 }
 
 .hwc-input-field {
-  user-select: text;
-  -webkit-user-select: text;
   /* 縦の flex で伸ばすと height 指定が効かず、内容がはみ出して切れる。 */
   flex: none;
   min-width: 0;
