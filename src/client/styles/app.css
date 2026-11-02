@@ -31,7 +31,7 @@ body {
    iOS は body の user-select と touch-callout を継承するため、接頭辞付きの指定と
    callout の解除も必要。 */
 .hwc-output,
-.hwc-msg-text,
+.hwc-md,
 .hwc-msg-body,
 .hwc-input-field {
   user-select: text;
@@ -1713,13 +1713,6 @@ button {
   align-items: flex-end;
 }
 
-.hwc-msg-text {
-  margin: 0;
-  min-width: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .hwc-msg[data-role="user"] .hwc-msg-bubble {
   display: flex;
   flex-direction: column;
@@ -1802,11 +1795,178 @@ button {
   }
 }
 
-.hwc-msg[data-role="agent"] .hwc-msg-text {
+/* エージェント本文の Markdown。散文はサンセリフ、コードと解析できなかった記法だけを等幅にする。 */
+.hwc-md {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font: 400 var(--text-body) / var(--line-body) var(--font-ui);
+
+  /* 見出しの段階は本文の大きさを基準にした固定値。tokens.css の段は増やさない。 */
+  --md-h3: calc(var(--text-body) * 1.25);
+  --md-h4: calc(var(--text-body) * 1.15);
+  --md-h5: calc(var(--text-body) * 1.05);
+  --md-h6: var(--text-body);
+}
+
+.hwc-md[data-plain] {
+  white-space: pre-wrap;
+}
+
+.hwc-md h3,
+.hwc-md h4,
+.hwc-md h5,
+.hwc-md h6 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-weight: 700;
+  line-height: var(--line-tight);
+}
+
+.hwc-md h3 {
+  font-size: var(--md-h3);
+}
+
+.hwc-md h4 {
+  font-size: var(--md-h4);
+}
+
+.hwc-md h5 {
+  font-size: var(--md-h5);
+}
+
+.hwc-md h6 {
+  font-size: var(--md-h6);
+  color: var(--color-secondary);
+}
+
+.hwc-md p,
+.hwc-md ul,
+.hwc-md ol,
+.hwc-md blockquote,
+.hwc-md hr,
+.hwc-md-figure,
+.hwc-md-table-wrap {
+  margin: var(--space-3) 0;
+}
+
+/* 先頭と末尾の余白はメッセージ側の gap に任せる。入れ子の再帰でも同じ規則を使う。 */
+.hwc-md > :first-child,
+.hwc-md li > :first-child,
+.hwc-md blockquote > :first-child {
+  margin-block-start: 0;
+}
+
+.hwc-md > :last-child,
+.hwc-md li > :last-child,
+.hwc-md blockquote > :last-child {
+  margin-block-end: 0;
+}
+
+.hwc-md ul,
+.hwc-md ol {
+  padding-inline-start: var(--space-5);
+}
+
+.hwc-md li + li {
+  margin-block-start: var(--space-1);
+}
+
+.hwc-md blockquote {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--color-line);
+  color: var(--color-secondary);
+}
+
+.hwc-md hr {
+  border: 0;
+  border-block-start: 1px solid var(--color-line);
+}
+
+.hwc-md a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hwc-md code,
+.hwc-md-literal {
   font-family: var(--font-mono);
   font-size: var(--text-mono);
+}
+
+/* インラインコードと literal は面で囲む。フェンス内の code は下で打ち消す。 */
+.hwc-md-literal,
+.hwc-md :not(pre) > code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+}
+
+.hwc-md-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.hwc-md-lang {
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+}
+
+/* コードは折り返さず、ブロックの中だけ横スクロールさせる。 */
+.hwc-md-pre {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
   line-height: 1.55;
-  color: var(--color-text);
+  -webkit-overflow-scrolling: touch;
+}
+
+.hwc-md-pre code {
+  padding: 0;
+  background: none;
+}
+
+.hwc-md-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 表は折り返して画面に収め、入らないときだけ横スクロールする。 */
+.hwc-md-table {
+  border-collapse: collapse;
+  font-size: var(--text-body);
+}
+
+.hwc-md-table th,
+.hwc-md-table td {
+  min-width: 5em;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  text-align: left;
+  overflow-wrap: break-word;
+}
+
+.hwc-md-table th {
+  background: var(--color-raised);
+  font-weight: 700;
+}
+
+.hwc-md-table [data-align="center"] {
+  text-align: center;
+}
+
+.hwc-md-table [data-align="right"] {
+  text-align: right;
 }
 
 .hwc-msg-time,

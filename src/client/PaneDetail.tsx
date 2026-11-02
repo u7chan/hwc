@@ -24,6 +24,7 @@ import {
   SendIcon,
   TerminalIcon,
 } from "./icons";
+import { Markdown } from "./Markdown";
 import { usePaneOutput } from "./output";
 import { agentGlyph, isShellPane, paneName, paneSubLabel } from "./select";
 import { Spinner } from "./Spinner";
@@ -174,7 +175,7 @@ function ChatLog(props: {
         <li class="hwc-msg" data-role={message.role} key={message.id}>
           {message.role === "agent" ? (
             <>
-              <pre class="hwc-msg-text">{message.text}</pre>
+              <Markdown text={message.text} />
               <div class="hwc-msg-meta">
                 <span class="hwc-msg-time">{formatClock(message.at)}</span>
                 {copyButton(message)}
