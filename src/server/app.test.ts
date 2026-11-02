@@ -13,6 +13,7 @@ import type { AppState, PaneState, StateStore } from "./herdr/state";
 const pane: PaneState = {
   id: "w1:p1",
   title: null,
+  label: null,
   agent: null,
   agentStatus: "idle",
   focused: true,

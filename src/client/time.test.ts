@@ -33,6 +33,7 @@ const state: AppState = {
             {
               id: "w1:p1",
               title: null,
+              label: null,
               agent: "pi",
               agentStatus: "working",
               focused: true,
@@ -41,6 +42,7 @@ const state: AppState = {
             {
               id: "w1:p2",
               title: null,
+              label: null,
               agent: "bash",
               agentStatus: "idle",
               focused: false,

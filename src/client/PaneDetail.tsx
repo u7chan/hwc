@@ -14,7 +14,7 @@ import {
   TerminalIcon,
 } from "./icons";
 import { usePaneOutput } from "./output";
-import { agentGlyph, isShellPane } from "./select";
+import { agentGlyph, isShellPane, paneName } from "./select";
 import { Spinner } from "./Spinner";
 
 // 出力がまだ無いときは、空の枠だけ置いても意味がないので案内を出す。
@@ -120,7 +120,7 @@ export function PaneDetail(props: PaneDetailProps) {
         <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
           {pane.agent ? <AgentGlyphIcon agent={pane.agent} size={14} /> : <PaneIcon size={14} />}
         </span>
-        <span class="hwc-pane-head-name">{pane.title ?? pane.agent ?? pane.id}</span>
+        <span class="hwc-pane-head-name">{paneName(pane)}</span>
         <span class="hwc-pane-id" data-copied={copied}>
           <span class="hwc-pane-id-text">{pane.id}</span>
           <button

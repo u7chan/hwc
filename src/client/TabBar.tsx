@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import { ChevronLeftIcon, SplitIcon } from "./icons";
-import { statusLabel } from "./select";
+import { paneName, statusLabel } from "./select";
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
@@ -50,11 +50,11 @@ export function TabBar(props: TabBarProps) {
               class="hwc-tab"
               key={item.id}
               aria-selected={selected}
-              aria-label={`${item.title ?? item.agent ?? item.id} (${item.id}, ${statusLabel(item.agentStatus)})`}
+              aria-label={`${paneName(item)} (${item.id}, ${statusLabel(item.agentStatus)})`}
               data-pane-id={item.id}
               onClick={() => props.onSelectPane(item.id)}
             >
-              <span class="hwc-tab-label">{item.title ?? item.agent ?? item.id}</span>
+              <span class="hwc-tab-label">{paneName(item)}</span>
               <StatusIcon status={item.agentStatus} />
             </button>
           );

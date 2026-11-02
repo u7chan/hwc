@@ -12,7 +12,14 @@ import {
   WorkspaceIcon,
   WorktreeIcon,
 } from "./icons";
-import { agentGlyph, countPanes, countWorkspacePanes, groupWorkspaces } from "./select";
+import {
+  agentGlyph,
+  countPanes,
+  countWorkspacePanes,
+  groupWorkspaces,
+  paneName,
+  paneSubLabel,
+} from "./select";
 import { StatusLabel } from "./StatusLabel";
 import { formatElapsed } from "./time";
 
@@ -158,6 +165,7 @@ export function PaneList(props: PaneListProps) {
       <ul class="hwc-panes" data-depth={depth}>
         {tab.panes.map((pane) => {
           const startedAt = workingSince.get(pane.id);
+          const subLabel = paneSubLabel(pane);
           return (
             <li key={pane.id}>
               <div
@@ -179,7 +187,8 @@ export function PaneList(props: PaneListProps) {
                     {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
                   </span>
                   <span class="hwc-pane-main">
-                    <span class="hwc-pane-name">{pane.title ?? pane.agent ?? pane.id}</span>
+                    <span class="hwc-pane-name">{paneName(pane)}</span>
+                    {subLabel === null ? null : <span class="hwc-pane-sub">{subLabel}</span>}
                   </span>
                   {startedAt === undefined ? null : (
                     <span class="hwc-pane-elapsed">{formatElapsed(now - startedAt)}</span>

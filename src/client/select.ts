@@ -171,6 +171,17 @@ export function findPaneContext(
   return null;
 }
 
+// 一覧・タブ・見出しで同じ名前を出す。label は Herdr で付けた作業名、title は端末のタイトル。
+export function paneName(pane: PaneState): string {
+  return pane.title ?? pane.label ?? pane.agent ?? pane.id;
+}
+
+// 同じ端末タイトルを複数のペインが持つことがある。名前と別にラベルがあるときだけ、
+// 区別するための副題を出す（同じ文字列を 2 度並べない）。
+export function paneSubLabel(pane: PaneState): string | null {
+  return pane.label !== null && pane.label !== paneName(pane) ? pane.label : null;
+}
+
 export type StatusTone = "active" | "attention" | "success" | "neutral";
 
 export function statusTone(status: AgentStatus): StatusTone {

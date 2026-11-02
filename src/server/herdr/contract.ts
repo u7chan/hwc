@@ -44,6 +44,7 @@ export type HerdrPane = {
   pane_id: string;
   workspace_id: string;
   tab_id: string;
+  label?: string | null;
   agent_status?: AgentStatus;
   focused?: boolean;
   agent_session?: HerdrAgentSession | null;
@@ -79,6 +80,11 @@ function expectId(value: unknown, path: string): string {
 
 function optionalText(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+// ペインのラベルは Herdr 側で未設定なら空文字が返る。空文字と null は「名前なし」に畳む。
+function optionalLabel(value: unknown): string | null {
+  return typeof value === "string" && value !== "" ? value : null;
 }
 
 function optionalStatus(value: unknown): AgentStatus {
@@ -148,6 +154,7 @@ export function parseSnapshot(value: unknown): HerdrSnapshot {
       pane_id: expectId(record.pane_id, `${path}.pane_id`),
       workspace_id: expectId(record.workspace_id, `${path}.workspace_id`),
       tab_id: expectId(record.tab_id, `${path}.tab_id`),
+      label: optionalLabel(record.label),
       agent_status: optionalStatus(record.agent_status),
       focused: optionalFlag(record.focused),
       agent_session: optionalAgentSession(record.agent_session),

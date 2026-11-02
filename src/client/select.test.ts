@@ -13,6 +13,8 @@ import {
   isShellPane,
   movePane,
   movePaneStep,
+  paneName,
+  paneSubLabel,
   removePane,
   splitPanes,
   statusLabel,
@@ -40,6 +42,7 @@ const state: AppState = {
             {
               id: "w1:p1",
               title: "π - hwc",
+              label: null,
               agent: "pi",
               agentStatus: "working",
               focused: true,
@@ -48,6 +51,7 @@ const state: AppState = {
             {
               id: "w1:p2",
               title: null,
+              label: null,
               agent: null,
               agentStatus: "unknown",
               focused: false,
@@ -64,6 +68,7 @@ const state: AppState = {
             {
               id: "w1:p3",
               title: "bash",
+              label: null,
               agent: null,
               agentStatus: "idle",
               focused: false,
@@ -89,6 +94,7 @@ const state: AppState = {
             {
               id: "w2:p1",
               title: "bash",
+              label: null,
               agent: null,
               agentStatus: "blocked",
               focused: false,
@@ -263,6 +269,7 @@ test("a pane without an agent is a shell", () => {
     isShellPane({
       id: "w1:p3",
       title: "bash",
+      label: null,
       agent: null,
       agentStatus: "idle",
       focused: false,
@@ -273,6 +280,7 @@ test("a pane without an agent is a shell", () => {
     isShellPane({
       id: "w1:p1",
       title: "π - hwc",
+      label: null,
       agent: "pi",
       agentStatus: "idle",
       focused: false,
@@ -285,6 +293,7 @@ test("the split view shows at most four panes of the tab", () => {
   const panes = [1, 2, 3, 4, 5].map((index) => ({
     id: `w1:p${index}`,
     title: `p${index}`,
+    label: null,
     agent: "pi",
     agentStatus: "idle" as const,
     focused: false,
@@ -305,4 +314,38 @@ test("the split view shows at most four panes of the tab", () => {
     "w1:p5",
   ]);
   expect(splitPanes(panes.slice(0, 3), "w1:p9")).toHaveLength(3);
+});
+
+test("the pane name prefers the terminal title, then the Herdr label", () => {
+  const base = {
+    id: "w1:p9",
+    title: null,
+    label: null,
+    agent: null,
+    agentStatus: "idle" as const,
+    focused: false,
+    chat: false,
+  };
+
+  expect(paneName({ ...base, title: "π - hwc", label: "impl" })).toBe("π - hwc");
+  expect(paneName({ ...base, label: "impl", agent: "pi" })).toBe("impl");
+  expect(paneName({ ...base, agent: "pi" })).toBe("pi");
+  expect(paneName(base)).toBe("w1:p9");
+});
+
+test("the label is shown as a subtitle only when it differs from the name", () => {
+  const base = {
+    id: "w1:p9",
+    title: null,
+    label: null,
+    agent: null,
+    agentStatus: "idle" as const,
+    focused: false,
+    chat: false,
+  };
+
+  // 4 つのペインが同じ端末タイトルでも、一覧ではラベルで見分けられる。
+  expect(paneSubLabel({ ...base, title: "π - hwc", label: "impl" })).toBe("impl");
+  expect(paneSubLabel({ ...base, label: "impl" })).toBeNull();
+  expect(paneSubLabel({ ...base, title: "π - hwc" })).toBeNull();
 });
