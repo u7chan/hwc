@@ -1825,11 +1825,6 @@ button {
   padding-right: calc(var(--space-1) + var(--space-8));
 }
 
-/* 隠れていても状態は見落とさない。淡くするのは名前だけにする。 */
-.hwc-tab-item[data-hidden="true"] .hwc-tab-label {
-  opacity: 0.55;
-}
-
 .hwc-detail-bar {
   display: flex;
   align-items: center;
@@ -2762,5 +2757,12 @@ button {
 
   .hwc-pane-head {
     padding: 0 var(--space-6);
+  }
+
+  /* 隠して 1 枚になってもセルは残すので、余白は分割前と同じに戻す。 */
+  .hwc-split[data-count="1"] .hwc-pane-head,
+  .hwc-split[data-count="1"] .hwc-input {
+    padding-right: var(--space-6);
+    padding-left: var(--space-6);
   }
 }

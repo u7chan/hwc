@@ -304,7 +304,10 @@ export function App() {
 
   // 分割は広い画面だけ。狭い画面では 1 枚ずつ見る。
   const shown = splitPanes(siblings, pane?.id ?? "", hidden);
-  const splitOn = wide && split && shown.length > 1;
+  // 隠して 1 枚になってもグリッドを外さない。外すとペインの作り直しで
+  // 読んでいた位置が最下部に戻る。
+  const splitOn = wide && split && shown.length > 0;
+  const cells = splitOn ? shown : pane === null ? [] : [pane];
 
   const renderPane = (item: PaneState, where: { workspaceLabel: string; tabLabel: string }) => (
     <PaneDetail
@@ -444,9 +447,9 @@ export function App() {
                 onBack={back}
                 onToggleSplit={toggleSplit}
               />
-              {splitOn ? (
-                <div class="hwc-split" data-count={shown.length}>
-                  {shown.map((item) => (
+              {wide ? (
+                <div class="hwc-split" data-count={cells.length}>
+                  {cells.map((item) => (
                     <section class="hwc-split-cell" key={item.id}>
                       {renderPane(item, context)}
                     </section>

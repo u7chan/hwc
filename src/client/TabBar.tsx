@@ -76,7 +76,7 @@ export function TabBar(props: TabBarProps) {
                   type="button"
                   class="hwc-tab-eye"
                   aria-pressed={!hidden}
-                  aria-label="分割に表示"
+                  aria-label={`${name} (${item.id}) を分割に表示`}
                   data-pane-id={item.id}
                   onClick={() => props.onToggleHidden(item.id)}
                 >
