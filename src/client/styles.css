@@ -829,6 +829,11 @@ button {
   flex-direction: column;
 }
 
+/* 副題がある行と無い行で高さを揃える。折り返しで行の高さが変わらないように。 */
+.hwc-pane-main {
+  min-height: calc((var(--text-body) + var(--text-secondary)) * var(--line-body) + var(--space-1));
+}
+
 .hwc-group-name {
   font-weight: 600;
 }
@@ -928,6 +933,11 @@ button {
   gap: var(--space-1);
 }
 
+/* 狭いかどうかは画面ではなく行の幅で決める。広い画面でも一覧の列は狭い。 */
+.hwc-pane-row {
+  container-type: inline-size;
+}
+
 /* 行は「開く」と「メニュー」の 2 つのボタンで持つ。 */
 .hwc-pane {
   position: relative;
@@ -935,8 +945,6 @@ button {
   align-items: center;
   min-height: var(--row-pane);
   padding-right: var(--space-4);
-  /* 狭いかどうかは画面ではなく行の幅で決める。広い画面でも一覧の列は狭い。 */
-  container-type: inline-size;
 }
 
 .hwc-pane-open {
@@ -1024,20 +1032,6 @@ button {
   .hwc-pane[data-current="true"] .hwc-pane-more,
   .hwc-pane-more[aria-expanded="true"] {
     opacity: 1;
-  }
-}
-
-/* 名前の幅を最優先で残す。経過時間とラベルで埋まると、実行中の行だけ名前が読めなくなる。 */
-@container (max-width: 320px) {
-  /* 経過とメニューは、名前の幅が確保できてから出す。状態の記号は残す。 */
-  .hwc-pane-elapsed,
-  .hwc-pane-more {
-    display: none;
-  }
-
-  .hwc-pane-open {
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-2);
   }
 }
 
@@ -1255,6 +1249,7 @@ button {
 
 /* 名前は 1 行に保つ。狭い画面で 1 文字ずつ折れると読めなくなる。 */
 .hwc-pane-name,
+.hwc-pane-sub,
 .hwc-group-name,
 .hwc-tabrow-name,
 .hwc-group-sub,
@@ -1273,6 +1268,35 @@ button {
   font-family: var(--font-mono);
   font-size: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+/* 名前の幅を最優先で残す。固定幅の要素で埋まると、実行中の行だけ名前が読めなくなる。 */
+@container (max-width: 320px) {
+  /* メニューは落とす。ペイン ID は詳細ヘッダからコピーできる。 */
+  .hwc-pane-more {
+    display: none;
+  }
+
+  .hwc-pane {
+    padding-right: 0;
+  }
+
+  .hwc-pane-open {
+    gap: var(--space-2);
+    padding: var(--space-3) 0 var(--space-3) var(--space-1);
+  }
+
+  /* 経過時間の前は gap が空ける。二重に取ると名前の幅が減る。 */
+  .hwc-pane-elapsed {
+    margin-left: 0;
+  }
+}
+
+/* 経過時間は実行中の可視化なので、名前が潰れる直前まで残す。 */
+@container (max-width: 200px) {
+  .hwc-pane-elapsed {
+    display: none;
+  }
 }
 
 /* 状態ラベル */

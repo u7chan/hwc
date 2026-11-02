@@ -167,7 +167,8 @@ export function PaneList(props: PaneListProps) {
           const startedAt = workingSince.get(pane.id);
           const subLabel = paneSubLabel(pane);
           return (
-            <li key={pane.id}>
+            // 狭い行の判定は、行そのものではなくこの枠の幅で行う。
+            <li key={pane.id} class="hwc-pane-row">
               <div
                 class="hwc-pane"
                 data-pane-id={pane.id}
