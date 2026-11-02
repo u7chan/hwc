@@ -51,16 +51,19 @@ export function paneBody(props: {
   return { kind: "chat", snapshot: props.snapshot };
 }
 
-const PENDING_CONFIRM_WINDOW_MS = 60_000;
+export type PendingMessage = ChatMessage & { from: number; waiting: boolean };
 
-// セッションの時刻は送信直後より少し前になることがある。同じ本文で、直前 60 秒までを同じ発話とみなす。
-export function isPendingConfirmed(pending: ChatMessage, messages: ChatMessage[]): boolean {
-  return messages.some(
-    (message) =>
-      message.role === "user" &&
-      message.text === pending.text &&
-      message.at >= pending.at - PENDING_CONFIRM_WINDOW_MS,
+export function latestUserAt(messages: ChatMessage[]): number {
+  return messages.reduce(
+    (latest, message) => (message.role === "user" ? Math.max(latest, message.at) : latest),
+    0,
   );
+}
+
+// 本文は pi 側で trim やテンプレート展開されることがあるため、送信時点の最後の user 発話より後に
+// 新しい user 発話が現れたかで対応付ける。
+export function isPendingConfirmed(pending: PendingMessage, messages: ChatMessage[]): boolean {
+  return messages.some((message) => message.role === "user" && message.at > pending.from);
 }
 
 export type AgentInfo = { model: string | null; effort: string | null };

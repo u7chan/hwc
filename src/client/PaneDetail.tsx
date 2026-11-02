@@ -3,7 +3,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { OUTPUT_LINES } from "./api";
-import { agentInfo, agentInfoLabel, isPendingConfirmed, paneBody, usePaneChat } from "./chat";
+import {
+  agentInfo,
+  agentInfoLabel,
+  isPendingConfirmed,
+  latestUserAt,
+  paneBody,
+  type PendingMessage,
+  usePaneChat,
+} from "./chat";
 import { useCopy } from "./copy";
 import { readDraft, storage, writeDraft } from "./drafts";
 import {
@@ -59,6 +67,7 @@ function OutputSkeleton() {
 
 const USER_MESSAGE_CLAMP_LINES = 5;
 const USER_MESSAGE_CLAMP_FALLBACK = 128;
+const PENDING_TIMEOUT_MS = 60_000;
 
 function UserMessage(props: {
   message: ChatMessage;
@@ -209,7 +218,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const [expanded, setExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
-  const [pending, setPending] = useState<ChatMessage[]>([]);
+  const [pending, setPending] = useState<PendingMessage[]>([]);
 
   // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
   const blocked = pane.agentStatus === "blocked";
@@ -283,6 +292,25 @@ export function PaneDetail(props: PaneDetailProps) {
     });
   }, [snapshot, pending.length]);
 
+  useEffect(() => {
+    if (replying) return;
+    setPending((items) => {
+      const next = items.filter((item) => !item.waiting);
+      return next.length === items.length ? items : next;
+    });
+  }, [replying, pending.length]);
+
+  useEffect(() => {
+    if (pending.length === 0) return;
+    const timer = setTimeout(() => {
+      setPending((items) => {
+        const next = items.filter((item) => item.waiting);
+        return next.length === items.length ? items : next;
+      });
+    }, PENDING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [pending.length]);
+
   const jumpToLatest = () => {
     setAtBottom(true);
     const element = scroller.current;
@@ -293,6 +321,8 @@ export function PaneDetail(props: PaneDetailProps) {
     if (!canSend || sending) return;
     const text = draft;
     const at = Date.now();
+    const from = latestUserAt(snapshot?.messages ?? []);
+    const waiting = replying;
     setSending(true);
     // 送信したらキーボードを閉じて出力を見せる。
     input.current?.blur();
@@ -301,7 +331,7 @@ export function PaneDetail(props: PaneDetailProps) {
       setDraft("");
       setPending((items) => [
         ...items,
-        { id: `pending-${at}-${items.length}`, role: "user", text, at },
+        { id: `pending-${at}-${items.length}`, role: "user", text, at, from, waiting },
       ]);
     }
     setSending(false);
@@ -420,7 +450,8 @@ export function PaneDetail(props: PaneDetailProps) {
             placeholder={shell ? "コマンドを入力" : "メッセージを入力"}
             onInput={(event) => setDraft(event.currentTarget.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+              const composing = event.isComposing || event.keyCode === 229;
+              if (event.key === "Enter" && !event.shiftKey && !composing) {
                 event.preventDefault();
                 void send();
               }

@@ -2080,7 +2080,7 @@ button {
   align-items: center;
   align-self: flex-end;
   gap: 2px;
-  min-height: var(--space-6);
+  min-height: var(--tap);
   padding: 0;
   border: 0;
   background: transparent;
