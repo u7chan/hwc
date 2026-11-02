@@ -1,22 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
-import { appendMessage, mockReply, type ChatMessage } from "./chat";
-import { previewAgentInfo, previewChat, previewChats, previewState } from "./fixtures";
-import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
+import { fetchState, parseAppState, sendInput } from "./api";
 import {
-  findPane,
-  findPaneContext,
-  initialExpanded,
-  isShellPane,
-  movePane,
-  movePaneStep,
-  removePane,
-  splitPanes,
-} from "./select";
+  INITIAL_CONNECTION,
+  connectionAfter,
+  connectionLabel,
+  type ConnectionStatus,
+} from "./connection";
+import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
+import { findPane, findPaneContext, initialExpanded, splitPanes } from "./select";
 import { trackWorking } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
@@ -35,13 +31,14 @@ import {
 } from "./theme";
 
 const SPLIT_STORAGE_KEY = "hwc-split";
+const NO_GROUPS: ReadonlySet<string> = new Set();
 
 // 壁時計との同期。1 秒ごとに数え直し、稼働に入った時刻は手元で覚える。
-function useWorkingClock(state: AppState) {
+function useWorkingClock(state: AppState | null) {
   const [now, setNow] = useState(() => Date.now());
   // 覚えた時刻は描画のたびに引き継ぐ。同じ入力なら同じ結果になるので、描画中に進めてよい。
   const workingSince = useRef<ReadonlyMap<string, number>>(new Map());
-  workingSince.current = trackWorking(workingSince.current, state, now);
+  if (state !== null) workingSince.current = trackWorking(workingSince.current, state, now);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -66,11 +63,25 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
+// 最初に届いたスナップショットでは、Herdr が focus しているペインを開く。
+function defaultSelection(state: AppState): string | null {
+  return findPane(state, state.focusedPaneId) ? state.focusedPaneId : null;
+}
+
+type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
+
+// 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
+// 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
+function defaultView(state: AppState): View {
+  return { selectedPaneId: defaultSelection(state), expanded: initialExpanded(state) };
+}
+
 export function App() {
-  // プレビューでは閉じたペインを手元で落とす。実 API に繋いだらサーバーの状態で置き換わる。
-  const [state, setState] = useState(previewState);
-  const [selectedPaneId, setSelectedPaneId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(() => initialExpanded(state));
+  const [state, setState] = useState<AppState | null>(null);
+  const [connection, setConnection] = useState<ConnectionStatus>(INITIAL_CONNECTION);
+  // 利用者が選んだ・開いた結果だけを持つ。まだ触っていない間はスナップショットから導く。
+  const [view, setView] = useState<View | null>(null);
+  const initialView = useRef<View | null>(null);
   // 入力欄の補足は、送ったペインにだけ出す。分割表示で隣の欄に漏れないように。
   const [feedback, setFeedback] = useState<Record<string, string | null>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -91,6 +102,28 @@ export function App() {
       return false;
     }
   });
+
+  // 状態は SSE で届くが、初回は取りに行って待ち時間を縮める。失敗しても SSE が追いつく。
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchState(controller.signal).then(setState, () => undefined);
+    return () => controller.abort();
+  }, []);
+
+  // 受信したスナップショットで丸ごと置き換える。差分は適用しない（ADR 0005）。
+  useEffect(() => {
+    const events = new EventSource("/api/events");
+    events.onmessage = (event) => {
+      const next = parseAppState(event.data);
+      if (next === null) return;
+      setState(next);
+      setConnection(connectionAfter("snapshot"));
+    };
+    events.addEventListener("unavailable", () => setConnection(connectionAfter("unavailable")));
+    // 再接続はブラウザに任せる。ここでは表示だけを切り替える。
+    events.onerror = () => setConnection(connectionAfter("error"));
+    return () => events.close();
+  }, []);
 
   // どの版を見ているかを画面で確かめられるようにする。取れなくても表示だけ諦める。
   useEffect(() => {
@@ -138,155 +171,63 @@ export function App() {
 
   const { workingSince, now } = useWorkingClock(state);
 
-  // 入力欄の外にファイルを落とすと、ブラウザがそのファイルを開いて画面を離れる。
-  useEffect(() => {
-    const block = (event: DragEvent) => {
-      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
-    };
-    window.addEventListener("dragover", block);
-    window.addEventListener("drop", block);
-    return () => {
-      window.removeEventListener("dragover", block);
-      window.removeEventListener("drop", block);
-    };
-  }, []);
+  // 選んだペインがスナップショットから消えても id は残す。findPane が null を返すので
+  // 表示は一覧に戻り、戻ってきたときは同じペインを開ける。
+  const selectedPaneId = view
+    ? view.selectedPaneId
+    : state
+      ? (initialView.current ??= defaultView(state)).selectedPaneId
+      : null;
+  const expanded = view
+    ? view.expanded
+    : state
+      ? (initialView.current ??= defaultView(state)).expanded
+      : NO_GROUPS;
 
-  // 行に落としたら、その行の前後に入れる。タブへ落としたら末尾に足す。
-  const dropOnPane = (paneId: string, targetPaneId: string, after: boolean) => {
-    setState((current) => {
-      for (const workspace of current.workspaces) {
-        for (const tab of workspace.tabs) {
-          const index = tab.panes.findIndex((item) => item.id === targetPaneId);
-          if (index === -1) continue;
-          return movePane(current, paneId, tab.id, index + (after ? 1 : 0));
-        }
-      }
-      return current;
-    });
-  };
-
-  const movePaneOne = (paneId: string, delta: -1 | 1) => {
-    setState((current) => movePaneStep(current, paneId, delta));
-  };
-
-  const closePane = (paneId: string) => {
-    setState((current) => removePane(current, paneId));
-    if (selectedPaneId === paneId) setSelectedPaneId(null);
-    setFeedback((current) => {
-      const next = { ...current };
-      delete next[paneId];
-      return next;
-    });
-  };
-
-  const pane = findPane(state, selectedPaneId);
-  const context = findPaneContext(state, selectedPaneId);
-
-  const toggle = (groupId: string) => {
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(groupId)) next.delete(groupId);
-      else next.add(groupId);
-      return next;
-    });
-  };
+  const pane = state ? findPane(state, selectedPaneId) : null;
+  const context = state ? findPaneContext(state, selectedPaneId) : null;
 
   const select = (paneId: string) => {
-    setSelectedPaneId(paneId);
+    setView({ selectedPaneId: paneId, expanded });
     setFeedback((current) => ({ ...current, [paneId]: null }));
     setSettingsOpen(false);
   };
 
-  // 会話はプレビュー用に手元で積む。TODO: #14 で実データに置き換える。
-  const [chats, setChats] = useState<Record<string, ChatMessage[]>>({ ...previewChats });
-  // 返答待ちのペインと、待ち始めた時刻。同じペインに続けて送ると複数が並ぶ。
-  const [replying, setReplying] = useState<Record<string, number>>({});
-  const replyTimers = useRef(new Map<string, Set<number>>());
-
-  // 待ちを外す。timer を渡さなければ、そのペインの待ちをすべて止める。
-  const clearReply = (paneId: string, timer?: number) => {
-    const timers = replyTimers.current.get(paneId);
-    if (timers === undefined) return false;
-    if (timer === undefined) {
-      for (const each of timers) window.clearTimeout(each);
-      timers.clear();
-    } else {
-      window.clearTimeout(timer);
-      timers.delete(timer);
-    }
-    if (timers.size > 0) return true;
-
-    replyTimers.current.delete(paneId);
-    setReplying((current) => {
-      if (!(paneId in current)) return current;
-      const next = { ...current };
-      delete next[paneId];
-      return next;
-    });
-    return true;
+  const back = () => {
+    setView({ selectedPaneId: null, expanded });
   };
 
-  const stopPane = (paneId: string) => {
-    if (!clearReply(paneId)) return;
-    setFeedback((current) => ({ ...current, [paneId]: "プレビュー：停止しました" }));
+  const toggle = (groupId: string) => {
+    const next = new Set(expanded);
+    if (next.has(groupId)) next.delete(groupId);
+    else next.add(groupId);
+    setView({ selectedPaneId, expanded: next });
   };
 
-  const askPane = async (paneId: string, text: string) => {
-    // 端末のペインは返答を待たない。プレビューでは送っていないことだけ伝える。
-    const target = findPane(state, paneId);
-    if (target !== null && isShellPane(target)) {
-      setFeedback((current) => ({ ...current, [paneId]: "プレビュー：コマンドは実行されません" }));
-      return;
+  // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。
+  const sendToPane = async (paneId: string, text: string): Promise<boolean> => {
+    // 前の結果は消す。送り直したのに「送信しました」が残っていると、どれの結果か読めない。
+    setFeedback((current) => ({ ...current, [paneId]: null }));
+    try {
+      await sendInput(paneId, text);
+      setFeedback((current) => ({ ...current, [paneId]: "送信しました" }));
+      return true;
+    } catch {
+      setFeedback((current) => ({ ...current, [paneId]: "送信できませんでした" }));
+      return false;
     }
-
-    const at = Date.now();
-    setChats((current) => ({
-      ...current,
-      [paneId]: appendMessage(current[paneId] ?? [], {
-        id: `u-${at}`,
-        role: "user",
-        text,
-        at,
-      }),
-    }));
-    setReplying((current) => (paneId in current ? current : { ...current, [paneId]: at }));
-
-    // 返答までの間を空けて、待っている様子を見せる。止められるよう、待ちはタイマーで持つ。
-    const timer = window.setTimeout(() => {
-      clearReply(paneId, timer);
-      const answeredAt = Date.now();
-      setChats((current) => {
-        const turn = (current[paneId] ?? []).filter((message) => message.role === "agent").length;
-        return {
-          ...current,
-          [paneId]: appendMessage(current[paneId] ?? [], {
-            id: `a-${answeredAt}`,
-            role: "agent",
-            text: mockReply(text, turn),
-            at: answeredAt,
-            elapsedMs: answeredAt - at,
-          }),
-        };
-      });
-      setFeedback((current) => ({ ...current, [paneId]: "プレビュー：返答はモックです" }));
-    }, 4500);
-
-    const timers = replyTimers.current.get(paneId) ?? new Set<number>();
-    timers.add(timer);
-    replyTimers.current.set(paneId, timers);
   };
 
   // 詳細のタブバーは、選択中ペインが属するタブのペインだけを出す。
-  const siblings = useMemo(() => {
-    if (!pane) return [];
+  const siblings = (() => {
+    if (!state || !pane) return [];
     for (const workspace of state.workspaces) {
       for (const tab of workspace.tabs) {
         if (tab.panes.some((candidate) => candidate.id === pane.id)) return tab.panes;
       }
     }
     return [];
-    // 並べ替えで状態そのものが変わる。
-  }, [pane?.id, state]);
+  })();
 
   // 画面が狭くなったら一覧も詰める。詳細が読めない幅にはしない。
   useEffect(() => {
@@ -313,9 +254,9 @@ export function App() {
 
   const actions = (
     <>
-      <span class="hwc-conn">
+      <span class="hwc-conn" data-status={connection}>
         <span class="hwc-conn-dot" />
-        プレビュー
+        {connectionLabel(connection)}
       </span>
       <button
         type="button"
@@ -328,7 +269,7 @@ export function App() {
     </>
   );
 
-  // 分割は広い画面だけ。狭い画面では今までどおり 1 枚ずつ見る。
+  // 分割は広い画面だけ。狭い画面では 1 枚ずつ見る。
   const shown = splitPanes(siblings, pane?.id ?? "");
   const splitOn = wide && split && shown.length > 1;
 
@@ -337,14 +278,41 @@ export function App() {
       key={item.id}
       pane={item}
       context={where}
-      messages={chats[item.id] ?? previewChat(item.id)}
-      agentInfo={previewAgentInfo[item.id] ?? null}
-      replying={replying[item.id] !== undefined}
-      waitingMs={replying[item.id] === undefined ? null : now - replying[item.id]}
       feedback={feedback[item.id] ?? null}
-      onSubmit={(text) => askPane(item.id, text)}
-      onStop={() => stopPane(item.id)}
+      onSubmit={(text) => sendToPane(item.id, text)}
     />
+  );
+
+  const listPlaceholder = (
+    <div class="hwc-empty">
+      <div class="hwc-empty-mark">
+        <HerdrMark size={32} />
+      </div>
+      <h2 class="hwc-empty-title">
+        {connection === "unavailable" ? "Herdr に接続できません" : "接続中"}
+      </h2>
+      <p class="hwc-empty-text">
+        {connection === "unavailable"
+          ? "Herdr が起動しているか確かめてください。"
+          : "ペインの一覧を受け取っています。"}
+      </p>
+    </div>
+  );
+
+  const placeholder = (
+    <div class="hwc-empty hwc-empty--detail">
+      <div class="hwc-empty-mark hwc-empty-mark--app">
+        <HerdrMark size={40} />
+      </div>
+      <h2 class="hwc-empty-title">
+        {connection === "unavailable" ? "Herdr に接続できません" : "接続中"}
+      </h2>
+      <p class="hwc-empty-text">
+        {connection === "unavailable"
+          ? "Herdr が起動しているか確かめてください。接続が戻ると自動で表示されます。"
+          : "Herdr の状態を受け取っています。"}
+      </p>
+    </div>
   );
 
   return (
@@ -365,18 +333,19 @@ export function App() {
 
       <div class="hwc-body">
         <aside class="hwc-list" aria-label="ペイン一覧">
-          <PaneList
-            state={state}
-            selectedPaneId={selectedPaneId}
-            expanded={expanded}
-            onSelect={select}
-            onToggle={toggle}
-            onClosePane={closePane}
-            onDropPane={dropOnPane}
-            onMovePaneStep={movePaneOne}
-            workingSince={workingSince}
-            now={now}
-          />
+          {state === null ? (
+            listPlaceholder
+          ) : (
+            <PaneList
+              state={state}
+              selectedPaneId={selectedPaneId}
+              expanded={expanded}
+              onSelect={select}
+              onToggle={toggle}
+              workingSince={workingSince}
+              now={now}
+            />
+          )}
           {wide ? <div class="hwc-sidebar-foot">{actions}</div> : null}
         </aside>
 
@@ -397,7 +366,10 @@ export function App() {
           onPointerMove={(event) => {
             if (!drag.current) return;
             setSidebarWidth(
-              clampSidebarWidth(drag.current.startWidth + event.clientX - drag.current.startX),
+              clampSidebarWidth(
+                drag.current.startWidth + event.clientX - drag.current.startX,
+                window.innerWidth,
+              ),
             );
           }}
           onPointerUp={(event) => {
@@ -422,7 +394,10 @@ export function App() {
               theme={theme}
               onThemeChange={changeTheme}
               revision={revision}
+              connection={connection}
             />
+          ) : state === null ? (
+            placeholder
           ) : pane && context ? (
             <div class="hwc-detail-inner">
               <TabBar
@@ -430,8 +405,7 @@ export function App() {
                 panes={siblings}
                 split={splitOn}
                 onSelectPane={select}
-                onBack={() => setSelectedPaneId(null)}
-                onDropPane={dropOnPane}
+                onBack={back}
                 onToggleSplit={toggleSplit}
               />
               {splitOn ? (

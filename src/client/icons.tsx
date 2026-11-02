@@ -36,22 +36,6 @@ export function ChevronRightIcon({ size = 16 }: IconProps) {
   );
 }
 
-export function ChevronUpIcon({ size = 16 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M6 14.5l6-6 6 6" />
-    </Svg>
-  );
-}
-
-export function ChevronDownIcon({ size = 16 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M5 9l7 7 7-7" />
-    </Svg>
-  );
-}
-
 export function WorkspaceIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
@@ -239,16 +223,6 @@ export function SendIcon({ size = 20 }: IconProps) {
   );
 }
 
-// 端末へ渡す改行。送信の矢印とは意味が違うので、↵ の形にする。
-export function ReturnIcon({ size = 20 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M20 6v5a3 3 0 0 1-3 3H5" />
-      <path d="M9 10l-4 4 4 4" />
-    </Svg>
-  );
-}
-
 // 2x2 の分割表示。押している間はアクセント色で表す。
 export function SplitIcon({ size = 20 }: IconProps) {
   return (
@@ -261,47 +235,11 @@ export function SplitIcon({ size = 20 }: IconProps) {
   );
 }
 
-// 処理を止める。送信と同じ面に置くので、形だけで違いを見せる。
-export function StopIcon({ size = 20 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <rect x="4.5" y="4.5" width="15" height="15" rx="3.5" fill="currentColor" stroke="none" />
-    </Svg>
-  );
-}
-
 export function ArrowDownIcon({ size = 20 }: IconProps) {
   return (
     <Svg size={size}>
       <path d="M12 5v14" />
       <path d="M6 13l6 6 6-6" />
-    </Svg>
-  );
-}
-
-export function EyeIcon({ size = 16 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M2.5 12s3.6-6.5 9.5-6.5S21.5 12 21.5 12s-3.6 6.5-9.5 6.5S2.5 12 2.5 12z" />
-      <circle cx="12" cy="12" r="2.8" />
-    </Svg>
-  );
-}
-
-export function ExternalLinkIcon({ size = 16 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M14 4h6v6" />
-      <path d="M20 4l-8.5 8.5" />
-      <path d="M18 14.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V8.5A1.5 1.5 0 0 1 5 7h4.5" />
-    </Svg>
-  );
-}
-
-export function PaperclipIcon({ size = 16 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M19.03 10.47l-7.9 7.9a3.6 3.6 0 0 1-5.1-5.1l8-8a2.4 2.4 0 0 1 3.4 3.4l-7.9 7.9a1.2 1.2 0 0 1-1.7-1.7l6.9-6.9" />
     </Svg>
   );
 }
