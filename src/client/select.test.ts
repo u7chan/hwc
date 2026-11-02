@@ -37,8 +37,22 @@ const state: AppState = {
           agentStatus: "working",
           focused: true,
           panes: [
-            { id: "w1:p1", title: "π - hwc", agent: "pi", agentStatus: "working", focused: true },
-            { id: "w1:p2", title: null, agent: null, agentStatus: "unknown", focused: false },
+            {
+              id: "w1:p1",
+              title: "π - hwc",
+              agent: "pi",
+              agentStatus: "working",
+              focused: true,
+              chat: false,
+            },
+            {
+              id: "w1:p2",
+              title: null,
+              agent: null,
+              agentStatus: "unknown",
+              focused: false,
+              chat: false,
+            },
           ],
         },
         {
@@ -46,7 +60,16 @@ const state: AppState = {
           label: "verify",
           agentStatus: "idle",
           focused: false,
-          panes: [{ id: "w1:p3", title: "bash", agent: null, agentStatus: "idle", focused: false }],
+          panes: [
+            {
+              id: "w1:p3",
+              title: "bash",
+              agent: null,
+              agentStatus: "idle",
+              focused: false,
+              chat: false,
+            },
+          ],
         },
       ],
     },
@@ -63,7 +86,14 @@ const state: AppState = {
           agentStatus: "blocked",
           focused: false,
           panes: [
-            { id: "w2:p1", title: "bash", agent: null, agentStatus: "blocked", focused: false },
+            {
+              id: "w2:p1",
+              title: "bash",
+              agent: null,
+              agentStatus: "blocked",
+              focused: false,
+              chat: false,
+            },
           ],
         },
       ],
@@ -230,7 +260,14 @@ test("agentGlyph matches the agent name loosely", () => {
 
 test("a pane without an agent is a shell", () => {
   expect(
-    isShellPane({ id: "w1:p3", title: "bash", agent: null, agentStatus: "idle", focused: false }),
+    isShellPane({
+      id: "w1:p3",
+      title: "bash",
+      agent: null,
+      agentStatus: "idle",
+      focused: false,
+      chat: false,
+    }),
   ).toBe(true);
   expect(
     isShellPane({
@@ -239,6 +276,7 @@ test("a pane without an agent is a shell", () => {
       agent: "pi",
       agentStatus: "idle",
       focused: false,
+      chat: true,
     }),
   ).toBe(false);
 });
@@ -250,6 +288,7 @@ test("the split view shows at most four panes of the tab", () => {
     agent: "pi",
     agentStatus: "idle" as const,
     focused: false,
+    chat: false,
   }));
 
   expect(splitPanes(panes, "w1:p2").map((pane) => pane.id)).toEqual([

@@ -1,4 +1,4 @@
-import type { AgentStatus, HerdrAgent, HerdrSnapshot } from "./contract";
+import type { AgentStatus, HerdrAgent, HerdrAgentSession, HerdrSnapshot } from "./contract";
 
 export type { AgentStatus };
 
@@ -8,6 +8,7 @@ export type PaneState = {
   agent: string | null;
   agentStatus: AgentStatus;
   focused: boolean;
+  chat: boolean;
 };
 
 export type TabState = {
@@ -41,6 +42,13 @@ export type AppState = {
   workspaces: WorkspaceState[];
 };
 
+// 会話を読めるのは pi の path セッションだけ。ここでだけ path を取り出し、
+// AppState には載せない（クライアントにホストのパスを渡さない）。
+function piSessionPath(session: HerdrAgentSession | null | undefined): string | null {
+  if (!session || session.agent !== "pi" || session.kind !== "path") return null;
+  return session.value === "" ? null : session.value;
+}
+
 export function toAppState(snapshot: HerdrSnapshot): AppState {
   const agentsByPane = new Map<string, HerdrAgent>();
   for (const agent of snapshot.agents ?? []) {
@@ -57,6 +65,7 @@ export function toAppState(snapshot: HerdrSnapshot): AppState {
       agent: agent?.agent ?? null,
       agentStatus: pane.agent_status ?? "unknown",
       focused: pane.focused ?? false,
+      chat: piSessionPath(pane.agent_session) !== null,
     });
     panesByTab.set(pane.tab_id, panes);
   }
@@ -107,7 +116,17 @@ export type StateStore = {
   get: () => AppState | null;
   refresh: () => Promise<AppState>;
   onChange: (listener: (state: AppState) => void) => () => void;
+  sessionPath: (paneId: string) => string | null;
 };
+
+function toSessionPaths(snapshot: HerdrSnapshot): Map<string, string> {
+  const paths = new Map<string, string>();
+  for (const pane of snapshot.panes ?? []) {
+    const path = piSessionPath(pane.agent_session);
+    if (path !== null) paths.set(pane.pane_id, path);
+  }
+  return paths;
+}
 
 export function createStateStore(options: {
   load: () => Promise<HerdrSnapshot>;
@@ -116,6 +135,7 @@ export function createStateStore(options: {
   const retryDelayMs = options.retryDelayMs ?? 1_000;
   const listeners = new Set<(state: AppState) => void>();
   let current: AppState | null = null;
+  let sessions = new Map<string, string>();
   let running: Promise<AppState> | null = null;
   let pending = false;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -131,12 +151,14 @@ export function createStateStore(options: {
   };
 
   const publish = async (): Promise<AppState> => {
-    const state = toAppState(await options.load());
+    const snapshot = await options.load();
+    const state = toAppState(snapshot);
     if (retryTimer) {
       clearTimeout(retryTimer);
       retryTimer = null;
     }
     current = state;
+    sessions = toSessionPaths(snapshot);
     for (const listener of listeners) listener(state);
     return state;
   };
@@ -173,6 +195,7 @@ export function createStateStore(options: {
   return {
     get: () => current,
     refresh,
+    sessionPath: (paneId) => sessions.get(paneId) ?? null,
     onChange: (listener) => {
       listeners.add(listener);
       return () => {

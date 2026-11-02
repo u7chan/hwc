@@ -29,6 +29,12 @@ const snapshot: HerdrSnapshot = {
       tab_id: "w1:t1",
       agent_status: "working",
       focused: true,
+      agent_session: {
+        agent: "pi",
+        source: "herdr:pi",
+        kind: "path",
+        value: "/sessions/--home-dev--/2026-01-01.jsonl",
+      },
     },
     {
       pane_id: "w1:p3",
@@ -43,6 +49,7 @@ const snapshot: HerdrSnapshot = {
       tab_id: "w2:t1",
       agent_status: "idle",
       focused: false,
+      agent_session: { agent: "claude", source: "herdr:claude", kind: "path", value: "/tmp/c" },
     },
   ],
   agents: [
@@ -80,6 +87,7 @@ test("toAppState carries labels, agent names and agent statuses", () => {
     agent: "pi",
     agentStatus: "working",
     focused: true,
+    chat: true,
   });
 });
 
@@ -92,6 +100,7 @@ test("toAppState leaves agent fields empty for a pane without an agent", () => {
     agent: null,
     agentStatus: "idle",
     focused: false,
+    chat: false,
   });
   expect(state.workspaces[0]?.tabs[1]?.panes[0]).toMatchObject({
     id: "w1:p3",
@@ -131,6 +140,77 @@ test("toAppState drops tabs whose workspace is gone and panes whose tab is gone"
   expect(state.workspaces).toHaveLength(1);
   expect(state.workspaces[0]?.tabs.map((tab) => tab.id)).toEqual(["w1:t1"]);
   expect(state.workspaces[0]?.tabs[0]?.panes.map((pane) => pane.id)).toEqual(["w1:p1"]);
+});
+
+test("toAppState marks chat only for a pi session that has a path", () => {
+  const state = toAppState({
+    workspaces: [{ workspace_id: "w1" }],
+    tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
+    panes: [
+      {
+        pane_id: "w1:p1",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: { agent: "pi", source: "herdr:pi", kind: "path", value: "/a.jsonl" },
+      },
+      {
+        pane_id: "w1:p2",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: { agent: "claude", source: "herdr:claude", kind: "path", value: "/b" },
+      },
+      {
+        pane_id: "w1:p3",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: { agent: "pi", source: "herdr:pi", kind: "pid", value: "123" },
+      },
+      {
+        pane_id: "w1:p4",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: { agent: "pi", source: "herdr:pi", kind: "path", value: null },
+      },
+    ],
+  });
+
+  expect(state.workspaces[0]?.tabs[0]?.panes.map((pane) => pane.chat)).toEqual([
+    true,
+    false,
+    false,
+    false,
+  ]);
+});
+
+test("the store resolves a session path by pane id and keeps it out of the state", async () => {
+  const { store, loads } = createControlledStore();
+
+  const refresh = store.refresh();
+  loads[0]?.resolve(snapshot);
+  await refresh;
+
+  expect(store.sessionPath("w1:p2")).toBe("/sessions/--home-dev--/2026-01-01.jsonl");
+  expect(store.sessionPath("w1:p1")).toBeNull();
+  // パスはホストの構成を含む。クライアントへ配る状態には載せない。
+  expect(JSON.stringify(store.get())).not.toContain("/sessions/");
+});
+
+test("the store drops a session path once the pane has no session", async () => {
+  const { store, loads } = createControlledStore();
+
+  const first = store.refresh();
+  loads[0]?.resolve(snapshot);
+  await first;
+
+  const second = store.refresh();
+  loads[1]?.resolve({
+    workspaces: [{ workspace_id: "w1" }],
+    tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
+    panes: [{ pane_id: "w1:p2", workspace_id: "w1", tab_id: "w1:t1" }],
+  });
+  await second;
+
+  expect(store.sessionPath("w1:p2")).toBeNull();
 });
 
 async function waitFor(condition: () => boolean, timeoutMs = 2_000) {

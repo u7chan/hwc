@@ -33,12 +33,20 @@ export type HerdrTab = {
   focused?: boolean;
 };
 
+export type HerdrAgentSession = {
+  agent: string | null;
+  source: string | null;
+  kind: string | null;
+  value: string | null;
+};
+
 export type HerdrPane = {
   pane_id: string;
   workspace_id: string;
   tab_id: string;
   agent_status?: AgentStatus;
   focused?: boolean;
+  agent_session?: HerdrAgentSession | null;
 };
 
 export type HerdrAgent = {
@@ -79,6 +87,19 @@ function optionalStatus(value: unknown): AgentStatus {
 
 function optionalFlag(value: unknown): boolean {
   return value === true;
+}
+
+// セッションは任意で、Herdr の版によっては形が違う。読めない値は null にして、
+// スナップショット全体を落とさない（ペインの一覧はセッション無しでも表示できる）。
+function optionalAgentSession(value: unknown): HerdrAgentSession | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  return {
+    agent: optionalText(record.agent),
+    source: optionalText(record.source),
+    kind: optionalText(record.kind),
+    value: optionalText(record.value),
+  };
 }
 
 // git 管理下でないワークスペースは worktree を持たない。
@@ -129,6 +150,7 @@ export function parseSnapshot(value: unknown): HerdrSnapshot {
       tab_id: expectId(record.tab_id, `${path}.tab_id`),
       agent_status: optionalStatus(record.agent_status),
       focused: optionalFlag(record.focused),
+      agent_session: optionalAgentSession(record.agent_session),
     };
   });
 

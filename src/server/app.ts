@@ -1,5 +1,6 @@
 import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import type { ChatClient } from "./chat/pi";
 import {
   isInvalidRequest,
   isPaneNotFound,
@@ -7,10 +8,15 @@ import {
   parseInputBody,
   parseOutputQuery,
 } from "./herdr/panes";
-import type { AppState, StateStore } from "./herdr/state";
+import type { AppState, PaneState, StateStore } from "./herdr/state";
 
-export function createApp(options: { store: StateStore; panes: PaneClient; revision?: string }) {
-  const { store, panes, revision = "dev" } = options;
+export function createApp(options: {
+  store: StateStore;
+  panes: PaneClient;
+  chat: ChatClient;
+  revision?: string;
+}) {
+  const { store, panes, chat, revision = "dev" } = options;
 
   const current = async (): Promise<AppState | null> =>
     store.get() ??
@@ -23,6 +29,31 @@ export function createApp(options: { store: StateStore; panes: PaneClient; revis
     if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
     if (isInvalidRequest(error)) return c.json({ error: "invalid_request" }, 400);
     return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  const findPane = (state: AppState, paneId: string): PaneState | null => {
+    for (const workspace of state.workspaces) {
+      for (const tab of workspace.tabs) {
+        for (const pane of tab.panes) {
+          if (pane.id === paneId) return pane;
+        }
+      }
+    }
+    return null;
+  };
+
+  // If-None-Match は弱比較。W/ と引用符を落として比べ、複数値と * も受ける。
+  const matchesEtag = (header: string | undefined, etag: string): boolean => {
+    if (header === undefined) return false;
+    return header.split(",").some((value) => {
+      const trimmed = value.trim();
+      if (trimmed === "*") return true;
+      const unquoted = (trimmed.startsWith("W/") ? trimmed.slice(2) : trimmed).replace(
+        /^"|"$/g,
+        "",
+      );
+      return unquoted === etag;
+    });
   };
 
   return new Hono()
@@ -72,6 +103,29 @@ export function createApp(options: { store: StateStore; panes: PaneClient; revis
         });
       }),
     )
+    .get("/api/panes/:id/chat", async (c) => {
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      const pane = findPane(state, paneId);
+      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+
+      // path はクライアントから受け取らず、BFF がペイン id から引く。
+      const path = store.sessionPath(paneId);
+      if (!pane.chat || path === null) return c.json({ error: "no_chat" }, 404);
+
+      try {
+        const snapshot = await chat.snapshot(path);
+        c.header("ETag", `"${snapshot.etag}"`);
+        if (matchesEtag(c.req.header("if-none-match"), snapshot.etag)) {
+          return c.body(null, 304);
+        }
+        return c.json(snapshot);
+      } catch {
+        return c.json({ error: "chat_unavailable" }, 502);
+      }
+    })
     .get("/api/panes/:id/output", async (c) => {
       const query = parseOutputQuery(new URL(c.req.url).searchParams);
       if (!query.ok) return c.json({ error: query.error }, query.status);
