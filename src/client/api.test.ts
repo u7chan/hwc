@@ -85,12 +85,40 @@ const chatBody = {
   model: "pi-large",
   effort: null,
   truncated: false,
+  context: null,
 };
 
 test("a chat body is accepted as the contract describes it", () => {
   expect(toChatSnapshot(chatBody)).toEqual(chatBody);
   expect(toChatSnapshot({ ...chatBody, messages: [] })).toEqual({ ...chatBody, messages: [] });
   expect(toChatSnapshot({ ...chatBody, model: null })).toEqual({ ...chatBody, model: null });
+});
+
+test("a context that breaks the contract costs the numbers, not the conversation", () => {
+  const wide = { tokens: 122_600, window: 1_000_000 };
+
+  expect(toChatSnapshot({ ...chatBody, context: wide })).toEqual({ ...chatBody, context: wide });
+  // 片方だけ分かる状態も契約のうち。
+  expect(toChatSnapshot({ ...chatBody, context: { tokens: null, window: 1_000_000 } })).toEqual({
+    ...chatBody,
+    context: { tokens: null, window: 1_000_000 },
+  });
+  expect(toChatSnapshot({ ...chatBody, context: { tokens: 122_600, window: null } })).toEqual({
+    ...chatBody,
+    context: { tokens: 122_600, window: null },
+  });
+  // 形が違う context は数字を出さないだけにする。会話は捨てない。
+  for (const context of [
+    undefined,
+    {},
+    { tokens: "122600", window: 1_000_000 },
+    { tokens: 122_600 },
+    { tokens: 122_600, window: "1000000" },
+    [122_600, 1_000_000],
+    122_600,
+  ]) {
+    expect(toChatSnapshot({ ...chatBody, context })).toEqual({ ...chatBody, context: null });
+  }
 });
 
 test("a chat body that breaks the contract is dropped", () => {

@@ -2155,6 +2155,53 @@ button {
   line-height: 1.25rem;
 }
 
+/* 幅は文字サイズに追従させない。数字を縮めると読めなくなるので、縮めるのは model 名だけ。 */
+.hwc-context {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.hwc-context[data-tone="secondary"] {
+  color: var(--color-secondary);
+}
+
+.hwc-context[data-tone="attention"] {
+  color: var(--color-attention);
+}
+
+.hwc-context-narrow {
+  display: none;
+}
+
+@container (max-width: 360px) {
+  .hwc-context-wide {
+    display: none;
+  }
+
+  .hwc-context-narrow {
+    display: inline;
+  }
+}
+
+.hwc-context-bar {
+  flex: none;
+  width: 48px;
+  height: 4px;
+  border-radius: 999px;
+  /* 溝が surface に埋もれると、低い割合で棒が点に見える。装飾の輪郭トークンで line を使う。 */
+  background: var(--color-line);
+  overflow: hidden;
+}
+
+.hwc-context-bar-fill {
+  display: block;
+  height: 100%;
+  background: currentColor;
+}
+
 .hwc-send {
   flex: none;
   display: grid;
@@ -2195,14 +2242,26 @@ button {
 
 .hwc-input-actions {
   display: flex;
+  /* 狭い入力行で feedback が 1 文字幅まで潰れるのを防ぐ。入り切らないときは tail を
+     上の行に残し、feedback をその下へ落とす（wrap-reverse）。360px 以下の container
+     query とは別の、内容の幅での折り返し。 */
+  flex-wrap: wrap-reverse;
   align-items: center;
   gap: var(--space-2);
   padding: 0 0 var(--space-1) var(--space-2);
+  /* 幅の判定は画面ではなく入力行で行う。分割表示では viewport と一致しない。
+     flex: none の .hwc-input-tail に置くと主軸サイズが内容から決まらず幅 0 になる。 */
+  container-type: inline-size;
 }
 
 .hwc-feedback {
-  flex: 1;
+  /* basis を内容の幅にして、入り切らないときに tail を折り返させる。文字単位で折り返すと
+     1 文字ずつ縦積みになるので、メッセージ自体は折り返さない。 */
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
 }

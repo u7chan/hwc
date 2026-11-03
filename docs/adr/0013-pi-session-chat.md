@@ -26,7 +26,8 @@ pi は会話を v3 の JSONL で保存している。`user` / `assistant` のメ
 - 会話履歴の正は pi のセッション JSONL とし、SQLite などの二次ストアを持たない
 - ペインとセッションは 1:1 とみなす。Web は現在のセッションの active branch を映すだけで、セッション選択・分岐・過去セッション一覧は持たない
 - BFF がペイン id からセッション path を解決し、path はクライアントへ渡さない。クライアントから path も受け取らない
-- path ごとに増分リーダーを持ち、要求時にスナップショット（`etag` / `messages` / `model` / `effort` / `truncated`）を返す。バックグラウンド監視はしない
+- path ごとに増分リーダーを持ち、要求時にスナップショット（`etag` / `messages` / `model` / `effort` / `truncated` / `context`）を返す。バックグラウンド監視はしない
+- コンテキスト使用量は pi のモデルカタログを第二の情報源にする。`tokens` はセッション中の usage から、`window` は `models-store.json` の `contextWindow` に `models.json` の `providers[].modelOverrides` を重ねたカタログから引く。agent dir はセッション path（`<agent-dir>/sessions/<slug>/<file>.jsonl`）から導き、カタログは agent dir ごとにプロセス内で 1 回だけ解決する。引けないときは `null` を返し、`tokens` と `window` の両方が `null` なら `context` を `null` に畳む
 - 読み取りは追記分だけを対象にし、ヘッダの `id` の変化・`size` の減少・inode の変化・ファイルの消失で全リセットする。パースできない行はその行だけ捨てる
 - 応答は直近 500 メッセージ / 1MB の小さい方を上限にし、切ったら `truncated` を立てる
 - `etag` は path のハッシュ・リーダー生成時のランダム id・読み取り世代から作り、`If-None-Match` の弱比較で 304 を返す。世代は追記を消費したときとリセットしたときだけ進め、ENOENT が続く間は同じ `etag` を返す
@@ -41,3 +42,6 @@ pi は会話を v3 の JSONL で保存している。`user` / `assistant` のメ
 - キャッシュから追い出されたセッションは次の要求で全読みになる。上限は path あたり 8 件
 - 送信直後は pi がメッセージを書くまで遅れる。ローカルの pending を「送信中」として表示し、送信時点の最後の user 発話より後に新しい user 発話が現れたら置き換える。ターン終了または一定時間で打ち切る。正はセッションのまま
 - 500 件 / 1MB より古い会話は Web からは読めない
+- モデルカタログは起動時に固定する。プロバイダの追加や override の変更は BFF の再起動まで反映されない。`window` がプロセス内で定数になるため、応答の `ETag` はセッションの generation だけで整合する
+- `models-store.json` に無いモデル（組み込みのみのプロバイダ、拡張が足したモデル）は `window` が `null` になり割合を出さない。数値と window の片方だけ分かればその片方を出す
+- 未応答メッセージ分の推定はせず、`compaction` と `context_edit` の後は次の usage まで `tokens` を `null` にする。pi の TUI より小さく出るか早く `?` になるが、hwc の reader では pi と完全一致にできない

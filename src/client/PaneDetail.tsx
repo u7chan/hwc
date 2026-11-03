@@ -6,6 +6,8 @@ import { OUTPUT_LINES } from "./api";
 import {
   agentInfo,
   agentInfoLabel,
+  contextMeter,
+  type ContextMeterView,
   isPendingConfirmed,
   latestUserAt,
   paneBody,
@@ -204,6 +206,25 @@ function ChatLog(props: {
   );
 }
 
+// 数値は可視テキストと sr-only の全文で伝え、バーは装飾に留める。
+function ContextMeter(props: { view: ContextMeterView }) {
+  const { view } = props;
+  return (
+    <span class="hwc-context" data-tone={view.tone}>
+      <span class="hwc-context-text" aria-hidden="true">
+        <span class="hwc-context-wide">{view.wide}</span>
+        <span class="hwc-context-narrow">{view.narrow}</span>
+      </span>
+      <span class="hwc-visually-hidden">{view.wide}</span>
+      {view.percent === null ? null : (
+        <span class="hwc-context-bar" aria-hidden="true">
+          <span class="hwc-context-bar-fill" style={{ width: `${view.fill}%` }} />
+        </span>
+      )}
+    </span>
+  );
+}
+
 type PaneDetailProps = {
   pane: PaneState;
   context: { workspaceLabel: string; tabLabel: string };
@@ -244,6 +265,8 @@ export function PaneDetail(props: PaneDetailProps) {
     !replying;
   const empty = body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty;
   const info = agentInfo(snapshot);
+  // モデルと effort が無くても、コンテキストの材料があれば行を出す。
+  const meter = contextMeter(snapshot?.context ?? null);
   const content = body.kind === "chat" ? body.snapshot.messages : output;
 
   const input = useRef<HTMLTextAreaElement>(null);
@@ -466,15 +489,19 @@ export function PaneDetail(props: PaneDetailProps) {
               {feedback}
             </span>
             <span class="hwc-input-tail">
-              {info === null ? null : (
-                <span class="hwc-input-info" title={agentInfoLabel(info)}>
+              {info === null && meter === null ? null : (
+                <span
+                  class="hwc-input-info"
+                  title={info === null ? undefined : agentInfoLabel(info)}
+                >
                   <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
                     <AgentGlyphIcon agent={pane.agent} size={14} />
                   </span>
-                  {info.model === null ? null : <span class="hwc-input-model">{info.model}</span>}
-                  {info.effort === null ? null : (
+                  {info?.model == null ? null : <span class="hwc-input-model">{info.model}</span>}
+                  {info?.effort == null ? null : (
                     <span class="hwc-input-effort">{info.effort}</span>
                   )}
+                  {meter === null ? null : <ContextMeter view={meter} />}
                 </span>
               )}
               <button
