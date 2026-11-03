@@ -44,21 +44,25 @@ export function writeSelectedPane(paneId: string | null): void {
 }
 
 // 開き直したペインが折りたたまれた中にあると、一覧のどこにいるのか分からない。
-// そのペインのワークスペースとタブだけ開いておく。
+// そのペインのワークスペースとタブだけ開いておく。ただし利用者が自分で畳んだものは
+// 開き直さない（覚えている開閉と画面を食い違わせない）。
 export function expandForPane(
   state: AppState,
   paneId: string,
   open: ReadonlySet<string>,
+  remembered: ReadonlyMap<string, boolean>,
 ): ReadonlySet<string> {
   const next = new Set(open);
+  const shut = (groupId: string) => remembered.get(groupId) === false;
   for (const workspace of state.workspaces) {
     const tab = workspace.tabs.find((candidate) =>
       candidate.panes.some((pane) => pane.id === paneId),
     );
     if (!tab) continue;
-    next.add(workspace.id);
-    next.add(tab.id);
-    if (workspace.worktree) next.add(`repo:${workspace.worktree.repoName}`);
+    if (!shut(workspace.id)) next.add(workspace.id);
+    if (!shut(tab.id)) next.add(tab.id);
+    const repo = workspace.worktree ? `repo:${workspace.worktree.repoName}` : null;
+    if (repo !== null && !shut(repo)) next.add(repo);
   }
   return next;
 }

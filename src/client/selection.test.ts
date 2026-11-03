@@ -75,11 +75,19 @@ test("a broken value means nothing was selected", () => {
 });
 
 test("the reopened pane has its workspace and tab open", () => {
-  const open = expandForPane(state, "w2:p1", new Set(["w1"]));
+  const open = expandForPane(state, "w2:p1", new Set(["w1"]), new Map());
   expect([...open].sort()).toEqual(["repo:u7agent", "w1", "w2", "w2:t1"]);
+});
+
+test("a group the user folded stays folded", () => {
+  const closed = expandForPane(state, "w2:p1", new Set(["w1"]), new Map([["w2", false]]));
+  expect([...closed].sort()).toEqual(["repo:u7agent", "w1", "w2:t1"]);
+
+  const tabClosed = expandForPane(state, "w2:p1", new Set(["w1"]), new Map([["w2:t1", false]]));
+  expect([...tabClosed].sort()).toEqual(["repo:u7agent", "w1", "w2"]);
 });
 
 test("a pane outside the tree opens nothing extra", () => {
   const open = new Set(["w1"]);
-  expect([...expandForPane(state, "w9:p1", open)]).toEqual(["w1"]);
+  expect([...expandForPane(state, "w9:p1", open, new Map())]).toEqual(["w1"]);
 });

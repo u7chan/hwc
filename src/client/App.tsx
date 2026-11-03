@@ -148,12 +148,14 @@ function SplitCell(props: { children: (compact: boolean) => ComponentChildren })
 // 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
 // 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
-function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean>): View {
+function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean> | null): View {
   const selectedPaneId = restorePane(state, readSelectedPane());
-  const base = applyOpenGroups(initialExpanded(state), openGroups, groupIds(state));
+  const remembered = openGroups ?? new Map();
+  const base = applyOpenGroups(initialExpanded(state), remembered, groupIds(state));
   return {
     selectedPaneId,
-    expanded: selectedPaneId === null ? base : expandForPane(state, selectedPaneId, base),
+    expanded:
+      selectedPaneId === null ? base : expandForPane(state, selectedPaneId, base, remembered),
   };
 }
 
@@ -186,10 +188,10 @@ export function App() {
       typeof localStorage === "undefined" ? null : localStorage.getItem(HIDDEN_STORAGE_KEY),
     ),
   );
-  const [openGroups, setOpenGroups] = useState<ReadonlyMap<string, boolean>>(() =>
-    parseOpenGroups(
-      typeof localStorage === "undefined" ? null : localStorage.getItem(OPEN_GROUPS_STORAGE_KEY),
-    ),
+  // 開閉の記憶は初期表示と切り替えのときだけ読む。描き直しには使わない。
+  const openGroups = useRef<ReadonlyMap<string, boolean> | null>(null);
+  openGroups.current ??= parseOpenGroups(
+    typeof localStorage === "undefined" ? null : localStorage.getItem(OPEN_GROUPS_STORAGE_KEY),
   );
   const [scope, setScope] = useState<ListScope>(() =>
     parseListScope(
@@ -308,20 +310,26 @@ export function App() {
   const selectedPaneId = view
     ? view.selectedPaneId
     : state
-      ? (initialView.current ??= defaultView(state, openGroups)).selectedPaneId
+      ? (initialView.current ??= defaultView(state, openGroups.current)).selectedPaneId
       : null;
   const expanded = view
     ? view.expanded
     : state
-      ? (initialView.current ??= defaultView(state, openGroups)).expanded
+      ? (initialView.current ??= defaultView(state, openGroups.current)).expanded
       : NO_GROUPS;
+
+  // 画面に出ている選択をそのまま覚える。復元先が消えて Herdr の focus に倒れたときも、
+  // 次に開いたときに同じペインが出る（表示と保存を二重に持たない）。
+  useEffect(() => {
+    if (state === null) return;
+    writeSelectedPane(selectedPaneId);
+  }, [state, selectedPaneId]);
 
   const pane = state ? findPane(state, selectedPaneId) : null;
   const context = state ? findPaneContext(state, selectedPaneId) : null;
 
   const select = (paneId: string) => {
     setView({ selectedPaneId: paneId, expanded });
-    writeSelectedPane(paneId);
     setSettingsOpen(false);
   };
 
@@ -335,7 +343,6 @@ export function App() {
 
   const back = () => {
     setView({ selectedPaneId: null, expanded });
-    writeSelectedPane(null);
   };
 
   // 開閉は次に開いたときも同じにしたいので、既定からの差分として覚える。
@@ -345,8 +352,8 @@ export function App() {
     else next.add(groupId);
     setView({ selectedPaneId, expanded: next });
 
-    const remembered = rememberGroup(openGroups, groupId, next.has(groupId));
-    setOpenGroups(remembered);
+    const remembered = rememberGroup(openGroups.current ?? new Map(), groupId, next.has(groupId));
+    openGroups.current = remembered;
     if (typeof localStorage !== "undefined") {
       try {
         localStorage.setItem(
