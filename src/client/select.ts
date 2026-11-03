@@ -177,16 +177,24 @@ export function soleTab(workspace: WorkspaceState): TabState | null {
   return workspace.tabs.length === 1 ? workspace.tabs[0] : null;
 }
 
+export type PaneContext = {
+  workspaceLabel: string;
+  tabLabel: string;
+  // ブランチはスペースの属性。同じスペースのペインは同じ値になる。
+  branch: string | null;
+};
+
 // 画面上部に出す、いま見ている対象の要約。選択が無いときは null。
-export function findPaneContext(
-  state: AppState,
-  paneId: string | null,
-): { workspaceLabel: string; tabLabel: string } | null {
+export function findPaneContext(state: AppState, paneId: string | null): PaneContext | null {
   if (paneId === null) return null;
   for (const workspace of state.workspaces) {
     for (const tab of workspace.tabs) {
       if (tab.panes.some((pane) => pane.id === paneId)) {
-        return { workspaceLabel: workspace.label, tabLabel: tab.label };
+        return {
+          workspaceLabel: workspace.label,
+          tabLabel: tab.label,
+          branch: workspace.branch ?? null,
+        };
       }
     }
   }

@@ -21,6 +21,7 @@ import {
   groupIds,
   initialExpanded,
   splitPanes,
+  type PaneContext,
 } from "./select";
 import {
   OPEN_GROUPS_STORAGE_KEY,
@@ -506,16 +507,16 @@ export function App() {
   const splitOn = wide && split && shown.length > 0;
   const cells = splitOn ? shown : pane === null ? [] : [pane];
 
-  const renderPane = (
-    item: PaneState,
-    where: { workspaceLabel: string; tabLabel: string },
-    compact: boolean,
-  ) => (
+  const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
     <PaneDetail
       key={item.id}
       pane={item}
       context={where}
       compact={compact}
+      // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
+      labeled={cells.length > 1}
+      // ブランチは一覧が隠れる狭い画面でだけ出す。広い画面の一覧と分割のセルでは重なる。
+      branch={wide || cells.length > 1 ? null : where.branch}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
       onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
     />

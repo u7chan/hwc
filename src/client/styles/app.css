@@ -1243,7 +1243,7 @@ button {
   padding-left: var(--space-4);
 }
 
-/* ペインの見出し。名前と ID を上端に置き、分割したときもどのセルか分かるようにする。 */
+/* ペインの見出し。1 枚表示はブランチと ID、分割セルは名前と ID を上端に置く。 */
 .hwc-pane-head {
   flex: none;
   display: flex;
@@ -1283,6 +1283,20 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 1 枚のときだけ、ペインの代わりにスペースの文脈を置く。長い名前は切る。
+   切れた全文は長押しで選べるようにする（body は選択を止めている）。 */
+.hwc-pane-head-branch {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 .hwc-pane-head .hwc-pane-id {
@@ -1381,6 +1395,12 @@ button {
 
   .hwc-pane-head:hover .hwc-pane-id,
   .hwc-pane-id:focus-within {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* 名前を持たない見出しは、ホバー待ちにすると空の行に見える。ID は常に出す。 */
+  .hwc-pane-head[data-bare="true"] .hwc-pane-id {
     opacity: 1;
     transform: none;
   }

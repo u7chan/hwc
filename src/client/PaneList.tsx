@@ -388,7 +388,11 @@ function TreePaneList(props: TreePaneListProps) {
                       )}
                       <span class="hwc-pane-name">{paneRowTitle(pane)}</span>
                     </span>
-                    {branch === null ? null : <span class="hwc-pane-sub">{branch}</span>}
+                    {branch === null ? null : (
+                      <span class="hwc-pane-sub" title={branch}>
+                        {branch}
+                      </span>
+                    )}
                   </span>
                   {startedAt === undefined ? null : (
                     <span class="hwc-pane-elapsed">{formatElapsed(now - startedAt)}</span>
