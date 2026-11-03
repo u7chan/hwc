@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type ChatReader, ChatUnavailableError, createChatClient } from "./pi";
 
 let dir: string;
@@ -64,6 +64,39 @@ const assistant = (
   });
 
 const text = (value: string): unknown[] => [{ type: "text", text: value }];
+
+const usage = (totalTokens: number, extra: Record<string, unknown> = {}): unknown => ({
+  input: totalTokens,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens,
+  ...extra,
+});
+
+// window を引くには <agent-dir>/sessions/<slug>/<file>.jsonl の形が要る。
+async function writeAgentSession(agentDir: string, ...lines: readonly string[]): Promise<string> {
+  fileCount += 1;
+  const path = join(agentDir, "sessions", "slug", `session-${fileCount}.jsonl`);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, lines.map((line) => `${line}\n`).join(""));
+  return path;
+}
+
+async function writeCatalog(
+  agentDir: string,
+  files: { store?: unknown; config?: unknown },
+): Promise<void> {
+  await mkdir(agentDir, { recursive: true });
+  for (const [name, body] of [
+    ["models-store.json", files.store],
+    ["models.json", files.config],
+  ] as const) {
+    if (body !== undefined) await writeFile(join(agentDir, name), JSON.stringify(body));
+  }
+}
+
+const providerModels = (models: Array<Record<string, unknown>>): unknown => ({ models });
 
 test("returns only the user and assistant text in order", async () => {
   const path = await writeSession(
@@ -378,7 +411,14 @@ test("reuses one reader per session and evicts the least recently used one", asy
     limit: 2,
     load: async (reader) => {
       seen.push({ path: reader.path, reader });
-      return { etag: reader.etagPrefix, messages: [], model: null, effort: null, truncated: false };
+      return {
+        etag: reader.etagPrefix,
+        messages: [],
+        model: null,
+        effort: null,
+        truncated: false,
+        context: null,
+      };
     },
   });
 
@@ -398,4 +438,350 @@ test("reuses one reader per session and evicts the least recently used one", asy
   expect(seen[1]?.reader).toBe(seen[0]?.reader);
   // 上限 2 を超えたので a は捨てられ、次の要求で作り直される。
   expect(seen[4]?.reader).not.toBe(seen[0]?.reader);
+});
+
+const agentDir = (): string => join(dir, "agent");
+
+test("reads tokens and the window from the session's agent dir catalog", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, {
+    store: {
+      "opencode-go": providerModels([{ id: "deepseek-v4.1-flash", contextWindow: 1_000_000 }]),
+    },
+  });
+  const path = await writeAgentSession(
+    agent,
+    header(),
+    entry("model_change", "m1", null, {
+      provider: "opencode-go",
+      modelId: "deepseek-v4.1-flash",
+    }),
+    user("u1", "m1", "hello"),
+    assistant("a1", "u1", text("hi"), {
+      model: "deepseek-v4.1-flash",
+      provider: "opencode-go",
+      stopReason: "endTurn",
+      usage: usage(122_600),
+    }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.context).toEqual({ tokens: 122_600, window: 1_000_000 });
+});
+
+test("a model override in models.json wins over the stored window", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, {
+    store: { "openai-codex": providerModels([{ id: "gpt-6-luna", contextWindow: 272_000 }]) },
+    config: {
+      providers: {
+        "openai-codex": { modelOverrides: { "gpt-6-luna": { contextWindow: 1_050_000 } } },
+      },
+    },
+  });
+  const path = await writeAgentSession(
+    agent,
+    header(),
+    assistant("a1", null, text("hi"), {
+      model: "gpt-6-luna",
+      provider: "openai-codex",
+      usage: usage(1_000),
+    }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.context).toEqual({ tokens: 1_000, window: 1_050_000 });
+});
+
+test("an override for a model the store does not have stays unknown", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, {
+    store: { p: providerModels([]) },
+    config: { providers: { p: { modelOverrides: { m: { contextWindow: 1_000_000 } } } } },
+  });
+  const path = await writeAgentSession(
+    agent,
+    header(),
+    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(1_000) }),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toEqual({
+    tokens: 1_000,
+    window: null,
+  });
+});
+
+test("a window that is not a positive number is left unknown", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, {
+    store: {
+      zero: providerModels([{ id: "m", contextWindow: 0 }]),
+      negative: providerModels([{ id: "m", contextWindow: -1 }]),
+      textual: providerModels([{ id: "m", contextWindow: "1000000" }]),
+      missing: providerModels([{ id: "m" }]),
+    },
+  });
+  const chat = createChatClient();
+
+  for (const provider of ["zero", "negative", "textual", "missing"]) {
+    const path = await writeAgentSession(
+      agent,
+      header(),
+      assistant("a1", null, text("hi"), { model: "m", provider, usage: usage(1_000) }),
+    );
+    expect((await chat.snapshot(path)).context).toEqual({ tokens: 1_000, window: null });
+  }
+});
+
+test("the agent dir is derived from the session path and needs models-store.json", async () => {
+  // セッションの 3 つ上ではなく tmpdir 直下に models-store.json を置いても使わない。
+  await writeCatalog(dir, {
+    store: { p: providerModels([{ id: "m", contextWindow: 1_000_000 }]) },
+  });
+  const path = await writeSession(
+    header(),
+    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(1_000) }),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toEqual({
+    tokens: 1_000,
+    window: null,
+  });
+});
+
+test("the window follows the model on display, not the one that reported the usage", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, {
+    store: {
+      "openai-codex": providerModels([{ id: "gpt-6", contextWindow: 256_000 }]),
+      other: providerModels([{ id: "big", contextWindow: 1_000_000 }]),
+    },
+  });
+  const path = await writeAgentSession(
+    agent,
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi"), { model: "big", provider: "other", usage: usage(122_600) }),
+    // 切り替え直後は、古いモデルで採った usage と新しいモデルの window が並ぶ。
+    entry("model_change", "m1", "a1", { provider: "openai-codex", modelId: "gpt-6" }),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toEqual({
+    tokens: 122_600,
+    window: 256_000,
+  });
+});
+
+test("a tool-only assistant still reports the usage of the turn", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "run it"),
+    assistant(
+      "a1",
+      "u1",
+      [{ type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } }],
+      { usage: usage(9_000), stopReason: "toolUse" },
+    ),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.messages).toHaveLength(1);
+  expect(snapshot.context).toEqual({ tokens: 9_000, window: null });
+});
+
+test("an all-zero usage is not a context reading", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi"), {
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 },
+    }),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toBeNull();
+});
+
+test("the usage total falls back to the sum of its parts", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi"), {
+      usage: { input: 1_000, output: 200, cacheRead: 300, cacheWrite: 0 },
+    }),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toEqual({
+    tokens: 1_500,
+    window: null,
+  });
+});
+
+test("an aborted or failed turn does not report usage", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("ok"), { usage: usage(4_000), stopReason: "endTurn" }),
+    user("u2", "a1", "more"),
+    assistant("a2", "u2", text("partial"), { usage: usage(9_000), stopReason: "aborted" }),
+    user("u3", "a2", "retry"),
+    assistant("a3", "u3", text("failed"), { usage: usage(9_000), stopReason: "error" }),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toEqual({
+    tokens: 4_000,
+    window: null,
+  });
+});
+
+test("a compaction makes the earlier usage unknowable until the next answer", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi"), { usage: usage(122_600) }),
+    entry("compaction", "c1", "a1", {
+      summary: "so far",
+      firstKeptEntryId: "u1",
+      tokensBefore: 122_600,
+    }),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toBeNull();
+
+  await writeFile(
+    path,
+    [
+      user("u2", "c1", "continue"),
+      assistant("a2", "u2", text("done"), { usage: usage(3_000) }),
+      "",
+    ].join("\n"),
+    { flag: "a" },
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toEqual({
+    tokens: 3_000,
+    window: null,
+  });
+});
+
+test("a context edit also makes the earlier usage unknowable", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi"), { usage: usage(122_600) }),
+    entry("context_edit", "e1", "a1", { targetId: "u1", replacement: null }),
+    user("u2", "e1", "next"),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toBeNull();
+});
+
+test("usage outside the active branch is ignored", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "start"),
+    assistant("a1", "u1", text("kept"), { usage: usage(50_000) }),
+    user("u2", "a1", "branch A"),
+    assistant("a2", "u2", text("abandoned"), { usage: usage(200_000) }),
+    // /tree で u1 ではなく a1 から選び直した状態。末尾が新しい枝になる。
+    user("u3", "a1", "branch B"),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toEqual({
+    tokens: 50_000,
+    window: null,
+  });
+});
+
+test("the window is shown before the first usage arrives", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, {
+    store: { p: providerModels([{ id: "m", contextWindow: 1_000_000 }]) },
+  });
+  const path = await writeAgentSession(
+    agent,
+    header(),
+    entry("model_change", "m1", null, { provider: "p", modelId: "m" }),
+    user("u1", "m1", "hello"),
+  );
+
+  expect((await createChatClient().snapshot(path)).context).toEqual({
+    tokens: null,
+    window: 1_000_000,
+  });
+});
+
+test("the context is folded into the four states the contract allows", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, {
+    store: { p: providerModels([{ id: "m", contextWindow: 100_000 }]) },
+  });
+  const chat = createChatClient();
+
+  const both = await writeAgentSession(
+    agent,
+    header(),
+    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(1_000) }),
+  );
+  const windowOnly = await writeAgentSession(
+    agent,
+    header(),
+    entry("model_change", "m1", null, { provider: "p", modelId: "m" }),
+  );
+  const tokensOnly = await writeAgentSession(
+    agent,
+    header(),
+    assistant("a1", null, text("hi"), { model: "m", provider: "gone", usage: usage(1_000) }),
+  );
+  const neither = await writeAgentSession(agent, header(), user("u1", null, "hello"));
+
+  expect((await chat.snapshot(both)).context).toEqual({ tokens: 1_000, window: 100_000 });
+  expect((await chat.snapshot(windowOnly)).context).toEqual({ tokens: null, window: 100_000 });
+  expect((await chat.snapshot(tokensOnly)).context).toEqual({ tokens: 1_000, window: null });
+  // 材料が無いときだけ null。{ tokens: null, window: null } は返さない。
+  expect((await chat.snapshot(neither)).context).toBeNull();
+});
+
+test("the catalog is resolved once per agent dir", async () => {
+  let loads = 0;
+  const chat = createChatClient({
+    sessionAgentDir: async () => "/agent",
+    loadCatalog: async () => {
+      loads += 1;
+      return { contextWindow: () => 1_000_000 };
+    },
+  });
+  const one = await writeSession(
+    header(),
+    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(1_000) }),
+  );
+  const two = await writeSession(
+    header(),
+    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(2_000) }),
+  );
+
+  expect((await chat.snapshot(one)).context).toEqual({ tokens: 1_000, window: 1_000_000 });
+  expect((await chat.snapshot(two)).context).toEqual({ tokens: 2_000, window: 1_000_000 });
+  expect(loads).toBe(1);
+});
+
+test("a catalog written after the first read is not picked up", async () => {
+  const agent = agentDir();
+  await mkdir(join(agent, "sessions", "slug"), { recursive: true });
+  const path = await writeAgentSession(
+    agent,
+    header(),
+    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(1_000) }),
+  );
+  const chat = createChatClient();
+
+  expect((await chat.snapshot(path)).context).toEqual({ tokens: 1_000, window: null });
+
+  // 起動後に足したプロバイダや override は BFF の再起動まで反映しない。
+  await writeCatalog(agent, {
+    store: { p: providerModels([{ id: "m", contextWindow: 1_000_000 }]) },
+  });
+  expect((await chat.snapshot(path)).context).toEqual({ tokens: 1_000, window: null });
 });

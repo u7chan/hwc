@@ -129,6 +129,9 @@ export function createApp(options: {
 
       try {
         const snapshot = await chat.snapshot(path);
+        // context.window はプロセス内で 1 回だけ解決したカタログから引く（pi.ts）。起動後に
+        // モデルカタログを再読込しないので window はプロセス内で定数になり、session の
+        // generation だけを ETag にしても整合する。
         c.header("ETag", `"${snapshot.etag}"`);
         if (matchesEtag(c.req.header("if-none-match"), snapshot.etag)) {
           return c.body(null, 304);

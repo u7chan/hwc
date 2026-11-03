@@ -1,11 +1,17 @@
 import { expect, test } from "bun:test";
-import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
+import type { ChatContext, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PendingMessage } from "./chat";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
 import {
   agentInfo,
   agentInfoLabel,
   chatPollDelay,
+  contextFill,
+  contextMeter,
+  contextPercent,
+  contextText,
+  contextTone,
+  formatTokens,
   isAbortError,
   isPendingConfirmed,
   latestUserAt,
@@ -19,6 +25,7 @@ const snapshot: ChatSnapshot = {
   model: "pi-large",
   effort: "high",
   truncated: false,
+  context: null,
 };
 
 const empty: ChatSnapshot = { ...snapshot, messages: [] };
@@ -114,6 +121,78 @@ test("the label shows the parts that exist", () => {
   expect(agentInfoLabel({ model: "pi-large", effort: "high" })).toBe("pi-large · effort high");
   expect(agentInfoLabel({ model: "pi-large", effort: null })).toBe("pi-large");
   expect(agentInfoLabel({ model: null, effort: "low" })).toBe("effort low");
+});
+
+test("token counts are shortened the way pi's footer does", () => {
+  expect(formatTokens(0)).toBe("0");
+  expect(formatTokens(999)).toBe("999");
+  expect(formatTokens(1_000)).toBe("1.0k");
+  expect(formatTokens(9_999)).toBe("10.0k");
+  expect(formatTokens(122_600)).toBe("123k");
+  expect(formatTokens(999_999)).toBe("1000k");
+  expect(formatTokens(1_000_000)).toBe("1.0M");
+  expect(formatTokens(1_050_000)).toBe("1.1M");
+  expect(formatTokens(12_345_678)).toBe("12M");
+});
+
+test("the percent is derived from tokens and window, one decimal below 10%", () => {
+  expect(contextPercent({ tokens: 122_600, window: 1_000_000 })).toBeCloseTo(12.26);
+  expect(contextPercent({ tokens: null, window: 1_000_000 })).toBeNull();
+  expect(contextPercent({ tokens: 122_600, window: null })).toBeNull();
+  // window 0 は Infinity になる。BFF はこの形を送らないが、描画側でも作らない。
+  expect(contextPercent({ tokens: 122_600, window: 0 })).toBeNull();
+});
+
+test("the meter turns to attention only above 70%", () => {
+  expect(contextTone(0)).toBe("secondary");
+  expect(contextTone(70)).toBe("secondary");
+  expect(contextTone(70.1)).toBe("attention");
+  expect(contextTone(140)).toBe("attention");
+});
+
+test("the fill stays inside the track while the number may pass 100%", () => {
+  expect(contextFill(12.3)).toBe(12.3);
+  expect(contextFill(-5)).toBe(0);
+  expect(contextFill(140)).toBe(100);
+});
+
+// Issue #45 の表と同じ並び。材料が増える順に、広い表現と狭い表現を固定する。
+const contextRows: Array<{ context: ChatContext; wide: string | null; narrow: string | null }> = [
+  {
+    context: { tokens: 122_600, window: 1_000_000 },
+    wide: "123k/1.0M (12.3%)",
+    narrow: "12.3%",
+  },
+  { context: { tokens: null, window: 1_000_000 }, wide: "?/1.0M", narrow: "?" },
+  { context: { tokens: 122_600, window: null }, wide: "123k/?", narrow: "123k" },
+  { context: { tokens: null, window: null }, wide: null, narrow: null },
+];
+
+test("the context text falls back to the material it has in each width", () => {
+  for (const row of contextRows) {
+    expect(contextText(row.context, false)).toBe(row.wide);
+    expect(contextText(row.context, true)).toBe(row.narrow);
+  }
+});
+
+test("the meter is drawn only when there is something to show", () => {
+  expect(contextMeter(null)).toBeNull();
+  expect(contextMeter({ tokens: null, window: null })).toBeNull();
+  expect(contextMeter({ tokens: 900_000, window: 1_000_000 })).toEqual({
+    wide: "900k/1.0M (90.0%)",
+    narrow: "90.0%",
+    percent: 90,
+    fill: 90,
+    tone: "attention",
+  });
+  // window が分からないときは percent もバーも無い。
+  expect(contextMeter({ tokens: 122_600, window: null })).toEqual({
+    wide: "123k/?",
+    narrow: "123k",
+    percent: null,
+    fill: 0,
+    tone: "secondary",
+  });
 });
 
 const pending: PendingMessage = {

@@ -2155,6 +2155,53 @@ button {
   line-height: 1.25rem;
 }
 
+/* 幅は文字サイズに追従させない。数字を縮めると読めなくなるので、縮めるのは model 名だけ。 */
+.hwc-context {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.hwc-context[data-tone="secondary"] {
+  color: var(--color-secondary);
+}
+
+.hwc-context[data-tone="attention"] {
+  color: var(--color-attention);
+}
+
+.hwc-context-narrow {
+  display: none;
+}
+
+@container (max-width: 360px) {
+  .hwc-context-wide {
+    display: none;
+  }
+
+  .hwc-context-narrow {
+    display: inline;
+  }
+}
+
+.hwc-context-bar {
+  flex: none;
+  width: 48px;
+  height: 4px;
+  border-radius: 999px;
+  /* 溝が surface に埋もれると、低い割合で棒が点に見える。装飾の輪郭トークンで line を使う。 */
+  background: var(--color-line);
+  overflow: hidden;
+}
+
+.hwc-context-bar-fill {
+  display: block;
+  height: 100%;
+  background: currentColor;
+}
+
 .hwc-send {
   flex: none;
   display: grid;
@@ -2198,6 +2245,9 @@ button {
   align-items: center;
   gap: var(--space-2);
   padding: 0 0 var(--space-1) var(--space-2);
+  /* 幅の判定は画面ではなく入力行で行う。分割表示では viewport と一致しない。
+     flex: none の .hwc-input-tail に置くと主軸サイズが内容から決まらず幅 0 になる。 */
+  container-type: inline-size;
 }
 
 .hwc-feedback {

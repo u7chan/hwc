@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
+import type { ChatContext, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, readChat } from "./api";
 
@@ -80,6 +80,76 @@ export function agentInfoLabel(info: AgentInfo): string {
   return [info.model, info.effort === null ? null : `effort ${info.effort}`]
     .filter((part): part is string => part !== null)
     .join(" · ");
+}
+
+// pi の footer と同じ丸め。桁が上がる境目で単位を切り替える。
+export function formatTokens(count: number): string {
+  if (count < 1_000) return count.toString();
+  if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
+  if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
+  if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  return `${Math.round(count / 1_000_000)}M`;
+}
+
+export function contextPercent(context: ChatContext): number | null {
+  const { tokens, window } = context;
+  if (tokens === null || window === null || window <= 0) return null;
+  return (tokens / window) * 100;
+}
+
+// pi は 90% 超を危険色にするが、hwc に危険な状態の文字色は無い。バーの長さでも差が出るので
+// 段は 1 つに留める。段を増やすなら design のトークンを見直す。
+export function contextTone(percent: number): "secondary" | "attention" {
+  return percent > 70 ? "attention" : "secondary";
+}
+
+// 100% を超えても数値はそのまま出す。塗りだけをトラックの中に収める。
+export function contextFill(percent: number): number {
+  return Math.min(100, Math.max(0, percent));
+}
+
+// 材料がある分だけ出す。狭いときは「percent → tokens → ? → なし」の順に短くする。
+export function contextText(context: ChatContext, narrow: boolean): string | null {
+  const { tokens, window } = context;
+  const percent = contextPercent(context);
+
+  if (narrow) {
+    if (percent !== null) return `${percent.toFixed(1)}%`;
+    if (tokens !== null) return formatTokens(tokens);
+    if (window !== null) return "?";
+    return null;
+  }
+
+  if (tokens !== null && window !== null && percent !== null) {
+    return `${formatTokens(tokens)}/${formatTokens(window)} (${percent.toFixed(1)}%)`;
+  }
+  if (tokens !== null) return `${formatTokens(tokens)}/?`;
+  if (window !== null) return `?/${formatTokens(window)}`;
+  return null;
+}
+
+export type ContextMeterView = {
+  wide: string;
+  narrow: string;
+  percent: number | null;
+  fill: number;
+  tone: "secondary" | "attention";
+};
+
+// 両方が不明なら何も出さない。片方だけ分かるなら分かる方を出す。
+export function contextMeter(context: ChatContext | null): ContextMeterView | null {
+  if (context === null) return null;
+  const wide = contextText(context, false);
+  const narrow = contextText(context, true);
+  if (wide === null || narrow === null) return null;
+  const percent = contextPercent(context);
+  return {
+    wide,
+    narrow,
+    percent,
+    fill: percent === null ? 0 : contextFill(percent),
+    tone: percent === null ? "secondary" : contextTone(percent),
+  };
 }
 
 type ChatEntry = { paneId: string; snapshot: ChatSnapshot };

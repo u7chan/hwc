@@ -118,6 +118,7 @@ const emptyChat: ChatSnapshot = {
   model: null,
   effort: null,
   truncated: false,
+  context: null,
 };
 
 function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
@@ -673,11 +674,12 @@ function createChatApp(options: { store?: FakeStore; chat?: ChatClient } = {}) {
 
 test("GET /api/panes/:id/chat returns the conversation of the pane session", async () => {
   const messages = [{ id: "a1", role: "user" as const, text: "hello", at: 1_700_000_000_000 }];
+  const context = { tokens: 122_600, window: 1_000_000 };
   const seen: string[] = [];
   const chat = createFakeChat({
     snapshot: async (path) => {
       seen.push(path);
-      return { ...emptyChat, messages };
+      return { ...emptyChat, messages, context };
     },
   });
   const app = createChatApp({ chat });
@@ -685,7 +687,7 @@ test("GET /api/panes/:id/chat returns the conversation of the pane session", asy
   const response = await app.request("/api/panes/w1:p1/chat");
 
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ ...emptyChat, messages });
+  expect(await response.json()).toEqual({ ...emptyChat, messages, context });
   expect(response.headers.get("etag")).toBe(`"${emptyChat.etag}"`);
   expect(seen).toEqual([sessionPath]);
 });
