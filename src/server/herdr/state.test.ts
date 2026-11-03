@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { HerdrSnapshot } from "./contract";
-import { type AppState, createStateStore, toAppState } from "./state";
+import { type AppState, checkoutPaths, createStateStore, toAppState } from "./state";
 
 const snapshot: HerdrSnapshot = {
   focused_workspace_id: "w1",
@@ -365,4 +365,36 @@ test("a request that arrives while a load fails is retried once", async () => {
 
   await waitFor(() => workspaceIds(store.get())?.join() === "w9");
   expect(loads).toHaveLength(2);
+});
+
+test("a checkout path falls back to the first pane when herdr sees no worktree", () => {
+  const paths = checkoutPaths({
+    workspaces: [
+      {
+        workspace_id: "w1",
+        label: "hwc",
+        worktree: {
+          repo_name: "hwc",
+          repo_root: "/repo",
+          checkout_path: "/repo",
+          is_linked_worktree: false,
+        },
+      },
+      { workspace_id: "w2", label: "runner" },
+      { workspace_id: "w3", label: "tmp" },
+    ],
+    tabs: [],
+    panes: [
+      { pane_id: "w2:p1", workspace_id: "w2", tab_id: "w2:t1", cwd: "/runner" },
+      { pane_id: "w2:p2", workspace_id: "w2", tab_id: "w2:t1", cwd: "/elsewhere" },
+    ],
+    agents: [{ pane_id: "w3:p1", workspace_id: "w3", cwd: "/tmp" }],
+  } as HerdrSnapshot);
+
+  // ワークツリーの情報があればそれを優先し、1 ペイン目で決める。無いものは載せない。
+  expect([...paths].sort()).toEqual([
+    ["w1", "/repo"],
+    ["w2", "/runner"],
+    ["w3", "/tmp"],
+  ]);
 });

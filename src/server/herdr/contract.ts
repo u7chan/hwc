@@ -43,6 +43,8 @@ export type HerdrAgentSession = {
 export type HerdrPane = {
   pane_id: string;
   workspace_id: string;
+  // ブランチを読む場所を決めるためだけに使う。
+  cwd?: string | null;
   tab_id: string;
   label?: string | null;
   agent_status?: AgentStatus;
@@ -52,6 +54,9 @@ export type HerdrPane = {
 
 export type HerdrAgent = {
   pane_id?: string | null;
+  workspace_id?: string | null;
+  // ブランチを読む場所を決めるためだけに使う（表示はペインの cwd ではない）。
+  cwd?: string | null;
   agent?: string | null;
   terminal_title_stripped?: string | null;
 };
@@ -154,6 +159,7 @@ export function parseSnapshot(value: unknown): HerdrSnapshot {
       pane_id: expectId(record.pane_id, `${path}.pane_id`),
       workspace_id: expectId(record.workspace_id, `${path}.workspace_id`),
       tab_id: expectId(record.tab_id, `${path}.tab_id`),
+      cwd: optionalText(record.cwd),
       label: optionalLabel(record.label),
       agent_status: optionalStatus(record.agent_status),
       focused: optionalFlag(record.focused),
@@ -165,6 +171,8 @@ export function parseSnapshot(value: unknown): HerdrSnapshot {
     const record = expectRecord(item, `snapshot.agents[${index}]`);
     return {
       pane_id: optionalText(record.pane_id),
+      workspace_id: optionalText(record.workspace_id),
+      cwd: optionalText(record.cwd),
       agent: optionalText(record.agent),
       terminal_title_stripped: optionalText(record.terminal_title_stripped),
     };

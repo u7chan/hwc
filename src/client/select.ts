@@ -190,6 +190,12 @@ export function paneName(pane: PaneState): string {
 
 // 同じ端末タイトルを複数のペインが持つことがある。名前と別にラベルがあるときだけ、
 // 区別するための副題を出す（同じ文字列を 2 度並べない）。
+// 一覧の 1 段目はペイン名。端末タイトルは同じリポジトリで同じ値になるので、
+// 名前が無いペインだけエージェント種別、それも無ければタイトルに倒す。
+export function paneRowTitle(pane: PaneState): string {
+  return pane.label ?? pane.agent ?? paneName(pane);
+}
+
 export function paneSubLabel(pane: PaneState): string | null {
   return pane.label !== null && pane.label !== paneName(pane) ? pane.label : null;
 }

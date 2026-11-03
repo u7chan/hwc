@@ -3,12 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createChatClient } from "./server/chat/pi";
 import { createPaneClient } from "./server/herdr/panes";
+import { createBranchReader } from "./server/git";
 import { createStateStore } from "./server/herdr/state";
 import { loadSnapshot, startStateSync } from "./server/herdr/sync";
 import { createApp } from "./server/app";
 import index from "../index.html";
 
-const store = createStateStore({ load: () => loadSnapshot() });
+const store = createStateStore({ load: () => loadSnapshot(), branch: createBranchReader() });
 
 startStateSync({
   store,
