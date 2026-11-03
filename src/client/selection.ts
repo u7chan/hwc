@@ -23,7 +23,9 @@ export function restorePane(
   // 一覧に戻していたなら、その画面へ戻す。ペインを開いていたときだけ復元する。
   if (listOpen) return null;
   const paneId = parseSelectedPane(stored);
-  if (paneId !== null && findPane(state, paneId)) return paneId;
+  // 覚えていたペインが消えていたら一覧へ。別のペインのチャットへ飛ばすより、
+  // 一覧から選び直せるほうが分かりやすい。
+  if (paneId !== null) return findPane(state, paneId) ? paneId : null;
   return defaultSelection(state);
 }
 

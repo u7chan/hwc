@@ -69,8 +69,11 @@ test("going back to the list is remembered across a reload", () => {
   expect(restorePane(state, null, true)).toBeNull();
 });
 
-test("a pane that is gone falls back to what herdr focuses", () => {
-  expect(restorePane(state, "w2:p9")).toBe("w1:p1");
+test("a pane that is gone opens the list instead of another chat", () => {
+  expect(restorePane(state, "w2:p9")).toBeNull();
+});
+
+test("the first visit opens what herdr focuses", () => {
   expect(restorePane(state, null)).toBe("w1:p1");
 });
 

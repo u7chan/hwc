@@ -325,16 +325,17 @@ export function App() {
       ? (initialView.current ??= defaultView(state, openGroups.current)).expanded
       : NO_GROUPS;
 
+  const pane = state ? findPane(state, selectedPaneId) : null;
+
   // 画面に出ている選択をそのまま覚える。復元先が消えて Herdr の focus に倒れたときも、
   // 次に開いたときに同じペインが出る（表示と保存を二重に持たない）。
+  // 一覧に戻しているかは「一覧が出ているか」で決める。id を消すだけだと「まだ何も選んで
+  // いない」と区別できず、開いていたペインが消えたときも再読み込みで別のチャットへ飛ぶ。
   useEffect(() => {
     if (state === null) return;
     writeSelectedPane(selectedPaneId);
-    // 一覧に戻しているかを残す。id を消すだけだと「まだ何も選んでいない」と区別できない。
-    writeListOpen(selectedPaneId === null);
-  }, [state, selectedPaneId]);
-
-  const pane = state ? findPane(state, selectedPaneId) : null;
+    writeListOpen(pane === null);
+  }, [state, selectedPaneId, pane]);
   const context = state ? findPaneContext(state, selectedPaneId) : null;
 
   const select = (paneId: string) => {
