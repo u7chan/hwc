@@ -9,6 +9,7 @@ import {
   ATTACHMENT_LIMIT_NOTICE,
   pasteActionFrom,
   SEND_FAILED_NOTICE,
+  SHELL_NEWLINE_NOTICE,
   unsupportedImageNotice,
   uploadFailureNotice,
 } from "./attachments";
@@ -432,7 +433,9 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
   // 前の inline height を残さない。
-  useEffect(() => {
+  // 描画の後に高さを直すと、改行した 1 フレームだけ箱が低いままになり、
+  // スクロールバーが一瞬出る。描画の前に合わせる。
+  useLayoutEffect(() => {
     fit(input.current, expanded);
   }, [draft, expanded, compact]);
 
@@ -752,6 +755,7 @@ export function PaneDetail(props: PaneDetailProps) {
       <form
         class="hwc-input"
         data-expanded={expanded}
+        data-shell={shell}
         onSubmit={(event) => {
           event.preventDefault();
           submit();
@@ -819,43 +823,73 @@ export function PaneDetail(props: PaneDetailProps) {
               ))}
             </div>
           )}
-          <textarea
-            id={`hwc-input-${pane.id}`}
-            ref={input}
-            class="hwc-input-field"
-            // 2 行ぶんの高さを初期値にすると、1 行のとき文字の下だけ空いて上に寄る。
-            // 高さは fit() が入力量に合わせて伸ばす。
-            rows={1}
-            value={draft}
-            // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
-            {...(compact ? {} : { placeholder })}
-            onInput={(event) => {
-              setDraft(event.currentTarget.value);
-              setChip(chipOnInput(chip));
-            }}
-            onPaste={(event) => {
-              // 添付を受け付けるのは会話を持つペインだけ。シェルペインでは既定に任せる。
-              if (!pane.chat) return;
-              const action = pasteActionFrom(event.clipboardData?.items);
-              // テキストだけの貼り付けは入力欄の既定動作のままにする。
-              if (action.kind === "default") return;
-              // 未対応の形式は保存しない。何が起きたかをその場で伝える。
-              if (action.kind === "unsupported") {
-                setNotice(unsupportedImageNotice());
-                return;
-              }
-              if (action.unsupported) setNotice(unsupportedImageNotice());
-              event.preventDefault();
-              addImages(action.files);
-            }}
-            onKeyDown={(event) => {
-              const composing = event.isComposing || event.keyCode === 229;
-              if (event.key === "Enter" && !event.shiftKey && !composing) {
+          <span class="hwc-input-line">
+            {shell ? (
+              // 端末への入力であることを 1 文字で示す。文字なので大きさと色は行に従う。
+              <span class="hwc-input-prompt" aria-hidden="true">
+                $
+              </span>
+            ) : null}
+            <textarea
+              id={`hwc-input-${pane.id}`}
+              ref={input}
+              class="hwc-input-field"
+              // 2 行ぶんの高さを初期値にすると、1 行のとき文字の下だけ空いて上に寄る。
+              // 高さは fit() が入力量に合わせて伸ばす。
+              rows={1}
+              value={draft}
+              // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
+              {...(compact ? {} : { placeholder })}
+              onInput={(event) => {
+                setDraft(event.currentTarget.value);
+                setChip(chipOnInput(chip));
+              }}
+              onPaste={(event) => {
+                // シェルは改行を受け取れない。末尾の改行だけなら落として差し込み、
+                // 途中に改行が残るなら入力を変えずに断る。
+                if (shell) {
+                  const raw = event.clipboardData?.getData("text/plain") ?? "";
+                  if (!/[\r\n]/.test(raw)) return;
+                  const text = raw.replace(/[\r\n]+$/, "");
+                  event.preventDefault();
+                  if (/[\r\n]/.test(text)) {
+                    setNotice(SHELL_NEWLINE_NOTICE);
+                    return;
+                  }
+                  const field = event.currentTarget;
+                  field.setRangeText(text, field.selectionStart, field.selectionEnd, "end");
+                  setDraft(field.value);
+                  fit(field, expanded);
+                  return;
+                }
+                // 添付を受け付けるのは会話を持つペインだけ。
+                if (!pane.chat) return;
+                const action = pasteActionFrom(event.clipboardData?.items);
+                // テキストだけの貼り付けは入力欄の既定動作のままにする。
+                if (action.kind === "default") return;
+                // 未対応の形式は保存しない。何が起きたかをその場で伝える。
+                if (action.kind === "unsupported") {
+                  setNotice(unsupportedImageNotice());
+                  return;
+                }
+                if (action.unsupported) setNotice(unsupportedImageNotice());
+                event.preventDefault();
+                addImages(action.files);
+              }}
+              onKeyDown={(event) => {
+                const composing = event.isComposing || event.keyCode === 229;
+                if (event.key !== "Enter") return;
+                if (composing) return;
+                // シェルは改行を受け取れない。Shift+Enter で改行を入れさせない。
+                if (event.shiftKey) {
+                  if (shell) event.preventDefault();
+                  return;
+                }
                 event.preventDefault();
                 submit();
-              }
-            }}
-          />
+              }}
+            />
+          </span>
           <div class="hwc-input-actions">
             <span class="hwc-input-tail">
               {info === null && meter === null ? null : (

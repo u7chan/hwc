@@ -2441,6 +2441,33 @@ p.hwc-compaction,
   resize: none;
 }
 
+/* シェルの入力欄は端末。$ を 1 行目の左に置き、カーソルをブロックにする。 */
+.hwc-input-line {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* 行の中では入力欄が残り幅いっぱいに広がる（.hwc-input-field の flex: none を打ち消す）。 */
+.hwc-input-line > .hwc-input-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hwc-input-prompt {
+  padding: var(--space-2) 0 var(--space-2) var(--space-2);
+  color: var(--color-secondary);
+  font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-mono);
+  user-select: none;
+}
+
+.hwc-input[data-shell="true"] .hwc-input-field {
+  padding-left: var(--space-1);
+  /* 未対応の環境では既定の細いカーソルになるだけ。 */
+  caret-shape: block;
+  caret-color: var(--color-accent);
+}
+
 /* 折りたたみ時は 1 行 + 上下同じ余白に収める。--row-pane（64px）のままだと 1 行の
    ときに文字の下だけ空いて上に寄って見える。高さは fit() が入力量に合わせて伸ばす。 */
 .hwc-input:not([data-expanded="true"]) .hwc-input-field {
@@ -2633,6 +2660,12 @@ p.hwc-compaction,
   order: 1;
   flex-basis: 100%;
   padding: 0;
+}
+
+/* 入力欄を包む行も横に伸ばす（包みが伸びないと入力欄が中身の幅で止まる）。 */
+.hwc-split-cell[data-compact="true"] .hwc-input-line {
+  flex: 1;
+  min-width: 0;
 }
 
 .hwc-split-cell[data-compact="true"] .hwc-input-field {
