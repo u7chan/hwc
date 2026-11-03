@@ -1718,11 +1718,9 @@ p.hwc-compaction,
   transform: rotate(180deg);
 }
 
-/* 要約は長い。画面を埋めつくさないよう高さで切って、中でスクロールさせる。 */
+/* 要約は長いが、内側でスクロールさせない。会話のスクロール 1 本で読ませる。 */
 .hwc-compaction-body {
   margin: var(--space-2) 0 0;
-  max-height: 40dvh;
-  overflow-y: auto;
   padding: var(--space-3);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-panel);

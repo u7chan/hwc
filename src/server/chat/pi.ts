@@ -51,6 +51,9 @@ type SessionEntry = {
   effort: string | null;
   usageTokens: number | null;
   invalidatesUsage: boolean;
+  // 材料の有無とは別に、compaction エントリかどうかを持つ。壊れた最新を古いもので
+  // 埋めないため、境界の位置と材料を別々に知る必要がある。
+  compactionEntry: boolean;
   compaction: SessionCompaction | null;
 };
 
@@ -258,6 +261,7 @@ function applyLine(reader: ChatReader, line: string): void {
     usageTokens: null,
     // compaction と context_edit は、それ以前の usage を現在のコンテキスト量にしない。
     invalidatesUsage: record.type === "compaction" || record.type === "context_edit",
+    compactionEntry: record.type === "compaction",
     compaction: null,
   };
 
@@ -471,22 +475,28 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   };
 }
 
-// 最後の compaction を採り、その firstKeptEntryId が branch にあればその位置を返す。
-// 窓が成立しないときは null。要約だけ出して古い会話を並べるより、全体を出す方を選ぶ。
+// 最新の compaction だけを見る。その材料が揃い、firstKeptEntryId が branch にあれば
+// その位置を返す。古い compaction へは遡らない。最新が使えないなら窓を張らず全体を返す。
+// 要約だけ出して古い会話を並べるより、表示と実体が一致する側を選ぶ。
 function compactionWindow(
   branch: readonly SessionEntry[],
 ): { start: number; compaction: ChatCompaction } | null {
+  let newest: SessionEntry | null = null;
   for (let index = branch.length - 1; index >= 0; index -= 1) {
-    const found = branch[index]?.compaction;
-    if (!found) continue;
-    const start = branch.findIndex((entry) => entry.id === found.firstKeptEntryId);
-    if (start < 0) return null;
-    return {
-      start,
-      compaction: { at: found.at, tokensBefore: found.tokensBefore, summary: found.summary },
-    };
+    const entry = branch[index];
+    if (!entry?.compactionEntry) continue;
+    newest = entry;
+    break;
   }
-  return null;
+
+  const found = newest?.compaction ?? null;
+  if (found === null) return null;
+  const start = branch.findIndex((entry) => entry.id === found.firstKeptEntryId);
+  if (start < 0) return null;
+  return {
+    start,
+    compaction: { at: found.at, tokensBefore: found.tokensBefore, summary: found.summary },
+  };
 }
 
 // 出す材料が無いときだけ context を null にする。{ tokens: null, window: null } は

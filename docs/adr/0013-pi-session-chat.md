@@ -28,7 +28,7 @@ pi は会話を v3 の JSONL で保存している。`user` / `assistant` のメ
 - BFF がペイン id からセッション path を解決し、path はクライアントへ渡さない。クライアントから path も受け取らない
 - path ごとに増分リーダーを持ち、要求時にスナップショット（`etag` / `messages` / `model` / `effort` / `truncated` / `context` / `compaction`）を返す。バックグラウンド監視はしない
 - スナップショットに直近の compaction（`at` / `tokensBefore` / `summary`）を含める。`messages` はその compaction の `firstKeptEntryId` 以降に限り、圧縮より前の会話は返さない。モデルの実際の文脈（要約 + kept 分）と表示を一致させるため
-- `firstKeptEntryId` が active branch に無い・`summary` が空・compaction が無いときは、`compaction` を `null` にして branch 全体を返す。要約だけ出して窓がずれる状態を作らない
+- 評価するのは最新の compaction エントリだけ。それに `firstKeptEntryId` が無い・`summary` が空・`firstKeptEntryId` が active branch に無い・compaction が無いときは、`compaction` を `null` にして branch 全体を返す。古い compaction へは遡らない。要約だけ出して窓がずれる状態を作らない
 - 入れ子の compaction は最新のみを採る。compaction エントリは `message` を持たないため、窓に入っていても会話としては描画されない
 - コンテキスト使用量は pi のモデルカタログを第二の情報源にする。`tokens` はセッション中の usage から、`window` は `models-store.json` の `contextWindow` に `models.json` の `providers[].modelOverrides` を重ねたカタログから引く。agent dir はセッション path（`<agent-dir>/sessions/<slug>/<file>.jsonl`）から導き、カタログは agent dir ごとにプロセス内で 1 回だけ解決する。引けないときは `null` を返し、`tokens` と `window` の両方が `null` なら `context` を `null` に畳む
 - 読み取りは追記分だけを対象にし、ヘッダの `id` の変化・`size` の減少・inode の変化・ファイルの消失で全リセットする。パースできない行はその行だけ捨てる

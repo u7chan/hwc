@@ -770,6 +770,65 @@ test("only the newest compaction is shown", async () => {
   expect(snapshot.messages.map((message) => message.id)).toEqual(["u2", "a2"]);
 });
 
+test("a broken newest compaction is not replaced by an older one", async () => {
+  const missingKeptId = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    entry("compaction", "c1", "a1", {
+      summary: "first summary",
+      firstKeptEntryId: "u1",
+      tokensBefore: 100_000,
+    }),
+    user("u2", "c1", "again"),
+    // 最新の compaction には firstKeptEntryId が無い。c1 は使えるが遡らない。
+    entry("compaction", "c2", "u2", { summary: "second summary" }),
+  );
+  const missingSummary = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    entry("compaction", "c1", "a1", {
+      summary: "first summary",
+      firstKeptEntryId: "u1",
+      tokensBefore: 100_000,
+    }),
+    user("u2", "c1", "again"),
+    entry("compaction", "c2", "u2", { firstKeptEntryId: "u2" }),
+  );
+
+  for (const path of [missingKeptId, missingSummary]) {
+    const snapshot = await createChatClient().snapshot(path);
+
+    expect(snapshot.messages.map((message) => message.id)).toEqual(["u1", "a1", "u2"]);
+    expect(snapshot.compaction).toBeNull();
+  }
+});
+
+test("a newest compaction whose kept entry is gone is not replaced by an older one", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    entry("compaction", "c1", "a1", {
+      summary: "first summary",
+      firstKeptEntryId: "u1",
+      tokensBefore: 100_000,
+    }),
+    user("u2", "c1", "again"),
+    entry("compaction", "c2", "u2", {
+      summary: "second summary",
+      firstKeptEntryId: "gone",
+      tokensBefore: 212_959,
+    }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u1", "a1", "u2"]);
+  expect(snapshot.compaction).toBeNull();
+});
+
 test("the size limits apply to the windowed history", async () => {
   const lines = [header()];
   let parentId: string | null = null;
