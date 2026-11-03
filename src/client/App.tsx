@@ -21,7 +21,14 @@ import {
   parseOpenGroups,
   rememberGroup,
 } from "./expanded";
-import { expandForPane, readSelectedPane, restorePane, writeSelectedPane } from "./selection";
+import {
+  expandForPane,
+  readListOpen,
+  readSelectedPane,
+  restorePane,
+  writeListOpen,
+  writeSelectedPane,
+} from "./selection";
 import { LIST_SCOPE_STORAGE_KEY, parseListScope, type ListScope } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import {
@@ -149,7 +156,7 @@ function SplitCell(props: { children: (compact: boolean) => ComponentChildren })
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
 // 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
 function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean> | null): View {
-  const selectedPaneId = restorePane(state, readSelectedPane());
+  const selectedPaneId = restorePane(state, readSelectedPane(), readListOpen());
   const remembered = openGroups ?? new Map();
   const base = applyOpenGroups(initialExpanded(state), remembered, groupIds(state));
   return {
@@ -323,6 +330,8 @@ export function App() {
   useEffect(() => {
     if (state === null) return;
     writeSelectedPane(selectedPaneId);
+    // 一覧に戻しているかを残す。id を消すだけだと「まだ何も選んでいない」と区別できない。
+    writeListOpen(selectedPaneId === null);
   }, [state, selectedPaneId]);
 
   const pane = state ? findPane(state, selectedPaneId) : null;

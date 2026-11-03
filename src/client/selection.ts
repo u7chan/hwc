@@ -5,13 +5,23 @@ import { findPane } from "./select";
 // 開いていたペインは端末ごとの好み。Herdr の状態ではないので BFF には持たせない。
 export const SELECTED_PANE_STORAGE_KEY = "hwc-selected-pane";
 
+// 一覧に戻したかどうかは、ペイン id だけでは表せない（未選択と未訪問が同じになる）。
+// スマホでは一覧と詳細が別の画面なので、再読み込みで読んでいた画面に戻すために要る。
+export const LIST_OPEN_STORAGE_KEY = "hwc-list-open";
+
 // 壊れた値や消えたペインは「まだ選んでいない」に倒す。開くはずのペインが無いだけで、
 // 一覧から選び直せる。
 export function parseSelectedPane(value: string | null): string | null {
   return value === null || value === "" ? null : value;
 }
 
-export function restorePane(state: AppState, stored: string | null): string | null {
+export function restorePane(
+  state: AppState,
+  stored: string | null,
+  listOpen = false,
+): string | null {
+  // 一覧に戻していたなら、その画面へ戻す。ペインを開いていたときだけ復元する。
+  if (listOpen) return null;
   const paneId = parseSelectedPane(stored);
   if (paneId !== null && findPane(state, paneId)) return paneId;
   return defaultSelection(state);
@@ -29,6 +39,27 @@ export function readSelectedPane(): string | null {
     return parseSelectedPane(store.getItem(SELECTED_PANE_STORAGE_KEY));
   } catch {
     return null;
+  }
+}
+
+export function readListOpen(): boolean {
+  const store = storage();
+  if (!store) return false;
+  try {
+    return store.getItem(LIST_OPEN_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function writeListOpen(open: boolean): void {
+  const store = storage();
+  if (!store) return;
+  try {
+    if (open) store.setItem(LIST_OPEN_STORAGE_KEY, "true");
+    else store.removeItem(LIST_OPEN_STORAGE_KEY);
+  } catch {
+    // 保存できなくてもその場の表示は変える。
   }
 }
 

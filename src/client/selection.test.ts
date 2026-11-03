@@ -63,6 +63,12 @@ test("a stored pane reopens where it was", () => {
   expect(restorePane(state, "w2:p1")).toBe("w2:p1");
 });
 
+test("going back to the list is remembered across a reload", () => {
+  // 一覧に戻していたなら、ペインが残っていても開き直さない。
+  expect(restorePane(state, "w2:p1", true)).toBeNull();
+  expect(restorePane(state, null, true)).toBeNull();
+});
+
 test("a pane that is gone falls back to what herdr focuses", () => {
   expect(restorePane(state, "w2:p9")).toBe("w1:p1");
   expect(restorePane(state, null)).toBe("w1:p1");
