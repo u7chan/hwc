@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
 import { copyText } from "./copy";
 import {
@@ -29,6 +29,7 @@ import {
   type ListScope,
   type TreeScope,
 } from "./scope";
+import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
 import type { SentPane } from "./sent";
 import { StatusIcon, StatusLabel } from "./StatusLabel";
 import { finishedMs, formatElapsed, workingMs } from "./time";
@@ -247,17 +248,19 @@ function TreePaneList(props: TreePaneListProps) {
   const visible = scopeWorkspaces(state.workspaces, scope, selectedPaneId);
 
   // メニューは行の中に置くと一覧のスクロールで切れる。画面に固定して出す。
-  const [menu, setMenu] = useState<{ paneId: string; top: number; right: number } | null>(null);
+  const [menu, setMenu] = useState<({ paneId: string } & MenuPlacement) | null>(null);
   const [copied, setCopied] = useState(false);
 
   const openMenu = (event: MouseEvent, paneId: string) => {
     const target = event.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     setCopied(false);
-    // 画面の下で切れないように、はみ出す分だけ上へ寄せる。
-    const height = 96;
-    const top = Math.min(rect.bottom + 4, window.innerHeight - height - 8);
-    setMenu({ paneId, top, right: window.innerWidth - rect.right });
+    const placement = menuPlacement(
+      rect,
+      { width: window.innerWidth, height: window.innerHeight },
+      MENU_HEIGHT,
+    );
+    setMenu({ paneId, ...placement });
   };
 
   const closeMenu = () => setMenu(null);
@@ -265,22 +268,6 @@ function TreePaneList(props: TreePaneListProps) {
   const copyId = (paneId: string) => {
     void copyText(paneId).then((done) => setCopied(done));
   };
-
-  useEffect(() => {
-    if (!menu) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenu(null);
-    };
-    const onMove = () => setMenu(null);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onMove, true);
-    window.addEventListener("resize", onMove);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onMove, true);
-      window.removeEventListener("resize", onMove);
-    };
-  }, [menu]);
 
   // ブランチはワークスペースの属性。行ごとに引き直さず、先にペイン id へ配る。
   const branchOf = new Map<string, string | null>();
@@ -505,26 +492,18 @@ function TreePaneList(props: TreePaneListProps) {
         );
       })}
       {menu ? (
-        <>
-          <div class="hwc-menu-backdrop" onPointerDown={closeMenu} />
-          <div
-            class="hwc-menu"
-            role="menu"
-            aria-label={`${menu.paneId} の操作`}
-            style={{ top: `${menu.top}px`, right: `${menu.right}px` }}
+        <Menu label={`${menu.paneId} の操作`} placement={menu} onClose={closeMenu} closeOnScroll>
+          <p class="hwc-menu-head">{menu.paneId}</p>
+          <button
+            type="button"
+            role="menuitem"
+            class="hwc-menu-item"
+            onClick={() => copyId(menu.paneId)}
           >
-            <p class="hwc-menu-head">{menu.paneId}</p>
-            <button
-              type="button"
-              role="menuitem"
-              class="hwc-menu-item"
-              onClick={() => copyId(menu.paneId)}
-            >
-              <CopyGlyph copied={copied} />
-              {copied ? "コピーしました" : "ペイン ID をコピー"}
-            </button>
-          </div>
-        </>
+            <CopyGlyph copied={copied} />
+            {copied ? "コピーしました" : "ペイン ID をコピー"}
+          </button>
+        </Menu>
       ) : null}
     </>
   );

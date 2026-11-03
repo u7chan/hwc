@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AppState } from "../server/herdr/state";
+import type { AppState, PaneState } from "../server/herdr/state";
 import {
   agentGlyph,
   countPanes,
@@ -13,6 +13,7 @@ import {
   isShellPane,
   movePane,
   movePaneStep,
+  nextPaneInTab,
   paneName,
   paneRowTitle,
   paneSubLabel,
@@ -357,6 +358,49 @@ test("hidden panes stay out of the split until they are opened", () => {
     "w1:p1",
   ]);
   expect(splitPanes(panes, "w1:p1", new Set())).toHaveLength(3);
+});
+
+const plainPane = (id: string): PaneState => ({
+  id,
+  title: id,
+  label: null,
+  agent: "pi",
+  agentStatus: "idle",
+  focused: false,
+  chat: false,
+});
+
+test("closing a pane moves the selection to the next pane in the tab", () => {
+  const panes = ["w1:p1", "w1:p2", "w1:p3"].map(plainPane);
+
+  expect(nextPaneInTab(panes, "w1:p1")).toBe("w1:p2");
+  expect(nextPaneInTab(panes, "w1:p2")).toBe("w1:p3");
+});
+
+test("closing the last pane of a tab moves the selection back to the one before", () => {
+  const panes = ["w1:p1", "w1:p2", "w1:p3"].map(plainPane);
+
+  expect(nextPaneInTab(panes, "w1:p3")).toBe("w1:p2");
+});
+
+test("there is no successor when the closed pane is the only one in the tab", () => {
+  expect(nextPaneInTab([plainPane("w1:p1")], "w1:p1")).toBeNull();
+});
+
+test("a hidden pane is never picked as the successor", () => {
+  const panes = ["w1:p1", "w1:p2", "w1:p3", "w1:p4"].map(plainPane);
+  const hidden = new Set(["w1:p2", "w1:p3"]);
+
+  expect(nextPaneInTab(panes, "w1:p1", hidden)).toBe("w1:p4");
+  // 後ろに見えるものが無ければ手前へ戻り、手前も隠れていれば移る先は無い。
+  expect(nextPaneInTab(panes, "w1:p4", hidden)).toBe("w1:p1");
+  expect(nextPaneInTab(panes, "w1:p2", new Set(["w1:p1", "w1:p3", "w1:p4"]))).toBeNull();
+});
+
+test("there is no successor when every other pane is hidden", () => {
+  const panes = ["w1:p1", "w1:p2"].map(plainPane);
+
+  expect(nextPaneInTab(panes, "w1:p1", new Set(["w1:p2"]))).toBeNull();
 });
 
 test("the pane name prefers the terminal title, then the Herdr label", () => {

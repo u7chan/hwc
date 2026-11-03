@@ -5,6 +5,8 @@ type ConfirmProps = {
   title: string;
   description: ComponentChildren;
   confirmLabel: string;
+  // 実行中は操作を受け付けない。結果の反映を 1 回に保つ。
+  busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -29,6 +31,7 @@ export function Confirm(props: ConfirmProps) {
           type="button"
           class="hwc-dialog-button hwc-dialog-cancel"
           data-autofocus
+          disabled={props.busy}
           onClick={props.onCancel}
         >
           キャンセル
@@ -36,6 +39,7 @@ export function Confirm(props: ConfirmProps) {
         <button
           type="button"
           class="hwc-dialog-button hwc-dialog-confirm"
+          disabled={props.busy}
           onClick={props.onConfirm}
         >
           {props.confirmLabel}

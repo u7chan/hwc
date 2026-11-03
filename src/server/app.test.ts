@@ -144,6 +144,7 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
     read: async ({ paneId }) => ({ paneId, text: "hello\n", truncated: false, revision: 3 }),
     send: async () => {},
     focus: async () => {},
+    close: async () => {},
     ...overrides,
   };
 }
@@ -785,6 +786,150 @@ test("POST /api/panes/:id/focus maps a Herdr failure like the other pane routes"
   });
 
   // agent_not_found は個別に扱わず、既存の失敗の規則に落とす。
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+test("POST /api/panes/:id/close closes the pane by id", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      close: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual([{ paneId: "w1:p1" }]);
+});
+
+test("POST /api/panes/:id/close rejects a request that is not sent as JSON", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      close: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+
+  for (const contentType of [
+    "text/plain",
+    "application/x-www-form-urlencoded",
+    "application/jsonx",
+  ]) {
+    const response = await app.request("/api/panes/w1:p1/close", {
+      method: "POST",
+      headers: { "content-type": contentType },
+    });
+    expect(response.status).toBe(415);
+    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
+  }
+
+  const bare = await app.request("/api/panes/w1:p1/close", { method: "POST" });
+  expect(bare.status).toBe(415);
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/close returns 404 before asking Herdr for a pane that is gone", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      close: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p9/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/close returns 502 when the state cannot be read", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(null, new Error("socket closed")),
+    panes: createFakePanes(),
+  });
+  const response = await app.request("/api/panes/w1:p1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+test("POST /api/panes/:id/close returns 404 when Herdr no longer has the pane", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      close: async () => {
+        throw new HerdrError("pane_not_found", "no pane w1:p1");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
+});
+
+test("POST /api/panes/:id/close returns 400 when Herdr rejects the id", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      close: async () => {
+        throw new HerdrError("invalid_params", "pane_id is required");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_request" });
+});
+
+test("POST /api/panes/:id/close returns 502 for any other Herdr failure", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      close: async () => {
+        throw new HerdrError("socket_closed", "socket closed");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });

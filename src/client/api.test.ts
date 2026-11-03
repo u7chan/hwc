@@ -5,6 +5,8 @@ import {
   attachmentUrl,
   chatOutcome,
   chatUrl,
+  closeOutcome,
+  closeRequest,
   focusRequest,
   outputUrl,
   parseAppState,
@@ -213,4 +215,28 @@ test("the focus request posts to the pane with a JSON header and no body", () =>
 
 test("the focus request keeps the pane id in a single path segment", () => {
   expect(focusRequest("w1/p2").url).toBe("/api/panes/w1%2Fp2/focus");
+});
+
+test("the close request posts to the pane with a JSON header and no body", () => {
+  const request = closeRequest("w1:p2");
+  const url = new URL(request.url, "http://localhost");
+
+  expect(url.pathname).toBe("/api/panes/w1%3Ap2/close");
+  expect(request.init.method).toBe("POST");
+  // ヘッダを落とすと BFF が 415 で弾く。body は読まれないので送らない。
+  expect(request.init.headers).toEqual({ "content-type": "application/json" });
+  expect(request.init.body).toBeUndefined();
+  expect(closeRequest("w1/p2").url).toBe("/api/panes/w1%2Fp2/close");
+});
+
+test("close is done once the pane is gone, whatever removed it", () => {
+  // 404 は「BFF の状態に無い」と「Herdr が pane_not_found」のどちらでも、閉じる目的は達している。
+  expect(closeOutcome(404)).toBe("done");
+  expect(closeOutcome(200)).toBe("done");
+});
+
+test("close fails on any other status", () => {
+  expect(closeOutcome(400)).toBe("failed");
+  expect(closeOutcome(415)).toBe("failed");
+  expect(closeOutcome(502)).toBe("failed");
 });

@@ -316,3 +316,19 @@ export function splitPanes(
   if (selected === undefined) return shown;
   return [...shown.slice(0, 3), selected];
 }
+
+// 閉じたペインの代わりに選ぶもの。続きの並びを先に探し、無ければ手前へ戻る。
+// 隠しているペインは候補にしない（閉じた直後に見えないセルへ移らないように）。
+export function nextPaneInTab(
+  panes: readonly PaneState[],
+  paneId: string,
+  hidden: ReadonlySet<string> = NO_HIDDEN,
+): string | null {
+  const at = panes.findIndex((pane) => pane.id === paneId);
+  if (at === -1) return null;
+  const visible = (pane: PaneState) => pane.id !== paneId && !hidden.has(pane.id);
+  const after = panes.slice(at + 1).find(visible);
+  if (after !== undefined) return after.id;
+  const before = panes.slice(0, at).reverse().find(visible);
+  return before?.id ?? null;
+}

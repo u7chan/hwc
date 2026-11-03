@@ -5,14 +5,16 @@ import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
-import { fetchState, focusAgent, parseAppState, sendInput } from "./api";
+import { fetchState, focusAgent, closePane, parseAppState, sendInput } from "./api";
 import {
   INITIAL_CONNECTION,
   connectionAfter,
   connectionLabel,
   type ConnectionStatus,
 } from "./connection";
+import { CloseConfirm } from "./CloseConfirm";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
+import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import {
   findPane,
@@ -20,6 +22,7 @@ import {
   findPaneRow,
   groupIds,
   initialExpanded,
+  nextPaneInTab,
   splitPanes,
   type PaneContext,
 } from "./select";
@@ -167,6 +170,14 @@ function useMediaQuery(query: string) {
 
 type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
 
+// 閉じる確認。後継は確認を開いた時点で決める。SSE が閉じたペインを落とした後では、
+// 次のペインを引けないため。
+type Closing = {
+  paneId: string;
+  next: string | null;
+  phase: "confirm" | "busy" | "failed";
+};
+
 // 分割セルの入力欄を畳むかは、セルの box の高さ・幅と、上下に積まれた段かで決める。PaneDetail は
 // fragment を返すので自分では測れない。内容高を測ると畳んだ切替で再ループするため box を使う。
 function SplitCell(props: { stacked: boolean; children: (compact: boolean) => ComponentChildren }) {
@@ -254,6 +265,11 @@ export function App() {
   const [sent, setSent] = useState<ReadonlyMap<string, SentPane>>(() =>
     parseSentPanes(readStored(SENT_PANE_STORAGE_KEY)),
   );
+  // メニューと確認はセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
+  // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
+  const [menu, setMenu] = useState<({ paneId: string } & MenuPlacement) | null>(null);
+  const [closing, setClosing] = useState<Closing | null>(null);
+  const closeInFlight = useRef(false);
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
@@ -385,6 +401,9 @@ export function App() {
     writeListOpen(pane === null);
   }, [state, selectedPaneId, pane]);
   const context = state ? findPaneContext(state, selectedPaneId) : null;
+  // 確認の文言は状態を開いた時点で固定しない。ダイアログ中に変わればその値で読む。
+  // スナップショットから消えたペインはもう無いので、確認は出さない。
+  const closingPane = state === null || closing === null ? null : findPane(state, closing.paneId);
 
   const select = (paneId: string) => {
     setView({ selectedPaneId: paneId, expanded });
@@ -401,6 +420,55 @@ export function App() {
 
   const back = () => {
     setView({ selectedPaneId: null, expanded });
+  };
+
+  const openPaneMenu = (paneId: string, rect: DOMRect) => {
+    const placement = menuPlacement(
+      rect,
+      { width: window.innerWidth, height: window.innerHeight },
+      MENU_HEIGHT,
+    );
+    setMenu({ paneId, ...placement });
+  };
+
+  // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。
+  const openCloseConfirm = () => {
+    if (menu === null) return;
+    const paneId = menu.paneId;
+    const row = state === null ? null : findPaneRow(state, paneId);
+    setMenu(null);
+    setClosing({
+      paneId,
+      next: row === null ? null : nextPaneInTab(row.tab.panes, paneId, hidden),
+      phase: "confirm",
+    });
+  };
+
+  // 送信中は閉じる手段を受け付けない。結果の反映を 1 回に保つ。
+  const cancelClose = () => {
+    if (closing?.phase === "busy") return;
+    setClosing(null);
+  };
+
+  // 閉じたペインはローカルで消さない。表示は SSE のスナップショットで置き換える。
+  const confirmClose = () => {
+    if (closing === null || closing.phase === "busy") return;
+    if (closeInFlight.current) return;
+    closeInFlight.current = true;
+    const target = closing;
+    setClosing({ ...target, phase: "busy" });
+    void closePane(target.paneId).then((outcome) => {
+      closeInFlight.current = false;
+      if (outcome !== "done") {
+        setClosing((current) => (current === null ? null : { ...current, phase: "failed" }));
+        return;
+      }
+      // 選んでいないペインを閉じても、読んでいるペインを動かさない。
+      if (target.next !== null && selectedPaneId === target.paneId) {
+        setView({ selectedPaneId: target.next, expanded });
+      }
+      setClosing(null);
+    });
   };
 
   // 開閉は次に開いたときも同じにしたいので、既定からの差分として覚える。
@@ -518,6 +586,8 @@ export function App() {
       // ブランチは一覧が隠れる狭い画面でだけ出す。広い画面の一覧と分割のセルでは重なる。
       branch={wide || cells.length > 1 ? null : where.branch}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
+      menuOpen={menu?.paneId === item.id}
+      onOpenMenu={openPaneMenu}
       onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
     />
   );
@@ -677,6 +747,31 @@ export function App() {
           )}
         </main>
       </div>
+
+      {menu === null ? null : (
+        <Menu label={`${menu.paneId} の操作`} placement={menu} onClose={() => setMenu(null)}>
+          <p class="hwc-menu-head">{menu.paneId}</p>
+          <button
+            type="button"
+            role="menuitem"
+            class="hwc-menu-item hwc-menu-item--danger"
+            onClick={openCloseConfirm}
+          >
+            <CloseIcon size={14} />
+            ペインを閉じる
+          </button>
+        </Menu>
+      )}
+
+      {closing === null || closingPane === null ? null : (
+        <CloseConfirm
+          pane={closingPane}
+          busy={closing.phase === "busy"}
+          failed={closing.phase === "failed"}
+          onConfirm={confirmClose}
+          onCancel={cancelClose}
+        />
+      )}
     </div>
   );
 }
