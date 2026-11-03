@@ -44,7 +44,7 @@ import {
   sentForSave,
   type SentPane,
 } from "./sent";
-import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
+import { gateSnapshot, nextObservation, type SnapshotOrigin } from "./snapshot";
 import {
   FINISHED_AT_STORAGE_KEY,
   WORKING_SINCE_STORAGE_KEY,
@@ -109,7 +109,7 @@ function usePaneTimes(state: AppState | null, connection: ConnectionStatus) {
   const finishedAt = useRef<ReadonlyMap<string, number>>(NO_TIMES);
   // 観測済みのスナップショット。描き直しのたびに遷移を数えないよう、同じものは見ない。
   const observed = useRef<AppState | null>(null);
-  // 接続が切れた描画を見たら、次のスナップショットが新しい観測の最初になる。
+  // 次のスナップショットを新しい観測の最初として扱うか。判定は nextObservation が持つ。
   const fresh = useRef(true);
 
   if (!restored.current) {
@@ -118,11 +118,12 @@ function usePaneTimes(state: AppState | null, connection: ConnectionStatus) {
     finishedAt.current = parseFinishedAt(readStored(FINISHED_AT_STORAGE_KEY), now);
   }
 
-  if (connection !== "live") fresh.current = true;
+  const newObservation = nextObservation(fresh.current, connection);
+  fresh.current = newObservation;
 
   if (state !== null && observed.current !== state) {
     observed.current = state;
-    const observing = !fresh.current;
+    const observing = !newObservation;
     fresh.current = false;
 
     // 完了時刻は、直前の観測で working だったペインが done / idle に移ったときだけ。
