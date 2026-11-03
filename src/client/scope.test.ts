@@ -3,6 +3,7 @@ import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server
 import {
   activePanes,
   activeUnreadCount,
+  activeViewRows,
   parseListScope,
   scopeWorkspaces,
   shouldFocusPane,
@@ -179,4 +180,56 @@ test("a count past two digits is shown as a range", () => {
   expect(unreadLabel(9)).toBe("9");
   expect(unreadLabel(99)).toBe("99");
   expect(unreadLabel(100)).toBe("99+");
+});
+
+test("the view lists what needs attention, the windows, the finished and the running", () => {
+  const state = app(
+    workspace("w1", [
+      pane("w1:p1", "pi", "done"),
+      pane("w1:p2", "pi", "working"),
+      pane("w1:p3", "pi", "blocked"),
+      pane("w1:p4", "claude", "idle"),
+      pane("w1:p5", "codex", "done"),
+    ]),
+    workspace("w2", [pane("w2:p1", "pi", "idle")]),
+  );
+  const sent = new Map([
+    ["w2", { paneId: "w2:p1", at: 3_000 }],
+    ["w1", { paneId: "w1:p4", at: 1_000 }],
+  ]);
+
+  expect(activeViewRows(state, sent).map((row) => row.pane.id)).toEqual([
+    "w1:p3",
+    "w2:p1",
+    "w1:p4",
+    "w1:p1",
+    "w1:p5",
+    "w1:p2",
+  ]);
+});
+
+test("a window row is not repeated in the status rows", () => {
+  const state = app(workspace("w1", [pane("w1:p1", "pi", "done"), pane("w1:p2", "pi", "working")]));
+  const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
+
+  // done と working は状態の行にもある。窓口に置いたものを先にし、重ねて出さない。
+  expect(activeViewRows(state, sent).map((row) => row.pane.id)).toEqual(["w1:p1", "w1:p2"]);
+});
+
+test("a window that needs attention moves to the attention side", () => {
+  const state = app(workspace("w1", [pane("w1:p1", "pi", "blocked")]));
+  const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
+
+  const rows = activeViewRows(state, sent);
+
+  expect(rows.map((row) => row.pane.id)).toEqual(["w1:p1"]);
+  expect(rows[0]?.pane.agentStatus).toBe("blocked");
+});
+
+test("nothing to read means no rows at all", () => {
+  const state = app(workspace("w1", [pane("w1:p1", "pi", "idle"), pane("w1:p2", null, "unknown")]));
+
+  // 窓口がシェルを指していても、状態の行が無ければ空。
+  expect(activeViewRows(state, new Map())).toEqual([]);
+  expect(activeViewRows(state, new Map([["w1", { paneId: "w1:p2", at: 1_000 }]]))).toEqual([]);
 });

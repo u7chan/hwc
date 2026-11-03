@@ -47,11 +47,12 @@ export function trackWorking(
 }
 
 export const WORKING_SINCE_STORAGE_KEY = "hwc-working-since";
+export const FINISHED_AT_STORAGE_KEY = "hwc-finished-at";
 
-// 保存した起点を読み直す。状態はまだ届いていないので、working かどうかは
-// 最初のスナップショットで trackWorking が絞る。ここでは数の健全さだけを見る。
-// 未来の値は、端末の時計が戻ったときに負の経過を出さないよう捨てる。
-export function parseWorkingSince(raw: string | null, now: number): ReadonlyMap<string, number> {
+// 保存した時刻を読み直す。状態はまだ届いていないので、どのペインの値かは最初の
+// スナップショットで絞る。ここでは数の健全さだけを見る。未来の値は、端末の時計が
+// 戻ったときに負の経過を出さないよう捨てる。
+function parsePaneTimes(raw: string | null, now: number): ReadonlyMap<string, number> {
   if (raw === null) return new Map();
   let value: unknown;
   try {
@@ -61,12 +62,20 @@ export function parseWorkingSince(raw: string | null, now: number): ReadonlyMap<
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return new Map();
 
-  const since = new Map<string, number>();
+  const times = new Map<string, number>();
   for (const [paneId, at] of Object.entries(value)) {
     if (typeof at !== "number" || !Number.isFinite(at) || at > now) continue;
-    since.set(paneId, at);
+    times.set(paneId, at);
   }
-  return since;
+  return times;
+}
+
+export function parseWorkingSince(raw: string | null, now: number): ReadonlyMap<string, number> {
+  return parsePaneTimes(raw, now);
+}
+
+export function parseFinishedAt(raw: string | null, now: number): ReadonlyMap<string, number> {
+  return parsePaneTimes(raw, now);
 }
 
 // 保存するのは、いま working と分かっているペインの起点だけ。止まったペインの値を
@@ -86,4 +95,42 @@ export function workingSinceForSave(
     }
   }
   return record;
+}
+
+// 完了からの経過は、観測した完了時刻からの差で出す。覚えていなければ出さない。
+export function finishedMs(
+  finished: ReadonlyMap<string, number>,
+  paneId: string,
+  now: number,
+): number | null {
+  const at = finished.get(paneId);
+  return at === undefined ? null : Math.max(0, now - at);
+}
+
+// 完了時刻は、直前の観測で working だったペインが done / idle に移ったときだけ記録する。
+// working と blocked では消す（要対応は待ち時間ではなく、こちらが動く番なので）。
+// `observing` が false のスナップショット（マウント直後と再接続後の最初）では記録せず、
+// 既に持っている時刻だけを残す。別端末で見た完了を、この端末の観測として捏造しない。
+export function trackFinished(
+  finished: ReadonlyMap<string, number>,
+  worked: ReadonlyMap<string, number>,
+  state: AppState,
+  now: number,
+  observing: boolean,
+): ReadonlyMap<string, number> {
+  const next = new Map<string, number>();
+  for (const workspace of state.workspaces) {
+    for (const tab of workspace.tabs) {
+      for (const pane of tab.panes) {
+        if (pane.agentStatus !== "done" && pane.agentStatus !== "idle") continue;
+        const at = finished.get(pane.id);
+        if (at !== undefined) next.set(pane.id, at);
+        else if (observing && worked.has(pane.id)) next.set(pane.id, now);
+      }
+    }
+  }
+
+  const unchanged =
+    next.size === finished.size && [...next].every(([id, at]) => finished.get(id) === at);
+  return unchanged ? finished : next;
 }
