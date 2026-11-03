@@ -14,7 +14,14 @@ import {
   type PendingMessage,
   usePaneChat,
 } from "./chat";
-import { type CommandId, commandCandidates, commandLabel, commandText } from "./commands";
+import {
+  chipOnInput,
+  type CommandId,
+  commandCandidates,
+  commandLabel,
+  commandSendText,
+  commandText,
+} from "./commands";
 import { useCopy } from "./copy";
 import { readDraft, storage, writeDraft } from "./drafts";
 import {
@@ -291,9 +298,11 @@ export function PaneDetail(props: PaneDetailProps) {
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
-  const candidates = commandCandidates(pane, draft);
+  const candidates = commandCandidates(pane, draft, snapshot?.context ?? null);
   const canSend = chip === null ? draft.trim() !== "" : !replying;
   const shell = isShellPane(pane);
+  const placeholder =
+    chip === "compact" ? "コンパクトの指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
   const subLabel = paneSubLabel(pane);
 
   const { copiedId, copy } = useCopy();
@@ -309,12 +318,14 @@ export function PaneDetail(props: PaneDetailProps) {
     field.style.height = `${field.scrollHeight}px`;
   };
 
-  // 打つたびに書くと重いので、手が止まってから残す。
+  // 打つたびに書くと重いので、手が止まってから残す。compact チップ中の draft は
+  // 指示であり、復元するとチップが無いぶん本文として送られてしまうので保存しない。
   useEffect(() => {
+    if (chip === "compact") return;
     const text = draft;
     const timer = setTimeout(() => writeDraft(storage(), pane.id, text), 250);
     return () => clearTimeout(timer);
-  }, [draft, pane.id]);
+  }, [draft, pane.id, chip]);
 
   // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
   // 前の inline height を残さない。
@@ -376,6 +387,7 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const clearChip = () => {
     setChip(null);
+    setDraft("");
     input.current?.focus();
   };
 
@@ -404,13 +416,17 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   // /new は user 発話を残さないので、送信中バブルを積むと最大 60 秒残る。
+  // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
     if (sending || replying) return;
+    const text = commandSendText(id, draft);
     setSending(true);
     input.current?.blur();
     setSendFailed(false);
-    if (await onSubmit(commandText(id))) setChip(null);
-    else setSendFailed(true);
+    if (await onSubmit(text)) {
+      setChip(null);
+      setDraft("");
+    } else setSendFailed(true);
     setSending(false);
   };
 
@@ -572,11 +588,10 @@ export function PaneDetail(props: PaneDetailProps) {
             rows={compact ? 1 : 2}
             value={draft}
             // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
-            {...(compact ? {} : { placeholder: shell ? "コマンドを入力" : "メッセージを入力" })}
+            {...(compact ? {} : { placeholder })}
             onInput={(event) => {
               setDraft(event.currentTarget.value);
-              // 文字を打ち始めたらチップを解除し、テキスト送信へ戻す。
-              setChip(null);
+              setChip(chipOnInput(chip));
             }}
             onKeyDown={(event) => {
               const composing = event.isComposing || event.keyCode === 229;
