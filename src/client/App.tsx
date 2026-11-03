@@ -21,7 +21,14 @@ import {
   parseOpenGroups,
   rememberGroup,
 } from "./expanded";
-import { expandForPane, readSelectedPane, restorePane, writeSelectedPane } from "./selection";
+import {
+  expandForPane,
+  readListOpen,
+  readSelectedPane,
+  restorePane,
+  writeListOpen,
+  writeSelectedPane,
+} from "./selection";
 import { LIST_SCOPE_STORAGE_KEY, parseListScope, type ListScope } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import {
@@ -149,7 +156,7 @@ function SplitCell(props: { children: (compact: boolean) => ComponentChildren })
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
 // 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
 function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean> | null): View {
-  const selectedPaneId = restorePane(state, readSelectedPane());
+  const selectedPaneId = restorePane(state, readSelectedPane(), readListOpen());
   const remembered = openGroups ?? new Map();
   const base = applyOpenGroups(initialExpanded(state), remembered, groupIds(state));
   return {
@@ -318,14 +325,16 @@ export function App() {
       ? (initialView.current ??= defaultView(state, openGroups.current)).expanded
       : NO_GROUPS;
 
-  // 画面に出ている選択をそのまま覚える。復元先が消えて Herdr の focus に倒れたときも、
-  // 次に開いたときに同じペインが出る（表示と保存を二重に持たない）。
+  const pane = state ? findPane(state, selectedPaneId) : null;
+
+  // 画面に出ている選択をそのまま覚える（表示と保存を二重に持たない）。
+  // 一覧に戻しているかは「一覧が出ているか」で決める。id を消すだけだと「まだ何も選んで
+  // いない」と区別できず、開いていたペインが消えたときも再読み込みで別のチャットへ飛ぶ。
   useEffect(() => {
     if (state === null) return;
     writeSelectedPane(selectedPaneId);
-  }, [state, selectedPaneId]);
-
-  const pane = state ? findPane(state, selectedPaneId) : null;
+    writeListOpen(pane === null);
+  }, [state, selectedPaneId, pane]);
   const context = state ? findPaneContext(state, selectedPaneId) : null;
 
   const select = (paneId: string) => {
