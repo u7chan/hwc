@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { HerdrError } from "./socket";
 import {
   createPaneClient,
+  exceedsTextLimit,
   isInvalidRequest,
   isPaneNotFound,
   parseInputBody,
@@ -166,24 +167,65 @@ test("parseOutputQuery rejects lines that are out of range", () => {
 test("parseInputBody accepts text with an optional submit", () => {
   expect(parseInputBody({ text: "hello" })).toEqual({
     ok: true,
-    value: { text: "hello", submit: false },
+    value: { text: "hello", submit: false, attachments: [] },
   });
   expect(parseInputBody({ text: "hello", submit: true })).toEqual({
     ok: true,
-    value: { text: "hello", submit: true },
+    value: { text: "hello", submit: true, attachments: [] },
   });
 });
 
 test("parseInputBody rejects a missing or blank text", () => {
-  const rejected = {
+  const blank = {
     ok: false as const,
     status: 400 as const,
     error: "text must be a non-empty string",
   };
-  expect(parseInputBody({})).toEqual(rejected);
-  expect(parseInputBody({ text: "" })).toEqual(rejected);
-  expect(parseInputBody({ text: "   " })).toEqual(rejected);
-  expect(parseInputBody({ text: 42 })).toEqual(rejected);
+  const notText = { ok: false as const, status: 400 as const, error: "text must be a string" };
+
+  expect(parseInputBody({})).toEqual(notText);
+  expect(parseInputBody({ text: 42 })).toEqual(notText);
+  expect(parseInputBody({ text: "" })).toEqual(blank);
+  expect(parseInputBody({ text: "   " })).toEqual(blank);
+  // 添付も無い空文字は送らないが、添付があれば本文は空でよい。
+  expect(parseInputBody({ text: "   ", attachments: [] })).toEqual(blank);
+});
+
+test("parseInputBody accepts an empty text when images are attached", () => {
+  const name = "pasted-20261103-120000.png";
+
+  expect(parseInputBody({ text: "", attachments: [name] })).toEqual({
+    ok: true,
+    value: { text: "", submit: false, attachments: [name] },
+  });
+});
+
+test("parseInputBody keeps at most four attachment names", () => {
+  const name = "pasted-20261103-120000.png";
+
+  expect(parseInputBody({ text: "hi", attachments: [name, name, name, name] }).ok).toBe(true);
+  expect(parseInputBody({ text: "hi", attachments: [name, name, name, name, name] })).toEqual({
+    ok: false,
+    status: 400,
+    error: "attachments must be at most 4",
+  });
+});
+
+test("parseInputBody rejects an attachment name that is not a saved one", () => {
+  const rejected = {
+    ok: false as const,
+    status: 400 as const,
+    error: "attachments must be an array of attachment names",
+  };
+
+  expect(parseInputBody({ text: "hi", attachments: "pasted-20261103-120000.png" })).toEqual(
+    rejected,
+  );
+  expect(parseInputBody({ text: "hi", attachments: ["../../etc/passwd"] })).toEqual(rejected);
+  expect(parseInputBody({ text: "hi", attachments: ["pasted-20261103-120000.gif"] })).toEqual(
+    rejected,
+  );
+  expect(parseInputBody({ text: "hi", attachments: [42] })).toEqual(rejected);
 });
 
 test("parseInputBody rejects a body that is not an object", () => {
@@ -193,15 +235,11 @@ test("parseInputBody rejects a body that is not an object", () => {
   expect(parseInputBody("hello")).toEqual(rejected);
 });
 
-test("parseInputBody rejects a text that is too long", () => {
-  expect(parseInputBody({ text: "a".repeat(16_385) })).toEqual({
-    ok: false,
-    status: 413,
-    error: "text must be at most 16384 bytes",
-  });
-  expect(parseInputBody({ text: "a".repeat(16_384) }).ok).toBe(true);
+test("exceedsTextLimit counts the bytes of the text it is given", () => {
+  expect(exceedsTextLimit("a".repeat(16_384))).toBe(false);
+  expect(exceedsTextLimit("a".repeat(16_385))).toBe(true);
   // 3 バイト文字はバイト数で数える。
-  expect(parseInputBody({ text: "あ".repeat(5_462) }).ok).toBe(false);
+  expect(exceedsTextLimit("あ".repeat(5_462))).toBe(true);
 });
 
 test("parseInputBody rejects a submit that is not a boolean", () => {

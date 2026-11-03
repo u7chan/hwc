@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { type FileHandle, open, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ChatCompaction, ChatContext, ChatMessage, ChatSnapshot } from "./contract";
+import { stripAttachedFiles } from "../../shared/attachments";
 
 // 直近の会話だけを返す。古い側は端末出力で読める。
 const MAX_MESSAGES = 500;
@@ -315,9 +316,19 @@ function project(id: string, message: Record<string, unknown>, entryTimestamp: u
   const at = messageAt(message.timestamp, entryTimestamp);
 
   if (message.role === "user") {
-    const text = userText(message.content);
+    const { text, attachments } = stripAttachedFiles(userText(message.content));
+    // 注記を落とした後に本文が空でも、添付があればメッセージとして残す。
+    const shown = text === "" && attachments.length === 0;
     return {
-      message: text === "" ? null : { id, role: "user", text, at },
+      message: shown
+        ? null
+        : {
+            id,
+            role: "user",
+            text,
+            at,
+            ...(attachments.length === 0 ? {} : { attachments }),
+          },
       model: null,
       provider: null,
       effort: null,

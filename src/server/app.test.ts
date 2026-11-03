@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "./app";
@@ -9,6 +9,7 @@ import type { ChatSnapshot } from "./chat/contract";
 import type { PaneClient } from "./herdr/panes";
 import { HerdrError } from "./herdr/socket";
 import type { AppState, PaneState, StateStore } from "./herdr/state";
+import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
 
 const pane: PaneState = {
   id: "w1:p1",
@@ -980,4 +981,349 @@ test("GET /api/panes/:id/chat answers 304 while the session file stays gone", as
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+// 保存先は外から差し替える。実ホームの状態ディレクトリへ書かせない。
+async function withAttachmentsRoot<T>(run: (root: string) => Promise<T>): Promise<T> {
+  const root = await mkdtemp(join(tmpdir(), "hwc-attachments-"));
+  try {
+    return await run(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+function createAttachmentApp(
+  root: string,
+  options: { state?: AppState; panes?: Partial<PaneClient> } = {},
+): ReturnType<typeof createApp> {
+  return createApp({
+    store: createFakeStore(options.state ?? chatState),
+    panes: createFakePanes(options.panes),
+    chat: createFakeChat(),
+    attachmentsRoot: root,
+  });
+}
+
+async function uploadImage(
+  app: ReturnType<typeof createApp>,
+  options: {
+    paneId?: string;
+    type?: string;
+    body?: Uint8Array<ArrayBuffer>;
+    headers?: Record<string, string>;
+  } = {},
+): Promise<Response> {
+  return app.request(`/api/panes/${options.paneId ?? "w1:p1"}/attachments`, {
+    method: "POST",
+    headers: {
+      "content-type": options.type ?? "image/png",
+      ...options.headers,
+    },
+    body: options.body ?? pngBytes,
+  });
+}
+
+const savedName = /^pasted-\d{8}-\d{6}(-\d+)?\.png$/;
+
+test("POST /api/panes/:id/attachments saves the image under the pane", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    const response = await uploadImage(app);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { name: string };
+    expect(body.name).toMatch(savedName);
+    expect(await readFile(join(root, "w1:p1", body.name))).toEqual(Buffer.from(pngBytes));
+
+    // 続けて貼った画像は上書きせず、別の名前になる。
+    const second = (await (await uploadImage(app)).json()) as { name: string };
+    expect(second.name).toMatch(savedName);
+    expect(second.name).not.toBe(body.name);
+  });
+});
+
+test("POST /api/panes/:id/attachments refuses a type outside the allowlist before the body", async () => {
+  await withAttachmentsRoot(async (root) => {
+    // ペインが無くても型の判定が先。simple request は preflight を通らないため。
+    for (const type of ["image/svg+xml", "image/gif", "text/plain", "application/octet-stream"]) {
+      const app = createAttachmentApp(root, { state });
+      const response = await uploadImage(app, { type });
+      expect(response.status).toBe(415);
+      expect(await response.json()).toEqual({ error: "unsupported_media_type" });
+    }
+  });
+});
+
+test("POST /api/panes/:id/attachments returns 404 for a pane that is gone or has no chat", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const missing = await uploadImage(createAttachmentApp(root), { paneId: "w1:p9" });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: "pane_not_found" });
+
+    const noChat = await uploadImage(createAttachmentApp(root, { state }));
+    expect(noChat.status).toBe(404);
+    expect(await noChat.json()).toEqual({ error: "no_chat" });
+  });
+});
+
+test("POST /api/panes/:id/attachments refuses a pane id that would escape the root", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+
+    // %2e%2e は URL の解決で消える。%2F は残るので、デコードすると区切りを含む id になる。
+    for (const paneId of ["%2e%2e", "..%2F..", "..%2F..%2Ftmp"]) {
+      const response = await uploadImage(app, { paneId });
+      expect(response.status).toBe(404);
+    }
+    // どこにも書いていない。
+    expect(await readdir(root)).toEqual([]);
+  });
+});
+
+test("POST /api/panes/:id/attachments stops an oversized image before reading it", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    const response = await uploadImage(app, {
+      headers: { "content-length": String(MAX_ATTACHMENT_BYTES + 1) },
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "attachment_too_large" });
+  });
+});
+
+test("POST /api/panes/:id/attachments counts the bytes it actually read", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    const response = await uploadImage(app, {
+      body: new Uint8Array(MAX_ATTACHMENT_BYTES + 1),
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "attachment_too_large" });
+  });
+});
+
+test("POST /api/panes/:id/attachments rejects an empty body", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    const response = await uploadImage(app, { body: new Uint8Array(0) });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+  });
+});
+
+test("GET /api/panes/:id/attachments/:name serves the saved image as immutable", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+
+    const response = await app.request(`/api/panes/w1:p1/attachments/${name}`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(pngBytes);
+  });
+});
+
+test("GET /api/panes/:id/attachments/:name returns 400 for a name outside the format", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+
+    // %2F は URL の解決で消えないので、デコードすると "../" を含む名前になる。
+    for (const name of [
+      "notes.png",
+      "pasted-20261103-120000.gif",
+      "..%2Fpasted-20261103-120000.png",
+    ]) {
+      const response = await app.request(`/api/panes/w1:p1/attachments/${name}`);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "invalid_request" });
+    }
+  });
+});
+
+test("GET /api/panes/:id/attachments/:name returns 404 for a name this pane never saved", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+
+    const absent = await app.request("/api/panes/w1:p1/attachments/pasted-20200101-000000.png");
+    expect(absent.status).toBe(404);
+    expect(await absent.json()).toEqual({ error: "not_found" });
+
+    // 別のペインの保存先は見ない。
+    const stored = await readFile(join(root, "w1:p1", name));
+    await mkdir(join(root, "w1:p2"), { recursive: true });
+    await writeFile(join(root, "w1:p2", name), stored);
+    const otherPane = await app.request(`/api/panes/w1:p9/attachments/${name}`);
+    expect(otherPane.status).toBe(404);
+    expect(await otherPane.json()).toEqual({ error: "pane_not_found" });
+  });
+});
+
+test("GET /api/panes/:id/attachments/:name returns 404 no_chat for a pane without a session", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const response = await createAttachmentApp(root, { state }).request(
+      "/api/panes/w1:p1/attachments/pasted-20261103-120000.png",
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "no_chat" });
+  });
+});
+
+test("POST /api/panes/:id/input appends the saved paths as a note", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const seen: unknown[] = [];
+    const app = createAttachmentApp(root, {
+      panes: {
+        send: async (options) => {
+          seen.push(options);
+        },
+      },
+    });
+    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+
+    const response = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "look at this", submit: true, attachments: [name] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(seen).toEqual([
+      {
+        paneId: "w1:p1",
+        text: `look at this\n\n<attached_files>\n- ${join(root, "w1:p1", name)}\n</attached_files>`,
+        submit: true,
+      },
+    ]);
+  });
+});
+
+test("POST /api/panes/:id/input accepts a message made of the images only", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const seen: unknown[] = [];
+    const app = createAttachmentApp(root, {
+      panes: {
+        send: async (options) => {
+          seen.push(options);
+        },
+      },
+    });
+    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+
+    const response = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "", submit: true, attachments: [name] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(seen).toEqual([
+      {
+        paneId: "w1:p1",
+        text: `<attached_files>\n- ${join(root, "w1:p1", name)}\n</attached_files>`,
+        submit: true,
+      },
+    ]);
+  });
+});
+
+test("POST /api/panes/:id/input rejects an attachment this pane never saved", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const sent: unknown[] = [];
+    const app = createAttachmentApp(root, {
+      panes: {
+        send: async (options) => {
+          sent.push(options);
+        },
+      },
+    });
+
+    const absent = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        text: "hi",
+        submit: true,
+        attachments: ["pasted-20200101-000000.png"],
+      }),
+    });
+    expect(absent.status).toBe(400);
+    expect(await absent.json()).toEqual({ error: "invalid_request" });
+
+    const outside = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        text: "hi",
+        submit: true,
+        attachments: ["../pasted-20200101-000000.png"],
+      }),
+    });
+    expect(outside.status).toBe(400);
+    expect(await outside.json()).toEqual({
+      error: "attachments must be an array of attachment names",
+    });
+    expect(sent).toEqual([]);
+  });
+});
+
+test("POST /api/panes/:id/input counts the note towards the size limit", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+
+    // 注記の分だけ本文に書ける量が減る。素の本文なら収まる長さで確かめる。
+    const note = `<attached_files>\n- ${join(root, "w1:p1", name)}\n</attached_files>`;
+    const text = "a".repeat(16_384 - note.length - 1);
+
+    const plain = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text, submit: true }),
+    });
+    expect(plain.status).toBe(200);
+
+    const response = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text, submit: true, attachments: [name] }),
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      error: "text and the attached files note must be at most 16384 bytes",
+    });
+  });
+});
+
+test("POST /api/panes/:id/input returns 404 for the pane that holds the images", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root, { state });
+
+    const noChat = await app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "", submit: true, attachments: ["pasted-20261103-120000.png"] }),
+    });
+    expect(noChat.status).toBe(404);
+    expect(await noChat.json()).toEqual({ error: "no_chat" });
+
+    const missing = await app.request("/api/panes/w1:p9/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "", submit: true, attachments: ["pasted-20261103-120000.png"] }),
+    });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: "pane_not_found" });
+  });
 });

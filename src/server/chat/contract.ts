@@ -3,6 +3,8 @@ export type ChatMessage = {
   role: "user" | "agent";
   text: string;
   at: number;
+  // ペイン配下のファイル名だけを持つ。絶対パスはクライアントへ渡さない。
+  attachments?: string[];
 };
 
 export type ChatContext = {

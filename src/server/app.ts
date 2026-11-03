@@ -1,12 +1,29 @@
 import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import {
+  attachmentContentType,
+  attachmentExtOf,
+  composeInputText,
+  isAttachmentName,
+  MAX_ATTACHMENT_BYTES,
+} from "../shared/attachments";
+import {
+  attachmentExists,
+  attachmentFilePath,
+  defaultAttachmentsRoot,
+  readAttachment,
+  saveAttachment,
+} from "./attachments";
 import type { ChatClient } from "./chat/pi";
 import {
+  exceedsTextLimit,
   isInvalidRequest,
   isPaneNotFound,
   type PaneClient,
   parseInputBody,
   parseOutputQuery,
+  TEXT_TOO_LONG,
+  TEXT_WITH_ATTACHMENTS_TOO_LONG,
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore } from "./herdr/state";
 
@@ -20,8 +37,17 @@ export function createApp(options: {
   chat: ChatClient;
   revision?: string;
   sseHeartbeatMs?: number;
+  // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
+  attachmentsRoot?: string;
 }) {
-  const { store, panes, chat, revision = "dev", sseHeartbeatMs = SSE_HEARTBEAT_MS } = options;
+  const {
+    store,
+    panes,
+    chat,
+    revision = "dev",
+    sseHeartbeatMs = SSE_HEARTBEAT_MS,
+    attachmentsRoot = defaultAttachmentsRoot(),
+  } = options;
 
   const current = async (): Promise<AppState | null> =>
     store.get() ??
@@ -65,6 +91,63 @@ export function createApp(options: {
   // CORS を返さないので、cross-origin は preflight で止まる。
   const isJsonRequest = (c: Context): boolean =>
     (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase() === "application/json";
+
+  // 画像は 1 枚の生バイトで受ける。保存名はサーバが決め、上書きしない。
+  const uploadAttachment = async (c: Context) => {
+    // 415 は body を読む前に返す。text/plain のような simple request は preflight を
+    // 通らないので、Content-Type の allowlist だけで守る。
+    const ext = attachmentExtOf(c.req.header("content-type"));
+    if (ext === null) return c.json({ error: "unsupported_media_type" }, 415);
+
+    const state = await current();
+    if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+    const paneId = c.req.param("id") ?? "";
+    const pane = findPane(state, paneId);
+    if (!pane) return c.json({ error: "pane_not_found" }, 404);
+    if (!pane.chat) return c.json({ error: "no_chat" }, 404);
+
+    // 宣言された長さで先に落とし、読み終えた実バイト数でも見る。
+    const declared = Number(c.req.header("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_ATTACHMENT_BYTES) {
+      return c.json({ error: "attachment_too_large" }, 413);
+    }
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+      return c.json({ error: "attachment_too_large" }, 413);
+    }
+    if (bytes.byteLength === 0) return c.json({ error: "invalid_request" }, 400);
+
+    const name = await saveAttachment({ root: attachmentsRoot, paneId, ext, bytes });
+    if (name === null) return c.json({ error: "invalid_request" }, 400);
+    return c.json({ name });
+  };
+
+  // 保存した画像を返す。名前は固定書式だけを通してからパスへ連結する。
+  const serveAttachment = async (c: Context) => {
+    const state = await current();
+    if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+    const paneId = c.req.param("id") ?? "";
+    const pane = findPane(state, paneId);
+    if (!pane) return c.json({ error: "pane_not_found" }, 404);
+    if (!pane.chat) return c.json({ error: "no_chat" }, 404);
+
+    const name = c.req.param("name") ?? "";
+    if (!isAttachmentName(name)) return c.json({ error: "invalid_request" }, 400);
+    const bytes = await readAttachment({ root: attachmentsRoot, paneId, name });
+    if (bytes === null) return c.json({ error: "not_found" }, 404);
+
+    // 保存した名前から決めた型で返し、中身を見て解釈させない。内容は変わらないので
+    // 長く持たせる。認証が無い LAN 公開なので private にする。
+    return new Response(bytes, {
+      headers: {
+        "content-type": attachmentContentType(name) ?? "application/octet-stream",
+        "x-content-type-options": "nosniff",
+        "cache-control": "private, max-age=31536000, immutable",
+      },
+    });
+  };
 
   return new Hono()
     .get("/api/health", (c) => c.json({ ok: true, service: "hwc", revision }))
@@ -146,6 +229,8 @@ export function createApp(options: {
         return c.json({ error: "chat_unavailable" }, 502);
       }
     })
+    .post("/api/panes/:id/attachments", uploadAttachment)
+    .get("/api/panes/:id/attachments/:name", serveAttachment)
     .get("/api/panes/:id/output", async (c) => {
       const query = parseOutputQuery(new URL(c.req.url).searchParams);
       if (!query.ok) return c.json({ error: query.error }, query.status);
@@ -171,8 +256,39 @@ export function createApp(options: {
       const input = parseInputBody(body);
       if (!input.ok) return c.json({ error: input.error }, input.status);
 
+      const paneId = c.req.param("id");
+      const paths: string[] = [];
+      // 添付が無いときは Herdr の pane_not_found に任せる。ペインの実在を状態から引くと、
+      // 従来の経路に余分な往復が増える。
+      if (input.value.attachments.length > 0) {
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+        const pane = findPane(state, paneId);
+        if (!pane) return c.json({ error: "pane_not_found" }, 404);
+        if (!pane.chat) return c.json({ error: "no_chat" }, 404);
+
+        // 書式は parseInputBody が見ている。ここではこのペインの保存先の実在を確かめる。
+        for (const name of input.value.attachments) {
+          const path = attachmentFilePath(attachmentsRoot, paneId, name);
+          if (path === null || !(await attachmentExists(attachmentsRoot, paneId, name))) {
+            return c.json({ error: "invalid_request" }, 400);
+          }
+          paths.push(path);
+        }
+      }
+
+      // 上限は注記を組み立てた後の本文で測る。パスの分だけ書ける量が減る。
+      const text = composeInputText(input.value.text, paths);
+      if (exceedsTextLimit(text)) {
+        return c.json(
+          { error: paths.length === 0 ? TEXT_TOO_LONG : TEXT_WITH_ATTACHMENTS_TOO_LONG },
+          413,
+        );
+      }
+
       try {
-        await panes.send({ paneId: c.req.param("id"), ...input.value });
+        await panes.send({ paneId, text, submit: input.value.submit });
         return c.json({ ok: true });
       } catch (error) {
         return paneFailure(c, error);

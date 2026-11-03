@@ -1,0 +1,75 @@
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  attachmentExists,
+  attachmentFilePath,
+  defaultAttachmentsRoot,
+  readAttachment,
+  saveAttachment,
+} from "./attachments";
+
+let root: string;
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), "hwc-attachments-"));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
+
+const at = new Date(2026, 10, 3, 12, 0, 0);
+const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+
+test("saves under the pane and never overwrites a name taken in the same second", async () => {
+  const first = await saveAttachment({ root, paneId: "w1:p1", ext: "png", bytes: png, now: at });
+  const second = await saveAttachment({ root, paneId: "w1:p1", ext: "png", bytes: png, now: at });
+  const third = await saveAttachment({ root, paneId: "w1:p1", ext: "png", bytes: png, now: at });
+
+  expect([first, second, third]).toEqual([
+    "pasted-20261103-120000.png",
+    "pasted-20261103-120000-1.png",
+    "pasted-20261103-120000-2.png",
+  ]);
+  const bytes = await readAttachment({ root, paneId: "w1:p1", name: first ?? "" });
+  expect(new Uint8Array(bytes ?? new ArrayBuffer(0))).toEqual(png);
+});
+
+test("refuses a pane id or a name that would escape the pane directory", async () => {
+  expect(await saveAttachment({ root, paneId: "../x", ext: "png", bytes: png })).toBeNull();
+  expect(attachmentFilePath(root, "../x", "pasted-20261103-120000.png")).toBeNull();
+  expect(attachmentFilePath(root, "w1:p1", "../pasted-20261103-120000.png")).toBeNull();
+  expect(attachmentFilePath(root, "w1:p1", "/etc/passwd")).toBeNull();
+});
+
+test("keeps the panes apart", async () => {
+  const name =
+    (await saveAttachment({ root, paneId: "w1:p1", ext: "png", bytes: png, now: at })) ?? "";
+
+  expect(await attachmentExists(root, "w1:p1", name)).toBe(true);
+  expect(await attachmentExists(root, "w1:p2", name)).toBe(false);
+  expect(await readAttachment({ root, paneId: "w1:p2", name })).toBeNull();
+});
+
+test("a file that is gone or not a saved name has no bytes", async () => {
+  expect(
+    await readAttachment({ root, paneId: "w1:p1", name: "pasted-20261103-120000.png" }),
+  ).toBeNull();
+  expect(await readAttachment({ root, paneId: "w1:p1", name: "notes.png" })).toBeNull();
+  expect(await attachmentExists(root, "w1:p1", "notes.png")).toBe(false);
+});
+
+test("the root comes from the state dir and ignores a relative path", () => {
+  expect(defaultAttachmentsRoot({ HWC_STATE_DIR: "/srv/hwc-state" })).toBe(
+    "/srv/hwc-state/attachments",
+  );
+  // 相対値は作業ディレクトリに依存する。既定へ落とす。
+  expect(defaultAttachmentsRoot({ HWC_STATE_DIR: "hwc-state", XDG_STATE_HOME: "/xdg" })).toBe(
+    "/xdg/hwc/attachments",
+  );
+  expect(defaultAttachmentsRoot({ XDG_STATE_HOME: "xdg" })).toBe(
+    join(homedir(), ".local", "state", "hwc", "attachments"),
+  );
+});
