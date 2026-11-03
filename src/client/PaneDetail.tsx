@@ -823,7 +823,9 @@ export function PaneDetail(props: PaneDetailProps) {
             id={`hwc-input-${pane.id}`}
             ref={input}
             class="hwc-input-field"
-            rows={compact ? 1 : 2}
+            // 2 行ぶんの高さを初期値にすると、1 行のとき文字の下だけ空いて上に寄る。
+            // 高さは fit() が入力量に合わせて伸ばす。
+            rows={1}
             value={draft}
             // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
             {...(compact ? {} : { placeholder })}
