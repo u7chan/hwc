@@ -796,6 +796,11 @@ button {
   background: transparent;
 }
 
+/* 戻せない操作は色で先に伝える。項目は常に活性（止まったエージェントも畳める）。 */
+.hwc-menu-item--danger {
+  color: var(--color-danger);
+}
+
 /* 確認ダイアログ。破壊的な操作の手前に一度だけ挟む。 */
 .hwc-dialog-layer {
   position: fixed;
@@ -876,6 +881,20 @@ button {
   color: var(--color-surface);
 }
 
+/* 送信中は押せない。危険色を外し、実行を抑止していることを面で示す。 */
+.hwc-dialog-button:disabled {
+  border: 1px solid var(--color-line);
+  background: var(--color-raised);
+  color: var(--color-secondary);
+  cursor: default;
+}
+
+.hwc-dialog-error {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--color-danger);
+}
+
 .hwc-dialog-button:active {
   transform: scale(0.98);
 }
@@ -954,8 +973,8 @@ button {
 
 /* 名前の幅を最優先で残す。固定幅の要素で埋まると、実行中の行だけ名前が読めなくなる。 */
 @container (max-width: 320px) {
-  /* メニューは落とす。ペイン ID は詳細ヘッダからコピーできる。 */
-  .hwc-pane-more {
+  /* 一覧の行のメニューは落とす。ペイン ID は詳細ヘッダからコピーできる。 */
+  .hwc-pane .hwc-pane-more {
     display: none;
   }
 
@@ -1415,6 +1434,11 @@ button {
   .hwc-pane-id-copy {
     transition: none;
   }
+}
+
+/* 詳細の見出しの「…」は、hover できる端末でも常に出す。閉じる入口がここしか無い。 */
+.hwc-pane-head .hwc-pane-more {
+  opacity: 1;
 }
 
 /* 分割表示は広い画面だけ。狭い画面では 1 枚ずつ見る。 */

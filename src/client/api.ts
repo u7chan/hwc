@@ -243,3 +243,33 @@ export async function focusAgent(paneId: string, signal?: AbortSignal): Promise<
   const response = await fetch(url, { ...init, signal });
   if (!response.ok) throw new Error(`focus: ${response.status}`);
 }
+
+export function closeRequest(paneId: string): { url: string; init: RequestInit } {
+  return {
+    url: `/api/panes/${encodeURIComponent(paneId)}/close`,
+    init: { method: "POST", headers: { "content-type": "application/json" } },
+  };
+}
+
+export type CloseOutcome = "done" | "failed";
+
+// ペインが無い（BFF の状態に無い / Herdr が pane_not_found）なら、閉じる目的は達している。
+export function closeOutcome(status: number): CloseOutcome {
+  return status === 404 || (status >= 200 && status < 300) ? "done" : "failed";
+}
+
+// 送信中はダイアログから出られないので、応答が返らない経路をここで切る。
+// BFF に届いた場合は Herdr 側の期限で終わるが、届かないと fetch が返らない。
+export const CLOSE_TIMEOUT_MS = 8_000;
+
+// 失敗も戻り値で返す。呼び出し側は結果の反映を 1 回だけ行えばよい。
+export async function closePane(paneId: string): Promise<CloseOutcome> {
+  const { url, init } = closeRequest(paneId);
+  try {
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(CLOSE_TIMEOUT_MS) });
+    return closeOutcome(response.status);
+  } catch {
+    // 通信の失敗と打ち切りは、閉じられなかった結果として扱う。
+    return "failed";
+  }
+}

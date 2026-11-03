@@ -315,6 +315,27 @@ export function createApp(options: {
       } catch (error) {
         return paneFailure(c, error);
       }
+    })
+    .post("/api/panes/:id/close", async (c) => {
+      // ペインとエージェントを終わらせる操作なので、form POST で叩ける状態にしない。
+      // body は読まない（ペイン id は path にあり、追加の指定は無い）。
+      if (!isJsonRequest(c)) {
+        return c.json({ error: "content-type must be application/json" }, 415);
+      }
+
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+
+      try {
+        await panes.close({ paneId });
+        // focus と同じく、状態の取り直しは Herdr のイベント（pane.closed）に任せる。
+        return c.json({ ok: true });
+      } catch (error) {
+        return paneFailure(c, error);
+      }
     });
 }
 

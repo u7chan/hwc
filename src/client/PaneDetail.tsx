@@ -42,6 +42,7 @@ import {
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
+  MoreIcon,
   PaneIcon,
   SendIcon,
   StatusMark,
@@ -329,6 +330,10 @@ type PaneDetailProps = {
   // 一覧が隠れる狭い画面でだけ渡す。広い画面では一覧がブランチを持っている。
   branch: string | null;
   waitingMs: number | null;
+  // メニューはセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
+  // 中の fixed はセル基準になる。ここではトリガーの位置を渡すだけ。
+  menuOpen: boolean;
+  onOpenMenu: (paneId: string, rect: DOMRect) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
 };
 
@@ -340,7 +345,8 @@ type AttachedImage = {
 };
 
 export function PaneDetail(props: PaneDetailProps) {
-  const { pane, context, compact, labeled, branch, waitingMs, onSubmit } = props;
+  const { pane, context, compact, labeled, branch, waitingMs, menuOpen, onOpenMenu, onSubmit } =
+    props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expandedOpen, setExpandedOpen] = useState(false);
@@ -668,6 +674,17 @@ export function PaneDetail(props: PaneDetailProps) {
             <CopyGlyph copied={copied} />
           </button>
         </span>
+        {/* ID の外に置く。中に入れると、hover できる端末で ID と一緒に隠れる。 */}
+        <button
+          type="button"
+          class="hwc-pane-more"
+          aria-label={`${pane.id} のメニュー`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={(event) => onOpenMenu(pane.id, event.currentTarget.getBoundingClientRect())}
+        >
+          <MoreIcon />
+        </button>
       </div>
       <div class="hwc-output-wrap">
         <div

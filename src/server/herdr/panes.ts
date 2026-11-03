@@ -24,10 +24,13 @@ export type InputBody = { text: string; submit: boolean; attachments: string[] }
 
 export type FocusOptions = { paneId: string };
 
+export type CloseOptions = { paneId: string };
+
 export type PaneClient = {
   read: (options: ReadOptions) => Promise<PaneOutput>;
   send: (options: SendOptions) => Promise<void>;
   focus: (options: FocusOptions) => Promise<void>;
+  close: (options: CloseOptions) => Promise<void>;
 };
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; status: 400 | 413; error: string };
@@ -132,6 +135,10 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
     async focus({ paneId }) {
       // target はエージェント名も受けるが、hwc が持つのはペイン id だけ。
       await call("agent.focus", { target: paneId }, { path });
+    },
+    async close({ paneId }) {
+      // ペインを閉じるとエージェントのプロセスも終わる。開いていた作業は戻らない。
+      await call("pane.close", { pane_id: paneId }, { path });
     },
   };
 }
