@@ -492,7 +492,7 @@ function TreePaneList(props: TreePaneListProps) {
         );
       })}
       {menu ? (
-        <Menu label={`${menu.paneId} の操作`} placement={menu} onClose={closeMenu}>
+        <Menu label={`${menu.paneId} の操作`} placement={menu} onClose={closeMenu} closeOnScroll>
           <p class="hwc-menu-head">{menu.paneId}</p>
           <button
             type="button"

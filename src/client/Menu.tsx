@@ -32,28 +32,33 @@ type MenuProps = {
   label: string;
   placement: MenuPlacement;
   onClose: () => void;
+  // 移動するトリガーのメニューだけスクロールで閉じる。一覧の行は行と一緒にスクロールするが、
+  // 詳細の見出しは固定で位置が変わらない。出力は追従で勝手にスクロールするので、
+  // そこで閉じると項目を押せない（実行中のペインほど出力が伸びる）。
+  closeOnScroll?: boolean;
   children: ComponentChildren;
 };
 
-// 行き場のない場所・Esc・スクロール・画面の伸縮で閉じる。中身は画面ごとに差し替える。
+// 行き場のない場所・Esc・画面の伸縮で閉じる。中身は画面ごとに差し替える。
 export function Menu(props: MenuProps) {
-  const { onClose } = props;
+  const { onClose, closeOnScroll = false } = props;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     const close = () => onClose();
-    window.addEventListener("keydown", onKey);
     // 中身が動くとトリガーとの位置がずれる。capture で内側のスクロールも拾う。
-    window.addEventListener("scroll", close, true);
+    const onScroll = closeOnScroll ? close : null;
+    window.addEventListener("keydown", onKey);
     window.addEventListener("resize", close);
+    if (onScroll !== null) window.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
+      if (onScroll !== null) window.removeEventListener("scroll", onScroll, true);
     };
-  }, [onClose]);
+  }, [onClose, closeOnScroll]);
 
   return (
     <>
