@@ -2242,6 +2242,10 @@ button {
 
 .hwc-input-actions {
   display: flex;
+  /* 狭い入力行で feedback が 1 文字幅まで潰れるのを防ぐ。入り切らないときは tail を
+     上の行に残し、feedback をその下へ落とす（wrap-reverse）。360px 以下の container
+     query とは別の、内容の幅での折り返し。 */
+  flex-wrap: wrap-reverse;
   align-items: center;
   gap: var(--space-2);
   padding: 0 0 var(--space-1) var(--space-2);
@@ -2251,8 +2255,13 @@ button {
 }
 
 .hwc-feedback {
-  flex: 1;
+  /* basis を内容の幅にして、入り切らないときに tail を折り返させる。文字単位で折り返すと
+     1 文字ずつ縦積みになるので、メッセージ自体は折り返さない。 */
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
 }
