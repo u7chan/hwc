@@ -14,7 +14,14 @@ import {
 } from "./connection";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
-import { findPane, findPaneContext, groupIds, initialExpanded, splitPanes } from "./select";
+import {
+  findPane,
+  findPaneContext,
+  findPaneRow,
+  groupIds,
+  initialExpanded,
+  splitPanes,
+} from "./select";
 import {
   OPEN_GROUPS_STORAGE_KEY,
   applyOpenGroups,
@@ -30,10 +37,20 @@ import {
   writeSelectedPane,
 } from "./selection";
 import { LIST_SCOPE_STORAGE_KEY, parseListScope, type ListScope } from "./scope";
+import {
+  SENT_PANE_STORAGE_KEY,
+  parseSentPanes,
+  recordSent,
+  sentForSave,
+  type SentPane,
+} from "./sent";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import {
+  FINISHED_AT_STORAGE_KEY,
   WORKING_SINCE_STORAGE_KEY,
+  parseFinishedAt,
   parseWorkingSince,
+  trackFinished,
   trackWorking,
   workingMs,
   workingSinceForSave,
@@ -57,44 +74,68 @@ import {
 
 const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
+const NO_TIMES: ReadonlyMap<string, number> = new Map();
 
 // 保存に失敗しても表示は続ける。プライベートモードなどでは localStorage が使えない。
-function readWorkingSince(): string | null {
+function readStored(key: string): string | null {
   if (typeof localStorage === "undefined") return null;
   try {
-    return localStorage.getItem(WORKING_SINCE_STORAGE_KEY);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function writeWorkingSince(state: AppState, since: ReadonlyMap<string, number>) {
+function writeStored(key: string, value: string) {
   if (typeof localStorage === "undefined") return;
   try {
-    localStorage.setItem(
-      WORKING_SINCE_STORAGE_KEY,
-      JSON.stringify(workingSinceForSave(state, since)),
-    );
+    localStorage.setItem(key, value);
   } catch {
-    // 保存できなくても、その場の経過表示は続ける。
+    // 保存できなくても、その場の表示は続ける。
   }
 }
 
-// 壁時計との同期。1 秒ごとに数え直し、稼働に入った時刻は手元で覚える。
-function useWorkingClock(state: AppState | null) {
+function writePaneTimes(key: string, times: Record<string, number>) {
+  writeStored(key, JSON.stringify(times));
+}
+
+// 壁時計との同期。1 秒ごとに数え直し、稼働に入った時刻と完了した時刻は手元で覚える。
+// 起点は端末にも残す。Herdr は変化の順序しか返さないので、こちらが唯一の持ち主になる。
+// 復元は 1 回だけ。毎秒 localStorage を読む必要は無い。
+function usePaneTimes(state: AppState | null, connection: ConnectionStatus) {
   const [now, setNow] = useState(() => Date.now());
-  // 覚えた時刻は描画のたびに引き継ぐ。同じ入力なら同じ結果になるので、描画中に進めてよい。
-  // 起点は端末にも残す。Herdr は変化の順序しか返さないので、こちらが唯一の持ち主になる。
-  // 復元は 1 回だけ。毎秒 localStorage を読む必要は無い。
-  const stored = useRef<ReadonlyMap<string, number> | null>(null);
-  stored.current ??= parseWorkingSince(readWorkingSince(), now);
-  let workingSince = stored.current;
-  if (state !== null) {
-    const next = trackWorking(workingSince, state, now);
-    if (next !== workingSince) {
-      workingSince = next;
-      stored.current = next;
-      writeWorkingSince(state, next);
+  const restored = useRef(false);
+  const workingSince = useRef<ReadonlyMap<string, number>>(NO_TIMES);
+  const finishedAt = useRef<ReadonlyMap<string, number>>(NO_TIMES);
+  // 観測済みのスナップショット。描き直しのたびに遷移を数えないよう、同じものは見ない。
+  const observed = useRef<AppState | null>(null);
+  // 接続が切れた描画を見たら、次のスナップショットが新しい観測の最初になる。
+  const fresh = useRef(true);
+
+  if (!restored.current) {
+    restored.current = true;
+    workingSince.current = parseWorkingSince(readStored(WORKING_SINCE_STORAGE_KEY), now);
+    finishedAt.current = parseFinishedAt(readStored(FINISHED_AT_STORAGE_KEY), now);
+  }
+
+  if (connection !== "live") fresh.current = true;
+
+  if (state !== null && observed.current !== state) {
+    observed.current = state;
+    const observing = !fresh.current;
+    fresh.current = false;
+
+    // 完了時刻は、直前の観測で working だったペインが done / idle に移ったときだけ。
+    const finished = trackFinished(finishedAt.current, workingSince.current, state, now, observing);
+    if (finished !== finishedAt.current) {
+      finishedAt.current = finished;
+      writePaneTimes(FINISHED_AT_STORAGE_KEY, Object.fromEntries(finished));
+    }
+
+    const working = trackWorking(workingSince.current, state, now);
+    if (working !== workingSince.current) {
+      workingSince.current = working;
+      writePaneTimes(WORKING_SINCE_STORAGE_KEY, workingSinceForSave(state, working));
     }
   }
 
@@ -103,7 +144,7 @@ function useWorkingClock(state: AppState | null) {
     return () => clearInterval(timer);
   }, []);
 
-  return { workingSince, now };
+  return { workingSince: workingSince.current, finishedAt: finishedAt.current, now };
 }
 
 // 端末の幅は React の外にある。購読して、変わったときだけ描き直す。
@@ -204,6 +245,10 @@ export function App() {
     parseListScope(
       typeof localStorage === "undefined" ? null : localStorage.getItem(LIST_SCOPE_STORAGE_KEY),
     ),
+  );
+  // 窓口はスペースごとに 1 つ。一覧が読む値なので state に置き、送信のたびに入れ替える。
+  const [sent, setSent] = useState<ReadonlyMap<string, SentPane>>(() =>
+    parseSentPanes(readStored(SENT_PANE_STORAGE_KEY)),
   );
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
@@ -310,7 +355,7 @@ export function App() {
     }
   };
 
-  const { workingSince, now } = useWorkingClock(state);
+  const { workingSince, finishedAt, now } = usePaneTimes(state, connection);
 
   // 選んだペインがスナップショットから消えても id は残す。findPane が null を返すので
   // 表示は一覧に戻り、戻ってきたときは同じペインを開ける。
@@ -375,6 +420,15 @@ export function App() {
     }
   };
 
+  // 窓口は「最後に送ったペイン」。開いただけでは入れ替えないので、送信が通ったときだけ呼ぶ。
+  const rememberSent = (paneId: string) => {
+    if (state === null) return;
+    const next = recordSent(sent, findPaneRow(state, paneId), Date.now());
+    if (next === sent) return;
+    setSent(next);
+    writeStored(SENT_PANE_STORAGE_KEY, JSON.stringify(sentForSave(state, next)));
+  };
+
   // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。
   // 失敗の表示は入力欄を持つ PaneDetail が持つ。ペインを離れれば消える。
   const sendToPane = async (
@@ -384,10 +438,11 @@ export function App() {
   ): Promise<boolean> => {
     try {
       await sendInput(paneId, text, attachments);
-      return true;
     } catch {
       return false;
     }
+    rememberSent(paneId);
+    return true;
   };
 
   // 詳細のタブバーは、選択中ペインが属するタブのペインだけを出す。
@@ -526,6 +581,8 @@ export function App() {
               onFocus={focusPane}
               onToggle={toggle}
               workingSince={workingSince}
+              finishedAt={finishedAt}
+              sent={sent}
               now={now}
             />
           )}

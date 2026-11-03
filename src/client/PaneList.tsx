@@ -21,16 +21,17 @@ import {
   soleTab,
 } from "./select";
 import {
-  activePanes,
   activeUnreadCount,
+  activeViewRows,
   scopeWorkspaces,
   shouldFocusPane,
   unreadLabel,
   type ListScope,
   type TreeScope,
 } from "./scope";
+import type { SentPane } from "./sent";
 import { StatusIcon, StatusLabel } from "./StatusLabel";
-import { formatElapsed } from "./time";
+import { finishedMs, formatElapsed, workingMs } from "./time";
 
 type PaneListProps = {
   state: AppState;
@@ -42,6 +43,8 @@ type PaneListProps = {
   onFocus: (paneId: string) => void;
   onToggle: (groupId: string) => void;
   workingSince: ReadonlyMap<string, number>;
+  finishedAt: ReadonlyMap<string, number>;
+  sent: ReadonlyMap<string, SentPane>;
   now: number;
 };
 
@@ -128,16 +131,33 @@ function activePlace(workspaceLabel: string, tabLabel: string): string {
   return tabLabel === "" ? workspaceLabel : `${workspaceLabel} · ${tabLabel}`;
 }
 
-// 状態を持つエージェントを 1 行ずつ並べる。ツリーを畳まないので、どのスペースの
-// どのタブで動いているかがそのまま読める。
+// 右端は「あとどれだけ待つか」。要対応だけは時刻ではなく言葉で示す。
+function ActiveTrail(props: {
+  pane: PaneState;
+  workingSince: ReadonlyMap<string, number>;
+  finishedAt: ReadonlyMap<string, number>;
+  now: number;
+}) {
+  if (props.pane.agentStatus === "blocked") {
+    return <span class="hwc-active-flag">要対応</span>;
+  }
+  const ms =
+    props.pane.agentStatus === "working"
+      ? workingMs(props.workingSince, props.pane.id, props.now)
+      : finishedMs(props.finishedAt, props.pane.id, props.now);
+  return ms === null ? null : <span class="hwc-pane-elapsed">{formatElapsed(ms)}</span>;
+}
+
+// 窓口と状態の行を 1 行ずつ並べる。ツリーを畳まないので、どのスペースのどのタブで
+// 動いているかがそのまま読める。並びは activeViewRows が持つ。
 function ActivePaneList(props: PaneListProps) {
-  const rows = activePanes(props.state);
+  const rows = activeViewRows(props.state, props.sent);
   if (rows.length === 0) {
     return (
       <div class="hwc-list-note">
-        <p class="hwc-list-note-title">対象のエージェントはいません</p>
+        <p class="hwc-list-note-title">窓口も動いているエージェントもいません</p>
         <p class="hwc-list-note-text">
-          実行中・要対応・完了のエージェントがここに並びます。「エージェント」に切り替えると、待機中のものも出ます。
+          メッセージを送ったペインと、実行中・要対応・完了のエージェントがここに並びます。「エージェント」に切り替えると、待機中のものも出ます。
         </p>
       </div>
     );
@@ -146,7 +166,6 @@ function ActivePaneList(props: PaneListProps) {
   return (
     <ul class="hwc-active">
       {rows.map(({ workspace, tab, pane }) => {
-        const startedAt = props.workingSince.get(pane.id);
         const current = pane.id === props.selectedPaneId;
         return (
           <li key={pane.id} class="hwc-active-row">
@@ -166,12 +185,12 @@ function ActivePaneList(props: PaneListProps) {
                 <span class="hwc-active-place">{activePlace(workspace.label, tab.label)}</span>
                 <span class="hwc-active-name">{pane.label ?? pane.agent}</span>
               </span>
-              {pane.agentStatus === "working" && startedAt !== undefined ? (
-                <span class="hwc-pane-elapsed">{formatElapsed(props.now - startedAt)}</span>
-              ) : pane.agentStatus === "blocked" ? (
-                // 色だけで意味を持たせない。記号の隣に言葉を置く。
-                <span class="hwc-active-flag">要対応</span>
-              ) : null}
+              <ActiveTrail
+                pane={pane}
+                workingSince={props.workingSince}
+                finishedAt={props.finishedAt}
+                now={props.now}
+              />
             </button>
           </li>
         );
@@ -357,21 +376,23 @@ function TreePaneList(props: TreePaneListProps) {
                   aria-current={pane.id === selectedPaneId ? "true" : undefined}
                   onClick={() => onSelect(pane.id)}
                 >
-                  <span
-                    class="hwc-pane-icon"
-                    data-agent={agentGlyph(pane.agent)}
-                    data-working={pane.agentStatus === "working"}
-                  >
-                    {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
+                  <span class={pane.agent === null ? "hwc-pane-icon" : "hwc-pane-state"}>
+                    {pane.agent === null ? <PaneIcon /> : <StatusLabel status={pane.agentStatus} />}
                   </span>
                   <span class="hwc-pane-main">
-                    <span class="hwc-pane-name">{paneRowTitle(pane)}</span>
+                    <span class="hwc-pane-title">
+                      {pane.agent === null ? null : (
+                        <span class="hwc-pane-agent" data-agent={agentGlyph(pane.agent)}>
+                          <AgentGlyphIcon agent={pane.agent} size={14} />
+                        </span>
+                      )}
+                      <span class="hwc-pane-name">{paneRowTitle(pane)}</span>
+                    </span>
                     {branch === null ? null : <span class="hwc-pane-sub">{branch}</span>}
                   </span>
                   {startedAt === undefined ? null : (
                     <span class="hwc-pane-elapsed">{formatElapsed(now - startedAt)}</span>
                   )}
-                  <StatusLabel status={pane.agentStatus} />
                 </button>
                 <button
                   type="button"

@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
-import type { AppState } from "../server/herdr/state";
+import type { AgentStatus, AppState } from "../server/herdr/state";
 import {
+  finishedMs,
   formatClock,
   formatElapsed,
+  parseFinishedAt,
   parseWorkingSince,
+  trackFinished,
   trackWorking,
   workingMs,
   workingSinceForSave,
@@ -195,4 +198,108 @@ test("only the working panes are written back to the device", () => {
 
   // 止まったペインと、もう居ないペインは保存しない。
   expect(workingSinceForSave(workingState, since)).toEqual({ "w1:p1": 1_000 });
+});
+
+function statuses(...list: AgentStatus[]): AppState {
+  return {
+    focusedWorkspaceId: null,
+    focusedTabId: null,
+    focusedPaneId: null,
+    workspaces: [
+      {
+        id: "w1",
+        label: "hwc",
+        agentStatus: "unknown",
+        focused: false,
+        worktree: null,
+        tabs: [
+          {
+            id: "w1:t1",
+            label: "1",
+            agentStatus: "unknown",
+            focused: false,
+            panes: list.map((agentStatus, index) => ({
+              id: `w1:p${index + 1}`,
+              title: null,
+              label: null,
+              agent: "pi",
+              agentStatus,
+              focused: false,
+              chat: false,
+            })),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+test("a pane that leaves working for done or idle remembers when it finished", () => {
+  const working = new Map([["w1:p1", 1_000]]);
+
+  expect([...trackFinished(new Map(), working, statuses("done"), 9_000, true)]).toEqual([
+    ["w1:p1", 9_000],
+  ]);
+  expect([...trackFinished(new Map(), working, statuses("idle"), 9_000, true)]).toEqual([
+    ["w1:p1", 9_000],
+  ]);
+
+  // 元から止まっているペインは、いつ終わったかを知らない。
+  expect([...trackFinished(new Map(), new Map(), statuses("done"), 9_000, true)]).toEqual([]);
+});
+
+test("going back to work or needing attention drops the finished time", () => {
+  const finished = new Map([["w1:p1", 1_000]]);
+
+  expect([...trackFinished(finished, new Map(), statuses("working"), 9_000, true)]).toEqual([]);
+  // 要対応は待ち時間ではなく、こちらが動く番。
+  expect([...trackFinished(finished, new Map(), statuses("blocked"), 9_000, true)]).toEqual([]);
+});
+
+test("only a transition seen on this connection is written down", () => {
+  const working = new Map([["w1:p1", 1_000]]);
+
+  // マウント直後と再接続後の最初のスナップショットでは、前回の観測を引き継がない。
+  expect([...trackFinished(new Map(), working, statuses("done"), 9_000, false)]).toEqual([]);
+  // 接続中に記録した完了時刻は、新しい観測の最初でも残す。
+  const finished = new Map([["w1:p1", 5_000]]);
+  expect([...trackFinished(finished, new Map(), statuses("done"), 9_000, false)]).toEqual([
+    ["w1:p1", 5_000],
+  ]);
+});
+
+test("a finished time is kept only while the pane is resting", () => {
+  const finished = new Map([
+    ["w1:p1", 1_000],
+    ["w1:p2", 2_000],
+    ["w9:p1", 3_000],
+  ]);
+
+  // 居ないペインの時刻は捨てる。
+  expect([...trackFinished(finished, new Map(), statuses("idle", "done"), 9_000, true)]).toEqual([
+    ["w1:p1", 1_000],
+    ["w1:p2", 2_000],
+  ]);
+});
+
+test("a saved finished time is read back from the device", () => {
+  expect([...parseFinishedAt('{"w1:p1":1000,"w1:p2":2000}', 5_000)]).toEqual([
+    ["w1:p1", 1_000],
+    ["w1:p2", 2_000],
+  ]);
+  // 未来の値と壊れた JSON は捨てる。
+  expect([...parseFinishedAt('{"w1:p1":9000,"w1:p2":1000}', 5_000)]).toEqual([["w1:p2", 1_000]]);
+  expect([...parseFinishedAt("not json", 5_000)]).toEqual([]);
+  expect([...parseFinishedAt("[1000]", 5_000)]).toEqual([]);
+  expect([...parseFinishedAt(null, 5_000)]).toEqual([]);
+});
+
+test("the time since a pane finished never reads as negative", () => {
+  const finished = new Map([["w1:p1", 9_000]]);
+
+  expect(finishedMs(finished, "w1:p1", 12_000)).toBe(3_000);
+  // 覚えていないペインには経過を出さない。
+  expect(finishedMs(finished, "w1:p2", 12_000)).toBeNull();
+  // 端末の時計が戻っても負の値は出さない。
+  expect(finishedMs(finished, "w1:p1", 0)).toBe(0);
 });

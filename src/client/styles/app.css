@@ -479,6 +479,20 @@ button {
   color: var(--color-secondary);
 }
 
+/* エージェントの行は枠を持たない。状態の記号を枠と同じ位置・寸法に置く。 */
+.hwc-pane-state {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--icon-frame);
+  height: var(--icon-frame);
+}
+
+/* 待機は控えめにする。動いていないことが記号の濃さでも分かる。 */
+.hwc-pane-state .hwc-status--neutral {
+  opacity: 0.5;
+}
+
 .hwc-group-main,
 .hwc-pane-main {
   flex: 1;
@@ -492,6 +506,25 @@ button {
 /* 副題がある行と無い行で高さを揃える。折り返しで行の高さが変わらないように。 */
 .hwc-pane-main {
   min-height: calc((var(--text-body) + var(--text-secondary)) * var(--line-body) + var(--space-1));
+}
+
+/* 名前の行。種類の記号は名前の手前に小さく添える。 */
+.hwc-pane-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.hwc-pane-agent {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--color-secondary);
+}
+
+.hwc-pane-agent[data-agent="claude"] {
+  color: var(--color-agent-claude);
 }
 
 .hwc-group-name {
@@ -631,23 +664,10 @@ button {
   font-weight: 600;
 }
 
-/* 稼働中は本家の色で示す。止まっている間は行の色に沈める。 */
-.hwc-pane-icon[data-working="true"] {
-  border-color: var(--color-control-line);
-  color: var(--color-text);
-}
-
-.hwc-pane-icon[data-working="true"][data-agent="claude"] {
-  color: var(--color-agent-claude);
-}
-
+/* 枠を残すのはシェルだけ。選んだ行の枠はアクセントで示す。 */
 .hwc-pane[data-current="true"] .hwc-pane-icon {
   border-color: var(--color-accent);
   color: var(--color-accent);
-}
-
-.hwc-pane[data-current="true"] .hwc-pane-icon[data-working="true"][data-agent="claude"] {
-  color: var(--color-agent-claude);
 }
 
 .hwc-pane-more {
@@ -1094,6 +1114,13 @@ button {
     opacity 140ms ease,
     transform 140ms ease,
     visibility 0s linear 140ms;
+}
+
+/* 左端の記号の文言は行の内側（右）へ開く。左へ出すと一覧の外で切れる。 */
+.hwc-pane-state .hwc-status-text {
+  left: calc(100% + var(--space-2));
+  right: auto;
+  transform: translate(calc(-1 * var(--space-1)), -50%);
 }
 
 .hwc-status-label:hover .hwc-status-text,

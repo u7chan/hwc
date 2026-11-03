@@ -1,10 +1,6 @@
-import type {
-  AgentStatus,
-  AppState,
-  PaneState,
-  TabState,
-  WorkspaceState,
-} from "../server/herdr/state";
+import type { AgentStatus, AppState, WorkspaceState } from "../server/herdr/state";
+import type { PaneRow } from "./select";
+import { sentPanes, type SentPane } from "./sent";
 
 export type ListScope = "agent" | "active" | "all";
 
@@ -53,11 +49,7 @@ function isActiveStatus(status: AgentStatus): status is ActiveStatus {
   return (ACTIVE_STATUSES as readonly AgentStatus[]).includes(status);
 }
 
-export type ActivePane = {
-  workspace: WorkspaceState;
-  tab: TabState;
-  pane: PaneState;
-};
+export type ActivePane = PaneRow;
 
 // 要対応 → 実行中 → 完了。同順位は state の並び（ワークスペース → タブ → ペイン）のまま。
 // ツリーの絞り込みと違い、選択中のペインは残さない。idle を出さない以上、
@@ -73,6 +65,23 @@ export function activePanes(state: AppState): readonly ActivePane[] {
     }
   }
   return ACTIVE_STATUSES.flatMap((status) => rows.filter((row) => row.pane.agentStatus === status));
+}
+
+// 表示の並びは要対応 → 窓口 → 完了 → 実行中。上から「自分が動く番 → 読む番 →
+// 待つ番」に揃える。窓口は状態の行と重なるので、先に置いた側だけを残す。
+export function activeViewRows(
+  state: AppState,
+  sent: ReadonlyMap<string, SentPane>,
+): readonly PaneRow[] {
+  const windows = sentPanes(state, sent);
+  const inWindow = new Set(windows.map((row) => row.pane.id));
+  const rows = activePanes(state);
+  const blocked = rows.filter((row) => row.pane.agentStatus === "blocked");
+  const done = rows.filter((row) => row.pane.agentStatus === "done" && !inWindow.has(row.pane.id));
+  const working = rows.filter(
+    (row) => row.pane.agentStatus === "working" && !inWindow.has(row.pane.id),
+  );
+  return [...blocked, ...windows, ...done, ...working];
 }
 
 // 未読は「完了してまだ見ていない」数だけ。開くと seen が進んで消えるので、受信箱の件数になる。

@@ -6,16 +6,26 @@ import type {
   WorkspaceState,
 } from "../server/herdr/state";
 
-export function findPane(state: AppState, paneId: string | null): PaneState | null {
+export type PaneRow = {
+  workspace: WorkspaceState;
+  tab: TabState;
+  pane: PaneState;
+};
+
+export function findPaneRow(state: AppState, paneId: string | null): PaneRow | null {
   if (paneId === null) return null;
   for (const workspace of state.workspaces) {
     for (const tab of workspace.tabs) {
       for (const pane of tab.panes) {
-        if (pane.id === paneId) return pane;
+        if (pane.id === paneId) return { workspace, tab, pane };
       }
     }
   }
   return null;
+}
+
+export function findPane(state: AppState, paneId: string | null): PaneState | null {
+  return findPaneRow(state, paneId)?.pane ?? null;
 }
 
 // ペインを別のタブへ移す。同じタブの中なら並び順の入れ替えになる。
