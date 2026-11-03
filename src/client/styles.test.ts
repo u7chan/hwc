@@ -90,3 +90,42 @@ test("classes used by the client keep the hwc- prefix", async () => {
 
   expect(offenders).toEqual([]);
 });
+
+// アイコンの豆腐は、欠けても気づきにくい。CSS と同梱物の対応をここで固定する。
+const SYMBOLS_FACE = tokens.match(/@font-face\s*\{[^}]*Nerd Symbols Mono[^}]*\}/)?.[0] ?? "";
+
+function unicodeRangeCovers(range: string, codepoint: number): boolean {
+  return range.split(",").some((part) => {
+    const [from, to] = part.trim().replace(/^U\+/i, "").split("-");
+    const start = Number.parseInt(from, 16);
+    const end = to === undefined ? start : Number.parseInt(to, 16);
+    return codepoint >= start && codepoint <= end;
+  });
+}
+
+test("the nerd symbols font backs the mono stack", () => {
+  const family = /font-family:\s*"([^"]+)"/.exec(SYMBOLS_FACE)?.[1];
+  const stack = /--font-mono:\s*([^;]+);/.exec(tokens)?.[1] ?? "";
+
+  expect(family).toBeDefined();
+  expect(stack).toContain(`"${family}"`);
+  // generic monospace より前でないと、フォールバックの解決で拾われない。
+  expect(stack.indexOf(`"${family}"`)).toBeLessThan(stack.lastIndexOf("monospace"));
+});
+
+// 報告のあった U+E60B / U+E672 / U+F418 が漏れると、その行だけ豆腐に戻る。
+test("the nerd symbols font covers the codepoints Herdr emits", () => {
+  const range = /unicode-range:\s*([^;]+);/.exec(SYMBOLS_FACE)?.[1] ?? "";
+
+  for (const codepoint of [0xe60b, 0xe672, 0xf418, 0xe0b0]) {
+    expect(unicodeRangeCovers(range, codepoint)).toBe(true);
+  }
+});
+
+test("the nerd symbols font file exists where the stylesheet points", async () => {
+  const url = /url\("([^"]+)"\)/.exec(SYMBOLS_FACE)?.[1] ?? "";
+  const path = `src/client/styles/${url}`;
+
+  expect(url).toEndWith(".woff2");
+  expect(await Bun.file(path).exists()).toBe(true);
+});
