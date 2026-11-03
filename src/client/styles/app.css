@@ -2449,6 +2449,12 @@ p.hwc-compaction,
   padding-bottom: var(--space-2);
 }
 
+/* 入力欄が 40px になると、右上の開閉ボタン（--tap = 44px）がチップ行に接する。
+   開閉のつもりのタップが送信に落ちないよう、ボタンの下に 8px 空ける。 */
+.hwc-input:not([data-expanded="true"]) .hwc-input-frame {
+  gap: var(--space-3);
+}
+
 .hwc-input[data-expanded="true"] .hwc-input-field {
   min-height: 40dvh;
   max-height: 60dvh;
