@@ -14,7 +14,14 @@ import {
 } from "./connection";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
-import { findPane, findPaneContext, initialExpanded, splitPanes } from "./select";
+import { findPane, findPaneContext, groupIds, initialExpanded, splitPanes } from "./select";
+import {
+  OPEN_GROUPS_STORAGE_KEY,
+  applyOpenGroups,
+  parseOpenGroups,
+  rememberGroup,
+} from "./expanded";
+import { expandForPane, readSelectedPane, restorePane, writeSelectedPane } from "./selection";
 import { LIST_SCOPE_STORAGE_KEY, parseListScope, type ListScope } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import {
@@ -107,11 +114,6 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-// 最初に届いたスナップショットでは、Herdr が focus しているペインを開く。
-function defaultSelection(state: AppState): string | null {
-  return findPane(state, state.focusedPaneId) ? state.focusedPaneId : null;
-}
-
 type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
 
 // 分割セルの入力欄を畳むかは、セルの box の高さと幅だけで決める。PaneDetail は fragment を
@@ -145,8 +147,14 @@ function SplitCell(props: { children: (compact: boolean) => ComponentChildren })
 
 // 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
-function defaultView(state: AppState): View {
-  return { selectedPaneId: defaultSelection(state), expanded: initialExpanded(state) };
+// 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
+function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean>): View {
+  const selectedPaneId = restorePane(state, readSelectedPane());
+  const base = applyOpenGroups(initialExpanded(state), openGroups, groupIds(state));
+  return {
+    selectedPaneId,
+    expanded: selectedPaneId === null ? base : expandForPane(state, selectedPaneId, base),
+  };
 }
 
 export function App() {
@@ -176,6 +184,11 @@ export function App() {
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() =>
     parseHiddenPanes(
       typeof localStorage === "undefined" ? null : localStorage.getItem(HIDDEN_STORAGE_KEY),
+    ),
+  );
+  const [openGroups, setOpenGroups] = useState<ReadonlyMap<string, boolean>>(() =>
+    parseOpenGroups(
+      typeof localStorage === "undefined" ? null : localStorage.getItem(OPEN_GROUPS_STORAGE_KEY),
     ),
   );
   const [scope, setScope] = useState<ListScope>(() =>
@@ -295,12 +308,12 @@ export function App() {
   const selectedPaneId = view
     ? view.selectedPaneId
     : state
-      ? (initialView.current ??= defaultView(state)).selectedPaneId
+      ? (initialView.current ??= defaultView(state, openGroups)).selectedPaneId
       : null;
   const expanded = view
     ? view.expanded
     : state
-      ? (initialView.current ??= defaultView(state)).expanded
+      ? (initialView.current ??= defaultView(state, openGroups)).expanded
       : NO_GROUPS;
 
   const pane = state ? findPane(state, selectedPaneId) : null;
@@ -308,6 +321,7 @@ export function App() {
 
   const select = (paneId: string) => {
     setView({ selectedPaneId: paneId, expanded });
+    writeSelectedPane(paneId);
     setSettingsOpen(false);
   };
 
@@ -321,13 +335,28 @@ export function App() {
 
   const back = () => {
     setView({ selectedPaneId: null, expanded });
+    writeSelectedPane(null);
   };
 
+  // 開閉は次に開いたときも同じにしたいので、既定からの差分として覚える。
   const toggle = (groupId: string) => {
     const next = new Set(expanded);
     if (next.has(groupId)) next.delete(groupId);
     else next.add(groupId);
     setView({ selectedPaneId, expanded: next });
+
+    const remembered = rememberGroup(openGroups, groupId, next.has(groupId));
+    setOpenGroups(remembered);
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem(
+          OPEN_GROUPS_STORAGE_KEY,
+          JSON.stringify(Object.fromEntries(remembered)),
+        );
+      } catch {
+        // 保存できなくてもその場の表示は変える。
+      }
+    }
   };
 
   // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。
