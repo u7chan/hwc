@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ChatContext, ChatMessage, ChatSnapshot } from "../server/chat/contract";
+import type {
+  ChatCompaction,
+  ChatContext,
+  ChatMessage,
+  ChatSnapshot,
+} from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, readChat } from "./api";
 
@@ -89,6 +94,12 @@ export function formatTokens(count: number): string {
   if (count < 1_000_000) return `${Math.round(count / 1_000)}k`;
   if (count < 10_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
   return `${Math.round(count / 1_000_000)}M`;
+}
+
+// 圧縮前の大きさは数として読ませる。ここだけ 3 桁区切りのままにする。
+export function compactionLabel(compaction: ChatCompaction): string {
+  if (compaction.tokensBefore === null) return "圧縮";
+  return `${compaction.tokensBefore.toLocaleString("en-US")} tokens から圧縮`;
 }
 
 export function contextPercent(context: ChatContext): number | null {

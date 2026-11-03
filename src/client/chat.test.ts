@@ -6,6 +6,7 @@ import {
   agentInfo,
   agentInfoLabel,
   chatPollDelay,
+  compactionLabel,
   contextFill,
   contextMeter,
   contextPercent,
@@ -26,6 +27,7 @@ const snapshot: ChatSnapshot = {
   effort: "high",
   truncated: false,
   context: null,
+  compaction: null,
 };
 
 const empty: ChatSnapshot = { ...snapshot, messages: [] };
@@ -193,6 +195,17 @@ test("the meter is drawn only when there is something to show", () => {
     fill: 0,
     tone: "secondary",
   });
+});
+
+test("the compaction line says how much was compressed", () => {
+  expect(compactionLabel({ at: 1_000, tokensBefore: 212_959, summary: "so far" })).toBe(
+    "212,959 tokens から圧縮",
+  );
+  expect(compactionLabel({ at: 1_000, tokensBefore: 950, summary: "so far" })).toBe(
+    "950 tokens から圧縮",
+  );
+  // 数を出せないときは、圧縮だけを伝える。
+  expect(compactionLabel({ at: 1_000, tokensBefore: null, summary: "so far" })).toBe("圧縮");
 });
 
 const pending: PendingMessage = {

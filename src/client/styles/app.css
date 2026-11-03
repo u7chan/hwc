@@ -1660,6 +1660,85 @@ button {
   max-width: 100%;
 }
 
+/* 圧縮の境目。吹き出しではなく、履歴が切り替わる区切りとして置く。 */
+.hwc-compaction {
+  margin: 0 0 var(--space-3);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* 1 行だけのときと、details の見出し。同じ並びにする。 */
+p.hwc-compaction,
+.hwc-compaction-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hwc-compaction-head {
+  min-height: var(--tap);
+  list-style: none;
+  cursor: pointer;
+}
+
+/* 既定の三角は自前の記号と二重になる。 */
+.hwc-compaction-head::-webkit-details-marker {
+  display: none;
+}
+
+.hwc-compaction-head:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* 区切りの線は文字の左右に伸ばす。長さは行の残りで決まる。 */
+.hwc-compaction-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--color-line);
+}
+
+.hwc-compaction-label {
+  flex: none;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-compaction-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  transition: transform 220ms ease;
+}
+
+.hwc-compaction[open] .hwc-compaction-icon {
+  transform: rotate(180deg);
+}
+
+/* 要約は長い。画面を埋めつくさないよう高さで切って、中でスクロールさせる。 */
+.hwc-compaction-body {
+  margin: var(--space-2) 0 0;
+  max-height: 40dvh;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-raised);
+  color: var(--color-text);
+  line-height: var(--line-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-compaction-icon {
+    transition: none;
+  }
+}
+
 /* 記号は本文の下の行へ。本文の幅を削らない。 */
 .hwc-msg-meta {
   display: flex;

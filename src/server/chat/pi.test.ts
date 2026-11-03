@@ -418,6 +418,7 @@ test("reuses one reader per session and evicts the least recently used one", asy
         effort: null,
         truncated: false,
         context: null,
+        compaction: null,
       };
     },
   });
@@ -664,6 +665,136 @@ test("a compaction makes the earlier usage unknowable until the next answer", as
     tokens: 3_000,
     window: null,
   });
+});
+
+test("a compaction replaces the history before firstKeptEntryId", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    user("u2", "a1", "again"),
+    assistant("a2", "u2", text("done")),
+    entry("compaction", "c1", "a2", {
+      summary: "the user said hello",
+      firstKeptEntryId: "u2",
+      tokensBefore: 212_959,
+    }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  // 圧縮より前の会話はモデルの文脈にもう無い。表示もそれに合わせる。
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u2", "a2"]);
+  expect(snapshot.compaction).toEqual({
+    at: Date.parse("2026-01-01T00:00:01.000Z"),
+    tokensBefore: 212_959,
+    summary: "the user said hello",
+  });
+});
+
+test("a compaction that points outside the branch keeps the whole history", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    entry("compaction", "c1", "a1", {
+      summary: "so far",
+      firstKeptEntryId: "gone",
+      tokensBefore: 122_600,
+    }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  // 要約だけ出して窓がずれるより、全体を出す。
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u1", "a1"]);
+  expect(snapshot.compaction).toBeNull();
+});
+
+test("a compaction without a summary is not shown", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    entry("compaction", "c1", "a1", { summary: "", firstKeptEntryId: "u1" }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u1", "a1"]);
+  expect(snapshot.compaction).toBeNull();
+});
+
+test("a compaction without tokensBefore still windows the history", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    user("u2", "a1", "again"),
+    entry("compaction", "c1", "u2", { summary: "so far", firstKeptEntryId: "u2" }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.compaction).toEqual({
+    at: Date.parse("2026-01-01T00:00:01.000Z"),
+    tokensBefore: null,
+    summary: "so far",
+  });
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u2"]);
+});
+
+test("only the newest compaction is shown", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    entry("compaction", "c1", "a1", {
+      summary: "first summary",
+      firstKeptEntryId: "u1",
+      tokensBefore: 100_000,
+    }),
+    user("u2", "c1", "again"),
+    assistant("a2", "u2", text("done")),
+    entry("compaction", "c2", "a2", {
+      summary: "second summary",
+      firstKeptEntryId: "u2",
+      tokensBefore: 212_959,
+    }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.compaction?.summary).toBe("second summary");
+  expect(snapshot.compaction?.tokensBefore).toBe(212_959);
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u2", "a2"]);
+});
+
+test("the size limits apply to the windowed history", async () => {
+  const lines = [header()];
+  let parentId: string | null = null;
+  for (let index = 0; index < 600; index += 1) {
+    const id = `u${index}`;
+    lines.push(user(id, parentId, `message ${index}`));
+    parentId = id;
+  }
+  lines.push(
+    entry("compaction", "c1", parentId, {
+      summary: "so far",
+      firstKeptEntryId: "u50",
+      tokensBefore: 212_959,
+    }),
+  );
+  const path = await writeSession(...lines);
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  // 窓には 550 件ある。上限は窓のあとに効く。
+  expect(snapshot.compaction?.summary).toBe("so far");
+  expect(snapshot.messages).toHaveLength(500);
+  expect(snapshot.messages[0]?.text).toBe("message 100");
+  expect(snapshot.messages.at(-1)?.text).toBe("message 599");
+  expect(snapshot.truncated).toBe(true);
 });
 
 test("a context edit also makes the earlier usage unknowable", async () => {

@@ -10,6 +10,12 @@ export type ChatContext = {
   window: number | null;
 };
 
+export type ChatCompaction = {
+  at: number;
+  tokensBefore: number | null;
+  summary: string;
+};
+
 export type ChatSnapshot = {
   etag: string;
   messages: ChatMessage[];
@@ -17,4 +23,5 @@ export type ChatSnapshot = {
   effort: string | null;
   truncated: boolean;
   context: ChatContext | null;
+  compaction: ChatCompaction | null;
 };

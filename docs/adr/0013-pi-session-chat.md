@@ -26,16 +26,21 @@ pi は会話を v3 の JSONL で保存している。`user` / `assistant` のメ
 - 会話履歴の正は pi のセッション JSONL とし、SQLite などの二次ストアを持たない
 - ペインとセッションは 1:1 とみなす。Web は現在のセッションの active branch を映すだけで、セッション選択・分岐・過去セッション一覧は持たない
 - BFF がペイン id からセッション path を解決し、path はクライアントへ渡さない。クライアントから path も受け取らない
-- path ごとに増分リーダーを持ち、要求時にスナップショット（`etag` / `messages` / `model` / `effort` / `truncated` / `context`）を返す。バックグラウンド監視はしない
+- path ごとに増分リーダーを持ち、要求時にスナップショット（`etag` / `messages` / `model` / `effort` / `truncated` / `context` / `compaction`）を返す。バックグラウンド監視はしない
+- スナップショットに直近の compaction（`at` / `tokensBefore` / `summary`）を含める。`messages` はその compaction の `firstKeptEntryId` 以降に限り、圧縮より前の会話は返さない。モデルの実際の文脈（要約 + kept 分）と表示を一致させるため
+- `firstKeptEntryId` が active branch に無い・`summary` が空・compaction が無いときは、`compaction` を `null` にして branch 全体を返す。要約だけ出して窓がずれる状態を作らない
+- 入れ子の compaction は最新のみを採る。compaction エントリは `message` を持たないため、窓に入っていても会話としては描画されない
 - コンテキスト使用量は pi のモデルカタログを第二の情報源にする。`tokens` はセッション中の usage から、`window` は `models-store.json` の `contextWindow` に `models.json` の `providers[].modelOverrides` を重ねたカタログから引く。agent dir はセッション path（`<agent-dir>/sessions/<slug>/<file>.jsonl`）から導き、カタログは agent dir ごとにプロセス内で 1 回だけ解決する。引けないときは `null` を返し、`tokens` と `window` の両方が `null` なら `context` を `null` に畳む
 - 読み取りは追記分だけを対象にし、ヘッダの `id` の変化・`size` の減少・inode の変化・ファイルの消失で全リセットする。パースできない行はその行だけ捨てる
-- 応答は直近 500 メッセージ / 1MB の小さい方を上限にし、切ったら `truncated` を立てる
+- 応答は直近 500 メッセージ / 1MB の小さい方を上限にし、切ったら `truncated` を立てる。上限は窓に絞ったあとの `messages` に効く
 - `etag` は path のハッシュ・リーダー生成時のランダム id・読み取り世代から作り、`If-None-Match` の弱比較で 304 を返す。世代は追記を消費したときとリセットしたときだけ進め、ENOENT が続く間は同じ `etag` を返す
 
 ## Consequences
 
 - 会話の表示は pi のセッション形式に依存する。形式が変わると追従が必要になる
-- ツールコール・thinking・ツール結果・compaction のエントリは表示しない。ツール実行だけのターンは会話に出ないため、`working` の表示で補う
+- ツールコール・thinking・ツール結果のエントリは表示しない。ツール実行だけのターンは会話に出ないため、`working` の表示で補う
+- compaction は履歴の区切りとして 1 行（要約の展開付き）で表示し、それ以前の会話は返さない。pi の TUI が `[compaction]` の 1 行に置き換えるのと同じ見え方になり、古いメッセージの描画も減る
+- 窓が成立しない（`firstKeptEntryId` が branch に無い等）ときは全体を返すため、圧縮済みなのに古い会話が並ぶことがある。要約だけを出して窓とずらすより、表示と実体が一致する側を選ぶ
 - `/tree` で分岐先を選んだだけ（送信前）はファイルに追記が無く、次の送信まで前の枝を表示する
 - セッションが無い・pi 以外・読み取りに失敗したときは端末出力にフォールバックする。ENOENT は空の会話として扱う
 - セッション形式は v3 を前提にする。v3 以外のヘッダはリセットではなく 502 `chat_unavailable` として扱うため、書き換えの検出はヘッダ `id` で行う

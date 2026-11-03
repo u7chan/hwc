@@ -1,4 +1,9 @@
-import type { ChatContext, ChatMessage, ChatSnapshot } from "../server/chat/contract";
+import type {
+  ChatCompaction,
+  ChatContext,
+  ChatMessage,
+  ChatSnapshot,
+} from "../server/chat/contract";
 import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
 
@@ -44,6 +49,15 @@ function toChatContext(value: unknown): ChatContext | null {
   return { tokens: context.tokens, window: context.window };
 }
 
+function toChatCompaction(value: unknown): ChatCompaction | null {
+  if (typeof value !== "object" || value === null) return null;
+  const compaction = value as Partial<ChatCompaction>;
+  if (typeof compaction.at !== "number") return null;
+  if (!isOptionalNumber(compaction.tokensBefore)) return null;
+  if (typeof compaction.summary !== "string") return null;
+  return { at: compaction.at, tokensBefore: compaction.tokensBefore, summary: compaction.summary };
+}
+
 function toChatMessage(value: unknown): ChatMessage | null {
   if (typeof value !== "object" || value === null) return null;
   const message = value as Partial<ChatMessage>;
@@ -75,6 +89,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     truncated: snapshot.truncated,
     // 飾りの値が壊れても会話は捨てない。数字を出さないだけにする。
     context: toChatContext(snapshot.context),
+    compaction: toChatCompaction(snapshot.compaction),
   };
 }
 
