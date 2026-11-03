@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
 import { copyText } from "./copy";
 import {
@@ -21,8 +21,14 @@ import {
   paneSubLabel,
   soleTab,
 } from "./select";
-import { scopeWorkspaces, type ListScope } from "./scope";
-import { StatusLabel } from "./StatusLabel";
+import {
+  activePanes,
+  scopeWorkspaces,
+  shouldFocusPane,
+  type ListScope,
+  type TreeScope,
+} from "./scope";
+import { StatusIcon, StatusLabel } from "./StatusLabel";
 import { formatElapsed } from "./time";
 
 type PaneListProps = {
@@ -32,9 +38,14 @@ type PaneListProps = {
   onScope: (scope: ListScope) => void;
   expanded: ReadonlySet<string>;
   onSelect: (paneId: string) => void;
+  onFocus: (paneId: string) => void;
   onToggle: (groupId: string) => void;
   workingSince: ReadonlyMap<string, number>;
   now: number;
+};
+
+type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onFocus"> & {
+  scope: TreeScope;
 };
 
 // git 管理下でない / 通常のリポジトリ / linked worktree を形で見分ける。
@@ -60,9 +71,144 @@ function GroupStatus(props: { status: PaneState["agentStatus"]; hidden: boolean 
   );
 }
 
+const SCOPE_OPTIONS: readonly { scope: ListScope; label: string }[] = [
+  { scope: "agent", label: "エージェント" },
+  { scope: "active", label: "アクティブ" },
+  { scope: "all", label: "すべて" },
+];
+
+function ScopeBar(props: { scope: ListScope; onScope: (scope: ListScope) => void }) {
+  return (
+    <div class="hwc-scope" role="group" aria-label="一覧の絞り込み" data-scope={props.scope}>
+      <span class="hwc-scope-thumb" aria-hidden="true" />
+      {SCOPE_OPTIONS.map((option) => (
+        <button
+          key={option.scope}
+          type="button"
+          class="hwc-scope-option"
+          aria-pressed={props.scope === option.scope}
+          onClick={() => props.onScope(option.scope)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NoPanes() {
+  return (
+    <div class="hwc-empty">
+      <div class="hwc-empty-mark">
+        <PaneIcon size={32} />
+      </div>
+      <h2 class="hwc-empty-title">ペインがありません</h2>
+      <p class="hwc-empty-text">Herdr でワークスペースとペインを開くと、ここに一覧が出ます。</p>
+    </div>
+  );
+}
+
+// 上段は所在。タブ名が無いスペースでは区切りごと落とす。
+function activePlace(workspaceLabel: string, tabLabel: string): string {
+  return tabLabel === "" ? workspaceLabel : `${workspaceLabel} · ${tabLabel}`;
+}
+
+// 状態を持つエージェントを 1 行ずつ並べる。ツリーを畳まないので、どのスペースの
+// どのタブで動いているかがそのまま読める。
+function ActivePaneList(props: PaneListProps) {
+  const rows = activePanes(props.state);
+  if (rows.length === 0) {
+    return (
+      <div class="hwc-list-note">
+        <p class="hwc-list-note-title">対象のエージェントはいません</p>
+        <p class="hwc-list-note-text">
+          実行中・要対応・完了のエージェントがここに並びます。「エージェント」に切り替えると、待機中のものも出ます。
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <ul class="hwc-active">
+      {rows.map(({ workspace, tab, pane }) => {
+        const startedAt = props.workingSince.get(pane.id);
+        const current = pane.id === props.selectedPaneId;
+        return (
+          <li key={pane.id} class="hwc-active-row">
+            <button
+              type="button"
+              class="hwc-active-open"
+              data-current={current}
+              aria-current={current ? "true" : undefined}
+              onClick={() => {
+                props.onSelect(pane.id);
+                // 既読が進むのは done だけ。working / blocked では TUI のフォーカスを動かさない。
+                if (shouldFocusPane(props.scope, pane.agentStatus)) props.onFocus(pane.id);
+              }}
+            >
+              <StatusIcon status={pane.agentStatus} />
+              <span class="hwc-active-main">
+                <span class="hwc-active-place">{activePlace(workspace.label, tab.label)}</span>
+                <span class="hwc-active-name">{pane.label ?? pane.agent}</span>
+              </span>
+              {pane.agentStatus === "working" && startedAt !== undefined ? (
+                <span class="hwc-pane-elapsed">{formatElapsed(props.now - startedAt)}</span>
+              ) : pane.agentStatus === "blocked" ? (
+                // 色だけで意味を持たせない。記号の隣に言葉を置く。
+                <span class="hwc-active-flag">要対応</span>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function PaneList(props: PaneListProps) {
-  const { state, selectedPaneId, scope, onScope, expanded, onSelect, onToggle, workingSince, now } =
-    props;
+  // スコープごとの位置を控える。中身が総入れ替えになるので、ブラウザに任せると
+  // 先頭や途中の位置へ飛ぶ。
+  const scroll = useRef<HTMLDivElement>(null);
+  const positions = useRef(new Map<ListScope, number>());
+
+  const changeScope = (next: ListScope) => {
+    if (scroll.current) positions.current.set(props.scope, scroll.current.scrollTop);
+    props.onScope(next);
+  };
+
+  useLayoutEffect(() => {
+    const node = scroll.current;
+    if (node) node.scrollTop = positions.current.get(props.scope) ?? 0;
+  }, [props.scope]);
+
+  if (countPanes(props.state) === 0) return <NoPanes />;
+
+  // セグメントと一覧のスクロール枠は分岐の外に置く。スコープを切り替えても同じ要素を
+  // 使い続けるので、つまみが滑り、スクロール枠も作り直されない。
+  return (
+    <>
+      <ScopeBar scope={props.scope} onScope={changeScope} />
+      <div class="hwc-list-scroll" ref={scroll}>
+        {renderList(props)}
+      </div>
+    </>
+  );
+}
+
+// 並べ方の分岐はここ 1 か所。active の行はツリーの絞り込みと前提が違うので、
+// scopeWorkspaces に active を渡さないよう型で分ける。
+function renderList(props: PaneListProps) {
+  switch (props.scope) {
+    case "active":
+      return <ActivePaneList {...props} />;
+    case "agent":
+    case "all":
+      return <TreePaneList {...props} scope={props.scope} />;
+  }
+}
+
+function TreePaneList(props: TreePaneListProps) {
+  const { state, selectedPaneId, scope, expanded, onSelect, onToggle, workingSince, now } = props;
 
   const visible = scopeWorkspaces(state.workspaces, scope, selectedPaneId);
 
@@ -270,98 +416,67 @@ export function PaneList(props: PaneListProps) {
     );
   }
 
-  if (countPanes(state) === 0) {
+  if (visible.length === 0) {
     return (
-      <div class="hwc-empty">
-        <div class="hwc-empty-mark">
-          <PaneIcon size={32} />
-        </div>
-        <h2 class="hwc-empty-title">ペインがありません</h2>
-        <p class="hwc-empty-text">Herdr でワークスペースとペインを開くと、ここに一覧が出ます。</p>
+      <div class="hwc-list-note">
+        <p class="hwc-list-note-title">エージェントのあるスペースがありません</p>
+        <p class="hwc-list-note-text">「すべて」に切り替えると、ターミナルのスペースも出ます。</p>
       </div>
     );
   }
 
   return (
     <>
-      <div class="hwc-scope" role="group" aria-label="表示するスペース" data-scope={scope}>
-        <span class="hwc-scope-thumb" aria-hidden="true" />
-        <button
-          type="button"
-          class="hwc-scope-option"
-          aria-pressed={scope === "agent"}
-          onClick={() => onScope("agent")}
-        >
-          エージェント
-        </button>
-        <button
-          type="button"
-          class="hwc-scope-option"
-          aria-pressed={scope === "all"}
-          onClick={() => onScope("all")}
-        >
-          すべて
-        </button>
-      </div>
-      {visible.length === 0 ? (
-        <div class="hwc-list-note">
-          <p class="hwc-list-note-title">エージェントのあるスペースがありません</p>
-          <p class="hwc-list-note-text">「すべて」に切り替えると、ターミナルのスペースも出ます。</p>
-        </div>
-      ) : (
-        <div class="hwc-list-scroll">
-          {groupWorkspaces(visible).map((group) => {
-            // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
-            if (group.repoName === null || group.linked.length === 0) {
-              const only = group.host ?? group.linked[0];
-              return renderWorkspace(only, 0, true);
-            }
+      {groupWorkspaces(visible).map((group) => {
+        // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
+        if (group.repoName === null || group.linked.length === 0) {
+          const only = group.host ?? group.linked[0];
+          return renderWorkspace(only, 0, true);
+        }
 
-            const open = expanded.has(group.key);
-            const groupId = `hwc-group-${group.key}`;
-            return (
-              <section class="hwc-group-block" data-depth={0} key={group.key}>
-                {renderHeader({
-                  id: group.key,
-                  depth: 0,
-                  icon: <RepoIcon />,
-                  label: group.repoName,
-                  sub: `${group.linked.length + (group.host ? 1 : 0)} ワークツリー`,
-                  title: group.host?.worktree?.repoRoot ?? undefined,
-                  status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
-                  controlsId: groupId,
-                })}
-                <GroupChildren id={groupId} open={open}>
-                  {group.host ? renderTabLevel(group.host, 1, false) : null}
-                  {group.linked.map((workspace) => renderWorkspace(workspace, 1, true))}
-                </GroupChildren>
-              </section>
-            );
-          })}
-          {menu ? (
-            <>
-              <div class="hwc-menu-backdrop" onPointerDown={closeMenu} />
-              <div
-                class="hwc-menu"
-                role="menu"
-                aria-label={`${menu.paneId} の操作`}
-                style={{ top: `${menu.top}px`, right: `${menu.right}px` }}
-              >
-                <p class="hwc-menu-head">{menu.paneId}</p>
-                <button
-                  type="button"
-                  role="menuitem"
-                  class="hwc-menu-item"
-                  onClick={() => copyId(menu.paneId)}
-                >
-                  <CopyGlyph copied={copied} />
-                  {copied ? "コピーしました" : "ペイン ID をコピー"}
-                </button>
-              </div>
-            </>
-          ) : null}
-        </div>
-      )}
+        const open = expanded.has(group.key);
+        const groupId = `hwc-group-${group.key}`;
+        return (
+          <section class="hwc-group-block" data-depth={0} key={group.key}>
+            {renderHeader({
+              id: group.key,
+              depth: 0,
+              icon: <RepoIcon />,
+              label: group.repoName,
+              sub: `${group.linked.length + (group.host ? 1 : 0)} ワークツリー`,
+              title: group.host?.worktree?.repoRoot ?? undefined,
+              status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
+              controlsId: groupId,
+            })}
+            <GroupChildren id={groupId} open={open}>
+              {group.host ? renderTabLevel(group.host, 1, false) : null}
+              {group.linked.map((workspace) => renderWorkspace(workspace, 1, true))}
+            </GroupChildren>
+          </section>
+        );
+      })}
+      {menu ? (
+        <>
+          <div class="hwc-menu-backdrop" onPointerDown={closeMenu} />
+          <div
+            class="hwc-menu"
+            role="menu"
+            aria-label={`${menu.paneId} の操作`}
+            style={{ top: `${menu.top}px`, right: `${menu.right}px` }}
+          >
+            <p class="hwc-menu-head">{menu.paneId}</p>
+            <button
+              type="button"
+              role="menuitem"
+              class="hwc-menu-item"
+              onClick={() => copyId(menu.paneId)}
+            >
+              <CopyGlyph copied={copied} />
+              {copied ? "コピーしました" : "ペイン ID をコピー"}
+            </button>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

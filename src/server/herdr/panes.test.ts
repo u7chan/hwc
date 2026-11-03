@@ -109,6 +109,26 @@ test("send reports the failure without a second request", async () => {
   expect(calls.map((call) => call.method)).toEqual(["pane.send_input"]);
 });
 
+test("focus asks Herdr to focus the pane by id", async () => {
+  const { calls, call } = recordingCaller();
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  await client.focus({ paneId: "w1:p1" });
+
+  expect(calls).toEqual([
+    { method: "agent.focus", params: { target: "w1:p1" }, options: { path: "/tmp/test.sock" } },
+  ]);
+});
+
+test("focus reports the failure so the route can map it", async () => {
+  const { call } = recordingCaller({
+    "agent.focus": new HerdrError("agent_not_found", "no agent in w1:p9"),
+  });
+  const client = createPaneClient({ call });
+
+  await expect(client.focus({ paneId: "w1:p9" })).rejects.toThrow("agent_not_found");
+});
+
 test("parseOutputQuery defaults to the recent output", () => {
   expect(parseOutputQuery(new URLSearchParams())).toEqual({
     ok: true,

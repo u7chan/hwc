@@ -5,7 +5,7 @@ import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
-import { fetchState, parseAppState, sendInput } from "./api";
+import { fetchState, focusAgent, parseAppState, sendInput } from "./api";
 import {
   INITIAL_CONNECTION,
   connectionAfter,
@@ -17,7 +17,13 @@ import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidde
 import { findPane, findPaneContext, initialExpanded, splitPanes } from "./select";
 import { LIST_SCOPE_STORAGE_KEY, parseListScope, type ListScope } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
-import { trackWorking, workingMs } from "./time";
+import {
+  WORKING_SINCE_STORAGE_KEY,
+  parseWorkingSince,
+  trackWorking,
+  workingMs,
+  workingSinceForSave,
+} from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -38,19 +44,52 @@ import {
 const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
 
+// 保存に失敗しても表示は続ける。プライベートモードなどでは localStorage が使えない。
+function readWorkingSince(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    return localStorage.getItem(WORKING_SINCE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeWorkingSince(state: AppState, since: ReadonlyMap<string, number>) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(
+      WORKING_SINCE_STORAGE_KEY,
+      JSON.stringify(workingSinceForSave(state, since)),
+    );
+  } catch {
+    // 保存できなくても、その場の経過表示は続ける。
+  }
+}
+
 // 壁時計との同期。1 秒ごとに数え直し、稼働に入った時刻は手元で覚える。
 function useWorkingClock(state: AppState | null) {
   const [now, setNow] = useState(() => Date.now());
   // 覚えた時刻は描画のたびに引き継ぐ。同じ入力なら同じ結果になるので、描画中に進めてよい。
-  const workingSince = useRef<ReadonlyMap<string, number>>(new Map());
-  if (state !== null) workingSince.current = trackWorking(workingSince.current, state, now);
+  // 起点は端末にも残す。Herdr は変化の順序しか返さないので、こちらが唯一の持ち主になる。
+  // 復元は 1 回だけ。毎秒 localStorage を読む必要は無い。
+  const stored = useRef<ReadonlyMap<string, number> | null>(null);
+  stored.current ??= parseWorkingSince(readWorkingSince(), now);
+  let workingSince = stored.current;
+  if (state !== null) {
+    const next = trackWorking(workingSince, state, now);
+    if (next !== workingSince) {
+      workingSince = next;
+      stored.current = next;
+      writeWorkingSince(state, next);
+    }
+  }
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  return { workingSince: workingSince.current, now };
+  return { workingSince, now };
 }
 
 // 端末の幅は React の外にある。購読して、変わったときだけ描き直す。
@@ -272,6 +311,14 @@ export function App() {
     setSettingsOpen(false);
   };
 
+  // 既読は Herdr の seen を進めて消す。失敗しても通知しない。次にその行を開いたときに
+  // もう一度送られるので、ここで知らせても利用者にできることが無い。
+  const focusPane = (paneId: string) => {
+    focusAgent(paneId).catch(() => {
+      // best-effort。選択は既に成立している。
+    });
+  };
+
   const back = () => {
     setView({ selectedPaneId: null, expanded });
   };
@@ -427,6 +474,7 @@ export function App() {
               onScope={changeScope}
               expanded={expanded}
               onSelect={select}
+              onFocus={focusPane}
               onToggle={toggle}
               workingSince={workingSince}
               now={now}

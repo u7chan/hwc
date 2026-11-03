@@ -126,6 +126,7 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
   return {
     read: async ({ paneId }) => ({ paneId, text: "hello\n", truncated: false, revision: 3 }),
     send: async () => {},
+    focus: async () => {},
     ...overrides,
   };
 }
@@ -661,6 +662,114 @@ test("GET /api/panes/:id/output rejects an unknown source", async () => {
   expect(await response.json()).toEqual({
     error: "source must be one of visible, recent, recent_unwrapped, detection",
   });
+});
+
+test("POST /api/panes/:id/focus focuses the pane by id", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      focus: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/focus", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual([{ paneId: "w1:p1" }]);
+});
+
+test("POST /api/panes/:id/focus rejects a request that is not sent as JSON", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      focus: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+
+  for (const contentType of [
+    "text/plain",
+    "application/x-www-form-urlencoded",
+    "application/jsonx",
+  ]) {
+    const response = await app.request("/api/panes/w1:p1/focus", {
+      method: "POST",
+      headers: { "content-type": contentType },
+    });
+    expect(response.status).toBe(415);
+    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
+  }
+
+  // ヘッダ無しの POST も同じ。LAN の任意ページから form で叩けないようにする。
+  const bare = await app.request("/api/panes/w1:p1/focus", { method: "POST" });
+  expect(bare.status).toBe(415);
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/focus returns 404 before asking Herdr for a pane that is gone", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      focus: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p9/focus", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/focus returns 502 when the state cannot be read", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(null, new Error("socket closed")),
+    panes: createFakePanes(),
+  });
+  const response = await app.request("/api/panes/w1:p1/focus", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+test("POST /api/panes/:id/focus maps a Herdr failure like the other pane routes", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      focus: async () => {
+        throw new HerdrError("agent_not_found", "no agent in w1:p1");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/focus", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  // agent_not_found は個別に扱わず、既存の失敗の規則に落とす。
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });
 
 function createChatApp(options: { store?: FakeStore; chat?: ChatClient } = {}) {

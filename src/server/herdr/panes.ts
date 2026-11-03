@@ -16,9 +16,12 @@ export type ReadOptions = { paneId: string; source: ReadSource; lines?: number }
 
 export type SendOptions = { paneId: string; text: string; submit: boolean };
 
+export type FocusOptions = { paneId: string };
+
 export type PaneClient = {
   read: (options: ReadOptions) => Promise<PaneOutput>;
   send: (options: SendOptions) => Promise<void>;
+  focus: (options: FocusOptions) => Promise<void>;
 };
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; status: 400 | 413; error: string };
@@ -93,6 +96,10 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
         ? { pane_id: paneId, text, keys: ["enter"] }
         : { pane_id: paneId, text };
       await call("pane.send_input", params, { path });
+    },
+    async focus({ paneId }) {
+      // target はエージェント名も受けるが、hwc が持つのはペイン id だけ。
+      await call("agent.focus", { target: paneId }, { path });
     },
   };
 }

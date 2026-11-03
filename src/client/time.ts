@@ -45,3 +45,45 @@ export function trackWorking(
   const unchanged = next.size === since.size && [...next].every(([id, at]) => since.get(id) === at);
   return unchanged ? since : next;
 }
+
+export const WORKING_SINCE_STORAGE_KEY = "hwc-working-since";
+
+// 保存した起点を読み直す。状態はまだ届いていないので、working かどうかは
+// 最初のスナップショットで trackWorking が絞る。ここでは数の健全さだけを見る。
+// 未来の値は、端末の時計が戻ったときに負の経過を出さないよう捨てる。
+export function parseWorkingSince(raw: string | null, now: number): ReadonlyMap<string, number> {
+  if (raw === null) return new Map();
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return new Map();
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return new Map();
+
+  const since = new Map<string, number>();
+  for (const [paneId, at] of Object.entries(value)) {
+    if (typeof at !== "number" || !Number.isFinite(at) || at > now) continue;
+    since.set(paneId, at);
+  }
+  return since;
+}
+
+// 保存するのは、いま working と分かっているペインの起点だけ。止まったペインの値を
+// 残すと、次に働き始めたときに古い起点から数えてしまう。
+export function workingSinceForSave(
+  state: AppState,
+  since: ReadonlyMap<string, number>,
+): Record<string, number> {
+  const record: Record<string, number> = {};
+  for (const workspace of state.workspaces) {
+    for (const tab of workspace.tabs) {
+      for (const pane of tab.panes) {
+        if (pane.agentStatus !== "working") continue;
+        const at = since.get(pane.id);
+        if (at !== undefined) record[pane.id] = at;
+      }
+    }
+  }
+  return record;
+}

@@ -168,3 +168,17 @@ export async function sendInput(paneId: string, text: string, signal?: AbortSign
   });
   if (!response.ok) throw new Error(`input: ${response.status}`);
 }
+
+// body は読まれないので送らない。ヘッダは BFF が application/json 以外を 415 で弾くため付ける。
+export function focusRequest(paneId: string): { url: string; init: RequestInit } {
+  return {
+    url: `/api/panes/${encodeURIComponent(paneId)}/focus`,
+    init: { method: "POST", headers: { "content-type": "application/json" } },
+  };
+}
+
+export async function focusAgent(paneId: string, signal?: AbortSignal): Promise<void> {
+  const { url, init } = focusRequest(paneId);
+  const response = await fetch(url, { ...init, signal });
+  if (!response.ok) throw new Error(`focus: ${response.status}`);
+}

@@ -3,6 +3,7 @@ import {
   OUTPUT_LINES,
   chatOutcome,
   chatUrl,
+  focusRequest,
   outputUrl,
   parseAppState,
   toAppState,
@@ -155,4 +156,20 @@ test("a chat body that breaks the contract is dropped", () => {
   expect(
     toChatSnapshot({ ...chatBody, messages: [{ ...chatBody.messages[0], at: "1" }] }),
   ).toBeNull();
+});
+
+test("the focus request posts to the pane with a JSON header and no body", () => {
+  const request = focusRequest("w1:p2");
+  const url = new URL(request.url, "http://localhost");
+
+  // ":" is escaped but the BFF decodes it back into the pane id.
+  expect(url.pathname).toBe("/api/panes/w1%3Ap2/focus");
+  expect(request.init.method).toBe("POST");
+  // ヘッダを落とすと BFF が 415 で弾く。body は読まれないので送らない。
+  expect(request.init.headers).toEqual({ "content-type": "application/json" });
+  expect(request.init.body).toBeUndefined();
+});
+
+test("the focus request keeps the pane id in a single path segment", () => {
+  expect(focusRequest("w1/p2").url).toBe("/api/panes/w1%2Fp2/focus");
 });
