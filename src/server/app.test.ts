@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "./app";
@@ -53,6 +53,22 @@ const chatState: AppState = {
     {
       ...state.workspaces[0]!,
       tabs: [{ ...state.workspaces[0]!.tabs[0]!, panes: [chatPane] }],
+    },
+  ],
+};
+
+// 添付がペインごとに分かれていることを確かめるため、会話を持つペインを 2 枚持つ状態。
+const twoChatPanesState: AppState = {
+  ...state,
+  workspaces: [
+    {
+      ...state.workspaces[0]!,
+      tabs: [
+        {
+          ...state.workspaces[0]!.tabs[0]!,
+          panes: [chatPane, { ...chatPane, id: "w1:p2" }],
+        },
+      ],
     },
   ],
 };
@@ -1095,12 +1111,44 @@ test("POST /api/panes/:id/attachments stops an oversized image before reading it
   });
 });
 
+test("POST /api/panes/:id/attachments accepts exactly the size limit and refuses one byte more", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+
+    const atLimit = await uploadImage(app, { body: new Uint8Array(MAX_ATTACHMENT_BYTES) });
+    expect(atLimit.status).toBe(200);
+
+    const over = await uploadImage(app, { body: new Uint8Array(MAX_ATTACHMENT_BYTES + 1) });
+    expect(over.status).toBe(413);
+    expect(await over.json()).toEqual({ error: "attachment_too_large" });
+  });
+});
+
 test("POST /api/panes/:id/attachments counts the bytes it actually read", async () => {
   await withAttachmentsRoot(async (root) => {
     const app = createAttachmentApp(root);
-    const response = await uploadImage(app, {
-      body: new Uint8Array(MAX_ATTACHMENT_BYTES + 1),
-    });
+    // Content-Length を持たない chunked の body。事前検査を通らず、読んだバイト数だけで落ちる。
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    const request = new Request("http://localhost/api/panes/w1:p1/attachments", {
+      method: "POST",
+      headers: { "content-type": "image/png" },
+      body: new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (sent > MAX_ATTACHMENT_BYTES) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(chunk);
+          sent += chunk.byteLength;
+        },
+      }),
+      // ストリームの body は長さが決まらないので duplex が要る。
+      duplex: "half",
+    } as RequestInit);
+    expect(request.headers.get("content-length")).toBeNull();
+
+    const response = await app.request(request);
 
     expect(response.status).toBe(413);
     expect(await response.json()).toEqual({ error: "attachment_too_large" });
@@ -1151,20 +1199,22 @@ test("GET /api/panes/:id/attachments/:name returns 400 for a name outside the fo
 
 test("GET /api/panes/:id/attachments/:name returns 404 for a name this pane never saved", async () => {
   await withAttachmentsRoot(async (root) => {
-    const app = createAttachmentApp(root);
-    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+    const app = createAttachmentApp(root, { state: twoChatPanesState });
 
     const absent = await app.request("/api/panes/w1:p1/attachments/pasted-20200101-000000.png");
     expect(absent.status).toBe(404);
     expect(await absent.json()).toEqual({ error: "not_found" });
 
-    // 別のペインの保存先は見ない。
-    const stored = await readFile(join(root, "w1:p1", name));
-    await mkdir(join(root, "w1:p2"), { recursive: true });
-    await writeFile(join(root, "w1:p2", name), stored);
-    const otherPane = await app.request(`/api/panes/w1:p9/attachments/${name}`);
-    expect(otherPane.status).toBe(404);
-    expect(await otherPane.json()).toEqual({ error: "pane_not_found" });
+    // 別のペイン（state に実在する w1:p2）にだけ置いた名前は、w1:p1 からは開けない。
+    const { name } = (await (await uploadImage(app, { paneId: "w1:p2" })).json()) as {
+      name: string;
+    };
+    const own = await app.request(`/api/panes/w1:p2/attachments/${name}`);
+    expect(own.status).toBe(200);
+
+    const crossPane = await app.request(`/api/panes/w1:p1/attachments/${name}`);
+    expect(crossPane.status).toBe(404);
+    expect(await crossPane.json()).toEqual({ error: "not_found" });
   });
 });
 

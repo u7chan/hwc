@@ -19,6 +19,15 @@ const CONTENT_TYPE_BY_EXT: ReadonlyMap<AttachmentExt, string> = new Map([
   ["webp", "image/webp"],
 ]);
 
+// 案内文の表記だけを持つ。受け付ける形式とその並びは allowlist から引く。
+const LABEL_BY_EXT: ReadonlyMap<AttachmentExt, string> = new Map([
+  ["png", "PNG"],
+  ["jpg", "JPEG"],
+  ["webp", "WebP"],
+]);
+
+const BYTES_PER_MB = 1024 * 1024;
+
 // pasted-<YYYYMMDD>-<HHmmss>[-n].<ext>。名前に規則があるので、配信の前に書式だけで弾ける。
 const ATTACHMENT_NAME = /^pasted-\d{8}-\d{6}(-\d+)?\.(png|jpg|webp)$/;
 
@@ -35,6 +44,16 @@ export function attachmentContentType(name: string): string | null {
   if (!isAttachmentName(name)) return null;
   const ext = name.slice(name.lastIndexOf(".") + 1);
   return CONTENT_TYPE_BY_EXT.get(ext as AttachmentExt) ?? null;
+}
+
+// 利用者に見せる形式の一覧。allowlist を変えたときに案内文だけが古くならないようにする。
+export function attachmentTypeLabels(): string {
+  return [...EXT_BY_CONTENT_TYPE.values()].map((ext) => LABEL_BY_EXT.get(ext) ?? ext).join(" / ");
+}
+
+export function formatMegaBytes(bytes: number): string {
+  const mb = bytes / BYTES_PER_MB;
+  return `${Number.isInteger(mb) ? mb : mb.toFixed(1)}MB`;
 }
 
 // ペイン id はそのままディレクトリ名になる。区切りと親参照を含む id をここで弾く。

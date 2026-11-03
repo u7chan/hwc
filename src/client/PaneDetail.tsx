@@ -6,8 +6,9 @@ import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
 import {
   ATTACHMENT_LIMIT_NOTICE,
-  imageFilesFrom,
+  pasteActionFrom,
   SEND_FAILED_NOTICE,
+  unsupportedImageNotice,
   uploadFailureNotice,
 } from "./attachments";
 import {
@@ -775,11 +776,17 @@ export function PaneDetail(props: PaneDetailProps) {
             onPaste={(event) => {
               // 添付を受け付けるのは会話を持つペインだけ。シェルペインでは既定に任せる。
               if (!pane.chat) return;
-              const files = imageFilesFrom(event.clipboardData?.items);
+              const action = pasteActionFrom(event.clipboardData?.items);
               // テキストだけの貼り付けは入力欄の既定動作のままにする。
-              if (files.length === 0) return;
+              if (action.kind === "default") return;
+              // 未対応の形式は保存しない。何が起きたかをその場で伝える。
+              if (action.kind === "unsupported") {
+                setNotice(unsupportedImageNotice());
+                return;
+              }
+              if (action.unsupported) setNotice(unsupportedImageNotice());
               event.preventDefault();
-              addImages(files);
+              addImages(action.files);
             }}
             onKeyDown={(event) => {
               const composing = event.isComposing || event.keyCode === 229;

@@ -3,10 +3,13 @@ import {
   attachmentContentType,
   attachmentExtOf,
   attachmentName,
+  attachmentTypeLabels,
   composeAttachedFilesNote,
   composeInputText,
+  formatMegaBytes,
   isAttachmentName,
   isSafePaneId,
+  MAX_ATTACHMENT_BYTES,
   stripAttachedFiles,
 } from "./attachments";
 
@@ -33,6 +36,16 @@ test("only the three image types are accepted, with or without parameters", () =
     expect(attachmentExtOf(type)).toBeNull();
   }
   expect(attachmentExtOf(undefined)).toBeNull();
+});
+
+test("the labels for the notice come from the allowlist", () => {
+  expect(attachmentTypeLabels()).toBe("PNG / JPEG / WebP");
+});
+
+test("a byte limit is shown in whole megabytes", () => {
+  expect(formatMegaBytes(MAX_ATTACHMENT_BYTES)).toBe("10MB");
+  expect(formatMegaBytes(1024 * 1024)).toBe("1MB");
+  expect(formatMegaBytes(1.5 * 1024 * 1024)).toBe("1.5MB");
 });
 
 test("a saved name maps back to the type it is served as", () => {

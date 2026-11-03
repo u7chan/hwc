@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { ATTACHMENT_LIMIT_NOTICE, imageFilesFrom, uploadFailureNotice } from "./attachments";
+import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
+import { ATTACHMENT_LIMIT_NOTICE, pasteActionFrom, uploadFailureNotice } from "./attachments";
 
 function clipboardItem(type: string, file: File | null, kind = "file") {
   return { kind, type, getAsFile: () => file };
@@ -9,25 +10,44 @@ const png = new File([new Uint8Array([0x89, 0x50])], "image.png", { type: "image
 const jpeg = new File([new Uint8Array([0xff, 0xd8])], "image.jpg", { type: "image/jpeg" });
 const plain = new File(["hello"], "note.txt", { type: "text/plain" });
 const svg = new File(["<svg/>"], "image.svg", { type: "image/svg+xml" });
+const gif = new File(["GIF89a"], "image.gif", { type: "image/gif" });
 
-test("only the image types the BFF accepts become files", () => {
-  const files = imageFilesFrom([
+test("the accepted images are uploaded and the default paste is prevented", () => {
+  const action = pasteActionFrom([
     clipboardItem("image/png", png),
     clipboardItem("text/plain", plain),
-    clipboardItem("image/svg+xml", svg),
     clipboardItem("", null, "string"),
     clipboardItem("image/jpeg", jpeg),
   ]);
 
-  expect(files).toEqual([png, jpeg]);
+  expect(action).toEqual({ kind: "upload", files: [png, jpeg], unsupported: false });
 });
 
-test("a paste without clipboard data yields nothing", () => {
-  expect(imageFilesFrom(null)).toEqual([]);
-  expect(imageFilesFrom(undefined)).toEqual([]);
-  expect(imageFilesFrom([])).toEqual([]);
+test("an unsupported image type is reported instead of being dropped silently", () => {
+  // GIF と SVG は保存しない。何も起きないと利用者は理由を知れない。
+  expect(pasteActionFrom([clipboardItem("image/gif", gif)])).toEqual({
+    kind: "unsupported",
+  });
+  expect(
+    pasteActionFrom([clipboardItem("image/gif", gif), clipboardItem("image/svg+xml", svg)]),
+  ).toEqual({ kind: "unsupported" });
+});
+
+test("an unsupported image next to a supported one is uploaded and reported", () => {
+  expect(
+    pasteActionFrom([clipboardItem("image/png", png), clipboardItem("image/gif", gif)]),
+  ).toEqual({ kind: "upload", files: [png], unsupported: true });
+});
+
+test("a paste without images keeps the default behaviour", () => {
+  // テキストだけの貼り付けでは preventDefault しない。入力欄の既定動作のままにする。
+  expect(pasteActionFrom([clipboardItem("text/plain", plain)])).toEqual({ kind: "default" });
+  expect(pasteActionFrom([clipboardItem("", null, "string")])).toEqual({ kind: "default" });
+  expect(pasteActionFrom([])).toEqual({ kind: "default" });
+  expect(pasteActionFrom(null)).toEqual({ kind: "default" });
+  expect(pasteActionFrom(undefined)).toEqual({ kind: "default" });
   // 画像の項目でも File が取れなければ添付しない。
-  expect(imageFilesFrom([clipboardItem("image/png", null)])).toEqual([]);
+  expect(pasteActionFrom([clipboardItem("image/png", null)])).toEqual({ kind: "default" });
 });
 
 test("the limit notice names the number of images", () => {
@@ -35,8 +55,10 @@ test("the limit notice names the number of images", () => {
 });
 
 test("an upload failure says what the user can change", () => {
-  expect(uploadFailureNotice(413)).toContain("大きすぎます");
-  expect(uploadFailureNotice(415)).toContain("形式");
+  expect(uploadFailureNotice(413)).toBe(
+    `画像が大きすぎます（${MAX_ATTACHMENT_BYTES / (1024 * 1024)}MB まで）`,
+  );
+  expect(uploadFailureNotice(415)).toBe("対応していない画像形式です（PNG / JPEG / WebP）");
   expect(uploadFailureNotice(0)).toBe("画像を送信できませんでした");
   expect(uploadFailureNotice(502)).toBe("画像を送信できませんでした");
 });
