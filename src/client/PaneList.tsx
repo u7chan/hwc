@@ -19,6 +19,7 @@ import {
   groupWorkspaces,
   paneName,
   paneSubLabel,
+  soleTab,
 } from "./select";
 import { scopeWorkspaces, type ListScope } from "./scope";
 import { StatusLabel } from "./StatusLabel";
@@ -220,6 +221,18 @@ export function PaneList(props: PaneListProps) {
     );
   }
 
+  // タブ行は複数のタブを束ねる見出し。1 つだけのときは束ねる相手がいないので、
+  // タブ行を省いてペインを親の直下に通す。
+  function renderTabLevel(workspace: AppState["workspaces"][number], depth: number) {
+    const sole = soleTab(workspace);
+    if (sole !== null) return renderPanes(sole, depth);
+    return (
+      <ul class="hwc-tabs-list" data-depth={depth}>
+        {workspace.tabs.map((tab) => renderTabs(tab, depth))}
+      </ul>
+    );
+  }
+
   // ワークスペース 1 つ分。ワークツリーが 1 つだけなら、これが一覧の 1 ブロックになる。
   function renderWorkspace(
     workspace: AppState["workspaces"][number],
@@ -246,9 +259,7 @@ export function PaneList(props: PaneListProps) {
             })
           : null}
         <GroupChildren id={groupId} open={withHeader ? open : true}>
-          <ul class="hwc-tabs-list" data-depth={withHeader ? depth + 1 : depth}>
-            {workspace.tabs.map((tab) => renderTabs(tab, withHeader ? depth + 1 : depth))}
-          </ul>
+          {renderTabLevel(workspace, withHeader ? depth + 1 : depth)}
         </GroupChildren>
       </section>
     );
@@ -316,11 +327,7 @@ export function PaneList(props: PaneListProps) {
                   controlsId: groupId,
                 })}
                 <GroupChildren id={groupId} open={open}>
-                  {group.host ? (
-                    <ul class="hwc-tabs-list" data-depth={1}>
-                      {group.host.tabs.map((tab) => renderTabs(tab, 1))}
-                    </ul>
-                  ) : null}
+                  {group.host ? renderTabLevel(group.host, 1) : null}
                   {group.linked.map((workspace) => renderWorkspace(workspace, 1, true))}
                 </GroupChildren>
               </section>

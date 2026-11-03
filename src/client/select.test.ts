@@ -16,6 +16,7 @@ import {
   paneName,
   paneSubLabel,
   removePane,
+  soleTab,
   splitPanes,
   statusLabel,
   statusTone,
@@ -124,6 +125,13 @@ test("findPaneContext names the workspace and tab of a pane", () => {
 test("the counts follow the nesting", () => {
   expect(countPanes(state)).toBe(4);
   expect(countWorkspacePanes("w1", state)).toBe(3);
+});
+
+test("a tab row is only worth showing when it gathers more than one tab", () => {
+  const [multiTab, singleTab] = state.workspaces;
+
+  expect(soleTab(multiTab)).toBeNull();
+  expect(soleTab(singleTab)).toBe(singleTab.tabs[0]);
 });
 
 test("closing a pane leaves its neighbours alone", () => {
