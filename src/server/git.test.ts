@@ -47,6 +47,20 @@ test("a linked worktree follows the gitdir file", async () => {
   expect(await readBranch(checkout)).toBe("feat/tree");
 });
 
+test("a subdirectory of a checkout keeps the branch", async () => {
+  const root = await dir();
+  await mkdir(join(root, ".git"));
+  await writeFile(join(root, ".git", "HEAD"), "ref: refs/heads/main\n");
+  const sub = join(root, "src", "client");
+  await mkdir(sub, { recursive: true });
+  expect(await readBranch(sub)).toBe("main");
+});
+
+test("a relative place is never read", async () => {
+  expect(await readBranch("")).toBeNull();
+  expect(await readBranch("relative/dir")).toBeNull();
+});
+
 test("a place without git has no branch", async () => {
   const root = await dir();
   expect(await readBranch(root)).toBeNull();

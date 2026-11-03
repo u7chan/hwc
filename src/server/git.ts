@@ -1,5 +1,5 @@
 import { readFile, stat } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 
 // HEAD は "ref: refs/heads/<branch>"、detached なら sha。detached はブランチではないので出さない。
 export function parseBranchHead(text: string): string | null {
@@ -19,19 +19,32 @@ export function parseGitDirFile(text: string): string | null {
   return path === "" ? null : path;
 }
 
+// ペインの cwd はリポジトリのサブディレクトリのこともある。.git が見つかるまで上へたどる。
+async function readFrom(directory: string): Promise<string | null> {
+  const dotGit = join(directory, ".git");
+  const info = await stat(dotGit);
+  if (info.isDirectory()) return parseBranchHead(await readFile(join(dotGit, "HEAD"), "utf8"));
+  const dir = parseGitDirFile(await readFile(dotGit, "utf8"));
+  if (dir === null) return null;
+  const head = isAbsolute(dir) ? join(dir, "HEAD") : join(directory, dir, "HEAD");
+  return parseBranchHead(await readFile(head, "utf8"));
+}
+
 export async function readBranch(checkoutPath: string): Promise<string | null> {
-  const dotGit = join(checkoutPath, ".git");
-  try {
-    const info = await stat(dotGit);
-    if (info.isDirectory()) return parseBranchHead(await readFile(join(dotGit, "HEAD"), "utf8"));
-    const dir = parseGitDirFile(await readFile(dotGit, "utf8"));
-    if (dir === null) return null;
-    const head = isAbsolute(dir) ? join(dir, "HEAD") : join(checkoutPath, dir, "HEAD");
-    return parseBranchHead(await readFile(head, "utf8"));
-  } catch {
-    // git 管理外・権限なし・壊れた .git は、ブランチを出さないだけにする。
-    return null;
+  if (!isAbsolute(checkoutPath)) return null;
+  let directory = checkoutPath;
+  // ルートより上は無い。深さの上限は念のためで、通常は数階層で見つかる。
+  for (let depth = 0; depth < 64; depth += 1) {
+    try {
+      return await readFrom(directory);
+    } catch {
+      // ここに .git が無いだけかもしれないので、親を見る。
+    }
+    const parent = dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
   }
+  return null;
 }
 
 export type BranchReader = (checkoutPath: string) => Promise<string | null>;

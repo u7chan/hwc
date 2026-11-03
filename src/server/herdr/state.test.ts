@@ -398,3 +398,35 @@ test("a checkout path falls back to the first pane when herdr sees no worktree",
     ["w3", "/tmp"],
   ]);
 });
+
+test("a branch that cannot be read still publishes the state", async () => {
+  const store = createStateStore({
+    load: async () =>
+      ({
+        focused_workspace_id: "w1",
+        focused_tab_id: "w1:t1",
+        focused_pane_id: "w1:p1",
+        workspaces: [
+          {
+            workspace_id: "w1",
+            label: "hwc",
+            worktree: {
+              repo_name: "hwc",
+              repo_root: "/repo",
+              checkout_path: "/repo",
+              is_linked_worktree: false,
+            },
+          },
+        ],
+        tabs: [{ tab_id: "w1:t1", workspace_id: "w1", label: "1" }],
+        panes: [{ pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1" }],
+        agents: [],
+      }) as HerdrSnapshot,
+    branch: async () => {
+      throw new Error("no git here");
+    },
+  });
+
+  const state = await store.refresh();
+  expect(state.workspaces[0]?.branch).toBeNull();
+});

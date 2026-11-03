@@ -1,4 +1,5 @@
 import type { AgentStatus, HerdrAgent, HerdrAgentSession, HerdrSnapshot } from "./contract";
+import { isAbsolute } from "node:path";
 import type { BranchReader } from "../git";
 
 export type { AgentStatus };
@@ -143,11 +144,14 @@ export function checkoutPaths(snapshot: HerdrSnapshot): Map<string, string> {
   }
   for (const pane of snapshot.panes ?? []) {
     if (paths.has(pane.workspace_id) || typeof pane.cwd !== "string") continue;
+    // 相対の cwd は BFF の起動ディレクトリを指してしまうので使わない。
+    if (!isAbsolute(pane.cwd)) continue;
     paths.set(pane.workspace_id, pane.cwd);
   }
   for (const agent of snapshot.agents ?? []) {
     const workspaceId = agent.workspace_id;
     if (workspaceId == null || paths.has(workspaceId) || agent.cwd == null) continue;
+    if (!isAbsolute(agent.cwd)) continue;
     paths.set(workspaceId, agent.cwd);
   }
   return paths;
@@ -165,7 +169,9 @@ async function withBranches(
     state.workspaces.map(async (workspace) => {
       const path = paths.get(workspace.id);
       if (path === undefined) return workspace;
-      return { ...workspace, branch: await read(path) };
+      // 読めないブランチで状態そのものを止めない。
+      const branch = await read(path).catch(() => null);
+      return { ...workspace, branch };
     }),
   );
   return { ...state, workspaces };
