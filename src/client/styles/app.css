@@ -821,6 +821,8 @@ button {
   display: grid;
   place-items: center;
   padding: var(--space-4);
+  /* 中央に置くためだけの枠。押した場所を背後へ通し、背景タップで閉じられるようにする。 */
+  pointer-events: none;
 }
 
 .hwc-dialog:focus {
@@ -835,6 +837,8 @@ button {
   border-radius: var(--radius-panel);
   background: var(--color-surface);
   animation: hwc-dialog-bounce 420ms cubic-bezier(0.22, 1.2, 0.36, 1);
+  /* 枠から中身だけ押せるようにする（.hwc-dialog-wrap の none を戻す）。 */
+  pointer-events: auto;
 }
 
 .hwc-dialog-title {
