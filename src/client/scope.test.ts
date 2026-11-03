@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server/herdr/state";
-import { activePanes, parseListScope, scopeWorkspaces, shouldFocusPane } from "./scope";
+import {
+  activePanes,
+  activeUnreadCount,
+  parseListScope,
+  scopeWorkspaces,
+  shouldFocusPane,
+  unreadLabel,
+} from "./scope";
 
 function pane(id: string, agent: string | null, agentStatus: AgentStatus = "unknown"): PaneState {
   return {
@@ -141,4 +148,35 @@ test("only a done row in the active scope moves the focus", () => {
   // ツリーからは送らない。詳細のタブ切替と経路が同じになる。
   expect(shouldFocusPane("agent", "done")).toBe(false);
   expect(shouldFocusPane("all", "done")).toBe(false);
+});
+
+test("the unread count is the finished panes waiting to be seen", () => {
+  const state = app(
+    workspace("w1", [
+      pane("w1:p1", "pi", "working"),
+      pane("w1:p2", "pi", "blocked"),
+      pane("w1:p3", "pi", "done"),
+      pane("w1:p4", "claude", "done"),
+      pane("w1:p5", "pi", "idle"),
+      pane("w1:p6", null, "done"),
+    ]),
+  );
+
+  // blocked は未読ではない。エージェントのいない done は active に載らない。
+  expect(activeUnreadCount(state)).toBe(2);
+});
+
+test("nothing unfinished means nothing unread", () => {
+  const state = app(
+    workspace("w1", [pane("w1:p1", "pi", "working"), pane("w1:p2", "pi", "blocked")]),
+  );
+
+  expect(activeUnreadCount(state)).toBe(0);
+});
+
+test("a count past two digits is shown as a range", () => {
+  expect(unreadLabel(0)).toBe("0");
+  expect(unreadLabel(9)).toBe("9");
+  expect(unreadLabel(99)).toBe("99");
+  expect(unreadLabel(100)).toBe("99+");
 });

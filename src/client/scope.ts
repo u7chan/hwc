@@ -75,6 +75,17 @@ export function activePanes(state: AppState): readonly ActivePane[] {
   return ACTIVE_STATUSES.flatMap((status) => rows.filter((row) => row.pane.agentStatus === status));
 }
 
+// 未読は「完了してまだ見ていない」数だけ。開くと seen が進んで消えるので、受信箱の件数になる。
+// blocked を混ぜると意味が変わる（未読ではなく、止まっている）。
+export function activeUnreadCount(state: AppState): number {
+  return activePanes(state).filter((row) => row.pane.agentStatus === "done").length;
+}
+
+// 3 桁を超えたら数えても読めない。件数は目安で足りる。
+export function unreadLabel(count: number): string {
+  return count > 99 ? "99+" : String(count);
+}
+
 // seen が進むのは done だけ。working / blocked で TUI のフォーカスを動かす理由は無い。
 export function shouldFocusPane(scope: ListScope, status: AgentStatus): boolean {
   return scope === "active" && status === "done";

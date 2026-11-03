@@ -23,8 +23,10 @@ import {
 } from "./select";
 import {
   activePanes,
+  activeUnreadCount,
   scopeWorkspaces,
   shouldFocusPane,
+  unreadLabel,
   type ListScope,
   type TreeScope,
 } from "./scope";
@@ -77,21 +79,35 @@ const SCOPE_OPTIONS: readonly { scope: ListScope; label: string }[] = [
   { scope: "all", label: "すべて" },
 ];
 
-function ScopeBar(props: { scope: ListScope; onScope: (scope: ListScope) => void }) {
+function ScopeBar(props: {
+  scope: ListScope;
+  unread: number;
+  onScope: (scope: ListScope) => void;
+}) {
   return (
     <div class="hwc-scope" role="group" aria-label="一覧の絞り込み" data-scope={props.scope}>
       <span class="hwc-scope-thumb" aria-hidden="true" />
-      {SCOPE_OPTIONS.map((option) => (
-        <button
-          key={option.scope}
-          type="button"
-          class="hwc-scope-option"
-          aria-pressed={props.scope === option.scope}
-          onClick={() => props.onScope(option.scope)}
-        >
-          {option.label}
-        </button>
-      ))}
+      {SCOPE_OPTIONS.map((option) => {
+        // 未読は「アクティブ」の意味そのもの。0 のときは何も出さない。
+        const unread = option.scope === "active" ? props.unread : 0;
+        return (
+          <button
+            key={option.scope}
+            type="button"
+            class="hwc-scope-option"
+            aria-pressed={props.scope === option.scope}
+            aria-label={unread > 0 ? `${option.label}、未読 ${unread} 件` : undefined}
+            onClick={() => props.onScope(option.scope)}
+          >
+            {option.label}
+            {unread > 0 && (
+              <span class="hwc-scope-count" aria-hidden="true">
+                {unreadLabel(unread)}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -187,7 +203,7 @@ export function PaneList(props: PaneListProps) {
   // 使い続けるので、つまみが滑り、スクロール枠も作り直されない。
   return (
     <>
-      <ScopeBar scope={props.scope} onScope={changeScope} />
+      <ScopeBar scope={props.scope} unread={activeUnreadCount(props.state)} onScope={changeScope} />
       <div class="hwc-list-scroll" ref={scroll}>
         {renderList(props)}
       </div>

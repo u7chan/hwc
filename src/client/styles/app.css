@@ -291,6 +291,10 @@ button {
 
 .hwc-scope-option {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   flex: 1;
   min-height: var(--tap);
   border: 0;
@@ -305,6 +309,23 @@ button {
 .hwc-scope-option[aria-pressed="true"] {
   color: var(--color-text);
   font-weight: 600;
+}
+
+/* 未読は目安。押す対象ではなく、急かさない色で小さく添える。 */
+.hwc-scope-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  height: 1.4em;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-mark);
+  background: var(--color-raised);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
