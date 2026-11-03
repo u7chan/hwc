@@ -342,18 +342,23 @@ export function PaneDetail(props: PaneDetailProps) {
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
-  // 追従するかはイベント購読の中でも読む。state を毎回張り直さずに済ませる。
+  // 追従するかは state が正。イベント購読からも読むので、同じ値を ref に写す
+  // （chat.ts の statusRef と同じ扱い）。更新は setPinned の 1 経路だけ。
   const pinned = useRef(true);
   // 高さが変わっただけのスクロール（入力欄や添付が伸縮して底が詰まる）は利用者の操作ではない。
   // 直前の content 高・表示領域の高さと比べて、変わっていれば追従の判断を変えない。
   const lastHeight = useRef(0);
   const lastClientHeight = useRef(0);
-  const lastScrollTop = useRef(0);
   const [pending, setPending] = useState<PendingMessage[]>([]);
   // チップは id だけを持つ。表示名と送信文字列は定数から引く。
   const [chip, setChip] = useState<CommandId | null>(null);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
   const nextAttachmentKey = useRef(0);
+
+  const setPinned = (next: boolean) => {
+    pinned.current = next;
+    setAtBottom(next);
+  };
 
   // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
   const expanded = expandedOpen && !compact;
@@ -446,7 +451,6 @@ export function PaneDetail(props: PaneDetailProps) {
     const keep = () => {
       lastHeight.current = element.scrollHeight;
       lastClientHeight.current = element.clientHeight;
-      lastScrollTop.current = element.scrollTop;
       if (!pinned.current) return;
       element.scrollTop = element.scrollHeight;
     };
@@ -494,8 +498,7 @@ export function PaneDetail(props: PaneDetailProps) {
   }, [pending]);
 
   const jumpToLatest = () => {
-    pinned.current = true;
-    setAtBottom(true);
+    setPinned(true);
     const element = scroller.current;
     element?.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   };
@@ -563,9 +566,6 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const sendText = async () => {
     if (!canSend || sending) return;
-    // 送ったら最新を見たい。読み返していた位置に留まると、自分の発言が画面外になる。
-    pinned.current = true;
-    setAtBottom(true);
     const text = draft;
     const names = attachments
       .map((item) => item.name)
@@ -580,6 +580,8 @@ export function PaneDetail(props: PaneDetailProps) {
     setNotice(null);
     // 送れたときだけ空にする。失敗したら本文も添付も残す。
     if (await onSubmit(text, names)) {
+      // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
+      setPinned(true);
       setDraft("");
       setAttachments([]);
       setPending((items) => [
@@ -604,13 +606,12 @@ export function PaneDetail(props: PaneDetailProps) {
   // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
     if (sending || replying) return;
-    pinned.current = true;
-    setAtBottom(true);
     const text = commandSendText(id, draft);
     setSending(true);
     input.current?.blur();
     setNotice(null);
     if (await onSubmit(text, [])) {
+      setPinned(true);
       setChip(null);
       setDraft("");
     } else setNotice(SEND_FAILED_NOTICE);
@@ -668,21 +669,20 @@ export function PaneDetail(props: PaneDetailProps) {
               scrollHeight: element.scrollHeight,
             };
             const last = {
-              scrollTop: lastScrollTop.current,
+              scrollTop: now.scrollTop,
               clientHeight: lastClientHeight.current,
               scrollHeight: lastHeight.current,
             };
-            lastScrollTop.current = now.scrollTop;
             lastHeight.current = now.scrollHeight;
             lastClientHeight.current = now.clientHeight;
             // 高さが変わっただけなら、底を詰めた副作用。読み返しの意思とはみなさない。
+            // 縮んだ結果ブラウザが底へ寄せた場合に備え、追従の判断は今の位置で取り直す。
             if (isLayoutShift(now, last)) {
               if (pinned.current) element.scrollTop = element.scrollHeight;
+              if (isNearBottom(now)) setPinned(true);
               return;
             }
-            const next = isNearBottom(now);
-            pinned.current = next;
-            setAtBottom(next);
+            setPinned(isNearBottom(now));
           }}
         >
           {body.kind === "skeleton" ? (

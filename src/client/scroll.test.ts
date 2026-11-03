@@ -24,6 +24,6 @@ test("a change of the content or the box height is a layout shift", () => {
   expect(isLayoutShift(box(1400, 551, 2000), box(1400, 600, 2000))).toBe(true);
 });
 
-test("scrolling past the end also counts as a shift, because the browser clamps it", () => {
-  expect(isLayoutShift(box(1450, 600, 2000), box(1400, 600, 2000))).toBe(true);
+test("the same content and box height means the reader moved", () => {
+  expect(isLayoutShift(box(0, 600, 2000), box(1400, 600, 2000))).toBe(false);
 });
