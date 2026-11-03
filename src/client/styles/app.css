@@ -322,6 +322,11 @@ button {
   line-height: var(--line-body);
 }
 
+/* 空状態をスクロール枠の内側に置いたぶん、枠の上余白を打ち消して従来の位置に揃える。 */
+.hwc-list-scroll > .hwc-list-note {
+  margin-top: calc(var(--space-2) * -1);
+}
+
 .hwc-list-note-title {
   margin: 0 0 var(--space-2);
   color: var(--color-text);
