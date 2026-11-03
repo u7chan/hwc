@@ -80,6 +80,7 @@ Accepted ADRとタスクが衝突する場合、迂回実装で無理に両立�
 - unit: BFF（プロトコル・状態機械）を主対象。client は純粋な変換・selector のみ。
 - hooks はロジックを純関数に抽出してテストする。フック自体はテストしない。
 - DOM を必要とするテスト（コンポーネント・CSS・アニメーション）は書かない。エージェント E2E と人間の目視に任せる。
+- E2E は `bun run e2e:serve` の架空 Herdr に対して行う。実 Herdr につながった画面をスクリーンショットに撮らない。詳細は [docs/e2e.md](docs/e2e.md)。
 
 ## Comment Policy
 
