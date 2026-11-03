@@ -13,9 +13,18 @@ export const COMPACT_CELL_HEIGHT = 560;
 // 幅がこれ未満だと 1 行では入力欄が潰れる。畳まずに通常の composer へ戻す。
 export const COMPACT_CELL_MIN_WIDTH = 500;
 
-// 高さは「未満」、幅は「以上」。0 はまだ測っていないセルなので畳まない。
-export function isCompactCell(height: number, width: number): boolean {
-  return height > 0 && height < COMPACT_CELL_HEIGHT && width >= COMPACT_CELL_MIN_WIDTH;
+// 上下に積まれた段か。3 枚は左 1 枚が縦いっぱい、4 枚は全部が 1 段ずつ。枚数から決まる並べ方の
+// 事実を app.css の .hwc-split[data-count]（grid-row: span 2）とも共有している。
+export function isStackedCell(count: number, index: number): boolean {
+  return count === 4 || (count === 3 && index > 0);
+}
+
+// 高さは「未満」、幅は「以上」。積まれた段は高さを見ない（ウィンドウが高くても畳む）。
+// 高さの 0 はまだ測っていないセルなので畳まない。
+export function isCompactCell(height: number, width: number, stacked: boolean): boolean {
+  return (
+    width >= COMPACT_CELL_MIN_WIDTH && (stacked || (height > 0 && height < COMPACT_CELL_HEIGHT))
+  );
 }
 
 export function clampSidebarWidth(width: number, viewportWidth = Number.POSITIVE_INFINITY): number {

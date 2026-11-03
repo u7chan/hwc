@@ -63,6 +63,7 @@ import {
   WIDE_LAYOUT_QUERY,
   clampSidebarWidth,
   isCompactCell,
+  isStackedCell,
   parseSidebarWidth,
 } from "./layout";
 import {
@@ -165,27 +166,28 @@ function useMediaQuery(query: string) {
 
 type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
 
-// 分割セルの入力欄を畳むかは、セルの box の高さと幅だけで決める。PaneDetail は fragment を
-// 返すので自分では測れない。内容高を測ると畳んだ切替で再ループするため box を使う。
-function SplitCell(props: { children: (compact: boolean) => ComponentChildren }) {
+// 分割セルの入力欄を畳むかは、セルの box の高さ・幅と、上下に積まれた段かで決める。PaneDetail は
+// fragment を返すので自分では測れない。内容高を測ると畳んだ切替で再ループするため box を使う。
+function SplitCell(props: { stacked: boolean; children: (compact: boolean) => ComponentChildren }) {
   const cell = useRef<HTMLElement>(null);
   const [compact, setCompact] = useState(false);
+  // 積まれた段かは枚数で変わり、resize では変わらない。依存としてだけ読む。
+  const { stacked } = props;
 
   useLayoutEffect(() => {
     const element = cell.current;
     if (!element) return;
+    const measure = (height: number, width: number) =>
+      setCompact(isCompactCell(height, width, stacked));
+    // observe は変化しか届かない。枚数が変わった直後の値を effect で一度測る。
+    measure(element.clientHeight, element.clientWidth);
     const observer = new ResizeObserver((entries) => {
       const box = entries[entries.length - 1].borderBoxSize[0];
-      setCompact(
-        isCompactCell(
-          box?.blockSize ?? element.clientHeight,
-          box?.inlineSize ?? element.clientWidth,
-        ),
-      );
+      measure(box?.blockSize ?? element.clientHeight, box?.inlineSize ?? element.clientWidth);
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [stacked]);
 
   return (
     <section class="hwc-split-cell" data-compact={compact} ref={cell}>
@@ -653,8 +655,8 @@ export function App() {
               />
               {wide ? (
                 <div class="hwc-split" data-count={cells.length}>
-                  {cells.map((item) => (
-                    <SplitCell key={item.id}>
+                  {cells.map((item, index) => (
+                    <SplitCell key={item.id} stacked={isStackedCell(cells.length, index)}>
                       {(compact) => renderPane(item, context, compact)}
                     </SplitCell>
                   ))}

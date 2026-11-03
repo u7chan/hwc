@@ -1214,7 +1214,8 @@ button {
   grid-template-rows: 1fr 1fr;
 }
 
-/* 3 枚のときは、1 枚目を左に縦いっぱい、残りを右に積む。 */
+/* 3 枚のときは、1 枚目を左に縦いっぱい、残りを右に積む。span しないセルは入力欄を
+   高さに関係なく畳む（layout.ts の isStackedCell と同じ事実。片方を変えたら両方直す）。 */
 .hwc-split[data-count="3"] > .hwc-split-cell:first-child {
   grid-row: span 2;
 }
@@ -2637,8 +2638,8 @@ p.hwc-compaction,
   container: hwc-input-actions / inline-size;
 }
 
-/* 分割セルが低いときの入力。セル高 560px 未満かつ幅 500px 以上で、1 行に畳んで
-   会話へ高さを回す（判定は isCompactCell）。開閉ボタンと placeholder は出さない。 */
+/* 分割セルが低いか上下に積まれた段のときの入力。セル幅 500px 以上で、1 行に畳んで
+   会話へ高さを回す（判定は isCompactCell と isStackedCell）。開閉ボタンと placeholder は出さない。 */
 .hwc-split-cell[data-compact="true"] .hwc-input {
   padding-top: var(--space-2);
   padding-bottom: var(--space-2);
