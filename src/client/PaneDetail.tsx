@@ -4,6 +4,7 @@ import type { ChatCompaction, ChatMessage, ChatSnapshot } from "../server/chat/c
 import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
+import { isLayoutShift, isNearBottom } from "./scroll";
 import {
   ATTACHMENT_LIMIT_NOTICE,
   pasteActionFrom,
@@ -341,11 +342,23 @@ export function PaneDetail(props: PaneDetailProps) {
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  // 追従するかは state が正。イベント購読からも読むので、同じ値を ref に写す
+  // （chat.ts の statusRef と同じ扱い）。更新は setPinned の 1 経路だけ。
+  const pinned = useRef(true);
+  // 高さが変わっただけのスクロール（入力欄や添付が伸縮して底が詰まる）は利用者の操作ではない。
+  // 直前の content 高・表示領域の高さと比べて、変わっていれば追従の判断を変えない。
+  const lastHeight = useRef(0);
+  const lastClientHeight = useRef(0);
   const [pending, setPending] = useState<PendingMessage[]>([]);
   // チップは id だけを持つ。表示名と送信文字列は定数から引く。
   const [chip, setChip] = useState<CommandId | null>(null);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
   const nextAttachmentKey = useRef(0);
+
+  const setPinned = (next: boolean) => {
+    pinned.current = next;
+    setAtBottom(next);
+  };
 
   // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
   const expanded = expandedOpen && !compact;
@@ -430,6 +443,29 @@ export function PaneDetail(props: PaneDetailProps) {
     if (element && atBottom) element.scrollTop = element.scrollHeight;
   }, [content, replying, atBottom, pendingMessages.length, notice]);
 
+  // 画像の読み込みや入力欄の伸びで高さが後から変わっても、最新を見ている間は底に留める。
+  // 画像の load は bubble しないので capture で拾い、領域の伸縮は ResizeObserver で拾う。
+  useEffect(() => {
+    const element = scroller.current;
+    if (!element) return;
+    const keep = () => {
+      lastHeight.current = element.scrollHeight;
+      lastClientHeight.current = element.clientHeight;
+      if (!pinned.current) return;
+      element.scrollTop = element.scrollHeight;
+    };
+    // 初回は今の高さを基準にする。0 のまま残すと、最初のスクロールを伸縮と誤認する。
+    lastHeight.current = element.scrollHeight;
+    lastClientHeight.current = element.clientHeight;
+    element.addEventListener("load", keep, true);
+    const observer = new ResizeObserver(keep);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener("load", keep, true);
+      observer.disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     if (pending.length === 0) return;
     const messages = snapshot?.messages ?? [];
@@ -462,7 +498,7 @@ export function PaneDetail(props: PaneDetailProps) {
   }, [pending]);
 
   const jumpToLatest = () => {
-    setAtBottom(true);
+    setPinned(true);
     const element = scroller.current;
     element?.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   };
@@ -544,6 +580,8 @@ export function PaneDetail(props: PaneDetailProps) {
     setNotice(null);
     // 送れたときだけ空にする。失敗したら本文も添付も残す。
     if (await onSubmit(text, names)) {
+      // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
+      setPinned(true);
       setDraft("");
       setAttachments([]);
       setPending((items) => [
@@ -573,6 +611,7 @@ export function PaneDetail(props: PaneDetailProps) {
     input.current?.blur();
     setNotice(null);
     if (await onSubmit(text, [])) {
+      setPinned(true);
       setChip(null);
       setDraft("");
     } else setNotice(SEND_FAILED_NOTICE);
@@ -624,7 +663,26 @@ export function PaneDetail(props: PaneDetailProps) {
           ref={scroller}
           onScroll={(event) => {
             const element = event.currentTarget;
-            setAtBottom(element.scrollHeight - element.scrollTop - element.clientHeight <= 8);
+            const now = {
+              scrollTop: element.scrollTop,
+              clientHeight: element.clientHeight,
+              scrollHeight: element.scrollHeight,
+            };
+            const last = {
+              scrollTop: now.scrollTop,
+              clientHeight: lastClientHeight.current,
+              scrollHeight: lastHeight.current,
+            };
+            lastHeight.current = now.scrollHeight;
+            lastClientHeight.current = now.clientHeight;
+            // 高さが変わっただけなら、底を詰めた副作用。読み返しの意思とはみなさない。
+            // 縮んだ結果ブラウザが底へ寄せた場合に備え、追従の判断は今の位置で取り直す。
+            if (isLayoutShift(now, last)) {
+              if (pinned.current) element.scrollTop = element.scrollHeight;
+              if (isNearBottom(now)) setPinned(true);
+              return;
+            }
+            setPinned(isNearBottom(now));
           }}
         >
           {body.kind === "skeleton" ? (
