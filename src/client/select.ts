@@ -1,4 +1,10 @@
-import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server/herdr/state";
+import type {
+  AgentStatus,
+  AppState,
+  PaneState,
+  TabState,
+  WorkspaceState,
+} from "../server/herdr/state";
 
 export function findPane(state: AppState, paneId: string | null): PaneState | null {
   if (paneId === null) return null;
@@ -153,6 +159,12 @@ export function countWorkspacePanes(workspaceId: string, state: AppState): numbe
   const workspace = state.workspaces.find((item) => item.id === workspaceId);
   if (!workspace) return 0;
   return workspace.tabs.reduce((total, tab) => total + tab.panes.length, 0);
+}
+
+// タブが 1 つだけのワークスペースでは、タブは何も束ねていない。タブ行を出さず、
+// ペインを親の直下に並べるために、そのタブを返す。
+export function soleTab(workspace: WorkspaceState): TabState | null {
+  return workspace.tabs.length === 1 ? workspace.tabs[0] : null;
 }
 
 // 画面上部に出す、いま見ている対象の要約。選択が無いときは null。
