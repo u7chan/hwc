@@ -170,6 +170,46 @@ test("reads a user message from a string or from content blocks", async () => {
   expect(snapshot.messages.map((message) => message.text)).toEqual(["[画像]", "look at this"]);
 });
 
+test("keeps the images a user message was sent with, and drops the note from the text", async () => {
+  const note =
+    "<attached_files>\n- /state/attachments/w1:p1/pasted-20261103-120000.png\n</attached_files>";
+  const path = await writeSession(
+    header(),
+    user("u1", null, `look at this\n\n${note}`),
+    // 画像だけを送ると本文は空になる。それでも履歴から消さない。
+    user("u2", "u1", note),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.messages).toEqual([
+    {
+      id: "u1",
+      role: "user",
+      text: "look at this",
+      at: 1_700_000_000_000,
+      attachments: ["pasted-20261103-120000.png"],
+    },
+    {
+      id: "u2",
+      role: "user",
+      text: "",
+      at: 1_700_000_000_000,
+      attachments: ["pasted-20261103-120000.png"],
+    },
+  ]);
+});
+
+test("a user message without a note carries no attachments", async () => {
+  const path = await writeSession(header(), user("u1", null, "hello"));
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.messages).toEqual([
+    { id: "u1", role: "user", text: "hello", at: 1_700_000_000_000 },
+  ]);
+});
+
 test("drops a line that is not JSON without breaking the rest of the session", async () => {
   const path = await writeSession(
     header(),

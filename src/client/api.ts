@@ -6,6 +6,7 @@ import type {
 } from "../server/chat/contract";
 import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
+import { isAttachmentName } from "../shared/attachments";
 
 export type OutputRead = PaneRead;
 
@@ -58,6 +59,15 @@ function toChatCompaction(value: unknown): ChatCompaction | null {
   return { at: compaction.at, tokensBefore: compaction.tokensBefore, summary: compaction.summary };
 }
 
+function toAttachmentNames(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  // 名前は配信 URL になる。書式の外れた値は捨て、リンクも画像も作らない。
+  const names = value.filter(
+    (item): item is string => typeof item === "string" && isAttachmentName(item),
+  );
+  return names.length === 0 ? undefined : names;
+}
+
 function toChatMessage(value: unknown): ChatMessage | null {
   if (typeof value !== "object" || value === null) return null;
   const message = value as Partial<ChatMessage>;
@@ -65,7 +75,14 @@ function toChatMessage(value: unknown): ChatMessage | null {
   if (message.role !== "user" && message.role !== "agent") return null;
   if (typeof message.text !== "string") return null;
   if (typeof message.at !== "number") return null;
-  return { id: message.id, role: message.role, text: message.text, at: message.at };
+  const attachments = toAttachmentNames(message.attachments);
+  return {
+    id: message.id,
+    role: message.role,
+    text: message.text,
+    at: message.at,
+    ...(attachments === undefined ? {} : { attachments }),
+  };
 }
 
 export function toChatSnapshot(value: unknown): ChatSnapshot | null {
@@ -96,6 +113,14 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
 export function outputUrl(paneId: string, lines: number = OUTPUT_LINES): string {
   const query = new URLSearchParams({ source: "recent", lines: String(lines) });
   return `/api/panes/${encodeURIComponent(paneId)}/output?${query.toString()}`;
+}
+
+export function attachmentUploadUrl(paneId: string): string {
+  return `/api/panes/${encodeURIComponent(paneId)}/attachments`;
+}
+
+export function attachmentUrl(paneId: string, name: string): string {
+  return `${attachmentUploadUrl(paneId)}/${encodeURIComponent(name)}`;
 }
 
 export function toAppState(value: unknown): AppState | null {
@@ -158,15 +183,51 @@ export async function readChat(
   return { kind: "snapshot", snapshot };
 }
 
-export async function sendInput(paneId: string, text: string, signal?: AbortSignal): Promise<void> {
+export async function sendInput(
+  paneId: string,
+  text: string,
+  attachments: readonly string[] = [],
+  signal?: AbortSignal,
+): Promise<void> {
   // BFF は application/json 以外を 415 で弾く。cross-origin の simple request に落とさない。
   const response = await fetch(`/api/panes/${encodeURIComponent(paneId)}/input`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text, submit: true }),
+    body: JSON.stringify(
+      attachments.length === 0 ? { text, submit: true } : { text, submit: true, attachments },
+    ),
     signal,
   });
   if (!response.ok) throw new Error(`input: ${response.status}`);
+}
+
+// 保存名はサーバが決める。status は失敗の理由を notice に伝えるためだけに返す。
+export type UploadResult = { ok: true; name: string } | { ok: false; status: number };
+
+export async function uploadAttachment(
+  paneId: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<UploadResult> {
+  let response: Response;
+  try {
+    // 生バイトで送る。Content-Type は BFF の allowlist 判定に使うので file.type をそのまま渡す。
+    response = await fetch(attachmentUploadUrl(paneId), {
+      method: "POST",
+      headers: { "content-type": file.type },
+      body: file,
+      signal,
+    });
+  } catch {
+    // 通信の失敗と打ち切りは呼び出し側が signal で見分ける。
+    return { ok: false, status: 0 };
+  }
+  if (!response.ok) return { ok: false, status: response.status };
+
+  const body = (await response.json().catch(() => null)) as { name?: unknown } | null;
+  const name = body?.name;
+  if (typeof name !== "string" || !isAttachmentName(name)) return { ok: false, status: 0 };
+  return { ok: true, name };
 }
 
 // body は読まれないので送らない。ヘッダは BFF が application/json 以外を 415 で弾くため付ける。

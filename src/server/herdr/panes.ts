@@ -1,3 +1,4 @@
+import { isAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
 import { type PaneRead, parsePaneRead } from "./contract";
 import { HerdrError, request } from "./socket";
 
@@ -8,13 +9,18 @@ export type ReadSource = (typeof READ_SOURCES)[number];
 const MAX_LINES = 4_294_967_295;
 
 // ペインへの入力を丸ごとソケットへ流す前に止める。手元の長文プロンプトには十分な大きさ。
-const MAX_TEXT_BYTES = 16_384;
+export const MAX_TEXT_BYTES = 16_384;
+
+export const TEXT_TOO_LONG = `text must be at most ${MAX_TEXT_BYTES} bytes`;
+export const TEXT_WITH_ATTACHMENTS_TOO_LONG = `text and the attached files note must be at most ${MAX_TEXT_BYTES} bytes`;
 
 export type PaneOutput = PaneRead;
 
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
 
 export type SendOptions = { paneId: string; text: string; submit: boolean };
+
+export type InputBody = { text: string; submit: boolean; attachments: string[] };
 
 export type FocusOptions = { paneId: string };
 
@@ -44,23 +50,49 @@ export function parseOutputQuery(params: URLSearchParams): Parsed<Omit<ReadOptio
   return { ok: true, value: { source, lines } };
 }
 
-export function parseInputBody(body: unknown): Parsed<Omit<SendOptions, "paneId">> {
+export function parseInputBody(body: unknown): Parsed<InputBody> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { ok: false, status: 400, error: "body must be an object" };
   }
 
   const record = body as Record<string, unknown>;
-  if (typeof record.text !== "string" || record.text.trim() === "") {
-    return { ok: false, status: 400, error: "text must be a non-empty string" };
+  if (typeof record.text !== "string") {
+    return { ok: false, status: 400, error: "text must be a string" };
   }
-  // 文字数ではなくバイト数で測る。絵文字などを含む場合に上限の意味がぶれないように。
-  if (new TextEncoder().encode(record.text).length > MAX_TEXT_BYTES) {
-    return { ok: false, status: 413, error: `text must be at most ${MAX_TEXT_BYTES} bytes` };
+
+  const attachments = parseAttachments(record.attachments);
+  if (attachments === null) {
+    return { ok: false, status: 400, error: "attachments must be an array of attachment names" };
+  }
+  // 枚数の上限はメッセージ単位。1 枚の大きさはアップロード側で見る。
+  if (attachments.length > MAX_ATTACHMENTS) {
+    return { ok: false, status: 400, error: `attachments must be at most ${MAX_ATTACHMENTS}` };
+  }
+  // 画像だけを送れるようにする。本文も添付も無いメッセージは送らない。
+  if (record.text.trim() === "" && attachments.length === 0) {
+    return { ok: false, status: 400, error: "text must be a non-empty string" };
   }
   if (record.submit !== undefined && typeof record.submit !== "boolean") {
     return { ok: false, status: 400, error: "submit must be a boolean" };
   }
-  return { ok: true, value: { text: record.text, submit: record.submit === true } };
+
+  return { ok: true, value: { text: record.text, submit: record.submit === true, attachments } };
+}
+
+function parseAttachments(value: unknown): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const names: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string" || !isAttachmentName(item)) return null;
+    names.push(item);
+  }
+  return names;
+}
+
+// 上限は注記を組み立てた後の本文で測る。文字数ではなくバイト数。
+export function exceedsTextLimit(text: string): boolean {
+  return new TextEncoder().encode(text).length > MAX_TEXT_BYTES;
 }
 
 export function isPaneNotFound(error: unknown): boolean {

@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   OUTPUT_LINES,
+  attachmentUploadUrl,
+  attachmentUrl,
   chatOutcome,
   chatUrl,
   focusRequest,
@@ -156,6 +158,45 @@ test("a chat body that breaks the contract is dropped", () => {
   expect(
     toChatSnapshot({ ...chatBody, messages: [{ ...chatBody.messages[0], at: "1" }] }),
   ).toBeNull();
+});
+
+test("the attachment urls keep the pane id and the saved name in single segments", () => {
+  const upload = new URL(attachmentUploadUrl("w1:p2"), "http://localhost");
+  expect(upload.pathname).toBe("/api/panes/w1%3Ap2/attachments");
+
+  expect(attachmentUrl("w1:p2", "pasted-20261103-120000.png")).toBe(
+    "/api/panes/w1%3Ap2/attachments/pasted-20261103-120000.png",
+  );
+  // 名前に区切りが入っても 1 セグメントのまま送る。
+  expect(new URL(attachmentUrl("w1:p2", "../x.png"), "http://localhost").pathname).toBe(
+    "/api/panes/w1%3Ap2/attachments/..%2Fx.png",
+  );
+});
+
+test("a message keeps its attachments only as names in the saved format", () => {
+  const message = {
+    id: "m1",
+    role: "user" as const,
+    text: "",
+    at: 1_000,
+    attachments: ["pasted-20261103-120000.png", "pasted-20261103-120000-1.jpg"],
+  };
+  expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
+
+  // 書式の外れた名前は配信 URL にしない。名前が全部落ちたら添付なしとして扱う。
+  expect(
+    toChatSnapshot({ ...chatBody, messages: [{ ...message, attachments: ["../x.png"] }] })
+      ?.messages,
+  ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
+  expect(
+    toChatSnapshot({
+      ...chatBody,
+      messages: [{ ...message, attachments: "pasted-20261103-120000.png" }],
+    })?.messages,
+  ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
+  expect(
+    toChatSnapshot({ ...chatBody, messages: [{ ...message, attachments: [] }] })?.messages,
+  ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
 });
 
 test("the focus request posts to the pane with a JSON header and no body", () => {

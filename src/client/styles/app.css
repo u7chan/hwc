@@ -1915,6 +1915,32 @@ p.hwc-compaction,
   transition: max-height 220ms ease;
 }
 
+/* 添付の画像。押すと新しいタブで実寸を開く。 */
+.hwc-msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.hwc-msg-attachment {
+  display: block;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.hwc-msg-attachment:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.hwc-msg-attachment-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 180px;
+}
+
 .hwc-msg-more {
   position: absolute;
   right: 0;
@@ -2293,6 +2319,27 @@ p.hwc-compaction,
 
 .hwc-command-clear:hover {
   background: var(--color-raised);
+}
+
+/* 添付のチップ。サムネイルの高さで行が伸びないよう、記号の代わりに小さく切って置く。 */
+.hwc-command.hwc-attachment {
+  padding: 0 0 0 var(--space-1);
+  gap: var(--space-1);
+}
+
+.hwc-attachment-thumb {
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.hwc-attachment-sending {
+  padding: 0 var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .hwc-input-toggle {

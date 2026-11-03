@@ -368,9 +368,13 @@ export function App() {
 
   // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。
   // 失敗の表示は入力欄を持つ PaneDetail が持つ。ペインを離れれば消える。
-  const sendToPane = async (paneId: string, text: string): Promise<boolean> => {
+  const sendToPane = async (
+    paneId: string,
+    text: string,
+    attachments: string[],
+  ): Promise<boolean> => {
     try {
-      await sendInput(paneId, text);
+      await sendInput(paneId, text, attachments);
       return true;
     } catch {
       return false;
@@ -446,7 +450,7 @@ export function App() {
       context={where}
       compact={compact}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
-      onSubmit={(text) => sendToPane(item.id, text)}
+      onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
     />
   );
 

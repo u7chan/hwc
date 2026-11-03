@@ -2,7 +2,15 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatCompaction, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
-import { OUTPUT_LINES } from "./api";
+import { MAX_ATTACHMENTS } from "../shared/attachments";
+import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
+import {
+  ATTACHMENT_LIMIT_NOTICE,
+  pasteActionFrom,
+  SEND_FAILED_NOTICE,
+  unsupportedImageNotice,
+  uploadFailureNotice,
+} from "./attachments";
 import {
   agentInfo,
   agentInfoLabel,
@@ -83,7 +91,24 @@ const USER_MESSAGE_CLAMP_LINES = 5;
 const USER_MESSAGE_CLAMP_FALLBACK = 128;
 const PENDING_TIMEOUT_MS = 60_000;
 
+// 添付の配信 URL は新しいタブで開く。ライトボックスを持たないので、拡大はブラウザに任せる。
+function MessageAttachments(props: { paneId: string; names: string[] }) {
+  return (
+    <div class="hwc-msg-attachments">
+      {props.names.map((name) => {
+        const url = attachmentUrl(props.paneId, name);
+        return (
+          <a class="hwc-msg-attachment" key={name} href={url} target="_blank" rel="noreferrer">
+            <img class="hwc-msg-attachment-image" src={url} alt="添付画像" loading="lazy" />
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 function UserMessage(props: {
+  paneId: string;
   message: ChatMessage;
   copyButton: ComponentChildren;
   pending?: boolean;
@@ -114,19 +139,21 @@ function UserMessage(props: {
   return (
     <>
       <div class="hwc-msg-bubble">
-        <div
-          class="hwc-msg-body"
-          id={textId}
-          ref={content}
-          style={{ maxHeight: `${expanded ? contentHeight : clampHeight}px` }}
-        >
-          {props.message.text}
-          {overflowing && !expanded ? (
-            <span class="hwc-msg-more" aria-hidden="true">
-              …
-            </span>
-          ) : null}
-        </div>
+        {props.message.text === "" ? null : (
+          <div
+            class="hwc-msg-body"
+            id={textId}
+            ref={content}
+            style={{ maxHeight: `${expanded ? contentHeight : clampHeight}px` }}
+          >
+            {props.message.text}
+            {overflowing && !expanded ? (
+              <span class="hwc-msg-more" aria-hidden="true">
+                …
+              </span>
+            ) : null}
+          </div>
+        )}
         {overflowing ? (
           <button
             type="button"
@@ -141,6 +168,9 @@ function UserMessage(props: {
             </span>
           </button>
         ) : null}
+        {props.message.attachments === undefined ? null : (
+          <MessageAttachments paneId={props.paneId} names={props.message.attachments} />
+        )}
       </div>
       <div class="hwc-msg-meta">
         {props.copyButton}
@@ -186,6 +216,7 @@ function Compaction(props: { compaction: ChatCompaction; expandable: boolean }) 
 // 会話として読むための並び。ユーザーは右、エージェントは左。
 // どのエージェントかは入力欄の側に出しているので、ここでは繰り返さない。
 function ChatLog(props: {
+  paneId: string;
   snapshot: ChatSnapshot;
   replying: boolean;
   waitingMs: number | null;
@@ -207,6 +238,9 @@ function ChatLog(props: {
       </button>
     );
   };
+  // 画像だけのメッセージは本文が無い。空文字をコピーさせない。
+  const userCopyButton = (message: ChatMessage) =>
+    message.text === "" ? null : copyButton(message);
 
   // ツール実行だけのターンは会話に残らない。返答待ちの表示だけが動いていることを示す。
   const rows = [
@@ -228,7 +262,12 @@ function ChatLog(props: {
               </div>
             </>
           ) : (
-            <UserMessage message={message} copyButton={copyButton(message)} pending={pending} />
+            <UserMessage
+              paneId={props.paneId}
+              message={message}
+              copyButton={userCopyButton(message)}
+              pending={pending}
+            />
           )}
         </li>
       ))}
@@ -284,7 +323,14 @@ type PaneDetailProps = {
   context: { workspaceLabel: string; tabLabel: string };
   compact: boolean;
   waitingMs: number | null;
-  onSubmit: (text: string) => Promise<boolean>;
+  onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
+};
+
+// 名前はアップロードが終わるまで無い。controller は取り外しと離脱で送信を止めるために持つ。
+type AttachedImage = {
+  key: string;
+  name: string | null;
+  controller: AbortController;
 };
 
 export function PaneDetail(props: PaneDetailProps) {
@@ -293,11 +339,13 @@ export function PaneDetail(props: PaneDetailProps) {
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expandedOpen, setExpandedOpen] = useState(false);
   const [sending, setSending] = useState(false);
-  const [sendFailed, setSendFailed] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [pending, setPending] = useState<PendingMessage[]>([]);
   // チップは id だけを持つ。表示名と送信文字列は定数から引く。
   const [chip, setChip] = useState<CommandId | null>(null);
+  const [attachments, setAttachments] = useState<AttachedImage[]>([]);
+  const nextAttachmentKey = useRef(0);
 
   // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
   const expanded = expandedOpen && !compact;
@@ -332,8 +380,16 @@ export function PaneDetail(props: PaneDetailProps) {
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
-  const candidates = commandCandidates(pane, draft, snapshot?.context ?? null);
-  const canSend = chip === null ? draft.trim() !== "" : !replying;
+  // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
+  // 書きかけの指示が別々のメッセージに分かれてしまう。
+  const candidates =
+    attachments.length === 0 ? commandCandidates(pane, draft, snapshot?.context ?? null) : [];
+  const uploading = attachments.some((item) => item.name === null);
+  const canSend = uploading
+    ? false
+    : chip === null
+      ? draft.trim() !== "" || attachments.length > 0
+      : !replying;
   const shell = isShellPane(pane);
   const placeholder =
     chip === "compact" ? "コンパクトの指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
@@ -372,7 +428,7 @@ export function PaneDetail(props: PaneDetailProps) {
   useEffect(() => {
     const element = scroller.current;
     if (element && atBottom) element.scrollTop = element.scrollHeight;
-  }, [content, replying, atBottom, pendingMessages.length, sendFailed]);
+  }, [content, replying, atBottom, pendingMessages.length, notice]);
 
   useEffect(() => {
     if (pending.length === 0) return;
@@ -425,9 +481,59 @@ export function PaneDetail(props: PaneDetailProps) {
     input.current?.focus();
   };
 
+  // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
+  const removeAttachment = (key: string) => {
+    attachments.find((item) => item.key === key)?.controller.abort();
+    setAttachments((items) => items.filter((item) => item.key !== key));
+  };
+
+  const uploadImage = async (file: File) => {
+    const controller = new AbortController();
+    const key = `attachment-${nextAttachmentKey.current}`;
+    nextAttachmentKey.current += 1;
+    setAttachments((items) => [...items, { key, name: null, controller }]);
+
+    const result = await uploadAttachment(pane.id, file, controller.signal);
+    if (result.ok) {
+      setAttachments((items) =>
+        items.map((item) => (item.key === key ? { ...item, name: result.name } : item)),
+      );
+      return;
+    }
+    // 外された添付は一覧から既に消えている。その失敗は知らせない。
+    if (controller.signal.aborted) return;
+    setAttachments((items) => items.filter((item) => item.key !== key));
+    setNotice(uploadFailureNotice(result.status));
+  };
+
+  // 貼った画像を見たらコマンドではなく本文を書く。書きかけの draft は捨てない。
+  const addImages = (files: File[]) => {
+    const room = MAX_ATTACHMENTS - attachments.length;
+    if (room <= 0) {
+      setNotice(ATTACHMENT_LIMIT_NOTICE);
+      return;
+    }
+    if (files.length > room) setNotice(ATTACHMENT_LIMIT_NOTICE);
+    setChip(null);
+    for (const file of files.slice(0, room)) void uploadImage(file);
+  };
+
+  // ペインを離れたら、終わっていないアップロードを止める。送り先が消えている。
+  const attached = useRef(attachments);
+  attached.current = attachments;
+  useEffect(
+    () => () => {
+      for (const item of attached.current) item.controller.abort();
+    },
+    [],
+  );
+
   const sendText = async () => {
     if (!canSend || sending) return;
     const text = draft;
+    const names = attachments
+      .map((item) => item.name)
+      .filter((name): name is string => name !== null);
     const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
@@ -435,16 +541,25 @@ export function PaneDetail(props: PaneDetailProps) {
     // 送信したらキーボードを閉じて出力を見せる。
     input.current?.blur();
     // 前の失敗は消す。送り直したのに前の notice が残っていると、いつの結果か読めない。
-    setSendFailed(false);
-    // 送れたときだけ空にする。失敗したら書き直せるよう残す。
-    if (await onSubmit(text)) {
+    setNotice(null);
+    // 送れたときだけ空にする。失敗したら本文も添付も残す。
+    if (await onSubmit(text, names)) {
       setDraft("");
+      setAttachments([]);
       setPending((items) => [
         ...items,
-        { id: `pending-${at}-${items.length}`, role: "user", text, at, from, waiting },
+        {
+          id: `pending-${at}-${items.length}`,
+          role: "user",
+          text,
+          at,
+          from,
+          waiting,
+          ...(names.length === 0 ? {} : { attachments: names }),
+        },
       ]);
     } else {
-      setSendFailed(true);
+      setNotice(SEND_FAILED_NOTICE);
     }
     setSending(false);
   };
@@ -456,23 +571,26 @@ export function PaneDetail(props: PaneDetailProps) {
     const text = commandSendText(id, draft);
     setSending(true);
     input.current?.blur();
-    setSendFailed(false);
-    if (await onSubmit(text)) {
+    setNotice(null);
+    if (await onSubmit(text, [])) {
       setChip(null);
       setDraft("");
-    } else setSendFailed(true);
+    } else setNotice(SEND_FAILED_NOTICE);
     setSending(false);
   };
 
   const submit = () => {
-    if (chip !== null) {
-      void sendCommand(chip);
-      return;
-    }
-    const first = candidates[0];
-    if (first !== undefined) {
-      pick(first);
-      return;
+    // 添付を持ったまま /compact と打っても、候補にもチップにも流さず本文として送る。
+    if (attachments.length === 0) {
+      if (chip !== null) {
+        void sendCommand(chip);
+        return;
+      }
+      const first = candidates[0];
+      if (first !== undefined) {
+        pick(first);
+        return;
+      }
     }
     void sendText();
   };
@@ -520,6 +638,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 <Compaction compaction={body.snapshot.compaction} expandable={!compact} />
               )}
               <ChatLog
+                paneId={pane.id}
                 snapshot={body.snapshot}
                 replying={replying}
                 waitingMs={waitingMs}
@@ -563,14 +682,14 @@ export function PaneDetail(props: PaneDetailProps) {
         </button>
       </div>
 
-      {sendFailed ? (
+      {notice === null ? null : (
         <p class="hwc-send-notice" role="status">
           <span class="hwc-send-notice-mark">
             <StatusMark tone="attention" size={12} />
           </span>
-          送信できませんでした
+          {notice}
         </p>
-      ) : null}
+      )}
 
       <form
         class="hwc-input"
@@ -595,7 +714,31 @@ export function PaneDetail(props: PaneDetailProps) {
               {expanded ? <CollapseIcon /> : <ExpandIcon />}
             </button>
           )}
-          {chip !== null ? (
+          {attachments.length > 0 ? (
+            <div class="hwc-commands" role="group" aria-label="添付画像">
+              {attachments.map((item) => (
+                <span class="hwc-command hwc-attachment" data-chip="true" key={item.key}>
+                  {item.name === null ? (
+                    <span class="hwc-attachment-sending">送信中</span>
+                  ) : (
+                    <img
+                      class="hwc-attachment-thumb"
+                      src={attachmentUrl(pane.id, item.name)}
+                      alt=""
+                    />
+                  )}
+                  <button
+                    type="button"
+                    class="hwc-command-clear"
+                    aria-label="添付を外す"
+                    onClick={() => removeAttachment(item.key)}
+                  >
+                    <CloseIcon size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : chip !== null ? (
             <div class="hwc-commands">
               <span class="hwc-command" data-chip="true">
                 <CommandBadge id={chip} />
@@ -629,6 +772,21 @@ export function PaneDetail(props: PaneDetailProps) {
             onInput={(event) => {
               setDraft(event.currentTarget.value);
               setChip(chipOnInput(chip));
+            }}
+            onPaste={(event) => {
+              // 添付を受け付けるのは会話を持つペインだけ。シェルペインでは既定に任せる。
+              if (!pane.chat) return;
+              const action = pasteActionFrom(event.clipboardData?.items);
+              // テキストだけの貼り付けは入力欄の既定動作のままにする。
+              if (action.kind === "default") return;
+              // 未対応の形式は保存しない。何が起きたかをその場で伝える。
+              if (action.kind === "unsupported") {
+                setNotice(unsupportedImageNotice());
+                return;
+              }
+              if (action.unsupported) setNotice(unsupportedImageNotice());
+              event.preventDefault();
+              addImages(action.files);
             }}
             onKeyDown={(event) => {
               const composing = event.isComposing || event.keyCode === 229;
