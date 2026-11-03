@@ -2430,15 +2430,12 @@ p.hwc-compaction,
   color: var(--color-text);
   /* 16px を下回ると iOS がフォーカス時に拡大する。 */
   font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-ui);
-  resize: vertical;
+  /* 高さは fit() が入力量に合わせる。手で伸ばすと次の入力で戻るので、取っ手を出さない。 */
+  resize: none;
 }
 
 .hwc-input-field:focus-visible {
   outline: none;
-}
-
-.hwc-input-field {
-  resize: none;
 }
 
 /* シェルの入力欄は端末。$ を 1 行目の左に置き、カーソルをブロックにする。 */
