@@ -1,11 +1,12 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
+import type { ChatCompaction, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { OUTPUT_LINES } from "./api";
 import {
   agentInfo,
   agentInfoLabel,
+  compactionLabel,
   contextMeter,
   type ContextMeterView,
   isPendingConfirmed,
@@ -146,6 +147,39 @@ function UserMessage(props: {
         <span class="hwc-msg-time">{props.pending ? "送信中" : formatClock(props.message.at)}</span>
       </div>
     </>
+  );
+}
+
+// 圧縮の境目。吹き出しではなく、履歴が切り替わる区切りとして置く。
+function CompactionRule() {
+  return <span class="hwc-compaction-rule" aria-hidden="true" />;
+}
+
+// 要約は開かないと読めない。畳んだ 1 行だけでも、ここより前が圧縮されたことが分かる。
+function Compaction(props: { compaction: ChatCompaction; expandable: boolean }) {
+  const label = compactionLabel(props.compaction);
+  if (!props.expandable || props.compaction.summary === "") {
+    return (
+      <p class="hwc-compaction">
+        <CompactionRule />
+        <span class="hwc-compaction-label">{label}</span>
+        <CompactionRule />
+      </p>
+    );
+  }
+
+  return (
+    <details class="hwc-compaction">
+      <summary class="hwc-compaction-head">
+        <CompactionRule />
+        <span class="hwc-compaction-label">{label}</span>
+        <span class="hwc-compaction-icon">
+          <ArrowDownIcon size={12} />
+        </span>
+        <CompactionRule />
+      </summary>
+      <div class="hwc-compaction-body">{props.compaction.summary}</div>
+    </details>
   );
 }
 
@@ -482,6 +516,9 @@ export function PaneDetail(props: PaneDetailProps) {
               {body.snapshot.truncated ? (
                 <p class="hwc-output-notice">古い会話は省略されています</p>
               ) : null}
+              {body.snapshot.compaction === null ? null : (
+                <Compaction compaction={body.snapshot.compaction} expandable={!compact} />
+              )}
               <ChatLog
                 snapshot={body.snapshot}
                 replying={replying}

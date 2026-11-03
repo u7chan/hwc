@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { type FileHandle, open, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ChatContext, ChatMessage, ChatSnapshot } from "./contract";
+import type { ChatCompaction, ChatContext, ChatMessage, ChatSnapshot } from "./contract";
 
 // 直近の会話だけを返す。古い側は端末出力で読める。
 const MAX_MESSAGES = 500;
@@ -35,6 +35,13 @@ type WindowResolver = (
   model: string | null,
 ) => Promise<number | null>;
 
+type SessionCompaction = {
+  summary: string;
+  firstKeptEntryId: string;
+  tokensBefore: number | null;
+  at: number;
+};
+
 type SessionEntry = {
   id: string;
   parentId: string | null;
@@ -44,6 +51,10 @@ type SessionEntry = {
   effort: string | null;
   usageTokens: number | null;
   invalidatesUsage: boolean;
+  // 材料の有無とは別に、compaction エントリかどうかを持つ。壊れた最新を古いもので
+  // 埋めないため、境界の位置と材料を別々に知る必要がある。
+  compactionEntry: boolean;
+  compaction: SessionCompaction | null;
 };
 
 export type ChatReader = {
@@ -250,6 +261,8 @@ function applyLine(reader: ChatReader, line: string): void {
     usageTokens: null,
     // compaction と context_edit は、それ以前の usage を現在のコンテキスト量にしない。
     invalidatesUsage: record.type === "compaction" || record.type === "context_edit",
+    compactionEntry: record.type === "compaction",
+    compaction: null,
   };
 
   if (record.type === "message") {
@@ -268,6 +281,8 @@ function applyLine(reader: ChatReader, line: string): void {
     entry.provider = nonEmptyText(record.provider);
   } else if (record.type === "thinking_level_change") {
     entry.effort = nonEmptyText(record.thinkingLevel);
+  } else if (record.type === "compaction") {
+    entry.compaction = projectCompaction(record);
   }
 
   // 捨てる種類のエントリも木には残す。parentId の鎖が切れると active branch を辿れない。
@@ -282,6 +297,19 @@ type Projected = {
   effort: string | null;
   usageTokens: number | null;
 };
+
+// 要約の無い compaction は材料にしない。要約だけ出して窓がずれる状態を作らないため。
+function projectCompaction(record: Record<string, unknown>): SessionCompaction | null {
+  const summary = nonEmptyText(record.summary);
+  const firstKeptEntryId = nonEmptyText(record.firstKeptEntryId);
+  if (summary === null || firstKeptEntryId === null) return null;
+  return {
+    summary,
+    firstKeptEntryId,
+    tokensBefore: finiteNumber(record.tokensBefore),
+    at: messageAt(record.timestamp, record.timestamp),
+  };
+}
 
 function project(id: string, message: Record<string, unknown>, entryTimestamp: unknown): Projected {
   const at = messageAt(message.timestamp, entryTimestamp);
@@ -414,8 +442,14 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   let tokens: number | null = null;
   const messages: ChatMessage[] = [];
 
-  for (const entry of activeBranch(reader)) {
-    if (entry.message) messages.push(entry.message);
+  const branch = activeBranch(reader);
+  const compacted = compactionWindow(branch);
+
+  for (let index = 0; index < branch.length; index += 1) {
+    const entry = branch[index];
+    if (!entry) continue;
+    // 圧縮より前の会話はモデルの文脈にもう無い。返さない。
+    if (entry.message && index >= (compacted?.start ?? 0)) messages.push(entry.message);
     // path 順で新しい方を採る。model_change が assistant より後なら切り替え後の値になる。
     if (entry.model !== null) {
       model = entry.model;
@@ -428,7 +462,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
 
   // window は表示中のモデルで引く。usage を採った assistant のモデルで引くと、切り替え直後に
   // 新しい model 名と古いモデルの window が混ざる。
-  const window = await windowFor(reader.path, provider, model);
+  const windowTokens = await windowFor(reader.path, provider, model);
   const limited = limitMessages(messages);
   return {
     etag: `${reader.etagPrefix}-${reader.generation}`,
@@ -436,7 +470,32 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
     model,
     effort,
     truncated: limited.truncated,
-    context: foldContext(tokens, window),
+    context: foldContext(tokens, windowTokens),
+    compaction: compacted?.compaction ?? null,
+  };
+}
+
+// 最新の compaction だけを見る。その材料が揃い、firstKeptEntryId が branch にあれば
+// その位置を返す。古い compaction へは遡らない。最新が使えないなら窓を張らず全体を返す。
+// 要約だけ出して古い会話を並べるより、表示と実体が一致する側を選ぶ。
+function compactionWindow(
+  branch: readonly SessionEntry[],
+): { start: number; compaction: ChatCompaction } | null {
+  let newest: SessionEntry | null = null;
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (!entry?.compactionEntry) continue;
+    newest = entry;
+    break;
+  }
+
+  const found = newest?.compaction ?? null;
+  if (found === null) return null;
+  const start = branch.findIndex((entry) => entry.id === found.firstKeptEntryId);
+  if (start < 0) return null;
+  return {
+    start,
+    compaction: { at: found.at, tokensBefore: found.tokensBefore, summary: found.summary },
   };
 }
 

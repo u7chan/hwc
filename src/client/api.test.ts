@@ -86,6 +86,7 @@ const chatBody = {
   effort: null,
   truncated: false,
   context: null,
+  compaction: null,
 };
 
 test("a chat body is accepted as the contract describes it", () => {
@@ -118,6 +119,26 @@ test("a context that breaks the contract costs the numbers, not the conversation
     122_600,
   ]) {
     expect(toChatSnapshot({ ...chatBody, context })).toEqual({ ...chatBody, context: null });
+  }
+});
+
+test("a compaction that breaks the contract costs the summary, not the conversation", () => {
+  const compaction = { at: 1_700_000_000_000, tokensBefore: 212_959, summary: "so far" };
+
+  expect(toChatSnapshot({ ...chatBody, compaction })).toEqual({ ...chatBody, compaction });
+  // 形が違う compaction は要約を出さないだけにする。会話は捨てない。
+  for (const broken of [
+    undefined,
+    {},
+    { at: 1, summary: "so far" },
+    { at: 1, tokensBefore: "212959", summary: "so far" },
+    { at: 1, tokensBefore: null },
+    "so far",
+  ]) {
+    expect(toChatSnapshot({ ...chatBody, compaction: broken })).toEqual({
+      ...chatBody,
+      compaction: null,
+    });
   }
 });
 

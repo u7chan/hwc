@@ -119,6 +119,7 @@ const emptyChat: ChatSnapshot = {
   effort: null,
   truncated: false,
   context: null,
+  compaction: null,
 };
 
 function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
