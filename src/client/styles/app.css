@@ -2448,6 +2448,12 @@ p.hwc-compaction,
   min-width: 0;
 }
 
+/* 行の中では入力欄が残り幅いっぱいに広がる（.hwc-input-field の flex: none を打ち消す）。 */
+.hwc-input-line > .hwc-input-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .hwc-input-prompt {
   padding: var(--space-2) 0 var(--space-2) var(--space-2);
   color: var(--color-secondary);
