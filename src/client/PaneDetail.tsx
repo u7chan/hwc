@@ -14,11 +14,13 @@ import {
   type PendingMessage,
   usePaneChat,
 } from "./chat";
+import { type CommandId, commandCandidates, commandLabel, commandText } from "./commands";
 import { useCopy } from "./copy";
 import { readDraft, storage, writeDraft } from "./drafts";
 import {
   AgentGlyphIcon,
   ArrowDownIcon,
+  CloseIcon,
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
@@ -207,6 +209,16 @@ function ChatLog(props: {
   );
 }
 
+// 送る文字列は短いので、記号だけを出さず、何が起きるかを並べる。
+function CommandBadge(props: { id: CommandId }) {
+  return (
+    <>
+      <span class="hwc-command-text">{commandText(props.id)}</span>
+      <span class="hwc-command-label">{commandLabel(props.id)}</span>
+    </>
+  );
+}
+
 // 数値は可視テキストと sr-only の全文で伝え、バーは装飾に留める。
 function ContextMeter(props: { view: ContextMeterView }) {
   const { view } = props;
@@ -243,6 +255,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const [sendFailed, setSendFailed] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [pending, setPending] = useState<PendingMessage[]>([]);
+  // チップは id だけを持つ。表示名と送信文字列は定数から引く。
+  const [chip, setChip] = useState<CommandId | null>(null);
 
   // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
   const expanded = expandedOpen && !compact;
@@ -277,7 +291,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
-  const canSend = draft.trim() !== "";
+  const candidates = commandCandidates(pane, draft);
+  const canSend = chip === null ? draft.trim() !== "" : !replying;
   const shell = isShellPane(pane);
   const subLabel = paneSubLabel(pane);
 
@@ -351,7 +366,20 @@ export function PaneDetail(props: PaneDetailProps) {
     element?.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   };
 
-  const send = async () => {
+  // 候補を選ぶとチップになり、入力欄の /... は消える。送信はもう一度 Enter。
+  const pick = (id: CommandId) => {
+    setChip(id);
+    setDraft("");
+    // タップでキーボードが閉じないよう、入力欄へ焦点を戻す。
+    input.current?.focus();
+  };
+
+  const clearChip = () => {
+    setChip(null);
+    input.current?.focus();
+  };
+
+  const sendText = async () => {
     if (!canSend || sending) return;
     const text = draft;
     const at = Date.now();
@@ -373,6 +401,30 @@ export function PaneDetail(props: PaneDetailProps) {
       setSendFailed(true);
     }
     setSending(false);
+  };
+
+  // /new は user 発話を残さないので、送信中バブルを積むと最大 60 秒残る。
+  const sendCommand = async (id: CommandId) => {
+    if (sending || replying) return;
+    setSending(true);
+    input.current?.blur();
+    setSendFailed(false);
+    if (await onSubmit(commandText(id))) setChip(null);
+    else setSendFailed(true);
+    setSending(false);
+  };
+
+  const submit = () => {
+    if (chip !== null) {
+      void sendCommand(chip);
+      return;
+    }
+    const first = candidates[0];
+    if (first !== undefined) {
+      pick(first);
+      return;
+    }
+    void sendText();
   };
 
   return (
@@ -472,7 +524,7 @@ export function PaneDetail(props: PaneDetailProps) {
         data-expanded={expanded}
         onSubmit={(event) => {
           event.preventDefault();
-          void send();
+          submit();
         }}
       >
         <label class="hwc-visually-hidden" for={`hwc-input-${pane.id}`}>
@@ -490,6 +542,29 @@ export function PaneDetail(props: PaneDetailProps) {
               {expanded ? <CollapseIcon /> : <ExpandIcon />}
             </button>
           )}
+          {chip !== null ? (
+            <div class="hwc-commands">
+              <span class="hwc-command" data-chip="true">
+                <CommandBadge id={chip} />
+                <button
+                  type="button"
+                  class="hwc-command-clear"
+                  aria-label={`${commandText(chip)} を解除`}
+                  onClick={clearChip}
+                >
+                  <CloseIcon size={14} />
+                </button>
+              </span>
+            </div>
+          ) : candidates.length === 0 ? null : (
+            <div class="hwc-commands" role="group" aria-label="コマンド候補">
+              {candidates.map((id) => (
+                <button type="button" class="hwc-command" key={id} onClick={() => pick(id)}>
+                  <CommandBadge id={id} />
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             id={`hwc-input-${pane.id}`}
             ref={input}
@@ -498,12 +573,16 @@ export function PaneDetail(props: PaneDetailProps) {
             value={draft}
             // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
             {...(compact ? {} : { placeholder: shell ? "コマンドを入力" : "メッセージを入力" })}
-            onInput={(event) => setDraft(event.currentTarget.value)}
+            onInput={(event) => {
+              setDraft(event.currentTarget.value);
+              // 文字を打ち始めたらチップを解除し、テキスト送信へ戻す。
+              setChip(null);
+            }}
             onKeyDown={(event) => {
               const composing = event.isComposing || event.keyCode === 229;
               if (event.key === "Enter" && !event.shiftKey && !composing) {
                 event.preventDefault();
-                void send();
+                submit();
               }
             }}
           />

@@ -2071,6 +2071,77 @@ button {
   gap: var(--space-1);
 }
 
+/* コマンドの候補とチップ。入力欄の中で行を占める。浮かせるとキーボードに隠れる。 */
+.hwc-commands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  /* 右は開閉ボタンの分だけ空ける。 */
+  padding: 0 calc(var(--tap) + var(--space-2)) 0 var(--space-2);
+}
+
+.hwc-command {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.hwc-command:hover {
+  background: var(--color-raised);
+}
+
+.hwc-command:active {
+  opacity: 0.72;
+}
+
+/* 選んだチップは送信待ちで、押しても何も起きない。面と枠で候補と見分ける。 */
+.hwc-command[data-chip="true"] {
+  padding: 0 0 0 var(--space-3);
+  border-color: var(--color-accent);
+  background: var(--color-selected);
+  cursor: default;
+}
+
+.hwc-command[data-chip="true"]:hover,
+.hwc-command[data-chip="true"]:active {
+  background: var(--color-selected);
+}
+
+.hwc-command-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+}
+
+.hwc-command-label {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hwc-command-clear {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-command-clear:hover {
+  background: var(--color-raised);
+}
+
 .hwc-input-toggle {
   position: absolute;
   top: 0;
@@ -2285,8 +2356,16 @@ button {
 /* 入力欄と情報・送信を同じ行に置く。開閉ボタンが無いので右の余白も詰める。 */
 .hwc-split-cell[data-compact="true"] .hwc-input-frame {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-2);
+}
+
+/* 簡略時は候補を入力欄の下へ回す。隠すと、打った /n がそのまま本文として送られる。 */
+.hwc-split-cell[data-compact="true"] .hwc-commands {
+  order: 1;
+  flex-basis: 100%;
+  padding: 0;
 }
 
 .hwc-split-cell[data-compact="true"] .hwc-input-field {
