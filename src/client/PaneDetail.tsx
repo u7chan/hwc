@@ -24,6 +24,7 @@ import {
   ExpandIcon,
   PaneIcon,
   SendIcon,
+  StatusMark,
   TerminalIcon,
 } from "./icons";
 import { Markdown } from "./Markdown";
@@ -228,19 +229,23 @@ function ContextMeter(props: { view: ContextMeterView }) {
 type PaneDetailProps = {
   pane: PaneState;
   context: { workspaceLabel: string; tabLabel: string };
-  feedback: string | null;
+  compact: boolean;
   waitingMs: number | null;
   onSubmit: (text: string) => Promise<boolean>;
 };
 
 export function PaneDetail(props: PaneDetailProps) {
-  const { pane, context, feedback, waitingMs, onSubmit } = props;
+  const { pane, context, compact, waitingMs, onSubmit } = props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
-  const [expanded, setExpanded] = useState(false);
+  const [expandedOpen, setExpandedOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendFailed, setSendFailed] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [pending, setPending] = useState<PendingMessage[]>([]);
+
+  // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
+  const expanded = expandedOpen && !compact;
 
   // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
   const blocked = pane.agentStatus === "blocked";
@@ -296,16 +301,18 @@ export function PaneDetail(props: PaneDetailProps) {
     return () => clearTimeout(timer);
   }, [draft, pane.id]);
 
-  // 送信で空にしたときも、高さを初期状態へ戻す。
+  // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
+  // 前の inline height を残さない。
   useEffect(() => {
     fit(input.current, expanded);
-  }, [draft, expanded]);
+  }, [draft, expanded, compact]);
 
   // 最新が見えている間だけ追従する。読み返しているときは勝手に動かさない。
+  // 失敗の notice はメッセージ領域を縮めるので、出たときも追従し直す。
   useEffect(() => {
     const element = scroller.current;
     if (element && atBottom) element.scrollTop = element.scrollHeight;
-  }, [content, replying, atBottom, pendingMessages.length]);
+  }, [content, replying, atBottom, pendingMessages.length, sendFailed]);
 
   useEffect(() => {
     if (pending.length === 0) return;
@@ -353,6 +360,8 @@ export function PaneDetail(props: PaneDetailProps) {
     setSending(true);
     // 送信したらキーボードを閉じて出力を見せる。
     input.current?.blur();
+    // 前の失敗は消す。送り直したのに前の notice が残っていると、いつの結果か読めない。
+    setSendFailed(false);
     // 送れたときだけ空にする。失敗したら書き直せるよう残す。
     if (await onSubmit(text)) {
       setDraft("");
@@ -360,6 +369,8 @@ export function PaneDetail(props: PaneDetailProps) {
         ...items,
         { id: `pending-${at}-${items.length}`, role: "user", text, at, from, waiting },
       ]);
+    } else {
+      setSendFailed(true);
     }
     setSending(false);
   };
@@ -447,6 +458,15 @@ export function PaneDetail(props: PaneDetailProps) {
         </button>
       </div>
 
+      {sendFailed ? (
+        <p class="hwc-send-notice" role="status">
+          <span class="hwc-send-notice-mark">
+            <StatusMark tone="attention" size={12} />
+          </span>
+          送信できませんでした
+        </p>
+      ) : null}
+
       <form
         class="hwc-input"
         data-expanded={expanded}
@@ -459,22 +479,25 @@ export function PaneDetail(props: PaneDetailProps) {
           {context.workspaceLabel} / {context.tabLabel} のペインへ送る
         </label>
         <div class="hwc-input-frame">
-          <button
-            type="button"
-            class="hwc-input-toggle"
-            aria-expanded={expanded}
-            aria-label={expanded ? "入力を折りたたむ" : "入力を広げる"}
-            onClick={() => setExpanded((current) => !current)}
-          >
-            {expanded ? <CollapseIcon /> : <ExpandIcon />}
-          </button>
+          {compact ? null : (
+            <button
+              type="button"
+              class="hwc-input-toggle"
+              aria-expanded={expanded}
+              aria-label={expanded ? "入力を折りたたむ" : "入力を広げる"}
+              onClick={() => setExpandedOpen((current) => !current)}
+            >
+              {expanded ? <CollapseIcon /> : <ExpandIcon />}
+            </button>
+          )}
           <textarea
             id={`hwc-input-${pane.id}`}
             ref={input}
             class="hwc-input-field"
-            rows={2}
+            rows={compact ? 1 : 2}
             value={draft}
-            placeholder={shell ? "コマンドを入力" : "メッセージを入力"}
+            // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
+            {...(compact ? {} : { placeholder: shell ? "コマンドを入力" : "メッセージを入力" })}
             onInput={(event) => setDraft(event.currentTarget.value)}
             onKeyDown={(event) => {
               const composing = event.isComposing || event.keyCode === 229;
@@ -485,9 +508,6 @@ export function PaneDetail(props: PaneDetailProps) {
             }}
           />
           <div class="hwc-input-actions">
-            <span class="hwc-feedback" aria-live="polite">
-              {feedback}
-            </span>
             <span class="hwc-input-tail">
               {info === null && meter === null ? null : (
                 <span

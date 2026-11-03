@@ -5,6 +5,7 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   clampSidebarWidth,
+  isCompactCell,
   parseSidebarWidth,
 } from "./layout";
 
@@ -29,4 +30,18 @@ test("a stored width is restored and a broken one falls back", () => {
   expect(parseSidebarWidth("wide")).toBe(SIDEBAR_DEFAULT_WIDTH);
   expect(parseSidebarWidth("9999")).toBe(SIDEBAR_MAX_WIDTH);
   expect(parseSidebarWidth("9999", 900)).toBe(540);
+});
+
+// 分割セルの入力は、低くて幅が足りるときだけ 1 行に畳む。境目は見た目で確かめにくいので
+// ここで固定する（559/560 と 499/500）。
+test("a split cell folds its composer only when it is low and wide enough", () => {
+  expect(isCompactCell(559, 500)).toBe(true);
+  expect(isCompactCell(560, 500)).toBe(false);
+  expect(isCompactCell(700, 500)).toBe(false);
+  expect(isCompactCell(494, 499)).toBe(false);
+  expect(isCompactCell(494, 500)).toBe(true);
+  expect(isCompactCell(494, 550)).toBe(true);
+  // 計測前（0）は畳まない。一瞬だけ 1 行になってから戻るのを避ける。
+  expect(isCompactCell(0, 0)).toBe(false);
+  expect(isCompactCell(400, 0)).toBe(false);
 });
