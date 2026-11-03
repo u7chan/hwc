@@ -14,7 +14,14 @@ import {
 } from "./connection";
 import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
-import { findPane, findPaneContext, initialExpanded, splitPanes } from "./select";
+import { findPane, findPaneContext, groupIds, initialExpanded, splitPanes } from "./select";
+import {
+  OPEN_GROUPS_STORAGE_KEY,
+  applyOpenGroups,
+  parseOpenGroups,
+  rememberGroup,
+} from "./expanded";
+import { expandForPane, readSelectedPane, restorePane, writeSelectedPane } from "./selection";
 import { LIST_SCOPE_STORAGE_KEY, parseListScope, type ListScope } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import {
@@ -107,11 +114,6 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-// 最初に届いたスナップショットでは、Herdr が focus しているペインを開く。
-function defaultSelection(state: AppState): string | null {
-  return findPane(state, state.focusedPaneId) ? state.focusedPaneId : null;
-}
-
 type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
 
 // 分割セルの入力欄を畳むかは、セルの box の高さと幅だけで決める。PaneDetail は fragment を
@@ -145,8 +147,16 @@ function SplitCell(props: { children: (compact: boolean) => ComponentChildren })
 
 // 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
-function defaultView(state: AppState): View {
-  return { selectedPaneId: defaultSelection(state), expanded: initialExpanded(state) };
+// 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
+function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean> | null): View {
+  const selectedPaneId = restorePane(state, readSelectedPane());
+  const remembered = openGroups ?? new Map();
+  const base = applyOpenGroups(initialExpanded(state), remembered, groupIds(state));
+  return {
+    selectedPaneId,
+    expanded:
+      selectedPaneId === null ? base : expandForPane(state, selectedPaneId, base, remembered),
+  };
 }
 
 export function App() {
@@ -177,6 +187,11 @@ export function App() {
     parseHiddenPanes(
       typeof localStorage === "undefined" ? null : localStorage.getItem(HIDDEN_STORAGE_KEY),
     ),
+  );
+  // 開閉の記憶は初期表示と切り替えのときだけ読む。描き直しには使わない。
+  const openGroups = useRef<ReadonlyMap<string, boolean> | null>(null);
+  openGroups.current ??= parseOpenGroups(
+    typeof localStorage === "undefined" ? null : localStorage.getItem(OPEN_GROUPS_STORAGE_KEY),
   );
   const [scope, setScope] = useState<ListScope>(() =>
     parseListScope(
@@ -295,13 +310,20 @@ export function App() {
   const selectedPaneId = view
     ? view.selectedPaneId
     : state
-      ? (initialView.current ??= defaultView(state)).selectedPaneId
+      ? (initialView.current ??= defaultView(state, openGroups.current)).selectedPaneId
       : null;
   const expanded = view
     ? view.expanded
     : state
-      ? (initialView.current ??= defaultView(state)).expanded
+      ? (initialView.current ??= defaultView(state, openGroups.current)).expanded
       : NO_GROUPS;
+
+  // 画面に出ている選択をそのまま覚える。復元先が消えて Herdr の focus に倒れたときも、
+  // 次に開いたときに同じペインが出る（表示と保存を二重に持たない）。
+  useEffect(() => {
+    if (state === null) return;
+    writeSelectedPane(selectedPaneId);
+  }, [state, selectedPaneId]);
 
   const pane = state ? findPane(state, selectedPaneId) : null;
   const context = state ? findPaneContext(state, selectedPaneId) : null;
@@ -323,11 +345,25 @@ export function App() {
     setView({ selectedPaneId: null, expanded });
   };
 
+  // 開閉は次に開いたときも同じにしたいので、既定からの差分として覚える。
   const toggle = (groupId: string) => {
     const next = new Set(expanded);
     if (next.has(groupId)) next.delete(groupId);
     else next.add(groupId);
     setView({ selectedPaneId, expanded: next });
+
+    const remembered = rememberGroup(openGroups.current ?? new Map(), groupId, next.has(groupId));
+    openGroups.current = remembered;
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem(
+          OPEN_GROUPS_STORAGE_KEY,
+          JSON.stringify(Object.fromEntries(remembered)),
+        );
+      } catch {
+        // 保存できなくてもその場の表示は変える。
+      }
+    }
   };
 
   // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。

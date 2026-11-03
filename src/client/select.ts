@@ -240,6 +240,17 @@ export function initialExpanded(state: AppState): Set<string> {
   return open;
 }
 
+// 一覧に出ている開閉できる単位（ワークスペース・タブ・リポジトリの束）。
+export function groupIds(state: AppState): Set<string> {
+  const ids = new Set<string>();
+  for (const workspace of state.workspaces) {
+    ids.add(workspace.id);
+    if (workspace.worktree) ids.add(`repo:${workspace.worktree.repoName}`);
+    for (const tab of workspace.tabs) ids.add(tab.id);
+  }
+  return ids;
+}
+
 export type AgentGlyph = "pi" | "claude" | "codex" | "opencode" | "generic";
 
 const NO_HIDDEN: ReadonlySet<string> = new Set();
