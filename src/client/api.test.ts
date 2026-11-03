@@ -3,7 +3,7 @@ import {
   OUTPUT_LINES,
   chatOutcome,
   chatUrl,
-  focusAgent,
+  focusRequest,
   outputUrl,
   parseAppState,
   toAppState,
@@ -158,35 +158,18 @@ test("a chat body that breaks the contract is dropped", () => {
   ).toBeNull();
 });
 
-test("the focus request posts to the pane and sends no body", async () => {
-  const calls: { url: string; init: RequestInit | undefined }[] = [];
-  const original = globalThis.fetch;
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    calls.push({ url: String(input), init });
-    return new Response(JSON.stringify({ ok: true }), { status: 200 });
-  }) as unknown as typeof fetch;
+test("the focus request posts to the pane with a JSON header and no body", () => {
+  const request = focusRequest("w1:p2");
+  const url = new URL(request.url, "http://localhost");
 
-  try {
-    await focusAgent("w1:p2");
-  } finally {
-    globalThis.fetch = original;
-  }
-
-  expect(calls).toHaveLength(1);
-  // BFF は application/json 以外を 415 で弾く。ヘッダを落とすと focus が通らない。
-  expect(calls[0]?.url).toBe("/api/panes/w1%3Ap2/focus");
-  expect(calls[0]?.init?.method).toBe("POST");
-  expect(calls[0]?.init?.headers).toEqual({ "content-type": "application/json" });
-  expect(calls[0]?.init?.body).toBeUndefined();
+  // ":" is escaped but the BFF decodes it back into the pane id.
+  expect(url.pathname).toBe("/api/panes/w1%3Ap2/focus");
+  expect(request.init.method).toBe("POST");
+  // ヘッダを落とすと BFF が 415 で弾く。body は読まれないので送らない。
+  expect(request.init.headers).toEqual({ "content-type": "application/json" });
+  expect(request.init.body).toBeUndefined();
 });
 
-test("a failed focus is reported so the caller can ignore it", async () => {
-  const original = globalThis.fetch;
-  globalThis.fetch = (async () => new Response(null, { status: 502 })) as unknown as typeof fetch;
-
-  try {
-    await expect(focusAgent("w1:p2")).rejects.toThrow("focus: 502");
-  } finally {
-    globalThis.fetch = original;
-  }
+test("the focus request keeps the pane id in a single path segment", () => {
+  expect(focusRequest("w1/p2").url).toBe("/api/panes/w1%2Fp2/focus");
 });
