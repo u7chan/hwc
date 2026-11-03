@@ -1285,6 +1285,16 @@ button {
   white-space: nowrap;
 }
 
+/* 1 枚のときだけ、ペインの代わりにスペースの文脈を置く。長い名前は切る。 */
+.hwc-pane-head-branch {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hwc-pane-head .hwc-pane-id {
   margin-left: auto;
 }
@@ -1381,6 +1391,12 @@ button {
 
   .hwc-pane-head:hover .hwc-pane-id,
   .hwc-pane-id:focus-within {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* 名前を持たない見出しは、ホバー待ちにすると空の行に見える。ID は常に出す。 */
+  .hwc-pane-head[data-bare="true"] .hwc-pane-id {
     opacity: 1;
     transform: none;
   }

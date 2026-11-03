@@ -34,6 +34,7 @@ const state: AppState = {
       agentStatus: "working",
       focused: true,
       worktree: null,
+      branch: "feat/board",
       tabs: [
         {
           id: "w1:t1",
@@ -115,10 +116,17 @@ test("findPane resolves a pane from its id", () => {
   expect(findPane(state, null)).toBeNull();
 });
 
-test("findPaneContext names the workspace and tab of a pane", () => {
+test("findPaneContext names the workspace, tab, and branch of a pane", () => {
+  expect(findPaneContext(state, "w1:p1")).toEqual({
+    workspaceLabel: "hwc",
+    tabLabel: "main",
+    branch: "feat/board",
+  });
+  // git 管理外のスペースはブランチを持たない。
   expect(findPaneContext(state, "w2:p1")).toEqual({
     workspaceLabel: "hwc-verify",
     tabLabel: "main",
+    branch: null,
   });
   expect(findPaneContext(state, "w9:p9")).toBeNull();
 });

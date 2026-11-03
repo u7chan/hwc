@@ -49,7 +49,7 @@ import {
 } from "./icons";
 import { Markdown } from "./Markdown";
 import { usePaneOutput } from "./output";
-import { agentGlyph, isShellPane, paneName, paneSubLabel } from "./select";
+import { agentGlyph, isShellPane, paneName, paneSubLabel, type PaneContext } from "./select";
 import { Spinner } from "./Spinner";
 import { formatClock, formatElapsed } from "./time";
 
@@ -322,8 +322,12 @@ function ContextMeter(props: { view: ContextMeterView }) {
 
 type PaneDetailProps = {
   pane: PaneState;
-  context: { workspaceLabel: string; tabLabel: string };
+  context: PaneContext;
   compact: boolean;
+  // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
+  labeled: boolean;
+  // 一覧が隠れる狭い画面でだけ渡す。広い画面では一覧がブランチを持っている。
+  branch: string | null;
   waitingMs: number | null;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
 };
@@ -336,7 +340,7 @@ type AttachedImage = {
 };
 
 export function PaneDetail(props: PaneDetailProps) {
-  const { pane, context, compact, waitingMs, onSubmit } = props;
+  const { pane, context, compact, labeled, branch, waitingMs, onSubmit } = props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expandedOpen, setExpandedOpen] = useState(false);
@@ -639,14 +643,20 @@ export function PaneDetail(props: PaneDetailProps) {
 
   return (
     <>
-      <div class="hwc-pane-head">
+      <div class="hwc-pane-head" data-bare={!labeled}>
         <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
           {pane.agent ? <AgentGlyphIcon agent={pane.agent} size={14} /> : <PaneIcon size={14} />}
         </span>
-        <span class="hwc-pane-head-main">
-          <span class="hwc-pane-head-name">{paneName(pane)}</span>
-          {subLabel === null ? null : <span class="hwc-pane-head-sub">{subLabel}</span>}
-        </span>
+        {labeled ? (
+          <span class="hwc-pane-head-main">
+            <span class="hwc-pane-head-name">{paneName(pane)}</span>
+            {subLabel === null ? null : <span class="hwc-pane-head-sub">{subLabel}</span>}
+          </span>
+        ) : branch === null ? null : (
+          <span class="hwc-pane-head-branch" title={branch}>
+            {branch}
+          </span>
+        )}
         <span class="hwc-pane-id" data-copied={copied}>
           <span class="hwc-pane-id-text">{pane.id}</span>
           <button
