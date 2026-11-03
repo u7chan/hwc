@@ -142,8 +142,8 @@ function UserMessage(props: {
         ) : null}
       </div>
       <div class="hwc-msg-meta">
-        <span class="hwc-msg-time">{props.pending ? "送信中" : formatClock(props.message.at)}</span>
         {props.copyButton}
+        <span class="hwc-msg-time">{props.pending ? "送信中" : formatClock(props.message.at)}</span>
       </div>
     </>
   );
