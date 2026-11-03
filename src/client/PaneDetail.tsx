@@ -845,12 +845,21 @@ export function PaneDetail(props: PaneDetailProps) {
                 setChip(chipOnInput(chip));
               }}
               onPaste={(event) => {
-                // シェルは改行を受け取れない。複数行の貼り付けは入力を変えずに断る。
+                // シェルは改行を受け取れない。末尾の改行だけなら落として差し込み、
+                // 途中に改行が残るなら入力を変えずに断る。
                 if (shell) {
-                  const text = event.clipboardData?.getData("text/plain") ?? "";
-                  if (!text.includes("\n")) return;
-                  setNotice(SHELL_NEWLINE_NOTICE);
+                  const raw = event.clipboardData?.getData("text/plain") ?? "";
+                  if (!/[\r\n]/.test(raw)) return;
+                  const text = raw.replace(/[\r\n]+$/, "");
                   event.preventDefault();
+                  if (/[\r\n]/.test(text)) {
+                    setNotice(SHELL_NEWLINE_NOTICE);
+                    return;
+                  }
+                  const field = event.currentTarget;
+                  field.setRangeText(text, field.selectionStart, field.selectionEnd, "end");
+                  setDraft(field.value);
+                  fit(field, expanded);
                   return;
                 }
                 // 添付を受け付けるのは会話を持つペインだけ。
