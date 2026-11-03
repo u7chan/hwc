@@ -54,7 +54,7 @@ test("a split cell folds its composer when it is low or stacked and wide enough"
 });
 
 // 上下に積まれるのは 3 枚の右列と 4 枚の全部。並べ方は枚数で決まる。
-test("only the cells under another cell count as stacked", () => {
+test("only cells in a two-row split that do not span count as stacked", () => {
   expect(isStackedCell(1, 0)).toBe(false);
   expect(isStackedCell(2, 0)).toBe(false);
   expect(isStackedCell(2, 1)).toBe(false);

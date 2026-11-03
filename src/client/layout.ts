@@ -14,7 +14,8 @@ export const COMPACT_CELL_HEIGHT = 560;
 export const COMPACT_CELL_MIN_WIDTH = 500;
 
 // 上下に積まれた段か。3 枚は左 1 枚が縦いっぱい、4 枚は全部が 1 段ずつ。枚数から決まる並べ方の
-// 事実を app.css の .hwc-split[data-count]（grid-row: span 2）とも共有している。
+// 事実を app.css の .hwc-split[data-count] とも共有している（3 枚は :first-child の
+// grid-row: span 2、4 枚は grid-template-rows: 1fr 1fr）。
 export function isStackedCell(count: number, index: number): boolean {
   return count === 4 || (count === 3 && index > 0);
 }
