@@ -122,6 +122,23 @@ test("the nerd symbols font covers the codepoints Herdr emits", () => {
   }
 });
 
+// 範囲は CSS とフォントの作り方の両方に書く。片方だけ直すと、豆腐が戻るか無駄な取得が増える。
+function normaliseRanges(range: string): string[] {
+  return range
+    .split(",")
+    .map((part) => part.trim().replace(/^U\+/i, "").toLowerCase())
+    .sort();
+}
+
+test("the stylesheet and the font recipe cover the same codepoints", async () => {
+  const notice = await Bun.file("src/client/assets/fonts/NOTICE.md").text();
+  const recipe = /--unicodes="([^"]+)"/.exec(notice)?.[1] ?? "";
+  const range = /unicode-range:\s*([^;]+);/.exec(SYMBOLS_FACE)?.[1] ?? "";
+
+  expect(recipe).not.toBe("");
+  expect(normaliseRanges(range)).toEqual(normaliseRanges(recipe));
+});
+
 test("the nerd symbols font file exists where the stylesheet points", async () => {
   const url = /url\("([^"]+)"\)/.exec(SYMBOLS_FACE)?.[1] ?? "";
   const path = `src/client/styles/${url}`;
