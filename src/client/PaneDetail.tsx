@@ -433,7 +433,9 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
   // 前の inline height を残さない。
-  useEffect(() => {
+  // 描画の後に高さを直すと、改行した 1 フレームだけ箱が低いままになり、
+  // スクロールバーが一瞬出る。描画の前に合わせる。
+  useLayoutEffect(() => {
     fit(input.current, expanded);
   }, [draft, expanded, compact]);
 
