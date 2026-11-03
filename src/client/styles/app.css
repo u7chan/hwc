@@ -1102,6 +1102,9 @@ button {
   min-width: 0;
   min-height: 0;
   background: var(--color-content);
+  /* 高さはグリッドの 1fr で確定するので containment は安全。中の 55cqh と
+     バーの有無の判定をセル基準にするために置く。 */
+  container: hwc-cell / size;
 }
 
 /* 半分の幅になるので、見出しと入力欄の左右は詰める。 */
@@ -1548,6 +1551,28 @@ button {
   background: var(--color-raised);
   color: var(--color-secondary);
   font-size: var(--text-secondary);
+}
+
+/* 送信の失敗はメッセージ領域の下端に出す。スクロール領域の中に置くと row flex で横に並び、
+   .hwc-jump（wrap 基準の絶対配置）と重なる。先頭に出す .hwc-output-notice とは役割が違う。 */
+.hwc-send-notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--color-attention);
+  background: var(--color-attention-bg);
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
+}
+
+.hwc-send-notice-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-3);
 }
 
 .hwc-output-empty {
@@ -2176,7 +2201,7 @@ button {
   display: none;
 }
 
-@container (max-width: 360px) {
+@container hwc-input-actions (max-width: 360px) {
   .hwc-context-wide {
     display: none;
   }
@@ -2242,32 +2267,65 @@ button {
 
 .hwc-input-actions {
   display: flex;
-  /* 狭い入力行で feedback が 1 文字幅まで潰れるのを防ぐ。入り切らないときは tail を
-     上の行に残し、feedback をその下へ落とす（wrap-reverse）。360px 以下の container
-     query とは別の、内容の幅での折り返し。 */
-  flex-wrap: wrap-reverse;
   align-items: center;
   gap: var(--space-2);
   padding: 0 0 var(--space-1) var(--space-2);
   /* 幅の判定は画面ではなく入力行で行う。分割表示では viewport と一致しない。
      flex: none の .hwc-input-tail に置くと主軸サイズが内容から決まらず幅 0 になる。 */
-  container-type: inline-size;
+  container: hwc-input-actions / inline-size;
 }
 
-.hwc-feedback {
-  /* basis を内容の幅にして、入り切らないときに tail を折り返させる。文字単位で折り返すと
-     1 文字ずつ縦積みになるので、メッセージ自体は折り返さない。 */
-  flex: 1 1 auto;
+/* 分割セルが低いときの入力。セル高 560px 未満かつ幅 500px 以上で、1 行に畳んで
+   会話へ高さを回す（判定は isCompactCell）。開閉ボタンと placeholder は出さない。 */
+.hwc-split-cell[data-compact="true"] .hwc-input {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+/* 入力欄と情報・送信を同じ行に置く。開閉ボタンが無いので右の余白も詰める。 */
+.hwc-split-cell[data-compact="true"] .hwc-input-frame {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-input-field {
+  flex: 1;
+  min-height: var(--tap);
+  /* 入力量に応じて伸びるが、セルからはみ出さない。 */
+  max-height: min(30dvh, 55cqh);
+  padding-right: var(--space-2);
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-input-actions {
+  flex: 0 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-secondary);
-  font-size: var(--text-secondary);
+  padding: 0;
+  /* 簡略時は入力行ではなくセルを基準に meter の表記を決める。 */
+  container: normal;
 }
 
-.hwc-feedback:empty {
+.hwc-split-cell[data-compact="true"] .hwc-input-tail {
+  flex: 0 1 auto;
+  gap: var(--space-2);
+}
+
+/* 簡略時は narrow 表記に固定する。セル基準の 360px 判定では wide 表記（106k/1.0M (10.6%)）が
+   出て、入力欄が約 90px まで落ちる。 */
+.hwc-split-cell[data-compact="true"] .hwc-context-wide {
   display: none;
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-context-narrow {
+  display: inline;
+}
+
+/* バーの 48px は入力欄へ回す。540px は「数値を優先する最小幅」で、500px の
+   「1 行に収める最小幅」とは役割が違う。統合しない。 */
+@container hwc-cell (max-width: 540px) {
+  .hwc-context-bar {
+    display: none;
+  }
 }
 
 /* 設定 */
@@ -2505,7 +2563,8 @@ button {
 
 @media (min-width: 900px) {
   .hwc-top {
-    padding: var(--space-2) var(--space-6);
+    /* 分割の高さを稼ぐ。狭い画面の値は変えない。 */
+    padding: var(--space-1) var(--space-6);
   }
 
   .hwc-body {
@@ -2545,7 +2604,8 @@ button {
   }
 
   .hwc-detail {
-    padding: var(--space-6);
+    /* 分割の高さを稼ぐ。左右は据え置き。 */
+    padding: var(--space-2) var(--space-6);
   }
 
   .hwc-settings-scroll {
@@ -2583,14 +2643,25 @@ button {
     border-top-color: var(--color-line);
   }
 
+  .hwc-send-notice {
+    padding-right: var(--space-6);
+    padding-left: var(--space-6);
+  }
+
   .hwc-pane-head {
     padding: 0 var(--space-6);
   }
 
   /* 隠して 1 枚になってもセルは残すので、余白は分割前と同じに戻す。 */
   .hwc-split[data-count="1"] .hwc-pane-head,
-  .hwc-split[data-count="1"] .hwc-input {
+  .hwc-split[data-count="1"] .hwc-input,
+  .hwc-split[data-count="1"] .hwc-send-notice {
     padding-right: var(--space-6);
     padding-left: var(--space-6);
+  }
+
+  .hwc-split-cell .hwc-send-notice {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
   }
 }

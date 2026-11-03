@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
@@ -24,6 +25,7 @@ import {
   SIDEBAR_STORAGE_KEY,
   WIDE_LAYOUT_QUERY,
   clampSidebarWidth,
+  isCompactCell,
   parseSidebarWidth,
 } from "./layout";
 import {
@@ -73,6 +75,35 @@ function defaultSelection(state: AppState): string | null {
 
 type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
 
+// 分割セルの入力欄を畳むかは、セルの box の高さと幅だけで決める。PaneDetail は fragment を
+// 返すので自分では測れない。内容高を測ると畳んだ切替で再ループするため box を使う。
+function SplitCell(props: { children: (compact: boolean) => ComponentChildren }) {
+  const cell = useRef<HTMLElement>(null);
+  const [compact, setCompact] = useState(false);
+
+  useLayoutEffect(() => {
+    const element = cell.current;
+    if (!element) return;
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[entries.length - 1].borderBoxSize[0];
+      setCompact(
+        isCompactCell(
+          box?.blockSize ?? element.clientHeight,
+          box?.inlineSize ?? element.clientWidth,
+        ),
+      );
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section class="hwc-split-cell" data-compact={compact} ref={cell}>
+      {props.children(compact)}
+    </section>
+  );
+}
+
 // 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
 function defaultView(state: AppState): View {
@@ -85,8 +116,6 @@ export function App() {
   // 利用者が選んだ・開いた結果だけを持つ。まだ触っていない間はスナップショットから導く。
   const [view, setView] = useState<View | null>(null);
   const initialView = useRef<View | null>(null);
-  // 入力欄の補足は、送ったペインにだけ出す。分割表示で隣の欄に漏れないように。
-  const [feedback, setFeedback] = useState<Record<string, string | null>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [revision, setRevision] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
@@ -240,7 +269,6 @@ export function App() {
 
   const select = (paneId: string) => {
     setView({ selectedPaneId: paneId, expanded });
-    setFeedback((current) => ({ ...current, [paneId]: null }));
     setSettingsOpen(false);
   };
 
@@ -256,15 +284,12 @@ export function App() {
   };
 
   // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。
+  // 失敗の表示は入力欄を持つ PaneDetail が持つ。ペインを離れれば消える。
   const sendToPane = async (paneId: string, text: string): Promise<boolean> => {
-    // 前の結果は消す。送り直したのに「送信しました」が残っていると、どれの結果か読めない。
-    setFeedback((current) => ({ ...current, [paneId]: null }));
     try {
       await sendInput(paneId, text);
-      setFeedback((current) => ({ ...current, [paneId]: "送信しました" }));
       return true;
     } catch {
-      setFeedback((current) => ({ ...current, [paneId]: "送信できませんでした" }));
       return false;
     }
   };
@@ -327,12 +352,16 @@ export function App() {
   const splitOn = wide && split && shown.length > 0;
   const cells = splitOn ? shown : pane === null ? [] : [pane];
 
-  const renderPane = (item: PaneState, where: { workspaceLabel: string; tabLabel: string }) => (
+  const renderPane = (
+    item: PaneState,
+    where: { workspaceLabel: string; tabLabel: string },
+    compact: boolean,
+  ) => (
     <PaneDetail
       key={item.id}
       pane={item}
       context={where}
-      feedback={feedback[item.id] ?? null}
+      compact={compact}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
       onSubmit={(text) => sendToPane(item.id, text)}
     />
@@ -470,13 +499,13 @@ export function App() {
               {wide ? (
                 <div class="hwc-split" data-count={cells.length}>
                   {cells.map((item) => (
-                    <section class="hwc-split-cell" key={item.id}>
-                      {renderPane(item, context)}
-                    </section>
+                    <SplitCell key={item.id}>
+                      {(compact) => renderPane(item, context, compact)}
+                    </SplitCell>
                   ))}
                 </div>
               ) : (
-                renderPane(pane, context)
+                renderPane(pane, context, false)
               )}
             </div>
           ) : (

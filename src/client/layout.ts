@@ -8,6 +8,16 @@ export const SIDEBAR_STEP = 16;
 // app.css の @media (min-width: 900px) と同じ境目。片方を変えたらもう片方も変える。
 export const WIDE_LAYOUT_QUERY = "(min-width: 900px)";
 
+// 分割セルの入力欄を 1 行に畳む条件。これより低いセルでは入力欄が会話を圧迫する。
+export const COMPACT_CELL_HEIGHT = 560;
+// 幅がこれ未満だと 1 行では入力欄が潰れる。畳まずに通常の composer へ戻す。
+export const COMPACT_CELL_MIN_WIDTH = 500;
+
+// 高さは「未満」、幅は「以上」。0 はまだ測っていないセルなので畳まない。
+export function isCompactCell(height: number, width: number): boolean {
+  return height > 0 && height < COMPACT_CELL_HEIGHT && width >= COMPACT_CELL_MIN_WIDTH;
+}
+
 export function clampSidebarWidth(width: number, viewportWidth = Number.POSITIVE_INFINITY): number {
   if (!Number.isFinite(width)) return SIDEBAR_DEFAULT_WIDTH;
   const max = Math.max(
