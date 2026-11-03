@@ -2655,6 +2655,12 @@ p.hwc-compaction,
   padding: 0;
 }
 
+/* 入力欄を包む行も横に伸ばす（包みが伸びないと入力欄が中身の幅で止まる）。 */
+.hwc-split-cell[data-compact="true"] .hwc-input-line {
+  flex: 1;
+  min-width: 0;
+}
+
 .hwc-split-cell[data-compact="true"] .hwc-input-field {
   flex: 1;
   min-height: var(--tap);
