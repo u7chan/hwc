@@ -21,8 +21,14 @@ import {
   paneSubLabel,
   soleTab,
 } from "./select";
-import { scopeWorkspaces, type ListScope } from "./scope";
-import { StatusLabel } from "./StatusLabel";
+import {
+  activePanes,
+  scopeWorkspaces,
+  shouldFocusPane,
+  type ListScope,
+  type TreeScope,
+} from "./scope";
+import { StatusIcon, StatusLabel } from "./StatusLabel";
 import { formatElapsed } from "./time";
 
 type PaneListProps = {
@@ -32,10 +38,13 @@ type PaneListProps = {
   onScope: (scope: ListScope) => void;
   expanded: ReadonlySet<string>;
   onSelect: (paneId: string) => void;
+  onFocus: (paneId: string) => void;
   onToggle: (groupId: string) => void;
   workingSince: ReadonlyMap<string, number>;
   now: number;
 };
+
+type TreePaneListProps = Omit<PaneListProps, "scope" | "onFocus"> & { scope: TreeScope };
 
 // git 管理下でない / 通常のリポジトリ / linked worktree を形で見分ける。
 function WorkspaceGlyph({ worktree }: { worktree: WorktreeState | null }) {
@@ -60,7 +69,121 @@ function GroupStatus(props: { status: PaneState["agentStatus"]; hidden: boolean 
   );
 }
 
+const SCOPE_OPTIONS: readonly { scope: ListScope; label: string }[] = [
+  { scope: "agent", label: "エージェント" },
+  { scope: "active", label: "アクティブ" },
+  { scope: "all", label: "すべて" },
+];
+
+function ScopeBar(props: { scope: ListScope; onScope: (scope: ListScope) => void }) {
+  return (
+    <div class="hwc-scope" role="group" aria-label="一覧の絞り込み" data-scope={props.scope}>
+      <span class="hwc-scope-thumb" aria-hidden="true" />
+      {SCOPE_OPTIONS.map((option) => (
+        <button
+          key={option.scope}
+          type="button"
+          class="hwc-scope-option"
+          aria-pressed={props.scope === option.scope}
+          onClick={() => props.onScope(option.scope)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NoPanes() {
+  return (
+    <div class="hwc-empty">
+      <div class="hwc-empty-mark">
+        <PaneIcon size={32} />
+      </div>
+      <h2 class="hwc-empty-title">ペインがありません</h2>
+      <p class="hwc-empty-text">Herdr でワークスペースとペインを開くと、ここに一覧が出ます。</p>
+    </div>
+  );
+}
+
+// 上段は所在。タブ名が無いスペースでは区切りごと落とす。
+function activePlace(workspaceLabel: string, tabLabel: string): string {
+  return tabLabel === "" ? workspaceLabel : `${workspaceLabel} · ${tabLabel}`;
+}
+
+// 状態を持つエージェントを 1 行ずつ並べる。ツリーを畳まないので、どのスペースの
+// どのタブで動いているかがそのまま読める。
+function ActivePaneList(props: PaneListProps) {
+  const rows = activePanes(props.state);
+
+  return (
+    <>
+      <ScopeBar scope={props.scope} onScope={props.onScope} />
+      {rows.length === 0 ? (
+        <div class="hwc-list-note">
+          <p class="hwc-list-note-title">対象のエージェントはいません</p>
+          <p class="hwc-list-note-text">
+            実行中・要対応・完了のエージェントがここに並びます。「エージェント」に切り替えると、待機中のものも出ます。
+          </p>
+        </div>
+      ) : (
+        <div class="hwc-list-scroll">
+          <ul class="hwc-active">
+            {rows.map(({ workspace, tab, pane }) => {
+              const startedAt = props.workingSince.get(pane.id);
+              const current = pane.id === props.selectedPaneId;
+              return (
+                <li key={pane.id} class="hwc-active-row">
+                  <button
+                    type="button"
+                    class="hwc-active-open"
+                    data-current={current}
+                    aria-current={current ? "true" : undefined}
+                    onClick={() => {
+                      props.onSelect(pane.id);
+                      // 既読が進むのは done だけ。working / blocked では TUI のフォーカスを動かさない。
+                      if (shouldFocusPane(props.scope, pane.agentStatus)) props.onFocus(pane.id);
+                    }}
+                  >
+                    <StatusIcon status={pane.agentStatus} />
+                    <span class="hwc-active-main">
+                      <span class="hwc-active-place">
+                        {activePlace(workspace.label, tab.label)}
+                      </span>
+                      <span class="hwc-active-name">{pane.label ?? pane.agent}</span>
+                    </span>
+                    {pane.agentStatus === "working" && startedAt !== undefined ? (
+                      <span class="hwc-pane-elapsed">{formatElapsed(props.now - startedAt)}</span>
+                    ) : pane.agentStatus === "blocked" ? (
+                      // 色だけで意味を持たせない。記号の隣に言葉を置く。
+                      <span class="hwc-active-flag">要対応</span>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function PaneList(props: PaneListProps) {
+  if (countPanes(props.state) === 0) return <NoPanes />;
+
+  // 分岐はここ 1 か所に集める。active の行はツリーの絞り込みと前提が違うので、
+  // scopeWorkspaces に active を渡さないよう型で分ける。
+  switch (props.scope) {
+    case "active":
+      return <ActivePaneList {...props} />;
+    case "agent":
+    case "all":
+      return <TreePaneList {...props} scope={props.scope} />;
+  }
+}
+
+function TreePaneList(props: TreePaneListProps) {
   const { state, selectedPaneId, scope, onScope, expanded, onSelect, onToggle, workingSince, now } =
     props;
 
@@ -270,39 +393,9 @@ export function PaneList(props: PaneListProps) {
     );
   }
 
-  if (countPanes(state) === 0) {
-    return (
-      <div class="hwc-empty">
-        <div class="hwc-empty-mark">
-          <PaneIcon size={32} />
-        </div>
-        <h2 class="hwc-empty-title">ペインがありません</h2>
-        <p class="hwc-empty-text">Herdr でワークスペースとペインを開くと、ここに一覧が出ます。</p>
-      </div>
-    );
-  }
-
   return (
     <>
-      <div class="hwc-scope" role="group" aria-label="表示するスペース" data-scope={scope}>
-        <span class="hwc-scope-thumb" aria-hidden="true" />
-        <button
-          type="button"
-          class="hwc-scope-option"
-          aria-pressed={scope === "agent"}
-          onClick={() => onScope("agent")}
-        >
-          エージェント
-        </button>
-        <button
-          type="button"
-          class="hwc-scope-option"
-          aria-pressed={scope === "all"}
-          onClick={() => onScope("all")}
-        >
-          すべて
-        </button>
-      </div>
+      <ScopeBar scope={scope} onScope={onScope} />
       {visible.length === 0 ? (
         <div class="hwc-list-note">
           <p class="hwc-list-note-title">エージェントのあるスペースがありません</p>

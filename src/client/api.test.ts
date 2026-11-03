@@ -3,6 +3,7 @@ import {
   OUTPUT_LINES,
   chatOutcome,
   chatUrl,
+  focusAgent,
   outputUrl,
   parseAppState,
   toAppState,
@@ -155,4 +156,37 @@ test("a chat body that breaks the contract is dropped", () => {
   expect(
     toChatSnapshot({ ...chatBody, messages: [{ ...chatBody.messages[0], at: "1" }] }),
   ).toBeNull();
+});
+
+test("the focus request posts to the pane and sends no body", async () => {
+  const calls: { url: string; init: RequestInit | undefined }[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), init });
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  try {
+    await focusAgent("w1:p2");
+  } finally {
+    globalThis.fetch = original;
+  }
+
+  expect(calls).toHaveLength(1);
+  // BFF は application/json 以外を 415 で弾く。ヘッダを落とすと focus が通らない。
+  expect(calls[0]?.url).toBe("/api/panes/w1%3Ap2/focus");
+  expect(calls[0]?.init?.method).toBe("POST");
+  expect(calls[0]?.init?.headers).toEqual({ "content-type": "application/json" });
+  expect(calls[0]?.init?.body).toBeUndefined();
+});
+
+test("a failed focus is reported so the caller can ignore it", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(null, { status: 502 })) as unknown as typeof fetch;
+
+  try {
+    await expect(focusAgent("w1:p2")).rejects.toThrow("focus: 502");
+  } finally {
+    globalThis.fetch = original;
+  }
 });

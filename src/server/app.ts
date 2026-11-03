@@ -61,6 +61,11 @@ export function createApp(options: {
     });
   };
 
+  // 状態を変える POST は simple request で叩かれないよう application/json に限る。
+  // CORS を返さないので、cross-origin は preflight で止まる。
+  const isJsonRequest = (c: Context): boolean =>
+    (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase() === "application/json";
+
   return new Hono()
     .get("/api/health", (c) => c.json({ ok: true, service: "hwc", revision }))
     .get("/api/state", async (c) => {
@@ -155,8 +160,7 @@ export function createApp(options: {
     .post("/api/panes/:id/input", async (c) => {
       // ペインへ入力を流す唯一のエンドポイントなので、simple request で叩かれないよう
       // application/json に限る。CORS を返さないので、cross-origin は preflight で止まる。
-      const contentType = (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
-      if (contentType !== "application/json") {
+      if (!isJsonRequest(c)) {
         return c.json({ error: "content-type must be application/json" }, 415);
       }
 
@@ -169,6 +173,28 @@ export function createApp(options: {
 
       try {
         await panes.send({ paneId: c.req.param("id"), ...input.value });
+        return c.json({ ok: true });
+      } catch (error) {
+        return paneFailure(c, error);
+      }
+    })
+    .post("/api/panes/:id/focus", async (c) => {
+      // TUI のフォーカスを動かす操作なので、form POST で叩ける状態にしない。
+      // body は読まない（ペイン id は path にあり、追加の指定は無い）。
+      if (!isJsonRequest(c)) {
+        return c.json({ error: "content-type must be application/json" }, 415);
+      }
+
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+
+      try {
+        await panes.focus({ paneId });
+        // 状態の取り直しは Herdr のイベント（pane.focused / pane.agent_status_changed）に任せる。
+        // ここで refresh を待つと、成功した focus が再取得の失敗で 502 になる。
         return c.json({ ok: true });
       } catch (error) {
         return paneFailure(c, error);

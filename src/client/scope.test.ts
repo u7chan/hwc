@@ -1,51 +1,63 @@
 import { expect, test } from "bun:test";
-import type { WorkspaceState } from "../server/herdr/state";
-import { parseListScope, scopeWorkspaces } from "./scope";
+import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server/herdr/state";
+import { activePanes, parseListScope, scopeWorkspaces, shouldFocusPane } from "./scope";
 
-function workspace(id: string, agents: readonly (string | null)[]): WorkspaceState {
+function pane(id: string, agent: string | null, agentStatus: AgentStatus = "unknown"): PaneState {
+  return {
+    id,
+    title: null,
+    label: null,
+    agent,
+    agentStatus,
+    focused: false,
+    chat: false,
+  };
+}
+
+function workspace(id: string, panes: readonly PaneState[], tabs = 1): WorkspaceState {
   return {
     id,
     label: id,
     agentStatus: "unknown",
     focused: false,
     worktree: null,
-    tabs: [
-      {
-        id: `${id}:t1`,
-        label: "1",
-        agentStatus: "unknown",
-        focused: false,
-        panes: agents.map((agent, index) => ({
-          id: `${id}:p${index + 1}`,
-          title: null,
-          label: null,
-          agent,
-          agentStatus: "unknown" as const,
-          focused: false,
-          chat: false,
-        })),
-      },
-    ],
+    tabs: Array.from({ length: tabs }, (_, index) => ({
+      id: `${id}:t${index + 1}`,
+      label: String(index + 1),
+      agentStatus: "unknown" as const,
+      focused: false,
+      // 1 タブ目にだけペインを置き、2 タブ目以降は空にする。
+      panes: index === 0 ? [...panes] : [],
+    })),
   };
+}
+
+function app(...workspaces: WorkspaceState[]): AppState {
+  return { focusedWorkspaceId: null, focusedTabId: null, focusedPaneId: null, workspaces };
+}
+
+function agents(workspaceId: string, list: readonly (string | null)[]): PaneState[] {
+  return list.map((agent, index) => pane(`${workspaceId}:p${index + 1}`, agent));
 }
 
 test("the list starts with the spaces that have an agent", () => {
   expect(parseListScope(null)).toBe("agent");
   expect(parseListScope("agent")).toBe("agent");
+  expect(parseListScope("active")).toBe("active");
   expect(parseListScope("all")).toBe("all");
   // 端末に残った知らない値では、既定に倒す。
   expect(parseListScope("everything")).toBe("agent");
 });
 
 test("agent scope keeps the spaces that have an agent and drops shell-only spaces", () => {
-  const spaces = [workspace("w1", [null]), workspace("w2", ["pi"]), workspace("w3", [null, null])];
+  const spaces = [workspace("w1", agents("w1", [null])), workspace("w2", agents("w2", ["pi"]))];
 
   expect(scopeWorkspaces(spaces, "agent", null).map((space) => space.id)).toEqual(["w2"]);
-  expect(scopeWorkspaces(spaces, "all", null).map((space) => space.id)).toEqual(["w1", "w2", "w3"]);
+  expect(scopeWorkspaces(spaces, "all", null).map((space) => space.id)).toEqual(["w1", "w2"]);
 });
 
 test("agent scope keeps the space that is being read", () => {
-  const spaces = [workspace("w1", [null]), workspace("w2", ["pi"])];
+  const spaces = [workspace("w1", agents("w1", [null])), workspace("w2", agents("w2", ["pi"]))];
 
   // シェルだけのスペースを開いている間は、絞り込んでも消さない。
   expect(scopeWorkspaces(spaces, "agent", "w1:p1").map((space) => space.id)).toEqual(["w1", "w2"]);
@@ -53,7 +65,80 @@ test("agent scope keeps the space that is being read", () => {
 });
 
 test("the order stays the order Herdr reports", () => {
-  const spaces = [workspace("w3", ["pi"]), workspace("w1", ["claude"]), workspace("w2", [null])];
+  const spaces = [
+    workspace("w3", agents("w3", ["pi"])),
+    workspace("w1", agents("w1", ["claude"])),
+    workspace("w2", agents("w2", [null])),
+  ];
 
   expect(scopeWorkspaces(spaces, "agent", null).map((space) => space.id)).toEqual(["w3", "w1"]);
+});
+
+test("active lists the agents that are working, blocked or done", () => {
+  const state = app(
+    workspace("w1", [
+      pane("w1:p1", "pi", "working"),
+      pane("w1:p2", null, "unknown"),
+      pane("w1:p3", "claude", "idle"),
+      pane("w1:p4", "pi", "blocked"),
+      pane("w1:p5", "codex", "done"),
+      pane("w1:p6", null, "done"),
+    ]),
+  );
+
+  // エージェントのいないシェルには状態が付かない。idle は一覧に載せない。
+  expect(activePanes(state).map((row) => row.pane.id)).toEqual(["w1:p4", "w1:p1", "w1:p5"]);
+});
+
+test("active puts what needs attention first and keeps the state order inside a status", () => {
+  const state = app(
+    workspace(
+      "w1",
+      [
+        pane("w1:p1", "pi", "done"),
+        pane("w1:p2", "pi", "working"),
+        pane("w1:p3", "pi", "blocked"),
+        pane("w1:p4", "pi", "done"),
+        pane("w1:p5", "pi", "working"),
+      ],
+      // 2 タブ目は空。タブをまたいでも state の並びを保つ。
+      2,
+    ),
+    workspace("w2", [pane("w2:p1", "claude", "blocked")]),
+  );
+
+  expect(activePanes(state).map((row) => row.pane.id)).toEqual([
+    "w1:p3",
+    "w2:p1",
+    "w1:p2",
+    "w1:p5",
+    "w1:p1",
+    "w1:p4",
+  ]);
+});
+
+test("active carries the workspace and the tab of each pane", () => {
+  const state = app(workspace("w1", [pane("w1:p1", "pi", "working")], 2));
+
+  const [row] = activePanes(state);
+
+  expect(row?.workspace.id).toBe("w1");
+  expect(row?.tab.id).toBe("w1:t1");
+  expect(row?.pane.id).toBe("w1:p1");
+});
+
+test("active keeps no room for the open pane, because idle panes are not in it", () => {
+  const state = app(workspace("w1", [pane("w1:p1", "pi", "idle")]));
+
+  // ツリーの絞り込みと違い、選択中のペインでも出さない。
+  expect(activePanes(state)).toEqual([]);
+});
+
+test("only a done row in the active scope moves the focus", () => {
+  expect(shouldFocusPane("active", "done")).toBe(true);
+  expect(shouldFocusPane("active", "working")).toBe(false);
+  expect(shouldFocusPane("active", "blocked")).toBe(false);
+  // ツリーからは送らない。詳細のタブ切替と経路が同じになる。
+  expect(shouldFocusPane("agent", "done")).toBe(false);
+  expect(shouldFocusPane("all", "done")).toBe(false);
 });

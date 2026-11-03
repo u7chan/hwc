@@ -168,3 +168,14 @@ export async function sendInput(paneId: string, text: string, signal?: AbortSign
   });
   if (!response.ok) throw new Error(`input: ${response.status}`);
 }
+
+// 既読は Herdr の seen を進めて消す。BFF は application/json 以外を 415 で弾くので、
+// ヘッダだけ付ける（body は読まれない）。
+export async function focusAgent(paneId: string, signal?: AbortSignal): Promise<void> {
+  const response = await fetch(`/api/panes/${encodeURIComponent(paneId)}/focus`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    signal,
+  });
+  if (!response.ok) throw new Error(`focus: ${response.status}`);
+}
