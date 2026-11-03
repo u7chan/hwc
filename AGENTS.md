@@ -37,7 +37,8 @@ Accepted ADRとタスクが衝突する場合、迂回実装で無理に両立�
 
 ## Git / PR
 
-- main へ直 push しない。必ずブランチを切り PR を出す。
+- main へ直 push しない。必ずブランチを切る。
+- `git push` と PR 作成（Draft を含む）は、明示的な指示があるまで行わない。ブランチ上でコミットまでに留め、変更内容と検証結果を報告して指示を待つ。
 - ワークツリー / ブランチ: 小文字 kebab-case（例: `feat/xxx-yyy`）、prefix は `feat` / `fix` / `chore` / `docs` / `refactor` / `test`。
 - マージ: squash のみ（1 PR = 1 コミット、PR 内のコミット数は問わない）。`gh pr merge <PR> --squash -t "feat(<scope>): ..." -b "<Why>"` でメッセージを英語・プレフィックス付きで明示。
 - 確認: マージ後 `git log -1 --format=%s` で main の subject が英語か確認。
@@ -80,6 +81,7 @@ Accepted ADRとタスクが衝突する場合、迂回実装で無理に両立�
 - unit: BFF（プロトコル・状態機械）を主対象。client は純粋な変換・selector のみ。
 - hooks はロジックを純関数に抽出してテストする。フック自体はテストしない。
 - DOM を必要とするテスト（コンポーネント・CSS・アニメーション）は書かない。エージェント E2E と人間の目視に任せる。
+- E2E は `bun run e2e:serve` の架空 Herdr に対して行う。実 Herdr につながった画面をスクリーンショットに撮らない。詳細は [docs/e2e.md](docs/e2e.md)。
 
 ## Comment Policy
 

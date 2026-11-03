@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt --check .",
-    "test": "bun test"
+    "test": "bun test",
+    "e2e:serve": "bun e2e/serve.ts"
   },
   "dependencies": {
     "hono": "^4.13.14",
