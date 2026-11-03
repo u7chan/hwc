@@ -31,9 +31,18 @@ const snapshot: HerdrSnapshot = {
       agent_status: "working",
       focused: true,
       agent_session: null,
+      cwd: null,
     },
   ],
-  agents: [{ pane_id: "w1:p2", agent: "pi", terminal_title_stripped: "π - hwc" }],
+  agents: [
+    {
+      pane_id: "w1:p2",
+      workspace_id: null,
+      cwd: null,
+      agent: "pi",
+      terminal_title_stripped: "π - hwc",
+    },
+  ],
 };
 
 test("parseSnapshot keeps the fields the state needs", () => {

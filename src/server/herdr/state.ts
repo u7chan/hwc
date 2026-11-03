@@ -1,4 +1,6 @@
 import type { AgentStatus, HerdrAgent, HerdrAgentSession, HerdrSnapshot } from "./contract";
+import { isAbsolute } from "node:path";
+import type { BranchReader } from "../git";
 
 export type { AgentStatus };
 
@@ -33,6 +35,8 @@ export type WorkspaceState = {
   agentStatus: AgentStatus;
   focused: boolean;
   worktree: WorktreeState | null;
+  // ブランチは Herdr の snapshot に無いので、BFF が checkoutPath から読んで足す。
+  branch?: string | null;
   tabs: TabState[];
 };
 
@@ -130,9 +134,53 @@ function toSessionPaths(snapshot: HerdrSnapshot): Map<string, string> {
   return paths;
 }
 
+// ブランチを読む場所。Herdr がワークツリーとして扱っていないディレクトリでも git の
+// 管理下にあることはあるので、無ければ最初のペインの cwd を使う。
+export function checkoutPaths(snapshot: HerdrSnapshot): Map<string, string> {
+  const paths = new Map<string, string>();
+  for (const workspace of snapshot.workspaces ?? []) {
+    const path = workspace.worktree?.checkout_path ?? null;
+    if (path !== null) paths.set(workspace.workspace_id, path);
+  }
+  for (const pane of snapshot.panes ?? []) {
+    if (paths.has(pane.workspace_id) || typeof pane.cwd !== "string") continue;
+    // 相対の cwd は BFF の起動ディレクトリを指してしまうので使わない。
+    if (!isAbsolute(pane.cwd)) continue;
+    paths.set(pane.workspace_id, pane.cwd);
+  }
+  for (const agent of snapshot.agents ?? []) {
+    const workspaceId = agent.workspace_id;
+    if (workspaceId == null || paths.has(workspaceId) || agent.cwd == null) continue;
+    if (!isAbsolute(agent.cwd)) continue;
+    paths.set(workspaceId, agent.cwd);
+  }
+  return paths;
+}
+
+// ブランチは Herdr が返さないので、ワークツリーの置き場所から読んで足す。
+// 読めなくても状態そのものは流す（ブランチが出ないだけ）。
+async function withBranches(
+  state: AppState,
+  read: BranchReader | undefined,
+  paths: Map<string, string>,
+): Promise<AppState> {
+  if (read === undefined) return state;
+  const workspaces = await Promise.all(
+    state.workspaces.map(async (workspace) => {
+      const path = paths.get(workspace.id);
+      if (path === undefined) return workspace;
+      // 読めないブランチで状態そのものを止めない。
+      const branch = await read(path).catch(() => null);
+      return { ...workspace, branch };
+    }),
+  );
+  return { ...state, workspaces };
+}
+
 export function createStateStore(options: {
   load: () => Promise<HerdrSnapshot>;
   retryDelayMs?: number;
+  branch?: BranchReader;
 }): StateStore {
   const retryDelayMs = options.retryDelayMs ?? 1_000;
   const listeners = new Set<(state: AppState) => void>();
@@ -154,7 +202,7 @@ export function createStateStore(options: {
 
   const publish = async (): Promise<AppState> => {
     const snapshot = await options.load();
-    const state = toAppState(snapshot);
+    const state = await withBranches(toAppState(snapshot), options.branch, checkoutPaths(snapshot));
     if (retryTimer) {
       clearTimeout(retryTimer);
       retryTimer = null;

@@ -485,6 +485,8 @@ button {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* 副題が無い行でも文字が上に寄らないよう、行の高さの中で中央に置く。 */
+  justify-content: center;
 }
 
 /* 副題がある行と無い行で高さを揃える。折り返しで行の高さが変わらないように。 */

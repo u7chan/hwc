@@ -17,8 +17,7 @@ import {
   countPanes,
   countWorkspacePanes,
   groupWorkspaces,
-  paneName,
-  paneSubLabel,
+  paneRowTitle,
   soleTab,
 } from "./select";
 import {
@@ -264,6 +263,15 @@ function TreePaneList(props: TreePaneListProps) {
     };
   }, [menu]);
 
+  // ブランチはワークスペースの属性。行ごとに引き直さず、先にペイン id へ配る。
+  const branchOf = new Map<string, string | null>();
+  for (const workspace of state.workspaces) {
+    const branch = workspace.branch ?? null;
+    for (const tab of workspace.tabs) {
+      for (const pane of tab.panes) branchOf.set(pane.id, branch);
+    }
+  }
+
   const toggle = (id: string) => () => onToggle(id);
 
   function renderHeader(props2: {
@@ -334,7 +342,7 @@ function TreePaneList(props: TreePaneListProps) {
       <ul class="hwc-panes" data-depth={depth}>
         {tab.panes.map((pane) => {
           const startedAt = workingSince.get(pane.id);
-          const subLabel = paneSubLabel(pane);
+          const branch = branchOf.get(pane.id) ?? null;
           return (
             // 狭い行の判定は、行そのものではなくこの枠の幅で行う。
             <li key={pane.id} class="hwc-pane-row">
@@ -357,8 +365,8 @@ function TreePaneList(props: TreePaneListProps) {
                     {pane.agent ? <AgentGlyphIcon agent={pane.agent} /> : <PaneIcon />}
                   </span>
                   <span class="hwc-pane-main">
-                    <span class="hwc-pane-name">{paneName(pane)}</span>
-                    {subLabel === null ? null : <span class="hwc-pane-sub">{subLabel}</span>}
+                    <span class="hwc-pane-name">{paneRowTitle(pane)}</span>
+                    {branch === null ? null : <span class="hwc-pane-sub">{branch}</span>}
                   </span>
                   {startedAt === undefined ? null : (
                     <span class="hwc-pane-elapsed">{formatElapsed(now - startedAt)}</span>

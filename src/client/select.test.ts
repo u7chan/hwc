@@ -14,6 +14,7 @@ import {
   movePane,
   movePaneStep,
   paneName,
+  paneRowTitle,
   paneSubLabel,
   removePane,
   soleTab,
@@ -427,4 +428,19 @@ test("a label that repeats the name is not shown twice", () => {
   expect(paneName(pane)).toBe("bash");
   expect(paneSubLabel(pane)).toBeNull();
   expect(paneSubLabel({ ...pane, agent: "bash" })).toBeNull();
+});
+
+test("a row is titled by its name, not by the terminal title", () => {
+  const base = {
+    title: "π - hwc",
+    label: null as string | null,
+    agent: "pi" as string | null,
+    agentStatus: "idle" as const,
+    focused: false,
+    chat: true,
+  };
+
+  expect(paneRowTitle({ ...base, id: "w1:p1", label: "impl" })).toBe("impl");
+  expect(paneRowTitle({ ...base, id: "w1:p1" })).toBe("pi");
+  expect(paneRowTitle({ ...base, id: "w1:p1", agent: null })).toBe("π - hwc");
 });
