@@ -60,8 +60,8 @@ const state: AppState = {
       focused: true,
       worktree: {
         repoName: "hwc",
-        repoRoot: "/home/u7dev/workspace/hwc",
-        checkoutPath: "/home/u7dev/workspace/hwc",
+        repoRoot: "/home/dev/workspace/hwc",
+        checkoutPath: "/home/dev/workspace/hwc",
         isLinkedWorktree: false,
       },
       tabs: [{ id: "w1:t1", label: "1", agentStatus: "idle", focused: true, panes: [] }],
