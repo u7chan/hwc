@@ -94,14 +94,15 @@ function Block({ block, depth }: { block: MdBlock; depth: number }) {
   }
 }
 
-function taskLabel(source: string): string {
+function taskLabel(source: string, fallback: string): string {
   const line = source.split("\n", 1)[0] ?? "";
-  return inlineText(parseInline(line)).trim() || "タスク";
+  return inlineText(parseInline(line)).trim() || fallback;
 }
 
 function List({ block, depth }: { block: Extract<MdBlock, { kind: "list" }>; depth: number }) {
   const items = block.items.map((item, index) => {
-    const label = item.task === undefined ? null : taskLabel(item.source);
+    const fallback = `${block.ordered ? block.start + index : index + 1}番目のタスク`;
+    const label = item.task === undefined ? null : taskLabel(item.source, fallback);
     return (
       <li class="hwc-md-li" key={index}>
         {item.task !== undefined && block.ordered ? (
@@ -109,11 +110,11 @@ function List({ block, depth }: { block: Extract<MdBlock, { kind: "list" }>; dep
             <span class="hwc-md-marker" aria-hidden="true">
               {`${block.start + index}.`}
             </span>
-            <TaskCheckbox checked={item.task} label={label ?? "タスク"} />
+            <TaskCheckbox checked={item.task} label={label ?? fallback} />
           </>
         ) : item.task !== undefined ? (
           <span class="hwc-md-marker">
-            <TaskCheckbox checked={item.task} label={label ?? "タスク"} />
+            <TaskCheckbox checked={item.task} label={label ?? fallback} />
           </span>
         ) : (
           <span class="hwc-md-marker" aria-hidden="true">
