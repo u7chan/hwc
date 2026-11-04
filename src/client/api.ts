@@ -1,3 +1,5 @@
+import { hc } from "hono/client";
+import type { AppType } from "../server/app";
 import type {
   ChatCompaction,
   ChatContext,
@@ -23,9 +25,21 @@ export type ChatRead =
   | { kind: "unchanged" }
   | { kind: "unavailable" };
 
-export function chatUrl(paneId: string): string {
-  return `/api/panes/${encodeURIComponent(paneId)}/chat`;
+// テストでは絶対 URL を渡して $url を確かめる。本番は同一 origin なので空でよい。
+export function createApiClient(baseUrl: string) {
+  return hc<AppType>(baseUrl);
 }
+
+const client = createApiClient("");
+
+// hc は path param をエスケープしない。ペイン id を 1 セグメントに保つ。
+export function paneParam(paneId: string) {
+  return { param: { id: encodeURIComponent(paneId) } };
+}
+
+// hc は validator のない query / body を入力型に含めない。実行時はそのまま送れるので、
+// ここで形を決めて渡す。
+export type InputBody = { text: string; submit: true; attachments?: string[] };
 
 // 304 は本文が無いだけで、手元の会話をそのまま使う。それ以外の失敗は、会話を出せない
 // 応答として扱い、端末出力へ切り替える。
@@ -110,11 +124,6 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
   };
 }
 
-export function outputUrl(paneId: string, lines: number = OUTPUT_LINES): string {
-  const query = new URLSearchParams({ source: "recent", lines: String(lines) });
-  return `/api/panes/${encodeURIComponent(paneId)}/output?${query.toString()}`;
-}
-
 export function attachmentUploadUrl(paneId: string): string {
   return `/api/panes/${encodeURIComponent(paneId)}/attachments`;
 }
@@ -148,20 +157,43 @@ export function toPaneRead(value: unknown, paneId: string): OutputRead | null {
   return { paneId, text: read.text, truncated: read.truncated, revision: read.revision };
 }
 
-async function getJson(path: string, signal?: AbortSignal): Promise<unknown> {
-  const response = await fetch(path, { signal });
-  if (!response.ok) throw new Error(`${path}: ${response.status}`);
-  return response.json();
+export async function fetchRevision(signal?: AbortSignal): Promise<string | null> {
+  const response = await client.api.health.$get({}, { init: { signal } });
+  if (!response.ok) throw new Error(`health: ${response.status}`);
+  const body = await response.json();
+  return typeof body.revision === "string" ? body.revision : null;
 }
 
 export async function fetchState(signal?: AbortSignal): Promise<AppState> {
-  const state = toAppState(await getJson("/api/state", signal));
-  if (state === null) throw new Error("/api/state: unexpected body");
+  const response = await client.api.state.$get({}, { init: { signal } });
+  if (!response.ok) throw new Error(`state: ${response.status}`);
+  const state = toAppState(await response.json());
+  if (state === null) throw new Error("state: unexpected body");
   return state;
 }
 
+export function outputQuery(lines: number = OUTPUT_LINES) {
+  return { source: "recent" as const, lines: String(lines) };
+}
+
+export function outputRequest(paneId: string) {
+  return { ...paneParam(paneId), query: outputQuery() };
+}
+
+export function inputRequest(paneId: string, text: string, attachments: readonly string[] = []) {
+  const json: InputBody =
+    attachments.length === 0
+      ? { text, submit: true }
+      : { text, submit: true, attachments: [...attachments] };
+  return { ...paneParam(paneId), json };
+}
+
 export async function readOutput(paneId: string, signal?: AbortSignal): Promise<OutputRead> {
-  const read = toPaneRead(await getJson(outputUrl(paneId), signal), paneId);
+  const response = await client.api.panes[":id"].output.$get(outputRequest(paneId), {
+    init: { signal },
+  });
+  if (!response.ok) throw new Error(`output: ${response.status}`);
+  const read = toPaneRead(await response.json(), paneId);
   if (read === null) throw new Error("output: unexpected body");
   return read;
 }
@@ -174,7 +206,10 @@ export async function readChat(
   const headers: Record<string, string> = {};
   // 手元に会話が無いのに 304 を返させない。条件は持っているときだけ付ける。
   if (etag !== null) headers["if-none-match"] = `"${etag}"`;
-  const response = await fetch(chatUrl(paneId), { headers, signal });
+  const response = await client.api.panes[":id"].chat.$get(paneParam(paneId), {
+    headers,
+    init: { signal },
+  });
   const outcome = chatOutcome(response.status);
   if (outcome === "unchanged") return { kind: "unchanged" };
   if (outcome === "unavailable") return { kind: "unavailable" };
@@ -189,15 +224,11 @@ export async function sendInput(
   attachments: readonly string[] = [],
   signal?: AbortSignal,
 ): Promise<void> {
-  // BFF は application/json 以外を 415 で弾く。cross-origin の simple request に落とさない。
-  const response = await fetch(`/api/panes/${encodeURIComponent(paneId)}/input`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(
-      attachments.length === 0 ? { text, submit: true } : { text, submit: true, attachments },
-    ),
-    signal,
-  });
+  // BFF は application/json 以外を 415 で弾く。hc に JSON body を作らせる。
+  const response = await client.api.panes[":id"].input.$post(
+    inputRequest(paneId, text, attachments),
+    { init: { signal } },
+  );
   if (!response.ok) throw new Error(`input: ${response.status}`);
 }
 
@@ -230,25 +261,13 @@ export async function uploadAttachment(
   return { ok: true, name };
 }
 
-// body は読まれないので送らない。ヘッダは BFF が application/json 以外を 415 で弾くため付ける。
-export function focusRequest(paneId: string): { url: string; init: RequestInit } {
-  return {
-    url: `/api/panes/${encodeURIComponent(paneId)}/focus`,
-    init: { method: "POST", headers: { "content-type": "application/json" } },
-  };
-}
-
 export async function focusAgent(paneId: string, signal?: AbortSignal): Promise<void> {
-  const { url, init } = focusRequest(paneId);
-  const response = await fetch(url, { ...init, signal });
+  // body は読まれないが、BFF は application/json 以外を 415 で弾く。
+  const response = await client.api.panes[":id"].focus.$post(paneParam(paneId), {
+    headers: { "content-type": "application/json" },
+    init: { signal },
+  });
   if (!response.ok) throw new Error(`focus: ${response.status}`);
-}
-
-export function closeRequest(paneId: string): { url: string; init: RequestInit } {
-  return {
-    url: `/api/panes/${encodeURIComponent(paneId)}/close`,
-    init: { method: "POST", headers: { "content-type": "application/json" } },
-  };
 }
 
 export type CloseOutcome = "done" | "failed";
@@ -264,9 +283,11 @@ export const CLOSE_TIMEOUT_MS = 8_000;
 
 // 失敗も戻り値で返す。呼び出し側は結果の反映を 1 回だけ行えばよい。
 export async function closePane(paneId: string): Promise<CloseOutcome> {
-  const { url, init } = closeRequest(paneId);
   try {
-    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(CLOSE_TIMEOUT_MS) });
+    const response = await client.api.panes[":id"].close.$post(paneParam(paneId), {
+      headers: { "content-type": "application/json" },
+      init: { signal: AbortSignal.timeout(CLOSE_TIMEOUT_MS) },
+    });
     return closeOutcome(response.status);
   } catch {
     // 通信の失敗と打ち切りは、閉じられなかった結果として扱う。

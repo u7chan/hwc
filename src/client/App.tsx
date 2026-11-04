@@ -5,7 +5,7 @@ import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
-import { fetchState, focusAgent, closePane, parseAppState, sendInput } from "./api";
+import { fetchRevision, fetchState, focusAgent, closePane, parseAppState, sendInput } from "./api";
 import {
   INITIAL_CONNECTION,
   connectionAfter,
@@ -309,10 +309,9 @@ export function App() {
   // どの版を見ているかを画面で確かめられるようにする。取れなくても表示だけ諦める。
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/health", { signal: controller.signal })
-      .then((response) => response.json())
-      .then((data: { revision?: unknown }) => {
-        if (typeof data.revision === "string") setRevision(data.revision);
+    fetchRevision(controller.signal)
+      .then((revision) => {
+        if (revision !== null) setRevision(revision);
       })
       .catch(() => {
         // 取れないときはラベルを出さない。
