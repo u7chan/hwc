@@ -358,10 +358,11 @@ export async function createPane(
   paneId: string,
   request: CreatePaneRequest,
 ): Promise<CreatePaneOutcome> {
+  const signal = AbortSignal.timeout(CREATE_TIMEOUT_MS);
   try {
     const input = { ...paneParam(paneId), json: request };
     const response = await client.api.panes[":id"].split.$post(input, {
-      init: { signal: AbortSignal.timeout(CREATE_TIMEOUT_MS) },
+      init: { signal },
     });
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) return { ok: false, ...toCreateError(body) };
@@ -369,10 +370,10 @@ export async function createPane(
     return created === null
       ? { ok: false, error: "failed", paneId: null }
       : { ok: true, paneId: created };
-  } catch (error) {
-    // 期限切れは、ペインができているか確認できない。再試行で 2 枚目を作らないよう、
-    // 通常の失敗とは分けてダイアログを閉じる側へ倒す。
-    const timedOut = error instanceof Error && error.name === "TimeoutError";
-    return { ok: false, error: timedOut ? "timeout" : "failed", paneId: null };
+  } catch {
+    // WebKit は AbortSignal.timeout で中断した fetch を TimeoutError ではなく AbortError で
+    // 返す。reject の名前ではなく signal 自体を見て、ペインができているか確認できない
+    // 期限切れを通常の失敗と分ける。
+    return { ok: false, error: signal.aborted ? "timeout" : "failed", paneId: null };
   }
 }
