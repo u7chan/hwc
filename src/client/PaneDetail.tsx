@@ -312,11 +312,11 @@ function ChatLog(props: {
 
   return (
     <ol class="hwc-chat">
-      {rows.map(({ message, pending }) => (
+      {rows.map(({ message, pending }, index) => (
         <li class="hwc-msg" data-role={message.role} key={message.id}>
           {message.role === "agent" ? (
             <>
-              <Markdown text={message.text} />
+              <Markdown text={message.text} taskScope={`${index + 1}番目のメッセージ`} />
               <div class="hwc-msg-meta">
                 <span class="hwc-msg-time">{formatClock(message.at)}</span>
                 {copyButton(message)}

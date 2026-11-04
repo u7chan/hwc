@@ -4,13 +4,15 @@ import { useCopy } from "./copy";
 import { CopyGlyph } from "./icons";
 import { inlineText, parseInline } from "./markdown/inline";
 import { MARKDOWN_MAX_LENGTH, parseMarkdown } from "./markdown/parse";
-import type { MdBlock, MdInline } from "./markdown/types";
+import type { MdBlock, MdInline, MdListItem } from "./markdown/types";
 
 const HEADING_TAGS = ["h3", "h4", "h5", "h6"] as const;
 
+type TaskCounter = { value: number };
+
 // 本文が上限を超えたら、解析せず原文をそのまま出す。解析してから捨てると固まる。
 // ルートの data-quote-scope は、本文の選択から返信を始める範囲を示す。
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, taskScope }: { text: string; taskScope?: string }) {
   if (text.length > MARKDOWN_MAX_LENGTH) {
     return (
       <div class="hwc-md" data-plain data-quote-scope="true">
@@ -18,25 +20,53 @@ export function Markdown({ text }: { text: string }) {
       </div>
     );
   }
+  // タスクの通し番号は Markdown の描画ごとに 0 から数える。メッセージをまたぐ一意性は taskScope が担う。
+  const taskCounter = { value: 0 };
   return (
     <div class="hwc-md" data-quote-scope="true">
-      <MarkdownBlocks text={text} />
+      <MarkdownBlocks text={text} taskScope={taskScope} taskCounter={taskCounter} />
     </div>
   );
 }
 
-function MarkdownBlocks({ text, depth = 0 }: { text: string; depth?: number }) {
+function MarkdownBlocks({
+  text,
+  depth = 0,
+  taskScope,
+  taskCounter,
+}: {
+  text: string;
+  depth?: number;
+  taskScope?: string;
+  taskCounter: TaskCounter;
+}) {
   const blocks = useMemo(() => parseMarkdown(text), [text]);
   return (
     <>
       {blocks.map((block, index) => (
-        <Block block={block} depth={depth} key={index} />
+        <Block
+          block={block}
+          depth={depth}
+          taskScope={taskScope}
+          taskCounter={taskCounter}
+          key={index}
+        />
       ))}
     </>
   );
 }
 
-function Block({ block, depth }: { block: MdBlock; depth: number }) {
+function Block({
+  block,
+  depth,
+  taskScope,
+  taskCounter,
+}: {
+  block: MdBlock;
+  depth: number;
+  taskScope?: string;
+  taskCounter: TaskCounter;
+}) {
   switch (block.kind) {
     case "heading": {
       const Heading = HEADING_TAGS[Math.min(block.level, 4) - 1];
@@ -53,11 +83,16 @@ function Block({ block, depth }: { block: MdBlock; depth: number }) {
         </p>
       );
     case "list":
-      return <List block={block} depth={depth} />;
+      return <List block={block} depth={depth} taskScope={taskScope} taskCounter={taskCounter} />;
     case "quote":
       return (
         <blockquote>
-          <MarkdownBlocks text={block.source} depth={depth} />
+          <MarkdownBlocks
+            text={block.source}
+            depth={depth}
+            taskScope={taskScope}
+            taskCounter={taskCounter}
+          />
         </blockquote>
       );
     case "code":
@@ -99,35 +134,79 @@ function taskLabel(source: string, fallback: string): string {
   return inlineText(parseInline(line)).trim() || fallback;
 }
 
-function List({ block, depth }: { block: Extract<MdBlock, { kind: "list" }>; depth: number }) {
-  const items = block.items.map((item, index) => {
-    const fallback = `${block.ordered ? block.start + index : index + 1}番目のタスク`;
-    const label = item.task === undefined ? null : taskLabel(item.source, fallback);
-    return (
-      <li class="hwc-md-li" key={index}>
-        {item.task !== undefined && block.ordered ? (
-          <>
-            <span class="hwc-md-marker" aria-hidden="true">
-              {`${block.start + index}.`}
-            </span>
-            <TaskCheckbox checked={item.task} label={label ?? fallback} />
-          </>
-        ) : item.task !== undefined ? (
-          <span class="hwc-md-marker">
-            <TaskCheckbox checked={item.task} label={label ?? fallback} />
-          </span>
-        ) : (
-          <span class="hwc-md-marker" aria-hidden="true">
-            {block.ordered ? `${block.start + index}.` : depth === 0 ? "•" : "◦"}
-          </span>
-        )}
-        <div class="hwc-md-li-body">
-          <MarkdownBlocks text={item.source} depth={depth + 1} />
-        </div>
-      </li>
-    );
-  });
+function List({
+  block,
+  depth,
+  taskScope,
+  taskCounter,
+}: {
+  block: Extract<MdBlock, { kind: "list" }>;
+  depth: number;
+  taskScope?: string;
+  taskCounter: TaskCounter;
+}) {
+  const items = block.items.map((item, index) => (
+    <ListItem
+      block={block}
+      depth={depth}
+      index={index}
+      item={item}
+      key={index}
+      taskScope={taskScope}
+      taskCounter={taskCounter}
+    />
+  ));
   return block.ordered ? <ol start={block.start}>{items}</ol> : <ul>{items}</ul>;
+}
+
+function ListItem({
+  block,
+  depth,
+  index,
+  item,
+  taskScope,
+  taskCounter,
+}: {
+  block: Extract<MdBlock, { kind: "list" }>;
+  depth: number;
+  index: number;
+  item: MdListItem;
+  taskScope?: string;
+  taskCounter: TaskCounter;
+}) {
+  const fallback =
+    item.task === undefined
+      ? "タスク"
+      : `${taskScope === undefined ? "" : `${taskScope}の`}${++taskCounter.value}番目のタスク`;
+  const label = item.task === undefined ? null : taskLabel(item.source, fallback);
+  return (
+    <li class="hwc-md-li">
+      {item.task !== undefined && block.ordered ? (
+        <>
+          <span class="hwc-md-marker" aria-hidden="true">
+            {`${block.start + index}.`}
+          </span>
+          <TaskCheckbox checked={item.task} label={label ?? fallback} />
+        </>
+      ) : item.task !== undefined ? (
+        <span class="hwc-md-marker">
+          <TaskCheckbox checked={item.task} label={label ?? fallback} />
+        </span>
+      ) : (
+        <span class="hwc-md-marker" aria-hidden="true">
+          {block.ordered ? `${block.start + index}.` : depth === 0 ? "•" : "◦"}
+        </span>
+      )}
+      <div class="hwc-md-li-body">
+        <MarkdownBlocks
+          text={item.source}
+          depth={depth + 1}
+          taskScope={taskScope}
+          taskCounter={taskCounter}
+        />
+      </div>
+    </li>
+  );
 }
 
 function TaskCheckbox({ checked, label }: { checked: boolean; label: string }) {
