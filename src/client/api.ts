@@ -305,3 +305,30 @@ export async function closePane(paneId: string): Promise<CloseOutcome> {
     return "failed";
   }
 }
+
+export type CreatePaneOutcome = { ok: true; paneId: string } | { ok: false };
+
+// 作成の目的は新しいペイン。応答に ID が無いと開けないので、形が違えば失敗にする。
+export function toCreatedPane(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const paneId = (value as { paneId?: unknown }).paneId;
+  return typeof paneId === "string" && paneId !== "" ? paneId : null;
+}
+
+// 送信はメニュー内で待つ。返らない経路で「作成中…」のままにしないよう切る。
+export const CREATE_TIMEOUT_MS = 8_000;
+
+export async function createPane(paneId: string): Promise<CreatePaneOutcome> {
+  try {
+    const response = await client.api.panes[":id"].split.$post(paneParam(paneId), {
+      headers: { "content-type": "application/json" },
+      init: { signal: AbortSignal.timeout(CREATE_TIMEOUT_MS) },
+    });
+    if (!response.ok) return { ok: false };
+    const created = toCreatedPane(await response.json().catch(() => null));
+    return created === null ? { ok: false } : { ok: true, paneId: created };
+  } catch {
+    // 通信の失敗と打ち切りは、作成できなかった結果として扱う。
+    return { ok: false };
+  }
+}

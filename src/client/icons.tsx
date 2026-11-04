@@ -82,6 +82,15 @@ export function MoreIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function PlusIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Svg>
+  );
+}
+
 export function CopyIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

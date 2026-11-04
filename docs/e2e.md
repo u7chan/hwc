@@ -31,12 +31,19 @@ bun run e2e:serve
 - `session.snapshot`
 - `events.subscribe`
 - `pane.read`
+- `pane.layout`
 - `pane.send_input`
 - `pane.send_keys`
 - `agent.focus`
+- `pane.split`
 - `pane.close`
 
-`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`agent.focus` はフォーカスを移して `pane.focused` を流す。`pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。BFF は実 Herdr と同じようにイベントで状態を取り直す。
+`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`pane.split` は
+`target_pane_id` のタブにシェルペインを 1 枚足し、`pane_info` を返して `pane.created` を流す。
+`pane.layout` はそのタブのセルを等幅のグリッドとして返す（E2E 用の固定形で、実際の分割方向は
+BFF の unit で確かめる）。`agent.focus` はフォーカスを移して `pane.focused` を流す。
+`pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
+BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 `pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。
 

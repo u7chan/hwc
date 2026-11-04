@@ -25,7 +25,9 @@ import {
   TEXT_TOO_LONG,
   TEXT_WITH_ATTACHMENTS_TOO_LONG,
 } from "./herdr/panes";
-import type { AppState, PaneState, StateStore } from "./herdr/state";
+import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
+import { planSplit } from "./herdr/split";
+import { MAX_PANES_PER_TAB } from "../shared/panes";
 
 // Bun.serve は 10 秒間何も書かれない chunked 応答を打ち切る。状態が変わらない間も接続を
 // 保つため、これより短い間隔でハートビートを送る。
@@ -62,16 +64,17 @@ export function createApp(options: {
     return c.json({ error: "herdr_unavailable" }, 502);
   };
 
-  const findPane = (state: AppState, paneId: string): PaneState | null => {
+  const findPaneTab = (state: AppState, paneId: string): TabState | null => {
     for (const workspace of state.workspaces) {
       for (const tab of workspace.tabs) {
-        for (const pane of tab.panes) {
-          if (pane.id === paneId) return pane;
-        }
+        if (tab.panes.some((pane) => pane.id === paneId)) return tab;
       }
     }
     return null;
   };
+
+  const findPane = (state: AppState, paneId: string): PaneState | null =>
+    findPaneTab(state, paneId)?.panes.find((pane) => pane.id === paneId) ?? null;
 
   // If-None-Match は弱比較。W/ と引用符を落として比べ、複数値と * も受ける。
   const matchesEtag = (header: string | undefined, etag: string): boolean => {
@@ -357,6 +360,38 @@ export function createApp(options: {
         await panes.close({ paneId });
         // focus と同じく、状態の取り直しは Herdr のイベント（pane.closed）に任せる。
         return c.json({ ok: true });
+      } catch (error) {
+        return paneFailure(c, error);
+      }
+    })
+    .post("/api/panes/:id/split", async (c) => {
+      // ペインを増やす操作なので、form POST で叩ける状態にしない。
+      // body は読まない（追加の指定は無く、対象は path とレイアウトから決める）。
+      if (!isJsonRequest(c)) {
+        return c.json({ error: "content-type must be application/json" }, 415);
+      }
+
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      const tab = findPaneTab(state, paneId);
+      if (tab === null) return c.json({ error: "pane_not_found" }, 404);
+      // 画面が古い・同時に押された場合の取りこぼしを、Herdr を呼ぶ前に止める。
+      if (tab.panes.length >= MAX_PANES_PER_TAB) return c.json({ error: "pane_limit" }, 409);
+
+      try {
+        const layout = await panes.layout({ paneId });
+        const plan = planSplit(layout.cells);
+        if (plan === null) return c.json({ error: "pane_limit" }, 409);
+
+        const created = await panes.split({
+          paneId: plan.paneId,
+          direction: plan.direction,
+          ratio: plan.ratio,
+        });
+        // focus / close と同じく、状態の取り直しは Herdr のイベント（pane.created）に任せる。
+        return c.json({ paneId: created.paneId });
       } catch (error) {
         return paneFailure(c, error);
       }
