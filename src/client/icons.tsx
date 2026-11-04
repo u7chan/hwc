@@ -227,7 +227,7 @@ export function SendIcon({ size = 20 }: IconProps) {
 export function StopIcon({ size = 20 }: IconProps) {
   return (
     <Svg size={size}>
-      <rect x="6.5" y="6.5" width="11" height="11" rx="2.2" fill="currentColor" stroke="none" />
+      <rect x="2" y="2" width="20" height="20" rx="3.2" fill="currentColor" stroke="none" />
     </Svg>
   );
 }
