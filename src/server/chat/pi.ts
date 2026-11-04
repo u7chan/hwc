@@ -1,12 +1,16 @@
 import { createHash, randomUUID } from "node:crypto";
 import { type FileHandle, open, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ChatCompaction, ChatContext, ChatMessage, ChatSnapshot } from "./contract";
+import type {
+  ChatCompaction,
+  ChatContext,
+  ChatMessage,
+  ChatSnapshot,
+  SessionChatClient,
+} from "./contract";
 import { stripAttachedFiles } from "../../shared/attachments";
-
-// 直近の会話だけを返す。古い側は端末出力で読める。
-const MAX_MESSAGES = 500;
-const MAX_BYTES = 1024 * 1024;
+import { ChatUnavailableError } from "./errors";
+import { limitMessages } from "./limit";
 
 // 40MB のセッションを一度に読まないよう、追記分はチャンクに分けて読む。
 const CHUNK_BYTES = 1024 * 1024;
@@ -19,11 +23,9 @@ const CURRENT_VERSION = 3;
 const MODELS_STORE = "models-store.json";
 const MODELS_CONFIG = "models.json";
 
-export class ChatUnavailableError extends Error {}
+export { ChatUnavailableError };
 
-export type ChatClient = {
-  snapshot: (sessionPath: string) => Promise<ChatSnapshot>;
-};
+export type ChatClient = SessionChatClient;
 
 // (provider, model) から contextWindow を引く。プロセス内で固定のカタログとして扱う。
 export type ModelCatalog = {
@@ -420,28 +422,6 @@ function activeBranch(reader: ChatReader): SessionEntry[] {
     id = entry.parentId;
   }
   return branch.reverse();
-}
-
-function limitMessages(messages: readonly ChatMessage[]): {
-  messages: ChatMessage[];
-  truncated: boolean;
-} {
-  const kept: ChatMessage[] = [];
-  let bytes = 0;
-
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (!message) continue;
-    const size = Buffer.byteLength(message.text, "utf8");
-    // 1 件で上限を超える場合は、その 1 件だけを返す。
-    if (kept.length > 0 && (kept.length >= MAX_MESSAGES || bytes + size > MAX_BYTES)) {
-      return { messages: kept.reverse(), truncated: true };
-    }
-    kept.push(message);
-    bytes += size;
-  }
-
-  return { messages: kept.reverse(), truncated: false };
 }
 
 async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promise<ChatSnapshot> {

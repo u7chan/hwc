@@ -14,7 +14,7 @@ import {
   readAttachment,
   saveAttachment,
 } from "./attachments";
-import type { ChatClient } from "./chat/pi";
+import type { SessionChatClient } from "./chat/contract";
 import {
   agentNameForPane,
   exceedsTextLimit,
@@ -39,7 +39,10 @@ export const SSE_HEARTBEAT_MS = 5_000;
 export function createApp(options: {
   store: StateStore;
   panes: PaneClient;
-  chat: ChatClient;
+  chat: SessionChatClient;
+  // opencode はローカルサービスの API から読む。サービスを読めない構成でも、ペインの
+  // 一覧や端末出力は使えるようにする。
+  opencode?: SessionChatClient;
   revision?: string;
   sseHeartbeatMs?: number;
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
@@ -49,6 +52,7 @@ export function createApp(options: {
     store,
     panes,
     chat,
+    opencode,
     revision = "dev",
     sseHeartbeatMs = SSE_HEARTBEAT_MS,
     attachmentsRoot = defaultAttachmentsRoot(),
@@ -217,15 +221,17 @@ export function createApp(options: {
       const pane = findPane(state, paneId);
       if (!pane) return c.json({ error: "pane_not_found" }, 404);
 
-      // path はクライアントから受け取らず、BFF がペイン id から引く。
-      const path = store.sessionPath(paneId);
-      if (!pane.chat || path === null) return c.json({ error: "no_chat" }, 404);
+      // セッションの在り処はクライアントから受け取らず、BFF がペイン id から引く。
+      const source = store.chatSource(paneId);
+      if (!pane.chat || source === null) return c.json({ error: "no_chat" }, 404);
+
+      const client = source.agent === "pi" ? chat : opencode;
+      if (client === undefined) return c.json({ error: "chat_unavailable" }, 502);
 
       try {
-        const snapshot = await chat.snapshot(path);
-        // context.window はプロセス内で 1 回だけ解決したカタログから引く（pi.ts）。起動後に
-        // モデルカタログを再読込しないので window はプロセス内で定数になり、session の
-        // generation だけを ETag にしても整合する。
+        const snapshot = await client.snapshot(
+          source.agent === "pi" ? source.path : source.sessionId,
+        );
         c.header("ETag", `"${snapshot.etag}"`);
         if (matchesEtag(c.req.header("if-none-match"), snapshot.etag)) {
           return c.body(null, 304);

@@ -27,3 +27,8 @@ export type ChatSnapshot = {
   context: ChatContext | null;
   compaction: ChatCompaction | null;
 };
+
+// BFF がペイン id から解決した会話の読み取り口。セッション id や path はクライアントへ渡さない。
+export type SessionChatClient = {
+  snapshot: (sessionId: string) => Promise<ChatSnapshot>;
+};
