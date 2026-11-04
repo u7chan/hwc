@@ -261,6 +261,17 @@ export async function uploadAttachment(
   return { ok: true, name };
 }
 
+// Esc を送るだけなら即座に返る。返らない経路でボタンを回し続けないよう切る。
+export const STOP_TIMEOUT_MS = 8_000;
+
+export async function stopAgent(paneId: string): Promise<void> {
+  const response = await client.api.panes[":id"].stop.$post(paneParam(paneId), {
+    headers: { "content-type": "application/json" },
+    init: { signal: AbortSignal.timeout(STOP_TIMEOUT_MS) },
+  });
+  if (!response.ok) throw new Error(`stop: ${response.status}`);
+}
+
 export async function focusAgent(paneId: string, signal?: AbortSignal): Promise<void> {
   // body は読まれないが、BFF は application/json 以外を 415 で弾く。
   const response = await client.api.panes[":id"].focus.$post(paneParam(paneId), {

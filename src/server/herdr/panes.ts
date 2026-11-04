@@ -24,12 +24,15 @@ export type InputBody = { text: string; submit: boolean; attachments: string[] }
 
 export type FocusOptions = { paneId: string };
 
+export type StopOptions = { paneId: string };
+
 export type CloseOptions = { paneId: string };
 
 export type PaneClient = {
   read: (options: ReadOptions) => Promise<PaneOutput>;
   send: (options: SendOptions) => Promise<void>;
   focus: (options: FocusOptions) => Promise<void>;
+  stop: (options: StopOptions) => Promise<void>;
   close: (options: CloseOptions) => Promise<void>;
 };
 
@@ -135,6 +138,10 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
     async focus({ paneId }) {
       // target はエージェント名も受けるが、hwc が持つのはペイン id だけ。
       await call("agent.focus", { target: paneId }, { path });
+    },
+    async stop({ paneId }) {
+      // Herdr は Esc を esc として受ける。文字は送らず、キーだけを 1 回送る。
+      await call("pane.send_keys", { pane_id: paneId, keys: ["esc"] }, { path });
     },
     async close({ paneId }) {
       // ペインを閉じるとエージェントのプロセスも終わる。開いていた作業は戻らない。

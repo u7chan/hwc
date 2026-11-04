@@ -224,6 +224,12 @@ test("the focus request keeps the pane id in a single path segment", () => {
   );
 });
 
+test("the stop request keeps the pane id in a single path segment", () => {
+  expect(api.api.panes[":id"].stop.$url(paneParam("w1/p2")).pathname).toBe(
+    "/api/panes/w1%2Fp2/stop",
+  );
+});
+
 test("the close request keeps the pane id in a single path segment", () => {
   expect(api.api.panes[":id"].close.$url(paneParam("w1/p2")).pathname).toBe(
     "/api/panes/w1%2Fp2/close",

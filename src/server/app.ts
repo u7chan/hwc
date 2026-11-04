@@ -294,6 +294,30 @@ export function createApp(options: {
         return paneFailure(c, error);
       }
     })
+    .post("/api/panes/:id/stop", async (c) => {
+      // 実行中のターンを止める操作なので、form POST で叩ける状態にしない。
+      if (!isJsonRequest(c)) {
+        return c.json({ error: "content-type must be application/json" }, 415);
+      }
+
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      const pane = findPane(state, paneId);
+      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+
+      // 止まっているペインに Esc を送ると、入力欄やダイアログを閉じてしまう。
+      // 画面が古いだけの再クリックは成功として扱い、状態の反映はイベントに任せる。
+      if (pane.agentStatus !== "working") return c.json({ ok: true });
+
+      try {
+        await panes.stop({ paneId });
+        return c.json({ ok: true });
+      } catch (error) {
+        return paneFailure(c, error);
+      }
+    })
     .post("/api/panes/:id/focus", async (c) => {
       // TUI のフォーカスを動かす操作なので、form POST で叩ける状態にしない。
       // body は読まない（ペイン id は path にあり、追加の指定は無い）。

@@ -5,7 +5,15 @@ import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
-import { fetchRevision, fetchState, focusAgent, closePane, parseAppState, sendInput } from "./api";
+import {
+  fetchRevision,
+  fetchState,
+  focusAgent,
+  closePane,
+  parseAppState,
+  sendInput,
+  stopAgent,
+} from "./api";
 import {
   INITIAL_CONNECTION,
   connectionAfter,
@@ -516,6 +524,16 @@ export function App() {
     return true;
   };
 
+  // 停止も送信と同じく、結果を画面に反映するのは PaneDetail に任せる。
+  const stopPane = async (paneId: string): Promise<boolean> => {
+    try {
+      await stopAgent(paneId);
+    } catch {
+      return false;
+    }
+    return true;
+  };
+
   // 詳細のタブバーは、選択中ペインが属するタブのペインだけを出す。
   const siblings = (() => {
     if (!state || !pane) return [];
@@ -596,6 +614,7 @@ export function App() {
       menuOpen={menu?.paneId === item.id}
       onOpenMenu={openPaneMenu}
       onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
+      onStop={() => stopPane(item.id)}
     />
   );
 
