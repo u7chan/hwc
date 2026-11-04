@@ -1002,9 +1002,10 @@ button {
     padding: var(--space-3) 0 var(--space-3) var(--space-1);
   }
 
-  /* 経過時間の前は gap が空ける。二重に取ると名前の幅が減る。 */
+  /* 経過時間の前は gap が空ける。右端には一覧の余白を残す。 */
   .hwc-pane-elapsed {
     margin-left: 0;
+    margin-right: var(--space-2);
   }
 }
 
