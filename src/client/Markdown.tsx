@@ -1,8 +1,10 @@
 import type { ComponentChildren } from "preact";
-import { useMemo } from "preact/hooks";
-import { parseInline } from "./markdown/inline";
+import { useMemo, useState } from "preact/hooks";
+import { useCopy } from "./copy";
+import { CopyGlyph } from "./icons";
+import { inlineText, parseInline } from "./markdown/inline";
 import { MARKDOWN_MAX_LENGTH, parseMarkdown } from "./markdown/parse";
-import type { MdBlock, MdInline, MdListItem } from "./markdown/types";
+import type { MdBlock, MdInline } from "./markdown/types";
 
 const HEADING_TAGS = ["h3", "h4", "h5", "h6"] as const;
 
@@ -23,18 +25,18 @@ export function Markdown({ text }: { text: string }) {
   );
 }
 
-function MarkdownBlocks({ text }: { text: string }) {
+function MarkdownBlocks({ text, depth = 0 }: { text: string; depth?: number }) {
   const blocks = useMemo(() => parseMarkdown(text), [text]);
   return (
     <>
       {blocks.map((block, index) => (
-        <Block block={block} key={index} />
+        <Block block={block} depth={depth} key={index} />
       ))}
     </>
   );
 }
 
-function Block({ block }: { block: MdBlock }) {
+function Block({ block, depth }: { block: MdBlock; depth: number }) {
   switch (block.kind) {
     case "heading": {
       const Heading = HEADING_TAGS[Math.min(block.level, 4) - 1];
@@ -51,30 +53,15 @@ function Block({ block }: { block: MdBlock }) {
         </p>
       );
     case "list":
-      return block.ordered ? (
-        <ol start={block.start}>
-          <ListItems items={block.items} />
-        </ol>
-      ) : (
-        <ul>
-          <ListItems items={block.items} />
-        </ul>
-      );
+      return <List block={block} depth={depth} />;
     case "quote":
       return (
         <blockquote>
-          <MarkdownBlocks text={block.source} />
+          <MarkdownBlocks text={block.source} depth={depth} />
         </blockquote>
       );
     case "code":
-      return (
-        <div class="hwc-md-figure">
-          {block.lang === null ? null : <span class="hwc-md-lang">{block.lang}</span>}
-          <pre class="hwc-md-pre">
-            <code>{block.text}</code>
-          </pre>
-        </div>
-      );
+      return <CodeBlock lang={block.lang} text={block.text} />;
     case "table":
       return (
         <div class="hwc-md-table-wrap">
@@ -107,15 +94,91 @@ function Block({ block }: { block: MdBlock }) {
   }
 }
 
-function ListItems({ items }: { items: MdListItem[] }) {
+function taskLabel(source: string): string {
+  const line = source.split("\n", 1)[0] ?? "";
+  return inlineText(parseInline(line)).trim() || "タスク";
+}
+
+function List({ block, depth }: { block: Extract<MdBlock, { kind: "list" }>; depth: number }) {
+  const items = block.items.map((item, index) => {
+    const label = item.task === undefined ? null : taskLabel(item.source);
+    return (
+      <li class="hwc-md-li" key={index}>
+        {item.task !== undefined && block.ordered ? (
+          <>
+            <span class="hwc-md-marker" aria-hidden="true">
+              {`${block.start + index}.`}
+            </span>
+            <TaskCheckbox checked={item.task} label={label ?? "タスク"} />
+          </>
+        ) : item.task !== undefined ? (
+          <span class="hwc-md-marker">
+            <TaskCheckbox checked={item.task} label={label ?? "タスク"} />
+          </span>
+        ) : (
+          <span class="hwc-md-marker" aria-hidden="true">
+            {block.ordered ? `${block.start + index}.` : depth === 0 ? "•" : "◦"}
+          </span>
+        )}
+        <div class="hwc-md-li-body">
+          <MarkdownBlocks text={item.source} depth={depth + 1} />
+        </div>
+      </li>
+    );
+  });
+  return block.ordered ? <ol start={block.start}>{items}</ol> : <ul>{items}</ul>;
+}
+
+function TaskCheckbox({ checked, label }: { checked: boolean; label: string }) {
+  const [done, setDone] = useState(checked);
   return (
-    <>
-      {items.map((item, index) => (
-        <li key={index}>
-          <MarkdownBlocks text={item.source} />
-        </li>
-      ))}
-    </>
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={done}
+      aria-label={label}
+      aria-description="押すと切り替わります。保存されません"
+      class="hwc-md-task"
+      onClick={() => setDone(!done)}
+    >
+      <span class="hwc-md-task-box" data-checked={done}>
+        {done ? (
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true">
+            <polyline
+              points="3,8.5 6.5,12 13,4.5"
+              stroke-width="2.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+function CodeBlock({ lang, text }: { lang: string | null; text: string }) {
+  const { copiedId, copy } = useCopy();
+  const copied = copiedId === "code";
+  return (
+    <div class="hwc-md-figure">
+      {lang === null ? null : <span class="hwc-md-lang">{lang}</span>}
+      <div class="hwc-md-code">
+        <pre class="hwc-md-pre">
+          <code>{text}</code>
+        </pre>
+        <button
+          type="button"
+          class="hwc-md-copy"
+          data-copied={copied}
+          aria-label={copied ? "コピーしました" : "コードをコピー"}
+          title={copied ? "コピーしました" : "コピー"}
+          onClick={() => copy("code", text)}
+        >
+          <CopyGlyph copied={copied} size={14} />
+        </button>
+      </div>
+    </div>
   );
 }
 

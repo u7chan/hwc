@@ -1,3 +1,11 @@
+/* UI の日本語を OS に依存させないため同梱する。可変フォント 1 本で 100〜900 を賄う。 */
+@font-face {
+  font-family: "Noto Sans JP";
+  src: url("../assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 /* Herdr の出力は Nerd Font の PUA を含む。端末側のフォントは Windows のブラウザから見えないので同梱する。
    unicode-range で PUA を描いたときにだけ取りに行かせ、初回表示には載せない。 */
 @font-face {
@@ -33,9 +41,14 @@
   --color-danger: #b3333c;
   --color-agent-claude: #c15f3c;
 
-  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", sans-serif;
-  /* 記号は最後に置く。先頭に置くと等幅の本文まで記号フォントで組まれる。 */
-  --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Nerd Symbols Mono", monospace;
+  /* UI は同梱の Noto Sans JP。読み込めない環境では OS 標準へ落とす。 */
+  --font-ui:
+    "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI",
+    "Noto Sans", sans-serif;
+  /* 記号は最後に置く。先頭に置くと等幅の本文まで記号フォントで組まれる。
+     BIZ UDGothic は Windows の日本語コード用。iOS には無いので ui-monospace を先頭に残す。 */
+  --font-mono:
+    ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
 
   /* 余白は 4px の段階。部品側では生の px を書かない。 */
   --space-1: 4px;

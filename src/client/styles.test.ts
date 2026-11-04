@@ -93,6 +93,7 @@ test("classes used by the client keep the hwc- prefix", async () => {
 
 // アイコンの豆腐は、欠けても気づきにくい。CSS と同梱物の対応をここで固定する。
 const SYMBOLS_FACE = tokens.match(/@font-face\s*\{[^}]*Nerd Symbols Mono[^}]*\}/)?.[0] ?? "";
+const UI_FACE = tokens.match(/@font-face\s*\{[^}]*Noto Sans JP[^}]*\}/)?.[0] ?? "";
 
 function unicodeRangeCovers(range: string, codepoint: number): boolean {
   return range.split(",").some((part) => {
@@ -132,7 +133,8 @@ function normaliseRanges(range: string): string[] {
 
 test("the stylesheet and the font recipe cover the same codepoints", async () => {
   const notice = await Bun.file("src/client/assets/fonts/NOTICE.md").text();
-  const recipe = /--unicodes="([^"]+)"/.exec(notice)?.[1] ?? "";
+  const nerd = notice.slice(notice.indexOf("# Nerd Symbols Mono"));
+  const recipe = /--unicodes="([^"]+)"/.exec(nerd)?.[1] ?? "";
   const range = /unicode-range:\s*([^;]+);/.exec(SYMBOLS_FACE)?.[1] ?? "";
 
   expect(recipe).not.toBe("");
@@ -143,6 +145,18 @@ test("the nerd symbols font file exists where the stylesheet points", async () =
   const url = /url\("([^"]+)"\)/.exec(SYMBOLS_FACE)?.[1] ?? "";
   const path = `src/client/styles/${url}`;
 
+  expect(url).toEndWith(".woff2");
+  expect(await Bun.file(path).exists()).toBe(true);
+});
+
+test("the ui font is bundled and backs the ui stack", async () => {
+  const family = /font-family:\s*"([^"]+)"/.exec(UI_FACE)?.[1];
+  const stack = (/--font-ui:\s*([^;]+);/.exec(tokens)?.[1] ?? "").trim();
+  const url = /url\("([^"]+)"\)/.exec(UI_FACE)?.[1] ?? "";
+  const path = `src/client/styles/${url}`;
+
+  expect(family).toBe("Noto Sans JP");
+  expect(stack.startsWith(`"${family}"`)).toBe(true);
   expect(url).toEndWith(".woff2");
   expect(await Bun.file(path).exists()).toBe(true);
 });

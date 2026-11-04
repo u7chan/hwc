@@ -27,6 +27,27 @@ export function parseInline(text: string): MdInline[] {
   return scanInline(text, { attempts: MAX_ATTEMPTS }, 0, true);
 }
 
+/** 表示用のテキスト。チェックボックスの名前など、記法を落として読み上げたい場所で使う */
+export function inlineText(nodes: MdInline[]): string {
+  return nodes
+    .map((node) => {
+      switch (node.kind) {
+        case "text":
+        case "literal":
+        case "code":
+          return node.text;
+        case "strong":
+        case "em":
+        case "del":
+        case "link":
+          return inlineText(node.children);
+        case "break":
+          return " ";
+      }
+    })
+    .join("");
+}
+
 /** allowLinks=false はリンクのラベル内 (リンクの入れ子を作らない) */
 function scanInline(
   text: string,

@@ -2187,24 +2187,118 @@ p.hwc-compaction,
 
 /* 先頭と末尾の余白はメッセージ側の gap に任せる。入れ子の再帰でも同じ規則を使う。 */
 .hwc-md > :first-child,
-.hwc-md li > :first-child,
 .hwc-md blockquote > :first-child {
   margin-block-start: 0;
 }
 
 .hwc-md > :last-child,
-.hwc-md li > :last-child,
 .hwc-md blockquote > :last-child {
   margin-block-end: 0;
 }
 
+/* 会話全体が <ol> なので、UA の ol ul / ul ul に頼らず、記号は自前の列で置く。
+   先頭のリストも段落と同じ左端に揃える。 */
 .hwc-md ul,
 .hwc-md ol {
-  padding-inline-start: var(--space-5);
+  padding-inline-start: 0;
+  list-style: none;
+}
+
+.hwc-md li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .hwc-md li + li {
   margin-block-start: var(--space-1);
+}
+
+/* 記号は 20px の内容列に右寄せし、右に 4px の余白を置く。本文はさらに 4px 空けるので、
+   記号と本文は 8px 離れる。2 桁の番号が折り返すと行の高さが変わるため、記号は折り返さない。
+   入れ子のリストは本文の列の中に置くので、段ごとに 28px 下がる。 */
+.hwc-md-marker {
+  flex: none;
+  width: var(--space-6);
+  padding-right: var(--space-1);
+  color: var(--color-secondary);
+  line-height: inherit;
+  text-align: right;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hwc-md-li-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 項目内の段落は入れ子リストの前後で余白を作らない。段落が続くときだけ空ける。 */
+.hwc-md-li-body > p {
+  margin-block: 0;
+}
+
+.hwc-md-li-body > p + p {
+  margin-block-start: var(--space-3);
+}
+
+/* 入れ子は前の行に続けて置く。汎用の 12px だと親項目から離れて別の段落に見える。 */
+.hwc-md-li-body > :is(ul, ol) {
+  margin-block-start: var(--space-1);
+}
+
+.hwc-md-li-body > :first-child {
+  margin-block-start: 0;
+}
+
+.hwc-md-li-body > :last-child {
+  margin-block-end: 0;
+}
+
+/* タスクリストのチェック。押した結果はこの画面だけに持ち、Markdown は書き換えない。 */
+.hwc-md-task {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-5);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hwc-md-task-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1.5px solid var(--color-control-line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-on-accent);
+}
+
+.hwc-md-task:hover .hwc-md-task-box {
+  border-color: var(--color-text);
+}
+
+.hwc-md-task-box[data-checked="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.hwc-md-task-box svg {
+  width: 0.625rem;
+  height: 0.625rem;
 }
 
 .hwc-md blockquote {
@@ -2268,6 +2362,64 @@ p.hwc-compaction,
 .hwc-md-pre code {
   padding: 0;
   background: none;
+}
+
+/* コードブロックのコピー。hover できる端末では hover でフワッと出し、
+   触れる端末では常に出す。 */
+.hwc-md-code {
+  position: relative;
+  min-width: 0;
+}
+
+.hwc-md-copy {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-mark);
+  background: var(--color-raised);
+  color: var(--color-secondary);
+  cursor: pointer;
+  opacity: 1;
+  transition:
+    opacity 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (hover: hover) {
+  .hwc-md-copy {
+    opacity: 0;
+  }
+
+  .hwc-md-code:hover .hwc-md-copy,
+  .hwc-md-copy:focus-visible {
+    opacity: 1;
+  }
+}
+
+.hwc-md-copy:hover {
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+
+.hwc-md-copy[data-copied="true"] {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-md-copy {
+    transition: none;
+  }
 }
 
 .hwc-md-table-wrap {
