@@ -37,6 +37,14 @@ bun run e2e:serve
 
 `pane.close` はスナップショットからペインを消して `pane.closed` を流す。`agent.focus` はフォーカスを移して `pane.focused` を流す。BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
+`pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。
+
+追記しない条件:
+
+- `agent_session` を持たないペイン（シェルや、会話を読まないペイン）。端末出力にだけ追記する
+- `/new` と `/compact`（`/compact <指示>` を含む）。会話を残さないか、履歴を置き換える
+- text が空の送信
+
 ## データを変える
 
 `e2e/fixtures/scenario.ts` を編集する。ワークスペース、タブ、ペイン、端末出力、pi セッション、ブランチはすべてここで作る。
