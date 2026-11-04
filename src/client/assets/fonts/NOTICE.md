@@ -1,3 +1,21 @@
+# Noto Sans JP
+
+`NotoSansJP-Variable.woff2` は Google Fonts の `NotoSansJP[wght].ttf`（Noto Sans JP v2.004）を woff2 に変換したもの。UI の日本語を OS に依存させないため同梱する。可変フォント 1 本で 100〜900 を賄う。
+
+## 再生成
+
+```bash
+curl -L -o NotoSansJP.ttf \
+  'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf'
+uv run --with fonttools --with brotli pyftsubset NotoSansJP.ttf \
+  --unicodes='U+0-10FFFF' --flavor=woff2 --layout-features='*' --no-hinting \
+  --output-file=src/client/assets/fonts/NotoSansJP-Variable.woff2
+```
+
+## ライセンス
+
+SIL Open Font License 1.1。全文は [NotoSansJP-OFL.txt](NotoSansJP-OFL.txt)。
+
 # Nerd Symbols Mono
 
 `NerdSymbolsMono.woff2` は Nerd Fonts v3.5.1 の `SymbolsNerdFontMono-Regular.ttf` を woff2 に変換したもの。ペイン出力に含まれる PUA のアイコンを描くためだけに使う（ADR 0015）。

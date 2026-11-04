@@ -55,13 +55,13 @@
 
 ## 文字
 
-UI はシステムのサンセリフ体を使う。日本語は OS の標準フォント（Hiragino Sans / Yu Gothic UI）に任せる。識別子・コード・整形済みの出力だけ等幅にし、長い説明文まで等幅にしない。
+UI は Noto Sans JP を同梱して使う。読み込めない環境では OS の標準フォント（Hiragino Sans / Yu Gothic UI）へ落とす。識別子・コード・整形済みの出力だけ等幅にし、長い説明文まで等幅にしない。
 
 ```css
 :root {
   --font-ui:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Noto Sans",
-    sans-serif;
+    "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI",
+    "Noto Sans", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", monospace;
 }
 ```
