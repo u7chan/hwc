@@ -201,9 +201,20 @@ export function findPaneContext(state: AppState, paneId: string | null): PaneCon
   return null;
 }
 
+// 端末タイトルの先頭にはエージェント自身の印が付く（`π - hwc` / `OC | title`）。
+// Provider は詳細のアイコンで分かるので、名前からは印を落とす。形が違えばそのまま使う。
+function titleText(title: string | null): string | null {
+  if (title === null) return null;
+  const text = title
+    .replace(/^π\s*-\s*/, "")
+    .replace(/^OC\s*\|\s*/i, "")
+    .trim();
+  return text === "" ? null : text;
+}
+
 // 一覧・タブ・見出しで同じ名前を出す。label は Herdr で付けた作業名、title は端末のタイトル。
 export function paneName(pane: PaneState): string {
-  return pane.title ?? pane.label ?? pane.agent ?? pane.id;
+  return titleText(pane.title) ?? pane.label ?? pane.agent ?? pane.id;
 }
 
 // 一覧の 1 段目はペイン名。端末タイトルは同じリポジトリで同じ値になるので、

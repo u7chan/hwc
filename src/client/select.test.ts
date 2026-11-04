@@ -403,7 +403,7 @@ test("there is no successor when every other pane is hidden", () => {
   expect(nextPaneInTab(panes, "w1:p1", new Set(["w1:p2"]))).toBeNull();
 });
 
-test("the pane name prefers the terminal title, then the Herdr label", () => {
+test("the pane name drops the agent mark from the terminal title", () => {
   const base = {
     id: "w1:p9",
     title: null,
@@ -414,7 +414,9 @@ test("the pane name prefers the terminal title, then the Herdr label", () => {
     chat: false,
   };
 
-  expect(paneName({ ...base, title: "π - hwc", label: "impl" })).toBe("π - hwc");
+  expect(paneName({ ...base, title: "π - hwc", label: "impl" })).toBe("hwc");
+  expect(paneName({ ...base, title: "OC | Single letter a" })).toBe("Single letter a");
+  expect(paneName({ ...base, title: "π - " })).toBe("w1:p9");
   expect(paneName({ ...base, label: "impl", agent: "pi" })).toBe("impl");
   expect(paneName({ ...base, agent: "pi" })).toBe("pi");
   expect(paneName(base)).toBe("w1:p9");
@@ -433,6 +435,7 @@ test("the label is shown as a subtitle only when it differs from the name", () =
 
   // 4 つのペインが同じ端末タイトルでも、一覧ではラベルで見分けられる。
   expect(paneSubLabel({ ...base, title: "π - hwc", label: "impl" })).toBe("impl");
+  expect(paneSubLabel({ ...base, title: "π - impl", label: "impl" })).toBeNull();
   expect(paneSubLabel({ ...base, label: "impl" })).toBeNull();
   expect(paneSubLabel({ ...base, title: "π - hwc" })).toBeNull();
 });
@@ -460,9 +463,7 @@ test("the tab chip and the detail header tell panes apart by their label", () =>
   });
 
   // 名前は同じでも、副題で 4 枚を見分けられる。
-  expect(new Set(shown.map((pane) => pane.name))).toEqual(
-    new Set(["π - feat-client-api-connection"]),
-  );
+  expect(new Set(shown.map((pane) => pane.name))).toEqual(new Set(["feat-client-api-connection"]));
   expect(shown.map((pane) => pane.sub)).toEqual(labels);
 });
 
@@ -494,5 +495,5 @@ test("a row is titled by its name, not by the terminal title", () => {
 
   expect(paneRowTitle({ ...base, id: "w1:p1", label: "impl" })).toBe("impl");
   expect(paneRowTitle({ ...base, id: "w1:p1" })).toBe("pi");
-  expect(paneRowTitle({ ...base, id: "w1:p1", agent: null })).toBe("π - hwc");
+  expect(paneRowTitle({ ...base, id: "w1:p1", agent: null })).toBe("hwc");
 });
