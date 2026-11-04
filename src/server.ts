@@ -2,6 +2,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createChatClient } from "./server/chat/pi";
+import { createOpencodeChatClient } from "./server/chat/opencode";
 import { createPaneClient } from "./server/herdr/panes";
 import { createBranchReader } from "./server/git";
 import { createStateStore } from "./server/herdr/state";
@@ -19,7 +20,13 @@ startStateSync({
 // 開発中はどの版かを画面で確かめられるように、起動時のコミットを出す。
 const revision = readRevision();
 
-const app = createApp({ store, panes: createPaneClient(), chat: createChatClient(), revision });
+const app = createApp({
+  store,
+  panes: createPaneClient(),
+  chat: createChatClient(),
+  opencode: createOpencodeChatClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
+  revision,
+});
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 30000),

@@ -8,7 +8,7 @@ import { createChatClient } from "./chat/pi";
 import type { ChatSnapshot } from "./chat/contract";
 import type { PaneClient } from "./herdr/panes";
 import { HerdrError } from "./herdr/socket";
-import type { AppState, PaneState, StateStore } from "./herdr/state";
+import type { AppState, ChatSource, PaneState, StateStore } from "./herdr/state";
 import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
 
 const pane: PaneState = {
@@ -92,12 +92,12 @@ type FakeStore = StateStore & {
   push: (state: AppState) => void;
   listenerCount: () => number;
   fireOnSubscribe: (state: AppState) => void;
-  setSessionPath: (paneId: string, path: string | null) => void;
+  setChatSource: (paneId: string, source: ChatSource | null) => void;
 };
 
 function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
   const listeners = new Set<(state: AppState) => void>();
-  const sessions = new Map<string, string>();
+  const sources = new Map<string, ChatSource>();
   let current = initial;
   let pendingOnSubscribe: AppState | null = null;
 
@@ -108,7 +108,7 @@ function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
       current ??= state;
       return current;
     },
-    sessionPath: (paneId) => sessions.get(paneId) ?? null,
+    chatSource: (paneId) => sources.get(paneId) ?? null,
     onChange: (listener) => {
       listeners.add(listener);
       if (pendingOnSubscribe) {
@@ -124,9 +124,9 @@ function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
     fireOnSubscribe: (state) => {
       pendingOnSubscribe = state;
     },
-    setSessionPath: (paneId, path) => {
-      if (path === null) sessions.delete(paneId);
-      else sessions.set(paneId, path);
+    setChatSource: (paneId, source) => {
+      if (source === null) sources.delete(paneId);
+      else sources.set(paneId, source);
     },
     push: (next) => {
       current = next;
@@ -1119,7 +1119,7 @@ test("POST /api/panes/:id/close returns 502 for any other Herdr failure", async 
 
 function createChatApp(options: { store?: FakeStore; chat?: ChatClient } = {}) {
   const store = options.store ?? createFakeStore(chatState);
-  store.setSessionPath("w1:p1", sessionPath);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
   return createApp({
     store,
     panes: createFakePanes(),
@@ -1145,6 +1145,45 @@ test("GET /api/panes/:id/chat returns the conversation of the pane session", asy
   expect(await response.json()).toEqual({ ...emptyChat, messages, context });
   expect(response.headers.get("etag")).toBe(`"${emptyChat.etag}"`);
   expect(seen).toEqual([sessionPath]);
+});
+
+test("GET /api/panes/:id/chat reads an opencode session through the opencode client", async () => {
+  const store = createFakeStore(chatState);
+  store.setChatSource("w1:p1", { agent: "opencode", sessionId: "ses_abc" });
+  const seen: string[] = [];
+  const opencode = createFakeChat({
+    snapshot: async (sessionId) => {
+      seen.push(sessionId);
+      return { ...emptyChat, etag: "opencode" };
+    },
+  });
+  const app = createApp({
+    store,
+    panes: createFakePanes(),
+    chat: createFakeChat({
+      snapshot: async () => {
+        throw new Error("the pi client must not read an opencode session");
+      },
+    }),
+    opencode,
+  });
+
+  const response = await app.request("/api/panes/w1:p1/chat");
+
+  expect(response.status).toBe(200);
+  expect(response.headers.get("etag")).toBe('"opencode"');
+  expect(seen).toEqual(["ses_abc"]);
+});
+
+test("GET /api/panes/:id/chat returns 502 when the opencode client is not configured", async () => {
+  const store = createFakeStore(chatState);
+  store.setChatSource("w1:p1", { agent: "opencode", sessionId: "ses_abc" });
+  const app = createApp({ store, panes: createFakePanes(), chat: createFakeChat() });
+
+  const response = await app.request("/api/panes/w1:p1/chat");
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "chat_unavailable" });
 });
 
 test("GET /api/panes/:id/chat answers 304 for a matching weak or listed If-None-Match", async () => {
@@ -1196,7 +1235,7 @@ test("GET /api/panes/:id/chat returns 404 no_chat for a pane without a session",
   expect(await response.json()).toEqual({ error: "no_chat" });
 });
 
-test("GET /api/panes/:id/chat returns 404 no_chat when the state has no session path", async () => {
+test("GET /api/panes/:id/chat returns 404 no_chat when the store has no chat source", async () => {
   const store = createFakeStore(chatState);
   const app = createApp({ store, panes: createFakePanes(), chat: createFakeChat() });
 
@@ -1208,7 +1247,7 @@ test("GET /api/panes/:id/chat returns 404 no_chat when the state has no session 
 
 test("GET /api/panes/:id/chat returns 502 when the state cannot be read", async () => {
   const store = createFakeStore(null, new Error("socket closed"));
-  store.setSessionPath("w1:p1", sessionPath);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
   const app = createApp({ store, panes: createFakePanes(), chat: createFakeChat() });
 
   const response = await app.request("/api/panes/w1:p1/chat");
@@ -1275,10 +1314,13 @@ test("GET /api/panes/:id/chat returns 200 after the pane session switched", asyn
     },
   });
   const app = createApp({ store, panes: createFakePanes(), chat });
-  store.setSessionPath("w1:p1", sessionPath);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
 
   const first = await app.request("/api/panes/w1:p1/chat");
-  store.setSessionPath("w1:p1", "/sessions/--home-dev--/2026-02-02.jsonl");
+  store.setChatSource("w1:p1", {
+    agent: "pi",
+    path: "/sessions/--home-dev--/2026-02-02.jsonl",
+  });
   const second = await app.request("/api/panes/w1:p1/chat", {
     headers: { "if-none-match": first.headers.get("etag") ?? "" },
   });
@@ -1305,7 +1347,7 @@ test("GET /api/panes/:id/chat answers 304 while the session file stays gone", as
 
   try {
     const store = createFakeStore(chatState);
-    store.setSessionPath("w1:p1", file);
+    store.setChatSource("w1:p1", { agent: "pi", path: file });
     const app = createApp({ store, panes: createFakePanes(), chat: createChatClient() });
 
     const first = await app.request("/api/panes/w1:p1/chat");

@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { startFakeHerdr } from "./fake-herdr";
 
 const fake = await startFakeHerdr();
@@ -5,6 +6,7 @@ const fake = await startFakeHerdr();
 // 実 Herdr・実 pi セッション・実ホームへ行かないよう、BFF の継ぎ目をすべて架空側へ向ける。
 process.env.HERDR_SOCKET_PATH = fake.socketPath;
 process.env.HWC_STATE_DIR = fake.root;
+process.env.HWC_OPENCODE_SERVICE = join(fake.root, "opencode", "service.json");
 process.env.HWC_REVISION = "e2e";
 process.env.HWC_NO_OPEN = "1";
 process.env.HOST = "127.0.0.1";

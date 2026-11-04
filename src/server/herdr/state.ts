@@ -47,11 +47,22 @@ export type AppState = {
   workspaces: WorkspaceState[];
 };
 
-// 会話を読めるのは pi の path セッションだけ。ここでだけ path を取り出し、
-// AppState には載せない（クライアントにホストのパスを渡さない）。
-function piSessionPath(session: HerdrAgentSession | null | undefined): string | null {
-  if (!session || session.agent !== "pi" || session.kind !== "path") return null;
-  return session.value === "" ? null : session.value;
+// 会話を読めるのは pi の path セッションと opencode の id セッション。ここでだけ
+// セッションの在り処を取り出し、AppState には載せない（クライアントにホストのパスや
+// サービス認証を渡さない）。
+export type ChatSource = { agent: "pi"; path: string } | { agent: "opencode"; sessionId: string };
+
+function chatSourceOf(session: HerdrAgentSession | null | undefined): ChatSource | null {
+  if (!session) return null;
+  const value = session.value;
+  if (value === null || value === "") return null;
+  if (session.agent === "pi" && session.kind === "path") {
+    return { agent: "pi", path: value };
+  }
+  if (session.agent === "opencode" && session.kind === "id") {
+    return { agent: "opencode", sessionId: value };
+  }
+  return null;
 }
 
 export function toAppState(snapshot: HerdrSnapshot): AppState {
@@ -71,7 +82,7 @@ export function toAppState(snapshot: HerdrSnapshot): AppState {
       agent: agent?.agent ?? null,
       agentStatus: pane.agent_status ?? "unknown",
       focused: pane.focused ?? false,
-      chat: piSessionPath(pane.agent_session) !== null,
+      chat: chatSourceOf(pane.agent_session) !== null,
     });
     panesByTab.set(pane.tab_id, panes);
   }
@@ -122,16 +133,16 @@ export type StateStore = {
   get: () => AppState | null;
   refresh: () => Promise<AppState>;
   onChange: (listener: (state: AppState) => void) => () => void;
-  sessionPath: (paneId: string) => string | null;
+  chatSource: (paneId: string) => ChatSource | null;
 };
 
-function toSessionPaths(snapshot: HerdrSnapshot): Map<string, string> {
-  const paths = new Map<string, string>();
+function toChatSources(snapshot: HerdrSnapshot): Map<string, ChatSource> {
+  const sources = new Map<string, ChatSource>();
   for (const pane of snapshot.panes ?? []) {
-    const path = piSessionPath(pane.agent_session);
-    if (path !== null) paths.set(pane.pane_id, path);
+    const source = chatSourceOf(pane.agent_session);
+    if (source !== null) sources.set(pane.pane_id, source);
   }
-  return paths;
+  return sources;
 }
 
 // ブランチを読む場所。Herdr がワークツリーとして扱っていないディレクトリでも git の
@@ -185,7 +196,7 @@ export function createStateStore(options: {
   const retryDelayMs = options.retryDelayMs ?? 1_000;
   const listeners = new Set<(state: AppState) => void>();
   let current: AppState | null = null;
-  let sessions = new Map<string, string>();
+  let sources = new Map<string, ChatSource>();
   let running: Promise<AppState> | null = null;
   let pending = false;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -208,7 +219,7 @@ export function createStateStore(options: {
       retryTimer = null;
     }
     current = state;
-    sessions = toSessionPaths(snapshot);
+    sources = toChatSources(snapshot);
     for (const listener of listeners) listener(state);
     return state;
   };
@@ -245,7 +256,7 @@ export function createStateStore(options: {
   return {
     get: () => current,
     refresh,
-    sessionPath: (paneId) => sessions.get(paneId) ?? null,
+    chatSource: (paneId) => sources.get(paneId) ?? null,
     onChange: (listener) => {
       listeners.add(listener);
       return () => {

@@ -14,13 +14,14 @@ bun run e2e:serve
 
 ## 実環境との分離
 
-| 対象           | 実環境                       | E2E                                                 |
-| -------------- | ---------------------------- | --------------------------------------------------- |
-| Herdr ソケット | `~/.config/herdr/herdr.sock` | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける      |
-| pi セッション  | 実セッションの JSONL         | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く |
-| ブランチ       | 実リポジトリの `.git/HEAD`   | 一時ディレクトリの `.git/HEAD`                      |
-| 添付の保存先   | `~/.local/state/hwc`         | `HWC_STATE_DIR` を一時ディレクトリへ向ける          |
-| ポート         | 30000                        | 31000                                               |
+| 対象              | 実環境                                 | E2E                                                 |
+| ----------------- | -------------------------------------- | --------------------------------------------------- |
+| Herdr ソケット    | `~/.config/herdr/herdr.sock`           | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける      |
+| pi セッション     | 実セッションの JSONL                   | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く |
+| OpenCode サービス | `~/.local/state/opencode/service.json` | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける   |
+| ブランチ          | 実リポジトリの `.git/HEAD`             | 一時ディレクトリの `.git/HEAD`                      |
+| 添付の保存先      | `~/.local/state/hwc`                   | `HWC_STATE_DIR` を一時ディレクトリへ向ける          |
+| ポート            | 30000                                  | 31000                                               |
 
 `e2e/serve.ts` が架空 Herdr を起動してから `src/server.ts` を読み込む。BFF とクライアントは本番コードのままで、ソケット経路・状態同期・チャット読み取りを通る。実 Herdr のソケットには接続しない。
 
