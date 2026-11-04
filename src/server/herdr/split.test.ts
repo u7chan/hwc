@@ -39,6 +39,18 @@ test("splitting the right and down sides equally prefers the right", () => {
   expect(plan?.direction).toBe("right");
 });
 
+test("a tall tab stacks panes instead of forcing a 2x2", () => {
+  // 60x48 のタブは幅を保つために 1 列のまま下へ積む。横長の 2x2 にはしない。
+  const first = planSplit([{ paneId: "w1:p1", width: 60, height: 48 }]);
+  expect(first?.direction).toBe("down");
+
+  const second = planSplit([
+    { paneId: "w1:p1", width: 60, height: 24 },
+    { paneId: "w1:p2", width: 60, height: 24 },
+  ]);
+  expect(second?.direction).toBe("down");
+});
+
 test("no pane is created once the tab has four", () => {
   const cells = [1, 2, 3, 4].map((index) => ({
     paneId: `w1:p${index}`,

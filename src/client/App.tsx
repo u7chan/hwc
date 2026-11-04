@@ -840,13 +840,14 @@ export function App() {
             type="button"
             role="menuitem"
             class="hwc-menu-item"
-            disabled={menuFull || menuBusy}
+            disabled={menuFull || creatingBusy}
             onClick={createPaneFromMenu}
           >
             <PlusIcon size={14} />
             {menuBusy ? "作成中…" : "新しいペイン"}
           </button>
           {menuFull ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
+          {creatingBusy && !menuBusy ? <p class="hwc-menu-note">作成中…</p> : null}
           {menuFailed ? (
             <p class="hwc-menu-error" role="status">
               {CREATE_FAILED_NOTICE}
@@ -856,6 +857,7 @@ export function App() {
             type="button"
             role="menuitem"
             class="hwc-menu-item hwc-menu-item--danger"
+            disabled={creatingBusy}
             onClick={openCloseConfirm}
           >
             <CloseIcon size={14} />
