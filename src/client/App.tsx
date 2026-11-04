@@ -13,7 +13,7 @@ import {
   type ConnectionStatus,
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
-import { CloseIcon, HerdrMark, SettingsIcon } from "./icons";
+import { CloseIcon, HwcMark, SettingsIcon } from "./icons";
 import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import {
@@ -551,15 +551,19 @@ export function App() {
 
   const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
 
+  const connChip = (
+    <span class="hwc-conn" data-status={connection}>
+      <span class="hwc-conn-dot" />
+      {connectionLabel(connection)}
+    </span>
+  );
+
   const actions = (
     <>
-      <span class="hwc-conn" data-status={connection}>
-        <span class="hwc-conn-dot" />
-        {connectionLabel(connection)}
-      </span>
+      {connChip}
       <button
         type="button"
-        class="hwc-icon-button hwc-top-button"
+        class="hwc-icon-button hwc-foot-button"
         aria-label={settingsOpen ? "設定を閉じる" : "設定"}
         onClick={() => setSettingsOpen((open) => !open)}
       >
@@ -567,6 +571,10 @@ export function App() {
       </button>
     </>
   );
+
+  // 接続は一覧の足元に出す。チャットは狭い画面で足元が隠れるので、タブバーの右端に
+  // 異常のときだけ出す。正常な間は何も出さず、タブの幅を空けておく。
+  const detailStatus = wide || connection === "live" ? null : connChip;
 
   // 分割は広い画面だけ。狭い画面では 1 枚ずつ見る。
   const shown = splitPanes(siblings, pane?.id ?? "", hidden);
@@ -595,7 +603,7 @@ export function App() {
   const listPlaceholder = (
     <div class="hwc-empty">
       <div class="hwc-empty-mark">
-        <HerdrMark size={32} />
+        <HwcMark size={32} />
       </div>
       <h2 class="hwc-empty-title">
         {connection === "unavailable" ? "Herdr に接続できません" : "接続中"}
@@ -611,7 +619,7 @@ export function App() {
   const placeholder = (
     <div class="hwc-empty hwc-empty--detail">
       <div class="hwc-empty-mark hwc-empty-mark--app">
-        <HerdrMark size={40} />
+        <HwcMark size={40} />
       </div>
       <h2 class="hwc-empty-title">
         {connection === "unavailable" ? "Herdr に接続できません" : "接続中"}
@@ -630,16 +638,6 @@ export function App() {
       data-view={settingsOpen ? "settings" : pane ? "detail" : "list"}
       style={{ "--hwc-sidebar-width": `${sidebarWidth}px` }}
     >
-      <header class="hwc-top">
-        <div class="hwc-brand">
-          <span class="hwc-mark">
-            <HerdrMark size={28} />
-          </span>
-          <span class="hwc-brand-name">HWC</span>
-        </div>
-        {wide ? null : <div class="hwc-top-actions">{actions}</div>}
-      </header>
-
       <div class="hwc-body">
         <aside class="hwc-list" aria-label="ペイン一覧">
           {state === null ? (
@@ -660,7 +658,13 @@ export function App() {
               now={now}
             />
           )}
-          {wide ? <div class="hwc-sidebar-foot">{actions}</div> : null}
+          <div class="hwc-sidebar-foot">
+            <span class="hwc-foot-brand">
+              <span class="hwc-foot-name">HWC</span>
+              {revision === null ? null : <span class="hwc-foot-rev">{revision}</span>}
+            </span>
+            <span class="hwc-foot-actions">{actions}</span>
+          </div>
         </aside>
 
         <div
@@ -709,6 +713,7 @@ export function App() {
               onThemeChange={changeTheme}
               revision={revision}
               connection={connection}
+              onClose={() => setSettingsOpen(false)}
             />
           ) : state === null ? (
             placeholder
@@ -719,6 +724,7 @@ export function App() {
                 panes={siblings}
                 split={wide && split}
                 hidden={hidden}
+                status={detailStatus}
                 onSelectPane={select}
                 onToggleHidden={toggleHidden}
                 onBack={back}
@@ -739,7 +745,7 @@ export function App() {
           ) : (
             <div class="hwc-empty hwc-empty--detail">
               <div class="hwc-empty-mark hwc-empty-mark--app">
-                <HerdrMark size={40} />
+                <HwcMark size={40} />
               </div>
               <h2 class="hwc-empty-title">ペインを選んでください</h2>
               <p class="hwc-empty-text">一覧からペインを選ぶと、出力と入力欄が出ます。</p>

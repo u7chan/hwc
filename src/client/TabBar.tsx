@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import { ChevronLeftIcon, EyeIcon, EyeOffIcon, SplitIcon } from "./icons";
@@ -9,6 +10,7 @@ type TabBarProps = {
   panes: readonly PaneState[];
   split: boolean;
   hidden: ReadonlySet<string>;
+  status: ComponentChildren;
   onSelectPane: (paneId: string) => void;
   onToggleHidden: (paneId: string) => void;
   onBack: () => void;
@@ -82,6 +84,7 @@ export function TabBar(props: TabBarProps) {
           );
         })}
       </div>
+      {props.status}
       <button
         type="button"
         class="hwc-split-toggle"
