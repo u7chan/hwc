@@ -50,7 +50,7 @@ import {
 } from "./icons";
 import { Markdown } from "./Markdown";
 import { usePaneOutput } from "./output";
-import { agentGlyph, isShellPane, paneName, paneSubLabel, type PaneContext } from "./select";
+import { agentGlyph, isShellPane, paneName, type PaneContext } from "./select";
 import { Spinner } from "./Spinner";
 import { formatClock, formatElapsed } from "./time";
 
@@ -417,7 +417,6 @@ export function PaneDetail(props: PaneDetailProps) {
   const shell = isShellPane(pane);
   const placeholder =
     chip === "compact" ? "コンパクトの指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
-  const subLabel = paneSubLabel(pane);
 
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
@@ -654,10 +653,7 @@ export function PaneDetail(props: PaneDetailProps) {
           {pane.agent ? <AgentGlyphIcon agent={pane.agent} size={14} /> : <PaneIcon size={14} />}
         </span>
         {labeled ? (
-          <span class="hwc-pane-head-main">
-            <span class="hwc-pane-head-name">{paneName(pane)}</span>
-            {subLabel === null ? null : <span class="hwc-pane-head-sub">{subLabel}</span>}
-          </span>
+          <span class="hwc-pane-head-name">{paneName(pane)}</span>
         ) : branch === null ? null : (
           <span class="hwc-pane-head-branch" title={branch}>
             {branch}

@@ -16,7 +16,6 @@ import {
   nextPaneInTab,
   paneName,
   paneRowTitle,
-  paneSubLabel,
   removePane,
   soleTab,
   splitPanes,
@@ -403,7 +402,7 @@ test("there is no successor when every other pane is hidden", () => {
   expect(nextPaneInTab(panes, "w1:p1", new Set(["w1:p2"]))).toBeNull();
 });
 
-test("the pane name drops the agent mark from the terminal title", () => {
+test("the pane name uses the Herdr label, then the title without the agent mark", () => {
   const base = {
     id: "w1:p9",
     title: null,
@@ -414,33 +413,16 @@ test("the pane name drops the agent mark from the terminal title", () => {
     chat: false,
   };
 
-  expect(paneName({ ...base, title: "π - hwc", label: "impl" })).toBe("hwc");
+  expect(paneName({ ...base, title: "π - hwc", label: "impl" })).toBe("impl");
+  expect(paneName({ ...base, label: "impl", agent: "pi" })).toBe("impl");
+  expect(paneName({ ...base, title: "π - hwc" })).toBe("hwc");
   expect(paneName({ ...base, title: "OC | Single letter a" })).toBe("Single letter a");
   expect(paneName({ ...base, title: "π - " })).toBe("w1:p9");
-  expect(paneName({ ...base, label: "impl", agent: "pi" })).toBe("impl");
   expect(paneName({ ...base, agent: "pi" })).toBe("pi");
   expect(paneName(base)).toBe("w1:p9");
 });
 
-test("the label is shown as a subtitle only when it differs from the name", () => {
-  const base = {
-    id: "w1:p9",
-    title: null,
-    label: null,
-    agent: null,
-    agentStatus: "idle" as const,
-    focused: false,
-    chat: false,
-  };
-
-  // 4 つのペインが同じ端末タイトルでも、一覧ではラベルで見分けられる。
-  expect(paneSubLabel({ ...base, title: "π - hwc", label: "impl" })).toBe("impl");
-  expect(paneSubLabel({ ...base, title: "π - impl", label: "impl" })).toBeNull();
-  expect(paneSubLabel({ ...base, label: "impl" })).toBeNull();
-  expect(paneSubLabel({ ...base, title: "π - hwc" })).toBeNull();
-});
-
-test("the tab chip and the detail header tell panes apart by their label", () => {
+test("the tab chip and the detail header name a pane by its label", () => {
   const base = {
     id: "w1:p9",
     title: "π - feat-client-api-connection",
@@ -457,30 +439,10 @@ test("the tab chip and the detail header tell panes apart by their label", () =>
     "ui-tester-client-api",
   ];
 
-  const shown = labels.map((label, index) => {
-    const pane = { ...base, id: `w1:p${index}`, label };
-    return { name: paneName(pane), sub: paneSubLabel(pane) };
-  });
+  const names = labels.map((label, index) => paneName({ ...base, id: `w1:p${index}`, label }));
 
-  // 名前は同じでも、副題で 4 枚を見分けられる。
-  expect(new Set(shown.map((pane) => pane.name))).toEqual(new Set(["feat-client-api-connection"]));
-  expect(shown.map((pane) => pane.sub)).toEqual(labels);
-});
-
-test("a label that repeats the name is not shown twice", () => {
-  const pane = {
-    id: "w1:p9",
-    title: null,
-    label: "bash",
-    agent: null,
-    agentStatus: "idle" as const,
-    focused: false,
-    chat: false,
-  };
-
-  expect(paneName(pane)).toBe("bash");
-  expect(paneSubLabel(pane)).toBeNull();
-  expect(paneSubLabel({ ...pane, agent: "bash" })).toBeNull();
+  // 4 枚が同じ端末タイトルでも、タブと見出しはラベルで見分けられる。
+  expect(names).toEqual(labels);
 });
 
 test("a row is titled by its name, not by the terminal title", () => {
