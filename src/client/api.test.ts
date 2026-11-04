@@ -6,7 +6,9 @@ import {
   chatOutcome,
   closeOutcome,
   createApiClient,
-  outputQuery,
+  inputRequest,
+  outputRequest,
+  paneParam,
   parseAppState,
   toAppState,
   toChatSnapshot,
@@ -23,16 +25,32 @@ const state = {
 };
 
 test("the output request asks for the recent lines of the pane", () => {
-  expect(outputQuery()).toEqual({ source: "recent", lines: String(OUTPUT_LINES) });
-  expect(
-    api.api.panes[":id"].output.$url({ param: { id: encodeURIComponent("w1:p2") } }).pathname,
-  ).toBe("/api/panes/w1%3Ap2/output");
+  const url = api.api.panes[":id"].output.$url(outputRequest("w1:p2"));
+
+  expect(url.pathname).toBe("/api/panes/w1%3Ap2/output");
+  expect(url.searchParams.get("source")).toBe("recent");
+  expect(url.searchParams.get("lines")).toBe(String(OUTPUT_LINES));
 });
 
-test("the pane id is escaped so it stays a single path segment", () => {
-  expect(
-    api.api.panes[":id"].output.$url({ param: { id: encodeURIComponent("w1/p2") } }).pathname,
-  ).toContain("/api/panes/w1%2Fp2/output");
+test("the request builders keep the pane id in a single path segment", () => {
+  expect(paneParam("w1/p2")).toEqual({ param: { id: "w1%2Fp2" } });
+  expect(api.api.panes[":id"].output.$url(outputRequest("w1/p2")).pathname).toContain(
+    "/api/panes/w1%2Fp2/output",
+  );
+  expect(api.api.panes[":id"].input.$url(inputRequest("w1/p2", "hi")).pathname).toBe(
+    "/api/panes/w1%2Fp2/input",
+  );
+});
+
+test("the input request keeps the pane id and JSON body together", () => {
+  expect(inputRequest("w1:p2", "hi")).toEqual({
+    param: { id: "w1%3Ap2" },
+    json: { text: "hi", submit: true },
+  });
+  expect(inputRequest("w1:p2", "hi", ["a.png"])).toEqual({
+    param: { id: "w1%3Ap2" },
+    json: { text: "hi", submit: true, attachments: ["a.png"] },
+  });
 });
 
 test("a state body needs a workspaces array", () => {
@@ -67,9 +85,9 @@ test("empty output is still valid output", () => {
 });
 
 test("the chat request names the pane and carries nothing else", () => {
-  expect(
-    api.api.panes[":id"].chat.$url({ param: { id: encodeURIComponent("w1:p2") } }).pathname,
-  ).toBe("/api/panes/w1%3Ap2/chat");
+  expect(api.api.panes[":id"].chat.$url(paneParam("w1:p2")).pathname).toBe(
+    "/api/panes/w1%3Ap2/chat",
+  );
 });
 
 test("a 304 keeps the messages already in hand", () => {
@@ -201,15 +219,15 @@ test("a message keeps its attachments only as names in the saved format", () => 
 });
 
 test("the focus request keeps the pane id in a single path segment", () => {
-  expect(
-    api.api.panes[":id"].focus.$url({ param: { id: encodeURIComponent("w1/p2") } }).pathname,
-  ).toBe("/api/panes/w1%2Fp2/focus");
+  expect(api.api.panes[":id"].focus.$url(paneParam("w1/p2")).pathname).toBe(
+    "/api/panes/w1%2Fp2/focus",
+  );
 });
 
 test("the close request keeps the pane id in a single path segment", () => {
-  expect(
-    api.api.panes[":id"].close.$url({ param: { id: encodeURIComponent("w1/p2") } }).pathname,
-  ).toBe("/api/panes/w1%2Fp2/close");
+  expect(api.api.panes[":id"].close.$url(paneParam("w1/p2")).pathname).toBe(
+    "/api/panes/w1%2Fp2/close",
+  );
 });
 
 test("close is done once the pane is gone, whatever removed it", () => {

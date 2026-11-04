@@ -33,21 +33,13 @@ export function createApiClient(baseUrl: string) {
 const client = createApiClient("");
 
 // hc は path param をエスケープしない。ペイン id を 1 セグメントに保つ。
-function paneParam(paneId: string) {
+export function paneParam(paneId: string) {
   return { param: { id: encodeURIComponent(paneId) } };
 }
 
 // hc は validator のない query / body を入力型に含めない。実行時はそのまま送れるので、
 // ここで形を決めて渡す。
-type OutputRequest = {
-  param: { id: string };
-  query: { source: "recent"; lines: string };
-};
-
-type InputRequest = {
-  param: { id: string };
-  json: { text: string; submit: true; attachments?: string[] };
-};
+export type InputBody = { text: string; submit: true; attachments?: string[] };
 
 // 304 は本文が無いだけで、手元の会話をそのまま使う。それ以外の失敗は、会話を出せない
 // 応答として扱い、端末出力へ切り替える。
@@ -184,14 +176,22 @@ export function outputQuery(lines: number = OUTPUT_LINES) {
   return { source: "recent" as const, lines: String(lines) };
 }
 
+export function outputRequest(paneId: string) {
+  return { ...paneParam(paneId), query: outputQuery() };
+}
+
+export function inputRequest(paneId: string, text: string, attachments: readonly string[] = []) {
+  const json: InputBody =
+    attachments.length === 0
+      ? { text, submit: true }
+      : { text, submit: true, attachments: [...attachments] };
+  return { ...paneParam(paneId), json };
+}
+
 export async function readOutput(paneId: string, signal?: AbortSignal): Promise<OutputRead> {
-  const response = await client.api.panes[":id"].output.$get(
-    {
-      ...paneParam(paneId),
-      query: outputQuery(),
-    } as OutputRequest,
-    { init: { signal } },
-  );
+  const response = await client.api.panes[":id"].output.$get(outputRequest(paneId), {
+    init: { signal },
+  });
   if (!response.ok) throw new Error(`output: ${response.status}`);
   const read = toPaneRead(await response.json(), paneId);
   if (read === null) throw new Error("output: unexpected body");
@@ -224,13 +224,9 @@ export async function sendInput(
   attachments: readonly string[] = [],
   signal?: AbortSignal,
 ): Promise<void> {
-  const body: InputRequest["json"] =
-    attachments.length === 0
-      ? { text, submit: true }
-      : { text, submit: true, attachments: [...attachments] };
   // BFF は application/json 以外を 415 で弾く。hc に JSON body を作らせる。
   const response = await client.api.panes[":id"].input.$post(
-    { ...paneParam(paneId), json: body } as InputRequest,
+    inputRequest(paneId, text, attachments),
     { init: { signal } },
   );
   if (!response.ok) throw new Error(`input: ${response.status}`);
