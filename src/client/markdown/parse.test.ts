@@ -78,6 +78,20 @@ test("タスクリストは完了状態を持ち、記号を本文から外す",
   ]);
 });
 
+test("番号付きのタスクリストも完了状態を持つ", () => {
+  assert.deepEqual(parseMarkdown("1. [ ] 未了\n2. [x] 済み"), [
+    {
+      kind: "list",
+      ordered: true,
+      start: 1,
+      items: [
+        { source: "未了", task: false },
+        { source: "済み", task: true },
+      ],
+    },
+  ]);
+});
+
 test("項目内の空行とコードフェンスは項目の中に残る", () => {
   assert.deepEqual(parseMarkdown("- 前\n\n  ```ts\n  const a = 1;\n  ```"), [
     {

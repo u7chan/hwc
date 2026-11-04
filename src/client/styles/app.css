@@ -2207,7 +2207,7 @@ p.hwc-compaction,
 .hwc-md li {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -2215,14 +2215,17 @@ p.hwc-compaction,
   margin-block-start: var(--space-1);
 }
 
-/* 記号は 16px の列に右寄せする。本文は 8px 空けて列の右から始まる。
-   入れ子のリストは本文の列の中に置くので、段ごとに 24px 下がる。 */
+/* 記号は 20px の内容列に右寄せし、右に 4px の余白を置く。本文はさらに 4px 空けるので、
+   記号と本文は 8px 離れる。2 桁の番号が折り返すと行の高さが変わるため、記号は折り返さない。
+   入れ子のリストは本文の列の中に置くので、段ごとに 28px 下がる。 */
 .hwc-md-marker {
   flex: none;
-  width: var(--space-4);
+  width: var(--space-6);
+  padding-right: var(--space-1);
   color: var(--color-secondary);
   line-height: inherit;
   text-align: right;
+  white-space: nowrap;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -2256,10 +2259,11 @@ p.hwc-compaction,
 
 /* タスクリストのチェック。押した結果はこの画面だけに持ち、Markdown は書き換えない。 */
 .hwc-md-task {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--space-4);
+  width: var(--space-5);
   height: var(--space-6);
   padding: 0;
   border: 0;

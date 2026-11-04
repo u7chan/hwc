@@ -2,7 +2,7 @@ import type { ComponentChildren } from "preact";
 import { useMemo, useState } from "preact/hooks";
 import { useCopy } from "./copy";
 import { CopyGlyph } from "./icons";
-import { parseInline } from "./markdown/inline";
+import { inlineText, parseInline } from "./markdown/inline";
 import { MARKDOWN_MAX_LENGTH, parseMarkdown } from "./markdown/parse";
 import type { MdBlock, MdInline } from "./markdown/types";
 
@@ -94,34 +94,50 @@ function Block({ block, depth }: { block: MdBlock; depth: number }) {
   }
 }
 
+function taskLabel(source: string): string {
+  const line = source.split("\n", 1)[0] ?? "";
+  return inlineText(parseInline(line)).trim() || "タスク";
+}
+
 function List({ block, depth }: { block: Extract<MdBlock, { kind: "list" }>; depth: number }) {
-  const items = block.items.map((item, index) => (
-    <li class="hwc-md-li" key={index}>
-      {item.task === undefined ? (
-        <span class="hwc-md-marker" aria-hidden="true">
-          {block.ordered ? `${block.start + index}.` : depth === 0 ? "•" : "◦"}
-        </span>
-      ) : (
-        <span class="hwc-md-marker">
-          <TaskCheckbox checked={item.task} />
-        </span>
-      )}
-      <div class="hwc-md-li-body">
-        <MarkdownBlocks text={item.source} depth={depth + 1} />
-      </div>
-    </li>
-  ));
+  const items = block.items.map((item, index) => {
+    const label = item.task === undefined ? null : taskLabel(item.source);
+    return (
+      <li class="hwc-md-li" key={index}>
+        {item.task !== undefined && block.ordered ? (
+          <>
+            <span class="hwc-md-marker" aria-hidden="true">
+              {`${block.start + index}.`}
+            </span>
+            <TaskCheckbox checked={item.task} label={label ?? "タスク"} />
+          </>
+        ) : item.task !== undefined ? (
+          <span class="hwc-md-marker">
+            <TaskCheckbox checked={item.task} label={label ?? "タスク"} />
+          </span>
+        ) : (
+          <span class="hwc-md-marker" aria-hidden="true">
+            {block.ordered ? `${block.start + index}.` : depth === 0 ? "•" : "◦"}
+          </span>
+        )}
+        <div class="hwc-md-li-body">
+          <MarkdownBlocks text={item.source} depth={depth + 1} />
+        </div>
+      </li>
+    );
+  });
   return block.ordered ? <ol start={block.start}>{items}</ol> : <ul>{items}</ul>;
 }
 
-function TaskCheckbox({ checked }: { checked: boolean }) {
+function TaskCheckbox({ checked, label }: { checked: boolean; label: string }) {
   const [done, setDone] = useState(checked);
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={done}
-      title="押して切り替える（残さないので、開き直すと戻る）"
+      aria-label={label}
+      aria-description="押すと切り替わります。保存されません"
       class="hwc-md-task"
       onClick={() => setDone(!done)}
     >

@@ -2,9 +2,17 @@
 // 解釈できない記法は削除せず literal (原文) として残すことも固定する。
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { parseInline } from "./inline";
+import { inlineText, parseInline } from "./inline";
 
 const text = (value: string) => ({ kind: "text" as const, text: value });
+
+test("表示用テキストは記法を落として本文だけを返す", () => {
+  assert.equal(
+    inlineText(parseInline("**太字**と `code` と [リンク](https://example.com)")),
+    "太字と code と リンク",
+  );
+  assert.equal(inlineText(parseInline("a\nb")), "a b");
+});
 
 test("強調は strong / em / del に分かれる", () => {
   assert.deepEqual(parseInline("**太字**"), [{ kind: "strong", children: [text("太字")] }]);
