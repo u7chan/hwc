@@ -17,7 +17,9 @@ ADR 0003 は BFF の JSON エンドポイントの型を `hc` で client と共�
 
 ## Consequences
 
-- JSON の path / query / body / response の型がコンパイル時に効く
+- JSON の path / response の型がコンパイル時に効く
+- `hc` は validator のない query / body を入力型に含めない。hwc は route 内で手書きの検証をしているため、client は request の形をローカル型で補う
+- `hc` は path param をエスケープしないため、ペイン id は client で `encodeURIComponent` してから渡す
 - `hc` の型は実行時の値を保証しないため、壊れた応答に備えるガードは必要に応じて残す
 - SSE と生バイトは `hc` の外にあり、別の規則で扱う
 - 実装の移行は #92 で追う
