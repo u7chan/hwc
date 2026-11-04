@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import { ChevronLeftIcon, EyeIcon, EyeOffIcon, SplitIcon } from "./icons";
-import { paneName, paneSubLabel, statusLabel } from "./select";
+import { paneName, statusLabel } from "./select";
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
@@ -49,7 +49,6 @@ export function TabBar(props: TabBarProps) {
           const selected = item.id === props.pane.id;
           const hidden = props.hidden.has(item.id);
           const name = paneName(item);
-          const sub = paneSubLabel(item);
           // 開いているペインは分割に必ず出るので、隠す操作を持たせない。
           const eye = props.split && !selected;
           return (
@@ -59,16 +58,12 @@ export function TabBar(props: TabBarProps) {
                 role="tab"
                 class="hwc-tab"
                 aria-selected={selected}
-                // 同じ端末タイトルのペインが並ぶので、読み上げにもラベルを添える。
-                aria-label={`${sub === null ? name : `${name} (${sub})`} (${item.id}, ${statusLabel(item.agentStatus)}${hidden ? ", 分割で非表示" : ""})`}
+                aria-label={`${name} (${item.id}, ${statusLabel(item.agentStatus)}${hidden ? ", 分割で非表示" : ""})`}
                 data-pane-id={item.id}
                 data-eye={eye}
                 onClick={() => props.onSelectPane(item.id)}
               >
-                <span class="hwc-tab-main">
-                  <span class="hwc-tab-label">{name}</span>
-                  {sub === null ? null : <span class="hwc-tab-sub">{sub}</span>}
-                </span>
+                <span class="hwc-tab-label">{name}</span>
                 <StatusIcon status={item.agentStatus} />
               </button>
               {eye ? (
