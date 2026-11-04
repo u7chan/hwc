@@ -1,4 +1,5 @@
 import { connectionLabel, type ConnectionStatus } from "./connection";
+import { ChevronLeftIcon } from "./icons";
 import { ThemePicker } from "./ThemePicker";
 import type { ThemePreference } from "./theme";
 
@@ -7,12 +8,22 @@ type SettingsProps = {
   onThemeChange: (theme: ThemePreference) => void;
   revision: string | null;
   connection: ConnectionStatus;
+  onClose: () => void;
 };
 
 export function Settings(props: SettingsProps) {
   return (
     <div class="hwc-detail-inner">
       <header class="hwc-detail-bar">
+        {/* 狭い画面では一覧ごと隠れるので、設定を閉じる道をここに残す。 */}
+        <button
+          type="button"
+          class="hwc-icon-button hwc-back"
+          aria-label="戻る"
+          onClick={props.onClose}
+        >
+          <ChevronLeftIcon />
+        </button>
         <h2 class="hwc-detail-title">設定</h2>
       </header>
 
