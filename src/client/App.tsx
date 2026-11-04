@@ -627,7 +627,7 @@ export function App() {
   const splitOn = wide && split && shown.length > 0;
   const cells = splitOn ? shown : pane === null ? [] : [pane];
 
-  // 4 枚の判定は BFF と同じタブの枚数で行う。作成中は二度押しを防ぐ。
+  // 4 枚の判定は BFF と同じタブの枚数で行う。
   const menuTab =
     state === null || menu === null ? null : (findPaneRow(state, menu.paneId)?.tab ?? null);
   const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;

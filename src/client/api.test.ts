@@ -279,5 +279,5 @@ test("a create error keeps the pane id only when the split already happened", ()
 });
 
 test("the create timeout leaves room for the agent start wait", () => {
-  expect(CREATE_TIMEOUT_MS).toBeGreaterThan(35_000);
+  expect(CREATE_TIMEOUT_MS).toBeGreaterThan(59_000);
 });

@@ -15,6 +15,8 @@ type Mode = "agent" | "shell";
 
 function failureMessage(error: CreatePaneFailure): string {
   switch (error) {
+    case "timeout":
+      return "作成できたか確認できませんでした。タブを確認してから、必要ならもう一度お試しください。";
     case "pane_limit":
       return "このタブは 4 ペインまでです。";
     case "pane_not_found":
@@ -38,7 +40,8 @@ export function CreatePane(props: CreatePaneProps) {
   const [mode, setMode] = useState<Mode>("agent");
   const [agent, setAgent] = useState<AgentKind>("pi");
   const [busy, setBusy] = useState(false);
-  const [partial, setPartial] = useState(false);
+  // ペインができた可能性がある状態。フィールドを閉じ、再送ではなく確認に倒す。
+  const [settled, setSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 結果を受け取るまで閉じない。閉じると、作成済みのペインとエラーを見失う。
@@ -62,12 +65,13 @@ export function CreatePane(props: CreatePaneProps) {
     }
     setBusy(false);
     if (result.paneId !== null) {
-      setPartial(true);
+      setSettled(true);
       setError(partialMessage(result.error));
       props.onCreated(result.paneId);
       return;
     }
-    setPartial(false);
+    // 期限切れはペインができているかもしれない。再送させず、タブを確認してもらう。
+    setSettled(result.error === "timeout");
     setError(failureMessage(result.error));
   };
 
@@ -92,7 +96,7 @@ export function CreatePane(props: CreatePaneProps) {
           placeholder="例: 実装"
           autocomplete="off"
           spellcheck={false}
-          disabled={busy || partial}
+          disabled={busy || settled}
           onInput={(event) => setName(event.currentTarget.value)}
         />
       </label>
@@ -103,7 +107,7 @@ export function CreatePane(props: CreatePaneProps) {
           role="radio"
           class="hwc-create-mode"
           aria-checked={mode === "agent"}
-          disabled={busy || partial}
+          disabled={busy || settled}
           onClick={() => setMode("agent")}
         >
           エージェント
@@ -113,7 +117,7 @@ export function CreatePane(props: CreatePaneProps) {
           role="radio"
           class="hwc-create-mode"
           aria-checked={mode === "shell"}
-          disabled={busy || partial}
+          disabled={busy || settled}
           onClick={() => setMode("shell")}
         >
           シェル
@@ -130,7 +134,7 @@ export function CreatePane(props: CreatePaneProps) {
             <ChoiceCard
               key={kind}
               selected={agent === kind}
-              disabled={busy || partial}
+              disabled={busy || settled}
               onSelect={() => setAgent(kind)}
               label={AGENT_LABELS[kind]}
             >
@@ -151,7 +155,7 @@ export function CreatePane(props: CreatePaneProps) {
       )}
 
       <div class="hwc-dialog-actions hwc-create-actions">
-        {partial ? (
+        {settled ? (
           <button type="button" class="hwc-dialog-button hwc-dialog-primary" onClick={close}>
             閉じる
           </button>

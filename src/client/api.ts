@@ -315,6 +315,7 @@ export type CreatePaneFailure =
   | "pane_limit"
   | "pane_not_found"
   | "invalid_request"
+  | "timeout"
   | "failed";
 
 export type CreatePaneOutcome =
@@ -348,8 +349,10 @@ export function toCreateError(value: unknown): { error: CreatePaneFailure; paneI
   return { error, paneId };
 }
 
-// エージェントの起動は Herdr 側で最大 30 秒待つ。分割やリネームの分も含めて切る。
-export const CREATE_TIMEOUT_MS = 40_000;
+// エージェントの起動は Herdr 側で最大 30 秒待つ。分割・リネームのソケット期限（各 8 秒）と
+// シェル準備待ち（5 秒）を含めた最悪値を覆う。ここを短くすると、ペインができた後に
+// クライアントだけ諦めて、再試行で 2 枚目を作ってしまう。
+export const CREATE_TIMEOUT_MS = 65_000;
 
 export async function createPane(
   paneId: string,
@@ -366,8 +369,10 @@ export async function createPane(
     return created === null
       ? { ok: false, error: "failed", paneId: null }
       : { ok: true, paneId: created };
-  } catch {
-    // 通信の失敗と打ち切りは、作成できなかった結果として扱う。
-    return { ok: false, error: "failed", paneId: null };
+  } catch (error) {
+    // 期限切れは、ペインができているか確認できない。再試行で 2 枚目を作らないよう、
+    // 通常の失敗とは分けてダイアログを閉じる側へ倒す。
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    return { ok: false, error: timedOut ? "timeout" : "failed", paneId: null };
   }
 }
