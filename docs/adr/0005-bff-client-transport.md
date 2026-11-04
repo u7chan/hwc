@@ -9,7 +9,7 @@ Herdr の状態変化を画面へ即時反映したい。ポーリングは再�
 
 ## Decision
 
-状態の push は SSE、JSON の操作は `hc`（Hono RPC）、生バイトは素の `fetch` にする（[ADR 0024](0024-json-hc-streaming-raw.md)）。片方向の push で要件を満たし、WebSocket の接続管理を持ち込まずに済むため。
+状態の push は SSE、JSON の操作は `hc`（Hono RPC）、生バイトは `hc` の対象外とする（[ADR 0024](0024-json-hc-streaming-raw.md)）。片方向の push で要件を満たし、WebSocket の接続管理を持ち込まずに済むため。
 
 ## Consequences
 

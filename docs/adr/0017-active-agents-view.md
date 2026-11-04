@@ -58,7 +58,7 @@ Herdr は `idle` と `done` をサーバー側の seen 状態で区別し、seen
 
 ### クライアントの transport
 
-- JSON エンドポイントは `hc`、SSE は `EventSource`、添付画像などの生バイトは素の `fetch` を使う（[ADR 0024](0024-json-hc-streaming-raw.md)）
+- JSON エンドポイントは `hc`、SSE は `EventSource`、生バイトは `hc` の対象外とする（[ADR 0024](0024-json-hc-streaming-raw.md)）
 
 ## Consequences
 

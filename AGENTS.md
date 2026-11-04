@@ -8,7 +8,7 @@ Herdr CLI（WSL2）を Web ブラウザから操作・閲覧するアプリ。TU
 - Bun（runtime / package manager / bundler / dev server / test runner）
 - Hono（BFF）
 - Preact（client）
-- BFF との通信: JSON は `hc`、SSE は EventSource、生バイトは素の `fetch`
+- BFF との通信: JSON は `hc`、SSE は `EventSource`、生バイトの送信は素の `fetch`、配信は URL 直参照
 - 素の CSS + CSS 変数 + 接頭辞付きクラス名
 - oxlint / oxfmt / `tsc --noEmit`
 - Playwright CLI（エージェント経由の E2E）
