@@ -636,8 +636,9 @@ export function PaneDetail(props: PaneDetailProps) {
   // 選択を引用として固定し、返信を始める。compact のチップは外すが、指示の下書きは残す
   // （返信本文として送り、/compact には戻さない。ADR 0016 / 0022）。
   const startReply = (text: string) => {
+    // 送信中に引用を変えると、成功時のクリアで新しい引用まで消える。送っている間は受け付けない。
+    if (sending || text === "") return;
     setQuoteAnchor(null);
-    if (text === "") return;
     setReply(text);
     setChip(null);
     // 選択の折りたたみは pointerdown で止めているが、押された後にブラウザが流す分は捨てる。

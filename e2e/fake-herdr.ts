@@ -2,6 +2,7 @@ import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ATTACHED_FILES_OPEN } from "../src/shared/attachments";
 import { createScenario } from "./fixtures/scenario";
 
 type WireRequest = { id?: string; method?: string; params?: unknown };
@@ -44,9 +45,14 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   // 送った本文を架空セッションの user メッセージとして追記する。E2E で確定後の送信カードを
   // 確かめられるようにするためで、対象は agent_session を持つペインの通常本文だけ。
   const appendUserEntry = async (paneId: string, text: string): Promise<void> => {
+    if (text.trim() === "") return;
     const session = findPane(paneId)?.agent_session ?? null;
     const path = session?.kind === "path" ? session.value : null;
-    if (path === null || COMMAND_TEXT.test(text.trim())) return;
+    if (path === null) return;
+    // 添付を持つペインの Enter は常に本文の送信になる（ADR 0018）。添付付きの `/compact` も
+    // 本文として送られるので、コマンド扱いは注記が無いときだけ。
+    const command = !text.includes(ATTACHED_FILES_OPEN) && COMMAND_TEXT.test(text.trim());
+    if (command) return;
     let raw: string;
     try {
       raw = await readFile(path, "utf8");
