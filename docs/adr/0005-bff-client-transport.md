@@ -9,10 +9,10 @@ Herdr の状態変化を画面へ即時反映したい。ポーリングは再�
 
 ## Decision
 
-状態の push は SSE、操作は通常の fetch（Hono RPC）にする。片方向の push で要件を満たし、WebSocket の接続管理を持ち込まずに済むため。
+状態の push は SSE、JSON の操作は `hc`（Hono RPC）、生バイトは素の `fetch` にする（[ADR 0024](0024-json-hc-streaming-raw.md)）。片方向の push で要件を満たし、WebSocket の接続管理を持ち込まずに済むため。
 
 ## Consequences
 
 - 再接続時はスナップショットで状態を丸ごと置き換える（差分の再適用はしない）
 - 状態の正は BFF に置き、client はスナップショットと差分から描画する
-- SSE は Hono RPC の型共有対象外になる
+- SSE と添付画像などの生バイトは Hono RPC の型共有対象外になる
