@@ -2203,6 +2203,39 @@ p.hwc-compaction,
   padding-inline-start: var(--space-5);
 }
 
+/* 会話全体が <ol> なので、UA の ol ul / ul ul が Markdown の先頭リストまで入れ子と誤認する。
+   段の形は Markdown の中だけで決める。 */
+.hwc-md ul {
+  list-style-type: square;
+}
+
+.hwc-md :is(ul, ol) ul {
+  list-style-type: circle;
+}
+
+.hwc-md ol {
+  list-style-type: decimal;
+}
+
+/* 箇条書きの記号は本文より弱くする。番号付きの数字は本文と同じ強さのまま。 */
+.hwc-md ul > li::marker {
+  color: var(--color-secondary);
+}
+
+/* 項目内の段落は入れ子リストの前後で余白を作らない。段落が続くときだけ空ける。 */
+.hwc-md li > p {
+  margin-block: 0;
+}
+
+.hwc-md li > p + p {
+  margin-block-start: var(--space-3);
+}
+
+/* 入れ子は前の行に続けて置く。汎用の 12px だと親項目から離れて別の段落に見える。 */
+.hwc-md li > :is(ul, ol) {
+  margin-block-start: var(--space-1);
+}
+
 .hwc-md li + li {
   margin-block-start: var(--space-1);
 }
