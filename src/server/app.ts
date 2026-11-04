@@ -16,12 +16,15 @@ import {
 } from "./attachments";
 import type { ChatClient } from "./chat/pi";
 import {
+  agentNameForPane,
   exceedsTextLimit,
+  isAgentNotReady,
   isInvalidRequest,
   isPaneNotFound,
   type PaneClient,
   parseInputBody,
   parseOutputQuery,
+  parseSplitBody,
   TEXT_TOO_LONG,
   TEXT_WITH_ATTACHMENTS_TOO_LONG,
 } from "./herdr/panes";
@@ -366,10 +369,14 @@ export function createApp(options: {
     })
     .post("/api/panes/:id/split", async (c) => {
       // ペインを増やす操作なので、form POST で叩ける状態にしない。
-      // body は読まない（追加の指定は無く、対象は path とレイアウトから決める）。
       if (!isJsonRequest(c)) {
         return c.json({ error: "content-type must be application/json" }, 415);
       }
+
+      // 追加の指定（名前・起動するエージェント）は body から読む。body 無しは不正。
+      const body = await c.req.json().catch(() => null);
+      const request = parseSplitBody(body);
+      if (!request.ok) return c.json({ error: request.error }, request.status);
 
       const state = await current();
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
@@ -390,6 +397,42 @@ export function createApp(options: {
           direction: plan.direction,
           ratio: plan.ratio,
         });
+
+        if (request.value.agent !== null) {
+          // エージェント名は Herdr の制約に合わせてペイン id から作る。ユーザーのペイン名は
+          // 日本語や空白を含み得るので、Herdr の名前制約には使わない。
+          const agentName = agentNameForPane(created.paneId);
+          try {
+            await panes.startAgent({
+              paneId: created.paneId,
+              kind: request.value.agent,
+              name: agentName,
+            });
+          } catch (error) {
+            // 初回の trust / login 待ち（agent_not_ready）でも、エージェントは起動している。
+            // ペインをシェル扱いにせず、名前を付けて成功として返す。
+            if (!isAgentNotReady(error)) {
+              // ペインは既にある。名前だけは付けられれば付け、シェルとして残す。
+              if (request.value.name !== null) {
+                await panes
+                  .rename({ paneId: created.paneId, label: request.value.name })
+                  .catch(() => {
+                    // 名前は副次的な指定。起動失敗の報告を優先する。
+                  });
+              }
+              return c.json({ error: "agent_start_failed", paneId: created.paneId }, 502);
+            }
+          }
+        }
+
+        if (request.value.name !== null) {
+          try {
+            await panes.rename({ paneId: created.paneId, label: request.value.name });
+          } catch {
+            return c.json({ error: "pane_rename_failed", paneId: created.paneId }, 502);
+          }
+        }
+
         // focus / close と同じく、状態の取り直しは Herdr のイベント（pane.created）に任せる。
         return c.json({ paneId: created.paneId });
       } catch (error) {

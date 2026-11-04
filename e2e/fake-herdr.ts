@@ -2,6 +2,7 @@ import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isAgentKind } from "../src/shared/agents";
 import { ATTACHED_FILES_OPEN } from "../src/shared/attachments";
 import type { HerdrPane } from "../src/server/herdr/contract";
 import { createScenario } from "./fixtures/scenario";
@@ -300,6 +301,67 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         }
         send(socket, { id, result: { type: "pane_info", pane: created } });
         broadcast("pane.created", { pane_id: created.pane_id });
+        return;
+      }
+      case "pane.rename": {
+        const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
+        const pane = findPane(paneId);
+        if (pane === null) {
+          send(socket, { id, error: { code: "pane_not_found", message: paneId } });
+          return;
+        }
+        pane.label = typeof params.label === "string" ? params.label : null;
+        send(socket, { id, result: { type: "ok" } });
+        broadcast("pane.updated", { pane_id: paneId });
+        return;
+      }
+      case "agent.start": {
+        const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
+        const pane = findPane(paneId);
+        if (pane === null) {
+          send(socket, { id, error: { code: "pane_not_found", message: paneId } });
+          return;
+        }
+        const kind = params.kind;
+        if (!isAgentKind(kind)) {
+          send(socket, { id, error: { code: "invalid_params", message: "kind" } });
+          return;
+        }
+        // Codex はこの環境で起動できない。成功経路を偽装せず、部分成功の画面を E2E で通す。
+        if (kind === "codex") {
+          send(socket, { id, error: { code: "agent_spawn_failed", message: "codex" } });
+          return;
+        }
+        const name = typeof params.name === "string" ? params.name : kind;
+        // 起動待ちのスピナーを画面で確かめられるよう、少しだけ待つ。実 Herdr では
+        // エージェントの TUI が準備できるまで待つ時間に相当する。
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        snapshot.agents = [
+          ...(snapshot.agents ?? []).filter((agent) => agent.pane_id !== paneId),
+          {
+            pane_id: paneId,
+            workspace_id: pane.workspace_id,
+            cwd: pane.cwd ?? null,
+            agent: kind,
+            terminal_title_stripped: name,
+          },
+        ];
+        pane.agent_status = "idle";
+        const tab = snapshot.tabs?.find((item) => item.tab_id === pane.tab_id);
+        if (tab) tab.agent_status = "idle";
+        const workspace = snapshot.workspaces?.find(
+          (item) => item.workspace_id === pane.workspace_id,
+        );
+        if (workspace) workspace.agent_status = "idle";
+        send(socket, {
+          id,
+          result: {
+            type: "agent_started",
+            agent: { pane_id: paneId, agent: kind, name },
+            argv: [],
+          },
+        });
+        broadcast("pane.updated", { pane_id: paneId });
         return;
       }
       case "pane.close": {

@@ -161,6 +161,8 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
     close: async () => {},
     layout: async ({ paneId }) => ({ cells: [{ paneId, width: 240, height: 48 }] }),
     split: async ({ paneId }) => ({ paneId }),
+    startAgent: async () => {},
+    rename: async () => {},
     ...overrides,
   };
 }
@@ -1724,6 +1726,14 @@ const fourPaneState: AppState = {
   ],
 };
 
+function postSplit(app: ReturnType<typeof createApp>, paneId: string, body: unknown = {}) {
+  return app.request(`/api/panes/${paneId}/split`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 test("POST /api/panes/:id/split splits the largest cell toward the target aspect", async () => {
   const seenLayout: unknown[] = [];
   const seenSplit: unknown[] = [];
@@ -1746,10 +1756,7 @@ test("POST /api/panes/:id/split splits the largest cell toward the target aspect
       },
     }),
   });
-  const response = await app.request("/api/panes/w1:p1/split", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-  });
+  const response = await postSplit(app, "w1:p1");
 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ paneId: "w1:p3" });
@@ -1795,10 +1802,7 @@ test("POST /api/panes/:id/split returns 502 when the state cannot be read", asyn
     store: createFakeStore(null, new Error("socket closed")),
     panes: createFakePanes(),
   });
-  const response = await app.request("/api/panes/w1:p1/split", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-  });
+  const response = await postSplit(app, "w1:p1");
 
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
@@ -1816,10 +1820,7 @@ test("POST /api/panes/:id/split returns 404 before asking Herdr for a pane that 
       },
     }),
   });
-  const response = await app.request("/api/panes/w1:p9/split", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-  });
+  const response = await postSplit(app, "w1:p9");
 
   expect(response.status).toBe(404);
   expect(await response.json()).toEqual({ error: "pane_not_found" });
@@ -1838,10 +1839,7 @@ test("POST /api/panes/:id/split stops at four panes in the tab", async () => {
       },
     }),
   });
-  const response = await app.request("/api/panes/w1:p1/split", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-  });
+  const response = await postSplit(app, "w1:p1");
 
   expect(response.status).toBe(409);
   expect(await response.json()).toEqual({ error: "pane_limit" });
@@ -1868,10 +1866,7 @@ test("POST /api/panes/:id/split stops when the layout already has four panes", a
       },
     }),
   });
-  const response = await app.request("/api/panes/w1:p1/split", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-  });
+  const response = await postSplit(app, "w1:p1");
 
   expect(response.status).toBe(409);
   expect(await response.json()).toEqual({ error: "pane_limit" });
@@ -1888,10 +1883,7 @@ test("POST /api/panes/:id/split returns 404 when Herdr no longer has the pane", 
       },
     }),
   });
-  const response = await app.request("/api/panes/w1:p1/split", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-  });
+  const response = await postSplit(app, "w1:p1");
 
   expect(response.status).toBe(404);
   expect(await response.json()).toEqual({ error: "pane_not_found" });
@@ -1907,10 +1899,7 @@ test("POST /api/panes/:id/split returns 400 when Herdr rejects the request", asy
       },
     }),
   });
-  const response = await app.request("/api/panes/w1:p1/split", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-  });
+  const response = await postSplit(app, "w1:p1");
 
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({ error: "invalid_request" });
@@ -1926,11 +1915,190 @@ test("POST /api/panes/:id/split returns 502 when Herdr cannot split the pane", a
       },
     }),
   });
+  const response = await postSplit(app, "w1:p1");
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+test("POST /api/panes/:id/split creates a named pane with the selected agent", async () => {
+  const calls: string[] = [];
+  const seenStart: unknown[] = [];
+  const seenRename: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(twoChatPanesState),
+    panes: createFakePanes({
+      split: async () => {
+        calls.push("split");
+        return { paneId: "w1:p3" };
+      },
+      startAgent: async (options) => {
+        calls.push("start");
+        seenStart.push(options);
+      },
+      rename: async (options) => {
+        calls.push("rename");
+        seenRename.push(options);
+      },
+    }),
+  });
+  const response = await postSplit(app, "w1:p1", { name: " 実装 ", agent: "pi" });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ paneId: "w1:p3" });
+  expect(seenStart).toEqual([{ paneId: "w1:p3", kind: "pi", name: "hwc-w1-p3" }]);
+  expect(seenRename).toEqual([{ paneId: "w1:p3", label: "実装" }]);
+  expect(calls).toEqual(["split", "start", "rename"]);
+});
+
+test("POST /api/panes/:id/split gives the agent a Herdr-valid name derived from the pane id", async () => {
+  const seenStart: unknown[] = [];
+  const seenRename: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(twoChatPanesState),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p3" }),
+      startAgent: async (options) => {
+        seenStart.push(options);
+      },
+      rename: async (options) => {
+        seenRename.push(options);
+      },
+    }),
+  });
+  const response = await postSplit(app, "w1:p1", { agent: "codex" });
+
+  expect(response.status).toBe(200);
+  expect(seenStart).toEqual([{ paneId: "w1:p3", kind: "codex", name: "hwc-w1-p3" }]);
+  expect(seenRename).toEqual([]);
+});
+
+test("POST /api/panes/:id/split creates a shell pane without starting an agent", async () => {
+  const seenStart: unknown[] = [];
+  const seenRename: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(twoChatPanesState),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p3" }),
+      startAgent: async (options) => {
+        seenStart.push(options);
+      },
+      rename: async (options) => {
+        seenRename.push(options);
+      },
+    }),
+  });
+  const response = await postSplit(app, "w1:p1", { name: "ログ", agent: null });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ paneId: "w1:p3" });
+  expect(seenStart).toEqual([]);
+  expect(seenRename).toEqual([{ paneId: "w1:p3", label: "ログ" }]);
+});
+
+test("POST /api/panes/:id/split keeps the pane when the agent cannot start", async () => {
+  const seenRename: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(twoChatPanesState),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p3" }),
+      startAgent: async () => {
+        throw new HerdrError("agent_spawn_failed", "codex is not installed");
+      },
+      rename: async (options) => {
+        seenRename.push(options);
+      },
+    }),
+  });
+  const response = await postSplit(app, "w1:p1", { name: "実装", agent: "codex" });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "agent_start_failed", paneId: "w1:p3" });
+  // 起動に失敗しても、作成済みのペインには名前を付けておく。
+  expect(seenRename).toEqual([{ paneId: "w1:p3", label: "実装" }]);
+});
+
+test("POST /api/panes/:id/split reports a rename failure after the pane is created", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(twoChatPanesState),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p3" }),
+      rename: async () => {
+        throw new HerdrError("pane_not_found", "no pane w1:p3");
+      },
+    }),
+  });
+  const response = await postSplit(app, "w1:p1", { name: "実装", agent: null });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "pane_rename_failed", paneId: "w1:p3" });
+});
+
+test("POST /api/panes/:id/split rejects a body without an object", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      split: async (options) => {
+        seen.push(options);
+        return { paneId: "w1:p2" };
+      },
+    }),
+  });
   const response = await app.request("/api/panes/w1:p1/split", {
     method: "POST",
     headers: { "content-type": "application/json" },
   });
 
-  expect(response.status).toBe(502);
-  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "body must be an object" });
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/split rejects an unknown agent or an overlong name", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      split: async (options) => {
+        seen.push(options);
+        return { paneId: "w1:p2" };
+      },
+    }),
+  });
+
+  for (const body of [{ agent: "gemini" }, { name: 42 }, { name: "x".repeat(81) }]) {
+    const response = await postSplit(app, "w1:p1", body);
+    expect(response.status).toBe(400);
+  }
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/split treats an agent blocked at startup as launched", async () => {
+  const seenRename: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(twoChatPanesState),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p3" }),
+      startAgent: async () => {
+        throw new HerdrError("agent_not_ready", "blocked during startup");
+      },
+      rename: async (options) => {
+        seenRename.push(options);
+      },
+    }),
+  });
+  const response = await postSplit(app, "w1:p1", { name: "Claude", agent: "claude" });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ paneId: "w1:p3" });
+  expect(seenRename).toEqual([{ paneId: "w1:p3", label: "Claude" }]);
 });

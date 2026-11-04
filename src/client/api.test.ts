@@ -12,6 +12,8 @@ import {
   parseAppState,
   toAppState,
   toChatSnapshot,
+  CREATE_TIMEOUT_MS,
+  toCreateError,
   toCreatedPane,
   toPaneRead,
 } from "./api";
@@ -260,4 +262,22 @@ test("close fails on any other status", () => {
   expect(closeOutcome(400)).toBe("failed");
   expect(closeOutcome(415)).toBe("failed");
   expect(closeOutcome(502)).toBe("failed");
+});
+
+test("a create error keeps the pane id only when the split already happened", () => {
+  expect(toCreateError({ error: "agent_start_failed", paneId: "w1:p3" })).toEqual({
+    error: "agent_start_failed",
+    paneId: "w1:p3",
+  });
+  expect(toCreateError({ error: "pane_limit" })).toEqual({ error: "pane_limit", paneId: null });
+  expect(toCreateError({ error: "pane_rename_failed", paneId: "w1:p3" })).toEqual({
+    error: "pane_rename_failed",
+    paneId: "w1:p3",
+  });
+  expect(toCreateError({ error: "something_else" })).toEqual({ error: "failed", paneId: null });
+  expect(toCreateError(null)).toEqual({ error: "failed", paneId: null });
+});
+
+test("the create timeout leaves room for the agent start wait", () => {
+  expect(CREATE_TIMEOUT_MS).toBeGreaterThan(59_000);
 });

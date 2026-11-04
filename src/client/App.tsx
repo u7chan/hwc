@@ -10,7 +10,6 @@ import {
   fetchState,
   focusAgent,
   closePane,
-  createPane,
   parseAppState,
   sendInput,
   stopAgent,
@@ -22,6 +21,7 @@ import {
   type ConnectionStatus,
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
+import { CreatePane } from "./CreatePane";
 import { CloseIcon, HwcMark, PlusIcon, SettingsIcon } from "./icons";
 import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
@@ -90,9 +90,8 @@ import {
 const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
 const NO_TIMES: ReadonlyMap<string, number> = new Map();
-// 詳細のメニューは見出し + 項目 2 つ + 注記/エラー行。位置計算のための目安。
+// 詳細のメニューは見出し + 項目 2 つ + 注記行。位置計算のための目安。
 const DETAIL_MENU_HEIGHT = MENU_HEIGHT + 44;
-const CREATE_FAILED_NOTICE = "ペインを作成できませんでした。もう一度お試しください。";
 
 // 保存に失敗しても表示は続ける。プライベートモードなどでは localStorage が使えない。
 function readStored(key: string): string | null {
@@ -191,12 +190,6 @@ type Closing = {
   phase: "confirm" | "busy" | "failed";
 };
 
-// 追加は確認を挟まない。送信中と失敗だけを持ち、成功したら新ペインを開く。
-type Creating = {
-  paneId: string;
-  phase: "busy" | "failed";
-};
-
 // 分割セルの入力欄を畳むかは、セルの box の高さ・幅と、上下に積まれた段かで決める。PaneDetail は
 // fragment を返すので自分では測れない。内容高を測ると畳んだ切替で再ループするため box を使う。
 function SplitCell(props: { stacked: boolean; children: (compact: boolean) => ComponentChildren }) {
@@ -288,11 +281,11 @@ export function App() {
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
   const [menu, setMenu] = useState<({ paneId: string } & MenuPlacement) | null>(null);
   const [closing, setClosing] = useState<Closing | null>(null);
-  const [creating, setCreating] = useState<Creating | null>(null);
+  // 作成ダイアログの対象ペイン。空なら閉じている。
+  const [createTarget, setCreateTarget] = useState<string | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const closeInFlight = useRef(false);
-  const createInFlight = useRef(false);
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
@@ -460,40 +453,21 @@ export function App() {
       { width: window.innerWidth, height: window.innerHeight },
       DETAIL_MENU_HEIGHT,
     );
-    // 前回の失敗はメニューを開き直した時点で消す。送信中は二度押しを防ぐため残す。
-    if (creating?.phase !== "busy") setCreating(null);
     setMenu({ paneId, ...placement });
   };
 
-  const closeMenu = () => {
-    setMenu(null);
-    if (creating?.phase === "failed") setCreating(null);
-  };
+  const closeMenu = () => setMenu(null);
 
-  // 作成の結果はメニュー内に出す。メニューを閉じても送信は続き、成功すれば新ペインを開く。
-  const createPaneFromMenu = () => {
+  // 名前とエージェントはダイアログで決める。メニューは入口だけ。
+  const openCreateDialog = () => {
     if (menu === null) return;
-    if (creating?.phase === "busy" || createInFlight.current) return;
-    const sourceId = menu.paneId;
-    createInFlight.current = true;
-    setCreating({ paneId: sourceId, phase: "busy" });
-    void createPane(sourceId).then((result) => {
-      createInFlight.current = false;
-      if (!result.ok) {
-        setCreating({ paneId: sourceId, phase: "failed" });
-        return;
-      }
-      setCreating(null);
-      setMenu(null);
-      setPendingSelect(result.paneId);
-    });
+    setCreateTarget(menu.paneId);
+    setMenu(null);
   };
 
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。
   const openCloseConfirm = () => {
     if (menu === null) return;
-    // 作成の送信中に閉じると、後継の計算と作成結果が重なる。短い間だけ待つ。
-    if (creating?.phase === "busy") return;
     const paneId = menu.paneId;
     const row = state === null ? null : findPaneRow(state, paneId);
     setMenu(null);
@@ -653,13 +627,10 @@ export function App() {
   const splitOn = wide && split && shown.length > 0;
   const cells = splitOn ? shown : pane === null ? [] : [pane];
 
-  // 4 枚の判定は BFF と同じタブの枚数で行う。作成中は二度押しを防ぐ。
+  // 4 枚の判定は BFF と同じタブの枚数で行う。
   const menuTab =
     state === null || menu === null ? null : (findPaneRow(state, menu.paneId)?.tab ?? null);
   const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
-  const creatingBusy = creating?.phase === "busy";
-  const menuBusy = creatingBusy && creating?.paneId === menu?.paneId;
-  const menuFailed = creating?.phase === "failed" && creating.paneId === menu?.paneId;
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
     <PaneDetail
@@ -840,24 +811,17 @@ export function App() {
             type="button"
             role="menuitem"
             class="hwc-menu-item"
-            disabled={menuFull || creatingBusy}
-            onClick={createPaneFromMenu}
+            disabled={menuFull}
+            onClick={openCreateDialog}
           >
             <PlusIcon size={14} />
-            {menuBusy ? "作成中…" : "新しいペイン"}
+            新しいペイン
           </button>
           {menuFull ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
-          {creatingBusy && !menuBusy ? <p class="hwc-menu-note">作成中…</p> : null}
-          {menuFailed ? (
-            <p class="hwc-menu-error" role="status">
-              {CREATE_FAILED_NOTICE}
-            </p>
-          ) : null}
           <button
             type="button"
             role="menuitem"
             class="hwc-menu-item hwc-menu-item--danger"
-            disabled={creatingBusy}
             onClick={openCloseConfirm}
           >
             <CloseIcon size={14} />
@@ -873,6 +837,14 @@ export function App() {
           failed={closing.phase === "failed"}
           onConfirm={confirmClose}
           onCancel={cancelClose}
+        />
+      )}
+
+      {createTarget === null ? null : (
+        <CreatePane
+          paneId={createTarget}
+          onCreated={setPendingSelect}
+          onClose={() => setCreateTarget(null)}
         />
       )}
     </div>
