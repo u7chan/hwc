@@ -34,7 +34,7 @@ import {
   commandText,
 } from "./commands";
 import { useCopy } from "./copy";
-import { readDraft, storage, writeDraft } from "./drafts";
+import { readDraft, readReply, storage, writeDraft, writeReply } from "./drafts";
 import {
   AgentGlyphIcon,
   ArrowDownIcon,
@@ -50,6 +50,7 @@ import {
 } from "./icons";
 import { Markdown } from "./Markdown";
 import { usePaneOutput } from "./output";
+import { canSend, composeReply, normaliseQuote, splitQuote } from "./reply";
 import { agentGlyph, isShellPane, paneName, type PaneContext } from "./select";
 import { Spinner } from "./Spinner";
 import { formatClock, formatElapsed } from "./time";
@@ -93,6 +94,59 @@ function OutputSkeleton() {
 const USER_MESSAGE_CLAMP_LINES = 5;
 const USER_MESSAGE_CLAMP_FALLBACK = 128;
 const PENDING_TIMEOUT_MS = 60_000;
+
+// 選択した本文の上に出す返信ボタン。位置は .hwc-output-wrap を基準にした px。
+type QuoteAnchor = { text: string; left: number; top: number; above: boolean };
+
+const QUOTE_SCOPE = "data-quote-scope";
+const QUOTE_BUTTON_GAP = 8;
+const QUOTE_BUTTON_HEIGHT = 32;
+const QUOTE_BUTTON_HALF_WIDTH = 32;
+
+// スマホは選択メニューを差し替えられない。返信の入り口はポインタを持つ画面だけに出す。
+// 端末の性質は途中で変わらないので、最初の判定を使い回す。
+let touchOnly: boolean | null = null;
+function touchFirst(): boolean {
+  touchOnly ??=
+    window.matchMedia("(hover: none)").matches || window.matchMedia("(pointer: coarse)").matches;
+  return touchOnly;
+}
+
+function quoteScopeOf(node: Node | null, root: Element): Element | null {
+  if (node === null) return null;
+  const element = node instanceof Element ? node : node.parentElement;
+  const scope = element?.closest(`[${QUOTE_SCOPE}]`) ?? null;
+  return scope !== null && root.contains(scope) ? scope : null;
+}
+
+// 選択が 1 つの本文の中にあるときだけ、その本文と位置を返す。
+// 入力欄・ヘッダ・メタ行・複数メッセージにまたがる選択は対象外。
+function readQuoteAnchor(scroller: HTMLElement, frame: HTMLElement): QuoteAnchor | null {
+  const selection = document.getSelection();
+  if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return null;
+  const text = normaliseQuote(selection.toString());
+  if (text === "") return null;
+  const range = selection.getRangeAt(0);
+  const scope = quoteScopeOf(range.startContainer, scroller);
+  if (scope === null || scope !== quoteScopeOf(range.endContainer, scroller)) return null;
+  const rect = range.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return null;
+
+  const box = frame.getBoundingClientRect();
+  const below = rect.bottom - box.top + QUOTE_BUTTON_GAP;
+  // 下端に寄っているときは選択の上に出す。入力欄に重ねない。
+  const above = below + QUOTE_BUTTON_HEIGHT > box.height;
+  const left = Math.min(
+    Math.max(rect.left + rect.width / 2 - box.left, QUOTE_BUTTON_HALF_WIDTH),
+    Math.max(box.width - QUOTE_BUTTON_HALF_WIDTH, QUOTE_BUTTON_HALF_WIDTH),
+  );
+  return {
+    text,
+    left,
+    top: above ? rect.top - box.top - QUOTE_BUTTON_GAP : below,
+    above,
+  };
+}
 
 // 添付の配信 URL は新しいタブで開く。ライトボックスを持たないので、拡大はブラウザに任せる。
 function MessageAttachments(props: { paneId: string; names: string[] }) {
@@ -138,6 +192,8 @@ function UserMessage(props: {
   const clampHeight =
     lineHeight > 0 ? lineHeight * USER_MESSAGE_CLAMP_LINES : USER_MESSAGE_CLAMP_FALLBACK;
   const overflowing = contentHeight > clampHeight + 1;
+  // 送信後の引用は、先頭の blockquote だけをカードにする（ADR 0022）。
+  const { quote, body } = splitQuote(props.message.text);
 
   return (
     <>
@@ -147,9 +203,11 @@ function UserMessage(props: {
             class="hwc-msg-body"
             id={textId}
             ref={content}
+            data-quote-scope="true"
             style={{ maxHeight: `${expanded ? contentHeight : clampHeight}px` }}
           >
-            {props.message.text}
+            {quote === null ? null : <span class="hwc-msg-quote">{quote}</span>}
+            {body}
             {overflowing && !expanded ? (
               <span class="hwc-msg-more" aria-hidden="true">
                 …
@@ -365,6 +423,14 @@ export function PaneDetail(props: PaneDetailProps) {
   const [chip, setChip] = useState<CommandId | null>(null);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
   const nextAttachmentKey = useRef(0);
+  // 引用は trim 済みの生テキスト。`>` は送信のときに付ける（ADR 0022）。
+  // 返信 UI を持たない端末では、残っていても使わない。見えない引用を付けて送らないため。
+  const [reply, setReply] = useState<string | null>(() => {
+    if (touchFirst()) return null;
+    const stored = readReply(storage(), pane.id);
+    return stored === "" ? null : stored;
+  });
+  const [quoteAnchor, setQuoteAnchor] = useState<QuoteAnchor | null>(null);
 
   const setPinned = (next: boolean) => {
     pinned.current = next;
@@ -403,17 +469,26 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  // 返信ボタンを出している間は自動追従を止める。購読を張り直さずに読むため ref に写す。
+  const quoting = useRef(false);
+  quoting.current = quoteAnchor !== null;
 
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
-  // 書きかけの指示が別々のメッセージに分かれてしまう。
+  // 書きかけの指示が別々のメッセージに分かれてしまう。引用中も同じ理由で出さない。
   const candidates =
-    attachments.length === 0 ? commandCandidates(pane, draft, snapshot?.context ?? null) : [];
+    attachments.length === 0 && reply === null
+      ? commandCandidates(pane, draft, snapshot?.context ?? null)
+      : [];
   const uploading = attachments.some((item) => item.name === null);
-  const canSend = uploading
-    ? false
-    : chip === null
-      ? draft.trim() !== "" || attachments.length > 0
-      : !replying;
+  const sendable = canSend({
+    uploading,
+    chip,
+    replying,
+    draft,
+    attachments: attachments.length,
+    reply,
+  });
   const shell = isShellPane(pane);
   const placeholder =
     chip === "compact" ? "コンパクトの指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
@@ -440,6 +515,34 @@ export function PaneDetail(props: PaneDetailProps) {
     return () => clearTimeout(timer);
   }, [draft, pane.id, chip]);
 
+  // 引用も同じ debounce で残す。再読み込みやペイン切替で戻せるようにする。
+  useEffect(() => {
+    if (touchFirst()) return;
+    const text = reply ?? "";
+    const timer = setTimeout(() => writeReply(storage(), pane.id, text), 250);
+    return () => clearTimeout(timer);
+  }, [reply, pane.id]);
+
+  // 選択が 1 つの本文の中で終わったときだけ返信ボタンを出す。位置は選択の下（入らなければ上）。
+  // 選択変更・スクロール・リサイズでは隠す。ペインの切替は PaneDetail の作り直しで消える。
+  useEffect(() => {
+    const scrollerElement = scroller.current;
+    const frameElement = frame.current;
+    if (scrollerElement === null || frameElement === null) return;
+    if (touchFirst()) return;
+
+    const refresh = () => setQuoteAnchor(readQuoteAnchor(scrollerElement, frameElement));
+    const clear = () => setQuoteAnchor(null);
+    document.addEventListener("selectionchange", refresh);
+    scrollerElement.addEventListener("scroll", clear);
+    window.addEventListener("resize", clear);
+    return () => {
+      document.removeEventListener("selectionchange", refresh);
+      scrollerElement.removeEventListener("scroll", clear);
+      window.removeEventListener("resize", clear);
+    };
+  }, [pane.id]);
+
   // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
   // 前の inline height を残さない。
   // 描画の後に高さを直すと、改行した 1 フレームだけ箱が低いままになり、
@@ -450,9 +553,10 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 最新が見えている間だけ追従する。読み返しているときは勝手に動かさない。
   // 失敗の notice はメッセージ領域を縮めるので、出たときも追従し直す。
+  // 返信ボタンを出している間は、選択を流さないよう追従しない。
   useEffect(() => {
     const element = scroller.current;
-    if (element && atBottom) element.scrollTop = element.scrollHeight;
+    if (element && atBottom && !quoting.current) element.scrollTop = element.scrollHeight;
   }, [content, replying, atBottom, pendingMessages.length, notice]);
 
   // 画像の読み込みや入力欄の伸びで高さが後から変わっても、最新を見ている間は底に留める。
@@ -463,7 +567,7 @@ export function PaneDetail(props: PaneDetailProps) {
     const keep = () => {
       lastHeight.current = element.scrollHeight;
       lastClientHeight.current = element.clientHeight;
-      if (!pinned.current) return;
+      if (!pinned.current || quoting.current) return;
       element.scrollTop = element.scrollHeight;
     };
     // 初回は今の高さを基準にする。0 のまま残すと、最初のスクロールを伸縮と誤認する。
@@ -529,6 +633,27 @@ export function PaneDetail(props: PaneDetailProps) {
     input.current?.focus();
   };
 
+  // 選択を引用として固定し、返信を始める。compact のチップは外すが、指示の下書きは残す
+  // （返信本文として送り、/compact には戻さない。ADR 0016 / 0022）。
+  const startReply = (text: string) => {
+    // 送信中に引用を変えると、成功時のクリアで新しい引用まで消える。送っている間は受け付けない。
+    if (sending || text === "") return;
+    setQuoteAnchor(null);
+    setReply(text);
+    setChip(null);
+    // 選択の折りたたみは pointerdown で止めているが、押された後にブラウザが流す分は捨てる。
+    document.getSelection()?.removeAllRanges();
+    const field = input.current;
+    if (field === null) return;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
+  };
+
+  const clearReply = () => {
+    setReply(null);
+    input.current?.focus();
+  };
+
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
   const removeAttachment = (key: string) => {
     attachments.find((item) => item.key === key)?.controller.abort();
@@ -577,11 +702,11 @@ export function PaneDetail(props: PaneDetailProps) {
   );
 
   const sendText = async () => {
-    if (!canSend || sending) return;
-    const text = draft;
+    if (!sendable || sending) return;
     const names = attachments
       .map((item) => item.name)
       .filter((name): name is string => name !== null);
+    const text = reply === null ? draft : composeReply(reply, draft);
     const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
@@ -594,7 +719,11 @@ export function PaneDetail(props: PaneDetailProps) {
     if (await onSubmit(text, names)) {
       // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
       setPinned(true);
+      // 250ms の debounce を待たずに消す。先にペインを切り替えると古い値が戻る。
+      writeDraft(storage(), pane.id, "");
+      writeReply(storage(), pane.id, "");
       setDraft("");
+      setReply(null);
       setAttachments([]);
       setPending((items) => [
         ...items,
@@ -682,7 +811,7 @@ export function PaneDetail(props: PaneDetailProps) {
           <MoreIcon />
         </button>
       </div>
-      <div class="hwc-output-wrap">
+      <div class="hwc-output-wrap" ref={frame}>
         <div
           class="hwc-output-scroll"
           data-empty={empty}
@@ -764,6 +893,25 @@ export function PaneDetail(props: PaneDetailProps) {
         >
           <ArrowDownIcon />
         </button>
+        {quoteAnchor === null ? null : (
+          <button
+            type="button"
+            class="hwc-quote-action"
+            aria-label="選択した箇所に返信"
+            data-above={quoteAnchor.above}
+            style={{ left: `${quoteAnchor.left}px`, top: `${quoteAnchor.top}px` }}
+            // 押下で選択が折りたたまれると、ボタン自身が消えて click が届かない。
+            onPointerDown={(event) => {
+              event.preventDefault();
+              startReply(quoteAnchor.text);
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            // キーボードで選んだ選択でも押せるようにする。
+            onClick={() => startReply(quoteAnchor.text)}
+          >
+            返信
+          </button>
+        )}
       </div>
 
       {notice === null ? null : (
@@ -798,6 +946,21 @@ export function PaneDetail(props: PaneDetailProps) {
             >
               {expanded ? <CollapseIcon /> : <ExpandIcon />}
             </button>
+          )}
+          {reply === null ? null : (
+            <div class="hwc-reply" role="group" aria-label="引用">
+              <span class="hwc-reply-text" title={reply}>
+                {reply}
+              </span>
+              <button
+                type="button"
+                class="hwc-reply-clear"
+                aria-label="引用を外す"
+                onClick={clearReply}
+              >
+                <CloseIcon size={14} />
+              </button>
+            </div>
           )}
           {attachments.length > 0 ? (
             <div class="hwc-commands" role="group" aria-label="添付画像">
@@ -935,7 +1098,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 class="hwc-send"
                 data-sending={sending}
                 aria-label={sending ? "送信中" : "送信"}
-                disabled={!canSend || sending}
+                disabled={!sendable || sending}
               >
                 {sending ? <Spinner /> : <SendIcon />}
               </button>

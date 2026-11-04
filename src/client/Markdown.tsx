@@ -7,16 +7,17 @@ import type { MdBlock, MdInline, MdListItem } from "./markdown/types";
 const HEADING_TAGS = ["h3", "h4", "h5", "h6"] as const;
 
 // 本文が上限を超えたら、解析せず原文をそのまま出す。解析してから捨てると固まる。
+// ルートの data-quote-scope は、本文の選択から返信を始める範囲を示す。
 export function Markdown({ text }: { text: string }) {
   if (text.length > MARKDOWN_MAX_LENGTH) {
     return (
-      <div class="hwc-md" data-plain>
+      <div class="hwc-md" data-plain data-quote-scope="true">
         {text}
       </div>
     );
   }
   return (
-    <div class="hwc-md">
+    <div class="hwc-md" data-quote-scope="true">
       <MarkdownBlocks text={text} />
     </div>
   );

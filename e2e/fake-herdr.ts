@@ -1,7 +1,8 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ATTACHED_FILES_OPEN } from "../src/shared/attachments";
 import { createScenario } from "./fixtures/scenario";
 
 type WireRequest = { id?: string; method?: string; params?: unknown };
@@ -14,6 +15,9 @@ export type FakeHerdr = {
 
 const MAX_MESSAGE_CHARS = 1024 * 1024;
 
+// 会話を残さない（または履歴を置き換える）コマンドは、user メッセージとして追記しない。
+const COMMAND_TEXT = /^\/(?:new|compact)(?:\s|$)/;
+
 // 実 Herdr のソケットに触れず、E2E で使う架空の状態だけを返す。プロトコルは BFF が
 // 実際に使う範囲に絞り、本番コードのソケット経路をそのまま通す。
 export async function startFakeHerdr(): Promise<FakeHerdr> {
@@ -25,6 +29,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   const revisions = new Map<string, number>();
   const sockets = new Set<net.Socket>();
   const subscribers = new Set<net.Socket>();
+  let sendCount = 0;
 
   const send = (socket: net.Socket, message: unknown) => {
     if (!socket.destroyed) socket.write(`${JSON.stringify(message)}\n`);
@@ -36,6 +41,46 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
 
   const findPane = (paneId: string) =>
     snapshot.panes?.find((pane) => pane.pane_id === paneId) ?? null;
+
+  // 送った本文を架空セッションの user メッセージとして追記する。E2E で確定後の送信カードを
+  // 確かめられるようにするためで、対象は agent_session を持つペインの通常本文だけ。
+  const appendUserEntry = async (paneId: string, text: string): Promise<void> => {
+    if (text.trim() === "") return;
+    const session = findPane(paneId)?.agent_session ?? null;
+    const path = session?.kind === "path" ? session.value : null;
+    if (path === null) return;
+    // 添付を持つペインの Enter は常に本文の送信になる（ADR 0018）。添付付きの `/compact` も
+    // 本文として送られるので、コマンド扱いは注記が無いときだけ。
+    const command = !text.includes(ATTACHED_FILES_OPEN) && COMMAND_TEXT.test(text.trim());
+    if (command) return;
+    let raw: string;
+    try {
+      raw = await readFile(path, "utf8");
+    } catch {
+      return;
+    }
+    // 現在の葉を親にする。fixture の最後のエントリ（t1）から伸ばす。
+    const lines = raw.split("\n").filter((line) => line.trim() !== "");
+    const last = lines.at(-1);
+    let parentId: string | null = null;
+    if (last !== undefined) {
+      try {
+        const entry = JSON.parse(last) as { id?: unknown };
+        parentId = typeof entry.id === "string" ? entry.id : null;
+      } catch {
+        parentId = null;
+      }
+    }
+    sendCount += 1;
+    const entry = {
+      type: "message",
+      id: `e2e-send-${sendCount}`,
+      parentId,
+      timestamp: new Date().toISOString(),
+      message: { role: "user", content: text, timestamp: Date.now() },
+    };
+    await appendFile(path, `${JSON.stringify(entry)}\n`);
+  };
 
   const focus = (paneId: string): boolean => {
     const pane = findPane(paneId);
@@ -84,7 +129,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     return true;
   };
 
-  const handle = (socket: net.Socket, line: string) => {
+  const handle = async (socket: net.Socket, line: string) => {
     let message: WireRequest;
     try {
       message = JSON.parse(line) as WireRequest;
@@ -131,6 +176,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         const text = typeof params.text === "string" ? params.text : "";
         outputs.set(paneId, `${outputs.get(paneId) ?? ""}${text}\n`);
         revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
+        await appendUserEntry(paneId, text);
         send(socket, { id, result: { type: "ok" } });
         broadcast("pane.updated", { pane_id: paneId });
         return;
@@ -180,7 +226,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         const line = buffer.slice(0, end);
         buffer = buffer.slice(end + 1);
         end = buffer.indexOf("\n");
-        if (line.trim()) handle(socket, line);
+        if (line.trim()) void handle(socket, line);
       }
       if (buffer.length > MAX_MESSAGE_CHARS) {
         buffer = "";

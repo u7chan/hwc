@@ -2,6 +2,9 @@ export const DRAFT_PREFIX = "hwc-draft:";
 // 長すぎる下書きは残さない。localStorage は同期的に書くので、容量も時間も食いたくない。
 export const DRAFT_MAX_LENGTH = 8000;
 
+export const REPLY_PREFIX = "hwc-reply:";
+export const REPLY_MAX_LENGTH = DRAFT_MAX_LENGTH;
+
 type DraftStorage = {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
@@ -26,15 +29,36 @@ export function draftKey(paneId: string): string {
   return `${DRAFT_PREFIX}${paneId}`;
 }
 
-export function readDraft(storage: DraftStorage | null, paneId: string): string {
+export function replyKey(paneId: string): string {
+  return `${REPLY_PREFIX}${paneId}`;
+}
+
+function read(storage: DraftStorage | null, key: string): string {
   if (!storage) return "";
-  return safely(() => storage.getItem(draftKey(paneId)) ?? "", "");
+  return safely(() => storage.getItem(key) ?? "", "");
+}
+
+function write(storage: DraftStorage | null, key: string, text: string, maxLength: number): void {
+  if (!storage) return;
+  safely(() => {
+    if (text === "") storage.removeItem(key);
+    else if (text.length <= maxLength) storage.setItem(key, text);
+  }, undefined);
+}
+
+export function readDraft(storage: DraftStorage | null, paneId: string): string {
+  return read(storage, draftKey(paneId));
 }
 
 export function writeDraft(storage: DraftStorage | null, paneId: string, text: string): void {
-  if (!storage) return;
-  safely(() => {
-    if (text === "") storage.removeItem(draftKey(paneId));
-    else if (text.length <= DRAFT_MAX_LENGTH) storage.setItem(draftKey(paneId), text);
-  }, undefined);
+  write(storage, draftKey(paneId), text, DRAFT_MAX_LENGTH);
+}
+
+// 引用は下書きと同じ場所に、別のキーで残す。
+export function readReply(storage: DraftStorage | null, paneId: string): string {
+  return read(storage, replyKey(paneId));
+}
+
+export function writeReply(storage: DraftStorage | null, paneId: string, text: string): void {
+  write(storage, replyKey(paneId), text, REPLY_MAX_LENGTH);
 }
