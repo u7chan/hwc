@@ -2888,8 +2888,9 @@ p.hwc-compaction,
   cursor: default;
 }
 
-/* 送信中もボタンの面は残す。押せないが処理中であることが見えるように。 */
-.hwc-send[data-sending="true"]:disabled {
+/* 送信中・停止中もボタンの面は残す。押せないが処理中であることが見えるように。 */
+.hwc-send[data-sending="true"]:disabled,
+.hwc-send[data-stopping="true"]:disabled {
   background: var(--color-accent);
   color: var(--color-on-accent);
 }

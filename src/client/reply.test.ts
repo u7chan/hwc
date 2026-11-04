@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canSend, composeReply, normaliseQuote, quoteLines, splitQuote } from "./reply";
+import { canSend, canStop, composeReply, normaliseQuote, quoteLines, splitQuote } from "./reply";
 
 test("a one line selection keeps the line as it is", () => {
   expect(normaliseQuote("余白が残ります")).toBe("余白が残ります");
@@ -115,4 +115,35 @@ test("a chip can be sent unless the agent is working", () => {
   expect(canSend({ ...idle, chip: "compact" })).toBe(true);
   expect(canSend({ ...idle, chip: "compact", replying: true })).toBe(false);
   expect(canSend({ ...idle, chip: "new", replying: true })).toBe(false);
+});
+
+const stoppable = {
+  replying: true,
+  agent: "pi",
+  draft: "",
+  attachments: 0,
+  reply: null,
+  chip: null,
+};
+
+test("a working agent with an empty composer can be stopped", () => {
+  expect(canStop(stoppable)).toBe(true);
+  expect(canStop({ ...stoppable, replying: false })).toBe(false);
+});
+
+test("only known agents can be stopped", () => {
+  for (const agent of ["pi", "claude", "codex", "opencode"]) {
+    expect(canStop({ ...stoppable, agent })).toBe(true);
+  }
+  for (const agent of [null, "custom", "shell"]) {
+    expect(canStop({ ...stoppable, agent })).toBe(false);
+  }
+});
+
+test("content in the composer keeps the send action", () => {
+  expect(canStop({ ...stoppable, draft: "続き" })).toBe(false);
+  expect(canStop({ ...stoppable, draft: "  " })).toBe(true);
+  expect(canStop({ ...stoppable, attachments: 1 })).toBe(false);
+  expect(canStop({ ...stoppable, reply: "引用" })).toBe(false);
+  expect(canStop({ ...stoppable, chip: "compact" })).toBe(false);
 });

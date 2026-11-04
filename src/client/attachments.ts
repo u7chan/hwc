@@ -45,6 +45,7 @@ export function pasteActionFrom(
 }
 
 export const SEND_FAILED_NOTICE = "送信できませんでした";
+export const STOP_FAILED_NOTICE = "停止できませんでした";
 // シェルは 1 行ずつしか渡せない（端末は改行を入力として扱えない）。
 export const SHELL_NEWLINE_NOTICE = "シェルでは改行できません（1 行ずつ送ってください）";
 

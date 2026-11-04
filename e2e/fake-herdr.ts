@@ -181,6 +181,31 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         broadcast("pane.updated", { pane_id: paneId });
         return;
       }
+      case "pane.send_keys": {
+        const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
+        const target = findPane(paneId);
+        if (target === null) {
+          send(socket, { id, error: { code: "pane_not_found", message: paneId } });
+          return;
+        }
+        const keys = Array.isArray(params.keys)
+          ? params.keys.filter((key): key is string => typeof key === "string")
+          : [];
+        // 停止ボタンは Esc だけを送る。実 Herdr と同じく、実行中のエージェントは
+        // idle に戻ったものとして次のスナップショットを作る。
+        if (keys.some((key) => key === "esc" || key === "escape")) {
+          target.agent_status = "idle";
+          const tab = snapshot.tabs?.find((item) => item.tab_id === target.tab_id);
+          if (tab) tab.agent_status = "idle";
+          const workspace = snapshot.workspaces?.find(
+            (item) => item.workspace_id === target.workspace_id,
+          );
+          if (workspace) workspace.agent_status = "idle";
+        }
+        send(socket, { id, result: { type: "ok" } });
+        broadcast("pane.updated", { pane_id: paneId });
+        return;
+      }
       case "agent.focus": {
         const paneId = typeof params.target === "string" ? params.target : "";
         if (!focus(paneId)) {

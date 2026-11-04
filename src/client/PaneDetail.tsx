@@ -10,6 +10,7 @@ import {
   pasteActionFrom,
   SEND_FAILED_NOTICE,
   SHELL_NEWLINE_NOTICE,
+  STOP_FAILED_NOTICE,
   unsupportedImageNotice,
   uploadFailureNotice,
 } from "./attachments";
@@ -46,11 +47,12 @@ import {
   PaneIcon,
   SendIcon,
   StatusMark,
+  StopIcon,
   TerminalIcon,
 } from "./icons";
 import { Markdown } from "./Markdown";
 import { usePaneOutput } from "./output";
-import { canSend, composeReply, normaliseQuote, splitQuote } from "./reply";
+import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
 import { agentGlyph, isShellPane, paneName, type PaneContext } from "./select";
 import { Spinner } from "./Spinner";
 import { formatClock, formatElapsed } from "./time";
@@ -393,6 +395,7 @@ type PaneDetailProps = {
   menuOpen: boolean;
   onOpenMenu: (paneId: string, rect: DOMRect) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
+  onStop: () => Promise<boolean>;
 };
 
 // 名前はアップロードが終わるまで無い。controller は取り外しと離脱で送信を止めるために持つ。
@@ -403,12 +406,23 @@ type AttachedImage = {
 };
 
 export function PaneDetail(props: PaneDetailProps) {
-  const { pane, context, compact, labeled, branch, waitingMs, menuOpen, onOpenMenu, onSubmit } =
-    props;
+  const {
+    pane,
+    context,
+    compact,
+    labeled,
+    branch,
+    waitingMs,
+    menuOpen,
+    onOpenMenu,
+    onSubmit,
+    onStop,
+  } = props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expandedOpen, setExpandedOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   // 追従するかは state が正。イベント購読からも読むので、同じ値を ref に写す
@@ -489,6 +503,16 @@ export function PaneDetail(props: PaneDetailProps) {
     attachments: attachments.length,
     reply,
   });
+  // 停止は入力が空のときだけ出す。文字・添付・引用があれば、送信は実行中への追加指示になる。
+  const stop = canStop({
+    replying,
+    agent: pane.agent,
+    draft,
+    attachments: attachments.length,
+    reply,
+    chip,
+  });
+  const busy = sending || stopping;
   const shell = isShellPane(pane);
   const placeholder =
     chip === "compact" ? "コンパクトの指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
@@ -741,6 +765,14 @@ export function PaneDetail(props: PaneDetailProps) {
       setNotice(SEND_FAILED_NOTICE);
     }
     setSending(false);
+  };
+
+  const stopWorking = async () => {
+    if (stopping || !stop) return;
+    setStopping(true);
+    setNotice(null);
+    if (!(await onStop())) setNotice(STOP_FAILED_NOTICE);
+    setStopping(false);
   };
 
   // /new は user 発話を残さないので、送信中バブルを積むと最大 60 秒残る。
@@ -1094,13 +1126,15 @@ export function PaneDetail(props: PaneDetailProps) {
                 </span>
               )}
               <button
-                type="submit"
+                type={stop && !busy ? "button" : "submit"}
                 class="hwc-send"
                 data-sending={sending}
-                aria-label={sending ? "送信中" : "送信"}
-                disabled={!sendable || sending}
+                data-stopping={stopping}
+                aria-label={stopping ? "停止中" : sending ? "送信中" : stop ? "停止" : "送信"}
+                disabled={busy || (!stop && !sendable)}
+                onClick={stop && !busy ? stopWorking : undefined}
               >
-                {sending ? <Spinner /> : <SendIcon />}
+                {busy ? <Spinner /> : stop ? <StopIcon /> : <SendIcon />}
               </button>
             </span>
           </div>

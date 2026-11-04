@@ -223,6 +223,15 @@ export function SendIcon({ size = 20 }: IconProps) {
   );
 }
 
+// 実行中のターンを止める。塗りつぶした四角で、送信の矢印と形を分ける。
+export function StopIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="2" y="2" width="20" height="20" rx="3.2" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
 // 2x2 の分割表示。押している間はアクセント色で表す。
 export function SplitIcon({ size = 20 }: IconProps) {
   return (
