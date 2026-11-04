@@ -51,6 +51,25 @@ test("a tall tab stacks panes instead of forcing a 2x2", () => {
   expect(second?.direction).toBe("down");
 });
 
+test("a 120x48 tab starts down and still reaches 2x2", () => {
+  // 横長でもアスペクトが 1.4 未満なら下から始まる。形は向きの名前では決まらない。
+  const first = planSplit([{ paneId: "w1:p1", width: 120, height: 48 }]);
+  expect(first?.direction).toBe("down");
+
+  const second = planSplit([
+    { paneId: "w1:p1", width: 120, height: 24 },
+    { paneId: "w1:p2", width: 120, height: 24 },
+  ]);
+  expect(second).toMatchObject({ paneId: "w1:p1", direction: "right" });
+
+  const third = planSplit([
+    { paneId: "w1:p1", width: 60, height: 24 },
+    { paneId: "w1:p3", width: 60, height: 24 },
+    { paneId: "w1:p2", width: 120, height: 24 },
+  ]);
+  expect(third).toMatchObject({ paneId: "w1:p2", direction: "right" });
+});
+
 test("no pane is created once the tab has four", () => {
   const cells = [1, 2, 3, 4].map((index) => ({
     paneId: `w1:p${index}`,
