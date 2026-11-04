@@ -56,9 +56,9 @@ Herdr は `idle` と `done` をサーバー側の seen 状態で区別し、seen
 - 窓口は localStorage のキー `hwc-sent-pane` に `{ [workspaceId]: { paneId, at } }` で保存する。`at` は送信が通った時刻。並びは `at` の降順で決め、キー順に頼らない
 - localStorage が使えない環境では保存だけ諦め、その場の表示は続ける
 
-### クライアントは BFF を素の fetch で叩く
+### クライアントの transport
 
-- クライアントは `src/client/api.ts` の素の fetch で BFF を叩く（[ADR 0005](0005-bff-client-transport.md)）。`hc` の型共有は使わない
+- JSON エンドポイントは `hc`、SSE は `EventSource`、生バイトは `hc` の対象外とする（[ADR 0024](0024-json-hc-streaming-raw.md)）
 
 ## Consequences
 

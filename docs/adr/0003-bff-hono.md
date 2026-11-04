@@ -9,10 +9,10 @@
 
 ## Decision
 
-BFF に Hono を使い、`hc` による RPC で JSON エンドポイントの型を client と共有する。Hono は依存を持たず、依存最小化の方針と衝突しないため。
+BFF に Hono を使い、`hc` による RPC で JSON エンドポイントの型を client と共有する。JSON は `hc`、SSE は `EventSource`、生バイトは `hc` の対象外とする（[ADR 0024](0024-json-hc-streaming-raw.md)）。Hono は依存を持たず、依存最小化の方針と衝突しないため。
 
 ## Consequences
 
-- 型共有は JSON エンドポイントに限られ、SSE と WebSocket は対象外になる
-- RPC はランタイム検証をしないため、Herdr から届く JSON は手書きの型ガードで検証する
+- 型共有は JSON エンドポイントに限られ、SSE・WebSocket・生バイトは対象外になる
+- RPC はランタイム検証をしないため、BFF が受け取る Herdr の JSON は手書きの型ガードで検証する
 - `AppType` は `import type` で取り込み、サーバーコードを client バンドルへ混入させない
