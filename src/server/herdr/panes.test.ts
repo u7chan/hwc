@@ -174,6 +174,90 @@ test("close reports the failure so the route can map it", async () => {
   await expect(client.close({ paneId: "w1:p9" })).rejects.toThrow("pane_not_found");
 });
 
+const paneLayoutReply = {
+  type: "pane_layout",
+  layout: {
+    workspace_id: "w1",
+    tab_id: "w1:t1",
+    zoomed: false,
+    area: { x: 0, y: 0, width: 240, height: 48 },
+    focused_pane_id: "w1:p1",
+    panes: [
+      { pane_id: "w1:p1", focused: true, rect: { x: 0, y: 0, width: 120, height: 48 } },
+      { pane_id: "w1:p2", focused: false, rect: { x: 120, y: 0, width: 120, height: 48 } },
+    ],
+    splits: [],
+  },
+};
+
+test("layout reads the cell sizes of the pane's tab", async () => {
+  const { calls, call } = recordingCaller({ "pane.layout": paneLayoutReply });
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  const layout = await client.layout({ paneId: "w1:p1" });
+
+  expect(calls).toEqual([
+    {
+      method: "pane.layout",
+      params: { pane_id: "w1:p1" },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+  expect(layout).toEqual({
+    cells: [
+      { paneId: "w1:p1", width: 120, height: 48 },
+      { paneId: "w1:p2", width: 120, height: 48 },
+    ],
+  });
+});
+
+test("layout fails when Herdr answers with something else", async () => {
+  const { call } = recordingCaller({ "pane.layout": { type: "ok" } });
+  const client = createPaneClient({ call });
+
+  await expect(client.layout({ paneId: "w1:p1" })).rejects.toThrow(
+    "pane_layout.type must be pane_layout",
+  );
+});
+
+test("split asks Herdr to split the target pane without moving focus", async () => {
+  const { calls, call } = recordingCaller({
+    "pane.split": { type: "pane_info", pane: { pane_id: "w1:p2" } },
+  });
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  const created = await client.split({ paneId: "w1:p1", direction: "down", ratio: 0.5 });
+
+  expect(calls).toEqual([
+    {
+      method: "pane.split",
+      params: { target_pane_id: "w1:p1", direction: "down", ratio: 0.5 },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+  expect(created).toEqual({ paneId: "w1:p2" });
+});
+
+test("split fails when the response has no pane id", async () => {
+  const { call } = recordingCaller({ "pane.split": { type: "pane_info", pane: {} } });
+  const client = createPaneClient({ call });
+
+  await expect(client.split({ paneId: "w1:p1", direction: "right", ratio: 0.5 })).rejects.toThrow(
+    "pane_info.pane.pane_id",
+  );
+});
+
+test("split reports the failure so the route can map it", async () => {
+  const { call } = recordingCaller({
+    "pane.split": new HerdrError("pane_split_failed", "could not split"),
+  });
+  const client = createPaneClient({ call });
+
+  await expect(client.split({ paneId: "w1:p1", direction: "right", ratio: 0.5 })).rejects.toThrow(
+    "pane_split_failed",
+  );
+});
+
 test("parseOutputQuery defaults to the recent output", () => {
   expect(parseOutputQuery(new URLSearchParams())).toEqual({
     ok: true,

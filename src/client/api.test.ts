@@ -12,6 +12,7 @@ import {
   parseAppState,
   toAppState,
   toChatSnapshot,
+  toCreatedPane,
   toPaneRead,
 } from "./api";
 
@@ -234,6 +235,19 @@ test("the close request keeps the pane id in a single path segment", () => {
   expect(api.api.panes[":id"].close.$url(paneParam("w1/p2")).pathname).toBe(
     "/api/panes/w1%2Fp2/close",
   );
+});
+
+test("the split request keeps the pane id in a single path segment", () => {
+  expect(api.api.panes[":id"].split.$url(paneParam("w1/p2")).pathname).toBe(
+    "/api/panes/w1%2Fp2/split",
+  );
+});
+
+test("the created pane id is read from the response", () => {
+  expect(toCreatedPane({ paneId: "w1:p2" })).toBe("w1:p2");
+  expect(toCreatedPane({ paneId: "" })).toBeNull();
+  expect(toCreatedPane({ paneId: 2 })).toBeNull();
+  expect(toCreatedPane(null)).toBeNull();
 });
 
 test("close is done once the pane is gone, whatever removed it", () => {

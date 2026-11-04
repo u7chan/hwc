@@ -10,6 +10,7 @@ import {
   fetchState,
   focusAgent,
   closePane,
+  createPane,
   parseAppState,
   sendInput,
   stopAgent,
@@ -21,8 +22,9 @@ import {
   type ConnectionStatus,
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
-import { CloseIcon, HwcMark, SettingsIcon } from "./icons";
+import { CloseIcon, HwcMark, PlusIcon, SettingsIcon } from "./icons";
 import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
+import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import {
   findPane,
@@ -88,6 +90,9 @@ import {
 const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
 const NO_TIMES: ReadonlyMap<string, number> = new Map();
+// 詳細のメニューは見出し + 項目 2 つ + 注記/エラー行。位置計算のための目安。
+const DETAIL_MENU_HEIGHT = MENU_HEIGHT + 44;
+const CREATE_FAILED_NOTICE = "ペインを作成できませんでした。もう一度お試しください。";
 
 // 保存に失敗しても表示は続ける。プライベートモードなどでは localStorage が使えない。
 function readStored(key: string): string | null {
@@ -186,6 +191,12 @@ type Closing = {
   phase: "confirm" | "busy" | "failed";
 };
 
+// 追加は確認を挟まない。送信中と失敗だけを持ち、成功したら新ペインを開く。
+type Creating = {
+  paneId: string;
+  phase: "busy" | "failed";
+};
+
 // 分割セルの入力欄を畳むかは、セルの box の高さ・幅と、上下に積まれた段かで決める。PaneDetail は
 // fragment を返すので自分では測れない。内容高を測ると畳んだ切替で再ループするため box を使う。
 function SplitCell(props: { stacked: boolean; children: (compact: boolean) => ComponentChildren }) {
@@ -277,7 +288,11 @@ export function App() {
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
   const [menu, setMenu] = useState<({ paneId: string } & MenuPlacement) | null>(null);
   const [closing, setClosing] = useState<Closing | null>(null);
+  const [creating, setCreating] = useState<Creating | null>(null);
+  // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
+  const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const closeInFlight = useRef(false);
+  const createInFlight = useRef(false);
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
@@ -412,7 +427,16 @@ export function App() {
   // スナップショットから消えたペインはもう無いので、確認は出さない。
   const closingPane = state === null || closing === null ? null : findPane(state, closing.paneId);
 
+  // 新ペインがスナップショットに現れたら開く。応答の前に SSE が届いていれば、ここで 1 度だけ動く。
+  useEffect(() => {
+    if (pendingSelect === null || state === null) return;
+    if (findPane(state, pendingSelect) === null) return;
+    setView({ selectedPaneId: pendingSelect, expanded });
+    setPendingSelect(null);
+  }, [state, pendingSelect, expanded]);
+
   const select = (paneId: string) => {
+    setPendingSelect(null);
     setView({ selectedPaneId: paneId, expanded });
     setSettingsOpen(false);
   };
@@ -426,6 +450,7 @@ export function App() {
   };
 
   const back = () => {
+    setPendingSelect(null);
     setView({ selectedPaneId: null, expanded });
   };
 
@@ -433,14 +458,42 @@ export function App() {
     const placement = menuPlacement(
       rect,
       { width: window.innerWidth, height: window.innerHeight },
-      MENU_HEIGHT,
+      DETAIL_MENU_HEIGHT,
     );
+    // 前回の失敗はメニューを開き直した時点で消す。送信中は二度押しを防ぐため残す。
+    if (creating?.phase !== "busy") setCreating(null);
     setMenu({ paneId, ...placement });
+  };
+
+  const closeMenu = () => {
+    setMenu(null);
+    if (creating?.phase === "failed") setCreating(null);
+  };
+
+  // 作成の結果はメニュー内に出す。メニューを閉じても送信は続き、成功すれば新ペインを開く。
+  const createPaneFromMenu = () => {
+    if (menu === null) return;
+    if (creating?.phase === "busy" || createInFlight.current) return;
+    const sourceId = menu.paneId;
+    createInFlight.current = true;
+    setCreating({ paneId: sourceId, phase: "busy" });
+    void createPane(sourceId).then((result) => {
+      createInFlight.current = false;
+      if (!result.ok) {
+        setCreating({ paneId: sourceId, phase: "failed" });
+        return;
+      }
+      setCreating(null);
+      setMenu(null);
+      setPendingSelect(result.paneId);
+    });
   };
 
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。
   const openCloseConfirm = () => {
     if (menu === null) return;
+    // 作成の送信中に閉じると、後継の計算と作成結果が重なる。短い間だけ待つ。
+    if (creating?.phase === "busy") return;
     const paneId = menu.paneId;
     const row = state === null ? null : findPaneRow(state, paneId);
     setMenu(null);
@@ -599,6 +652,14 @@ export function App() {
   // 読んでいた位置が最下部に戻る。
   const splitOn = wide && split && shown.length > 0;
   const cells = splitOn ? shown : pane === null ? [] : [pane];
+
+  // 4 枚の判定は BFF と同じタブの枚数で行う。作成中は二度押しを防ぐ。
+  const menuTab =
+    state === null || menu === null ? null : (findPaneRow(state, menu.paneId)?.tab ?? null);
+  const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
+  const creatingBusy = creating?.phase === "busy";
+  const menuBusy = creatingBusy && creating?.paneId === menu?.paneId;
+  const menuFailed = creating?.phase === "failed" && creating.paneId === menu?.paneId;
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
     <PaneDetail
@@ -773,12 +834,30 @@ export function App() {
       </div>
 
       {menu === null ? null : (
-        <Menu label={`${menu.paneId} の操作`} placement={menu} onClose={() => setMenu(null)}>
+        <Menu label={`${menu.paneId} の操作`} placement={menu} onClose={closeMenu}>
           <p class="hwc-menu-head">{menu.paneId}</p>
           <button
             type="button"
             role="menuitem"
+            class="hwc-menu-item"
+            disabled={menuFull || creatingBusy}
+            onClick={createPaneFromMenu}
+          >
+            <PlusIcon size={14} />
+            {menuBusy ? "作成中…" : "新しいペイン"}
+          </button>
+          {menuFull ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
+          {creatingBusy && !menuBusy ? <p class="hwc-menu-note">作成中…</p> : null}
+          {menuFailed ? (
+            <p class="hwc-menu-error" role="status">
+              {CREATE_FAILED_NOTICE}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            role="menuitem"
             class="hwc-menu-item hwc-menu-item--danger"
+            disabled={creatingBusy}
             onClick={openCloseConfirm}
           >
             <CloseIcon size={14} />

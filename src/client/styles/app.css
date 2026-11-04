@@ -812,6 +812,23 @@ button {
   color: var(--color-danger);
 }
 
+/* メニュー内の補足。上限の理由や失敗を 1 行で添える。 */
+.hwc-menu-note,
+.hwc-menu-error {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) 0;
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.hwc-menu-note {
+  color: var(--color-secondary);
+}
+
+.hwc-menu-error {
+  color: var(--color-danger);
+}
+
 /* 確認ダイアログ。破壊的な操作の手前に一度だけ挟む。 */
 .hwc-dialog-layer {
   position: fixed;

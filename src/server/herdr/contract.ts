@@ -83,6 +83,13 @@ function expectId(value: unknown, path: string): string {
   return value;
 }
 
+function expectNumber(value: unknown, path: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${path} must be a non-negative number`);
+  }
+  return value;
+}
+
 function optionalText(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
@@ -196,6 +203,14 @@ export type PaneRead = {
   revision: number;
 };
 
+export type PaneLayoutCell = {
+  paneId: string;
+  width: number;
+  height: number;
+};
+
+export type PaneLayout = { cells: PaneLayoutCell[] };
+
 export function parsePaneRead(value: unknown, paneId: string): PaneRead {
   const record = expectRecord(value, "pane_read");
   if (record.type !== "pane_read") {
@@ -214,4 +229,35 @@ export function parsePaneRead(value: unknown, paneId: string): PaneRead {
   }
 
   return { paneId, text: raw.text, truncated: raw.truncated, revision };
+}
+
+export function parsePaneLayout(value: unknown): PaneLayout {
+  const record = expectRecord(value, "pane_layout");
+  if (record.type !== "pane_layout") {
+    throw new Error(`pane_layout.type must be pane_layout, got ${String(record.type)}`);
+  }
+
+  const layout = expectRecord(record.layout, "pane_layout.layout");
+  const cells = expectArray(layout.panes, "pane_layout.layout.panes").map((item, index) => {
+    const path = `pane_layout.layout.panes[${index}]`;
+    const pane = expectRecord(item, path);
+    const rect = expectRecord(pane.rect, `${path}.rect`);
+    return {
+      paneId: expectId(pane.pane_id, `${path}.pane_id`),
+      width: expectNumber(rect.width, `${path}.rect.width`),
+      height: expectNumber(rect.height, `${path}.rect.height`),
+    };
+  });
+  return { cells };
+}
+
+// pane.split は作ったペインを pane_info で返す。ID だけを読む。
+export function parsePaneSplit(value: unknown): { paneId: string } {
+  const record = expectRecord(value, "pane_info");
+  if (record.type !== "pane_info") {
+    throw new Error(`pane_info.type must be pane_info, got ${String(record.type)}`);
+  }
+
+  const pane = expectRecord(record.pane, "pane_info.pane");
+  return { paneId: expectId(pane.pane_id, "pane_info.pane.pane_id") };
 }

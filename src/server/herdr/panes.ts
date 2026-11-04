@@ -1,5 +1,12 @@
 import { isAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
-import { type PaneRead, parsePaneRead } from "./contract";
+import {
+  type PaneLayout,
+  type PaneRead,
+  parsePaneLayout,
+  parsePaneRead,
+  parsePaneSplit,
+} from "./contract";
+import type { SplitDirection } from "./split";
 import { HerdrError, request } from "./socket";
 
 export const READ_SOURCES = ["visible", "recent", "recent_unwrapped", "detection"] as const;
@@ -28,12 +35,18 @@ export type StopOptions = { paneId: string };
 
 export type CloseOptions = { paneId: string };
 
+export type LayoutOptions = { paneId: string };
+
+export type SplitOptions = { paneId: string; direction: SplitDirection; ratio: number };
+
 export type PaneClient = {
   read: (options: ReadOptions) => Promise<PaneOutput>;
   send: (options: SendOptions) => Promise<void>;
   focus: (options: FocusOptions) => Promise<void>;
   stop: (options: StopOptions) => Promise<void>;
   close: (options: CloseOptions) => Promise<void>;
+  layout: (options: LayoutOptions) => Promise<PaneLayout>;
+  split: (options: SplitOptions) => Promise<{ paneId: string }>;
 };
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; status: 400 | 413; error: string };
@@ -146,6 +159,21 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
     async close({ paneId }) {
       // ペインを閉じるとエージェントのプロセスも終わる。開いていた作業は戻らない。
       await call("pane.close", { pane_id: paneId }, { path });
+    },
+    async layout({ paneId }) {
+      // 追加先を決めるためのセルの形だけを読む。タブの並びは変えない。
+      const result = await call<unknown>("pane.layout", { pane_id: paneId }, { path });
+      return parsePaneLayout(result);
+    },
+    async split({ paneId, direction, ratio }) {
+      // focus は既定の false のまま。TUI を見ている人のフォーカスを奪わない。
+      // cwd も指定せず、Herdr の terminal.new_cwd を分割元に追随させる。
+      const result = await call<unknown>(
+        "pane.split",
+        { target_pane_id: paneId, direction, ratio },
+        { path },
+      );
+      return parsePaneSplit(result);
     },
   };
 }
