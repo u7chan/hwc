@@ -1,3 +1,4 @@
+import { ChoiceCard } from "./ChoiceCard";
 import { themeGroups, type ThemeMeta, type ThemePreference } from "./theme";
 
 type ThemePickerProps = {
@@ -18,14 +19,7 @@ function Swatch(props: { bg: string; surface: string; accent: string }) {
 function ThemeButton(props: { theme: ThemeMeta | null; selected: boolean; onSelect: () => void }) {
   const label = props.theme?.label ?? "System";
   return (
-    <button
-      type="button"
-      role="radio"
-      class="hwc-theme"
-      aria-checked={props.selected}
-      data-selected={props.selected}
-      onClick={props.onSelect}
-    >
+    <ChoiceCard selected={props.selected} onSelect={props.onSelect} label={label}>
       {props.theme ? (
         <Swatch {...props.theme.swatch} />
       ) : (
@@ -33,10 +27,7 @@ function ThemeButton(props: { theme: ThemeMeta | null; selected: boolean; onSele
           <span class="hwc-theme-split" />
         </span>
       )}
-      <span class="hwc-theme-name" title={label}>
-        {label}
-      </span>
-    </button>
+    </ChoiceCard>
   );
 }
 
@@ -45,8 +36,8 @@ export function ThemePicker(props: ThemePickerProps) {
   const [lightTheme, darkTheme] = modes;
 
   return (
-    <div class="hwc-theme-block">
-      <div class="hwc-themes hwc-themes--modes" role="radiogroup" aria-label="明るさ">
+    <div class="hwc-choice-block">
+      <div class="hwc-choice-grid hwc-choice-grid--modes" role="radiogroup" aria-label="明るさ">
         <ThemeButton
           theme={null}
           selected={props.value === "system"}
@@ -66,7 +57,7 @@ export function ThemePicker(props: ThemePickerProps) {
 
       <div class="hwc-divider" role="presentation" />
 
-      <div class="hwc-themes" role="radiogroup" aria-label="色テーマ">
+      <div class="hwc-choice-grid" role="radiogroup" aria-label="色テーマ">
         {[...light, ...dark].map((theme) => (
           <ThemeButton
             key={theme.id}

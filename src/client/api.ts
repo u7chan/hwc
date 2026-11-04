@@ -8,6 +8,7 @@ import type {
 } from "../server/chat/contract";
 import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
+import type { AgentKind } from "../shared/agents";
 import { isAttachmentName } from "../shared/attachments";
 
 export type OutputRead = PaneRead;
@@ -306,7 +307,19 @@ export async function closePane(paneId: string): Promise<CloseOutcome> {
   }
 }
 
-export type CreatePaneOutcome = { ok: true; paneId: string } | { ok: false };
+export type CreatePaneRequest = { name: string | null; agent: AgentKind | null };
+
+export type CreatePaneFailure =
+  | "agent_start_failed"
+  | "pane_rename_failed"
+  | "pane_limit"
+  | "pane_not_found"
+  | "invalid_request"
+  | "failed";
+
+export type CreatePaneOutcome =
+  | { ok: true; paneId: string }
+  | { ok: false; error: CreatePaneFailure; paneId: string | null };
 
 // 作成の目的は新しいペイン。応答に ID が無いと開けないので、形が違えば失敗にする。
 export function toCreatedPane(value: unknown): string | null {
@@ -315,20 +328,46 @@ export function toCreatedPane(value: unknown): string | null {
   return typeof paneId === "string" && paneId !== "" ? paneId : null;
 }
 
-// 送信はメニュー内で待つ。返らない経路で「作成中…」のままにしないよう切る。
-export const CREATE_TIMEOUT_MS = 8_000;
+const CREATE_FAILURES: readonly CreatePaneFailure[] = [
+  "agent_start_failed",
+  "pane_rename_failed",
+  "pane_limit",
+  "pane_not_found",
+  "invalid_request",
+];
 
-export async function createPane(paneId: string): Promise<CreatePaneOutcome> {
+// 分割の後に失敗した場合は paneId が付く。ペインが既にあるかをこの値で分ける。
+export function toCreateError(value: unknown): { error: CreatePaneFailure; paneId: string | null } {
+  if (typeof value !== "object" || value === null) return { error: "failed", paneId: null };
+  const record = value as { error?: unknown; paneId?: unknown };
+  const error =
+    typeof record.error === "string" && CREATE_FAILURES.includes(record.error as CreatePaneFailure)
+      ? (record.error as CreatePaneFailure)
+      : "failed";
+  const paneId = typeof record.paneId === "string" && record.paneId !== "" ? record.paneId : null;
+  return { error, paneId };
+}
+
+// エージェントの起動は Herdr 側で最大 30 秒待つ。分割やリネームの分も含めて切る。
+export const CREATE_TIMEOUT_MS = 40_000;
+
+export async function createPane(
+  paneId: string,
+  request: CreatePaneRequest,
+): Promise<CreatePaneOutcome> {
   try {
-    const response = await client.api.panes[":id"].split.$post(paneParam(paneId), {
-      headers: { "content-type": "application/json" },
+    const input = { ...paneParam(paneId), json: request };
+    const response = await client.api.panes[":id"].split.$post(input, {
       init: { signal: AbortSignal.timeout(CREATE_TIMEOUT_MS) },
     });
-    if (!response.ok) return { ok: false };
-    const created = toCreatedPane(await response.json().catch(() => null));
-    return created === null ? { ok: false } : { ok: true, paneId: created };
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) return { ok: false, ...toCreateError(body) };
+    const created = toCreatedPane(body);
+    return created === null
+      ? { ok: false, error: "failed", paneId: null }
+      : { ok: true, paneId: created };
   } catch {
     // 通信の失敗と打ち切りは、作成できなかった結果として扱う。
-    return { ok: false };
+    return { ok: false, error: "failed", paneId: null };
   }
 }

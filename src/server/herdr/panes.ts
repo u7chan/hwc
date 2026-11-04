@@ -1,4 +1,5 @@
 import { isAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
+import { type AgentKind, isAgentKind } from "../../shared/agents";
 import {
   type PaneLayout,
   type PaneRead,
@@ -21,7 +22,16 @@ export const MAX_TEXT_BYTES = 16_384;
 export const TEXT_TOO_LONG = `text must be at most ${MAX_TEXT_BYTES} bytes`;
 export const TEXT_WITH_ATTACHMENTS_TOO_LONG = `text and the attached files note must be at most ${MAX_TEXT_BYTES} bytes`;
 
+// 分割直後のペインは、シェルの準備ができるまで agent.start が agent_pane_busy を返す。
+const AGENT_PANE_WAIT_MS = 5_000;
+const AGENT_PANE_RETRY_MS = 150;
+
 export type PaneOutput = PaneRead;
+
+// ペイン名は Herdr のラベルと同じ上限に合わせる。空文字は「名前なし」として null にする。
+export const MAX_PANE_NAME = 80;
+
+export type SplitRequest = { name: string | null; agent: AgentKind | null };
 
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
 
@@ -39,6 +49,22 @@ export type LayoutOptions = { paneId: string };
 
 export type SplitOptions = { paneId: string; direction: SplitDirection; ratio: number };
 
+export type AgentStartOptions = {
+  paneId: string;
+  kind: AgentKind;
+  name: string;
+  timeoutMs?: number;
+};
+
+export type RenameOptions = { paneId: string; label: string };
+
+// Herdr のエージェント名は小文字英数字・-・_ の 1〜32 文字。ペイン名は日本語や空白を
+// 許すので、エージェント名はペイン id から別に作る。表示名は pane.rename の label に置く。
+export function agentNameForPane(paneId: string): string {
+  const base = `hwc-${paneId}`.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+  return base.slice(0, 32);
+}
+
 export type PaneClient = {
   read: (options: ReadOptions) => Promise<PaneOutput>;
   send: (options: SendOptions) => Promise<void>;
@@ -47,9 +73,37 @@ export type PaneClient = {
   close: (options: CloseOptions) => Promise<void>;
   layout: (options: LayoutOptions) => Promise<PaneLayout>;
   split: (options: SplitOptions) => Promise<{ paneId: string }>;
+  startAgent: (options: AgentStartOptions) => Promise<void>;
+  rename: (options: RenameOptions) => Promise<void>;
 };
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; status: 400 | 413; error: string };
+
+export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, status: 400, error: "body must be an object" };
+  }
+
+  const record = body as Record<string, unknown>;
+  const rawName = record.name;
+  if (rawName !== undefined && rawName !== null && typeof rawName !== "string") {
+    return { ok: false, status: 400, error: "name must be a string" };
+  }
+  const name = typeof rawName === "string" ? rawName.trim() : "";
+  if ([...name].length > MAX_PANE_NAME) {
+    return { ok: false, status: 400, error: `name must be at most ${MAX_PANE_NAME} characters` };
+  }
+
+  const rawAgent = record.agent;
+  if (rawAgent !== undefined && rawAgent !== null && !isAgentKind(rawAgent)) {
+    return { ok: false, status: 400, error: "agent must be one of pi, claude, codex, opencode" };
+  }
+
+  return {
+    ok: true,
+    value: { name: name === "" ? null : name, agent: rawAgent == null ? null : rawAgent },
+  };
+}
 
 export function parseOutputQuery(params: URLSearchParams): Parsed<Omit<ReadOptions, "paneId">> {
   const rawSource = params.get("source");
@@ -125,7 +179,16 @@ export function isInvalidRequest(error: unknown): boolean {
   );
 }
 
-type Caller = <T>(method: string, params?: unknown, options?: { path?: string }) => Promise<T>;
+// 初回の trust / login 待ちで Herdr が返す。エージェント自体は起動している。
+export function isAgentNotReady(error: unknown): boolean {
+  return error instanceof HerdrError && error.code === "agent_not_ready";
+}
+
+type Caller = <T>(
+  method: string,
+  params?: unknown,
+  options?: { path?: string; timeoutMs?: number },
+) => Promise<T>;
 
 export function createPaneClient(options: { path?: string; call?: Caller } = {}): PaneClient {
   const { path } = options;
@@ -174,6 +237,33 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
         { path },
       );
       return parsePaneSplit(result);
+    },
+    async startAgent({ paneId, kind, name, timeoutMs = 30_000 }) {
+      // エージェントの起動は TUI の準備完了まで待つ。通常のソケット期限（8 秒）では
+      // 足りないので、Herdr 側の期限より少し長く取る。
+      const params = { pane_id: paneId, kind, name, timeout_ms: timeoutMs };
+      const deadline = Date.now() + AGENT_PANE_WAIT_MS;
+      for (;;) {
+        try {
+          await call("agent.start", params, { path, timeoutMs: timeoutMs + 5_000 });
+          return;
+        } catch (error) {
+          // 分割直後はシェルの準備待ち。別のペインが使われている場合も同じ code なので、
+          // 期限までだけ試し、それ以上は失敗として返す。
+          if (
+            !(error instanceof HerdrError) ||
+            error.code !== "agent_pane_busy" ||
+            Date.now() >= deadline
+          ) {
+            throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, AGENT_PANE_RETRY_MS));
+        }
+      }
+    },
+    async rename({ paneId, label }) {
+      // 起動後に付ける。表示名はユーザーが入れたものを優先する。
+      await call("pane.rename", { pane_id: paneId, label }, { path });
     },
   };
 }

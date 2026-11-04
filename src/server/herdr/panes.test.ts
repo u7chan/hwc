@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test";
 import { HerdrError } from "./socket";
 import {
+  agentNameForPane,
   createPaneClient,
   exceedsTextLimit,
   isInvalidRequest,
   isPaneNotFound,
   parseInputBody,
   parseOutputQuery,
+  parseSplitBody,
 } from "./panes";
 
 type Call = { method: string; params: unknown; options: unknown };
@@ -389,4 +391,85 @@ test("isInvalidRequest tells a rejected request apart from other failures", () =
   expect(isInvalidRequest(new HerdrError("invalid_request", "bad request"))).toBe(true);
   expect(isInvalidRequest(new HerdrError("pane_not_found", "missing"))).toBe(false);
   expect(isInvalidRequest(new Error("invalid_params"))).toBe(false);
+});
+
+test("parseSplitBody trims the name and keeps a known agent", () => {
+  expect(parseSplitBody({ name: "  実装  ", agent: "claude" })).toEqual({
+    ok: true,
+    value: { name: "実装", agent: "claude" },
+  });
+  expect(parseSplitBody({ name: "   ", agent: null })).toEqual({
+    ok: true,
+    value: { name: null, agent: null },
+  });
+  expect(parseSplitBody({})).toEqual({ ok: true, value: { name: null, agent: null } });
+});
+
+test("parseSplitBody rejects an unknown agent, a non-string name, or an overlong name", () => {
+  expect(parseSplitBody({ agent: "gemini" }).ok).toBe(false);
+  expect(parseSplitBody({ name: 42 }).ok).toBe(false);
+  expect(parseSplitBody({ name: "x".repeat(81) }).ok).toBe(false);
+  expect(parseSplitBody(null).ok).toBe(false);
+  expect(parseSplitBody([]).ok).toBe(false);
+});
+
+test("agentNameForPane makes a name Herdr accepts even for a non-ASCII pane label", () => {
+  expect(agentNameForPane("w1:p3")).toBe("hwc-w1-p3");
+  expect(agentNameForPane("w1:p3")).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);
+  expect(agentNameForPane("w1:p3").length).toBeLessThanOrEqual(32);
+});
+
+test("startAgent asks Herdr to start the kind and gives it a longer deadline", async () => {
+  const { calls, call } = recordingCaller({ "agent.start": { type: "agent_started" } });
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  await client.startAgent({ paneId: "w1:p3", kind: "claude", name: "実装" });
+
+  expect(calls).toEqual([
+    {
+      method: "agent.start",
+      params: { pane_id: "w1:p3", kind: "claude", name: "実装", timeout_ms: 30_000 },
+      options: { path: "/tmp/test.sock", timeoutMs: 35_000 },
+    },
+  ]);
+});
+
+test("startAgent waits for the shell that the split just created", async () => {
+  let attempts = 0;
+  const call = async <T>(): Promise<T> => {
+    attempts += 1;
+    if (attempts === 1) throw new HerdrError("agent_pane_busy", "not an available shell");
+    return { type: "agent_started" } as T;
+  };
+  const client = createPaneClient({ call });
+
+  await client.startAgent({ paneId: "w1:p3", kind: "pi", name: "hwc-w1-p3" });
+
+  expect(attempts).toBe(2);
+});
+
+test("startAgent reports the failure so the route can keep the pane", async () => {
+  const { call } = recordingCaller({
+    "agent.start": new HerdrError("agent_spawn_failed", "not installed"),
+  });
+  const client = createPaneClient({ call });
+
+  await expect(
+    client.startAgent({ paneId: "w1:p3", kind: "codex", name: "codex" }),
+  ).rejects.toThrow("agent_spawn_failed");
+});
+
+test("rename sets the pane label", async () => {
+  const { calls, call } = recordingCaller({ "pane.rename": { type: "ok" } });
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  await client.rename({ paneId: "w1:p3", label: "実装" });
+
+  expect(calls).toEqual([
+    {
+      method: "pane.rename",
+      params: { pane_id: "w1:p3", label: "実装" },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
 });

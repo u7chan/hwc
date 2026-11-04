@@ -36,12 +36,17 @@ bun run e2e:serve
 - `pane.send_keys`
 - `agent.focus`
 - `pane.split`
+- `pane.rename`
+- `agent.start`
 - `pane.close`
 
 `pane.close` はスナップショットからペインを消して `pane.closed` を流す。`pane.split` は
 `target_pane_id` のタブにシェルペインを 1 枚足し、`pane_info` を返して `pane.created` を流す。
 `pane.layout` はそのタブのセルを等幅のグリッドとして返す（E2E 用の固定形で、実際の分割方向は
-BFF の unit で確かめる）。`agent.focus` はフォーカスを移して `pane.focused` を流す。
+BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.updated` を流す。`agent.start` は
+架空のエージェントをペインへ付け、`pane.updated` を流す。Codex だけは起動失敗を返し、ペインを
+残す部分成功の画面を通す（実環境では Codex CLI が起動できないため）。`agent.focus` は
+フォーカスを移して `pane.focused` を流す。
 `pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
