@@ -1,4 +1,5 @@
 import type { CommandId } from "./commands";
+import { agentGlyph } from "./select";
 
 // 選択範囲は trim 済みの生テキストで持ち、送信のときだけ引用の記号を付ける。
 // 前後の空行を落とし、最初と最後の行の端の空白だけを整える。行の中の空白は本文の一部なので残す。
@@ -54,6 +55,27 @@ export type ComposeState = {
   attachments: number;
   reply: string | null;
 };
+
+// 停止は実行中の既知エージェントだけ。入力が残っていれば、その送信（steering）を優先する。
+export type StopState = {
+  replying: boolean;
+  agent: string | null;
+  draft: string;
+  attachments: number;
+  reply: string | null;
+  chip: CommandId | null;
+};
+
+export function canStop(state: StopState): boolean {
+  return (
+    state.replying &&
+    agentGlyph(state.agent) !== "generic" &&
+    state.draft.trim() === "" &&
+    state.attachments === 0 &&
+    state.reply === null &&
+    state.chip === null
+  );
+}
 
 // 引用だけでも送れる。アップロード中は添付が揃うまで待ち、チップは会話が動いていないときだけ。
 export function canSend(state: ComposeState): boolean {

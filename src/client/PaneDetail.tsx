@@ -52,7 +52,7 @@ import {
 } from "./icons";
 import { Markdown } from "./Markdown";
 import { usePaneOutput } from "./output";
-import { canSend, composeReply, normaliseQuote, splitQuote } from "./reply";
+import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
 import { agentGlyph, isShellPane, paneName, type PaneContext } from "./select";
 import { Spinner } from "./Spinner";
 import { formatClock, formatElapsed } from "./time";
@@ -504,10 +504,14 @@ export function PaneDetail(props: PaneDetailProps) {
     reply,
   });
   // 停止は入力が空のときだけ出す。文字・添付・引用があれば、送信は実行中への追加指示になる。
-  const composerEmpty =
-    draft.trim() === "" && attachments.length === 0 && reply === null && chip === null;
-  const stoppable = replying && agentGlyph(pane.agent) !== "generic";
-  const stop = stoppable && composerEmpty;
+  const stop = canStop({
+    replying,
+    agent: pane.agent,
+    draft,
+    attachments: attachments.length,
+    reply,
+    chip,
+  });
   const busy = sending || stopping;
   const shell = isShellPane(pane);
   const placeholder =
