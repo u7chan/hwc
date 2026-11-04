@@ -8,6 +8,8 @@ export type MdHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 export type MdListItem = {
   /** 項目の本文 (入れ子のリスト行を含む)。描画側が再帰的に解析する */
   source: string;
+  /** タスクリストの完了状態。undefined は通常の項目 */
+  task?: boolean;
 };
 
 export type MdBlock =

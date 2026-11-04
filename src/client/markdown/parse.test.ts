@@ -64,13 +64,16 @@ test("入れ子のリストは項目の本文に入り、描画側が再帰的�
   ]);
 });
 
-test("タスクリストの記号は項目の本文として残る", () => {
+test("タスクリストは完了状態を持ち、記号を本文から外す", () => {
   assert.deepEqual(parseMarkdown("- [x] 済み\n- [ ] 未了"), [
     {
       kind: "list",
       ordered: false,
       start: 1,
-      items: [{ source: "[x] 済み" }, { source: "[ ] 未了" }],
+      items: [
+        { source: "済み", task: true },
+        { source: "未了", task: false },
+      ],
     },
   ]);
 });

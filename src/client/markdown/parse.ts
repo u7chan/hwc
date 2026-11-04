@@ -177,6 +177,8 @@ function readList(
       break;
     const contentIndent = baseIndent + marker[2].length + Math.max(1, marker[3].length);
     const raw = [lines[at].slice(baseIndent + marker[2].length).replace(/^[ \t]+/, "")];
+    const task = /^\[([ xX])\](?:[ \t]+|$)/.exec(raw[0]);
+    if (task !== null) raw[0] = raw[0].slice(task[0].length);
     let scan = at + 1;
     while (scan < lines.length) {
       if (isBlank(lines[scan])) {
@@ -193,7 +195,10 @@ function readList(
       raw.push(lines[scan].slice(Math.min(contentIndent, indent)));
       scan += 1;
     }
-    items.push({ source: raw.join("\n").replace(/\n+$/, "") });
+    items.push({
+      source: raw.join("\n").replace(/\n+$/, ""),
+      ...(task === null ? {} : { task: task[1].toLowerCase() === "x" }),
+    });
     at = scan;
   }
   return { block: { kind: "list", ordered, start: startNumber, items }, next: at };
