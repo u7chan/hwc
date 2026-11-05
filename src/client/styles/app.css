@@ -2043,6 +2043,28 @@ p.hwc-compaction,
   align-items: flex-end;
 }
 
+/* ローカルで送った /compact の控え。通常会話の青い吹き出しと区別する。 */
+.hwc-msg[data-role="command"] {
+  align-items: flex-end;
+}
+
+.hwc-msg[data-role="command"] .hwc-msg-meta {
+  justify-content: flex-end;
+}
+
+.hwc-command-echo {
+  max-width: 85%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-panel);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .hwc-msg[data-role="user"] .hwc-msg-bubble {
   display: flex;
   flex-direction: column;
