@@ -24,8 +24,8 @@ import { CreatePane } from "./CreatePane";
 import { CloseIcon, CollapseIcon, HwcMark, NewSessionIcon, PlusIcon, SettingsIcon } from "./icons";
 import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
 import {
+  COMMAND_BLOCK_NOTES,
   commandLabel,
-  COMPACTED_NOTICE,
   isCommandPane,
   type CommandId,
   type PaneCommandHandle,
@@ -627,14 +627,10 @@ export function App() {
     menuCommandsShown &&
     menuPane !== null &&
     (menuCommands?.available("compact", menuPane) ?? false);
-  const compactBlock = menuCommands?.compactBlock() ?? null;
-  const compactNote =
-    menuCommandsShown && !menuCommandsBusy
-      ? compactBlock === "history"
-        ? "会話が小さいうちは圧縮できません"
-        : compactBlock === "compacted"
-          ? COMPACTED_NOTICE
-          : null
+  const compactBlock = menuCommands?.blockReason() ?? null;
+  const commandNote =
+    menuCommandsShown && !menuCommandsBusy && compactBlock !== null
+      ? COMMAND_BLOCK_NOTES[compactBlock]
       : null;
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
@@ -845,7 +841,7 @@ export function App() {
                 <CollapseIcon size={14} />
                 {commandLabel("compact")}
               </button>
-              {compactNote === null ? null : <p class="hwc-menu-note">{compactNote}</p>}
+              {commandNote === null ? null : <p class="hwc-menu-note">{commandNote}</p>}
             </>
           ) : null}
           <hr class="hwc-menu-separator" />

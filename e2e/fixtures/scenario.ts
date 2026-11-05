@@ -15,17 +15,20 @@ export async function createScenario(root: string): Promise<Scenario> {
   const scratch = join(root, "work", "scratch");
   const agentDir = join(root, "agent");
   const sessionPath = join(agentDir, "sessions", "demo", "session.jsonl");
+  const emptySessionPath = join(agentDir, "sessions", "empty", "session.jsonl");
 
   await Promise.all([
     writeBranch(dashboard, "feat/empty-state"),
     writeBranch(docs, "docs/quickstart"),
     mkdir(scratch, { recursive: true }),
     mkdir(join(agentDir, "sessions", "demo"), { recursive: true }),
+    mkdir(join(agentDir, "sessions", "empty"), { recursive: true }),
   ]);
 
   await Promise.all([
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
     writeFile(sessionPath, sessionLines.map((line) => `${line}\n`).join("")),
+    writeFile(emptySessionPath, `${JSON.stringify(emptySessionHeader)}\n`),
   ]);
 
   const snapshot: HerdrSnapshot = {
@@ -132,6 +135,21 @@ export async function createScenario(root: string): Promise<Scenario> {
         agent_session: null,
       },
       {
+        pane_id: "w1:p4",
+        workspace_id: "w1",
+        tab_id: "w1:t2",
+        cwd: dashboard,
+        label: "new",
+        agent_status: "idle",
+        focused: false,
+        agent_session: {
+          agent: "pi",
+          source: "integration",
+          kind: "path",
+          value: emptySessionPath,
+        },
+      },
+      {
         pane_id: "w2:p1",
         workspace_id: "w2",
         tab_id: "w2:t1",
@@ -168,6 +186,13 @@ export async function createScenario(root: string): Promise<Scenario> {
         terminal_title_stripped: "acme-dashboard",
       },
       {
+        pane_id: "w1:p4",
+        workspace_id: "w1",
+        cwd: dashboard,
+        agent: "pi",
+        terminal_title_stripped: "acme-dashboard",
+      },
+      {
         pane_id: "w2:p1",
         workspace_id: "w2",
         cwd: docs,
@@ -197,6 +222,12 @@ const sessionHeader = {
   id: "e2e-demo",
   timestamp: "2026-01-01T09:00:00.000Z",
   cwd: "/home/dev/work/acme-dashboard",
+};
+
+const emptySessionHeader = {
+  ...sessionHeader,
+  id: "e2e-empty",
+  timestamp: "2026-01-02T09:00:00.000Z",
 };
 
 const sessionEntries = [

@@ -27,8 +27,8 @@ const COMPACT_MIN_TOKENS = 20000;
 export type PaneCommandHandle = {
   available: (id: CommandId, pane: PaneState) => boolean;
   busy: () => boolean;
-  // メニューの注記用。圧縮できない理由が履歴の小ささか、圧縮済みか。
-  compactBlock: () => "history" | "compacted" | null;
+  // メニューの注記用。押せない理由を 1 つだけ返す。
+  blockReason: () => CommandBlockReason | null;
   run: (id: CommandId) => void;
 };
 
@@ -57,9 +57,24 @@ export function compactAlreadyDone(snapshot: ChatSnapshot): boolean {
 
 export const COMPACTED_NOTICE = "会話は圧縮済みです";
 
+export type CommandBlockReason = "empty" | "history" | "compacted";
+
+export const COMMAND_BLOCK_NOTES: Readonly<Record<CommandBlockReason, string>> = {
+  empty: "会話が始まると使えます",
+  history: "会話が小さいうちは圧縮できません",
+  compacted: COMPACTED_NOTICE,
+};
+
 export function compactHistoryBlocked(context: ChatContext | null): boolean {
   const tokens = context === null ? null : context.tokens;
   return tokens !== null && tokens < COMPACT_MIN_TOKENS;
+}
+
+// 会話のスナップショットが読めていて、まだ何も無い状態。空の会話では /new は同じ空の
+// セッションを作り直すだけで、/compact は対象が無い。snapshot が無いとき（読み込み前、
+// 会話を持たない CLI）は空かどうか分からないので、空とは扱わない。
+export function conversationEmpty(snapshot: ChatSnapshot | null): boolean {
+  return snapshot !== null && snapshot.messages.length === 0 && snapshot.compaction === null;
 }
 
 export function commandLabel(id: CommandId): string {
@@ -89,12 +104,22 @@ export function chipOnInput(chip: CommandId | null): CommandId | null {
 export function commandAvailable(
   id: CommandId,
   pane: PaneState,
-  context: ChatContext | null,
+  snapshot: ChatSnapshot | null,
 ): boolean {
   if (pane.agentStatus === "working") return false;
   if (!isCommandPane(pane)) return false;
+  if (conversationEmpty(snapshot)) return false;
   if (id !== "compact") return true;
-  return !compactHistoryBlocked(context);
+  if (snapshot !== null && compactAlreadyDone(snapshot)) return false;
+  return !compactHistoryBlocked(snapshot?.context ?? null);
+}
+
+// メニューの注記用。空の会話では 2 つとも使えないので、compact だけの理由より先に返す。
+export function commandBlockReason(snapshot: ChatSnapshot | null): CommandBlockReason | null {
+  if (conversationEmpty(snapshot)) return "empty";
+  if (snapshot !== null && compactAlreadyDone(snapshot)) return "compacted";
+  if (compactHistoryBlocked(snapshot?.context ?? null)) return "history";
+  return null;
 }
 
 // 空白が入った時点でコマンドではなく本文（`/compact 指示` など）。iOS が先頭を
@@ -111,7 +136,7 @@ function matchCommands(draft: string): readonly CommandId[] {
 export function commandCandidates(
   pane: PaneState,
   draft: string,
-  context: ChatContext | null,
+  snapshot: ChatSnapshot | null,
 ): readonly CommandId[] {
-  return matchCommands(draft).filter((id) => commandAvailable(id, pane, context));
+  return matchCommands(draft).filter((id) => commandAvailable(id, pane, snapshot));
 }
