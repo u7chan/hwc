@@ -1,5 +1,4 @@
-import type { ComponentChildren } from "preact";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
@@ -76,8 +75,6 @@ import {
   SIDEBAR_STORAGE_KEY,
   WIDE_LAYOUT_QUERY,
   clampSidebarWidth,
-  isCompactCell,
-  isStackedCell,
   parseSidebarWidth,
 } from "./layout";
 import {
@@ -189,36 +186,6 @@ type Closing = {
   next: string | null;
   phase: "confirm" | "busy" | "failed";
 };
-
-// 分割セルの入力欄を畳むかは、セルの box の高さ・幅と、上下に積まれた段かで決める。PaneDetail は
-// fragment を返すので自分では測れない。内容高を測ると畳んだ切替で再ループするため box を使う。
-function SplitCell(props: { stacked: boolean; children: (compact: boolean) => ComponentChildren }) {
-  const cell = useRef<HTMLElement>(null);
-  const [compact, setCompact] = useState(false);
-  // 積まれた段かは枚数で変わり、resize では変わらない。依存としてだけ読む。
-  const { stacked } = props;
-
-  useLayoutEffect(() => {
-    const element = cell.current;
-    if (!element) return;
-    const measure = (height: number, width: number) =>
-      setCompact(isCompactCell(height, width, stacked));
-    // observe は変化しか届かない。枚数が変わった直後の値を effect で一度測る。
-    measure(element.clientHeight, element.clientWidth);
-    const observer = new ResizeObserver((entries) => {
-      const box = entries[entries.length - 1].borderBoxSize[0];
-      measure(box?.blockSize ?? element.clientHeight, box?.inlineSize ?? element.clientWidth);
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [stacked]);
-
-  return (
-    <section class="hwc-split-cell" data-compact={compact} ref={cell}>
-      {props.children(compact)}
-    </section>
-  );
-}
 
 // 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
@@ -626,6 +593,10 @@ export function App() {
   // 読んでいた位置が最下部に戻る。
   const splitOn = wide && split && shown.length > 0;
   const cells = splitOn ? shown : pane === null ? [] : [pane];
+  // 分割中は入力欄を 1 行に畳み、会話へ高さを回す。長文は 1 枚表示へ戻して書く（下書きは
+  // ペインごとに残る）。幅や高さの閾値で切り替えると、境目の前後で見え方が変わり、なぜ
+  // 畳まれないのかが画面から読み取れない。
+  const compact = cells.length > 1;
 
   // 4 枚の判定は BFF と同じタブの枚数で行う。
   const menuTab =
@@ -782,10 +753,10 @@ export function App() {
               />
               {wide ? (
                 <div class="hwc-split" data-count={cells.length}>
-                  {cells.map((item, index) => (
-                    <SplitCell key={item.id} stacked={isStackedCell(cells.length, index)}>
-                      {(compact) => renderPane(item, context, compact)}
-                    </SplitCell>
+                  {cells.map((item) => (
+                    <section class="hwc-split-cell" data-compact={compact} key={item.id}>
+                      {renderPane(item, context, compact)}
+                    </section>
                   ))}
                 </div>
               ) : (
