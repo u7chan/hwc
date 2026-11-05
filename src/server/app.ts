@@ -17,6 +17,8 @@ import {
 } from "./attachments";
 import type { SessionChatClient } from "./chat/contract";
 import { createPane } from "./create-pane";
+import { createPaneCloser } from "./close-pane";
+import type { PaneCloseAction } from "../shared/pane-close";
 import {
   exceedsTextLimit,
   isInvalidRequest,
@@ -30,6 +32,7 @@ import {
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
+import { HerdrError } from "./herdr/socket";
 
 // Bun.serve は 10 秒間何も書かれない chunked 応答を打ち切る。状態が変わらない間も接続を
 // 保つため、これより短い間隔でハートビートを送る。
@@ -78,6 +81,21 @@ export function createApp(options: {
     if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
     if (isInvalidRequest(error)) return c.json({ error: "invalid_request" }, 400);
     return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  const closePane = createPaneCloser(store, panes);
+  const requestClose = async (c: Context, action: PaneCloseAction) => {
+    try {
+      const result = await closePane(c.req.param("id") ?? "", action);
+      if (result === "missing") return c.json({ error: "pane_not_found" }, 404);
+      if (result === "changed") return c.json({ error: "pane_action_changed" }, 409);
+      return c.json({ ok: true });
+    } catch (error) {
+      if (error instanceof HerdrError && error.code === "agent_exit_unsafe") {
+        return c.json({ error: error.code }, 409);
+      }
+      return paneFailure(c, error);
+    }
   };
 
   const findPaneTab = (state: AppState, paneId: string): TabState | null => {
@@ -339,21 +357,8 @@ export function createApp(options: {
         return paneFailure(c, error);
       }
     })
-    .post("/api/panes/:id/close", requireJson, async (c) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
-
-      try {
-        await panes.close({ paneId });
-        // focus と同じく、状態の取り直しは Herdr のイベント（pane.closed）に任せる。
-        return c.json({ ok: true });
-      } catch (error) {
-        return paneFailure(c, error);
-      }
-    })
+    .post("/api/panes/:id/close", requireJson, (c) => requestClose(c, "close"))
+    .post("/api/panes/:id/exit", requireJson, (c) => requestClose(c, "exit"))
     .post("/api/panes/:id/split", requireJson, async (c) => {
       // 追加の指定（名前・起動するエージェント）は body から読む。body 無しは不正。
       const body = await c.req.json().catch(() => null);

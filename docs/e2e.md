@@ -33,6 +33,7 @@ bun run e2e:serve
 - `session.snapshot`
 - `events.subscribe`
 - `pane.read`
+- `pane.process_info`
 - `pane.layout`
 - `pane.send_input`
 - `pane.send_keys`
@@ -40,6 +41,7 @@ bun run e2e:serve
 - `pane.split`
 - `pane.rename`
 - `agent.start`
+- `agent.prompt`
 - `pane.close`
 
 `pane.close` はスナップショットからペインを消して `pane.closed` を流す。`pane.split` は
@@ -51,6 +53,11 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 フォーカスを移して `pane.focused` を流す。
 `pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
+
+`pane.process_info` は親シェルと別のフォアグラウンドジョブの架空 PID を返す。
+`agent.prompt` は既知のエージェントへの `/quit` だけを受け付け、ペイン・タブ・スペースを残して
+エージェントとセッション参照を外し、`pane.updated` を流す。要対応のペインは実 Herdr と同じく
+`agent_blocked` で拒否する。最後のエージェントの終了要求、拒否、残ったシェルの削除禁止を確認する。
 
 `pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。
 

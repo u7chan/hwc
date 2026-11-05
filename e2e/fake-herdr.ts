@@ -290,6 +290,47 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         });
         return;
       }
+      case "pane.process_info": {
+        const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
+        if (findPane(paneId) === null) {
+          send(socket, { id, error: { code: "pane_not_found", message: paneId } });
+          return;
+        }
+        send(socket, {
+          id,
+          result: {
+            type: "pane_process_info",
+            process_info: { pane_id: paneId, shell_pid: 100, foreground_process_group_id: 200 },
+          },
+        });
+        return;
+      }
+      case "agent.prompt": {
+        const paneId = typeof params.target === "string" ? params.target : "";
+        const pane = findPane(paneId);
+        const agent = snapshot.agents?.find((item) => item.pane_id === paneId);
+        if (pane === null || !isAgentKind(agent?.agent)) {
+          send(socket, { id, error: { code: "agent_not_ready", message: paneId } });
+          return;
+        }
+        if (pane.agent_status === "blocked") {
+          send(socket, { id, error: { code: "agent_blocked", message: paneId } });
+          return;
+        }
+        if (params.text !== "/quit") {
+          send(socket, { id, error: { code: "invalid_params", message: "text" } });
+          return;
+        }
+        setAgentStatus(paneId, "idle");
+        pane.agent_status = "unknown";
+        pane.agent_session = null;
+        snapshot.agents = (snapshot.agents ?? []).filter((item) => item.pane_id !== paneId);
+        outputs.set(paneId, "$ ");
+        revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
+        send(socket, { id, result: { type: "ok" } });
+        broadcast("pane.updated", { pane_id: paneId });
+        return;
+      }
       case "pane.send_input": {
         const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
         if (findPane(paneId) === null) {

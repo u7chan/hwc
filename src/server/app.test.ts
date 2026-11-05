@@ -159,6 +159,7 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
     focus: async () => {},
     stop: async () => {},
     close: async () => {},
+    exit: async () => {},
     layout: async ({ paneId }) => ({ cells: [{ paneId, width: 240, height: 48 }] }),
     split: async ({ paneId }) => ({ paneId }),
     startAgent: async () => {},
@@ -474,7 +475,7 @@ test("GET /api/panes/:id/output returns 502 when Herdr cannot be reached", async
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });
 
-const jsonPaneActions = ["input", "stop", "focus", "close", "split"] as const;
+const jsonPaneActions = ["input", "stop", "focus", "close", "exit", "split"] as const;
 
 test.each(jsonPaneActions)(
   "POST /api/panes/:id/%s rejects non-JSON before reading the body or state",
@@ -521,7 +522,7 @@ test.each(jsonPaneActions)(
   async (action) => {
     const app = createApp({
       chat: createFakeChat(),
-      store: createFakeStore(workingState),
+      store: createFakeStore(action === "close" ? twoChatPanesState : workingState),
       panes: createFakePanes(),
     });
 
@@ -536,12 +537,12 @@ test.each(jsonPaneActions)(
   },
 );
 
-test.each(["stop", "focus", "close"])(
+test.each(["stop", "focus", "close", "exit"])(
   "POST /api/panes/:id/%s does not parse a body it does not need",
   async (action) => {
     const app = createApp({
       chat: createFakeChat(),
-      store: createFakeStore(workingState),
+      store: createFakeStore(action === "close" ? twoChatPanesState : workingState),
       panes: createFakePanes(),
     });
     const request = new Request(`http://localhost/api/panes/w1:p1/${action}`, {
@@ -556,7 +557,7 @@ test.each(["stop", "focus", "close"])(
   },
 );
 
-test.each(["stop", "focus", "close", "split"])(
+test.each(["stop", "focus", "split"])(
   "POST /api/panes/:id/%s leaves snapshot refresh to Herdr events",
   async (action) => {
     let refreshes = 0;
@@ -1001,7 +1002,7 @@ test("POST /api/panes/:id/close closes the pane by id", async () => {
   const seen: unknown[] = [];
   const app = createApp({
     chat: createFakeChat(),
-    store: createFakeStore(state),
+    store: createFakeStore(twoChatPanesState),
     panes: createFakePanes({
       close: async (options) => {
         seen.push(options);
@@ -1057,7 +1058,7 @@ test("POST /api/panes/:id/close returns 502 when the state cannot be read", asyn
 test("POST /api/panes/:id/close returns 404 when Herdr no longer has the pane", async () => {
   const app = createApp({
     chat: createFakeChat(),
-    store: createFakeStore(state),
+    store: createFakeStore(twoChatPanesState),
     panes: createFakePanes({
       close: async () => {
         throw new HerdrError("pane_not_found", "no pane w1:p1");
@@ -1076,7 +1077,7 @@ test("POST /api/panes/:id/close returns 404 when Herdr no longer has the pane", 
 test("POST /api/panes/:id/close returns 400 when Herdr rejects the id", async () => {
   const app = createApp({
     chat: createFakeChat(),
-    store: createFakeStore(state),
+    store: createFakeStore(twoChatPanesState),
     panes: createFakePanes({
       close: async () => {
         throw new HerdrError("invalid_params", "pane_id is required");
@@ -1095,7 +1096,7 @@ test("POST /api/panes/:id/close returns 400 when Herdr rejects the id", async ()
 test("POST /api/panes/:id/close returns 502 for any other Herdr failure", async () => {
   const app = createApp({
     chat: createFakeChat(),
-    store: createFakeStore(state),
+    store: createFakeStore(twoChatPanesState),
     panes: createFakePanes({
       close: async () => {
         throw new HerdrError("socket_closed", "socket closed");
@@ -1109,6 +1110,236 @@ test("POST /api/panes/:id/close returns 502 for any other Herdr failure", async 
 
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+test.each([state, chatState, workingState])(
+  "close refuses the last pane without closing or exiting it",
+  async (initial) => {
+    const seen: string[] = [];
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(initial),
+      panes: createFakePanes({
+        close: async () => {
+          seen.push("close");
+        },
+        exit: async () => {
+          seen.push("exit");
+        },
+      }),
+    });
+    const response = await app.request("/api/panes/w1:p1/close", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "pane_action_changed" });
+    expect(seen).toEqual([]);
+  },
+);
+
+test.each(["close", "exit"])(
+  "%s refreshes before checking the action, but not after sending it",
+  async (action) => {
+    let refreshes = 0;
+    const initial = action === "close" ? twoChatPanesState : chatState;
+    const store = createFakeStore(initial);
+    const app = createApp({
+      chat: createFakeChat(),
+      store: {
+        ...store,
+        refresh: async () => {
+          refreshes += 1;
+          return initial;
+        },
+      },
+      panes: createFakePanes(),
+    });
+    const response = await app.request(`/api/panes/w1:p1/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(200);
+    expect(refreshes).toBe(1);
+  },
+);
+
+test("close rechecks a stale snapshot and refuses what is now the last pane", async () => {
+  const seen: string[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: { ...createFakeStore(twoChatPanesState), refresh: async () => chatState },
+    panes: createFakePanes({
+      close: async () => {
+        seen.push("close");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  expect(response.status).toBe(409);
+  expect(seen).toEqual([]);
+});
+
+test.each(["close", "exit"])(
+  "%s never uses a cached snapshot when refreshing fails",
+  async (action) => {
+    const seen: string[] = [];
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(
+        action === "close" ? twoChatPanesState : chatState,
+        new Error("socket closed"),
+      ),
+      panes: createFakePanes({
+        close: async () => {
+          seen.push("close");
+        },
+        exit: async () => {
+          seen.push("exit");
+        },
+      }),
+    });
+    const response = await app.request(`/api/panes/w1:p1/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(502);
+    expect(seen).toEqual([]);
+  },
+);
+
+test("a failed close does not prevent subsequent requests from being checked", async () => {
+  let attempts = 0;
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(twoChatPanesState),
+    panes: createFakePanes({
+      close: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new HerdrError("socket_closed", "socket closed");
+      },
+    }),
+  });
+  const statuses: number[] = [];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await app.request("/api/panes/w1:p1/close", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+    statuses.push(response.status);
+  }
+  expect(statuses).toEqual([502, 200]);
+});
+
+test("simultaneous closes cannot both remove the two remaining panes", async () => {
+  const store = createFakeStore(twoChatPanesState);
+  const seen: string[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store,
+    panes: createFakePanes({
+      close: async ({ paneId }) => {
+        seen.push(paneId);
+        store.push({
+          ...chatState,
+          workspaces: [
+            {
+              ...chatState.workspaces[0]!,
+              tabs: [
+                {
+                  ...chatState.workspaces[0]!.tabs[0]!,
+                  panes: [{ ...chatPane, id: "w1:p2" }],
+                },
+              ],
+            },
+          ],
+        });
+      },
+    }),
+  });
+  const responses = await Promise.all(
+    ["w1:p1", "w1:p2"].map((id) =>
+      app.request(`/api/panes/${id}/close`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      }),
+    ),
+  );
+  expect(responses.map((response) => response.status)).toEqual([200, 409]);
+  expect(seen).toEqual(["w1:p1"]);
+});
+
+test("exit requests agent shutdown while leaving the last pane and selection intact", async () => {
+  const store = createFakeStore(chatState);
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store,
+    panes: createFakePanes({
+      exit: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/exit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  expect(response.status).toBe(200);
+  expect(seen).toEqual([{ paneId: "w1:p1" }]);
+  expect(store.get()).toEqual(chatState);
+});
+
+test.each([state, twoChatPanesState])(
+  "exit rejects a shell or an action that no longer matches the space",
+  async (initial) => {
+    const seen: string[] = [];
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(initial),
+      panes: createFakePanes({
+        exit: async () => {
+          seen.push("exit");
+        },
+      }),
+    });
+    const response = await app.request("/api/panes/w1:p1/exit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+    expect(response.status).toBe(409);
+    expect(seen).toEqual([]);
+  },
+);
+
+test.each([
+  ["agent_exit_unsafe", 409],
+  ["pane_not_found", 404],
+  ["agent_not_ready", 502],
+  ["agent_blocked", 502],
+] as const)("exit maps %s without falling back to close", async (code, status) => {
+  const seen: string[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(chatState),
+    panes: createFakePanes({
+      exit: async () => {
+        throw new HerdrError(code, "cannot exit");
+      },
+      close: async () => {
+        seen.push("close");
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/exit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  expect(response.status).toBe(status);
+  expect(seen).toEqual([]);
 });
 
 function createChatApp(options: { store?: FakeStore; chat?: ChatClient } = {}) {
