@@ -2551,6 +2551,23 @@ p.hwc-compaction,
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  /* ドロップ中の面の色を、戻るときも滑らかにする。 */
+  transition: background-color 120ms ease;
+}
+
+/* ファイルをドラッグしている間は、画像を落とせる範囲を面と破線で示す。
+   フォーカスの輪郭（実線・外側）と取り違えないよう、内側の破線にする。 */
+.hwc-input[data-drop="true"] .hwc-input-frame {
+  border-radius: var(--radius-control);
+  background: var(--color-selected);
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-input-frame {
+    transition: none;
+  }
 }
 
 /* 引用。添付やチップと同じ行にせず、入力欄の上に独立した行として置く。 */

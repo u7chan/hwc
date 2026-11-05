@@ -7,6 +7,8 @@ import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
 import { isLayoutShift, isNearBottom } from "./scroll";
 import {
   ATTACHMENT_LIMIT_NOTICE,
+  type AttachmentAction,
+  dropActionFrom,
   pasteActionFrom,
   SEND_FAILED_NOTICE,
   SHELL_NEWLINE_NOTICE,
@@ -437,6 +439,10 @@ export function PaneDetail(props: PaneDetailProps) {
   const [chip, setChip] = useState<CommandId | null>(null);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
   const nextAttachmentKey = useRef(0);
+  // ファイルをドラッグしている間だけ composer を光らせる。dragenter / dragleave は
+  // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
+  const [dropping, setDropping] = useState(false);
+  const dragDepth = useRef(0);
   // 引用は trim 済みの生テキスト。`>` は送信のときに付ける（ADR 0022）。
   // 返信 UI を持たない端末では、残っていても使わない。見えない引用を付けて送らないため。
   const [reply, setReply] = useState<string | null>(() => {
@@ -715,6 +721,25 @@ export function PaneDetail(props: PaneDetailProps) {
     for (const file of files.slice(0, room)) void uploadImage(file);
   };
 
+  // ファイルのドラッグだけを扱う。テキストやページ内の要素のドラッグは既定動作のまま。
+  const droppableFiles = (transfer: DataTransfer | null): DataTransfer | null => {
+    if (!pane.chat || transfer === null || !transfer.types.includes("Files")) return null;
+    return transfer;
+  };
+
+  // 貼り付けとドロップで同じ受け付け方をする。未対応の形式は保存せず、その場で伝える。
+  // アップロードする画像が無ければ既定動作を止めない（ADR 0018）。
+  // 何もアップロードしないときは false を返し、呼び出し側に preventDefault させない。
+  const takeImages = (action: AttachmentAction): boolean => {
+    if (action.kind === "upload") {
+      if (action.unsupported) setNotice(unsupportedImageNotice());
+      addImages(action.files);
+      return true;
+    }
+    if (action.kind === "unsupported") setNotice(unsupportedImageNotice());
+    return false;
+  };
+
   // ペインを離れたら、終わっていないアップロードを止める。送り先が消えている。
   const attached = useRef(attachments);
   attached.current = attachments;
@@ -959,9 +984,35 @@ export function PaneDetail(props: PaneDetailProps) {
         class="hwc-input"
         data-expanded={expanded}
         data-shell={shell}
+        data-drop={dropping}
         onSubmit={(event) => {
           event.preventDefault();
           submit();
+        }}
+        onDragEnter={(event) => {
+          if (droppableFiles(event.dataTransfer) === null) return;
+          dragDepth.current += 1;
+          setDropping(true);
+        }}
+        onDragOver={(event) => {
+          const transfer = droppableFiles(event.dataTransfer);
+          if (transfer === null) return;
+          event.preventDefault();
+          transfer.dropEffect = "copy";
+        }}
+        onDragLeave={() => {
+          if (dragDepth.current === 0) return;
+          dragDepth.current -= 1;
+          if (dragDepth.current === 0) setDropping(false);
+        }}
+        onDrop={(event) => {
+          const transfer = droppableFiles(event.dataTransfer);
+          if (transfer === null) return;
+          // 画像以外のファイルもアップロードせず、ブラウザに開かせもしない。
+          event.preventDefault();
+          dragDepth.current = 0;
+          setDropping(false);
+          takeImages(dropActionFrom(transfer.files));
         }}
       >
         <label class="hwc-visually-hidden" for={`hwc-input-${pane.id}`}>
@@ -1085,14 +1136,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 const action = pasteActionFrom(event.clipboardData?.items);
                 // テキストだけの貼り付けは入力欄の既定動作のままにする。
                 if (action.kind === "default") return;
-                // 未対応の形式は保存しない。何が起きたかをその場で伝える。
-                if (action.kind === "unsupported") {
-                  setNotice(unsupportedImageNotice());
-                  return;
-                }
-                if (action.unsupported) setNotice(unsupportedImageNotice());
-                event.preventDefault();
-                addImages(action.files);
+                if (takeImages(action)) event.preventDefault();
               }}
               onKeyDown={(event) => {
                 const composing = event.isComposing || event.keyCode === 229;
