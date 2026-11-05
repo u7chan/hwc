@@ -303,6 +303,7 @@ function ChatLog(props: {
   copiedId: string | null;
   expandable: boolean;
   compactionDurationMs: number | null;
+  compactionElapsedMs: number | null;
   onCopy: (id: string, text: string) => void;
   pending: ChatMessage[];
 }) {
@@ -345,7 +346,9 @@ function ChatLog(props: {
         />
       </li>
     );
-  if (rows.length === 0 && !props.replying && compaction === null) return <ChatEmpty />;
+  if (rows.length === 0 && !props.replying && !props.compacting && compaction === null)
+    return <ChatEmpty />;
+  const waiting = props.compacting ? props.compactionElapsedMs : props.waitingMs;
 
   return (
     <ol class="hwc-chat">
@@ -373,7 +376,7 @@ function ChatLog(props: {
           {compactionRow !== null && compactionAt === index + 1 ? compactionRow : null}
         </Fragment>
       ))}
-      {props.replying ? (
+      {props.replying || props.compacting ? (
         <li
           class="hwc-msg"
           data-role="agent"
@@ -388,8 +391,8 @@ function ChatLog(props: {
             {props.compacting ? (
               <span class="hwc-compaction-pending">会話を圧縮しています</span>
             ) : null}
-            {props.waitingMs === null ? null : (
-              <span class="hwc-msg-elapsed">{formatElapsed(props.waitingMs)}</span>
+            {waiting === null ? null : (
+              <span class="hwc-msg-elapsed">{formatElapsed(waiting)}</span>
             )}
           </div>
         </li>
@@ -526,13 +529,24 @@ export function PaneDetail(props: PaneDetailProps) {
     startedAt: number;
     baselineAt: number | null;
   } | null>(null);
+  const [compactionNow, setCompactionNow] = useState(() => Date.now());
+  const compactionSawWorking = useRef(false);
   const [compactionDuration, setCompactionDuration] = useState<{
     at: number;
     ms: number;
   } | null>(null);
   const markCompaction = (baselineAt: number | null) => {
-    setCompactionRun({ startedAt: Date.now(), baselineAt });
+    const startedAt = Date.now();
+    compactionSawWorking.current = false;
+    setCompactionNow(startedAt);
+    setCompactionRun({ startedAt, baselineAt });
   };
+  useEffect(() => {
+    if (compactionRun === null) return;
+    setCompactionNow(Date.now());
+    const timer = window.setInterval(() => setCompactionNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [compactionRun]);
   useEffect(() => {
     if (compactionRun === null) return;
     const at = snapshot?.compaction?.at ?? null;
@@ -543,18 +557,34 @@ export function PaneDetail(props: PaneDetailProps) {
       setCompactionRun(null);
       return;
     }
-    // working に入る前の短い idle は待つ。3 秒経っても始まらなければ失敗として畳む。
-    if (replying) return;
-    const timer = window.setTimeout(() => {
-      setCompactionRun((run) => (run === compactionRun ? null : run));
-    }, 3000);
+    // 手動の /compact は Herdr の agent_status を working にしない。working を観測
+    // できた場合だけ idle 復帰を失敗とみなし、それ以外は完了か上限まで待つ。
+    if (replying) {
+      compactionSawWorking.current = true;
+      return;
+    }
+    if (compactionSawWorking.current) {
+      const timer = window.setTimeout(() => {
+        setCompactionRun((run) => (run === compactionRun ? null : run));
+      }, 3000);
+      return () => window.clearTimeout(timer);
+    }
+    const timer = window.setTimeout(
+      () => {
+        setCompactionRun((run) => (run === compactionRun ? null : run));
+      },
+      10 * 60 * 1000,
+    );
     return () => window.clearTimeout(timer);
   }, [compactionRun, replying, snapshot?.compaction?.at]);
+  const compactionElapsedMs =
+    compactionRun === null ? null : Math.max(0, compactionNow - compactionRun.startedAt);
   const chatEmpty =
     body.kind === "chat" &&
     body.snapshot.messages.length === 0 &&
     body.snapshot.compaction === null &&
     pendingMessages.length === 0 &&
+    compactionRun === null &&
     !replying;
   const empty = body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty;
   const info = agentInfo(snapshot);
@@ -572,7 +602,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
   // 書きかけの指示が別々のメッセージに分かれてしまう。引用中も同じ理由で出さない。
   const candidates =
-    attachments.length === 0 && reply === null
+    attachments.length === 0 && reply === null && compactionRun === null
       ? commandCandidates(pane, draft, snapshot?.context ?? null)
       : [];
   const uploading = attachments.some((item) => item.name === null);
@@ -887,7 +917,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // /new は user 発話を残さないので、送信中バブルを積むと最大 60 秒残る。
   // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
-    if (sending || replying) return;
+    if (sending || replying || compactionRun !== null) return;
     const text = commandSendText(id, draft);
     const baselineAt = snapshot?.compaction?.at ?? null;
     setSending(true);
@@ -906,13 +936,25 @@ export function PaneDetail(props: PaneDetailProps) {
   // メッセージのために残す（チップのように draft を指示には使わない）。
   // メニューを開いた後に状態が変わっても最新値で判定できるよう、送信直前の値は
   // ref から読む。onSubmit も App の再描画で更新されるので、同じく ref を経由する。
-  const commandState = useRef({ pane, sending, replying, snapshot });
-  commandState.current = { pane, sending, replying, snapshot };
+  const commandState = useRef({
+    pane,
+    sending,
+    replying,
+    compacting: compactionRun !== null,
+    snapshot,
+  });
+  commandState.current = {
+    pane,
+    sending,
+    replying,
+    compacting: compactionRun !== null,
+    snapshot,
+  };
   const submitLatest = useRef(onSubmit);
   submitLatest.current = onSubmit;
   const sendMenuCommand = async (id: CommandId) => {
     const state = commandState.current;
-    if (state.sending || state.replying) return;
+    if (state.sending || state.replying || state.compacting) return;
     const baselineAt = state.snapshot?.compaction?.at ?? null;
     setSending(true);
     input.current?.blur();
@@ -933,18 +975,20 @@ export function PaneDetail(props: PaneDetailProps) {
       return (
         !state.sending &&
         !state.replying &&
+        !state.compacting &&
         commandAvailable(id, currentPane, state.snapshot?.context ?? null)
       );
     },
     busy: () => {
       const state = commandState.current;
-      return state.sending || state.replying;
+      return state.sending || state.replying || state.compacting;
     },
     run: (id) => {
       const state = commandState.current;
       if (
         !state.sending &&
         !state.replying &&
+        !state.compacting &&
         commandAvailable(id, state.pane, state.snapshot?.context ?? null)
       ) {
         void sendMenuCommand(id);
@@ -1050,6 +1094,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 waitingMs={waitingMs}
                 copiedId={copiedId}
                 expandable={!compact}
+                compactionElapsedMs={compactionElapsedMs}
                 compactionDurationMs={
                   compactionDuration !== null &&
                   compactionDuration.at === body.snapshot.compaction?.at

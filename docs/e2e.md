@@ -53,7 +53,7 @@ BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 `pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。
 
-`/compact`（添付注記なし）を受け取ると、`working` にしてから 1.2 秒後に架空の compaction をセッションへ追記し、`idle` に戻す。圧縮中の表示と完了ログの位置・所要時間を E2E で確かめるため、最後の user メッセージを kept の先頭にする。
+`/compact`（添付注記なし）を受け取ると、実 Herdr の pi 拡張と同じく `agent_status` は `working` にせず、1.2 秒後に架空の compaction をセッションへ追記して `idle` のままにする。hwc 側のローカルな「会話を圧縮しています」と、完了ログの位置・所要時間を E2E で確かめるため、最後の user メッセージを kept の先頭にする。
 
 追記しない条件:
 

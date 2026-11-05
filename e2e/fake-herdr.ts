@@ -302,7 +302,6 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         const compact =
           !text.includes(ATTACHED_FILES_OPEN) && /^\/compact(?: |$)/.test(text.trim());
         if (compact) {
-          setAgentStatus(paneId, "working");
           send(socket, { id, result: { type: "ok" } });
           later(async () => {
             try {
@@ -310,6 +309,8 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
             } catch {
               // 追記に失敗しても idle に戻す。E2E の状態を止めない。
             } finally {
+              // 実 Herdr の pi 拡張は手動 compaction を working として報告しない。
+              // ここでも working にせず、hwc のローカルな圧縮中表示を確かめる。
               setAgentStatus(paneId, "idle");
             }
           }, 1200);
