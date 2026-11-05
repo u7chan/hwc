@@ -820,12 +820,19 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // メニューからはコマンド文字列だけを送る。書きかけの draft・添付・引用は次の
   // メッセージのために残す（チップのように draft を指示には使わない）。
+  // メニューを開いた後に状態が変わっても最新値で判定できるよう、送信直前の値は
+  // ref から読む。onSubmit も App の再描画で更新されるので、同じく ref を経由する。
+  const commandState = useRef({ pane, sending, replying, snapshot });
+  commandState.current = { pane, sending, replying, snapshot };
+  const submitLatest = useRef(onSubmit);
+  submitLatest.current = onSubmit;
   const sendMenuCommand = async (id: CommandId) => {
-    if (sending || replying) return;
+    const state = commandState.current;
+    if (state.sending || state.replying) return;
     setSending(true);
     input.current?.blur();
     setNotice(null);
-    if (await onSubmit(commandText(id), [])) {
+    if (await submitLatest.current(commandText(id), [])) {
       setPinned(true);
       setChip(null);
     } else setNotice(SEND_FAILED_NOTICE);
@@ -834,8 +841,6 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // メニューを開くときに渡す。開いた後に状態が変わっても、実行可否と実行だけを
   // ref から最新値で読む。available の pane は App が今のスナップショットから渡す。
-  const commandState = useRef({ pane, sending, replying, snapshot });
-  commandState.current = { pane, sending, replying, snapshot };
   const menuCommands: PaneCommandHandle = {
     available: (id, currentPane) => {
       const state = commandState.current;
