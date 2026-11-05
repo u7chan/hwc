@@ -21,7 +21,8 @@ const COMMAND_AGENTS: ReadonlySet<string> = new Set(["pi", "claude", "codex", "o
 // pi の keepRecentTokens の既定値の写し。pi 側が変われば追随が要る。
 const COMPACT_MIN_TOKENS = 20000;
 
-// セルの外にあるメニューへ、実行可否と実行だけを渡す。状態は PaneDetail が持つ。
+// セルの外にあるメニューへ、実行可否と実行だけを渡す。
+// 会話と圧縮は PaneDetail、未完了の送信は App が持ち、入口ごとに状態を分けない。
 // メニューを開いた後に SSE や送信で状態が変わっても、最新値で判定できるよう
 // available は現在の pane を受け取り、実行に使う値は PaneDetail 側の ref から読む。
 export type PaneCommandHandle = {

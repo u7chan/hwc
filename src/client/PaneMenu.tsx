@@ -21,6 +21,7 @@ type PaneMenuProps = {
   full: boolean;
   closeAction: ReturnType<typeof paneCloseAction>;
   commands: PaneCommandHandle | null;
+  sending: boolean;
   onCreate: () => void;
   onClosePane: () => void;
   onDismiss: () => void;
@@ -28,8 +29,7 @@ type PaneMenuProps = {
 };
 
 export function PaneMenu(props: PaneMenuProps) {
-  const { pane, commands } = props;
-  const [sending, setSending] = useState(false);
+  const { pane, commands, sending } = props;
   const [failed, setFailed] = useState(false);
   const { copiedId, copy } = useCopy();
   const copied = copiedId === pane.id;
@@ -60,11 +60,9 @@ export function PaneMenu(props: PaneMenuProps) {
       commands.run(id);
       return;
     }
-    setSending(true);
     setFailed(false);
     if (await props.onSubmit(commandText(id))) props.onDismiss();
     else setFailed(true);
-    setSending(false);
   };
 
   return (

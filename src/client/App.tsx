@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
@@ -256,8 +256,12 @@ export function App() {
   // メニューと確認はセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
   const [menu, setMenu] = useState<OperationMenu | null>(null);
-  // 実行状態は各詳細が持つ。一覧から表示中のペインを操作するときも、その実行口を使う。
+  // 会話と圧縮の状態は各詳細が持つ。一覧も同じ実行口を使う。
   const commandHandles = useRef(new Map<string, PaneCommandHandle>());
+  // メニューや詳細の寿命でロックを失わず、次の描画より前の連打も抑える。
+  // 正はこの集合だけにし、描画には変更通知を使う。
+  const inputsInFlight = useRef(new Set<string>());
+  const [, inputChanged] = useReducer((revision: number) => revision + 1, 0);
   const [closing, setClosing] = useState<Closing | null>(null);
   // 作成ダイアログの対象ペイン。空なら閉じている。
   const [createTarget, setCreateTarget] = useState<string | null>(null);
@@ -518,16 +522,22 @@ export function App() {
   };
 
   // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。
-  // 失敗の表示は入力欄を持つ PaneDetail が持つ。ペインを離れれば消える。
+  // 失敗は送信した入口で伝える。本文は消さず、再試行できるようにする。
   const sendToPane = async (
     paneId: string,
     text: string,
     attachments: string[],
   ): Promise<boolean> => {
+    if (inputsInFlight.current.has(paneId)) return false;
+    inputsInFlight.current.add(paneId);
+    inputChanged(undefined);
     try {
       await sendInput(paneId, text, attachments);
     } catch {
       return false;
+    } finally {
+      inputsInFlight.current.delete(paneId);
+      inputChanged(undefined);
     }
     rememberSent(paneId);
     return true;
@@ -636,6 +646,7 @@ export function App() {
       // ブランチは一覧が隠れる狭い画面でだけ出す。広い画面の一覧と分割のセルでは重なる。
       branch={wide || cells.length > 1 ? null : where.branch}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
+      sending={inputsInFlight.current.has(item.id)}
       menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
       commandRef={(handle) => {
         if (handle === null) commandHandles.current.delete(item.id);
@@ -828,6 +839,7 @@ export function App() {
               full={menuFull}
               closeAction={menuCloseAction}
               commands={commandHandles.current.get(menuPane.id) ?? null}
+              sending={inputsInFlight.current.has(menuPane.id)}
               onCreate={() => openCreateDialog(menuPane.id)}
               onClosePane={openCloseConfirm}
               onDismiss={closeMenu}
