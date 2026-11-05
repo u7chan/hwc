@@ -50,7 +50,7 @@ test("model-specific creation also covers candidate lookup and session preparati
 
 test("the JSON pane routes expose their media type rejection through RPC", () => {
   type PaneRoutes = (typeof api.api.panes)[":id"];
-  type JsonAction = "input" | "stop" | "focus" | "close" | "split";
+  type JsonAction = "input" | "stop" | "focus" | "close" | "exit" | "split";
   type Rejections = {
     [Action in JsonAction]: Extract<
       Awaited<ReturnType<PaneRoutes[Action]["$post"]>>,
@@ -305,6 +305,7 @@ test("close is done once the pane is gone, whatever removed it", () => {
 
 test("close fails on any other status", () => {
   expect(closeOutcome(400)).toBe("failed");
+  expect(closeOutcome(409)).toBe("failed");
   expect(closeOutcome(415)).toBe("failed");
   expect(closeOutcome(502)).toBe("failed");
 });

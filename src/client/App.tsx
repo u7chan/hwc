@@ -31,6 +31,7 @@ import {
   type PaneCommandHandle,
 } from "./commands";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
+import { type PaneCloseAction, paneCloseAction } from "../shared/pane-close";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import {
   findPane,
@@ -95,7 +96,7 @@ const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
 const NO_TIMES: ReadonlyMap<string, number> = new Map();
 // 詳細のメニューは見出し + 項目 4 つ + 区切り + 注記行。位置計算のための目安。
-const DETAIL_MENU_HEIGHT = MENU_HEIGHT + 44 * 4;
+const DETAIL_MENU_HEIGHT = MENU_HEIGHT + 44 * 5;
 
 // 保存に失敗しても表示は続ける。プライベートモードなどでは localStorage が使えない。
 function readStored(key: string): string | null {
@@ -190,6 +191,7 @@ type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
 // 次のペインを引けないため。
 type Closing = {
   paneId: string;
+  action: PaneCloseAction;
   next: string | null;
   phase: "confirm" | "busy" | "failed";
 };
@@ -395,6 +397,8 @@ export function App() {
   // 確認の文言は状態を開いた時点で固定しない。ダイアログ中に変わればその値で読む。
   // スナップショットから消えたペインはもう無いので、確認は出さない。
   const closingPane = state === null || closing === null ? null : findPane(state, closing.paneId);
+  const closingAvailable =
+    state !== null && closing !== null && paneCloseAction(state, closing.paneId) === closing.action;
 
   // 新ペインがスナップショットに現れたら開く。応答の前に SSE が届いていれば、ここで 1 度だけ動く。
   useEffect(() => {
@@ -449,12 +453,15 @@ export function App() {
 
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。
   const openCloseConfirm = () => {
-    if (menu === null) return;
+    if (menu === null || state === null) return;
     const paneId = menu.paneId;
-    const row = state === null ? null : findPaneRow(state, paneId);
+    const action = paneCloseAction(state, paneId);
+    if (action === null || action === "keep") return;
+    const row = findPaneRow(state, paneId);
     setMenu(null);
     setClosing({
       paneId,
+      action,
       next: row === null ? null : nextPaneInTab(row.tab.panes, paneId, hidden),
       phase: "confirm",
     });
@@ -468,19 +475,19 @@ export function App() {
 
   // 閉じたペインはローカルで消さない。表示は SSE のスナップショットで置き換える。
   const confirmClose = () => {
-    if (closing === null || closing.phase === "busy") return;
+    if (closing === null || closing.phase === "busy" || !closingAvailable) return;
     if (closeInFlight.current) return;
     closeInFlight.current = true;
     const target = closing;
     setClosing({ ...target, phase: "busy" });
-    void closePane(target.paneId).then((outcome) => {
+    void closePane(target.paneId, target.action).then((outcome) => {
       closeInFlight.current = false;
       if (outcome !== "done") {
         setClosing((current) => (current === null ? null : { ...current, phase: "failed" }));
         return;
       }
       // 選んでいないペインを閉じても、読んでいるペインを動かさない。
-      if (target.next !== null && selectedPaneId === target.paneId) {
+      if (target.action === "close" && target.next !== null && selectedPaneId === target.paneId) {
         setView({ selectedPaneId: target.next, expanded });
       }
       setClosing(null);
@@ -618,6 +625,8 @@ export function App() {
     state === null || menu === null ? null : (findPaneRow(state, menu.paneId)?.tab ?? null);
   const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
   const menuPane = state === null || menu === null ? null : findPane(state, menu.paneId);
+  const menuCloseAction =
+    state === null || menu === null ? null : paneCloseAction(state, menu.paneId);
   const menuCommands = menu?.commands ?? null;
   const menuCommandsShown = menuPane !== null && isCommandPane(menuPane);
   const menuCommandsBusy = menuPane?.agentStatus === "working" || (menuCommands?.busy() ?? false);
@@ -849,17 +858,25 @@ export function App() {
             type="button"
             role="menuitem"
             class="hwc-menu-item hwc-menu-item--danger"
+            disabled={menuCloseAction === null || menuCloseAction === "keep"}
             onClick={openCloseConfirm}
           >
             <CloseIcon size={14} />
-            ペインを閉じる
+            {menuCloseAction === "exit" ? "エージェントを終了" : "ペインを閉じる"}
           </button>
+          {menuCloseAction === "exit" ? (
+            <p class="hwc-menu-note">最後のペインとスペースは残します</p>
+          ) : menuCloseAction === "keep" ? (
+            <p class="hwc-menu-note">スペースを残すため、最後のペインは閉じられません</p>
+          ) : null}
         </Menu>
       )}
 
       {closing === null || closingPane === null ? null : (
         <CloseConfirm
           pane={closingPane}
+          action={closing.action}
+          available={closingAvailable}
           busy={closing.phase === "busy"}
           failed={closing.phase === "failed"}
           onConfirm={confirmClose}

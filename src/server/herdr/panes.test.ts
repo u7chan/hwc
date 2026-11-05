@@ -176,6 +176,71 @@ test("close reports the failure so the route can map it", async () => {
   await expect(client.close({ paneId: "w1:p9" })).rejects.toThrow("pane_not_found");
 });
 
+const processInfoReply = {
+  type: "pane_process_info",
+  process_info: { pane_id: "w1:p1", shell_pid: 100, foreground_process_group_id: 200 },
+};
+
+test("exit requests /quit through the guarded agent API only when a parent shell remains", async () => {
+  const { calls, call } = recordingCaller({ "pane.process_info": processInfoReply });
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  await client.exit({ paneId: "w1:p1" });
+
+  expect(calls).toEqual([
+    {
+      method: "pane.process_info",
+      params: { pane_id: "w1:p1" },
+      options: { path: "/tmp/test.sock" },
+    },
+    {
+      method: "agent.prompt",
+      params: { target: "w1:p1", text: "/quit" },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});
+
+test.each([
+  null,
+  {},
+  { ...processInfoReply, type: "ok" },
+  { ...processInfoReply, process_info: { ...processInfoReply.process_info, pane_id: "w1:p2" } },
+  { ...processInfoReply, process_info: { ...processInfoReply.process_info, shell_pid: null } },
+  { ...processInfoReply, process_info: { ...processInfoReply.process_info, shell_pid: 0 } },
+  {
+    ...processInfoReply,
+    process_info: { ...processInfoReply.process_info, foreground_process_group_id: null },
+  },
+  {
+    ...processInfoReply,
+    process_info: { ...processInfoReply.process_info, foreground_process_group_id: 100 },
+  },
+])(
+  "exit refuses missing process facts and agents running directly under the PTY: %j",
+  async (reply) => {
+    const { calls, call } = recordingCaller({ "pane.process_info": reply });
+    const client = createPaneClient({ call });
+
+    await expect(client.exit({ paneId: "w1:p1" })).rejects.toThrow("agent_exit_unsafe");
+    expect(calls.map((call) => call.method)).toEqual(["pane.process_info"]);
+  },
+);
+
+test.each(["agent_not_ready", "agent_blocked"])(
+  "exit never falls back to pane.close after %s",
+  async (code) => {
+    const { calls, call } = recordingCaller({
+      "pane.process_info": processInfoReply,
+      "agent.prompt": new HerdrError(code, "cannot send input"),
+    });
+    const client = createPaneClient({ call });
+
+    await expect(client.exit({ paneId: "w1:p1" })).rejects.toThrow(code);
+    expect(calls.map((call) => call.method)).toEqual(["pane.process_info", "agent.prompt"]);
+  },
+);
+
 const paneLayoutReply = {
   type: "pane_layout",
   layout: {

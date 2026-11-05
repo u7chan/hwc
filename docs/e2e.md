@@ -34,6 +34,7 @@ bun run e2e:serve
 - `session.snapshot`
 - `events.subscribe`
 - `pane.read`
+- `pane.process_info`
 - `pane.layout`
 - `pane.get`
 - `pane.send_input`
@@ -42,6 +43,7 @@ bun run e2e:serve
 - `pane.split`
 - `pane.rename`
 - `agent.start`
+- `agent.prompt`
 - `pane.close`
 
 `pane.close` はスナップショットからペインを消して `pane.closed` を流す。`pane.split` は
@@ -55,6 +57,11 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 モデル選択では、`pane.get` が fixture の cwd を返す。Pi の一覧は架空 CLI から、OpenCode の一覧と新規セッションは `e2e/fake-opencode.ts` の loopback サービスから読み書きする。候補の正は `e2e/fixtures/scenario.ts` の `STARTUP_MODELS`。`agent.start` は受け取った引数を架空の端末出力にも残し、モデル指定した OpenCode には架空のセッション参照を付ける。
+
+`pane.process_info` は親シェルと別のフォアグラウンドジョブの架空 PID を返す。
+`agent.prompt` は既知のエージェントへの `/quit` だけを受け付け、ペイン・タブ・スペースを残して
+エージェントとセッション参照を外し、`pane.updated` を流す。要対応のペインは実 Herdr と同じく
+`agent_blocked` で拒否する。最後のエージェントの終了要求、拒否、残ったシェルの削除禁止を確認する。
 
 `pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。
 

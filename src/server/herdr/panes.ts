@@ -83,6 +83,7 @@ export type PaneClient = {
   focus: (options: FocusOptions) => Promise<void>;
   stop: (options: StopOptions) => Promise<void>;
   close: (options: CloseOptions) => Promise<void>;
+  exit: (options: CloseOptions) => Promise<void>;
   layout: (options: LayoutOptions) => Promise<PaneLayout>;
   directory: (options: { paneId: string }) => Promise<string>;
   split: (options: SplitOptions) => Promise<{ paneId: string }>;
@@ -208,6 +209,26 @@ type Caller = <T>(
   options?: { path?: string; timeoutMs?: number },
 ) => Promise<T>;
 
+function hasParentShell(value: unknown, paneId: string): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const result = value as Record<string, unknown>;
+  if (result.type !== "pane_process_info") return false;
+  if (typeof result.process_info !== "object" || result.process_info === null) return false;
+  const info = result.process_info as Record<string, unknown>;
+  const shell = info.shell_pid;
+  const foreground = info.foreground_process_group_id;
+  return (
+    info.pane_id === paneId &&
+    typeof shell === "number" &&
+    Number.isInteger(shell) &&
+    shell > 0 &&
+    typeof foreground === "number" &&
+    Number.isInteger(foreground) &&
+    foreground > 0 &&
+    shell !== foreground
+  );
+}
+
 export function createPaneClient(options: { path?: string; call?: Caller } = {}): PaneClient {
   const { path } = options;
   const call: Caller = options.call ?? request;
@@ -240,6 +261,15 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
     async close({ paneId }) {
       // ペインを閉じるとエージェントのプロセスも終わる。開いていた作業は戻らない。
       await call("pane.close", { pane_id: paneId }, { path });
+    },
+    async exit({ paneId }) {
+      // exec などで PTY 直下のエージェントを終了すると、スペースまで消えてしまう。
+      const info = await call("pane.process_info", { pane_id: paneId }, { path });
+      if (!hasParentShell(info, paneId)) {
+        throw new HerdrError("agent_exit_unsafe", "cannot confirm a parent shell");
+      }
+      // agent.prompt は実プロセスも検査し、シェルや要対応の画面への誤送信を拒否する。
+      await call("agent.prompt", { target: paneId, text: "/quit" }, { path });
     },
     async layout({ paneId }) {
       // 追加先を決めるためのセルの形だけを読む。タブの並びは変えない。

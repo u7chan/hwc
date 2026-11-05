@@ -3549,6 +3549,16 @@ p.hwc-compaction,
     border-top-color: var(--color-line);
   }
 
+  .hwc-send {
+    width: 36px;
+    height: 36px;
+  }
+
+  .hwc-send .hwc-stop-icon {
+    width: 16px;
+    height: 16px;
+  }
+
   .hwc-send-notice {
     padding-right: var(--space-6);
     padding-left: var(--space-6);
