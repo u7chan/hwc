@@ -474,6 +474,136 @@ test("GET /api/panes/:id/output returns 502 when Herdr cannot be reached", async
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });
 
+const jsonPaneActions = ["input", "stop", "focus", "close", "split"] as const;
+
+test.each(jsonPaneActions)(
+  "POST /api/panes/:id/%s rejects non-JSON before reading the body or state",
+  async (action) => {
+    let stateReads = 0;
+    const store = createFakeStore(workingState);
+    const app = createApp({
+      chat: createFakeChat(),
+      store: {
+        ...store,
+        get: () => {
+          stateReads += 1;
+          return store.get();
+        },
+      },
+      panes: createFakePanes(),
+    });
+
+    for (const contentType of [
+      undefined,
+      "text/plain",
+      "application/x-www-form-urlencoded",
+      "multipart/form-data; boundary=example",
+      "application/jsonx",
+      "application/json-patch+json",
+    ]) {
+      const request = new Request(`http://localhost/api/panes/w1:p1/${action}`, {
+        method: "POST",
+        headers: contentType === undefined ? {} : { "content-type": contentType },
+        body: new TextEncoder().encode("not json"),
+      });
+      const response = await app.request(request);
+
+      expect(response.status).toBe(415);
+      expect(await response.json()).toEqual({ error: "content-type must be application/json" });
+      expect(request.bodyUsed).toBe(false);
+    }
+    expect(stateReads).toBe(0);
+  },
+);
+
+test.each(jsonPaneActions)(
+  "POST /api/panes/:id/%s accepts JSON media types regardless of case or parameters",
+  async (action) => {
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(workingState),
+      panes: createFakePanes(),
+    });
+
+    for (const contentType of ["application/json", "Application/JSON; Charset=utf-8"]) {
+      const response = await app.request(`/api/panes/w1:p1/${action}`, {
+        method: "POST",
+        headers: { "content-type": contentType },
+        body: JSON.stringify({ text: "hello" }),
+      });
+      expect(response.status).toBe(200);
+    }
+  },
+);
+
+test.each(["stop", "focus", "close"])(
+  "POST /api/panes/:id/%s does not parse a body it does not need",
+  async (action) => {
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(workingState),
+      panes: createFakePanes(),
+    });
+    const request = new Request(`http://localhost/api/panes/w1:p1/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "not json",
+    });
+    const response = await app.request(request);
+
+    expect(response.status).toBe(200);
+    expect(request.bodyUsed).toBe(false);
+  },
+);
+
+test.each(["stop", "focus", "close", "split"])(
+  "POST /api/panes/:id/%s leaves snapshot refresh to Herdr events",
+  async (action) => {
+    let refreshes = 0;
+    const store = createFakeStore(workingState);
+    const app = createApp({
+      chat: createFakeChat(),
+      store: {
+        ...store,
+        refresh: async () => {
+          refreshes += 1;
+          throw new Error("socket closed");
+        },
+      },
+      panes: createFakePanes(),
+    });
+    const response = await app.request(`/api/panes/w1:p1/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+
+    expect(response.status).toBe(200);
+    expect(refreshes).toBe(0);
+  },
+);
+
+test("POST /api/panes/:id/input without attachments does not need a snapshot", async () => {
+  const seen: unknown[] = [];
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(null, new Error("socket closed")),
+    panes: createFakePanes({
+      send: async (options) => {
+        seen.push(options);
+      },
+    }),
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(seen).toEqual([{ paneId: "w1:p1", text: "hello", submit: true }]);
+});
+
 test("POST /api/panes/:id/input sends the text and submits it", async () => {
   const seen: unknown[] = [];
   const app = createApp({
@@ -546,51 +676,6 @@ test("POST /api/panes/:id/input returns 502 when Herdr cannot be reached", async
 
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
-});
-
-test("POST /api/panes/:id/input rejects a body that is not sent as JSON", async () => {
-  const seen: unknown[] = [];
-  const app = createApp({
-    chat: createFakeChat(),
-    store: createFakeStore(state),
-    panes: createFakePanes({
-      send: async (options) => {
-        seen.push(options);
-      },
-    }),
-  });
-
-  for (const contentType of [
-    "text/plain",
-    "application/x-www-form-urlencoded",
-    "application/jsonx",
-  ]) {
-    const response = await app.request("/api/panes/w1:p1/input", {
-      method: "POST",
-      headers: { "content-type": contentType },
-      body: JSON.stringify({ text: "rm -rf /", submit: true }),
-    });
-    expect(response.status).toBe(415);
-    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
-  }
-
-  expect(seen).toEqual([]);
-});
-
-test("POST /api/panes/:id/input accepts a JSON content type with parameters", async () => {
-  const app = createApp({
-    chat: createFakeChat(),
-    store: createFakeStore(state),
-    panes: createFakePanes(),
-  });
-  const response = await app.request("/api/panes/w1:p1/input", {
-    method: "POST",
-    headers: { "content-type": "application/json; charset=utf-8" },
-    body: JSON.stringify({ text: "ls" }),
-  });
-
-  expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ ok: true });
 });
 
 test("POST /api/panes/:id/input returns 400 when Herdr rejects the request", async () => {
@@ -742,36 +827,6 @@ test("POST /api/panes/:id/stop does not send Escape to a pane that is not workin
   expect(seen).toEqual([]);
 });
 
-test("POST /api/panes/:id/stop rejects a request that is not sent as JSON", async () => {
-  const seen: unknown[] = [];
-  const app = createApp({
-    chat: createFakeChat(),
-    store: createFakeStore(workingState),
-    panes: createFakePanes({
-      stop: async (options) => {
-        seen.push(options);
-      },
-    }),
-  });
-
-  for (const contentType of [
-    "text/plain",
-    "application/x-www-form-urlencoded",
-    "application/jsonx",
-  ]) {
-    const response = await app.request("/api/panes/w1:p1/stop", {
-      method: "POST",
-      headers: { "content-type": contentType },
-    });
-    expect(response.status).toBe(415);
-    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
-  }
-
-  const bare = await app.request("/api/panes/w1:p1/stop", { method: "POST" });
-  expect(bare.status).toBe(415);
-  expect(seen).toEqual([]);
-});
-
 test("POST /api/panes/:id/stop returns 404 before asking Herdr for a pane that is gone", async () => {
   const seen: unknown[] = [];
   const app = createApp({
@@ -886,37 +941,6 @@ test("POST /api/panes/:id/focus focuses the pane by id", async () => {
   expect(seen).toEqual([{ paneId: "w1:p1" }]);
 });
 
-test("POST /api/panes/:id/focus rejects a request that is not sent as JSON", async () => {
-  const seen: unknown[] = [];
-  const app = createApp({
-    chat: createFakeChat(),
-    store: createFakeStore(state),
-    panes: createFakePanes({
-      focus: async (options) => {
-        seen.push(options);
-      },
-    }),
-  });
-
-  for (const contentType of [
-    "text/plain",
-    "application/x-www-form-urlencoded",
-    "application/jsonx",
-  ]) {
-    const response = await app.request("/api/panes/w1:p1/focus", {
-      method: "POST",
-      headers: { "content-type": contentType },
-    });
-    expect(response.status).toBe(415);
-    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
-  }
-
-  // ヘッダ無しの POST も同じ。LAN の任意ページから form で叩けないようにする。
-  const bare = await app.request("/api/panes/w1:p1/focus", { method: "POST" });
-  expect(bare.status).toBe(415);
-  expect(seen).toEqual([]);
-});
-
 test("POST /api/panes/:id/focus returns 404 before asking Herdr for a pane that is gone", async () => {
   const seen: unknown[] = [];
   const app = createApp({
@@ -992,36 +1016,6 @@ test("POST /api/panes/:id/close closes the pane by id", async () => {
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true });
   expect(seen).toEqual([{ paneId: "w1:p1" }]);
-});
-
-test("POST /api/panes/:id/close rejects a request that is not sent as JSON", async () => {
-  const seen: unknown[] = [];
-  const app = createApp({
-    chat: createFakeChat(),
-    store: createFakeStore(state),
-    panes: createFakePanes({
-      close: async (options) => {
-        seen.push(options);
-      },
-    }),
-  });
-
-  for (const contentType of [
-    "text/plain",
-    "application/x-www-form-urlencoded",
-    "application/jsonx",
-  ]) {
-    const response = await app.request("/api/panes/w1:p1/close", {
-      method: "POST",
-      headers: { "content-type": contentType },
-    });
-    expect(response.status).toBe(415);
-    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
-  }
-
-  const bare = await app.request("/api/panes/w1:p1/close", { method: "POST" });
-  expect(bare.status).toBe(415);
-  expect(seen).toEqual([]);
 });
 
 test("POST /api/panes/:id/close returns 404 before asking Herdr for a pane that is gone", async () => {
@@ -1776,6 +1770,18 @@ function postSplit(app: ReturnType<typeof createApp>, paneId: string, body: unkn
   });
 }
 
+test("POST /api/panes/:id/split validates the body before loading a snapshot", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(null, new Error("socket closed")),
+    panes: createFakePanes(),
+  });
+  const response = await postSplit(app, "w1:p1", { name: 42 });
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "name must be a string" });
+});
+
 test("POST /api/panes/:id/split splits the largest cell toward the target aspect", async () => {
   const seenLayout: unknown[] = [];
   const seenSplit: unknown[] = [];
@@ -1805,37 +1811,6 @@ test("POST /api/panes/:id/split splits the largest cell toward the target aspect
   expect(seenLayout).toEqual([{ paneId: "w1:p1" }]);
   // 一番大きいセルは w1:p2。160x47 は右に割ると 1.63 から 0.82 になり、下より目標 1.4 に近い。
   expect(seenSplit).toEqual([{ paneId: "w1:p2", direction: "right", ratio: 0.5 }]);
-});
-
-test("POST /api/panes/:id/split rejects a request that is not sent as JSON", async () => {
-  const seen: unknown[] = [];
-  const app = createApp({
-    chat: createFakeChat(),
-    store: createFakeStore(state),
-    panes: createFakePanes({
-      split: async (options) => {
-        seen.push(options);
-        return { paneId: "w1:p2" };
-      },
-    }),
-  });
-
-  for (const contentType of [
-    "text/plain",
-    "application/x-www-form-urlencoded",
-    "application/jsonx",
-  ]) {
-    const response = await app.request("/api/panes/w1:p1/split", {
-      method: "POST",
-      headers: { "content-type": contentType },
-    });
-    expect(response.status).toBe(415);
-    expect(await response.json()).toEqual({ error: "content-type must be application/json" });
-  }
-
-  const bare = await app.request("/api/panes/w1:p1/split", { method: "POST" });
-  expect(bare.status).toBe(415);
-  expect(seen).toEqual([]);
 });
 
 test("POST /api/panes/:id/split returns 502 when the state cannot be read", async () => {

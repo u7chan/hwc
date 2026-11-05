@@ -1,4 +1,5 @@
 import { type Context, Hono } from "hono";
+import { createMiddleware } from "hono/factory";
 import { streamSSE } from "hono/streaming";
 import {
   attachmentContentType,
@@ -15,10 +16,9 @@ import {
   saveAttachment,
 } from "./attachments";
 import type { SessionChatClient } from "./chat/contract";
+import { createPane } from "./create-pane";
 import {
-  agentNameForPane,
   exceedsTextLimit,
-  isAgentNotReady,
   isInvalidRequest,
   isPaneNotFound,
   type PaneClient,
@@ -29,12 +29,21 @@ import {
   TEXT_WITH_ATTACHMENTS_TOO_LONG,
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
-import { planSplit } from "./herdr/split";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 
 // Bun.serve は 10 秒間何も書かれない chunked 応答を打ち切る。状態が変わらない間も接続を
 // 保つため、これより短い間隔でハートビートを送る。
 export const SSE_HEARTBEAT_MS = 5_000;
+
+// 状態を変える JSON POST は simple request で叩かれないようにする。
+// CORS を返さないので、cross-origin は preflight で止まる。body はここでは読まない。
+const requireJson = createMiddleware(async (c, next) => {
+  const contentType = (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
+  if (contentType !== "application/json") {
+    return c.json({ error: "content-type must be application/json" }, 415);
+  }
+  await next();
+});
 
 export function createApp(options: {
   store: StateStore;
@@ -96,11 +105,6 @@ export function createApp(options: {
       return unquoted === etag;
     });
   };
-
-  // 状態を変える POST は simple request で叩かれないよう application/json に限る。
-  // CORS を返さないので、cross-origin は preflight で止まる。
-  const isJsonRequest = (c: Context): boolean =>
-    (c.req.header("content-type") ?? "").split(";")[0]?.trim().toLowerCase() === "application/json";
 
   // 画像は 1 枚の生バイトで受ける。保存名はサーバが決め、上書きしない。
   const uploadAttachment = async (c: Context) => {
@@ -254,13 +258,7 @@ export function createApp(options: {
         return paneFailure(c, error);
       }
     })
-    .post("/api/panes/:id/input", async (c) => {
-      // ペインへ入力を流す唯一のエンドポイントなので、simple request で叩かれないよう
-      // application/json に限る。CORS を返さないので、cross-origin は preflight で止まる。
-      if (!isJsonRequest(c)) {
-        return c.json({ error: "content-type must be application/json" }, 415);
-      }
-
+    .post("/api/panes/:id/input", requireJson, async (c) => {
       // body は JSON として読み切ってから text のバイト数で上限を見る。Content-Type の検証で
       // browser の cross-origin は preflight に落ちるが、LAN の非 browser client はここまで
       // 到達し得る。その場合の巨大 body は Bun の body 読み込みに任せる。
@@ -306,12 +304,7 @@ export function createApp(options: {
         return paneFailure(c, error);
       }
     })
-    .post("/api/panes/:id/stop", async (c) => {
-      // 実行中のターンを止める操作なので、form POST で叩ける状態にしない。
-      if (!isJsonRequest(c)) {
-        return c.json({ error: "content-type must be application/json" }, 415);
-      }
-
+    .post("/api/panes/:id/stop", requireJson, async (c) => {
       const state = await current();
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
 
@@ -330,13 +323,7 @@ export function createApp(options: {
         return paneFailure(c, error);
       }
     })
-    .post("/api/panes/:id/focus", async (c) => {
-      // TUI のフォーカスを動かす操作なので、form POST で叩ける状態にしない。
-      // body は読まない（ペイン id は path にあり、追加の指定は無い）。
-      if (!isJsonRequest(c)) {
-        return c.json({ error: "content-type must be application/json" }, 415);
-      }
-
+    .post("/api/panes/:id/focus", requireJson, async (c) => {
       const state = await current();
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
 
@@ -352,13 +339,7 @@ export function createApp(options: {
         return paneFailure(c, error);
       }
     })
-    .post("/api/panes/:id/close", async (c) => {
-      // ペインとエージェントを終わらせる操作なので、form POST で叩ける状態にしない。
-      // body は読まない（ペイン id は path にあり、追加の指定は無い）。
-      if (!isJsonRequest(c)) {
-        return c.json({ error: "content-type must be application/json" }, 415);
-      }
-
+    .post("/api/panes/:id/close", requireJson, async (c) => {
       const state = await current();
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
 
@@ -373,12 +354,7 @@ export function createApp(options: {
         return paneFailure(c, error);
       }
     })
-    .post("/api/panes/:id/split", async (c) => {
-      // ペインを増やす操作なので、form POST で叩ける状態にしない。
-      if (!isJsonRequest(c)) {
-        return c.json({ error: "content-type must be application/json" }, 415);
-      }
-
+    .post("/api/panes/:id/split", requireJson, async (c) => {
       // 追加の指定（名前・起動するエージェント）は body から読む。body 無しは不正。
       const body = await c.req.json().catch(() => null);
       const request = parseSplitBody(body);
@@ -394,53 +370,14 @@ export function createApp(options: {
       if (tab.panes.length >= MAX_PANES_PER_TAB) return c.json({ error: "pane_limit" }, 409);
 
       try {
-        const layout = await panes.layout({ paneId });
-        const plan = planSplit(layout.cells);
-        if (plan === null) return c.json({ error: "pane_limit" }, 409);
-
-        const created = await panes.split({
-          paneId: plan.paneId,
-          direction: plan.direction,
-          ratio: plan.ratio,
-        });
-
-        if (request.value.agent !== null) {
-          // エージェント名は Herdr の制約に合わせてペイン id から作る。ユーザーのペイン名は
-          // 日本語や空白を含み得るので、Herdr の名前制約には使わない。
-          const agentName = agentNameForPane(created.paneId);
-          try {
-            await panes.startAgent({
-              paneId: created.paneId,
-              kind: request.value.agent,
-              name: agentName,
-            });
-          } catch (error) {
-            // 初回の trust / login 待ち（agent_not_ready）でも、エージェントは起動している。
-            // ペインをシェル扱いにせず、名前を付けて成功として返す。
-            if (!isAgentNotReady(error)) {
-              // ペインは既にある。名前だけは付けられれば付け、シェルとして残す。
-              if (request.value.name !== null) {
-                await panes
-                  .rename({ paneId: created.paneId, label: request.value.name })
-                  .catch(() => {
-                    // 名前は副次的な指定。起動失敗の報告を優先する。
-                  });
-              }
-              return c.json({ error: "agent_start_failed", paneId: created.paneId }, 502);
-            }
-          }
-        }
-
-        if (request.value.name !== null) {
-          try {
-            await panes.rename({ paneId: created.paneId, label: request.value.name });
-          } catch {
-            return c.json({ error: "pane_rename_failed", paneId: created.paneId }, 502);
-          }
+        const result = await createPane(panes, paneId, request.value);
+        if (!result.ok) {
+          if (result.error === "pane_limit") return c.json({ error: result.error }, 409);
+          return c.json({ error: result.error, paneId: result.paneId }, 502);
         }
 
         // focus / close と同じく、状態の取り直しは Herdr のイベント（pane.created）に任せる。
-        return c.json({ paneId: created.paneId });
+        return c.json({ paneId: result.paneId });
       } catch (error) {
         return paneFailure(c, error);
       }

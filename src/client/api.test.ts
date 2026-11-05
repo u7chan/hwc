@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test";
+import { expect, expectTypeOf, test } from "bun:test";
+import type { ClientResponse } from "hono/client";
 import {
   OUTPUT_LINES,
   attachmentUploadUrl,
@@ -19,6 +20,20 @@ import {
 } from "./api";
 
 const api = createApiClient("http://localhost");
+
+test("the JSON pane routes expose their media type rejection through RPC", () => {
+  type PaneRoutes = (typeof api.api.panes)[":id"];
+  type JsonAction = "input" | "stop" | "focus" | "close" | "split";
+  type Rejections = {
+    [Action in JsonAction]: Extract<
+      Awaited<ReturnType<PaneRoutes[Action]["$post"]>>,
+      { status: 415 }
+    >;
+  };
+  type Rejection = ClientResponse<{ error: string }, 415, "json">;
+
+  expectTypeOf<Rejections>().toEqualTypeOf<Record<JsonAction, Rejection>>();
+});
 
 const state = {
   focusedWorkspaceId: null,
