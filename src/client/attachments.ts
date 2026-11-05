@@ -13,16 +13,16 @@ export type ClipboardItemLike = {
   getAsFile: () => File | null;
 };
 
-// 貼り付けに対して何をするか。テキストだけなら既定のまま、未対応形式は通知だけ、
+// 貼り付け・ドロップに対して何をするか。テキストだけなら既定のまま、未対応形式は通知だけ、
 // 受け付けた画像があれば既定動作を止めてアップロードする。
-export type PasteAction =
+export type AttachmentAction =
   | { kind: "default" }
   | { kind: "unsupported" }
   | { kind: "upload"; files: File[]; unsupported: boolean };
 
 export function pasteActionFrom(
   items: ArrayLike<ClipboardItemLike> | null | undefined,
-): PasteAction {
+): AttachmentAction {
   if (!items) return { kind: "default" };
 
   const files: File[] = [];
@@ -41,6 +41,27 @@ export function pasteActionFrom(
   }
 
   if (files.length > 0) return { kind: "upload", files, unsupported };
+  return unsupported ? { kind: "unsupported" } : { kind: "default" };
+}
+
+// ドロップでは DataTransfer.files（kind を持たない File の一覧）を見る。
+// 画像以外のファイルは既定動作に任せ、未対応の画像形式だけを知らせる。
+export function dropActionFrom(files: ArrayLike<File> | null | undefined): AttachmentAction {
+  if (!files) return { kind: "default" };
+
+  const accepted: File[] = [];
+  let unsupported = false;
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    if (!file || !file.type.startsWith("image/")) continue;
+    if (attachmentExtOf(file.type) === null) {
+      unsupported = true;
+      continue;
+    }
+    accepted.push(file);
+  }
+
+  if (accepted.length > 0) return { kind: "upload", files: accepted, unsupported };
   return unsupported ? { kind: "unsupported" } : { kind: "default" };
 }
 

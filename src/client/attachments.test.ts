@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
-import { ATTACHMENT_LIMIT_NOTICE, pasteActionFrom, uploadFailureNotice } from "./attachments";
+import {
+  ATTACHMENT_LIMIT_NOTICE,
+  dropActionFrom,
+  pasteActionFrom,
+  uploadFailureNotice,
+} from "./attachments";
 
 function clipboardItem(type: string, file: File | null, kind = "file") {
   return { kind, type, getAsFile: () => file };
@@ -48,6 +53,35 @@ test("a paste without images keeps the default behaviour", () => {
   expect(pasteActionFrom(undefined)).toEqual({ kind: "default" });
   // 画像の項目でも File が取れなければ添付しない。
   expect(pasteActionFrom([clipboardItem("image/png", null)])).toEqual({ kind: "default" });
+});
+
+test("the accepted images dropped together are uploaded and the default is prevented", () => {
+  expect(dropActionFrom([png, plain, jpeg])).toEqual({
+    kind: "upload",
+    files: [png, jpeg],
+    unsupported: false,
+  });
+});
+
+test("a dropped unsupported image is reported instead of being ignored", () => {
+  expect(dropActionFrom([gif])).toEqual({ kind: "unsupported" });
+  expect(dropActionFrom([gif, svg])).toEqual({ kind: "unsupported" });
+});
+
+test("a dropped unsupported image next to a supported one is uploaded and reported", () => {
+  expect(dropActionFrom([png, gif])).toEqual({
+    kind: "upload",
+    files: [png],
+    unsupported: true,
+  });
+});
+
+test("a drop without images keeps the default behaviour", () => {
+  // 画像以外のファイルは添付しない。既定動作を止めるかどうかは呼び出し側が決める。
+  expect(dropActionFrom([plain])).toEqual({ kind: "default" });
+  expect(dropActionFrom([])).toEqual({ kind: "default" });
+  expect(dropActionFrom(null)).toEqual({ kind: "default" });
+  expect(dropActionFrom(undefined)).toEqual({ kind: "default" });
 });
 
 test("the limit notice names the number of images", () => {
