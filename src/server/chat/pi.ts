@@ -27,8 +27,7 @@ export { ChatUnavailableError };
 
 export type ChatClient = SessionChatClient;
 
-// (provider, model) から contextWindow を引く。プロセス内で固定のカタログとして扱う。
-export type ModelCatalog = {
+type ModelCatalog = {
   contextWindow: (provider: string | null, model: string | null) => number | null;
 };
 
@@ -96,14 +95,12 @@ export function createChatClient(
   options: {
     limit?: number;
     load?: (reader: ChatReader) => Promise<ChatSnapshot>;
-    sessionAgentDir?: (sessionPath: string) => Promise<string | null>;
-    loadCatalog?: (agentDir: string) => Promise<ModelCatalog>;
+    readCatalogFile?: (path: string) => Promise<string>;
   } = {},
 ): ChatClient {
   const limit = options.limit ?? 8;
   const windowFor = createWindowResolver(
-    options.sessionAgentDir ?? sessionAgentDirOf,
-    options.loadCatalog ?? loadCatalogFrom,
+    options.readCatalogFile ?? ((path) => readFile(path, "utf8")),
   );
   const load = options.load ?? ((reader: ChatReader) => readSessionFile(reader, windowFor));
   const readers = new Map<string, ChatReader>();
@@ -467,7 +464,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
       ? 0
       : Math.max(0, Math.min(limited.messages.length, beforeCompaction - dropped));
   return {
-    etag: `${reader.etagPrefix}-${reader.generation}`,
+    etag: `${reader.etagPrefix}-${reader.generation}-${windowTokens ?? "unknown"}`,
     messages: limited.messages,
     model,
     effort,
@@ -509,34 +506,55 @@ function foldContext(tokens: number | null, window: number | null): ChatContext 
   return { tokens, window };
 }
 
-function createWindowResolver(
-  sessionAgentDir: (sessionPath: string) => Promise<string | null>,
-  loadCatalog: (agentDir: string) => Promise<ModelCatalog>,
-): WindowResolver {
-  const agentDirs = new Map<string, Promise<string | null>>();
-  const catalogs = new Map<string, Promise<ModelCatalog>>();
+function createWindowResolver(readCatalogFile: (path: string) => Promise<string>): WindowResolver {
+  const files = new Map<string, { version: string; value: unknown }>();
+  const catalogs = new Map<string, { store: unknown; config: unknown; catalog: ModelCatalog }>();
+  const running = new Map<string, Promise<ModelCatalog>>();
 
-  // セッション path もカタログも動かない前提。起動後に足したプロバイダや override は
-  // BFF の再起動まで反映しない。ETag が session の generation だけで整合するのはこのため。
-  const agentDirOf = (sessionPath: string): Promise<string | null> => {
-    const cached = agentDirs.get(sessionPath);
-    if (cached) return cached;
-    const pending = sessionAgentDir(sessionPath).catch(() => null);
-    agentDirs.set(sessionPath, pending);
-    return pending;
+  const readJson = async (path: string): Promise<unknown> => {
+    try {
+      const info = await stat(path, { bigint: true });
+      if (!info.isFile()) {
+        files.delete(path);
+        return null;
+      }
+      // 同サイズの上書きと atomic rename も拾う。時刻は丸めずに比較する。
+      const version = `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`;
+      const cached = files.get(path);
+      if (cached?.version === version) return cached.value;
+      const value: unknown = JSON.parse(await readCatalogFile(path));
+      files.set(path, { version, value });
+      return value;
+    } catch {
+      // 失敗を覚えると、メタデータが同じまま読み取りが復旧しても再試行できない。
+      files.delete(path);
+      return null;
+    }
   };
 
   const catalogFor = (agentDir: string): Promise<ModelCatalog> => {
-    const cached = catalogs.get(agentDir);
-    if (cached) return cached;
-    const pending = loadCatalog(agentDir).catch(() => emptyCatalog());
-    catalogs.set(agentDir, pending);
+    const inFlight = running.get(agentDir);
+    if (inFlight) return inFlight;
+
+    const pending = Promise.all([
+      readJson(join(agentDir, MODELS_STORE)),
+      readJson(join(agentDir, MODELS_CONFIG)),
+    ])
+      .then(([store, config]) => {
+        const cached = catalogs.get(agentDir);
+        if (cached && cached.store === store && cached.config === config) return cached.catalog;
+        const catalog = catalogOf(store, config);
+        catalogs.set(agentDir, { store, config, catalog });
+        return catalog;
+      })
+      .finally(() => running.delete(agentDir));
+    running.set(agentDir, pending);
     return pending;
   };
 
   return async (sessionPath, provider, model) => {
     if (provider === null || model === null) return null;
-    const agentDir = await agentDirOf(sessionPath);
+    const agentDir = await sessionAgentDirOf(sessionPath);
     if (agentDir === null) return null;
     const catalog = await catalogFor(agentDir);
     return catalog.contextWindow(provider, model);
@@ -554,27 +572,6 @@ async function sessionAgentDirOf(sessionPath: string): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-async function loadCatalogFrom(agentDir: string): Promise<ModelCatalog> {
-  const [store, config] = await Promise.all([
-    readJson(join(agentDir, MODELS_STORE)),
-    readJson(join(agentDir, MODELS_CONFIG)),
-  ]);
-  return catalogOf(store, config);
-}
-
-async function readJson(path: string): Promise<unknown> {
-  try {
-    return JSON.parse(await readFile(path, "utf8"));
-  } catch {
-    // カタログが無い・壊れているときは window を出さない。会話は止めない。
-    return null;
-  }
-}
-
-function emptyCatalog(): ModelCatalog {
-  return { contextWindow: () => null };
 }
 
 // models-store.json が取得済みカタログの土台で、models.json の modelOverrides が最後に

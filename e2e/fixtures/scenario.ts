@@ -319,6 +319,28 @@ const sessionEntries = [
     firstKeptEntryId: "u2",
     tokensBefore: 48_000,
   },
+  {
+    type: "message",
+    id: "a3",
+    parentId: "c1",
+    timestamp: "2026-01-01T09:00:07.000Z",
+    message: {
+      role: "assistant",
+      content: [
+        { type: "text", text: "空状態の表示とテストを再確認しました。追加の修正はありません。" },
+      ],
+      model: "claude-sonnet-4-5",
+      provider: "anthropic",
+      timestamp: Date.parse("2026-01-01T09:00:07.000Z"),
+      usage: {
+        input: 11_000,
+        output: 1_000,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 12_000,
+      },
+    },
+  },
 ];
 
 const sessionLines = [sessionHeader, ...sessionEntries].map((line) => JSON.stringify(line));

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApp } from "./app";
@@ -1358,6 +1358,68 @@ test("GET /api/panes/:id/chat answers 304 while the session file stays gone", as
       headers: { "if-none-match": gone.headers.get("etag") ?? "" },
     });
     expect(repeated.status).toBe(304);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("GET /api/panes/:id/chat returns 200 for a catalog-only window change and 304 for other models", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "hwc-chat-"));
+  try {
+    const sessions = join(dir, "sessions", "demo");
+    await mkdir(sessions, { recursive: true });
+    const file = join(sessions, "session.jsonl");
+    const lines = [
+      { type: "session", version: 3, id: "session-1" },
+      {
+        type: "message",
+        id: "a1",
+        parentId: null,
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "hello" }],
+          provider: "p",
+          model: "m",
+          usage: { totalTokens: 1_000 },
+        },
+      },
+    ];
+    await writeFile(file, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`);
+    const catalogFile = join(dir, "models-store.json");
+    const catalog = (window: number, other = 100_000) => ({
+      p: {
+        models: [
+          { id: "m", contextWindow: window },
+          { id: "other", contextWindow: other },
+        ],
+      },
+    });
+    await writeFile(catalogFile, JSON.stringify(catalog(100_000)));
+    const store = createFakeStore(chatState);
+    store.setChatSource("w1:p1", { agent: "pi", path: file });
+    const app = createApp({ store, panes: createFakePanes(), chat: createChatClient() });
+    const request = (etag: string | null) =>
+      app.request("/api/panes/w1:p1/chat", { headers: { "if-none-match": etag ?? "" } });
+
+    const first = await request(null);
+    expect(first.status).toBe(200);
+    const before = (await first.json()) as ChatSnapshot;
+    expect(before.context).toEqual({ tokens: 1_000, window: 100_000 });
+    expect((await request(first.headers.get("etag"))).status).toBe(304);
+
+    await writeFile(catalogFile, JSON.stringify(catalog(1_000_000)));
+    const changed = await request(first.headers.get("etag"));
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get("etag")).not.toBe(first.headers.get("etag"));
+    expect(await changed.json()).toMatchObject({
+      context: { tokens: 1_000, window: 1_000_000 },
+      messages: before.messages,
+      model: before.model,
+    });
+    expect((await request(changed.headers.get("etag"))).status).toBe(304);
+
+    await writeFile(catalogFile, JSON.stringify(catalog(1_000_000, 200_000)));
+    expect((await request(changed.headers.get("etag"))).status).toBe(304);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
