@@ -36,6 +36,9 @@ import {
   commandLabel,
   commandSendText,
   commandText,
+  compactAlreadyDone,
+  compactHistoryBlocked,
+  COMPACTED_NOTICE,
   isCompactCommand,
   type PaneCommandHandle,
 } from "./commands";
@@ -656,9 +659,14 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
   // 書きかけの指示が別々のメッセージに分かれてしまう。引用中も同じ理由で出さない。
+  // 圧縮済み（直近の compaction の後ろに発話が無い）なら、もう一度送っても
+  // pi が Already compacted で即失敗するので候補にも出さない。
+  const compactDone = snapshot !== null && compactAlreadyDone(snapshot);
   const candidates =
     attachments.length === 0 && reply === null && compactionRun === null
-      ? commandCandidates(pane, draft, snapshot?.context ?? null)
+      ? commandCandidates(pane, draft, snapshot?.context ?? null).filter(
+          (id) => id !== "compact" || !compactDone,
+        )
       : [];
   const uploading = attachments.some((item) => item.name === null);
   const sendable = canSend({
@@ -919,6 +927,10 @@ export function PaneDetail(props: PaneDetailProps) {
     const text = reply === null ? draft : composeReply(reply, draft);
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
     const compactCommand = attachments.length === 0 && isCompactCommand(text);
+    if (compactCommand && compactDone) {
+      setNotice(COMPACTED_NOTICE);
+      return;
+    }
     const baselineAt = snapshot?.compaction?.at ?? null;
     const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
@@ -988,6 +1000,10 @@ export function PaneDetail(props: PaneDetailProps) {
   // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
     if (sending || replying || compactionRun !== null) return;
+    if (id === "compact" && compactDone) {
+      setNotice(COMPACTED_NOTICE);
+      return;
+    }
     const text = commandSendText(id, draft);
     const baselineAt = snapshot?.compaction?.at ?? null;
     setSending(true);
@@ -1026,6 +1042,10 @@ export function PaneDetail(props: PaneDetailProps) {
   const sendMenuCommand = async (id: CommandId) => {
     const state = commandState.current;
     if (state.sending || state.replying || state.compacting) return;
+    if (id === "compact" && state.snapshot !== null && compactAlreadyDone(state.snapshot)) {
+      setNotice(COMPACTED_NOTICE);
+      return;
+    }
     const baselineAt = state.snapshot?.compaction?.at ?? null;
     const text = commandText(id);
     setSending(true);
@@ -1045,10 +1065,13 @@ export function PaneDetail(props: PaneDetailProps) {
   const menuCommands: PaneCommandHandle = {
     available: (id, currentPane) => {
       const state = commandState.current;
+      const compacted =
+        id === "compact" && state.snapshot !== null && compactAlreadyDone(state.snapshot);
       return (
         !state.sending &&
         !state.replying &&
         !state.compacting &&
+        !compacted &&
         commandAvailable(id, currentPane, state.snapshot?.context ?? null)
       );
     },
@@ -1056,12 +1079,21 @@ export function PaneDetail(props: PaneDetailProps) {
       const state = commandState.current;
       return state.sending || state.replying || state.compacting;
     },
+    compactBlock: () => {
+      const state = commandState.current;
+      if (state.snapshot !== null && compactAlreadyDone(state.snapshot)) return "compacted";
+      if (compactHistoryBlocked(state.snapshot?.context ?? null)) return "history";
+      return null;
+    },
     run: (id) => {
       const state = commandState.current;
+      const compacted =
+        id === "compact" && state.snapshot !== null && compactAlreadyDone(state.snapshot);
       if (
         !state.sending &&
         !state.replying &&
         !state.compacting &&
+        !compacted &&
         commandAvailable(id, state.pane, state.snapshot?.context ?? null)
       ) {
         void sendMenuCommand(id);

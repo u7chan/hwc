@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ChatContext } from "../server/chat/contract";
+import type { ChatContext, ChatSnapshot } from "../server/chat/contract";
 import type { AgentStatus, PaneState } from "../server/herdr/state";
 import {
   AGENT_COMMANDS,
@@ -9,6 +9,8 @@ import {
   commandLabel,
   commandSendText,
   commandText,
+  compactAlreadyDone,
+  compactHistoryBlocked,
   isCommandPane,
   isCompactCommand,
 } from "./commands";
@@ -28,6 +30,40 @@ function pane(agent: string | null, agentStatus: AgentStatus = "idle"): PaneStat
 function context(tokens: number | null): ChatContext {
   return { tokens, window: 200000 };
 }
+
+function snapshot(messages: number, compactionIndex: number | null): ChatSnapshot {
+  return {
+    etag: "e",
+    messages: Array.from({ length: messages }, (_, index) => ({
+      id: `m${index}`,
+      role: "user",
+      text: "x",
+      at: 1,
+    })),
+    model: null,
+    effort: null,
+    truncated: false,
+    context: null,
+    compaction:
+      compactionIndex === null
+        ? null
+        : { at: 1, tokensBefore: null, summary: "so far", index: compactionIndex },
+  };
+}
+
+test("compact is already done when the compaction is after the last message", () => {
+  expect(compactAlreadyDone(snapshot(2, 2))).toBe(true);
+  expect(compactAlreadyDone(snapshot(0, 0))).toBe(true);
+  expect(compactAlreadyDone(snapshot(2, 1))).toBe(false);
+  expect(compactAlreadyDone(snapshot(2, null))).toBe(false);
+});
+
+test("the compact history threshold is exposed for the menu note", () => {
+  expect(compactHistoryBlocked(context(19999))).toBe(true);
+  expect(compactHistoryBlocked(context(20000))).toBe(false);
+  expect(compactHistoryBlocked(context(null))).toBe(false);
+  expect(compactHistoryBlocked(null)).toBe(false);
+});
 
 test("both commands are sent as the string the CLIs read", () => {
   expect(AGENT_COMMANDS.new.text).toBe("/new");

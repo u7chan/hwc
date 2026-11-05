@@ -23,7 +23,13 @@ import { CloseConfirm } from "./CloseConfirm";
 import { CreatePane } from "./CreatePane";
 import { CloseIcon, CollapseIcon, HwcMark, NewSessionIcon, PlusIcon, SettingsIcon } from "./icons";
 import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
-import { commandLabel, isCommandPane, type CommandId, type PaneCommandHandle } from "./commands";
+import {
+  commandLabel,
+  COMPACTED_NOTICE,
+  isCommandPane,
+  type CommandId,
+  type PaneCommandHandle,
+} from "./commands";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import {
@@ -621,9 +627,15 @@ export function App() {
     menuCommandsShown &&
     menuPane !== null &&
     (menuCommands?.available("compact", menuPane) ?? false);
-  // working / 送信中ではなく、compact だけが使えない理由は履歴の小ささ。
-  const compactBlockedByHistory =
-    menuCommandsShown && menuCommands !== null && !menuCommandsBusy && !canRunCompact;
+  const compactBlock = menuCommands?.compactBlock() ?? null;
+  const compactNote =
+    menuCommandsShown && !menuCommandsBusy
+      ? compactBlock === "history"
+        ? "会話が小さいうちは圧縮できません"
+        : compactBlock === "compacted"
+          ? COMPACTED_NOTICE
+          : null
+      : null;
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
     <PaneDetail
@@ -833,9 +845,7 @@ export function App() {
                 <CollapseIcon size={14} />
                 {commandLabel("compact")}
               </button>
-              {compactBlockedByHistory ? (
-                <p class="hwc-menu-note">会話が小さいうちは圧縮できません</p>
-              ) : null}
+              {compactNote === null ? null : <p class="hwc-menu-note">{compactNote}</p>}
             </>
           ) : null}
           <hr class="hwc-menu-separator" />
