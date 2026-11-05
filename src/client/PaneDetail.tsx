@@ -832,6 +832,7 @@ export function PaneDetail(props: PaneDetailProps) {
       .filter((name): name is string => name !== null);
     const text = reply === null ? draft : composeReply(reply, draft);
     const compactCommand = isCompactCommand(text);
+    const baselineAt = snapshot?.compaction?.at ?? null;
     const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
@@ -853,7 +854,7 @@ export function PaneDetail(props: PaneDetailProps) {
       // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
       // 代わりに圧縮中の行を出す。
       if (compactCommand) {
-        markCompaction(snapshot?.compaction?.at ?? null);
+        markCompaction(baselineAt);
       } else {
         setPending((items) => [
           ...items,
@@ -887,6 +888,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const sendCommand = async (id: CommandId) => {
     if (sending || replying) return;
     const text = commandSendText(id, draft);
+    const baselineAt = snapshot?.compaction?.at ?? null;
     setSending(true);
     input.current?.blur();
     setNotice(null);
@@ -894,7 +896,7 @@ export function PaneDetail(props: PaneDetailProps) {
       setPinned(true);
       setChip(null);
       setDraft("");
-      if (id === "compact") markCompaction(snapshot?.compaction?.at ?? null);
+      if (id === "compact") markCompaction(baselineAt);
     } else setNotice(SEND_FAILED_NOTICE);
     setSending(false);
   };
@@ -910,13 +912,14 @@ export function PaneDetail(props: PaneDetailProps) {
   const sendMenuCommand = async (id: CommandId) => {
     const state = commandState.current;
     if (state.sending || state.replying) return;
+    const baselineAt = state.snapshot?.compaction?.at ?? null;
     setSending(true);
     input.current?.blur();
     setNotice(null);
     if (await submitLatest.current(commandText(id), [])) {
       setPinned(true);
       setChip(null);
-      if (id === "compact") markCompaction(state.snapshot?.compaction?.at ?? null);
+      if (id === "compact") markCompaction(baselineAt);
     } else setNotice(SEND_FAILED_NOTICE);
     setSending(false);
   };
