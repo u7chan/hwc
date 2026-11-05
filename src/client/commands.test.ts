@@ -4,10 +4,12 @@ import type { AgentStatus, PaneState } from "../server/herdr/state";
 import {
   AGENT_COMMANDS,
   chipOnInput,
+  commandAvailable,
   commandCandidates,
   commandLabel,
   commandSendText,
   commandText,
+  isCommandPane,
 } from "./commands";
 
 function pane(agent: string | null, agentStatus: AgentStatus = "idle"): PaneState {
@@ -35,7 +37,33 @@ test("both commands are sent as the string the CLIs read", () => {
 
 test("the label says what the command does, not how it is typed", () => {
   expect(commandLabel("new")).toBe("新しいセッション");
-  expect(commandLabel("compact")).toBe("コンパクト");
+  expect(commandLabel("compact")).toBe("会話を圧縮");
+});
+
+test("commands are available only on the CLIs that accept them", () => {
+  for (const agent of ["pi", "claude", "codex", "opencode"]) {
+    const state = pane(agent);
+    expect(isCommandPane(state)).toBe(true);
+    expect(commandAvailable("new", state, context(50000))).toBe(true);
+    expect(commandAvailable("compact", state, context(50000))).toBe(true);
+  }
+  expect(isCommandPane(pane(null))).toBe(false);
+  expect(commandAvailable("new", pane(null), context(50000))).toBe(false);
+});
+
+test("a working agent cannot run a command", () => {
+  expect(commandAvailable("new", pane("pi", "working"), context(50000))).toBe(false);
+  expect(commandAvailable("compact", pane("pi", "working"), context(50000))).toBe(false);
+});
+
+test("compact is unavailable while the history is too small to compact", () => {
+  expect(commandAvailable("compact", pane("pi"), context(19999))).toBe(false);
+  expect(commandAvailable("compact", pane("pi"), context(20000))).toBe(true);
+  // tokens が無いときは判定できないので押せる側に倒す。
+  expect(commandAvailable("compact", pane("pi"), context(null))).toBe(true);
+  expect(commandAvailable("compact", pane("pi"), null)).toBe(true);
+  // new は履歴の大きさに依存しない。
+  expect(commandAvailable("new", pane("pi"), context(0))).toBe(true);
 });
 
 test("a slash without whitespace narrows the candidates", () => {

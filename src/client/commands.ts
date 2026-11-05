@@ -10,7 +10,7 @@ type AgentCommand = { label: string; text: string };
 // 受け付けることを確かめてから 1 行足す。
 export const AGENT_COMMANDS: Readonly<Record<CommandId, AgentCommand>> = {
   new: { label: "新しいセッション", text: "/new" },
-  compact: { label: "コンパクト", text: "/compact" },
+  compact: { label: "会話を圧縮", text: "/compact" },
 };
 
 const COMMAND_IDS: readonly CommandId[] = ["new", "compact"];
@@ -20,6 +20,19 @@ const COMMAND_AGENTS: ReadonlySet<string> = new Set(["pi", "claude", "codex", "o
 
 // pi の keepRecentTokens の既定値の写し。pi 側が変われば追随が要る。
 const COMPACT_MIN_TOKENS = 20000;
+
+// セルの外にあるメニューへ、実行可否と実行だけを渡す。状態は PaneDetail が持つ。
+// メニューを開いた後に SSE や送信で状態が変わっても、最新値で判定できるよう
+// available は現在の pane を受け取り、実行に使う値は PaneDetail 側の ref から読む。
+export type PaneCommandHandle = {
+  available: (id: CommandId, pane: PaneState) => boolean;
+  busy: () => boolean;
+  run: (id: CommandId) => void;
+};
+
+export function isCommandPane(pane: PaneState): boolean {
+  return COMMAND_AGENTS.has(agentGlyph(pane.agent));
+}
 
 export function commandText(id: CommandId): string {
   return AGENT_COMMANDS[id].text;
@@ -47,6 +60,20 @@ export function chipOnInput(chip: CommandId | null): CommandId | null {
   return chip === "compact" ? chip : null;
 }
 
+// compact は履歴が小さいと失敗し、hwc には結果が来ない。閾値未満では押させない。
+// tokens が null（compaction 直後など）は判定できないので押せる側に倒す。
+export function commandAvailable(
+  id: CommandId,
+  pane: PaneState,
+  context: ChatContext | null,
+): boolean {
+  if (pane.agentStatus === "working") return false;
+  if (!isCommandPane(pane)) return false;
+  if (id !== "compact") return true;
+  const tokens = context === null ? null : context.tokens;
+  return tokens === null || tokens >= COMPACT_MIN_TOKENS;
+}
+
 // 空白が入った時点でコマンドではなく本文（`/compact 指示` など）。iOS が先頭を
 // 大文字にしても候補が出るよう、比較は小文字で行う。
 function matchCommands(draft: string): readonly CommandId[] {
@@ -63,10 +90,5 @@ export function commandCandidates(
   draft: string,
   context: ChatContext | null,
 ): readonly CommandId[] {
-  if (pane.agentStatus === "working") return [];
-  if (!COMMAND_AGENTS.has(agentGlyph(pane.agent))) return [];
-  const ids = matchCommands(draft);
-  const tokens = context === null ? null : context.tokens;
-  if (tokens === null || tokens >= COMPACT_MIN_TOKENS) return ids;
-  return ids.filter((id) => id !== "compact");
+  return matchCommands(draft).filter((id) => commandAvailable(id, pane, context));
 }
