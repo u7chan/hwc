@@ -39,6 +39,11 @@ test("model candidates keep only their provider and id", () => {
   }
 });
 
+test("model candidates with namespaced @ IDs remain selectable", () => {
+  const model = { provider: "cloudflare-workers-ai", id: "@cf/meta/llama-3.2-3b-instruct" };
+  expect(toAgentModels({ models: [model] })).toEqual([model]);
+});
+
 test("model-specific creation also covers candidate lookup and session preparation", () => {
   expect(MODEL_CREATE_TIMEOUT_MS).toBeGreaterThan(CREATE_TIMEOUT_MS + 33_000);
 });

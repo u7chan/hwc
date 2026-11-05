@@ -10,6 +10,7 @@ export type Scenario = {
 export const STARTUP_MODELS = [
   { provider: "example", id: "beam-small" },
   { provider: "example", id: "beam-long-name-for-mobile-layout" },
+  { provider: "example", id: "@demo/beam-small" },
 ];
 
 // 実在のユーザー名・リポジトリ名・パスを fixture に写さない。E2E のスクリーンショットは

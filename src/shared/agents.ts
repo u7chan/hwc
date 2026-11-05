@@ -19,7 +19,7 @@ export function isAgentModel(value: unknown): value is AgentModel {
     typeof provider === "string" &&
     /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(provider) &&
     typeof id === "string" &&
-    /^[a-zA-Z0-9][a-zA-Z0-9._/:+-]{0,511}$/.test(id)
+    /^[a-zA-Z0-9@][a-zA-Z0-9@._/:+-]{0,511}$/.test(id)
   );
 }
 

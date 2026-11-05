@@ -2,6 +2,10 @@ import { expect, test } from "bun:test";
 import { createAgentModelsClient, parseOpencodeModels, parsePiModels } from "./agent-models";
 
 const model = { provider: "example", id: "beam" };
+const namespacedModel = {
+  provider: "cloudflare-workers-ai",
+  id: "@cf/meta/llama-3.2-3b-instruct",
+};
 const table = `provider  model  context  max-out  thinking  images
 example   beam   200K     32K      yes       no
 example   beam   200K     32K      yes       no
@@ -12,6 +16,13 @@ const service = { url: new URL("http://127.0.0.1:4096"), authorization: "Basic f
 test("Pi candidates keep the provider identity and collapse duplicate rows", () => {
   expect(parsePiModels(table)).toEqual([model, { provider: "other", id: "beam" }]);
   expect(parsePiModels("No models available. Use /login to sign in.")).toEqual([]);
+});
+
+test("Pi candidates preserve namespaced model IDs starting with @", () => {
+  expect(parsePiModels(table.replaceAll("beam", namespacedModel.id))).toEqual([
+    { provider: "example", id: namespacedModel.id },
+    { provider: "other", id: namespacedModel.id },
+  ]);
 });
 
 test("unrecognized or malformed Pi output is unavailable, not a fabricated model", () => {
@@ -38,6 +49,20 @@ test("OpenCode candidates include only enabled models and keep provider identity
   expect(() => parseOpencodeModels({})).toThrow();
 });
 
+test("enabled Cloudflare Workers AI models stay in the OpenCode candidates", () => {
+  expect(
+    parseOpencodeModels({
+      data: [
+        {
+          providerID: namespacedModel.provider,
+          id: namespacedModel.id,
+          enabled: true,
+        },
+      ],
+    }),
+  ).toEqual([namespacedModel]);
+});
+
 test("Pi startup uses the new pane's directory and a provider-qualified --model", async () => {
   const directories: string[] = [];
   const client = createAgentModelsClient({
@@ -58,32 +83,35 @@ test("an unavailable Pi model is rejected instead of relying on CLI fuzzy matchi
   await expect(client.startArgs("pi", { ...model, id: "bea" }, "/project")).rejects.toThrow();
 });
 
-test("OpenCode selects a model on a new session without changing shared config", async () => {
-  const calls: { path: string; body: unknown }[] = [];
-  const client = createAgentModelsClient({
-    loadService: async () => service,
-    request: async (_service, path, _timeout, body) => {
-      calls.push({ path, body });
-      return path.startsWith("/api/model")
-        ? { data: [{ providerID: "example", id: "beam", enabled: true }] }
-        : { data: { id: "ses_fixture" } };
-    },
-  });
-  expect(await client.startArgs("opencode", model, "/new-project")).toEqual([
-    "--session",
-    "ses_fixture",
-  ]);
-  expect(calls).toEqual([
-    { path: "/api/model?location%5Bdirectory%5D=%2Fnew-project", body: undefined },
-    {
-      path: "/api/session",
-      body: {
-        model: { providerID: "example", id: "beam" },
-        location: { directory: "/new-project" },
+test.each([model, namespacedModel])(
+  "OpenCode starts %j on a new session without changing shared config",
+  async (selected) => {
+    const calls: { path: string; body: unknown }[] = [];
+    const client = createAgentModelsClient({
+      loadService: async () => service,
+      request: async (_service, path, _timeout, body) => {
+        calls.push({ path, body });
+        return path.startsWith("/api/model")
+          ? { data: [{ providerID: selected.provider, id: selected.id, enabled: true }] }
+          : { data: { id: "ses_fixture" } };
       },
-    },
-  ]);
-});
+    });
+    expect(await client.startArgs("opencode", selected, "/new-project")).toEqual([
+      "--session",
+      "ses_fixture",
+    ]);
+    expect(calls).toEqual([
+      { path: "/api/model?location%5Bdirectory%5D=%2Fnew-project", body: undefined },
+      {
+        path: "/api/session",
+        body: {
+          model: { providerID: selected.provider, id: selected.id },
+          location: { directory: "/new-project" },
+        },
+      },
+    ]);
+  },
+);
 
 test("an unavailable OpenCode model does not create a session", async () => {
   const paths: string[] = [];

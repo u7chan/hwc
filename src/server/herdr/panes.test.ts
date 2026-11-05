@@ -424,6 +424,17 @@ test.each(["pi", "opencode"])(
   },
 );
 
+test.each(["pi", "opencode"])(
+  "parseSplitBody accepts namespaced model IDs starting with @ for %s",
+  (agent) => {
+    const model = { provider: "cloudflare-workers-ai", id: "@cf/meta/llama-3.2-3b-instruct" };
+    expect(parseSplitBody({ agent, model })).toEqual({
+      ok: true,
+      value: { name: null, agent, model },
+    });
+  },
+);
+
 test.each(["claude", "codex", null, undefined])(
   "parseSplitBody rejects model overrides for %s",
   (agent) => {
@@ -438,6 +449,11 @@ test.each([
   { provider: "example", id: "--help" },
   { provider: "example", id: "beam; touch file" },
   { provider: "example", id: "beam\nexit" },
+  { provider: "example", id: "@cf/beam; touch file" },
+  { provider: "example", id: "@cf/beam\n" },
+  { provider: "example", id: "@cf/beam\r" },
+  { provider: "example", id: "@cf/beam\u0000" },
+  { provider: "example", id: "@cf/beam$(command)" },
 ])("parseSplitBody rejects malformed model identifiers: %j", (model) => {
   expect(parseSplitBody({ agent: "pi", model }).ok).toBe(false);
 });
