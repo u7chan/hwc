@@ -5,8 +5,10 @@ import {
   type SplitRequest,
 } from "./herdr/panes";
 import { planSplit } from "./herdr/split";
+import { supportsModelSelection } from "../shared/agents";
+import type { AgentModelsClient } from "./agent-models";
 
-type CreationClient = Pick<PaneClient, "layout" | "split" | "startAgent" | "rename">;
+type CreationClient = Pick<PaneClient, "layout" | "split" | "startAgent" | "rename" | "directory">;
 
 type CreatePaneResult =
   | { ok: true; paneId: string }
@@ -17,6 +19,7 @@ export async function createPane(
   panes: CreationClient,
   paneId: string,
   request: SplitRequest,
+  models?: AgentModelsClient,
 ): Promise<CreatePaneResult> {
   const layout = await panes.layout({ paneId });
   const plan = planSplit(layout.cells);
@@ -27,11 +30,19 @@ export async function createPane(
 
   if (request.agent !== null) {
     try {
+      let args: string[] | undefined;
+      if (request.model != null) {
+        if (!models || !supportsModelSelection(request.agent))
+          throw new Error("Model selection is unavailable");
+        const directory = await panes.directory({ paneId: created.paneId });
+        args = await models.startArgs(request.agent, request.model, directory);
+      }
       await panes.startAgent({
         paneId: created.paneId,
         kind: request.agent,
         // 表示名は日本語や空白を許すため、Herdr のエージェント名には使わない。
         name: agentNameForPane(created.paneId),
+        ...(args === undefined ? {} : { args }),
       });
     } catch (failure) {
       // 初回の trust / login 待ちでもエージェント自体は起動している。

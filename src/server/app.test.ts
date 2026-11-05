@@ -160,6 +160,7 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
     stop: async () => {},
     close: async () => {},
     layout: async ({ paneId }) => ({ cells: [{ paneId, width: 240, height: 48 }] }),
+    directory: async () => "/project",
     split: async ({ paneId }) => ({ paneId }),
     startAgent: async () => {},
     rename: async () => {},
@@ -1831,6 +1832,124 @@ function postSplit(app: ReturnType<typeof createApp>, paneId: string, body: unkn
     body: JSON.stringify(body),
   });
 }
+
+test.each(["pi", "opencode"] as const)(
+  "GET /api/panes/:id/models lists %s candidates in the pane's directory",
+  async (agent) => {
+    const seen: unknown[] = [];
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(state),
+      panes: createFakePanes(),
+      models: {
+        list: async (...args) => {
+          seen.push(args);
+          return [{ provider: "example", id: "beam" }];
+        },
+        startArgs: async () => {
+          throw new Error("Reading must not create a session");
+        },
+      },
+    });
+    const response = await app.request(`/api/panes/w1:p1/models?agent=${agent}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ models: [{ provider: "example", id: "beam" }] });
+    expect(seen).toEqual([[agent, "/project"]]);
+  },
+);
+
+test.each(["claude", "codex", "unknown", ""])(
+  "GET /api/panes/:id/models rejects unsupported agent %s",
+  async (agent) => {
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(state),
+      panes: createFakePanes(),
+    });
+    const response = await app.request(`/api/panes/w1:p1/models?agent=${agent}`);
+    expect(response.status).toBe(400);
+  },
+);
+
+test("GET /api/panes/:id/models does not expose upstream errors or paths", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes(),
+    models: {
+      list: async () => {
+        throw new Error("/private/path: credential failure");
+      },
+      startArgs: async () => [],
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/models?agent=pi");
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "models_unavailable" });
+});
+
+test("GET /api/panes/:id/models requires an existing pane and a readable snapshot", async () => {
+  const missing = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes(),
+  });
+  expect((await missing.request("/api/panes/w1:p9/models?agent=pi")).status).toBe(404);
+  const unavailable = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(null, new Error("unavailable")),
+    panes: createFakePanes(),
+  });
+  expect((await unavailable.request("/api/panes/w1:p1/models?agent=pi")).status).toBe(502);
+});
+
+test("POST /api/panes/:id/split passes the chosen model to startup preparation", async () => {
+  const seen: unknown[] = [];
+  const model = { provider: "example", id: "beam" };
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p2" }),
+      startAgent: async (options) => {
+        seen.push(options);
+      },
+    }),
+    models: {
+      list: async () => [model],
+      startArgs: async (agent, selected, directory) => {
+        expect({ agent, selected, directory }).toEqual({
+          agent: "pi",
+          selected: model,
+          directory: "/project",
+        });
+        return ["--model", "example/beam"];
+      },
+    },
+  });
+  const response = await postSplit(app, "w1:p1", { agent: "pi", model });
+  expect(response.status).toBe(200);
+  expect(seen).toEqual([
+    { paneId: "w1:p2", kind: "pi", name: "hwc-w1-p2", args: ["--model", "example/beam"] },
+  ]);
+});
+
+test("POST /api/panes/:id/split rejects a Claude model override before creating anything", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      split: async () => {
+        throw new Error("Must not split");
+      },
+    }),
+  });
+  const response = await postSplit(app, "w1:p1", {
+    agent: "claude",
+    model: { provider: "example", id: "beam" },
+  });
+  expect(response.status).toBe(400);
+});
 
 test("POST /api/panes/:id/split validates the body before loading a snapshot", async () => {
   const app = createApp({

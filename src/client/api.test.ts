@@ -17,9 +17,31 @@ import {
   toCreateError,
   toCreatedPane,
   toPaneRead,
+  toAgentModels,
+  MODEL_CREATE_TIMEOUT_MS,
 } from "./api";
 
 const api = createApiClient("http://localhost");
+
+test("model candidates keep only their provider and id", () => {
+  expect(
+    toAgentModels({ models: [{ provider: "example", id: "beam", secret: "hidden" }] }),
+  ).toEqual([{ provider: "example", id: "beam" }]);
+  expect(toAgentModels({ models: [] })).toEqual([]);
+  for (const body of [
+    null,
+    {},
+    { models: "beam" },
+    { models: [{ id: "beam" }] },
+    { models: [{ provider: "example", id: "--help" }] },
+  ]) {
+    expect(toAgentModels(body)).toBeNull();
+  }
+});
+
+test("model-specific creation also covers candidate lookup and session preparation", () => {
+  expect(MODEL_CREATE_TIMEOUT_MS).toBeGreaterThan(CREATE_TIMEOUT_MS + 33_000);
+});
 
 test("the JSON pane routes expose their media type rejection through RPC", () => {
   type PaneRoutes = (typeof api.api.panes)[":id"];

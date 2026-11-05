@@ -4,6 +4,29 @@ export const AGENT_KINDS = ["pi", "claude", "codex", "opencode"] as const;
 
 export type AgentKind = (typeof AGENT_KINDS)[number];
 
+export type ModelAgentKind = "pi" | "opencode";
+
+export type AgentModel = { provider: string; id: string };
+
+export function supportsModelSelection(agent: unknown): agent is ModelAgentKind {
+  return agent === "pi" || agent === "opencode";
+}
+
+export function isAgentModel(value: unknown): value is AgentModel {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const { provider, id } = value as Partial<AgentModel>;
+  return (
+    typeof provider === "string" &&
+    /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(provider) &&
+    typeof id === "string" &&
+    /^[a-zA-Z0-9][a-zA-Z0-9._/:+-]{0,511}$/.test(id)
+  );
+}
+
+export function modelKey(model: AgentModel): string {
+  return `${model.provider}/${model.id}`;
+}
+
 export const AGENT_LABELS: Record<AgentKind, string> = {
   pi: "Pi",
   claude: "Claude",

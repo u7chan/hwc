@@ -167,15 +167,21 @@ function isLoopback(hostname: string): boolean {
   );
 }
 
-async function requestJson(
+export async function requestJson(
   service: OpencodeService,
   path: string,
   timeoutMs: number,
+  body?: unknown,
 ): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(new URL(path, service.url), {
-      headers: { authorization: service.authorization },
+      method: body === undefined ? "GET" : "POST",
+      headers: {
+        authorization: service.authorization,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {

@@ -3302,6 +3302,7 @@ p.hwc-compaction,
 
 .hwc-create-input {
   width: 100%;
+  min-width: 0;
   min-height: var(--tap);
   padding: 0 var(--space-3);
   border: 1px solid var(--color-control-line);
@@ -3309,6 +3310,12 @@ p.hwc-compaction,
   background: var(--color-raised);
   color: var(--color-text);
   font: inherit;
+  font-size: max(16px, 1em);
+}
+
+.hwc-create-input:disabled {
+  color: var(--color-secondary);
+  cursor: default;
 }
 
 .hwc-create-input:focus-visible {
@@ -3357,6 +3364,14 @@ p.hwc-compaction,
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   line-height: var(--line-body);
+}
+
+.hwc-create-model {
+  margin-top: var(--space-4);
+}
+
+.hwc-create-model .hwc-create-field {
+  margin-bottom: 0;
 }
 
 .hwc-create-actions {

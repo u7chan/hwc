@@ -6,6 +6,7 @@ import { HerdrError } from "./herdr/socket";
 function createFakePanes() {
   const calls: string[] = [];
   const panes = {
+    directory: mock(async (_options: { paneId: string }) => "/project"),
     layout: mock(async (_options: LayoutOptions) => {
       calls.push("layout");
       return {
@@ -51,6 +52,76 @@ test("an unnamed shell needs only the layout and split requests", async () => {
 
   expect(result).toEqual({ ok: true, paneId: "w1:p3" });
   expect(calls).toEqual(["layout", "split"]);
+  expect(panes.directory).not.toHaveBeenCalled();
+});
+
+test.each(["pi", "claude", "codex", "opencode"] as const)(
+  "%s with no model override starts with its own CLI default",
+  async (agent) => {
+    const { panes } = createFakePanes();
+    const models = {
+      list: mock(async () => []),
+      startArgs: mock(async () => []),
+    };
+    expect(await createPane(panes, "w1:p1", { name: null, agent, model: null }, models)).toEqual({
+      ok: true,
+      paneId: "w1:p3",
+    });
+    expect(panes.startAgent).toHaveBeenCalledWith({
+      paneId: "w1:p3",
+      kind: agent,
+      name: "hwc-w1-p3",
+    });
+    expect(panes.directory).not.toHaveBeenCalled();
+    expect(models.list).not.toHaveBeenCalled();
+    expect(models.startArgs).not.toHaveBeenCalled();
+  },
+);
+
+test.each(["pi", "opencode"] as const)(
+  "a new %s pane starts with model-specific arguments",
+  async (agent) => {
+    const { panes } = createFakePanes();
+    const model = { provider: "example", id: "beam" };
+    const models = {
+      list: mock(async () => [model]),
+      startArgs: mock(async () => ["--model", "example/beam"]),
+    };
+    const result = await createPane(panes, "w1:p1", { name: "実装", agent, model }, models);
+    expect(result).toEqual({ ok: true, paneId: "w1:p3" });
+    expect(panes.directory).toHaveBeenCalledWith({ paneId: "w1:p3" });
+    expect(models.startArgs).toHaveBeenCalledWith(agent, model, "/project");
+    expect(panes.startAgent).toHaveBeenCalledWith({
+      paneId: "w1:p3",
+      kind: agent,
+      name: "hwc-w1-p3",
+      args: ["--model", "example/beam"],
+    });
+  },
+);
+
+test("a model preparation failure keeps the named shell and does not start the default model", async () => {
+  const { panes } = createFakePanes();
+  const models = {
+    list: async () => [],
+    startArgs: async () => {
+      throw new Error("unavailable");
+    },
+  };
+  expect(
+    await createPane(
+      panes,
+      "w1:p1",
+      {
+        name: "実装",
+        agent: "pi",
+        model: { provider: "example", id: "beam" },
+      },
+      models,
+    ),
+  ).toEqual({ ok: false, error: "agent_start_failed", paneId: "w1:p3" });
+  expect(panes.startAgent).not.toHaveBeenCalled();
+  expect(panes.rename).toHaveBeenCalledWith({ paneId: "w1:p3", label: "実装" });
 });
 
 test("a named shell is renamed without starting an agent", async () => {
