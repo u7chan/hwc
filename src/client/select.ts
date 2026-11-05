@@ -28,87 +28,6 @@ export function findPane(state: AppState, paneId: string | null): PaneState | nu
   return findPaneRow(state, paneId)?.pane ?? null;
 }
 
-// ペインを別のタブへ移す。同じタブの中なら並び順の入れ替えになる。
-export function movePane(
-  state: AppState,
-  paneId: string,
-  targetTabId: string,
-  targetIndex: number,
-): AppState {
-  let moved: PaneState | null = null;
-  let sourceTabId: string | null = null;
-  let sourceIndex = -1;
-
-  for (const workspace of state.workspaces) {
-    for (const tab of workspace.tabs) {
-      const index = tab.panes.findIndex((pane) => pane.id === paneId);
-      if (index === -1) continue;
-      moved = tab.panes[index];
-      sourceTabId = tab.id;
-      sourceIndex = index;
-    }
-  }
-  if (!moved || !sourceTabId) return state;
-
-  // 同じタブの中で後ろへ動かすときは、自分が抜けた分だけ前へ詰まる。
-  const sameTab = sourceTabId === targetTabId;
-  const insertAt = sameTab && sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
-  const pane = moved;
-  let changed = false;
-
-  const workspaces = state.workspaces.map((workspace) => ({
-    ...workspace,
-    tabs: workspace.tabs.map((tab) => {
-      const without = tab.panes.filter((item) => item.id !== paneId);
-      if (tab.id !== targetTabId) {
-        if (without.length === tab.panes.length) return tab;
-        changed = true;
-        return { ...tab, panes: without };
-      }
-      const next = [...without];
-      next.splice(Math.max(0, Math.min(insertAt, next.length)), 0, pane);
-      changed = true;
-      return { ...tab, panes: next };
-    }),
-  }));
-
-  return changed ? { ...state, workspaces } : state;
-}
-
-// 一覧に並ぶ順（ワークスペース内のタブを横断した順）で、前後のペインへ 1 つ動かす。
-export function movePaneStep(state: AppState, paneId: string, delta: -1 | 1): AppState {
-  for (const workspace of state.workspaces) {
-    const flat = workspace.tabs.flatMap((tab) =>
-      tab.panes.map((pane, index) => ({ pane, tabId: tab.id, index })),
-    );
-    const at = flat.findIndex((item) => item.pane.id === paneId);
-    if (at === -1) continue;
-    const target = flat[at + delta];
-    if (!target) return state;
-    return movePane(state, paneId, target.tabId, target.index + (delta > 0 ? 1 : 0));
-  }
-  return state;
-}
-
-export function canMovePane(state: AppState, paneId: string, delta: -1 | 1): boolean {
-  return movePaneStep(state, paneId, delta) !== state;
-}
-
-// ペインを 1 枚だけ取り除く。空になったタブとワークスペースも一緒に落とす。
-export function removePane(state: AppState, paneId: string): AppState {
-  return {
-    ...state,
-    workspaces: state.workspaces
-      .map((workspace) => ({
-        ...workspace,
-        tabs: workspace.tabs
-          .map((tab) => ({ ...tab, panes: tab.panes.filter((pane) => pane.id !== paneId) }))
-          .filter((tab) => tab.panes.length > 0),
-      }))
-      .filter((workspace) => workspace.tabs.length > 0),
-  };
-}
-
 export function countPanes(state: AppState): number {
   return state.workspaces.reduce(
     (total, workspace) =>
@@ -160,11 +79,6 @@ export function groupWorkspaces(workspaces: readonly WorkspaceState[]): Workspac
   return groups;
 }
 
-export function countGroupPanes(group: WorkspaceGroup, state: AppState): number {
-  const ids = [group.host, ...group.linked].filter((workspace) => workspace !== null);
-  return ids.reduce((total, workspace) => total + countWorkspacePanes(workspace.id, state), 0);
-}
-
 export function countWorkspacePanes(workspaceId: string, state: AppState): number {
   const workspace = state.workspaces.find((item) => item.id === workspaceId);
   if (!workspace) return 0;
@@ -186,19 +100,13 @@ export type PaneContext = {
 
 // 画面上部に出す、いま見ている対象の要約。選択が無いときは null。
 export function findPaneContext(state: AppState, paneId: string | null): PaneContext | null {
-  if (paneId === null) return null;
-  for (const workspace of state.workspaces) {
-    for (const tab of workspace.tabs) {
-      if (tab.panes.some((pane) => pane.id === paneId)) {
-        return {
-          workspaceLabel: workspace.label,
-          tabLabel: tab.label,
-          branch: workspace.branch ?? null,
-        };
-      }
-    }
-  }
-  return null;
+  const row = findPaneRow(state, paneId);
+  if (row === null) return null;
+  return {
+    workspaceLabel: row.workspace.label,
+    tabLabel: row.tab.label,
+    branch: row.workspace.branch ?? null,
+  };
 }
 
 // 端末タイトルの先頭にはエージェント自身の印が付く（`π - hwc` / `OC | title`）。
