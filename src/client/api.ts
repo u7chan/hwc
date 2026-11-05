@@ -10,6 +10,7 @@ import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
 import type { AgentKind } from "../shared/agents";
 import { isAttachmentName } from "../shared/attachments";
+import type { PaneCloseAction } from "../shared/pane-close";
 
 export type OutputRead = PaneRead;
 
@@ -304,9 +305,9 @@ export function closeOutcome(status: number): CloseOutcome {
 export const CLOSE_TIMEOUT_MS = 8_000;
 
 // 失敗も戻り値で返す。呼び出し側は結果の反映を 1 回だけ行えばよい。
-export async function closePane(paneId: string): Promise<CloseOutcome> {
+export async function closePane(paneId: string, action: PaneCloseAction): Promise<CloseOutcome> {
   try {
-    const response = await client.api.panes[":id"].close.$post(paneParam(paneId), {
+    const response = await client.api.panes[":id"][action].$post(paneParam(paneId), {
       headers: { "content-type": "application/json" },
       init: { signal: AbortSignal.timeout(CLOSE_TIMEOUT_MS) },
     });
