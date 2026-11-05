@@ -31,10 +31,12 @@ import {
 import {
   chipOnInput,
   type CommandId,
+  commandAvailable,
   commandCandidates,
   commandLabel,
   commandSendText,
   commandText,
+  type PaneCommandHandle,
 } from "./commands";
 import { useCopy } from "./copy";
 import { readDraft, readReply, storage, writeDraft, writeReply } from "./drafts";
@@ -393,9 +395,9 @@ type PaneDetailProps = {
   branch: string | null;
   waitingMs: number | null;
   // メニューはセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
-  // 中の fixed はセル基準になる。ここではトリガーの位置を渡すだけ。
+  // 中の fixed はセル基準になる。ここではトリガーの位置と、コマンドの実行口を渡す。
   menuOpen: boolean;
-  onOpenMenu: (paneId: string, rect: DOMRect) => void;
+  onOpenMenu: (paneId: string, rect: DOMRect, commands: PaneCommandHandle) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
   onStop: () => Promise<boolean>;
 };
@@ -521,7 +523,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const busy = sending || stopping;
   const shell = isShellPane(pane);
   const placeholder =
-    chip === "compact" ? "コンパクトの指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
+    chip === "compact" ? "圧縮の指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
 
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
@@ -816,6 +818,33 @@ export function PaneDetail(props: PaneDetailProps) {
     setSending(false);
   };
 
+  // メニューからはコマンド文字列だけを送る。書きかけの draft・添付・引用は次の
+  // メッセージのために残す（チップのように draft を指示には使わない）。
+  const sendMenuCommand = async (id: CommandId) => {
+    if (sending || replying) return;
+    setSending(true);
+    input.current?.blur();
+    setNotice(null);
+    if (await onSubmit(commandText(id), [])) {
+      setPinned(true);
+      setChip(null);
+    } else setNotice(SEND_FAILED_NOTICE);
+    setSending(false);
+  };
+
+  // メニューを開くときに渡す。開いた後に状態が変わっても、メニューは閉じるまで
+  // 同じ判断を使う（開いた瞬間の状態で足りる）。
+  const menuCommands: PaneCommandHandle = {
+    available: (id) =>
+      !sending && !replying && commandAvailable(id, pane, snapshot?.context ?? null),
+    busy: () => sending || replying,
+    run: (id) => {
+      if (!sending && !replying && commandAvailable(id, pane, snapshot?.context ?? null)) {
+        void sendMenuCommand(id);
+      }
+    },
+  };
+
   const submit = () => {
     // 添付を持ったまま /compact と打っても、候補にもチップにも流さず本文として送る。
     if (attachments.length === 0) {
@@ -863,7 +892,9 @@ export function PaneDetail(props: PaneDetailProps) {
           aria-label={`${pane.id} のメニュー`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          onClick={(event) => onOpenMenu(pane.id, event.currentTarget.getBoundingClientRect())}
+          onClick={(event) =>
+            onOpenMenu(pane.id, event.currentTarget.getBoundingClientRect(), menuCommands)
+          }
         >
           <MoreIcon />
         </button>

@@ -13,7 +13,7 @@ hwc の入力欄は、書かれた文字列をそのままペインへ送る。B
 - Claude Code と opencode は `Unknown command:` で止める
 - ピッカーを開くコマンド（`/model` など）は、hwc が汎用のキー入力を持たないため、開いたあと GUI から操作も取消もできない。停止の Esc だけは例外（[ADR 0025](0025-stop-working-agent.md)）
 
-GUI で意味のあるのは、ピッカーを開かず、即時実行される「新しいセッション」と「コンパクト」に限られる。4 つの CLI はいずれも `/new` と `/compact` を受け付ける（Claude Code の `/new` は `/clear` の別名、opencode の `/clear` は `/new` の別名、Codex CLI の `/clear` は端末表示も消すため別物）。
+GUI で意味のあるのは、ピッカーを開かず、即時実行される「新しいセッション」と「会話を圧縮」に限られる。4 つの CLI はいずれも `/new` と `/compact` を受け付ける（Claude Code の `/new` は `/clear` の別名、opencode の `/clear` は `/new` の別名、Codex CLI の `/clear` は端末表示も消すため別物）。
 
 引数の扱いはコマンドごとに違う。`/compact` だけは要約の指示を取り（pi の `dist/modes/interactive/interactive-mode.js` は `/compact <指示>` を解釈する）、hwc はこの 1 コマンドの引数だけをチップ経由で組み立てる。
 
@@ -23,12 +23,14 @@ GUI で意味のあるのは、ピッカーを開かず、即時実行される�
 
 - 入力契約は「hwc は入力欄の文字列を解釈しない」のままにする。例外は hwc が存在を知っている `/new` と `/compact` だけで、送信経路は通常の文字列送信と同じ（BFF と Herdr の変更なし）
 - 送る文字列の基底は `src/client/commands.ts` の 1 つの表に固定し、`commands.test.ts` が文字列そのものを見張る。`/compact` だけは入力欄の文字列を後ろに付けて組み立てる純関数（`commandSendText()`）を通す
+- 表示名は「新しいセッション」「会話を圧縮」。`/compact` の結果は履歴の区切りで「圧縮」と呼んでいる（`compactionLabel`）ため、チップ・メニュー・placeholder の語を揃える
+- 詳細の「…」メニューにも同じ 2 コマンドを置く。メニューは入力欄の状態に依存しない経路として bare の `/new` / `/compact` を送り、`draft`・添付・引用は残す。`compact` の指示には使わない（指示付きはチップか直接入力）。表示はコマンド対応 agent のペインだけ、`working` と送信中は無効、`compact` は閾値未満で無効にして理由を 1 行添える
 - 候補は `draft` が `/` で始まり空白を含まず、表の文字列の前方一致（大文字小文字を無視）のときだけ出す。判定は `PaneState`・`draft`・`ChatContext | null` を受け取る純関数にし、DOM なしでテストする。`context` は呼び出し元が `snapshot.context` から渡し、`PaneState` には持たせない（サーバー状態の二重持ちになる）
 - `context.tokens` が閾値 `20000` 未満のときは `compact` を候補から外す。閾値は `commands.ts` の定数 1 箇所に置く。`context` か `tokens` が `null` のとき（compaction 直後など）は判定できないので出し、押せて失敗する側に倒す
 - `compact` のチップを選ぶと入力欄をそのまま指示の入力に使う。文字を打ってもチップは解除しない。指示は `draft` に入れ、指示用の state を増やさない。送信は `draft` が空なら `/compact`、非空なら `/compact <指示>` で、指示は前後の空白を落とし、改行と連続空白を空白 1 個に畳んでから 1 行で送る
 - `compact` のチップ中は `draft` を下書き保存しない。`chip` は state なのでリロードで消えるが `draft` は残り、指示だけが復元されると次回は素の本文として送られてしまう
 - 送信が成功したら `chip` と `draft` を両方空にし、失敗したら両方残す。チップの × は両方消す
-- チップが `compact` のときは placeholder を「コンパクトの指示（任意）」にする。簡略セルでは placeholder を出さない既存規則を変えず、チップのラベルで意味を伝える
+- チップが `compact` のときは placeholder を「圧縮の指示（任意）」にする。簡略セルでは placeholder を出さない既存規則を変えず、チップのラベルで意味を伝える
 - 候補を出すのは `agentGlyph` が `pi` / `claude` / `codex` / `opencode` のペインだけ。`generic` とシェルは TUI のコマンドを持たない
 - `agentStatus === "working"` の間は候補を出さず、チップの送信も無効にする
 - 候補とチップは入力フレーム内の固定行に置く。絶対配置にするとキーボードに隠れる

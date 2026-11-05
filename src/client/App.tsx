@@ -21,8 +21,9 @@ import {
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
 import { CreatePane } from "./CreatePane";
-import { CloseIcon, HwcMark, PlusIcon, SettingsIcon } from "./icons";
+import { CloseIcon, CollapseIcon, HwcMark, NewSessionIcon, PlusIcon, SettingsIcon } from "./icons";
 import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
+import { commandLabel, isCommandPane, type CommandId, type PaneCommandHandle } from "./commands";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import {
@@ -87,8 +88,8 @@ import {
 const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
 const NO_TIMES: ReadonlyMap<string, number> = new Map();
-// 詳細のメニューは見出し + 項目 2 つ + 注記行。位置計算のための目安。
-const DETAIL_MENU_HEIGHT = MENU_HEIGHT + 44;
+// 詳細のメニューは見出し + 項目 4 つ + 区切り + 注記行。位置計算のための目安。
+const DETAIL_MENU_HEIGHT = MENU_HEIGHT + 44 * 4;
 
 // 保存に失敗しても表示は続ける。プライベートモードなどでは localStorage が使えない。
 function readStored(key: string): string | null {
@@ -246,7 +247,9 @@ export function App() {
   );
   // メニューと確認はセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
-  const [menu, setMenu] = useState<({ paneId: string } & MenuPlacement) | null>(null);
+  const [menu, setMenu] = useState<
+    ({ paneId: string; commands: PaneCommandHandle } & MenuPlacement) | null
+  >(null);
   const [closing, setClosing] = useState<Closing | null>(null);
   // 作成ダイアログの対象ペイン。空なら閉じている。
   const [createTarget, setCreateTarget] = useState<string | null>(null);
@@ -414,16 +417,22 @@ export function App() {
     setView({ selectedPaneId: null, expanded });
   };
 
-  const openPaneMenu = (paneId: string, rect: DOMRect) => {
+  const openPaneMenu = (paneId: string, rect: DOMRect, commands: PaneCommandHandle) => {
     const placement = menuPlacement(
       rect,
       { width: window.innerWidth, height: window.innerHeight },
       DETAIL_MENU_HEIGHT,
     );
-    setMenu({ paneId, ...placement });
+    setMenu({ paneId, commands, ...placement });
   };
 
   const closeMenu = () => setMenu(null);
+
+  const runPaneCommand = (id: CommandId) => {
+    if (menu === null) return;
+    setMenu(null);
+    menu.commands.run(id);
+  };
 
   // 名前とエージェントはダイアログで決める。メニューは入口だけ。
   const openCreateDialog = () => {
@@ -602,6 +611,15 @@ export function App() {
   const menuTab =
     state === null || menu === null ? null : (findPaneRow(state, menu.paneId)?.tab ?? null);
   const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
+  const menuPane = state === null || menu === null ? null : findPane(state, menu.paneId);
+  const menuCommands = menu?.commands ?? null;
+  const menuCommandsShown = menuPane !== null && isCommandPane(menuPane);
+  const menuCommandsBusy = menuCommands?.busy() ?? false;
+  const canRunNew = menuCommands?.available("new") ?? false;
+  const canRunCompact = menuCommands?.available("compact") ?? false;
+  // working / 送信中ではなく、compact だけが使えない理由は履歴の小ささ。
+  const compactBlockedByHistory =
+    menuCommandsShown && menuCommands !== null && !menuCommandsBusy && !canRunCompact;
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
     <PaneDetail
@@ -789,6 +807,34 @@ export function App() {
             新しいペイン
           </button>
           {menuFull ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
+          {menuCommandsShown ? (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                class="hwc-menu-item"
+                disabled={!canRunNew}
+                onClick={() => runPaneCommand("new")}
+              >
+                <NewSessionIcon size={14} />
+                {commandLabel("new")}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class="hwc-menu-item"
+                disabled={!canRunCompact}
+                onClick={() => runPaneCommand("compact")}
+              >
+                <CollapseIcon size={14} />
+                {commandLabel("compact")}
+              </button>
+              {compactBlockedByHistory ? (
+                <p class="hwc-menu-note">会話が小さいうちは圧縮できません</p>
+              ) : null}
+            </>
+          ) : null}
+          <hr class="hwc-menu-separator" />
           <button
             type="button"
             role="menuitem"

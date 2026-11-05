@@ -821,6 +821,14 @@ button {
   line-height: 1.4;
 }
 
+/* 壊す操作の前に置く。メニューの項目が増えても、close が別の群だと分かる。 */
+.hwc-menu-separator {
+  height: 0;
+  margin: var(--space-1) 0;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+
 /* 確認ダイアログ。破壊的な操作の手前に一度だけ挟む。 */
 .hwc-dialog-layer {
   position: fixed;
