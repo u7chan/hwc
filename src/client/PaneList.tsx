@@ -1,11 +1,9 @@
 import type { ComponentChildren } from "preact";
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
-import { copyText } from "./copy";
 import {
   AgentGlyphIcon,
   ChevronRightIcon,
-  CopyGlyph,
   MoreIcon,
   PaneIcon,
   RepoIcon,
@@ -29,7 +27,7 @@ import {
   type ListScope,
   type TreeScope,
 } from "./scope";
-import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
+import { MENU_ID } from "./Menu";
 import type { SentPane } from "./sent";
 import { StatusIcon, StatusLabel } from "./StatusLabel";
 import { finishedMs, formatElapsed, workingMs } from "./time";
@@ -43,6 +41,10 @@ type PaneListProps = {
   onSelect: (paneId: string) => void;
   onFocus: (paneId: string) => void;
   onToggle: (groupId: string) => void;
+  openPaneMenuId: string | null;
+  openWorkspaceMenuId: string | null;
+  onPaneMenu: (paneId: string, trigger: HTMLElement) => void;
+  onWorkspaceMenu: (workspaceId: string, trigger: HTMLElement) => void;
   workingSince: ReadonlyMap<string, number>;
   finishedAt: ReadonlyMap<string, number>;
   sent: ReadonlyMap<string, SentPane>;
@@ -247,28 +249,6 @@ function TreePaneList(props: TreePaneListProps) {
 
   const visible = scopeWorkspaces(state.workspaces, scope, selectedPaneId);
 
-  // メニューは行の中に置くと一覧のスクロールで切れる。画面に固定して出す。
-  const [menu, setMenu] = useState<({ paneId: string } & MenuPlacement) | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const openMenu = (event: MouseEvent, paneId: string) => {
-    const target = event.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    setCopied(false);
-    const placement = menuPlacement(
-      rect,
-      { width: window.innerWidth, height: window.innerHeight },
-      MENU_HEIGHT,
-    );
-    setMenu({ paneId, ...placement });
-  };
-
-  const closeMenu = () => setMenu(null);
-
-  const copyId = (paneId: string) => {
-    void copyText(paneId).then((done) => setCopied(done));
-  };
-
   // ブランチはワークスペースの属性。行ごとに引き直さず、先にペイン id へ配る。
   const branchOf = new Map<string, string | null>();
   for (const workspace of state.workspaces) {
@@ -289,28 +269,45 @@ function TreePaneList(props: TreePaneListProps) {
     title?: string;
     status: PaneState["agentStatus"];
     controlsId: string;
+    workspaceId?: string;
   }) {
     const open = expanded.has(props2.id);
+    const workspaceId = props2.workspaceId;
     return (
-      <button
-        type="button"
-        class="hwc-group"
-        data-depth={props2.depth}
-        title={props2.title}
-        aria-expanded={open}
-        aria-controls={props2.controlsId}
-        onClick={toggle(props2.id)}
-      >
-        <span class="hwc-group-icon">{props2.icon}</span>
-        <span class="hwc-group-main">
-          <span class="hwc-group-name">{props2.label}</span>
-          <span class="hwc-group-sub">{props2.sub}</span>
-        </span>
-        <GroupStatus status={props2.status} hidden={open} />
-        <span class="hwc-chevron" data-open={open}>
-          <ChevronRightIcon />
-        </span>
-      </button>
+      <div class="hwc-group-row" data-menu={workspaceId !== undefined}>
+        <button
+          type="button"
+          class="hwc-group"
+          data-depth={props2.depth}
+          title={props2.title}
+          aria-expanded={open}
+          aria-controls={props2.controlsId}
+          onClick={toggle(props2.id)}
+        >
+          <span class="hwc-group-icon">{props2.icon}</span>
+          <span class="hwc-group-main">
+            <span class="hwc-group-name">{props2.label}</span>
+            <span class="hwc-group-sub">{props2.sub}</span>
+          </span>
+          <GroupStatus status={props2.status} hidden={open} />
+          <span class="hwc-chevron" data-open={open}>
+            <ChevronRightIcon />
+          </span>
+        </button>
+        {workspaceId === undefined ? null : (
+          <button
+            type="button"
+            class="hwc-pane-more"
+            aria-label={`${props2.label} のメニュー`}
+            aria-haspopup="menu"
+            aria-expanded={props.openWorkspaceMenuId === workspaceId}
+            aria-controls={MENU_ID}
+            onClick={(event) => props.onWorkspaceMenu(workspaceId, event.currentTarget)}
+          >
+            <MoreIcon />
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -390,8 +387,9 @@ function TreePaneList(props: TreePaneListProps) {
                   class="hwc-pane-more"
                   aria-label={`${pane.id} のメニュー`}
                   aria-haspopup="menu"
-                  aria-expanded={menu?.paneId === pane.id}
-                  onClick={(event) => openMenu(event, pane.id)}
+                  aria-expanded={props.openPaneMenuId === pane.id}
+                  aria-controls={MENU_ID}
+                  onClick={(event) => props.onPaneMenu(pane.id, event.currentTarget)}
                 >
                   <MoreIcon />
                 </button>
@@ -443,6 +441,7 @@ function TreePaneList(props: TreePaneListProps) {
               title: workspace.worktree?.checkoutPath ?? undefined,
               status: workspace.agentStatus,
               controlsId: groupId,
+              workspaceId: workspace.id,
             })
           : null}
         <GroupChildren id={groupId} open={withHeader ? open : true}>
@@ -483,6 +482,7 @@ function TreePaneList(props: TreePaneListProps) {
               title: group.host?.worktree?.repoRoot ?? undefined,
               status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
               controlsId: groupId,
+              workspaceId: group.host?.id,
             })}
             <GroupChildren id={groupId} open={open}>
               {group.host ? renderTabLevel(group.host, 1, false) : null}
@@ -491,20 +491,6 @@ function TreePaneList(props: TreePaneListProps) {
           </section>
         );
       })}
-      {menu ? (
-        <Menu label={`${menu.paneId} の操作`} placement={menu} onClose={closeMenu} closeOnScroll>
-          <p class="hwc-menu-head">{menu.paneId}</p>
-          <button
-            type="button"
-            role="menuitem"
-            class="hwc-menu-item"
-            onClick={() => copyId(menu.paneId)}
-          >
-            <CopyGlyph copied={copied} />
-            {copied ? "コピーしました" : "ペイン ID をコピー"}
-          </button>
-        </Menu>
-      ) : null}
     </>
   );
 }

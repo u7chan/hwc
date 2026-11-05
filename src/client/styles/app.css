@@ -473,7 +473,25 @@ button {
   padding: var(--space-4) var(--space-4) var(--space-4) calc(var(--space-4) + var(--indent, 0px));
 }
 
-.hwc-group:hover,
+.hwc-group-row {
+  display: flex;
+  align-items: center;
+}
+
+.hwc-group-row[data-menu="true"] {
+  padding-right: var(--space-2);
+}
+
+.hwc-group-row .hwc-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.hwc-group-row[data-menu="true"] .hwc-group {
+  padding-right: 0;
+}
+
+.hwc-group-row:hover,
 .hwc-pane:hover {
   background: var(--color-raised);
 }
@@ -648,7 +666,7 @@ button {
   display: flex;
   align-items: center;
   min-height: var(--row-pane);
-  padding-right: var(--space-4);
+  padding-right: var(--space-2);
 }
 
 .hwc-pane-open {
@@ -712,6 +730,11 @@ button {
   color: var(--color-text);
 }
 
+.hwc-list .hwc-pane-more {
+  width: var(--tap);
+  height: var(--tap);
+}
+
 /* ポインタの画面では行に乗ったときだけ出す。触れる画面では常に出す。 */
 @media (hover: hover) {
   .hwc-pane-more {
@@ -721,6 +744,8 @@ button {
   .hwc-pane:hover .hwc-pane-more,
   .hwc-pane:focus-within .hwc-pane-more,
   .hwc-pane[data-current="true"] .hwc-pane-more,
+  .hwc-group-row:hover .hwc-pane-more,
+  .hwc-group-row:focus-within .hwc-pane-more,
   .hwc-pane-more[aria-expanded="true"] {
     opacity: 1;
   }
@@ -736,11 +761,55 @@ button {
 .hwc-menu {
   position: fixed;
   z-index: 21;
-  min-width: 220px;
+  width: max-content;
+  min-width: min(220px, calc(100vw - var(--space-2) * 2));
+  max-width: calc(100vw - var(--space-2) * 2);
+  max-height: calc(100dvh - var(--space-2) * 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-2);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-panel);
   background: var(--color-surface);
+  transform-origin: top right;
+  animation: hwc-menu-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hwc-menu[data-open="false"] {
+  pointer-events: none;
+  animation: hwc-menu-out 160ms ease-in both;
+}
+
+@keyframes hwc-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes hwc-menu-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-menu {
+    animation: none;
+  }
+  .hwc-menu[data-open="false"] {
+    opacity: 0;
+    animation: none;
+  }
 }
 
 .hwc-copy-glyph {
@@ -775,6 +844,34 @@ button {
   color: var(--color-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.hwc-menu-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: 0;
+  padding-right: 0;
+}
+
+.hwc-menu-copy {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-menu-copy:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
 }
 
 .hwc-menu-item {
@@ -807,7 +904,7 @@ button {
   background: transparent;
 }
 
-/* 戻せない操作は色で先に伝える。項目は常に活性（止まったエージェントも畳める）。 */
+/* 最後のペインを保護する場合以外は、止まったエージェントも畳めるようにする。 */
 .hwc-menu-item--danger {
   color: var(--color-danger);
 }
@@ -1016,15 +1113,6 @@ button {
 
 /* 名前の幅を最優先で残す。固定幅の要素で埋まると、実行中の行だけ名前が読めなくなる。 */
 @container (max-width: 320px) {
-  /* 一覧の行のメニューは落とす。ペイン ID は詳細ヘッダからコピーできる。 */
-  .hwc-pane .hwc-pane-more {
-    display: none;
-  }
-
-  .hwc-pane {
-    padding-right: 0;
-  }
-
   .hwc-pane-open {
     gap: var(--space-2);
     padding: var(--space-3) 0 var(--space-3) var(--space-1);
@@ -1037,8 +1125,8 @@ button {
   }
 }
 
-/* 経過時間は実行中の可視化なので、名前が潰れる直前まで残す。 */
-@container (max-width: 200px) {
+/* メニューを残すため、名前が潰れる行だけ経過時間を省く。 */
+@container (max-width: 240px) {
   .hwc-pane-elapsed {
     display: none;
   }
@@ -3502,7 +3590,8 @@ p.hwc-compaction,
 
   .hwc-group {
     min-height: var(--row-pane);
-    padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + var(--indent, 0px));
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
   }
 
   .hwc-back {

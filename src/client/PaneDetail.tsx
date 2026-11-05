@@ -1,5 +1,5 @@
-import { Fragment, type ComponentChildren } from "preact";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { Fragment, type ComponentChildren, type Ref } from "preact";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatCompaction, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
@@ -59,6 +59,7 @@ import {
   TerminalIcon,
 } from "./icons";
 import { Markdown } from "./Markdown";
+import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
 import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
 import { agentGlyph, isShellPane, paneName, type PaneContext } from "./select";
@@ -490,9 +491,10 @@ type PaneDetailProps = {
   branch: string | null;
   waitingMs: number | null;
   // メニューはセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
-  // 中の fixed はセル基準になる。ここではトリガーの位置と、コマンドの実行口を渡す。
+  // 中の fixed はセル基準になる。実行口は一覧から同じペインを操作するときにも使う。
   menuOpen: boolean;
-  onOpenMenu: (paneId: string, rect: DOMRect, commands: PaneCommandHandle) => void;
+  commandRef: Ref<PaneCommandHandle>;
+  onOpenMenu: (paneId: string, trigger: HTMLElement) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
   onStop: () => Promise<boolean>;
 };
@@ -1053,8 +1055,8 @@ export function PaneDetail(props: PaneDetailProps) {
     setSending(false);
   };
 
-  // メニューを開くときに渡す。開いた後に状態が変わっても、実行可否と実行だけを
-  // ref から最新値で読む。available の pane は App が今のスナップショットから渡す。
+  // 一覧の入口からも、詳細が持つ送信中・圧縮中の状態で判定する。
+  // 開いた後に状態が変わっても ref から最新値を読む。
   const menuCommands: PaneCommandHandle = {
     available: (id, currentPane) => {
       const state = commandState.current;
@@ -1082,6 +1084,7 @@ export function PaneDetail(props: PaneDetailProps) {
       }
     },
   };
+  useImperativeHandle(props.commandRef, () => menuCommands);
 
   const submit = () => {
     // 添付を持ったまま /compact と打っても、候補にもチップにも流さず本文として送る。
@@ -1130,9 +1133,8 @@ export function PaneDetail(props: PaneDetailProps) {
           aria-label={`${pane.id} のメニュー`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          onClick={(event) =>
-            onOpenMenu(pane.id, event.currentTarget.getBoundingClientRect(), menuCommands)
-          }
+          aria-controls={MENU_ID}
+          onClick={(event) => onOpenMenu(pane.id, event.currentTarget)}
         >
           <MoreIcon />
         </button>

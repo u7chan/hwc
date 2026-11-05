@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { MENU_GAP, MENU_HEIGHT, MENU_MARGIN, MENU_MIN_WIDTH, menuPlacement } from "./Menu";
+import { MENU_GAP, MENU_MARGIN, MENU_MIN_WIDTH, menuPlacement } from "./Menu";
 
 const viewport = { width: 390, height: 844 };
+const MENU_HEIGHT = 96;
 
 test("the menu sits just below the trigger when there is room", () => {
   const placement = menuPlacement(
@@ -30,8 +31,25 @@ test("the menu moves in when the trigger sits too close to the left edge", () =>
   expect(placement.right).toBe(viewport.width - MENU_MIN_WIDTH - MENU_MARGIN);
 });
 
-test("the menu keeps its right edge on the trigger near the right edge", () => {
+test("the menu leaves a margin at the right edge", () => {
   const placement = menuPlacement({ bottom: 100, right: viewport.width }, viewport, MENU_HEIGHT);
 
-  expect(placement.right).toBe(0);
+  expect(placement.right).toBe(MENU_MARGIN);
+});
+
+test("a menu wider than the minimum uses its measured width", () => {
+  const placement = menuPlacement({ bottom: 100, right: 100 }, viewport, 340, 300);
+
+  expect(placement.right).toBe(viewport.width - 300 - MENU_MARGIN);
+});
+
+test("a tall menu stays below the top margin in a short viewport", () => {
+  const placement = menuPlacement(
+    { bottom: 200, right: 300 },
+    { width: 320, height: 240 },
+    300,
+    304,
+  );
+
+  expect(placement).toEqual({ top: MENU_MARGIN, right: MENU_MARGIN });
 });
