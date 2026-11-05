@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createChatClient } from "./server/chat/pi";
 import { createOpencodeChatClient } from "./server/chat/opencode";
+import { createCodexChatClient } from "./server/chat/codex";
 import { createPaneClient } from "./server/herdr/panes";
 import { createBranchReader } from "./server/git";
 import { createStateStore } from "./server/herdr/state";
@@ -26,6 +27,7 @@ const app = createApp({
   panes: createPaneClient(),
   chat: createChatClient(),
   opencode: createOpencodeChatClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
+  codex: createCodexChatClient(),
   models: createAgentModelsClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   revision,
 });

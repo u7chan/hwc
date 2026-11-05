@@ -4,12 +4,12 @@ export const AGENT_KINDS = ["pi", "claude", "codex", "opencode"] as const;
 
 export type AgentKind = (typeof AGENT_KINDS)[number];
 
-export type ModelAgentKind = "pi" | "opencode";
+export type ModelAgentKind = "pi" | "codex" | "opencode";
 
 export type AgentModel = { provider: string; id: string };
 
 export function supportsModelSelection(agent: unknown): agent is ModelAgentKind {
-  return agent === "pi" || agent === "opencode";
+  return agent === "pi" || agent === "codex" || agent === "opencode";
 }
 
 export function isAgentModel(value: unknown): value is AgentModel {

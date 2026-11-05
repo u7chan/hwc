@@ -154,7 +154,7 @@ test("toAppState drops tabs whose workspace is gone and panes whose tab is gone"
   expect(state.workspaces[0]?.tabs[0]?.panes.map((pane) => pane.id)).toEqual(["w1:p1"]);
 });
 
-test("toAppState marks chat for pi paths and opencode ids", () => {
+test("toAppState marks chat for pi paths and Codex / OpenCode ids", () => {
   const state = toAppState({
     workspaces: [{ workspace_id: "w1" }],
     tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
@@ -194,6 +194,18 @@ test("toAppState marks chat for pi paths and opencode ids", () => {
           value: "ses_abc",
         },
       },
+      {
+        pane_id: "w1:p6",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: { agent: "codex", source: "herdr:codex", kind: "id", value: "thread_demo" },
+      },
+      {
+        pane_id: "w1:p7",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: { agent: "codex", source: "herdr:codex", kind: "path", value: "/a.jsonl" },
+      },
     ],
   });
 
@@ -203,6 +215,8 @@ test("toAppState marks chat for pi paths and opencode ids", () => {
     false,
     false,
     true,
+    true,
+    false,
   ]);
 });
 
@@ -222,33 +236,36 @@ test("the store resolves a chat source by pane id and keeps it out of the state"
   expect(JSON.stringify(store.get())).not.toContain("/sessions/");
 });
 
-test("the store resolves an opencode session id by pane id", async () => {
-  const { store, loads } = createControlledStore();
+test.each(["codex", "opencode"] as const)(
+  "the store resolves a %s session id by pane id",
+  async (agent) => {
+    const { store, loads } = createControlledStore();
 
-  const refresh = store.refresh();
-  loads[0]?.resolve({
-    workspaces: [{ workspace_id: "w1" }],
-    tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
-    panes: [
-      {
-        pane_id: "w1:p1",
-        workspace_id: "w1",
-        tab_id: "w1:t1",
-        agent_session: {
-          agent: "opencode",
-          source: "herdr:opencode",
-          kind: "id",
-          value: "ses_abc",
+    const refresh = store.refresh();
+    loads[0]?.resolve({
+      workspaces: [{ workspace_id: "w1" }],
+      tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
+      panes: [
+        {
+          pane_id: "w1:p1",
+          workspace_id: "w1",
+          tab_id: "w1:t1",
+          agent_session: {
+            agent,
+            source: `herdr:${agent}`,
+            kind: "id",
+            value: "ses_abc",
+          },
         },
-      },
-    ],
-  });
-  await refresh;
+      ],
+    });
+    await refresh;
 
-  expect(store.chatSource("w1:p1")).toEqual({ agent: "opencode", sessionId: "ses_abc" });
-  // セッション id もホスト側の識別子。クライアントへ配る状態には載せない。
-  expect(JSON.stringify(store.get())).not.toContain("ses_abc");
-});
+    expect(store.chatSource("w1:p1")).toEqual({ agent, sessionId: "ses_abc" });
+    // セッション id もホスト側の識別子。クライアントへ配る状態には載せない。
+    expect(JSON.stringify(store.get())).not.toContain("ses_abc");
+  },
+);
 
 test("the store drops a chat source once the pane has no session", async () => {
   const { store, loads } = createControlledStore();

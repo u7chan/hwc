@@ -47,10 +47,10 @@ export type AppState = {
   workspaces: WorkspaceState[];
 };
 
-// 会話を読めるのは pi の path セッションと opencode の id セッション。ここでだけ
-// セッションの在り処を取り出し、AppState には載せない（クライアントにホストのパスや
-// サービス認証を渡さない）。
-export type ChatSource = { agent: "pi"; path: string } | { agent: "opencode"; sessionId: string };
+// セッションの在り処は AppState に載せず、BFF 内だけで解決する。
+export type ChatSource =
+  | { agent: "pi"; path: string }
+  | { agent: "codex" | "opencode"; sessionId: string };
 
 function chatSourceOf(session: HerdrAgentSession | null | undefined): ChatSource | null {
   if (!session) return null;
@@ -59,8 +59,8 @@ function chatSourceOf(session: HerdrAgentSession | null | undefined): ChatSource
   if (session.agent === "pi" && session.kind === "path") {
     return { agent: "pi", path: value };
   }
-  if (session.agent === "opencode" && session.kind === "id") {
-    return { agent: "opencode", sessionId: value };
+  if ((session.agent === "codex" || session.agent === "opencode") && session.kind === "id") {
+    return { agent: session.agent, sessionId: value };
   }
   return null;
 }

@@ -5,7 +5,12 @@ import { join } from "node:path";
 import { isAgentKind } from "../src/shared/agents";
 import { ATTACHED_FILES_OPEN } from "../src/shared/attachments";
 import type { HerdrPane } from "../src/server/herdr/contract";
-import { createScenario } from "./fixtures/scenario";
+import {
+  createScenario,
+  type CodexFixture,
+  STARTUP_MODELS,
+  writeCodexThread,
+} from "./fixtures/scenario";
 import { startFakeOpencode } from "./fake-opencode";
 
 type WireRequest = { id?: string; method?: string; params?: unknown };
@@ -53,12 +58,27 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   const appendUserEntry = async (paneId: string, text: string): Promise<void> => {
     if (text.trim() === "") return;
     const session = findPane(paneId)?.agent_session ?? null;
-    const path = session?.kind === "path" ? session.value : null;
-    if (path === null) return;
     // 添付を持つペインの Enter は常に本文の送信になる（ADR 0018）。添付付きの `/compact` も
     // 本文として送られるので、コマンド扱いは注記が無いときだけ。
     const command = !text.includes(ATTACHED_FILES_OPEN) && COMMAND_TEXT.test(text.trim());
     if (command) return;
+    if (session?.agent === "codex" && session.kind === "id" && session.value) {
+      const path = join(root, "codex", "threads", `${session.value}.json`);
+      const fixture = (await Bun.file(path).json()) as CodexFixture;
+      sendCount += 1;
+      fixture.turns.push({
+        id: `turn_send_${sendCount}`,
+        startedAt: Date.now() / 1000,
+        items: [
+          { type: "userMessage", id: `u${sendCount}`, content: [{ type: "text", text }] },
+          { type: "agentMessage", id: `a${sendCount}`, text: "E2E: Codex の返答です。" },
+        ],
+      });
+      await writeCodexThread(root, session.value, fixture.thread.model, fixture.turns);
+      return;
+    }
+    const path = session?.kind === "path" ? session.value : null;
+    if (path === null) return;
     let raw: string;
     try {
       raw = await readFile(path, "utf8");
@@ -460,16 +480,22 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           send(socket, { id, error: { code: "invalid_params", message: "kind" } });
           return;
         }
-        // Codex はこの環境で起動できない。成功経路を偽装せず、部分成功の画面を E2E で通す。
-        if (kind === "codex") {
-          send(socket, { id, error: { code: "agent_spawn_failed", message: "codex" } });
-          return;
-        }
         const name = typeof params.name === "string" ? params.name : kind;
         const args = Array.isArray(params.args)
           ? params.args.filter((arg): arg is string => typeof arg === "string")
           : [];
         outputs.set(paneId, `$ ${kind}${args.length === 0 ? "" : ` ${args.join(" ")}`}\n`);
+        if (kind === "codex") {
+          const sessionId = `thread_${paneId.replaceAll(":", "_")}`;
+          const model = args[0] === "--model" ? args[1] : STARTUP_MODELS[0]!.id;
+          await writeCodexThread(root, sessionId, model ?? STARTUP_MODELS[0]!.id);
+          pane.agent_session = {
+            agent: "codex",
+            source: "herdr:codex",
+            kind: "id",
+            value: sessionId,
+          };
+        }
         if (kind === "opencode" && args[0] === "--session" && args[1]) {
           pane.agent_session = {
             agent: "opencode",

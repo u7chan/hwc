@@ -1373,44 +1373,55 @@ test("GET /api/panes/:id/chat returns the conversation of the pane session", asy
   expect(seen).toEqual([sessionPath]);
 });
 
-test("GET /api/panes/:id/chat reads an opencode session through the opencode client", async () => {
-  const store = createFakeStore(chatState);
-  store.setChatSource("w1:p1", { agent: "opencode", sessionId: "ses_abc" });
-  const seen: string[] = [];
-  const opencode = createFakeChat({
-    snapshot: async (sessionId) => {
-      seen.push(sessionId);
-      return { ...emptyChat, etag: "opencode" };
-    },
-  });
-  const app = createApp({
-    store,
-    panes: createFakePanes(),
-    chat: createFakeChat({
-      snapshot: async () => {
-        throw new Error("the pi client must not read an opencode session");
+test.each(["codex", "opencode"] as const)(
+  "GET /api/panes/:id/chat reads a %s session through its own client",
+  async (agent) => {
+    const store = createFakeStore(chatState);
+    store.setChatSource("w1:p1", { agent, sessionId: "ses_abc" });
+    const seen: string[] = [];
+    const client = createFakeChat({
+      snapshot: async (sessionId) => {
+        seen.push(sessionId);
+        return { ...emptyChat, etag: agent };
       },
-    }),
-    opencode,
-  });
+    });
+    const app = createApp({
+      store,
+      panes: createFakePanes(),
+      chat: createFakeChat({
+        snapshot: async () => {
+          throw new Error("the pi client must not read another agent's session");
+        },
+      }),
+      [agent]: client,
+    });
 
-  const response = await app.request("/api/panes/w1:p1/chat");
+    const response = await app.request("/api/panes/w1:p1/chat");
 
-  expect(response.status).toBe(200);
-  expect(response.headers.get("etag")).toBe('"opencode"');
-  expect(seen).toEqual(["ses_abc"]);
-});
+    expect(response.status).toBe(200);
+    expect(response.headers.get("etag")).toBe(`"${agent}"`);
+    expect(seen).toEqual(["ses_abc"]);
+    const unchanged = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": `W/"${agent}"` },
+    });
+    expect(unchanged.status).toBe(304);
+    expect(await unchanged.text()).toBe("");
+  },
+);
 
-test("GET /api/panes/:id/chat returns 502 when the opencode client is not configured", async () => {
-  const store = createFakeStore(chatState);
-  store.setChatSource("w1:p1", { agent: "opencode", sessionId: "ses_abc" });
-  const app = createApp({ store, panes: createFakePanes(), chat: createFakeChat() });
+test.each(["codex", "opencode"] as const)(
+  "GET /api/panes/:id/chat returns 502 when the %s client is not configured",
+  async (agent) => {
+    const store = createFakeStore(chatState);
+    store.setChatSource("w1:p1", { agent, sessionId: "ses_abc" });
+    const app = createApp({ store, panes: createFakePanes(), chat: createFakeChat() });
 
-  const response = await app.request("/api/panes/w1:p1/chat");
+    const response = await app.request("/api/panes/w1:p1/chat");
 
-  expect(response.status).toBe(502);
-  expect(await response.json()).toEqual({ error: "chat_unavailable" });
-});
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "chat_unavailable" });
+  },
+);
 
 test("GET /api/panes/:id/chat answers 304 for a matching weak or listed If-None-Match", async () => {
   const app = createChatApp();
@@ -2064,7 +2075,7 @@ function postSplit(app: ReturnType<typeof createApp>, paneId: string, body: unkn
   });
 }
 
-test.each(["pi", "opencode"] as const)(
+test.each(["pi", "codex", "opencode"] as const)(
   "GET /api/panes/:id/models lists %s candidates in the pane's directory",
   async (agent) => {
     const seen: unknown[] = [];
@@ -2089,7 +2100,7 @@ test.each(["pi", "opencode"] as const)(
   },
 );
 
-test.each(["claude", "codex", "unknown", ""])(
+test.each(["claude", "unknown", ""])(
   "GET /api/panes/:id/models rejects unsupported agent %s",
   async (agent) => {
     const app = createApp({
@@ -2134,36 +2145,38 @@ test("GET /api/panes/:id/models requires an existing pane and a readable snapsho
   expect((await unavailable.request("/api/panes/w1:p1/models?agent=pi")).status).toBe(502);
 });
 
-test("POST /api/panes/:id/split passes the chosen model to startup preparation", async () => {
-  const seen: unknown[] = [];
-  const model = { provider: "example", id: "beam" };
-  const app = createApp({
-    chat: createFakeChat(),
-    store: createFakeStore(state),
-    panes: createFakePanes({
-      split: async () => ({ paneId: "w1:p2" }),
-      startAgent: async (options) => {
-        seen.push(options);
+test.each(["pi", "codex"] as const)(
+  "POST /api/panes/:id/split passes the chosen %s model to startup preparation",
+  async (kind) => {
+    const seen: unknown[] = [];
+    const model = { provider: "example", id: "beam" };
+    const args = ["--model", kind === "pi" ? "example/beam" : "beam"];
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(state),
+      panes: createFakePanes({
+        split: async () => ({ paneId: "w1:p2" }),
+        startAgent: async (options) => {
+          seen.push(options);
+        },
+      }),
+      models: {
+        list: async () => [model],
+        startArgs: async (agent, selected, directory) => {
+          expect({ agent, selected, directory }).toEqual({
+            agent: kind,
+            selected: model,
+            directory: "/project",
+          });
+          return args;
+        },
       },
-    }),
-    models: {
-      list: async () => [model],
-      startArgs: async (agent, selected, directory) => {
-        expect({ agent, selected, directory }).toEqual({
-          agent: "pi",
-          selected: model,
-          directory: "/project",
-        });
-        return ["--model", "example/beam"];
-      },
-    },
-  });
-  const response = await postSplit(app, "w1:p1", { agent: "pi", model });
-  expect(response.status).toBe(200);
-  expect(seen).toEqual([
-    { paneId: "w1:p2", kind: "pi", name: "hwc-w1-p2", args: ["--model", "example/beam"] },
-  ]);
-});
+    });
+    const response = await postSplit(app, "w1:p1", { agent: kind, model });
+    expect(response.status).toBe(200);
+    expect(seen).toEqual([{ paneId: "w1:p2", kind, name: "hwc-w1-p2", args }]);
+  },
+);
 
 test("POST /api/panes/:id/split rejects a Claude model override before creating anything", async () => {
   const app = createApp({

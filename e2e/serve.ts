@@ -11,6 +11,7 @@ process.env.HWC_REVISION = "e2e";
 process.env.HWC_NO_OPEN = "1";
 process.env.PATH = `${join(fake.root, "bin")}:${process.env.PATH ?? ""}`;
 process.env.PI_CODING_AGENT_DIR = join(fake.root, "agent");
+process.env.CODEX_HOME = join(fake.root, "codex");
 process.env.HOST = "127.0.0.1";
 process.env.PORT ??= "31000";
 
