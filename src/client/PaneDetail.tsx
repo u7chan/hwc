@@ -312,12 +312,14 @@ function ChatLog(props: {
   snapshot: ChatSnapshot;
   replying: boolean;
   compacting: boolean;
+  stopping: boolean;
   waitingMs: number | null;
   copiedId: string | null;
   expandable: boolean;
   compactionDurationMs: number | null;
   compactionElapsedMs: number | null;
   compactionEcho: { text: string; at: number; completedAt: number | null } | null;
+  onCancelCompaction: () => void;
   onCopy: (id: string, text: string) => void;
   pending: ChatMessage[];
 }) {
@@ -384,7 +386,6 @@ function ChatLog(props: {
   )
     return <ChatEmpty />;
   const waiting = props.compacting ? props.compactionElapsedMs : props.waitingMs;
-
   return (
     <ol class="hwc-chat">
       {compactionBlock !== null && compactionAt === 0 ? compactionBlock : null}
@@ -425,7 +426,17 @@ function ChatLog(props: {
               <span />
             </span>
             {props.compacting ? (
-              <span class="hwc-compaction-pending">会話を圧縮しています</span>
+              <>
+                <span class="hwc-compaction-pending">会話を圧縮しています</span>
+                <button
+                  type="button"
+                  class="hwc-compaction-cancel"
+                  disabled={props.stopping}
+                  onClick={props.onCancelCompaction}
+                >
+                  {props.stopping ? "中断中" : "中断"}
+                </button>
+              </>
             ) : null}
             {waiting === null ? null : (
               <span class="hwc-msg-elapsed">{formatElapsed(waiting)}</span>
@@ -732,11 +743,12 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 最新が見えている間だけ追従する。読み返しているときは勝手に動かさない。
   // 失敗の notice はメッセージ領域を縮めるので、出たときも追従し直す。
-  // 返信ボタンを出している間は、選択を流さないよう追従しない。
+  // 圧縮の吹き出しと進捗行は chat の末尾にローカルで足すため、content が変わらない
+  // 間も追従できるよう compactionRun / compactionEcho も依存に入れる。
   useEffect(() => {
     const element = scroller.current;
     if (element && atBottom && !quoting.current) element.scrollTop = element.scrollHeight;
-  }, [content, replying, atBottom, pendingMessages.length, notice]);
+  }, [content, replying, atBottom, pendingMessages.length, notice, compactionRun, compactionEcho]);
 
   // 画像の読み込みや入力欄の伸びで高さが後から変わっても、最新を見ている間は底に留める。
   // 画像の load は bubble しないので capture で拾い、領域の伸縮は ResizeObserver で拾う。
@@ -958,6 +970,20 @@ export function PaneDetail(props: PaneDetailProps) {
     setStopping(false);
   };
 
+  // 手動 compaction は Herdr の working にならないため、失敗しても agent_status から
+  // 判別できない。10 分の上限だけに頼らず、進捗行から Esc を送ってローカルの開始記録を
+  // 畳めるようにする。
+  const cancelCompaction = async () => {
+    if (stopping) return;
+    setStopping(true);
+    setNotice(null);
+    if (await onStop()) {
+      setCompactionRun(null);
+      setCompactionEcho(null);
+    } else setNotice(STOP_FAILED_NOTICE);
+    setStopping(false);
+  };
+
   // /new は user 発話を残さないので、送信中バブルを積むと最大 60 秒残る。
   // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
@@ -1138,11 +1164,13 @@ export function PaneDetail(props: PaneDetailProps) {
                 snapshot={body.snapshot}
                 replying={replying}
                 compacting={compactionRun !== null}
+                stopping={stopping}
                 waitingMs={waitingMs}
                 copiedId={copiedId}
                 expandable={!compact}
                 compactionElapsedMs={compactionElapsedMs}
                 compactionEcho={compactionEcho}
+                onCancelCompaction={() => void cancelCompaction()}
                 compactionDurationMs={
                   compactionDuration !== null &&
                   compactionDuration.at === body.snapshot.compaction?.at

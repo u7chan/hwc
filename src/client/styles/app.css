@@ -2524,6 +2524,28 @@ p.hwc-compaction,
   font-size: var(--text-secondary);
 }
 
+/* 失敗を観測できない圧縮を、利用者がローカルに畳むための逃げ道。 */
+.hwc-compaction-cancel {
+  min-height: var(--space-6);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-compaction-cancel:hover {
+  background: var(--color-raised);
+}
+
+.hwc-compaction-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* 返答までの時間は、時刻と区別できるよう等幅で添える。 */
 .hwc-msg-elapsed {
   font-family: var(--font-mono);
