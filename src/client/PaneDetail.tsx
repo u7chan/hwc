@@ -722,8 +722,8 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   // ファイルのドラッグだけを扱う。テキストやページ内の要素のドラッグは既定動作のまま。
-  const droppableFiles = (transfer: DataTransfer | null): DataTransfer | null => {
-    if (!pane.chat || transfer === null || !transfer.types.includes("Files")) return null;
+  const fileTransfer = (transfer: DataTransfer | null): DataTransfer | null => {
+    if (transfer === null || !transfer.types.includes("Files")) return null;
     return transfer;
   };
 
@@ -990,15 +990,17 @@ export function PaneDetail(props: PaneDetailProps) {
           submit();
         }}
         onDragEnter={(event) => {
-          if (droppableFiles(event.dataTransfer) === null) return;
+          if (!pane.chat || fileTransfer(event.dataTransfer) === null) return;
           dragDepth.current += 1;
           setDropping(true);
         }}
         onDragOver={(event) => {
-          const transfer = droppableFiles(event.dataTransfer);
+          const transfer = fileTransfer(event.dataTransfer);
           if (transfer === null) return;
+          // 添付を受け付けないペインでもファイルを開かせない。ただし落とせる場所では
+          // ないので、copy のカーソルは出さない。
           event.preventDefault();
-          transfer.dropEffect = "copy";
+          transfer.dropEffect = pane.chat ? "copy" : "none";
         }}
         onDragLeave={() => {
           if (dragDepth.current === 0) return;
@@ -1006,12 +1008,13 @@ export function PaneDetail(props: PaneDetailProps) {
           if (dragDepth.current === 0) setDropping(false);
         }}
         onDrop={(event) => {
-          const transfer = droppableFiles(event.dataTransfer);
+          const transfer = fileTransfer(event.dataTransfer);
           if (transfer === null) return;
           // 画像以外のファイルもアップロードせず、ブラウザに開かせもしない。
           event.preventDefault();
           dragDepth.current = 0;
           setDropping(false);
+          if (!pane.chat) return;
           takeImages(dropActionFrom(transfer.files));
         }}
       >
