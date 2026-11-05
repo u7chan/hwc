@@ -41,13 +41,15 @@ test("the label says what the command does, not how it is typed", () => {
   expect(commandLabel("compact")).toBe("会話を圧縮");
 });
 
-test("a typed compact command is recognized with or without an instruction", () => {
+test("a typed compact command is recognized the same way pi parses it", () => {
   expect(isCompactCommand("/compact")).toBe(true);
+  expect(isCompactCommand(" /compact ")).toBe(true);
   expect(isCompactCommand("/compact focus on the API")).toBe(true);
-  expect(isCompactCommand("/compact\n続きをまとめる")).toBe(true);
+  // pi は改行やタブをコマンドの区切りにしない。末尾の空白だけは trim で落ちる。
+  expect(isCompactCommand("/compact\n続きをまとめる")).toBe(false);
+  expect(isCompactCommand("/compact\t続きをまとめる")).toBe(false);
   expect(isCompactCommand("/compaction")).toBe(false);
   expect(isCompactCommand("/compactfoo")).toBe(false);
-  expect(isCompactCommand(" /compact")).toBe(false);
   expect(isCompactCommand("/new")).toBe(false);
 });
 

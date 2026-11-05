@@ -18,7 +18,7 @@ export type FakeHerdr = {
 const MAX_MESSAGE_CHARS = 1024 * 1024;
 
 // 会話を残さない（または履歴を置き換える）コマンドは、user メッセージとして追記しない。
-const COMMAND_TEXT = /^\/(?:new|compact)(?:\s|$)/;
+const COMMAND_TEXT = /^\/(?:new|compact)(?: |$)/;
 
 // 実 Herdr のソケットに触れず、E2E で使う架空の状態だけを返す。プロトコルは BFF が
 // 実際に使う範囲に絞り、本番コードのソケット経路をそのまま通す。
@@ -300,7 +300,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         outputs.set(paneId, `${outputs.get(paneId) ?? ""}${text}\n`);
         revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
         const compact =
-          !text.includes(ATTACHED_FILES_OPEN) && /^\/compact(?:\s|$)/.test(text.trim());
+          !text.includes(ATTACHED_FILES_OPEN) && /^\/compact(?: |$)/.test(text.trim());
         if (compact) {
           setAgentStatus(paneId, "working");
           send(socket, { id, result: { type: "ok" } });

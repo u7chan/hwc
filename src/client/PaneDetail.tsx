@@ -831,7 +831,8 @@ export function PaneDetail(props: PaneDetailProps) {
       .map((item) => item.name)
       .filter((name): name is string => name !== null);
     const text = reply === null ? draft : composeReply(reply, draft);
-    const compactCommand = isCompactCommand(text);
+    // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
+    const compactCommand = attachments.length === 0 && isCompactCommand(text);
     const baselineAt = snapshot?.compaction?.at ?? null;
     const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
