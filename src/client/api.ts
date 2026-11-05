@@ -8,7 +8,12 @@ import type {
 } from "../server/chat/contract";
 import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
-import type { AgentKind } from "../shared/agents";
+import {
+  type AgentKind,
+  type AgentModel,
+  type ModelAgentKind,
+  isAgentModel,
+} from "../shared/agents";
 import { isAttachmentName } from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
 
@@ -318,7 +323,35 @@ export async function closePane(paneId: string, action: PaneCloseAction): Promis
   }
 }
 
-export type CreatePaneRequest = { name: string | null; agent: AgentKind | null };
+export type CreatePaneRequest = {
+  name: string | null;
+  agent: AgentKind | null;
+  model: AgentModel | null;
+};
+
+export function toAgentModels(value: unknown): AgentModel[] | null {
+  if (typeof value !== "object" || value === null) return null;
+  const models = (value as { models?: unknown }).models;
+  if (!Array.isArray(models) || !models.every(isAgentModel)) return null;
+  return models.map(({ provider, id }) => ({ provider, id }));
+}
+
+export async function readAgentModels(
+  paneId: string,
+  agent: ModelAgentKind,
+  signal: AbortSignal,
+): Promise<AgentModel[] | null> {
+  try {
+    const input = { ...paneParam(paneId), query: { agent } };
+    const response = await client.api.panes[":id"].models.$get(input, {
+      init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
+    });
+    if (!response.ok) return null;
+    return toAgentModels(await response.json());
+  } catch {
+    return null;
+  }
+}
 
 export type CreatePaneFailure =
   | "agent_start_failed"
@@ -365,11 +398,16 @@ export function toCreateError(value: unknown): { error: CreatePaneFailure; paneI
 // クライアントだけ諦めて、再試行で 2 枚目を作ってしまう。
 export const CREATE_TIMEOUT_MS = 65_000;
 
+// モデル指定時は作成済みペインの cwd と候補を確認し、OpenCode はセッションも作る。
+export const MODEL_CREATE_TIMEOUT_MS = 100_000;
+
 export async function createPane(
   paneId: string,
   request: CreatePaneRequest,
 ): Promise<CreatePaneOutcome> {
-  const signal = AbortSignal.timeout(CREATE_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(
+    request.model === null ? CREATE_TIMEOUT_MS : MODEL_CREATE_TIMEOUT_MS,
+  );
   try {
     const input = { ...paneParam(paneId), json: request };
     const response = await client.api.panes[":id"].split.$post(input, {

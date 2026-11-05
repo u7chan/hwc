@@ -17,7 +17,7 @@ Herdr の `agent.start` は既存のシェルペインに `{ pane_id, kind, name
 - ダイアログはペイン名（任意、80 文字まで、前後の空白は落とす）と、次の 2 タブを持つ
   - 「エージェント」: Pi → Claude → Codex → OpenCode の 2 列カード。既定は Pi。カードは Provider アイコン + ラベルで、テーマピッカーと同じ部品を使う
   - 「シェル」: エージェントを起動せず、名前だけ付けたシェルペインを作る
-- API は `POST /api/panes/:id/split` の body に `{ name?: string | null, agent?: kind | null }` を取る。分割位置と 4 枚上限は ADR 0026 のまま
+- API は `POST /api/panes/:id/split` の body に `{ name?: string | null, agent?: kind | null }` を取る。モデル指定による拡張と、そのときの起動引数・期限は [ADR 0030](0030-new-pane-model.md) に従う。分割位置と 4 枚上限は ADR 0026 のまま
 - 作成は 分割 → `agent.start` → `pane.rename` の順。エージェント名は Herdr の制約に合わせて `hwc-<paneId>` を自動で付ける（例: `hwc-w1-p4`）。ユーザーのペイン名は label にだけ使い、日本語や空白も許す。cwd は指定せず Herdr の `terminal.new_cwd` に任せ、`pane.split` の focus は既定の false のまま
 - `agent.start` は `timeout_ms` 30 秒、ソケットは 35 秒、クライアントは 65 秒で切る。分割直後は Herdr が `agent_pane_busy` を返すので、シェルが準備できるまで最大 5 秒・150ms 間隔でリトライする。クライアントの期限切れは、ペインができているか確認できないため、ダイアログを「閉じる」にして再送させない。期限切れの判定は reject の名前ではなく AbortSignal の aborted を使う（WebKit は中断された fetch を AbortError で返すため）。送信中はスピナーと「起動中…」/「作成中…」を出し、ダイアログを閉じられず二重送信もできない
 - エージェント起動に失敗したら、分割済みのペインはシェルとして残す。API は `502 { error, paneId }` の部分成功を返し、ダイアログにエラーと「閉じる」を出す。分割自体の失敗はペインが無いので、ダイアログにエラーを出して再試行できる

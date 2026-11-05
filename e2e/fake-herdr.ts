@@ -6,6 +6,7 @@ import { isAgentKind } from "../src/shared/agents";
 import { ATTACHED_FILES_OPEN } from "../src/shared/attachments";
 import type { HerdrPane } from "../src/server/herdr/contract";
 import { createScenario } from "./fixtures/scenario";
+import { startFakeOpencode } from "./fake-opencode";
 
 type WireRequest = { id?: string; method?: string; params?: unknown };
 
@@ -26,6 +27,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   const root = await mkdtemp(join(tmpdir(), "hwc-e2e-"));
   const socketPath = join(root, "herdr.sock");
   const scenario = await createScenario(root);
+  const opencode = await startFakeOpencode(root);
   const snapshot = structuredClone(scenario.snapshot);
   const outputs = new Map(Object.entries(scenario.outputs));
   const revisions = new Map<string, number>();
@@ -397,6 +399,17 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         broadcast("pane.focused", { pane_id: paneId });
         return;
       }
+      case "pane.get": {
+        const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
+        const pane = findPane(paneId);
+        send(
+          socket,
+          pane === null
+            ? { id, error: { code: "pane_not_found", message: paneId } }
+            : { id, result: { type: "pane_info", pane } },
+        );
+        return;
+      }
       case "pane.layout": {
         const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
         const result = layout(paneId);
@@ -453,6 +466,18 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           return;
         }
         const name = typeof params.name === "string" ? params.name : kind;
+        const args = Array.isArray(params.args)
+          ? params.args.filter((arg): arg is string => typeof arg === "string")
+          : [];
+        outputs.set(paneId, `$ ${kind}${args.length === 0 ? "" : ` ${args.join(" ")}`}\n`);
+        if (kind === "opencode" && args[0] === "--session" && args[1]) {
+          pane.agent_session = {
+            agent: "opencode",
+            source: "herdr:opencode",
+            kind: "id",
+            value: args[1],
+          };
+        }
         // 起動待ちのスピナーを画面で確かめられるよう、少しだけ待つ。実 Herdr では
         // エージェントの TUI が準備できるまで待つ時間に相当する。
         await new Promise((resolve) => setTimeout(resolve, 400));
@@ -478,7 +503,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           result: {
             type: "agent_started",
             agent: { pane_id: paneId, agent: kind, name },
-            argv: [],
+            argv: [kind, ...args],
           },
         });
         broadcast("pane.updated", { pane_id: paneId });
@@ -541,6 +566,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
       timers.clear();
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));
+      opencode.close();
       await rm(root, { recursive: true, force: true });
     },
   };

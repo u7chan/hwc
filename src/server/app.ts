@@ -32,6 +32,8 @@ import {
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
+import { supportsModelSelection } from "../shared/agents";
+import type { AgentModelsClient } from "./agent-models";
 import { HerdrError } from "./herdr/socket";
 
 // Bun.serve は 10 秒間何も書かれない chunked 応答を打ち切る。状態が変わらない間も接続を
@@ -55,6 +57,7 @@ export function createApp(options: {
   // opencode はローカルサービスの API から読む。サービスを読めない構成でも、ペインの
   // 一覧や端末出力は使えるようにする。
   opencode?: SessionChatClient;
+  models?: AgentModelsClient;
   revision?: string;
   sseHeartbeatMs?: number;
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
@@ -65,6 +68,7 @@ export function createApp(options: {
     panes,
     chat,
     opencode,
+    models,
     revision = "dev",
     sseHeartbeatMs = SSE_HEARTBEAT_MS,
     attachmentsRoot = defaultAttachmentsRoot(),
@@ -183,6 +187,21 @@ export function createApp(options: {
 
   return new Hono()
     .get("/api/health", (c) => c.json({ ok: true, service: "hwc", revision }))
+    .get("/api/panes/:id/models", async (c) => {
+      const agent = c.req.query("agent");
+      if (!supportsModelSelection(agent)) return c.json({ error: "invalid_request" }, 400);
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+      const paneId = c.req.param("id");
+      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      try {
+        if (!models) return c.json({ error: "models_unavailable" }, 502);
+        const directory = await panes.directory({ paneId });
+        return c.json({ models: await models.list(agent, directory) });
+      } catch {
+        return c.json({ error: "models_unavailable" }, 502);
+      }
+    })
     .get("/api/state", async (c) => {
       const state = await current();
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
@@ -375,7 +394,7 @@ export function createApp(options: {
       if (tab.panes.length >= MAX_PANES_PER_TAB) return c.json({ error: "pane_limit" }, 409);
 
       try {
-        const result = await createPane(panes, paneId, request.value);
+        const result = await createPane(panes, paneId, request.value, models);
         if (!result.ok) {
           if (result.error === "pane_limit") return c.json({ error: result.error }, 409);
           return c.json({ error: result.error, paneId: result.paneId }, 502);

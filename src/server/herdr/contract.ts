@@ -1,3 +1,5 @@
+import { isAbsolute } from "node:path";
+
 export type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
 
 export type HerdrSnapshot = {
@@ -260,4 +262,18 @@ export function parsePaneSplit(value: unknown): { paneId: string } {
 
   const pane = expectRecord(record.pane, "pane_info.pane");
   return { paneId: expectId(pane.pane_id, "pane_info.pane.pane_id") };
+}
+
+export function parsePaneDirectory(value: unknown, paneId: string): string {
+  const record = expectRecord(value, "pane_info");
+  const pane = expectRecord(record.pane, "pane_info.pane");
+  if (
+    record.type !== "pane_info" ||
+    pane.pane_id !== paneId ||
+    typeof pane.cwd !== "string" ||
+    !isAbsolute(pane.cwd)
+  ) {
+    throw new Error("pane_info must contain the requested pane and its absolute cwd");
+  }
+  return pane.cwd;
 }

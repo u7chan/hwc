@@ -1,9 +1,16 @@
 import { isAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
-import { type AgentKind, isAgentKind } from "../../shared/agents";
+import {
+  type AgentKind,
+  type AgentModel,
+  isAgentKind,
+  isAgentModel,
+  supportsModelSelection,
+} from "../../shared/agents";
 import {
   type PaneLayout,
   type PaneRead,
   parsePaneLayout,
+  parsePaneDirectory,
   parsePaneRead,
   parsePaneSplit,
 } from "./contract";
@@ -31,7 +38,11 @@ export type PaneOutput = PaneRead;
 // ペイン名は Herdr のラベルと同じ上限に合わせる。空文字は「名前なし」として null にする。
 export const MAX_PANE_NAME = 80;
 
-export type SplitRequest = { name: string | null; agent: AgentKind | null };
+export type SplitRequest = {
+  name: string | null;
+  agent: AgentKind | null;
+  model?: AgentModel | null;
+};
 
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
 
@@ -53,6 +64,7 @@ export type AgentStartOptions = {
   paneId: string;
   kind: AgentKind;
   name: string;
+  args?: string[];
   timeoutMs?: number;
 };
 
@@ -73,6 +85,7 @@ export type PaneClient = {
   close: (options: CloseOptions) => Promise<void>;
   exit: (options: CloseOptions) => Promise<void>;
   layout: (options: LayoutOptions) => Promise<PaneLayout>;
+  directory: (options: { paneId: string }) => Promise<string>;
   split: (options: SplitOptions) => Promise<{ paneId: string }>;
   startAgent: (options: AgentStartOptions) => Promise<void>;
   rename: (options: RenameOptions) => Promise<void>;
@@ -100,9 +113,14 @@ export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
     return { ok: false, status: 400, error: "agent must be one of pi, claude, codex, opencode" };
   }
 
+  const model = record.model ?? null;
+  if (model !== null && (!supportsModelSelection(rawAgent) || !isAgentModel(model))) {
+    return { ok: false, status: 400, error: "model must identify a Pi or OpenCode model" };
+  }
+
   return {
     ok: true,
-    value: { name: name === "" ? null : name, agent: rawAgent == null ? null : rawAgent },
+    value: { name: name === "" ? null : name, agent: rawAgent == null ? null : rawAgent, model },
   };
 }
 
@@ -258,6 +276,10 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
       const result = await call<unknown>("pane.layout", { pane_id: paneId }, { path });
       return parsePaneLayout(result);
     },
+    async directory({ paneId }) {
+      const result = await call<unknown>("pane.get", { pane_id: paneId }, { path });
+      return parsePaneDirectory(result, paneId);
+    },
     async split({ paneId, direction, ratio }) {
       // focus は既定の false のまま。TUI を見ている人のフォーカスを奪わない。
       // cwd も指定せず、Herdr の terminal.new_cwd を分割元に追随させる。
@@ -268,10 +290,16 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
       );
       return parsePaneSplit(result);
     },
-    async startAgent({ paneId, kind, name, timeoutMs = 30_000 }) {
+    async startAgent({ paneId, kind, name, args, timeoutMs = 30_000 }) {
       // エージェントの起動は TUI の準備完了まで待つ。通常のソケット期限（8 秒）では
       // 足りないので、Herdr 側の期限より少し長く取る。
-      const params = { pane_id: paneId, kind, name, timeout_ms: timeoutMs };
+      const params = {
+        pane_id: paneId,
+        kind,
+        name,
+        timeout_ms: timeoutMs,
+        ...(args === undefined ? {} : { args }),
+      };
       const deadline = Date.now() + AGENT_PANE_WAIT_MS;
       for (;;) {
         try {

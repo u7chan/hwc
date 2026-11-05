@@ -7,6 +7,12 @@ export type Scenario = {
   outputs: Record<string, string>;
 };
 
+export const STARTUP_MODELS = [
+  { provider: "example", id: "beam-small" },
+  { provider: "example", id: "beam-long-name-for-mobile-layout" },
+  { provider: "example", id: "@demo/beam-small" },
+];
+
 // 実在のユーザー名・リポジトリ名・パスを fixture に写さない。E2E のスクリーンショットは
 // ここで作ったデータだけを見せる。
 export async function createScenario(root: string): Promise<Scenario> {
@@ -23,12 +29,24 @@ export async function createScenario(root: string): Promise<Scenario> {
     mkdir(scratch, { recursive: true }),
     mkdir(join(agentDir, "sessions", "demo"), { recursive: true }),
     mkdir(join(agentDir, "sessions", "empty"), { recursive: true }),
+    mkdir(join(root, "bin"), { recursive: true }),
   ]);
 
   await Promise.all([
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
     writeFile(sessionPath, sessionLines.map((line) => `${line}\n`).join("")),
     writeFile(emptySessionPath, `${JSON.stringify(emptySessionHeader)}\n`),
+    writeFile(
+      join(root, "bin", "pi"),
+      `#!/bin/sh
+if [ "$1" != "--offline" ] || [ "$2" != "--list-models" ]; then exit 2; fi
+cat <<'MODELS'
+provider  model  context  max-out  thinking  images
+${STARTUP_MODELS.map(({ provider, id }) => `${provider}  ${id}  200K  32K  yes  yes`).join("\n")}
+MODELS
+`,
+      { mode: 0o700 },
+    ),
   ]);
 
   const snapshot: HerdrSnapshot = {

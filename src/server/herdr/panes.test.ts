@@ -461,13 +461,13 @@ test("isInvalidRequest tells a rejected request apart from other failures", () =
 test("parseSplitBody trims the name and keeps a known agent", () => {
   expect(parseSplitBody({ name: "  実装  ", agent: "claude" })).toEqual({
     ok: true,
-    value: { name: "実装", agent: "claude" },
+    value: { name: "実装", agent: "claude", model: null },
   });
   expect(parseSplitBody({ name: "   ", agent: null })).toEqual({
     ok: true,
-    value: { name: null, agent: null },
+    value: { name: null, agent: null, model: null },
   });
-  expect(parseSplitBody({})).toEqual({ ok: true, value: { name: null, agent: null } });
+  expect(parseSplitBody({})).toEqual({ ok: true, value: { name: null, agent: null, model: null } });
 });
 
 test("parseSplitBody rejects an unknown agent, a non-string name, or an overlong name", () => {
@@ -476,6 +476,91 @@ test("parseSplitBody rejects an unknown agent, a non-string name, or an overlong
   expect(parseSplitBody({ name: "x".repeat(81) }).ok).toBe(false);
   expect(parseSplitBody(null).ok).toBe(false);
   expect(parseSplitBody([]).ok).toBe(false);
+});
+
+test.each(["pi", "opencode"])(
+  "parseSplitBody accepts a provider-qualified model for %s",
+  (agent) => {
+    const model = { provider: "example", id: "family/beam-v1:latest" };
+    expect(parseSplitBody({ agent, model })).toEqual({
+      ok: true,
+      value: { name: null, agent, model },
+    });
+  },
+);
+
+test.each(["pi", "opencode"])(
+  "parseSplitBody accepts namespaced model IDs starting with @ for %s",
+  (agent) => {
+    const model = { provider: "cloudflare-workers-ai", id: "@cf/meta/llama-3.2-3b-instruct" };
+    expect(parseSplitBody({ agent, model })).toEqual({
+      ok: true,
+      value: { name: null, agent, model },
+    });
+  },
+);
+
+test.each(["claude", "codex", null, undefined])(
+  "parseSplitBody rejects model overrides for %s",
+  (agent) => {
+    expect(parseSplitBody({ agent, model: { provider: "example", id: "beam" } }).ok).toBe(false);
+    expect(parseSplitBody({ agent, model: null }).ok).toBe(true);
+  },
+);
+
+test.each([
+  "beam",
+  {},
+  { provider: "example", id: "--help" },
+  { provider: "example", id: "beam; touch file" },
+  { provider: "example", id: "beam\nexit" },
+  { provider: "example", id: "@cf/beam; touch file" },
+  { provider: "example", id: "@cf/beam\n" },
+  { provider: "example", id: "@cf/beam\r" },
+  { provider: "example", id: "@cf/beam\u0000" },
+  { provider: "example", id: "@cf/beam$(command)" },
+])("parseSplitBody rejects malformed model identifiers: %j", (model) => {
+  expect(parseSplitBody({ agent: "pi", model }).ok).toBe(false);
+});
+
+test("directory reads the requested pane's actual cwd without changing it", async () => {
+  const { calls, call } = recordingCaller({
+    "pane.get": { type: "pane_info", pane: { pane_id: "w1:p3", cwd: "/project" } },
+  });
+  const client = createPaneClient({ call });
+  expect(await client.directory({ paneId: "w1:p3" })).toBe("/project");
+  expect(calls[0]).toEqual({
+    method: "pane.get",
+    params: { pane_id: "w1:p3" },
+    options: { path: undefined },
+  });
+});
+
+test.each([
+  { type: "ok", pane: { pane_id: "w1:p3", cwd: "/project" } },
+  { type: "pane_info", pane: { pane_id: "w1:p4", cwd: "/project" } },
+  { type: "pane_info", pane: { pane_id: "w1:p3", cwd: "relative" } },
+  { type: "pane_info", pane: { pane_id: "w1:p3" } },
+])("directory rejects an unknown or mismatched cwd: %j", async (reply) => {
+  const { call } = recordingCaller({ "pane.get": reply });
+  await expect(createPaneClient({ call }).directory({ paneId: "w1:p3" })).rejects.toThrow();
+});
+
+test("startAgent forwards the argument array without a shell command string", async () => {
+  const { calls, call } = recordingCaller();
+  await createPaneClient({ call }).startAgent({
+    paneId: "w1:p3",
+    kind: "pi",
+    name: "hwc-w1-p3",
+    args: ["--model", "example/beam"],
+  });
+  expect(calls[0]?.params).toEqual({
+    pane_id: "w1:p3",
+    kind: "pi",
+    name: "hwc-w1-p3",
+    timeout_ms: 30_000,
+    args: ["--model", "example/beam"],
+  });
 });
 
 test("agentNameForPane makes a name Herdr accepts even for a non-ASCII pane label", () => {

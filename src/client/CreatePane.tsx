@@ -1,9 +1,10 @@
 import { useState } from "preact/hooks";
-import { AGENT_KINDS, AGENT_LABELS, type AgentKind } from "../shared/agents";
+import { AGENT_KINDS, AGENT_LABELS, type AgentKind, type AgentModel } from "../shared/agents";
 import { createPane, type CreatePaneFailure } from "./api";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
 import { AgentGlyphIcon } from "./icons";
+import { CreatePaneModel } from "./CreatePaneModel";
 
 type CreatePaneProps = {
   paneId: string;
@@ -39,6 +40,7 @@ export function CreatePane(props: CreatePaneProps) {
   const [name, setName] = useState("");
   const [mode, setMode] = useState<Mode>("agent");
   const [agent, setAgent] = useState<AgentKind>("pi");
+  const [model, setModel] = useState<AgentModel | null>(null);
   const [busy, setBusy] = useState(false);
   // ペインができた可能性がある状態。フィールドを閉じ、再送ではなく確認に倒す。
   const [settled, setSettled] = useState(false);
@@ -57,6 +59,7 @@ export function CreatePane(props: CreatePaneProps) {
     const result = await createPane(props.paneId, {
       name: name.trim() === "" ? null : name.trim(),
       agent: mode === "agent" ? agent : null,
+      model: mode === "agent" ? model : null,
     });
     if (result.ok) {
       props.onCreated(result.paneId);
@@ -118,32 +121,49 @@ export function CreatePane(props: CreatePaneProps) {
           class="hwc-create-mode"
           aria-checked={mode === "shell"}
           disabled={busy || settled}
-          onClick={() => setMode("shell")}
+          onClick={() => {
+            setMode("shell");
+            setModel(null);
+          }}
         >
           シェル
         </button>
       </div>
 
       {mode === "agent" ? (
-        <div
-          class="hwc-choice-grid hwc-agent-grid"
-          role="radiogroup"
-          aria-label="起動するエージェント"
-        >
-          {AGENT_KINDS.map((kind) => (
-            <ChoiceCard
-              key={kind}
-              selected={agent === kind}
-              disabled={busy || settled}
-              onSelect={() => setAgent(kind)}
-              label={AGENT_LABELS[kind]}
-            >
-              <span class="hwc-choice-icon" data-agent={kind}>
-                <AgentGlyphIcon agent={kind} size={18} />
-              </span>
-            </ChoiceCard>
-          ))}
-        </div>
+        <>
+          <div
+            class="hwc-choice-grid hwc-agent-grid"
+            role="radiogroup"
+            aria-label="起動するエージェント"
+          >
+            {AGENT_KINDS.map((kind) => (
+              <ChoiceCard
+                key={kind}
+                selected={agent === kind}
+                disabled={busy || settled}
+                onSelect={() => {
+                  if (kind === agent) return;
+                  setAgent(kind);
+                  setModel(null);
+                }}
+                label={AGENT_LABELS[kind]}
+              >
+                <span class="hwc-choice-icon" data-agent={kind}>
+                  <AgentGlyphIcon agent={kind} size={18} />
+                </span>
+              </ChoiceCard>
+            ))}
+          </div>
+          <CreatePaneModel
+            key={`${props.paneId}/${agent}`}
+            paneId={props.paneId}
+            agent={agent}
+            model={model}
+            disabled={busy || settled}
+            onChange={setModel}
+          />
+        </>
       ) : (
         <p class="hwc-create-note">エージェントを起動せず、シェルだけを作ります。</p>
       )}
