@@ -10,6 +10,7 @@ import {
   commandSendText,
   commandText,
   isCommandPane,
+  isCompactCommand,
 } from "./commands";
 
 function pane(agent: string | null, agentStatus: AgentStatus = "idle"): PaneState {
@@ -38,6 +39,16 @@ test("both commands are sent as the string the CLIs read", () => {
 test("the label says what the command does, not how it is typed", () => {
   expect(commandLabel("new")).toBe("新しいセッション");
   expect(commandLabel("compact")).toBe("会話を圧縮");
+});
+
+test("a typed compact command is recognized with or without an instruction", () => {
+  expect(isCompactCommand("/compact")).toBe(true);
+  expect(isCompactCommand("/compact focus on the API")).toBe(true);
+  expect(isCompactCommand("/compact\n続きをまとめる")).toBe(true);
+  expect(isCompactCommand("/compaction")).toBe(false);
+  expect(isCompactCommand("/compactfoo")).toBe(false);
+  expect(isCompactCommand(" /compact")).toBe(false);
+  expect(isCompactCommand("/new")).toBe(false);
 });
 
 test("commands are available only on the CLIs that accept them", () => {

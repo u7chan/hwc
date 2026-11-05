@@ -27,7 +27,8 @@ pi は会話を v3 の JSONL で保存している。`user` / `assistant` のメ
 - ペインとセッションは 1:1 とみなす。Web は現在のセッションの active branch を映すだけで、セッション選択・分岐・過去セッション一覧は持たない
 - BFF がペイン id からセッション path を解決し、path はクライアントへ渡さない。クライアントから path も受け取らない
 - path ごとに増分リーダーを持ち、要求時にスナップショット（`etag` / `messages` / `model` / `effort` / `truncated` / `context` / `compaction`）を返す。バックグラウンド監視はしない。`messages` の user は `attachments?: string[]`（ペイン配下のファイル名のみ）を持ち、本文へ貼った `<attached_files>` 注記は BFF が strip して返す（[ADR 0018](0018-pasted-image-attachments.md)）
-- スナップショットに直近の compaction（`at` / `tokensBefore` / `summary`）を含める。`messages` はその compaction の `firstKeptEntryId` 以降に限り、圧縮より前の会話は返さない。モデルの実際の文脈（要約 + kept 分）と表示を一致させるため
+- スナップショットに直近の compaction（`at` / `tokensBefore` / `summary` / `index`）を含める。`messages` はその compaction の `firstKeptEntryId` 以降に限り、圧縮より前の会話は返さない。モデルの実際の文脈（要約 + kept 分）と表示を一致させるため
+- `index` は返す `messages` のうち compaction エントリより前にある件数。クライアントはその位置に区切りを挿む。`limitMessages` で古い側を切ったときは切った分だけ手前へずらし、`0..messages.length` に clamp する。opencode は圧縮後の会話しか返さないため常に `0` になる
 - 評価するのは最新の compaction エントリだけ。それに `firstKeptEntryId` が無い・`summary` が空・`firstKeptEntryId` が active branch に無い・compaction が無いときは、`compaction` を `null` にして branch 全体を返す。古い compaction へは遡らない。要約だけ出して窓がずれる状態を作らない
 - 入れ子の compaction は最新のみを採る。compaction エントリは `message` を持たないため、窓に入っていても会話としては描画されない
 - コンテキスト使用量は pi のモデルカタログを第二の情報源にする。`tokens` はセッション中の usage から、`window` は `models-store.json` の `contextWindow` に `models.json` の `providers[].modelOverrides` を重ねたカタログから引く。agent dir はセッション path（`<agent-dir>/sessions/<slug>/<file>.jsonl`）から導き、カタログは agent dir ごとにプロセス内で 1 回だけ解決する。引けないときは `null` を返し、`tokens` と `window` の両方が `null` なら `context` を `null` に畳む
@@ -39,7 +40,8 @@ pi は会話を v3 の JSONL で保存している。`user` / `assistant` のメ
 
 - 会話の表示は pi のセッション形式に依存する。形式が変わると追従が必要になる
 - ツールコール・thinking・ツール結果のエントリは表示しない。ツール実行だけのターンは会話に出ないため、`working` の表示で補う
-- compaction は履歴の区切りとして 1 行（要約の展開付き）で表示し、それ以前の会話は返さない。pi の TUI が `[compaction]` の 1 行に置き換えるのと同じ見え方になり、古いメッセージの描画も減る
+- compaction は履歴の区切りとして 1 行（要約の展開付き）で表示し、それ以前の会話は返さない。区切りは窓の先頭ではなく compaction エントリの位置（アクション時点）に置く。圧縮直後は直近の末尾に出て、その後の発話で自然に上へ流れる。要約はその行で展開する
+- 圧縮の所要時間は、クライアントが `/compact` の送信時刻を観測できたときだけログに添える。リロードやペイン切り替えで失われ、その場合は tokens とホバー時の時刻だけになる。永続化は別スコープ
 - 窓が成立しない（`firstKeptEntryId` が branch に無い等）ときは全体を返すため、圧縮済みなのに古い会話が並ぶことがある。要約だけを出して窓とずらすより、表示と実体が一致する側を選ぶ
 - `/tree` で分岐先を選んだだけ（送信前）はファイルに追記が無く、次の送信まで前の枝を表示する
 - セッションが無い・pi 以外・読み取りに失敗したときは端末出力にフォールバックする。ENOENT は空の会話として扱う。OpenCode は [ADR 0028](0028-opencode-chat.md) でローカルサービス API から読む

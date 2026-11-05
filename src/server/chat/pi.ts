@@ -432,6 +432,8 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   // 持たせると tool-only の最後の応答を取りこぼす。
   let tokens: number | null = null;
   const messages: ChatMessage[] = [];
+  // compaction エントリより前にある、表示対象のメッセージ数。区切りを置く位置になる。
+  let beforeCompaction = 0;
 
   const branch = activeBranch(reader);
   const compacted = compactionWindow(branch);
@@ -440,7 +442,10 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
     const entry = branch[index];
     if (!entry) continue;
     // 圧縮より前の会話はモデルの文脈にもう無い。返さない。
-    if (entry.message && index >= (compacted?.start ?? 0)) messages.push(entry.message);
+    if (entry.message && index >= (compacted?.start ?? 0)) {
+      messages.push(entry.message);
+      if (compacted !== null && index < compacted.entryIndex) beforeCompaction += 1;
+    }
     // path 順で新しい方を採る。model_change が assistant より後なら切り替え後の値になる。
     if (entry.model !== null) {
       model = entry.model;
@@ -455,6 +460,12 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   // 新しい model 名と古いモデルの window が混ざる。
   const windowTokens = await windowFor(reader.path, provider, model);
   const limited = limitMessages(messages);
+  // limitMessages は古い側から落とす。落ちた分だけ区切りの位置も手前へずらす。
+  const dropped = messages.length - limited.messages.length;
+  const compactionIndex =
+    compacted === null
+      ? 0
+      : Math.max(0, Math.min(limited.messages.length, beforeCompaction - dropped));
   return {
     etag: `${reader.etagPrefix}-${reader.generation}`,
     messages: limited.messages,
@@ -462,7 +473,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
     effort,
     truncated: limited.truncated,
     context: foldContext(tokens, windowTokens),
-    compaction: compacted?.compaction ?? null,
+    compaction: compacted === null ? null : { ...compacted.compaction, index: compactionIndex },
   };
 }
 
@@ -471,21 +482,22 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
 // 要約だけ出して古い会話を並べるより、表示と実体が一致する側を選ぶ。
 function compactionWindow(
   branch: readonly SessionEntry[],
-): { start: number; compaction: ChatCompaction } | null {
-  let newest: SessionEntry | null = null;
+): { start: number; entryIndex: number; compaction: Omit<ChatCompaction, "index"> } | null {
+  let newestIndex = -1;
   for (let index = branch.length - 1; index >= 0; index -= 1) {
-    const entry = branch[index];
-    if (!entry?.compactionEntry) continue;
-    newest = entry;
+    if (!branch[index]?.compactionEntry) continue;
+    newestIndex = index;
     break;
   }
 
+  const newest = newestIndex < 0 ? null : branch[newestIndex];
   const found = newest?.compaction ?? null;
   if (found === null) return null;
   const start = branch.findIndex((entry) => entry.id === found.firstKeptEntryId);
   if (start < 0) return null;
   return {
     start,
+    entryIndex: newestIndex,
     compaction: { at: found.at, tokensBefore: found.tokensBefore, summary: found.summary },
   };
 }

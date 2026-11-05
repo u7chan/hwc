@@ -221,7 +221,7 @@ function parseContext(raw: unknown): Projected {
       if (record.status !== "completed") continue;
       const summary = nonEmptyText(record.summary);
       if (summary === null) continue;
-      compaction = { at: timestampOf(record.time), tokensBefore: null, summary };
+      compaction = { at: timestampOf(record.time), tokensBefore: null, summary, index: 0 };
       messages.length = 0;
       tokens = null;
       model = null;

@@ -279,6 +279,15 @@ const sessionEntries = [
     timestamp: "2026-01-01T09:00:05.000Z",
     thinkingLevel: "high",
   },
+  {
+    type: "compaction",
+    id: "c1",
+    parentId: "t1",
+    timestamp: "2026-01-01T09:00:06.000Z",
+    summary: "以前の会話では、空状態の分岐とテスト追加の方針を確認しました。",
+    firstKeptEntryId: "u2",
+    tokensBefore: 48_000,
+  },
 ];
 
 const sessionLines = [sessionHeader, ...sessionEntries].map((line) => JSON.stringify(line));

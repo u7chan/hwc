@@ -191,6 +191,7 @@ test("a completed compaction starts a new window", async () => {
     at: 3_000,
     tokensBefore: null,
     summary: "summary of the old conversation",
+    index: 0,
   });
   expect(snapshot.context).toEqual({ tokens: 40, window: 1_048_576 });
 });

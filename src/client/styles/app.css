@@ -1885,9 +1885,14 @@ button {
 
 /* 圧縮の境目。吹き出しではなく、履歴が切り替わる区切りとして置く。 */
 .hwc-compaction {
-  margin: 0 0 var(--space-3);
+  margin: 0;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
+}
+
+/* 区切りは会話の li と同じ並びに置く。行間は .hwc-chat の gap に任せる。 */
+.hwc-compaction-row {
+  display: block;
 }
 
 /* 1 行だけのときと、details の見出し。同じ並びにする。 */
@@ -2489,6 +2494,12 @@ p.hwc-compaction,
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+/* 圧縮中だけ、返答待ちの 3 点に何が起きているかを添える。 */
+.hwc-compaction-pending {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
 }
 
 /* 返答までの時間は、時刻と区別できるよう等幅で添える。 */

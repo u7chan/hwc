@@ -1,4 +1,4 @@
-import type { ComponentChildren } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatCompaction, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
@@ -36,6 +36,7 @@ import {
   commandLabel,
   commandSendText,
   commandText,
+  isCompactCommand,
   type PaneCommandHandle,
 } from "./commands";
 import { useCopy } from "./copy";
@@ -253,13 +254,22 @@ function CompactionRule() {
 }
 
 // 要約は開かないと読めない。畳んだ 1 行だけでも、ここより前が圧縮されたことが分かる。
-function Compaction(props: { compaction: ChatCompaction; expandable: boolean }) {
+// 所要時間は開始を観測できたときだけ添える。リロード後は tokens とホバー時刻だけになる。
+function Compaction(props: {
+  compaction: ChatCompaction;
+  expandable: boolean;
+  durationMs: number | null;
+}) {
   const label = compactionLabel(props.compaction);
+  const shown = props.durationMs === null ? label : `${formatElapsed(props.durationMs)} · ${label}`;
+  const title = `${formatClock(props.compaction.at)} に圧縮`;
   if (!props.expandable || props.compaction.summary === "") {
     return (
       <p class="hwc-compaction">
         <CompactionRule />
-        <span class="hwc-compaction-label">{label}</span>
+        <span class="hwc-compaction-label" title={title}>
+          {shown}
+        </span>
         <CompactionRule />
       </p>
     );
@@ -269,7 +279,9 @@ function Compaction(props: { compaction: ChatCompaction; expandable: boolean }) 
     <details class="hwc-compaction">
       <summary class="hwc-compaction-head">
         <CompactionRule />
-        <span class="hwc-compaction-label">{label}</span>
+        <span class="hwc-compaction-label" title={title}>
+          {shown}
+        </span>
         <span class="hwc-compaction-icon">
           <ArrowDownIcon size={12} />
         </span>
@@ -286,8 +298,11 @@ function ChatLog(props: {
   paneId: string;
   snapshot: ChatSnapshot;
   replying: boolean;
+  compacting: boolean;
   waitingMs: number | null;
   copiedId: string | null;
+  expandable: boolean;
+  compactionDurationMs: number | null;
   onCopy: (id: string, text: string) => void;
   pending: ChatMessage[];
 }) {
@@ -314,38 +329,65 @@ function ChatLog(props: {
     ...props.snapshot.messages.map((message) => ({ message, pending: false })),
     ...props.pending.map((message) => ({ message, pending: true })),
   ];
-  if (rows.length === 0 && !props.replying) return <ChatEmpty />;
+  const compaction = props.snapshot.compaction;
+  // サーバーが返す位置は messages 基準。再取得の境目で欠けても落ちないよう clamp する。
+  const compactionAt =
+    compaction === null
+      ? null
+      : Math.min(Math.max(0, compaction.index), props.snapshot.messages.length);
+  const compactionRow =
+    compaction === null ? null : (
+      <li class="hwc-compaction-row">
+        <Compaction
+          compaction={compaction}
+          expandable={props.expandable}
+          durationMs={props.compactionDurationMs}
+        />
+      </li>
+    );
+  if (rows.length === 0 && !props.replying && compaction === null) return <ChatEmpty />;
 
   return (
     <ol class="hwc-chat">
+      {compactionRow !== null && compactionAt === 0 ? compactionRow : null}
       {rows.map(({ message, pending }, index) => (
-        <li class="hwc-msg" data-role={message.role} key={message.id}>
-          {message.role === "agent" ? (
-            <>
-              <Markdown text={message.text} taskScope={`${index + 1}番目のメッセージ`} />
-              <div class="hwc-msg-meta">
-                <span class="hwc-msg-time">{formatClock(message.at)}</span>
-                {copyButton(message)}
-              </div>
-            </>
-          ) : (
-            <UserMessage
-              paneId={props.paneId}
-              message={message}
-              copyButton={userCopyButton(message)}
-              pending={pending}
-            />
-          )}
-        </li>
+        <Fragment key={message.id}>
+          <li class="hwc-msg" data-role={message.role}>
+            {message.role === "agent" ? (
+              <>
+                <Markdown text={message.text} taskScope={`${index + 1}番目のメッセージ`} />
+                <div class="hwc-msg-meta">
+                  <span class="hwc-msg-time">{formatClock(message.at)}</span>
+                  {copyButton(message)}
+                </div>
+              </>
+            ) : (
+              <UserMessage
+                paneId={props.paneId}
+                message={message}
+                copyButton={userCopyButton(message)}
+                pending={pending}
+              />
+            )}
+          </li>
+          {compactionRow !== null && compactionAt === index + 1 ? compactionRow : null}
+        </Fragment>
       ))}
       {props.replying ? (
-        <li class="hwc-msg" data-role="agent" aria-label="返答を待っています">
+        <li
+          class="hwc-msg"
+          data-role="agent"
+          aria-label={props.compacting ? "会話を圧縮しています" : "返答を待っています"}
+        >
           <div class="hwc-msg-meta">
             <span class="hwc-typing">
               <span />
               <span />
               <span />
             </span>
+            {props.compacting ? (
+              <span class="hwc-compaction-pending">会話を圧縮しています</span>
+            ) : null}
             {props.waitingMs === null ? null : (
               <span class="hwc-msg-elapsed">{formatElapsed(props.waitingMs)}</span>
             )}
@@ -478,9 +520,40 @@ export function PaneDetail(props: PaneDetailProps) {
   const output = read?.text ?? null;
   const outputEmpty = output !== null && output.trim() === "";
   const replying = pane.agentStatus === "working";
+  // /compact の開始を観測できたときだけ、完了までの所要時間をログに添える。
+  // リロードやペイン切り替えでは失う（永続化は別スコープ）。
+  const [compactionRun, setCompactionRun] = useState<{
+    startedAt: number;
+    baselineAt: number | null;
+  } | null>(null);
+  const [compactionDuration, setCompactionDuration] = useState<{
+    at: number;
+    ms: number;
+  } | null>(null);
+  const markCompaction = (baselineAt: number | null) => {
+    setCompactionRun({ startedAt: Date.now(), baselineAt });
+  };
+  useEffect(() => {
+    if (compactionRun === null) return;
+    const at = snapshot?.compaction?.at ?? null;
+    // 新しい compaction が届いたら、開始からの差を所要時間として残す。
+    if (at !== null && at !== compactionRun.baselineAt) {
+      const ms = at - compactionRun.startedAt;
+      if (ms > 0 && ms < 24 * 60 * 60 * 1000) setCompactionDuration({ at, ms });
+      setCompactionRun(null);
+      return;
+    }
+    // working に入る前の短い idle は待つ。3 秒経っても始まらなければ失敗として畳む。
+    if (replying) return;
+    const timer = window.setTimeout(() => {
+      setCompactionRun((run) => (run === compactionRun ? null : run));
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [compactionRun, replying, snapshot?.compaction?.at]);
   const chatEmpty =
     body.kind === "chat" &&
     body.snapshot.messages.length === 0 &&
+    body.snapshot.compaction === null &&
     pendingMessages.length === 0 &&
     !replying;
   const empty = body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty;
@@ -758,6 +831,7 @@ export function PaneDetail(props: PaneDetailProps) {
       .map((item) => item.name)
       .filter((name): name is string => name !== null);
     const text = reply === null ? draft : composeReply(reply, draft);
+    const compactCommand = isCompactCommand(text);
     const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
@@ -776,18 +850,24 @@ export function PaneDetail(props: PaneDetailProps) {
       setDraft("");
       setReply(null);
       setAttachments([]);
-      setPending((items) => [
-        ...items,
-        {
-          id: `pending-${at}-${items.length}`,
-          role: "user",
-          text,
-          at,
-          from,
-          waiting,
-          ...(names.length === 0 ? {} : { attachments: names }),
-        },
-      ]);
+      // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
+      // 代わりに圧縮中の行を出す。
+      if (compactCommand) {
+        markCompaction(snapshot?.compaction?.at ?? null);
+      } else {
+        setPending((items) => [
+          ...items,
+          {
+            id: `pending-${at}-${items.length}`,
+            role: "user",
+            text,
+            at,
+            from,
+            waiting,
+            ...(names.length === 0 ? {} : { attachments: names }),
+          },
+        ]);
+      }
     } else {
       setNotice(SEND_FAILED_NOTICE);
     }
@@ -814,6 +894,7 @@ export function PaneDetail(props: PaneDetailProps) {
       setPinned(true);
       setChip(null);
       setDraft("");
+      if (id === "compact") markCompaction(snapshot?.compaction?.at ?? null);
     } else setNotice(SEND_FAILED_NOTICE);
     setSending(false);
   };
@@ -835,6 +916,7 @@ export function PaneDetail(props: PaneDetailProps) {
     if (await submitLatest.current(commandText(id), [])) {
       setPinned(true);
       setChip(null);
+      if (id === "compact") markCompaction(state.snapshot?.compaction?.at ?? null);
     } else setNotice(SEND_FAILED_NOTICE);
     setSending(false);
   };
@@ -956,15 +1038,20 @@ export function PaneDetail(props: PaneDetailProps) {
               {body.snapshot.truncated ? (
                 <p class="hwc-output-notice">古い会話は省略されています</p>
               ) : null}
-              {body.snapshot.compaction === null ? null : (
-                <Compaction compaction={body.snapshot.compaction} expandable={!compact} />
-              )}
               <ChatLog
                 paneId={pane.id}
                 snapshot={body.snapshot}
                 replying={replying}
+                compacting={compactionRun !== null}
                 waitingMs={waitingMs}
                 copiedId={copiedId}
+                expandable={!compact}
+                compactionDurationMs={
+                  compactionDuration !== null &&
+                  compactionDuration.at === body.snapshot.compaction?.at
+                    ? compactionDuration.ms
+                    : null
+                }
                 onCopy={copy}
                 pending={pendingMessages}
               />

@@ -31,7 +31,9 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   const revisions = new Map<string, number>();
   const sockets = new Set<net.Socket>();
   const subscribers = new Set<net.Socket>();
+  const timers = new Set<ReturnType<typeof setTimeout>>();
   let sendCount = 0;
+  let compactionCount = 0;
 
   const send = (socket: net.Socket, message: unknown) => {
     if (!socket.destroyed) socket.write(`${JSON.stringify(message)}\n`);
@@ -82,6 +84,66 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
       message: { role: "user", content: text, timestamp: Date.now() },
     };
     await appendFile(path, `${JSON.stringify(entry)}\n`);
+  };
+
+  const later = (fn: () => Promise<void>, ms: number) => {
+    const timer = setTimeout(() => {
+      timers.delete(timer);
+      void fn();
+    }, ms);
+    timers.add(timer);
+  };
+
+  const setAgentStatus = (paneId: string, status: "working" | "idle") => {
+    const pane = findPane(paneId);
+    if (pane === null) return;
+    pane.agent_status = status;
+    const tab = snapshot.tabs?.find((item) => item.tab_id === pane.tab_id);
+    if (tab) tab.agent_status = status;
+    const workspace = snapshot.workspaces?.find((item) => item.workspace_id === pane.workspace_id);
+    if (workspace) workspace.agent_status = status;
+    broadcast("pane.updated", { pane_id: paneId });
+  };
+
+  // /compact の完了を架空セッションに追記する。最後の user メッセージを kept の先頭にし、
+  // 圧縮の区切りが会話の時系列に置かれることを E2E で確かめられるようにする。
+  const appendCompaction = async (paneId: string): Promise<boolean> => {
+    const session = findPane(paneId)?.agent_session ?? null;
+    const path = session?.kind === "path" ? session.value : null;
+    if (path === null) return false;
+    let raw: string;
+    try {
+      raw = await readFile(path, "utf8");
+    } catch {
+      return false;
+    }
+    const lines = raw.split("\n").filter((line) => line.trim() !== "");
+    let parentId: string | null = null;
+    let keptId: string | null = null;
+    for (const line of lines) {
+      let entry: { id?: unknown; type?: unknown; message?: { role?: unknown } };
+      try {
+        entry = JSON.parse(line) as typeof entry;
+      } catch {
+        continue;
+      }
+      if (typeof entry.id !== "string") continue;
+      parentId = entry.id;
+      if (entry.type === "message" && entry.message?.role === "user") keptId = entry.id;
+    }
+    if (parentId === null || keptId === null) return false;
+    compactionCount += 1;
+    const entry = {
+      type: "compaction",
+      id: `e2e-compaction-${compactionCount}`,
+      parentId,
+      timestamp: new Date().toISOString(),
+      summary: "E2E: 直前までの会話を圧縮しました。",
+      firstKeptEntryId: keptId,
+      tokensBefore: 48_000,
+    };
+    await appendFile(path, `${JSON.stringify(entry)}\n`);
+    return true;
   };
 
   const focus = (paneId: string): boolean => {
@@ -237,6 +299,22 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         const text = typeof params.text === "string" ? params.text : "";
         outputs.set(paneId, `${outputs.get(paneId) ?? ""}${text}\n`);
         revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
+        const compact =
+          !text.includes(ATTACHED_FILES_OPEN) && /^\/compact(?:\s|$)/.test(text.trim());
+        if (compact) {
+          setAgentStatus(paneId, "working");
+          send(socket, { id, result: { type: "ok" } });
+          later(async () => {
+            try {
+              await appendCompaction(paneId);
+            } catch {
+              // 追記に失敗しても idle に戻す。E2E の状態を止めない。
+            } finally {
+              setAgentStatus(paneId, "idle");
+            }
+          }, 1200);
+          return;
+        }
         await appendUserEntry(paneId, text);
         send(socket, { id, result: { type: "ok" } });
         broadcast("pane.updated", { pane_id: paneId });
@@ -417,6 +495,8 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     socketPath,
     root,
     close: async () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await rm(root, { recursive: true, force: true });

@@ -38,6 +38,15 @@ export function commandText(id: CommandId): string {
   return AGENT_COMMANDS[id].text;
 }
 
+// 直接入力の /compact を、チップを通さない経路でも圧縮として扱うための判定。
+// 添付注記が後ろに付いても、先頭が /compact なら pi はコマンドとして解釈する。
+export function isCompactCommand(text: string): boolean {
+  const command = commandText("compact");
+  if (!text.startsWith(command)) return false;
+  const rest = text.slice(command.length);
+  return rest === "" || /^\s/.test(rest);
+}
+
 export function commandLabel(id: CommandId): string {
   return AGENT_COMMANDS[id].label;
 }
