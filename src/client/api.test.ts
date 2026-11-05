@@ -148,7 +148,7 @@ test("a context that breaks the contract costs the numbers, not the conversation
 });
 
 test("a compaction that breaks the contract costs the summary, not the conversation", () => {
-  const compaction = { at: 1_700_000_000_000, tokensBefore: 212_959, summary: "so far" };
+  const compaction = { at: 1_700_000_000_000, tokensBefore: 212_959, summary: "so far", index: 0 };
 
   expect(toChatSnapshot({ ...chatBody, compaction })).toEqual({ ...chatBody, compaction });
   // 形が違う compaction は要約を出さないだけにする。会話は捨てない。
@@ -158,6 +158,9 @@ test("a compaction that breaks the contract costs the summary, not the conversat
     { at: 1, summary: "so far" },
     { at: 1, tokensBefore: "212959", summary: "so far" },
     { at: 1, tokensBefore: null },
+    { at: 1, tokensBefore: null, summary: "so far" },
+    { at: 1, tokensBefore: null, summary: "so far", index: -1 },
+    { at: 1, tokensBefore: null, summary: "so far", index: 1.5 },
     "so far",
   ]) {
     expect(toChatSnapshot({ ...chatBody, compaction: broken })).toEqual({

@@ -71,7 +71,17 @@ function toChatCompaction(value: unknown): ChatCompaction | null {
   if (typeof compaction.at !== "number") return null;
   if (!isOptionalNumber(compaction.tokensBefore)) return null;
   if (typeof compaction.summary !== "string") return null;
-  return { at: compaction.at, tokensBefore: compaction.tokensBefore, summary: compaction.summary };
+  if (!isIndex(compaction.index)) return null;
+  return {
+    at: compaction.at,
+    tokensBefore: compaction.tokensBefore,
+    summary: compaction.summary,
+    index: compaction.index,
+  };
+}
+
+function isIndex(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
 function toAttachmentNames(value: unknown): string[] | undefined {

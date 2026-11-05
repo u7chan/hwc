@@ -729,7 +729,30 @@ test("a compaction replaces the history before firstKeptEntryId", async () => {
     at: Date.parse("2026-01-01T00:00:01.000Z"),
     tokensBefore: 212_959,
     summary: "the user said hello",
+    index: 2,
   });
+});
+
+test("a compaction is placed before the messages that came after it", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    user("u2", "a1", "again"),
+    assistant("a2", "u2", text("done")),
+    entry("compaction", "c1", "a2", {
+      summary: "the user said hello",
+      firstKeptEntryId: "u2",
+      tokensBefore: 212_959,
+    }),
+    user("u3", "c1", "after the compaction"),
+    assistant("a3", "u3", text("still here")),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u2", "a2", "u3", "a3"]);
+  expect(snapshot.compaction?.index).toBe(2);
 });
 
 test("a compaction that points outside the branch keeps the whole history", async () => {
@@ -780,6 +803,7 @@ test("a compaction without tokensBefore still windows the history", async () => 
     at: Date.parse("2026-01-01T00:00:01.000Z"),
     tokensBefore: null,
     summary: "so far",
+    index: 1,
   });
   expect(snapshot.messages.map((message) => message.id)).toEqual(["u2"]);
 });
@@ -807,6 +831,7 @@ test("only the newest compaction is shown", async () => {
 
   expect(snapshot.compaction?.summary).toBe("second summary");
   expect(snapshot.compaction?.tokensBefore).toBe(212_959);
+  expect(snapshot.compaction?.index).toBe(2);
   expect(snapshot.messages.map((message) => message.id)).toEqual(["u2", "a2"]);
 });
 

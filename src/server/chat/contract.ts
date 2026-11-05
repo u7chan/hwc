@@ -16,6 +16,9 @@ export type ChatCompaction = {
   at: number;
   tokensBefore: number | null;
   summary: string;
+  // messages のうち、この区切りより前にある件数。クライアントはこの位置に 1 行を挿む。
+  // opencode は compaction 以降の会話しか返さないため常に 0 になる。
+  index: number;
 };
 
 export type ChatSnapshot = {

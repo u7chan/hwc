@@ -198,14 +198,16 @@ test("the meter is drawn only when there is something to show", () => {
 });
 
 test("the compaction line says how much was compressed", () => {
-  expect(compactionLabel({ at: 1_000, tokensBefore: 212_959, summary: "so far" })).toBe(
+  expect(compactionLabel({ at: 1_000, tokensBefore: 212_959, summary: "so far", index: 0 })).toBe(
     "212,959 tokens から圧縮",
   );
-  expect(compactionLabel({ at: 1_000, tokensBefore: 950, summary: "so far" })).toBe(
+  expect(compactionLabel({ at: 1_000, tokensBefore: 950, summary: "so far", index: 0 })).toBe(
     "950 tokens から圧縮",
   );
   // 数を出せないときは、圧縮だけを伝える。
-  expect(compactionLabel({ at: 1_000, tokensBefore: null, summary: "so far" })).toBe("圧縮");
+  expect(compactionLabel({ at: 1_000, tokensBefore: null, summary: "so far", index: 0 })).toBe(
+    "圧縮",
+  );
 });
 
 const pending: PendingMessage = {
