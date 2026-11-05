@@ -22,8 +22,10 @@ const COMMAND_AGENTS: ReadonlySet<string> = new Set(["pi", "claude", "codex", "o
 const COMPACT_MIN_TOKENS = 20000;
 
 // セルの外にあるメニューへ、実行可否と実行だけを渡す。状態は PaneDetail が持つ。
+// メニューを開いた後に SSE や送信で状態が変わっても、最新値で判定できるよう
+// available は現在の pane を受け取り、実行に使う値は PaneDetail 側の ref から読む。
 export type PaneCommandHandle = {
-  available: (id: CommandId) => boolean;
+  available: (id: CommandId, pane: PaneState) => boolean;
   busy: () => boolean;
   run: (id: CommandId) => void;
 };

@@ -832,14 +832,30 @@ export function PaneDetail(props: PaneDetailProps) {
     setSending(false);
   };
 
-  // メニューを開くときに渡す。開いた後に状態が変わっても、メニューは閉じるまで
-  // 同じ判断を使う（開いた瞬間の状態で足りる）。
+  // メニューを開くときに渡す。開いた後に状態が変わっても、実行可否と実行だけを
+  // ref から最新値で読む。available の pane は App が今のスナップショットから渡す。
+  const commandState = useRef({ pane, sending, replying, snapshot });
+  commandState.current = { pane, sending, replying, snapshot };
   const menuCommands: PaneCommandHandle = {
-    available: (id) =>
-      !sending && !replying && commandAvailable(id, pane, snapshot?.context ?? null),
-    busy: () => sending || replying,
+    available: (id, currentPane) => {
+      const state = commandState.current;
+      return (
+        !state.sending &&
+        !state.replying &&
+        commandAvailable(id, currentPane, state.snapshot?.context ?? null)
+      );
+    },
+    busy: () => {
+      const state = commandState.current;
+      return state.sending || state.replying;
+    },
     run: (id) => {
-      if (!sending && !replying && commandAvailable(id, pane, snapshot?.context ?? null)) {
+      const state = commandState.current;
+      if (
+        !state.sending &&
+        !state.replying &&
+        commandAvailable(id, state.pane, state.snapshot?.context ?? null)
+      ) {
         void sendMenuCommand(id);
       }
     },

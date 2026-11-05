@@ -614,9 +614,13 @@ export function App() {
   const menuPane = state === null || menu === null ? null : findPane(state, menu.paneId);
   const menuCommands = menu?.commands ?? null;
   const menuCommandsShown = menuPane !== null && isCommandPane(menuPane);
-  const menuCommandsBusy = menuCommands?.busy() ?? false;
-  const canRunNew = menuCommands?.available("new") ?? false;
-  const canRunCompact = menuCommands?.available("compact") ?? false;
+  const menuCommandsBusy = menuPane?.agentStatus === "working" || (menuCommands?.busy() ?? false);
+  const canRunNew =
+    menuCommandsShown && menuPane !== null && (menuCommands?.available("new", menuPane) ?? false);
+  const canRunCompact =
+    menuCommandsShown &&
+    menuPane !== null &&
+    (menuCommands?.available("compact", menuPane) ?? false);
   // working / 送信中ではなく、compact だけが使えない理由は履歴の小ささ。
   const compactBlockedByHistory =
     menuCommandsShown && menuCommands !== null && !menuCommandsBusy && !canRunCompact;
