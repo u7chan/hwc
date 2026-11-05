@@ -16,8 +16,9 @@ import {
 } from "../shared/agents";
 import { isAttachmentName } from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
+import type { PaneInteraction } from "../shared/confirmation";
 
-export type OutputRead = PaneRead;
+export type OutputRead = PaneRead & { interaction: PaneInteraction | null };
 
 // 1 回に読む行数。スマホの画面に収まる範囲に留め、全文は端末で読む。
 export const OUTPUT_LINES = 200;
@@ -171,7 +172,35 @@ export function toPaneRead(value: unknown, paneId: string): OutputRead | null {
   if (typeof read.text !== "string") return null;
   if (typeof read.truncated !== "boolean") return null;
   if (typeof read.revision !== "number") return null;
-  return { paneId, text: read.text, truncated: read.truncated, revision: read.revision };
+  return {
+    paneId,
+    text: read.text,
+    truncated: read.truncated,
+    revision: read.revision,
+    interaction: toPaneInteraction(read.interaction),
+  };
+}
+
+export function toPaneInteraction(value: unknown): PaneInteraction | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object") return { kind: "terminal" };
+  const interaction = value as Partial<Extract<PaneInteraction, { kind: "codex-folder-trust" }>>;
+  if (
+    interaction.kind === "codex-folder-trust" &&
+    typeof interaction.id === "string" &&
+    interaction.id !== "" &&
+    typeof interaction.directory === "string" &&
+    interaction.directory !== "" &&
+    typeof interaction.submitted === "boolean"
+  ) {
+    return {
+      kind: interaction.kind,
+      id: interaction.id,
+      directory: interaction.directory,
+      submitted: interaction.submitted,
+    };
+  }
+  return { kind: "terminal" };
 }
 
 export async function fetchRevision(signal?: AbortSignal): Promise<string | null> {
@@ -287,6 +316,18 @@ export async function stopAgent(paneId: string): Promise<void> {
     init: { signal: AbortSignal.timeout(STOP_TIMEOUT_MS) },
   });
   if (!response.ok) throw new Error(`stop: ${response.status}`);
+}
+
+export async function confirmFolderTrust(
+  paneId: string,
+  id: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const input = { ...paneParam(paneId), json: { id } };
+  const response = await client.api.panes[":id"]["confirm-folder-trust"].$post(input, {
+    init: { signal: AbortSignal.any([signal, AbortSignal.timeout(8_000)]) },
+  });
+  if (!response.ok) throw new Error(`confirm-folder-trust: ${response.status}`);
 }
 
 export async function focusAgent(paneId: string, signal?: AbortSignal): Promise<void> {

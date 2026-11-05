@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HerdrSnapshot } from "../../src/server/herdr/contract";
+import { FOLDER_TRUST_SCREEN } from "./folder-trust";
 
 export type Scenario = {
   snapshot: HerdrSnapshot;
@@ -233,6 +234,26 @@ MODELS
         focused: false,
         agent_session: null,
       },
+      {
+        pane_id: "w3:p2",
+        workspace_id: "w3",
+        tab_id: "w3:t1",
+        cwd: scratch,
+        label: "folder-trust",
+        agent_status: "blocked",
+        focused: false,
+        agent_session: null,
+      },
+      {
+        pane_id: "w3:p3",
+        workspace_id: "w3",
+        tab_id: "w3:t1",
+        cwd: scratch,
+        label: "folder-trust-saved",
+        agent_status: "idle",
+        focused: false,
+        agent_session: { agent: "codex", source: "herdr:codex", kind: "id", value: "thread_demo" },
+      },
     ],
     agents: [
       {
@@ -263,10 +284,20 @@ MODELS
         agent: "claude",
         terminal_title_stripped: "docs",
       },
+      ...["w3:p2", "w3:p3"].map((pane_id) => ({
+        pane_id,
+        workspace_id: "w3",
+        cwd: scratch,
+        agent: "codex",
+        terminal_title_stripped: "scratch",
+      })),
     ],
   };
 
-  return { snapshot, outputs };
+  return {
+    snapshot,
+    outputs: { ...outputs, "w3:p2": FOLDER_TRUST_SCREEN, "w3:p3": FOLDER_TRUST_SCREEN },
+  };
 }
 
 async function writeBranch(directory: string, branch: string): Promise<void> {

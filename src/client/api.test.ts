@@ -19,6 +19,7 @@ import {
   toPaneRead,
   toAgentModels,
   MODEL_CREATE_TIMEOUT_MS,
+  toPaneInteraction,
 } from "./api";
 
 const api = createApiClient("http://localhost");
@@ -50,7 +51,14 @@ test("model-specific creation also covers candidate lookup and session preparati
 
 test("the JSON pane routes expose their media type rejection through RPC", () => {
   type PaneRoutes = (typeof api.api.panes)[":id"];
-  type JsonAction = "input" | "stop" | "focus" | "close" | "exit" | "split";
+  type JsonAction =
+    | "input"
+    | "stop"
+    | "focus"
+    | "close"
+    | "exit"
+    | "split"
+    | "confirm-folder-trust";
   type Rejections = {
     [Action in JsonAction]: Extract<
       Awaited<ReturnType<PaneRoutes[Action]["$post"]>>,
@@ -111,7 +119,7 @@ test("a broken event body is dropped instead of thrown", () => {
 });
 
 test("an output body is accepted only for the pane that was requested", () => {
-  const body = { paneId: "w1:p2", text: "hi", truncated: false, revision: 3 };
+  const body = { paneId: "w1:p2", text: "hi", truncated: false, revision: 3, interaction: null };
 
   expect(toPaneRead(body, "w1:p2")).toEqual(body);
   expect(toPaneRead(body, "w1:p3")).toBeNull();
@@ -126,7 +134,26 @@ test("empty output is still valid output", () => {
     text: "",
     truncated: true,
     revision: 0,
+    interaction: null,
   });
+});
+
+test("confirmation snapshots validate their identity, scope and submitted state", () => {
+  const confirmation = {
+    kind: "codex-folder-trust" as const,
+    id: "prompt-1",
+    directory: "/workspace/demo",
+    submitted: false,
+  };
+  expect(toPaneInteraction(confirmation)).toEqual(confirmation);
+  expect(toPaneInteraction(null)).toBeNull();
+  for (const value of [
+    { kind: "unknown" },
+    { ...confirmation, id: null },
+    { ...confirmation, submitted: "false" },
+  ]) {
+    expect(toPaneInteraction(value)).toEqual({ kind: "terminal" });
+  }
 });
 
 test("the chat request names the pane and carries nothing else", () => {

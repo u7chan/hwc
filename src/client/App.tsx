@@ -217,6 +217,7 @@ export function App() {
   const [view, setView] = useState<View | null>(null);
   const initialView = useRef<View | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dismissedConfirmations, setDismissedConfirmations] = useState<Record<string, string>>({});
   const [revision, setRevision] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     parseSidebarWidth(
@@ -647,6 +648,10 @@ export function App() {
       branch={wide || cells.length > 1 ? null : where.branch}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
       sending={inputsInFlight.current.has(item.id)}
+      dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
+      onDismissConfirmation={(id) =>
+        setDismissedConfirmations((current) => ({ ...current, [item.id]: id }))
+      }
       menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
       commandRef={(handle) => {
         if (handle === null) commandHandles.current.delete(item.id);

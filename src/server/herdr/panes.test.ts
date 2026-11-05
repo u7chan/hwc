@@ -127,6 +127,18 @@ test("stop sends Escape to the pane", async () => {
   ]);
 });
 
+test("folder trust confirmation sends Enter without text or other keys", async () => {
+  const { calls, call } = recordingCaller();
+  await createPaneClient({ path: "/tmp/test.sock", call }).confirmFolderTrust({ paneId: "w1:p1" });
+  expect(calls).toEqual([
+    {
+      method: "pane.send_keys",
+      params: { pane_id: "w1:p1", keys: ["enter"] },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});
+
 test("stop reports the failure so the route can map it", async () => {
   const { call } = recordingCaller({
     "pane.send_keys": new HerdrError("pane_not_found", "no pane w1:p9"),

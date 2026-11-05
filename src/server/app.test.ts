@@ -10,6 +10,7 @@ import type { PaneClient } from "./herdr/panes";
 import { HerdrError } from "./herdr/socket";
 import type { AppState, ChatSource, PaneState, StateStore } from "./herdr/state";
 import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
+import { FOLDER_TRUST_SCREEN } from "../../e2e/fixtures/folder-trust";
 
 const pane: PaneState = {
   id: "w1:p1",
@@ -158,6 +159,7 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
     send: async () => {},
     focus: async () => {},
     stop: async () => {},
+    confirmFolderTrust: async () => {},
     close: async () => {},
     exit: async () => {},
     layout: async ({ paneId }) => ({ cells: [{ paneId, width: 240, height: 48 }] }),
@@ -409,7 +411,7 @@ test("GET /api/panes/:id/output returns the pane output", async () => {
   const response = await app.request("/api/panes/w1:p1/output?lines=20");
 
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual(output);
+  expect(await response.json()).toEqual({ ...output, interaction: null });
 });
 
 test("GET /api/panes/:id/output forwards the parsed query to the pane client", async () => {
@@ -476,7 +478,150 @@ test("GET /api/panes/:id/output returns 502 when Herdr cannot be reached", async
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });
 
-const jsonPaneActions = ["input", "stop", "focus", "close", "exit", "split"] as const;
+function folderTrustApp() {
+  let screen = FOLDER_TRUST_SCREEN;
+  let sends = 0;
+  let inputs = 0;
+  let stops = 0;
+  const codexPane = { ...pane, agent: "codex", chat: true, agentStatus: "working" as const };
+  const codexState: AppState = {
+    ...state,
+    workspaces: [
+      { ...state.workspaces[0]!, tabs: [{ ...state.workspaces[0]!.tabs[0]!, panes: [codexPane] }] },
+    ],
+  };
+  const store = createFakeStore(codexState);
+  const app = createApp({
+    store,
+    chat: createFakeChat(),
+    panes: createFakePanes({
+      read: async ({ paneId, source }) => ({
+        paneId,
+        text: source === "detection" ? screen : "terminal output",
+        truncated: false,
+        revision: 0,
+      }),
+      confirmFolderTrust: async () => {
+        sends += 1;
+      },
+      send: async () => {
+        inputs += 1;
+      },
+      stop: async () => {
+        stops += 1;
+      },
+    }),
+  });
+  const inspect = async () =>
+    (await (await app.request("/api/panes/w1:p1/output")).json()) as {
+      interaction: { id: string; submitted: boolean } | null;
+    };
+  const confirm = (id: unknown) =>
+    app.request("/api/panes/w1:p1/confirm-folder-trust", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+  return {
+    app,
+    inspect,
+    confirm,
+    store,
+    setScreen: (text: string) => {
+      screen = text;
+    },
+    counts: () => ({ sends, inputs, stops }),
+  };
+}
+
+test("output reports a server-issued folder confirmation independently of the conversation", async () => {
+  const fixture = folderTrustApp();
+  const first = await fixture.inspect();
+  expect(first).toMatchObject({
+    interaction: {
+      kind: "codex-folder-trust",
+      directory: "/workspace/acme-dashboard",
+      submitted: false,
+    },
+  });
+  expect((await fixture.inspect()).interaction?.id).toBe(first.interaction!.id);
+  expect(fixture.counts()).toEqual({ sends: 0, inputs: 0, stops: 0 });
+});
+
+test("a valid confirmation succeeds once and does not optimistically clear the prompt", async () => {
+  const fixture = folderTrustApp();
+  const { interaction } = await fixture.inspect();
+  const results = await Promise.all([
+    fixture.confirm(interaction!.id),
+    fixture.confirm(interaction!.id),
+  ]);
+  expect(results.map((result) => result.status)).toEqual([200, 409]);
+  expect((await fixture.inspect()).interaction?.submitted).toBe(true);
+  expect(fixture.counts().sends).toBe(1);
+  fixture.setScreen("Codex is ready");
+  expect((await fixture.inspect()).interaction).toBeNull();
+});
+
+test("confirmation rejects malformed, forged and stale identifiers without sending keys", async () => {
+  const fixture = folderTrustApp();
+  for (const id of [null, false, 0, "", [], {}])
+    expect((await fixture.confirm(id)).status).toBe(400);
+  expect((await fixture.confirm("forged")).status).toBe(409);
+  const { interaction } = await fixture.inspect();
+  fixture.setScreen(FOLDER_TRUST_SCREEN.replace("acme-dashboard", "other-project"));
+  expect((await fixture.confirm(interaction!.id)).status).toBe(409);
+  expect(fixture.counts().sends).toBe(0);
+});
+
+test("approval refreshes agent identity and rejects a pane that is no longer Codex", async () => {
+  const fixture = folderTrustApp();
+  const { interaction } = await fixture.inspect();
+  fixture.store.push(state);
+  expect((await fixture.confirm(interaction!.id)).status).toBe(409);
+  expect(fixture.counts().sends).toBe(0);
+});
+
+test("message and stop requests cannot answer or cancel the pending trust screen", async () => {
+  const fixture = folderTrustApp();
+  for (const action of ["input", "stop"]) {
+    const response = await fixture.app.request(`/api/panes/w1:p1/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello", submit: true }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "confirmation_pending" });
+  }
+  expect(fixture.counts()).toEqual({ sends: 0, inputs: 0, stops: 0 });
+});
+
+test("confirmation returns 404 for absent panes and 502 if authoritative state is unavailable", async () => {
+  const fixture = folderTrustApp();
+  const request = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: "old" }),
+  };
+  expect((await fixture.app.request("/api/panes/w1:p9/confirm-folder-trust", request)).status).toBe(
+    404,
+  );
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(null, new Error("offline")),
+    panes: createFakePanes(),
+  });
+  expect((await app.request("/api/panes/w1:p1/confirm-folder-trust", request)).status).toBe(502);
+});
+
+const jsonPaneActions = [
+  "input",
+  "stop",
+  "focus",
+  "close",
+  "exit",
+  "split",
+  "confirm-folder-trust",
+] as const;
 
 test.each(jsonPaneActions)(
   "POST /api/panes/:id/%s rejects non-JSON before reading the body or state",
@@ -518,7 +663,7 @@ test.each(jsonPaneActions)(
   },
 );
 
-test.each(jsonPaneActions)(
+test.each(jsonPaneActions.filter((action) => action !== "confirm-folder-trust"))(
   "POST /api/panes/:id/%s accepts JSON media types regardless of case or parameters",
   async (action) => {
     const app = createApp({
@@ -535,6 +680,20 @@ test.each(jsonPaneActions)(
       });
       expect(response.status).toBe(200);
     }
+  },
+);
+
+test.each(["application/json", "Application/JSON; Charset=utf-8"])(
+  "folder confirmation accepts the JSON media type %s",
+  async (contentType) => {
+    const fixture = folderTrustApp();
+    const { interaction } = await fixture.inspect();
+    const response = await fixture.app.request("/api/panes/w1:p1/confirm-folder-trust", {
+      method: "POST",
+      headers: { "content-type": contentType },
+      body: JSON.stringify({ id: interaction!.id }),
+    });
+    expect(response.status).toBe(200);
   },
 );
 
