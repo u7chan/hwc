@@ -1,5 +1,6 @@
 import { type AgentModel, type ModelAgentKind, isAgentModel, modelKey } from "../shared/agents";
 import { readServiceFile, requestJson } from "./chat/opencode";
+import { asRecord, type CodexReader, nextCursor, withCodex } from "./codex";
 
 export type AgentModelsClient = {
   list: (agent: ModelAgentKind, directory: string) => Promise<AgentModel[]>;
@@ -79,14 +80,17 @@ export function createAgentModelsClient(
     piModels?: (directory: string) => Promise<string>;
     request?: typeof requestJson;
     loadService?: typeof readServiceFile;
+    codex?: CodexReader;
   } = {},
 ): AgentModelsClient {
   const piModels = options.piModels ?? listPiModels;
   const request = options.request ?? requestJson;
   const loadService = () => (options.loadService ?? readServiceFile)(options.servicePath);
+  const codex = options.codex ?? withCodex;
 
   const list: AgentModelsClient["list"] = async (agent, directory) => {
     if (agent === "pi") return parsePiModels(await piModels(directory));
+    if (agent === "codex") return listCodexModels(codex, directory);
     const service = await loadService();
     const query = new URLSearchParams({ "location[directory]": directory });
     return parseOpencodeModels(await request(service, `/api/model?${query}`, 5_000));
@@ -100,6 +104,7 @@ export function createAgentModelsClient(
         throw new Error("The selected model is not available");
       }
       if (agent === "pi") return ["--model", modelKey(model)];
+      if (agent === "codex") return ["--model", model.id];
 
       // OpenCode 2 の通常 TUI に --model は無い。新規セッションだけにモデルを指定し、
       // --session で開く。共有の既定設定や実行中のセッションには触れない。
@@ -115,4 +120,36 @@ export function createAgentModelsClient(
       return ["--session", id];
     },
   };
+}
+
+async function listCodexModels(read: CodexReader, directory: string): Promise<AgentModel[]> {
+  return read(directory, async (request) => {
+    const raw = await request("config/read", { cwd: directory, includeLayers: false });
+    const config = asRecord(asRecord(raw)?.config);
+    if (config === null) throw new Error("Codex config is not available");
+    const provider = config.model_provider ?? "openai";
+    const models: AgentModel[] = [];
+    let cursor: string | null = null;
+    const seen = new Set<string>();
+    for (let page = 0; page < 10; page += 1) {
+      const result = asRecord(
+        await request("model/list", {
+          includeHidden: false,
+          limit: 100,
+          ...(cursor === null ? {} : { cursor }),
+        }),
+      );
+      if (!Array.isArray(result?.data)) throw new Error("Codex model list is not available");
+      for (const item of result.data) {
+        const record = asRecord(item);
+        const model = { provider, id: record?.model };
+        if (record?.hidden !== true && isAgentModel(model)) models.push(model);
+      }
+      cursor = nextCursor(result);
+      if (cursor === null) return uniqueModels(models);
+      if (seen.has(cursor)) throw new Error("Codex cursor did not advance");
+      seen.add(cursor);
+    }
+    throw new Error("Codex model list is too large");
+  });
 }

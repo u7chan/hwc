@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createAgentModelsClient, parseOpencodeModels, parsePiModels } from "./agent-models";
+import type { CodexReader } from "./codex";
 
 const model = { provider: "example", id: "beam" };
 const namespacedModel = {
@@ -12,6 +13,114 @@ example   beam   200K     32K      yes       no
 other     beam   200K     32K      no        yes
 `;
 const service = { url: new URL("http://127.0.0.1:4096"), authorization: "Basic fixture" };
+
+function codexReader(options: { provider?: unknown; pages?: unknown[]; config?: unknown } = {}) {
+  const calls: {
+    method: string;
+    params: Record<string, unknown>;
+    directory: string | undefined;
+  }[] = [];
+  const read: CodexReader = async (directory, run) => {
+    let page = 0;
+    return run(async (method, params) => {
+      calls.push({ method, params, directory });
+      if (method === "config/read")
+        return options.config ?? { config: { model_provider: options.provider } };
+      if (method === "model/list")
+        return (
+          options.pages?.[page++] ?? { data: [{ id: "picker-id", model: "beam", hidden: false }] }
+        );
+      throw new Error("Model selection must not start a thread or change config");
+    });
+  };
+  return { read, calls };
+}
+
+test("Codex candidates use API model slugs and the effective provider, not picker ids", async () => {
+  const { read, calls } = codexReader({
+    provider: "example",
+    pages: [
+      {
+        data: [
+          { id: "picker-one", model: "beam", hidden: false },
+          { id: "picker-two", model: "beam", hidden: false },
+          { model: "hidden", hidden: true },
+          { model: "--help", hidden: false },
+        ],
+        nextCursor: "more",
+      },
+      { data: [{ model: "beam-mini", hidden: false }], nextCursor: null },
+    ],
+  });
+  const client = createAgentModelsClient({ codex: read });
+  expect(await client.list("codex", "/project")).toEqual([
+    model,
+    { provider: "example", id: "beam-mini" },
+  ]);
+  expect(calls.map((call) => call.method)).toEqual(["config/read", "model/list", "model/list"]);
+  expect(calls.every((call) => call.directory === "/project")).toBe(true);
+  expect(calls[0]?.params).toEqual({ cwd: "/project", includeLayers: false });
+  expect(calls[2]?.params.cursor).toBe("more");
+});
+
+test("Codex uses OpenAI when config leaves the provider unset", async () => {
+  const { read } = codexReader();
+  expect(await createAgentModelsClient({ codex: read }).list("codex", "/project")).toEqual([
+    { provider: "openai", id: "beam" },
+  ]);
+});
+
+test("an empty Codex model catalog stays empty", async () => {
+  const { read } = codexReader({ pages: [{ data: [], nextCursor: null }] });
+  expect(await createAgentModelsClient({ codex: read }).list("codex", "/project")).toEqual([]);
+});
+
+test("Codex starts only the selected model in the new pane's effective directory", async () => {
+  const { read, calls } = codexReader({ provider: "example" });
+  const client = createAgentModelsClient({ codex: read });
+  expect(await client.startArgs("codex", model, "/new-project")).toEqual(["--model", "beam"]);
+  expect(calls.every((call) => call.directory === "/new-project")).toBe(true);
+  await expect(
+    client.startArgs("codex", { ...model, provider: "other" }, "/new-project"),
+  ).rejects.toThrow();
+  await expect(
+    client.startArgs("codex", { ...model, id: "bea" }, "/new-project"),
+  ).rejects.toThrow();
+});
+
+test.each([{}, { data: null }, { data: [], nextCursor: 42 }])(
+  "malformed Codex catalogs are unavailable: %j",
+  async (page) => {
+    const { read } = codexReader({ pages: [page] });
+    await expect(
+      createAgentModelsClient({ codex: read }).list("codex", "/project"),
+    ).rejects.toThrow();
+  },
+);
+
+test("Codex rejects a missing config instead of using an unrelated provider", async () => {
+  const { read } = codexReader({ config: {} });
+  await expect(
+    createAgentModelsClient({ codex: read }).list("codex", "/project"),
+  ).rejects.toThrow();
+});
+
+test("Codex catalog pagination must advance", async () => {
+  const page = { data: [], nextCursor: "same" };
+  const { read } = codexReader({ pages: [page, page] });
+  await expect(
+    createAgentModelsClient({ codex: read }).list("codex", "/project"),
+  ).rejects.toThrow();
+});
+
+test("excessive Codex catalog pagination fails instead of returning a partial selection", async () => {
+  const { read } = codexReader({
+    pages: Array.from({ length: 11 }, (_, i) => ({ data: [], nextCursor: `page${i}` })),
+  });
+  await expect(createAgentModelsClient({ codex: read }).list("codex", "/project")).rejects.toThrow(
+    "too large",
+  );
+});
 
 test("Pi candidates keep the provider identity and collapse duplicate rows", () => {
   expect(parsePiModels(table)).toEqual([model, { provider: "other", id: "beam" }]);

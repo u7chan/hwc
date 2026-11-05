@@ -57,6 +57,7 @@ export function createApp(options: {
   // opencode はローカルサービスの API から読む。サービスを読めない構成でも、ペインの
   // 一覧や端末出力は使えるようにする。
   opencode?: SessionChatClient;
+  codex?: SessionChatClient;
   models?: AgentModelsClient;
   revision?: string;
   sseHeartbeatMs?: number;
@@ -68,6 +69,7 @@ export function createApp(options: {
     panes,
     chat,
     opencode,
+    codex,
     models,
     revision = "dev",
     sseHeartbeatMs = SSE_HEARTBEAT_MS,
@@ -266,7 +268,7 @@ export function createApp(options: {
       const source = store.chatSource(paneId);
       if (!pane.chat || source === null) return c.json({ error: "no_chat" }, 404);
 
-      const client = source.agent === "pi" ? chat : opencode;
+      const client = { pi: chat, opencode, codex }[source.agent];
       if (client === undefined) return c.json({ error: "chat_unavailable" }, 502);
 
       try {

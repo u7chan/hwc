@@ -78,7 +78,7 @@ test.each(["pi", "claude", "codex", "opencode"] as const)(
   },
 );
 
-test.each(["pi", "opencode"] as const)(
+test.each(["pi", "codex", "opencode"] as const)(
   "a new %s pane starts with model-specific arguments",
   async (agent) => {
     const { panes } = createFakePanes();
@@ -100,29 +100,32 @@ test.each(["pi", "opencode"] as const)(
   },
 );
 
-test("a model preparation failure keeps the named shell and does not start the default model", async () => {
-  const { panes } = createFakePanes();
-  const models = {
-    list: async () => [],
-    startArgs: async () => {
-      throw new Error("unavailable");
-    },
-  };
-  expect(
-    await createPane(
-      panes,
-      "w1:p1",
-      {
-        name: "実装",
-        agent: "pi",
-        model: { provider: "example", id: "beam" },
+test.each(["pi", "codex"] as const)(
+  "a %s model preparation failure keeps the named shell and does not start the default model",
+  async (agent) => {
+    const { panes } = createFakePanes();
+    const models = {
+      list: async () => [],
+      startArgs: async () => {
+        throw new Error("unavailable");
       },
-      models,
-    ),
-  ).toEqual({ ok: false, error: "agent_start_failed", paneId: "w1:p3" });
-  expect(panes.startAgent).not.toHaveBeenCalled();
-  expect(panes.rename).toHaveBeenCalledWith({ paneId: "w1:p3", label: "実装" });
-});
+    };
+    expect(
+      await createPane(
+        panes,
+        "w1:p1",
+        {
+          name: "実装",
+          agent,
+          model: { provider: "example", id: "beam" },
+        },
+        models,
+      ),
+    ).toEqual({ ok: false, error: "agent_start_failed", paneId: "w1:p3" });
+    expect(panes.startAgent).not.toHaveBeenCalled();
+    expect(panes.rename).toHaveBeenCalledWith({ paneId: "w1:p3", label: "実装" });
+  },
+);
 
 test("a named shell is renamed without starting an agent", async () => {
   const { panes, calls } = createFakePanes();

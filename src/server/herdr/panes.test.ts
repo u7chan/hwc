@@ -478,7 +478,7 @@ test("parseSplitBody rejects an unknown agent, a non-string name, or an overlong
   expect(parseSplitBody([]).ok).toBe(false);
 });
 
-test.each(["pi", "opencode"])(
+test.each(["pi", "codex", "opencode"])(
   "parseSplitBody accepts a provider-qualified model for %s",
   (agent) => {
     const model = { provider: "example", id: "family/beam-v1:latest" };
@@ -500,13 +500,10 @@ test.each(["pi", "opencode"])(
   },
 );
 
-test.each(["claude", "codex", null, undefined])(
-  "parseSplitBody rejects model overrides for %s",
-  (agent) => {
-    expect(parseSplitBody({ agent, model: { provider: "example", id: "beam" } }).ok).toBe(false);
-    expect(parseSplitBody({ agent, model: null }).ok).toBe(true);
-  },
-);
+test.each(["claude", null, undefined])("parseSplitBody rejects model overrides for %s", (agent) => {
+  expect(parseSplitBody({ agent, model: { provider: "example", id: "beam" } }).ok).toBe(false);
+  expect(parseSplitBody({ agent, model: null }).ok).toBe(true);
+});
 
 test.each([
   "beam",

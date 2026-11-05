@@ -1,11 +1,34 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { HerdrSnapshot } from "../../src/server/herdr/contract";
 
 export type Scenario = {
   snapshot: HerdrSnapshot;
   outputs: Record<string, string>;
 };
+
+export type CodexFixture = {
+  thread: { id: string; model: string; reasoningEffort: string };
+  turns: { id: string; startedAt: number; items: Record<string, unknown>[] }[];
+};
+
+export async function writeCodexThread(
+  root: string,
+  id: string,
+  model: string,
+  turns: CodexFixture["turns"] = [],
+) {
+  const directory = join(root, "codex", "threads");
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    join(directory, `${id}.json`),
+    JSON.stringify({
+      thread: { id, model, reasoningEffort: "high" },
+      turns,
+    } satisfies CodexFixture),
+  );
+}
 
 export const STARTUP_MODELS = [
   { provider: "example", id: "beam-small" },
@@ -36,6 +59,29 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
     writeFile(sessionPath, sessionLines.map((line) => `${line}\n`).join("")),
     writeFile(emptySessionPath, `${JSON.stringify(emptySessionHeader)}\n`),
+    writeCodexThread(root, "thread_demo", "beam-small", [
+      {
+        id: "turn_demo",
+        startedAt: 1767258000,
+        items: [
+          {
+            type: "userMessage",
+            id: "u1",
+            content: [{ type: "text", text: "空状態の変更をレビューしてください。" }],
+          },
+          {
+            type: "agentMessage",
+            id: "a1",
+            text: "## レビュー結果\n\n- 空状態の分岐と余白は揃っています。\n- 追加の修正はありません。",
+          },
+        ],
+      },
+    ]),
+    writeFile(
+      join(root, "bin", "codex"),
+      `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-codex.ts", import.meta.url))}" "$@"\n`,
+      { mode: 0o700 },
+    ),
     writeFile(
       join(root, "bin", "pi"),
       `#!/bin/sh
@@ -150,7 +196,7 @@ MODELS
         label: "review",
         agent_status: "idle",
         focused: false,
-        agent_session: null,
+        agent_session: { agent: "codex", source: "herdr:codex", kind: "id", value: "thread_demo" },
       },
       {
         pane_id: "w1:p4",
