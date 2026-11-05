@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
@@ -21,15 +21,10 @@ import {
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
 import { CreatePane } from "./CreatePane";
-import { CloseIcon, CollapseIcon, HwcMark, NewSessionIcon, PlusIcon, SettingsIcon } from "./icons";
-import { MENU_HEIGHT, Menu, menuPlacement, type MenuPlacement } from "./Menu";
-import {
-  COMMAND_BLOCK_NOTES,
-  commandLabel,
-  isCommandPane,
-  type CommandId,
-  type PaneCommandHandle,
-} from "./commands";
+import { CloseIcon, HwcMark, PlusIcon, SettingsIcon } from "./icons";
+import { Menu } from "./Menu";
+import { PaneMenu } from "./PaneMenu";
+import type { PaneCommandHandle } from "./commands";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { type PaneCloseAction, paneCloseAction } from "../shared/pane-close";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
@@ -95,8 +90,6 @@ import {
 const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
 const NO_TIMES: ReadonlyMap<string, number> = new Map();
-// 詳細のメニューは見出し + 項目 4 つ + 区切り + 注記行。位置計算のための目安。
-const DETAIL_MENU_HEIGHT = MENU_HEIGHT + 44 * 5;
 
 // 保存に失敗しても表示は続ける。プライベートモードなどでは localStorage が使えない。
 function readStored(key: string): string | null {
@@ -196,6 +189,13 @@ type Closing = {
   phase: "confirm" | "busy" | "failed";
 };
 
+type OperationMenu = {
+  target: { kind: "pane" | "workspace"; id: string };
+  trigger: HTMLElement;
+  fromList: boolean;
+  open: boolean;
+};
+
 // 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
 // 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
@@ -255,9 +255,13 @@ export function App() {
   );
   // メニューと確認はセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
-  const [menu, setMenu] = useState<
-    ({ paneId: string; commands: PaneCommandHandle } & MenuPlacement) | null
-  >(null);
+  const [menu, setMenu] = useState<OperationMenu | null>(null);
+  // 会話と圧縮の状態は各詳細が持つ。一覧も同じ実行口を使う。
+  const commandHandles = useRef(new Map<string, PaneCommandHandle>());
+  // メニューや詳細の寿命でロックを失わず、次の描画より前の連打も抑える。
+  // 正はこの集合だけにし、描画には変更通知を使う。
+  const inputsInFlight = useRef(new Set<string>());
+  const [, inputChanged] = useReducer((revision: number) => revision + 1, 0);
   const [closing, setClosing] = useState<Closing | null>(null);
   // 作成ダイアログの対象ペイン。空なら閉じている。
   const [createTarget, setCreateTarget] = useState<string | null>(null);
@@ -427,38 +431,31 @@ export function App() {
     setView({ selectedPaneId: null, expanded });
   };
 
-  const openPaneMenu = (paneId: string, rect: DOMRect, commands: PaneCommandHandle) => {
-    const placement = menuPlacement(
-      rect,
-      { width: window.innerWidth, height: window.innerHeight },
-      DETAIL_MENU_HEIGHT,
-    );
-    setMenu({ paneId, commands, ...placement });
+  const openPaneMenu = (paneId: string, trigger: HTMLElement, fromList = false) => {
+    setMenu({ target: { kind: "pane", id: paneId }, trigger, fromList, open: true });
   };
 
-  const closeMenu = () => setMenu(null);
-
-  const runPaneCommand = (id: CommandId) => {
-    if (menu === null) return;
-    setMenu(null);
-    menu.commands.run(id);
+  const closeMenu = () => {
+    // 送信中に別のメニューを開き直しても、古い応答で新しいメニューを閉じない。
+    setMenu((current) =>
+      current !== null && current === menu ? { ...current, open: false } : current,
+    );
   };
 
   // 名前とエージェントはダイアログで決める。メニューは入口だけ。
-  const openCreateDialog = () => {
-    if (menu === null) return;
-    setCreateTarget(menu.paneId);
-    setMenu(null);
+  const openCreateDialog = (paneId: string) => {
+    setCreateTarget(paneId);
+    closeMenu();
   };
 
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。
   const openCloseConfirm = () => {
-    if (menu === null || state === null) return;
-    const paneId = menu.paneId;
+    if (menu === null || menu.target.kind !== "pane" || state === null) return;
+    const paneId = menu.target.id;
     const action = paneCloseAction(state, paneId);
     if (action === null || action === "keep") return;
     const row = findPaneRow(state, paneId);
-    setMenu(null);
+    closeMenu();
     setClosing({
       paneId,
       action,
@@ -525,16 +522,22 @@ export function App() {
   };
 
   // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。
-  // 失敗の表示は入力欄を持つ PaneDetail が持つ。ペインを離れれば消える。
+  // 失敗は送信した入口で伝える。本文は消さず、再試行できるようにする。
   const sendToPane = async (
     paneId: string,
     text: string,
     attachments: string[],
   ): Promise<boolean> => {
+    if (inputsInFlight.current.has(paneId)) return false;
+    inputsInFlight.current.add(paneId);
+    inputChanged(undefined);
     try {
       await sendInput(paneId, text, attachments);
     } catch {
       return false;
+    } finally {
+      inputsInFlight.current.delete(paneId);
+      inputChanged(undefined);
     }
     rememberSent(paneId);
     return true;
@@ -621,25 +624,15 @@ export function App() {
   const compact = cells.length > 1;
 
   // 4 枚の判定は BFF と同じタブの枚数で行う。
-  const menuTab =
-    state === null || menu === null ? null : (findPaneRow(state, menu.paneId)?.tab ?? null);
+  const menuPaneId = menu?.target.kind === "pane" ? menu.target.id : null;
+  const menuTab = state === null ? null : (findPaneRow(state, menuPaneId)?.tab ?? null);
   const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
-  const menuPane = state === null || menu === null ? null : findPane(state, menu.paneId);
+  const menuPane = state === null ? null : findPane(state, menuPaneId);
   const menuCloseAction =
-    state === null || menu === null ? null : paneCloseAction(state, menu.paneId);
-  const menuCommands = menu?.commands ?? null;
-  const menuCommandsShown = menuPane !== null && isCommandPane(menuPane);
-  const menuCommandsBusy = menuPane?.agentStatus === "working" || (menuCommands?.busy() ?? false);
-  const canRunNew =
-    menuCommandsShown && menuPane !== null && (menuCommands?.available("new", menuPane) ?? false);
-  const canRunCompact =
-    menuCommandsShown &&
-    menuPane !== null &&
-    (menuCommands?.available("compact", menuPane) ?? false);
-  const compactBlock = menuCommands?.blockReason() ?? null;
-  const commandNote =
-    menuCommandsShown && !menuCommandsBusy && compactBlock !== null
-      ? COMMAND_BLOCK_NOTES[compactBlock]
+    state === null || menuPaneId === null ? null : paneCloseAction(state, menuPaneId);
+  const menuWorkspace =
+    menu?.target.kind === "workspace"
+      ? (state?.workspaces.find((workspace) => workspace.id === menu.target.id) ?? null)
       : null;
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
@@ -653,7 +646,12 @@ export function App() {
       // ブランチは一覧が隠れる狭い画面でだけ出す。広い画面の一覧と分割のセルでは重なる。
       branch={wide || cells.length > 1 ? null : where.branch}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
-      menuOpen={menu?.paneId === item.id}
+      sending={inputsInFlight.current.has(item.id)}
+      menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
+      commandRef={(handle) => {
+        if (handle === null) commandHandles.current.delete(item.id);
+        else commandHandles.current.set(item.id, handle);
+      }}
       onOpenMenu={openPaneMenu}
       onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
       onStop={() => stopPane(item.id)}
@@ -712,6 +710,17 @@ export function App() {
               onSelect={select}
               onFocus={focusPane}
               onToggle={toggle}
+              openPaneMenuId={menu?.open === true && menu.fromList ? menuPaneId : null}
+              openWorkspaceMenuId={menu?.open === true ? (menuWorkspace?.id ?? null) : null}
+              onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
+              onWorkspaceMenu={(workspaceId, trigger) =>
+                setMenu({
+                  target: { kind: "workspace", id: workspaceId },
+                  trigger,
+                  fromList: true,
+                  open: true,
+                })
+              }
               workingSince={workingSince}
               finishedAt={finishedAt}
               sent={sent}
@@ -814,61 +823,55 @@ export function App() {
         </main>
       </div>
 
-      {menu === null ? null : (
-        <Menu label={`${menu.paneId} の操作`} placement={menu} onClose={closeMenu}>
-          <p class="hwc-menu-head">{menu.paneId}</p>
-          <button
-            type="button"
-            role="menuitem"
-            class="hwc-menu-item"
-            disabled={menuFull}
-            onClick={openCreateDialog}
-          >
-            <PlusIcon size={14} />
-            新しいペイン
-          </button>
-          {menuFull ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
-          {menuCommandsShown ? (
+      {menu === null || (menuPane === null && menuWorkspace === null) ? null : (
+        <Menu
+          key={`${menu.target.kind}:${menu.target.id}`}
+          label={`${menuWorkspace?.label ?? menuPaneId} の操作`}
+          trigger={menu.trigger}
+          open={menu.open}
+          onClose={closeMenu}
+          onExited={() => setMenu((current) => (current?.open === false ? null : current))}
+          closeOnScroll={menu.fromList}
+        >
+          {menuPane === null ? null : (
+            <PaneMenu
+              pane={menuPane}
+              full={menuFull}
+              closeAction={menuCloseAction}
+              commands={commandHandles.current.get(menuPane.id) ?? null}
+              sending={inputsInFlight.current.has(menuPane.id)}
+              onCreate={() => openCreateDialog(menuPane.id)}
+              onClosePane={openCloseConfirm}
+              onDismiss={closeMenu}
+              onSubmit={(text) => sendToPane(menuPane.id, text, [])}
+            />
+          )}
+          {menuWorkspace === null ? null : (
             <>
-              <button
-                type="button"
-                role="menuitem"
-                class="hwc-menu-item"
-                disabled={!canRunNew}
-                onClick={() => runPaneCommand("new")}
-              >
-                <NewSessionIcon size={14} />
-                {commandLabel("new")}
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                class="hwc-menu-item"
-                disabled={!canRunCompact}
-                onClick={() => runPaneCommand("compact")}
-              >
-                <CollapseIcon size={14} />
-                {commandLabel("compact")}
-              </button>
-              {commandNote === null ? null : <p class="hwc-menu-note">{commandNote}</p>}
+              <p class="hwc-menu-head">{menuWorkspace.label}</p>
+              {menuWorkspace.tabs.map((tab) => {
+                const source = tab.panes[0];
+                const full = tab.panes.length >= MAX_PANES_PER_TAB;
+                return (
+                  <div key={tab.id}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      class="hwc-menu-item"
+                      disabled={full || source === undefined}
+                      onClick={() => source && openCreateDialog(source.id)}
+                    >
+                      <PlusIcon size={14} />
+                      {menuWorkspace.tabs.length === 1
+                        ? "新しいペイン"
+                        : `${tab.label || tab.id} に新しいペイン`}
+                    </button>
+                    {full ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
+                  </div>
+                );
+              })}
             </>
-          ) : null}
-          <hr class="hwc-menu-separator" />
-          <button
-            type="button"
-            role="menuitem"
-            class="hwc-menu-item hwc-menu-item--danger"
-            disabled={menuCloseAction === null || menuCloseAction === "keep"}
-            onClick={openCloseConfirm}
-          >
-            <CloseIcon size={14} />
-            {menuCloseAction === "exit" ? "エージェントを終了" : "ペインを閉じる"}
-          </button>
-          {menuCloseAction === "exit" ? (
-            <p class="hwc-menu-note">最後のペインとスペースは残します</p>
-          ) : menuCloseAction === "keep" ? (
-            <p class="hwc-menu-note">スペースを残すため、最後のペインは閉じられません</p>
-          ) : null}
+          )}
         </Menu>
       )}
 

@@ -1,5 +1,5 @@
-import { Fragment, type ComponentChildren } from "preact";
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { Fragment, type ComponentChildren, type Ref } from "preact";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatCompaction, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
@@ -59,6 +59,7 @@ import {
   TerminalIcon,
 } from "./icons";
 import { Markdown } from "./Markdown";
+import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
 import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
 import { agentGlyph, isShellPane, paneName, type PaneContext } from "./select";
@@ -489,10 +490,12 @@ type PaneDetailProps = {
   // 一覧が隠れる狭い画面でだけ渡す。広い画面では一覧がブランチを持っている。
   branch: string | null;
   waitingMs: number | null;
+  sending: boolean;
   // メニューはセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
-  // 中の fixed はセル基準になる。ここではトリガーの位置と、コマンドの実行口を渡す。
+  // 中の fixed はセル基準になる。実行口は一覧から同じペインを操作するときにも使う。
   menuOpen: boolean;
-  onOpenMenu: (paneId: string, rect: DOMRect, commands: PaneCommandHandle) => void;
+  commandRef: Ref<PaneCommandHandle>;
+  onOpenMenu: (paneId: string, trigger: HTMLElement) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
   onStop: () => Promise<boolean>;
 };
@@ -512,6 +515,7 @@ export function PaneDetail(props: PaneDetailProps) {
     labeled,
     branch,
     waitingMs,
+    sending,
     menuOpen,
     onOpenMenu,
     onSubmit,
@@ -520,7 +524,6 @@ export function PaneDetail(props: PaneDetailProps) {
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expandedOpen, setExpandedOpen] = useState(false);
-  const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -932,7 +935,6 @@ export function PaneDetail(props: PaneDetailProps) {
     const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
-    setSending(true);
     // 送信したらキーボードを閉じて出力を見せる。
     input.current?.blur();
     // 前の失敗は消す。送り直したのに前の notice が残っていると、いつの結果か読めない。
@@ -968,7 +970,6 @@ export function PaneDetail(props: PaneDetailProps) {
     } else {
       setNotice(SEND_FAILED_NOTICE);
     }
-    setSending(false);
   };
 
   const stopWorking = async () => {
@@ -1003,7 +1004,6 @@ export function PaneDetail(props: PaneDetailProps) {
     }
     const text = commandSendText(id, draft);
     const baselineAt = snapshot?.compaction?.at ?? null;
-    setSending(true);
     input.current?.blur();
     setNotice(null);
     if (await onSubmit(text, [])) {
@@ -1013,7 +1013,6 @@ export function PaneDetail(props: PaneDetailProps) {
       if (id === "compact") markCompaction(baselineAt, text);
       else if (id === "new") setCompactionEcho(null);
     } else setNotice(SEND_FAILED_NOTICE);
-    setSending(false);
   };
 
   // メニューからはコマンド文字列だけを送る。書きかけの draft・添付・引用は次の
@@ -1041,7 +1040,6 @@ export function PaneDetail(props: PaneDetailProps) {
     if (state.sending || state.replying || state.compacting) return;
     const baselineAt = state.snapshot?.compaction?.at ?? null;
     const text = commandText(id);
-    setSending(true);
     input.current?.blur();
     setNotice(null);
     if (await submitLatest.current(text, [])) {
@@ -1050,11 +1048,10 @@ export function PaneDetail(props: PaneDetailProps) {
       if (id === "compact") markCompaction(baselineAt, text);
       else if (id === "new") setCompactionEcho(null);
     } else setNotice(SEND_FAILED_NOTICE);
-    setSending(false);
   };
 
-  // メニューを開くときに渡す。開いた後に状態が変わっても、実行可否と実行だけを
-  // ref から最新値で読む。available の pane は App が今のスナップショットから渡す。
+  // 一覧の入口も、最新の送信中・圧縮中の状態で判定する。
+  // 開いた後に状態が変わっても ref から最新値を読む。
   const menuCommands: PaneCommandHandle = {
     available: (id, currentPane) => {
       const state = commandState.current;
@@ -1082,6 +1079,7 @@ export function PaneDetail(props: PaneDetailProps) {
       }
     },
   };
+  useImperativeHandle(props.commandRef, () => menuCommands);
 
   const submit = () => {
     // 添付を持ったまま /compact と打っても、候補にもチップにも流さず本文として送る。
@@ -1130,9 +1128,8 @@ export function PaneDetail(props: PaneDetailProps) {
           aria-label={`${pane.id} のメニュー`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          onClick={(event) =>
-            onOpenMenu(pane.id, event.currentTarget.getBoundingClientRect(), menuCommands)
-          }
+          aria-controls={MENU_ID}
+          onClick={(event) => onOpenMenu(pane.id, event.currentTarget)}
         >
           <MoreIcon />
         </button>
