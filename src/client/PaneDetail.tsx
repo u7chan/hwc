@@ -36,6 +36,9 @@ import {
   commandLabel,
   commandSendText,
   commandText,
+  compactAlreadyDone,
+  compactHistoryBlocked,
+  COMPACTED_NOTICE,
   isCompactCommand,
   type PaneCommandHandle,
 } from "./commands";
@@ -292,6 +295,19 @@ function Compaction(props: {
   );
 }
 
+// ローカルで送った /compact の控え。セッションには残らないので、リロードや
+// ペイン切り替えで消える。完了した compaction の直前、実行中は末尾に置く。
+function CommandEcho(props: { text: string; at: number }) {
+  return (
+    <li class="hwc-msg" data-role="command">
+      <div class="hwc-command-echo">{props.text}</div>
+      <div class="hwc-msg-meta">
+        <span class="hwc-msg-time">{formatClock(props.at)}</span>
+      </div>
+    </li>
+  );
+}
+
 // 会話として読むための並び。ユーザーは右、エージェントは左。
 // どのエージェントかは入力欄の側に出しているので、ここでは繰り返さない。
 function ChatLog(props: {
@@ -299,10 +315,14 @@ function ChatLog(props: {
   snapshot: ChatSnapshot;
   replying: boolean;
   compacting: boolean;
+  stopping: boolean;
   waitingMs: number | null;
   copiedId: string | null;
   expandable: boolean;
   compactionDurationMs: number | null;
+  compactionElapsedMs: number | null;
+  compactionEcho: { text: string; at: number; completedAt: number | null } | null;
+  onCancelCompaction: () => void;
   onCopy: (id: string, text: string) => void;
   pending: ChatMessage[];
 }) {
@@ -345,11 +365,33 @@ function ChatLog(props: {
         />
       </li>
     );
-  if (rows.length === 0 && !props.replying && compaction === null) return <ChatEmpty />;
-
+  const echo = props.compactionEcho;
+  const echoPending = echo !== null && echo.completedAt === null;
+  const echoAtLog =
+    echo !== null && echo.completedAt !== null && compaction?.at === echo.completedAt;
+  const echoVisible = echoPending || echoAtLog;
+  const echoRow =
+    echoVisible && echo !== null ? <CommandEcho text={echo.text} at={echo.at} /> : null;
+  // 実行中は末尾、完了後は compaction の区切りの直前に置く。
+  const compactionBlock =
+    compactionRow === null ? null : (
+      <>
+        {echoAtLog ? echoRow : null}
+        {compactionRow}
+      </>
+    );
+  if (
+    rows.length === 0 &&
+    !props.replying &&
+    !props.compacting &&
+    compaction === null &&
+    !echoVisible
+  )
+    return <ChatEmpty />;
+  const waiting = props.compacting ? props.compactionElapsedMs : props.waitingMs;
   return (
     <ol class="hwc-chat">
-      {compactionRow !== null && compactionAt === 0 ? compactionRow : null}
+      {compactionBlock !== null && compactionAt === 0 ? compactionBlock : null}
       {rows.map(({ message, pending }, index) => (
         <Fragment key={message.id}>
           <li class="hwc-msg" data-role={message.role}>
@@ -370,10 +412,11 @@ function ChatLog(props: {
               />
             )}
           </li>
-          {compactionRow !== null && compactionAt === index + 1 ? compactionRow : null}
+          {compactionBlock !== null && compactionAt === index + 1 ? compactionBlock : null}
         </Fragment>
       ))}
-      {props.replying ? (
+      {echoPending ? echoRow : null}
+      {props.replying || props.compacting ? (
         <li
           class="hwc-msg"
           data-role="agent"
@@ -386,10 +429,20 @@ function ChatLog(props: {
               <span />
             </span>
             {props.compacting ? (
-              <span class="hwc-compaction-pending">会話を圧縮しています</span>
+              <>
+                <span class="hwc-compaction-pending">会話を圧縮しています</span>
+                <button
+                  type="button"
+                  class="hwc-compaction-cancel"
+                  disabled={props.stopping}
+                  onClick={props.onCancelCompaction}
+                >
+                  {props.stopping ? "中断中" : "中断"}
+                </button>
+              </>
             ) : null}
-            {props.waitingMs === null ? null : (
-              <span class="hwc-msg-elapsed">{formatElapsed(props.waitingMs)}</span>
+            {waiting === null ? null : (
+              <span class="hwc-msg-elapsed">{formatElapsed(waiting)}</span>
             )}
           </div>
         </li>
@@ -526,13 +579,30 @@ export function PaneDetail(props: PaneDetailProps) {
     startedAt: number;
     baselineAt: number | null;
   } | null>(null);
+  const [compactionNow, setCompactionNow] = useState(() => Date.now());
+  const compactionSawWorking = useRef(false);
   const [compactionDuration, setCompactionDuration] = useState<{
     at: number;
     ms: number;
   } | null>(null);
-  const markCompaction = (baselineAt: number | null) => {
-    setCompactionRun({ startedAt: Date.now(), baselineAt });
+  const [compactionEcho, setCompactionEcho] = useState<{
+    text: string;
+    at: number;
+    completedAt: number | null;
+  } | null>(null);
+  const markCompaction = (baselineAt: number | null, text: string) => {
+    const startedAt = Date.now();
+    compactionSawWorking.current = false;
+    setCompactionNow(startedAt);
+    setCompactionEcho({ text, at: startedAt, completedAt: null });
+    setCompactionRun({ startedAt, baselineAt });
   };
+  useEffect(() => {
+    if (compactionRun === null) return;
+    setCompactionNow(Date.now());
+    const timer = window.setInterval(() => setCompactionNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [compactionRun]);
   useEffect(() => {
     if (compactionRun === null) return;
     const at = snapshot?.compaction?.at ?? null;
@@ -540,21 +610,39 @@ export function PaneDetail(props: PaneDetailProps) {
     if (at !== null && at !== compactionRun.baselineAt) {
       const ms = at - compactionRun.startedAt;
       if (ms > 0 && ms < 24 * 60 * 60 * 1000) setCompactionDuration({ at, ms });
+      setCompactionEcho((echo) => (echo === null ? null : { ...echo, completedAt: at }));
       setCompactionRun(null);
       return;
     }
-    // working に入る前の短い idle は待つ。3 秒経っても始まらなければ失敗として畳む。
-    if (replying) return;
-    const timer = window.setTimeout(() => {
-      setCompactionRun((run) => (run === compactionRun ? null : run));
-    }, 3000);
+    // 手動の /compact は Herdr の agent_status を working にしない。working を観測
+    // できた場合だけ idle 復帰を失敗とみなし、それ以外は完了か上限まで待つ。
+    if (replying) {
+      compactionSawWorking.current = true;
+      return;
+    }
+    if (compactionSawWorking.current) {
+      const timer = window.setTimeout(() => {
+        setCompactionRun((run) => (run === compactionRun ? null : run));
+      }, 3000);
+      return () => window.clearTimeout(timer);
+    }
+    const timer = window.setTimeout(
+      () => {
+        setCompactionRun((run) => (run === compactionRun ? null : run));
+      },
+      10 * 60 * 1000,
+    );
     return () => window.clearTimeout(timer);
   }, [compactionRun, replying, snapshot?.compaction?.at]);
+  const compactionElapsedMs =
+    compactionRun === null ? null : Math.max(0, compactionNow - compactionRun.startedAt);
   const chatEmpty =
     body.kind === "chat" &&
     body.snapshot.messages.length === 0 &&
     body.snapshot.compaction === null &&
     pendingMessages.length === 0 &&
+    compactionRun === null &&
+    compactionEcho === null &&
     !replying;
   const empty = body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty;
   const info = agentInfo(snapshot);
@@ -571,9 +659,14 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
   // 書きかけの指示が別々のメッセージに分かれてしまう。引用中も同じ理由で出さない。
+  // 圧縮済み（直近の compaction の後ろに発話が無い）なら、もう一度送っても
+  // pi が Already compacted で即失敗するので候補にも出さない。
+  const compactDone = snapshot !== null && compactAlreadyDone(snapshot);
   const candidates =
-    attachments.length === 0 && reply === null
-      ? commandCandidates(pane, draft, snapshot?.context ?? null)
+    attachments.length === 0 && reply === null && compactionRun === null
+      ? commandCandidates(pane, draft, snapshot?.context ?? null).filter(
+          (id) => id !== "compact" || !compactDone,
+        )
       : [];
   const uploading = attachments.some((item) => item.name === null);
   const sendable = canSend({
@@ -658,11 +751,12 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 最新が見えている間だけ追従する。読み返しているときは勝手に動かさない。
   // 失敗の notice はメッセージ領域を縮めるので、出たときも追従し直す。
-  // 返信ボタンを出している間は、選択を流さないよう追従しない。
+  // 圧縮の吹き出しと進捗行は chat の末尾にローカルで足すため、content が変わらない
+  // 間も追従できるよう compactionRun / compactionEcho も依存に入れる。
   useEffect(() => {
     const element = scroller.current;
     if (element && atBottom && !quoting.current) element.scrollTop = element.scrollHeight;
-  }, [content, replying, atBottom, pendingMessages.length, notice]);
+  }, [content, replying, atBottom, pendingMessages.length, notice, compactionRun, compactionEcho]);
 
   // 画像の読み込みや入力欄の伸びで高さが後から変わっても、最新を見ている間は底に留める。
   // 画像の load は bubble しないので capture で拾い、領域の伸縮は ResizeObserver で拾う。
@@ -833,6 +927,10 @@ export function PaneDetail(props: PaneDetailProps) {
     const text = reply === null ? draft : composeReply(reply, draft);
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
     const compactCommand = attachments.length === 0 && isCompactCommand(text);
+    if (compactCommand && compactDone) {
+      setNotice(COMPACTED_NOTICE);
+      return;
+    }
     const baselineAt = snapshot?.compaction?.at ?? null;
     const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
@@ -855,7 +953,7 @@ export function PaneDetail(props: PaneDetailProps) {
       // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
       // 代わりに圧縮中の行を出す。
       if (compactCommand) {
-        markCompaction(baselineAt);
+        markCompaction(baselineAt, text);
       } else {
         setPending((items) => [
           ...items,
@@ -884,10 +982,28 @@ export function PaneDetail(props: PaneDetailProps) {
     setStopping(false);
   };
 
+  // 手動 compaction は Herdr の working にならないため、失敗しても agent_status から
+  // 判別できない。10 分の上限だけに頼らず、進捗行から Esc を送ってローカルの開始記録を
+  // 畳めるようにする。
+  const cancelCompaction = async () => {
+    if (stopping) return;
+    setStopping(true);
+    setNotice(null);
+    if (await onStop()) {
+      setCompactionRun(null);
+      setCompactionEcho(null);
+    } else setNotice(STOP_FAILED_NOTICE);
+    setStopping(false);
+  };
+
   // /new は user 発話を残さないので、送信中バブルを積むと最大 60 秒残る。
   // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
-    if (sending || replying) return;
+    if (sending || replying || compactionRun !== null) return;
+    if (id === "compact" && compactDone) {
+      setNotice(COMPACTED_NOTICE);
+      return;
+    }
     const text = commandSendText(id, draft);
     const baselineAt = snapshot?.compaction?.at ?? null;
     setSending(true);
@@ -897,7 +1013,8 @@ export function PaneDetail(props: PaneDetailProps) {
       setPinned(true);
       setChip(null);
       setDraft("");
-      if (id === "compact") markCompaction(baselineAt);
+      if (id === "compact") markCompaction(baselineAt, text);
+      else if (id === "new") setCompactionEcho(null);
     } else setNotice(SEND_FAILED_NOTICE);
     setSending(false);
   };
@@ -906,21 +1023,39 @@ export function PaneDetail(props: PaneDetailProps) {
   // メッセージのために残す（チップのように draft を指示には使わない）。
   // メニューを開いた後に状態が変わっても最新値で判定できるよう、送信直前の値は
   // ref から読む。onSubmit も App の再描画で更新されるので、同じく ref を経由する。
-  const commandState = useRef({ pane, sending, replying, snapshot });
-  commandState.current = { pane, sending, replying, snapshot };
+  const commandState = useRef({
+    pane,
+    sending,
+    replying,
+    compacting: compactionRun !== null,
+    snapshot,
+  });
+  commandState.current = {
+    pane,
+    sending,
+    replying,
+    compacting: compactionRun !== null,
+    snapshot,
+  };
   const submitLatest = useRef(onSubmit);
   submitLatest.current = onSubmit;
   const sendMenuCommand = async (id: CommandId) => {
     const state = commandState.current;
-    if (state.sending || state.replying) return;
+    if (state.sending || state.replying || state.compacting) return;
+    if (id === "compact" && state.snapshot !== null && compactAlreadyDone(state.snapshot)) {
+      setNotice(COMPACTED_NOTICE);
+      return;
+    }
     const baselineAt = state.snapshot?.compaction?.at ?? null;
+    const text = commandText(id);
     setSending(true);
     input.current?.blur();
     setNotice(null);
-    if (await submitLatest.current(commandText(id), [])) {
+    if (await submitLatest.current(text, [])) {
       setPinned(true);
       setChip(null);
-      if (id === "compact") markCompaction(baselineAt);
+      if (id === "compact") markCompaction(baselineAt, text);
+      else if (id === "new") setCompactionEcho(null);
     } else setNotice(SEND_FAILED_NOTICE);
     setSending(false);
   };
@@ -930,21 +1065,35 @@ export function PaneDetail(props: PaneDetailProps) {
   const menuCommands: PaneCommandHandle = {
     available: (id, currentPane) => {
       const state = commandState.current;
+      const compacted =
+        id === "compact" && state.snapshot !== null && compactAlreadyDone(state.snapshot);
       return (
         !state.sending &&
         !state.replying &&
+        !state.compacting &&
+        !compacted &&
         commandAvailable(id, currentPane, state.snapshot?.context ?? null)
       );
     },
     busy: () => {
       const state = commandState.current;
-      return state.sending || state.replying;
+      return state.sending || state.replying || state.compacting;
+    },
+    compactBlock: () => {
+      const state = commandState.current;
+      if (state.snapshot !== null && compactAlreadyDone(state.snapshot)) return "compacted";
+      if (compactHistoryBlocked(state.snapshot?.context ?? null)) return "history";
+      return null;
     },
     run: (id) => {
       const state = commandState.current;
+      const compacted =
+        id === "compact" && state.snapshot !== null && compactAlreadyDone(state.snapshot);
       if (
         !state.sending &&
         !state.replying &&
+        !state.compacting &&
+        !compacted &&
         commandAvailable(id, state.pane, state.snapshot?.context ?? null)
       ) {
         void sendMenuCommand(id);
@@ -1047,9 +1196,13 @@ export function PaneDetail(props: PaneDetailProps) {
                 snapshot={body.snapshot}
                 replying={replying}
                 compacting={compactionRun !== null}
+                stopping={stopping}
                 waitingMs={waitingMs}
                 copiedId={copiedId}
                 expandable={!compact}
+                compactionElapsedMs={compactionElapsedMs}
+                compactionEcho={compactionEcho}
+                onCancelCompaction={() => void cancelCompaction()}
                 compactionDurationMs={
                   compactionDuration !== null &&
                   compactionDuration.at === body.snapshot.compaction?.at

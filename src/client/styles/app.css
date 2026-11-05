@@ -2043,6 +2043,28 @@ p.hwc-compaction,
   align-items: flex-end;
 }
 
+/* ローカルで送った /compact の控え。通常会話の青い吹き出しと区別する。 */
+.hwc-msg[data-role="command"] {
+  align-items: flex-end;
+}
+
+.hwc-msg[data-role="command"] .hwc-msg-meta {
+  justify-content: flex-end;
+}
+
+.hwc-command-echo {
+  max-width: 85%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-panel);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .hwc-msg[data-role="user"] .hwc-msg-bubble {
   display: flex;
   flex-direction: column;
@@ -2500,6 +2522,28 @@ p.hwc-compaction,
 .hwc-compaction-pending {
   color: var(--color-secondary);
   font-size: var(--text-secondary);
+}
+
+/* 失敗を観測できない圧縮を、利用者がローカルに畳むための逃げ道。 */
+.hwc-compaction-cancel {
+  min-height: var(--space-6);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-compaction-cancel:hover {
+  background: var(--color-raised);
+}
+
+.hwc-compaction-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* 返答までの時間は、時刻と区別できるよう等幅で添える。 */

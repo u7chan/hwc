@@ -1,4 +1,4 @@
-import type { ChatContext } from "../server/chat/contract";
+import type { ChatContext, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { agentGlyph } from "./select";
 
@@ -27,6 +27,8 @@ const COMPACT_MIN_TOKENS = 20000;
 export type PaneCommandHandle = {
   available: (id: CommandId, pane: PaneState) => boolean;
   busy: () => boolean;
+  // メニューの注記用。圧縮できない理由が履歴の小ささか、圧縮済みか。
+  compactBlock: () => "history" | "compacted" | null;
   run: (id: CommandId) => void;
 };
 
@@ -45,6 +47,19 @@ export function isCompactCommand(text: string): boolean {
   const trimmed = text.trim();
   const command = commandText("compact");
   return trimmed === command || trimmed.startsWith(`${command} `);
+}
+
+// pi は直前のエントリが compaction のとき、手動 /compact を Already compacted で即失敗する。
+// 返ってきた messages の後ろに compaction がある（後ろに発話がない）状態を圧縮済みとみなす。
+export function compactAlreadyDone(snapshot: ChatSnapshot): boolean {
+  return snapshot.compaction !== null && snapshot.compaction.index === snapshot.messages.length;
+}
+
+export const COMPACTED_NOTICE = "会話は圧縮済みです";
+
+export function compactHistoryBlocked(context: ChatContext | null): boolean {
+  const tokens = context === null ? null : context.tokens;
+  return tokens !== null && tokens < COMPACT_MIN_TOKENS;
 }
 
 export function commandLabel(id: CommandId): string {
@@ -79,8 +94,7 @@ export function commandAvailable(
   if (pane.agentStatus === "working") return false;
   if (!isCommandPane(pane)) return false;
   if (id !== "compact") return true;
-  const tokens = context === null ? null : context.tokens;
-  return tokens === null || tokens >= COMPACT_MIN_TOKENS;
+  return !compactHistoryBlocked(context);
 }
 
 // 空白が入った時点でコマンドではなく本文（`/compact 指示` など）。iOS が先頭を
