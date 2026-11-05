@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type ChatReader, ChatUnavailableError, createChatClient } from "./pi";
@@ -398,8 +398,6 @@ test("treats a session that does not exist yet as an empty conversation", async 
 
   expect(first.messages).toEqual([]);
   expect(first).toMatchObject({ model: null, effort: null, truncated: false });
-  // 一度もファイルを見ていない path は世代 0 のまま。
-  expect(first.etag).toEndWith("-0");
   expect(second.etag).toBe(first.etag);
 });
 
@@ -999,44 +997,305 @@ test("the context is folded into the four states the contract allows", async () 
   expect((await chat.snapshot(neither)).context).toBeNull();
 });
 
-test("the catalog is resolved once per agent dir", async () => {
-  let loads = 0;
-  const chat = createChatClient({
-    sessionAgentDir: async () => "/agent",
-    loadCatalog: async () => {
-      loads += 1;
-      return { contextWindow: () => 1_000_000 };
-    },
-  });
-  const one = await writeSession(
+async function writeUsageSession(agent: string, tokens = 1_000): Promise<string> {
+  return writeAgentSession(
+    agent,
     header(),
-    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(1_000) }),
+    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(tokens) }),
   );
-  const two = await writeSession(
-    header(),
-    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(2_000) }),
-  );
+}
 
-  expect((await chat.snapshot(one)).context).toEqual({ tokens: 1_000, window: 1_000_000 });
-  expect((await chat.snapshot(two)).context).toEqual({ tokens: 2_000, window: 1_000_000 });
-  expect(loads).toBe(1);
+const storedWindow = (window: number): unknown => ({
+  p: providerModels([{ id: "m", contextWindow: window }]),
 });
 
-test("a catalog written after the first read is not picked up", async () => {
+const overriddenWindow = (window: number): unknown => ({
+  providers: { p: { modelOverrides: { m: { contextWindow: window } } } },
+});
+
+test("a catalog written after the first read is picked up without session changes", async () => {
   const agent = agentDir();
-  await mkdir(join(agent, "sessions", "slug"), { recursive: true });
+  const path = await writeUsageSession(agent);
+  const chat = createChatClient();
+  const before = await chat.snapshot(path);
+
+  expect(before.context).toEqual({ tokens: 1_000, window: null });
+
+  await writeCatalog(agent, { store: storedWindow(1_000_000) });
+  const after = await chat.snapshot(path);
+
+  expect(after.context).toEqual({ tokens: 1_000, window: 1_000_000 });
+  expect(after.messages).toEqual(before.messages);
+  expect(after.etag).not.toBe(before.etag);
+  expect((await chat.snapshot(path)).etag).toBe(after.etag);
+});
+
+test("override additions, changes and removals follow the config without session changes", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, { store: storedWindow(100_000) });
+  const path = await writeUsageSession(agent);
+  const chat = createChatClient();
+  const before = await chat.snapshot(path);
+  let previous = before;
+
+  for (const [config, window] of [
+    [overriddenWindow(200_000), 200_000],
+    [overriddenWindow(1_000_000), 1_000_000],
+    [{ providers: { p: { modelOverrides: {} } } }, 100_000],
+    [overriddenWindow(300_000), 300_000],
+  ] as const) {
+    await writeCatalog(agent, { config });
+    const current = await chat.snapshot(path);
+    expect(current.context).toEqual({ tokens: 1_000, window });
+    expect(current.messages).toEqual(before.messages);
+    expect(current.etag).not.toBe(previous.etag);
+    expect((await chat.snapshot(path)).etag).toBe(current.etag);
+    previous = current;
+  }
+
+  await rm(join(agent, "models.json"));
+  const removed = await chat.snapshot(path);
+  expect(removed.context).toEqual({ tokens: 1_000, window: 100_000 });
+  expect(removed.etag).not.toBe(previous.etag);
+});
+
+test.each([
+  {
+    change: "model addition",
+    before: { p: providerModels([]) },
+    after: storedWindow(100_000),
+    window: 100_000,
+  },
+  { change: "provider addition", before: {}, after: storedWindow(100_000), window: 100_000 },
+  {
+    change: "model removal",
+    before: storedWindow(100_000),
+    after: { p: providerModels([]) },
+    window: null,
+  },
+  { change: "provider removal", before: storedWindow(100_000), after: {}, window: null },
+  {
+    change: "window change",
+    before: storedWindow(100_000),
+    after: storedWindow(200_000),
+    window: 200_000,
+  },
+])("a stored $change is reflected without session changes", async (change) => {
+  const agent = agentDir();
+  await writeCatalog(agent, { store: change.before });
+  const path = await writeUsageSession(agent);
+  const chat = createChatClient();
+  const before = await chat.snapshot(path);
+
+  await writeCatalog(agent, { store: change.after });
+  const after = await chat.snapshot(path);
+
+  expect(after.context).toEqual({ tokens: 1_000, window: change.window });
+  expect(after.messages).toEqual(before.messages);
+  expect(after.etag).not.toBe(before.etag);
+  expect((await chat.snapshot(path)).etag).toBe(after.etag);
+});
+
+test("an override becomes usable only while its provider and model exist in the store", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, { store: {}, config: overriddenWindow(1_000_000) });
+  const path = await writeUsageSession(agent);
+  const chat = createChatClient();
+
+  expect((await chat.snapshot(path)).context?.window).toBeNull();
+  await writeCatalog(agent, { store: storedWindow(100_000) });
+  expect((await chat.snapshot(path)).context?.window).toBe(1_000_000);
+  await writeCatalog(agent, { store: { p: providerModels([]) } });
+  expect((await chat.snapshot(path)).context?.window).toBeNull();
+});
+
+test("catalog reevaluation preserves the etag when the displayed window does not change", async () => {
+  const agent = agentDir();
+  const store = {
+    p: providerModels([{ id: "m", contextWindow: 100_000 }]),
+    other: providerModels([{ id: "m", contextWindow: 200_000 }]),
+  };
+  await writeCatalog(agent, { store });
+  const path = await writeUsageSession(agent);
+  const chat = createChatClient();
+  const before = await chat.snapshot(path);
+
+  for (const files of [
+    { store },
+    { store: { ...store, other: providerModels([{ id: "m", contextWindow: 300_000 }]) } },
+    { config: { providers: { other: { modelOverrides: { m: { contextWindow: 400_000 } } } } } },
+    { config: overriddenWindow(100_000) },
+  ]) {
+    await writeCatalog(agent, files);
+    expect(await chat.snapshot(path)).toEqual(before);
+  }
+});
+
+test.each(["in-place", "atomic rename"])(
+  "same-size catalog updates are detected after %s with a restored mtime",
+  async (method) => {
+    const agent = agentDir();
+    await writeCatalog(agent, { store: storedWindow(100_000) });
+    const path = await writeUsageSession(agent);
+    const chat = createChatClient();
+    const file = join(agent, "models-store.json");
+    const fixedTime = new Date("2026-01-01T00:00:00.000Z");
+    await utimes(file, fixedTime, fixedTime);
+    const before = await chat.snapshot(path);
+    const info = await stat(file);
+    const target = method === "in-place" ? file : join(agent, "replacement.json");
+
+    await writeFile(target, JSON.stringify(storedWindow(200_000)));
+    await utimes(target, info.atime, info.mtime);
+    if (target !== file) await rename(target, file);
+    const after = await chat.snapshot(path);
+
+    expect(after.context).toEqual({ tokens: 1_000, window: 200_000 });
+    expect(after.etag).not.toBe(before.etag);
+  },
+);
+
+test.each(["models-store.json", "models.json"])(
+  "a transient read failure in %s is retried even when metadata is unchanged",
+  async (name) => {
+    const agent = agentDir();
+    await writeCatalog(agent, {
+      store: storedWindow(100_000),
+      config: overriddenWindow(200_000),
+    });
+    const path = await writeUsageSession(agent);
+    let failing = true;
+    const chat = createChatClient({
+      readCatalogFile: async (file) => {
+        if (file === join(agent, name) && failing) throw new Error("temporarily unreadable");
+        return readFile(file, "utf8");
+      },
+    });
+    const before = await chat.snapshot(path);
+
+    expect(before.context).toEqual({
+      tokens: 1_000,
+      window: name === "models-store.json" ? null : 100_000,
+    });
+    failing = false;
+    const after = await chat.snapshot(path);
+
+    expect(after.context).toEqual({ tokens: 1_000, window: 200_000 });
+    expect(after.messages).toEqual(before.messages);
+    expect(after.etag).not.toBe(before.etag);
+  },
+);
+
+test.each(
+  ["models-store.json", "models.json"].flatMap((name) =>
+    ["missing", "invalid JSON", "directory"].map((failure) => ({ name, failure })),
+  ),
+)("$name becoming $failure does not stop chat and recovers", async ({ name, failure }) => {
+  const agent = agentDir();
+  const catalog = { store: storedWindow(100_000), config: overriddenWindow(200_000) };
+  await writeCatalog(agent, catalog);
+  const path = await writeUsageSession(agent);
+  const chat = createChatClient();
+  const before = await chat.snapshot(path);
+  const file = join(agent, name);
+
+  await rm(file);
+  if (failure === "invalid JSON") await writeFile(file, "{");
+  if (failure === "directory") await mkdir(file);
+  const failed = await chat.snapshot(path);
+
+  expect(failed.context).toEqual({
+    tokens: 1_000,
+    window: name === "models-store.json" ? null : 100_000,
+  });
+  expect(failed.messages).toEqual(before.messages);
+  expect(failed.etag).not.toBe(before.etag);
+  expect((await chat.snapshot(path)).etag).toBe(failed.etag);
+
+  await rm(file, { recursive: true, force: true });
+  await writeCatalog(agent, catalog);
+  expect(await chat.snapshot(path)).toEqual(before);
+});
+
+test("a window can appear and disappear before the first usage without changing the session", async () => {
+  const agent = agentDir();
   const path = await writeAgentSession(
     agent,
     header(),
-    assistant("a1", null, text("hi"), { model: "m", provider: "p", usage: usage(1_000) }),
+    entry("model_change", "m1", null, { provider: "p", modelId: "m" }),
   );
   const chat = createChatClient();
+  const before = await chat.snapshot(path);
+  expect(before.context).toBeNull();
 
-  expect((await chat.snapshot(path)).context).toEqual({ tokens: 1_000, window: null });
+  await writeCatalog(agent, { store: storedWindow(100_000) });
+  const known = await chat.snapshot(path);
+  expect(known.context).toEqual({ tokens: null, window: 100_000 });
+  expect(known.etag).not.toBe(before.etag);
 
-  // 起動後に足したプロバイダや override は BFF の再起動まで反映しない。
-  await writeCatalog(agent, {
-    store: { p: providerModels([{ id: "m", contextWindow: 1_000_000 }]) },
+  await rm(join(agent, "models-store.json"));
+  const unknown = await chat.snapshot(path);
+  expect(unknown.context).toBeNull();
+  expect(unknown.etag).not.toBe(known.etag);
+});
+
+test("sessions share updated catalogs only within the same agent dir", async () => {
+  const one = agentDir();
+  const two = join(dir, "another-agent");
+  await writeCatalog(one, { store: storedWindow(100_000), config: overriddenWindow(200_000) });
+  await writeCatalog(two, { store: storedWindow(300_000), config: overriddenWindow(400_000) });
+  const paths = [
+    await writeUsageSession(one, 1_000),
+    await writeUsageSession(one, 2_000),
+    await writeUsageSession(two, 3_000),
+  ];
+  const chat = createChatClient();
+  const before = await Promise.all(paths.map((path) => chat.snapshot(path)));
+
+  expect(before.map((snapshot) => snapshot.context?.window)).toEqual([200_000, 200_000, 400_000]);
+  await writeCatalog(one, { config: overriddenWindow(500_000) });
+  const after = await Promise.all(paths.map((path) => chat.snapshot(path)));
+
+  expect(after.map((snapshot) => snapshot.context)).toEqual([
+    { tokens: 1_000, window: 500_000 },
+    { tokens: 2_000, window: 500_000 },
+    { tokens: 3_000, window: 400_000 },
+  ]);
+  expect(after[0]?.etag).not.toBe(before[0]?.etag);
+  expect(after[1]?.etag).not.toBe(before[1]?.etag);
+  expect(after[2]).toEqual(before[2]);
+});
+
+test("concurrent sessions share catalog reads and only changed files are read again", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, { store: storedWindow(100_000), config: overriddenWindow(200_000) });
+  const paths = [await writeUsageSession(agent), await writeUsageSession(agent, 2_000)];
+  const reads: string[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  expect((await chat.snapshot(path)).context).toEqual({ tokens: 1_000, window: null });
+  const chat = createChatClient({
+    readCatalogFile: async (file) => {
+      reads.push(file);
+      await gate;
+      return readFile(file, "utf8");
+    },
+  });
+  const pending = Promise.all(paths.map((path) => chat.snapshot(path)));
+  await Bun.sleep(20);
+  release();
+  expect((await pending).map((snapshot) => snapshot.context?.window)).toEqual([200_000, 200_000]);
+  expect(reads.toSorted()).toEqual(
+    [join(agent, "models-store.json"), join(agent, "models.json")].toSorted(),
+  );
+
+  await Promise.all(paths.map((path) => chat.snapshot(path)));
+  expect(reads).toHaveLength(2);
+
+  await writeCatalog(agent, { config: overriddenWindow(300_000) });
+  const updated = await Promise.all(paths.map((path) => chat.snapshot(path)));
+  expect(updated.map((snapshot) => snapshot.context?.window)).toEqual([300_000, 300_000]);
+  expect(reads).toHaveLength(3);
+  expect(reads.at(-1)).toBe(join(agent, "models.json"));
 });

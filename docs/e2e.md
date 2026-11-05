@@ -14,14 +14,15 @@ bun run e2e:serve
 
 ## 実環境との分離
 
-| 対象              | 実環境                                 | E2E                                                 |
-| ----------------- | -------------------------------------- | --------------------------------------------------- |
-| Herdr ソケット    | `~/.config/herdr/herdr.sock`           | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける      |
-| pi セッション     | 実セッションの JSONL                   | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く |
-| OpenCode サービス | `~/.local/state/opencode/service.json` | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける   |
-| ブランチ          | 実リポジトリの `.git/HEAD`             | 一時ディレクトリの `.git/HEAD`                      |
-| 添付の保存先      | `~/.local/state/hwc`                   | `HWC_STATE_DIR` を一時ディレクトリへ向ける          |
-| ポート            | 30000                                  | 31000                                               |
+| 対象              | 実環境                                              | E2E                                                                                              |
+| ----------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Herdr ソケット    | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                   |
+| pi セッション     | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                              |
+| pi モデルカタログ | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く |
+| OpenCode サービス | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                |
+| ブランチ          | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                   |
+| 添付の保存先      | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                       |
+| ポート            | 30000                                               | 31000                                                                                            |
 
 `e2e/serve.ts` が架空 Herdr を起動してから `src/server.ts` を読み込む。BFF とクライアントは本番コードのままで、ソケット経路・状態同期・チャット読み取りを通る。実 Herdr のソケットには接続しない。
 
@@ -68,6 +69,29 @@ BFF は実 Herdr と同じようにイベントで状態を取り直す。
 `e2e/fixtures/scenario.ts` を編集する。ワークスペース、タブ、ペイン、端末出力、pi セッション、ブランチはすべてここで作る。
 
 実在のユーザー名・ホスト名・リポジトリ名・パスを書かない。スクリーンショットに写る値はすべて架空にする。
+
+### 実行中のモデルカタログを変える
+
+モデル上限の追従は、起動ログの `hwc e2e fixture: <root>` が示す架空カタログだけを書き換えて確かめる。実際の Pi の agent dir は使わない。
+
+1. `bun run e2e:serve` で起動し、設定画面の revision が `e2e` であることを確認する。
+2. `frontend` ペインを表示する。初期データには圧縮後の usage があり、コンテキストは `12k/200k (6.0%)` になる。狭い表示では割合だけになる。
+3. 起動ログから得た `<root>` を使い、表示中モデルの上限だけを変更する。
+
+   ```bash
+   FIXTURE_ROOT='<root>'
+   bun -e '
+     const file = Bun.file(process.argv[1]);
+     const store = await file.json();
+     store.anthropic.models.find(model => model.id === "claude-sonnet-4-5").contextWindow = 1_000_000;
+     await Bun.write(file, JSON.stringify(store));
+   ' "$FIXTURE_ROOT/agent/models-store.json"
+   ```
+
+4. ペインを可視状態に保ち、次のポーリングで `12k/1.0M (1.2%)` に変わることを確認する。working は 2 秒 / idle は 5 秒周期なので、待ち時間は最大 5 秒程度に通信・処理時間を加えたものとする。BFF の再起動・会話 JSONL への追記・ブラウザのリロードは行わない。
+5. 同じ操作で `contextWindow` を `200_000` に戻し、上限と割合も元に戻ることを確認する。
+
+override の追加・変更・削除や読み取り失敗からの復旧、ETag の安定性は BFF の unit / API テストで確認する。
 
 ## 禁止
 
