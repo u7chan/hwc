@@ -54,7 +54,7 @@ GUI で意味のあるのは、ピッカーを開かず、即時実行される�
 - 閾値未満で `compact` を隠しても、手で `/compact` と打てば従来どおり送れる。hwc は入力欄の文字列を解釈しないため
 - 空の会話では `/new` も候補・メニューから外れる。同じ空のセッションを作り直すだけで、hwc からは結果を観測できないため。手で `/new` と打てば従来どおり送れる
 - 閾値 20000 は pi の `keepRecentTokens` の既定値の写しであり、pi 側の既定が変われば追随する義務がある。`keepRecentTokens` を変更しているユーザー、モデル別の上書き、日本語中心の履歴では近似が外れ得る。`tokens` は provider usage の実測で、pi が打ち切り位置に使う推定（`Math.ceil(chars / 4)`）とは別物なので、`tokens >= 20000` でも失敗し得る。閾値が効くのは `context` を持つペイン（現在は pi と opencode）で、agent ではなく context の有無で判定する。opencode の compaction 閾値は pi と同じとは限らないが、履歴が小さいうちに `/compact` を隠す近似として同じ値を使う。将来ほかの CLI に会話を足すとこの定数が黙って適用される
-- 直近のエントリが既に `compaction` のとき（`Already compacted`）は `tokens` が `null` になるため防げない。閾値未満で隠した理由も画面には出ない
+- 直近のエントリが既に `compaction` のとき（`Already compacted`）は `tokens` が `null` でも `compaction.index === messages.length` で判定し、候補・メニューから外す。直接入力は「会話は圧縮済みです」の notice にして送らない。閾値未満で `compact` を隠した理由は候補には出ないが、メニューには 1 行添える
 - `/compact <指示>` を受け付けることは pi で実装を確認し、Claude Code / opencode / Codex CLI はユーザーの確認による。実機で 1 つずつ確かめてはいない。解釈が違う CLI が見つかったら、送信文字列とこの記述を直す
 - ピッカーを開くコマンドの GUI 操作は持たない。汎用の Esc と矢印を送れないため、開いた先で詰まる。停止の Esc は入力欄の停止ボタンに限る（[ADR 0025](0025-stop-working-agent.md)）
 - コマンドの実行結果は hwc には伝わらない。chat ペインは端末出力を表示しておらず、pi は失敗をセッションに残さないため、`/compact` が `Nothing to compact` で失敗しても画面は無反応に見える。hwc は完了も失敗も検知しない。失敗を可視化するのではなく、起きにくくする方向で扱う
