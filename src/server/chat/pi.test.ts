@@ -1197,6 +1197,34 @@ test("Pi model fallback failure leaves chat intact and is retried", async () => 
   expect(next.messages).toEqual(first.messages);
 });
 
+test("editing a comment-prefixed Pi config refreshes the fallback and etag", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, { store: {} });
+  const path = await writeUsageSession(agent);
+  const config = join(agent, "models.json");
+  const writeWindow = (window: number) =>
+    writeFile(config, `\ufeff// Pi accepts this comment\n${JSON.stringify({ window })}`);
+  let calls = 0;
+  const chat = createChatClient({
+    loadPiModels: async () => {
+      calls += 1;
+      const text = await readFile(config, "utf8");
+      const data = JSON.parse(text.slice(text.indexOf("\n") + 1)) as { window: number };
+      return [{ provider: "p", id: "m", window: data.window }];
+    },
+  });
+  await writeWindow(500_000);
+  const before = await chat.snapshot(path);
+  expect(before.context?.window).toBe(500_000);
+  expect((await chat.snapshot(path)).etag).toBe(before.etag);
+  expect(calls).toBe(1);
+  await writeWindow(256_000);
+  const after = await chat.snapshot(path);
+  expect(after.context?.window).toBe(256_000);
+  expect(after.etag).not.toBe(before.etag);
+  expect(calls).toBe(2);
+});
+
 test("Pi model fallback works without a stored catalog and never mixes agent directories", async () => {
   const one = agentDir();
   const two = join(dir, "another-agent");

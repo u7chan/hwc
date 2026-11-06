@@ -482,14 +482,49 @@ function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usa
   const { view, context, usage } = props;
   const [open, setOpen] = useState<"hover" | "pinned" | null>(null);
   const root = useRef<HTMLSpanElement>(null);
+  const tooltip = useRef<HTMLSpanElement>(null);
   const tooltipId = useId();
+  useLayoutEffect(() => {
+    if (open === null || root.current === null || tooltip.current === null) return;
+    const anchor = root.current;
+    const popup = tooltip.current;
+    const viewport = window.visualViewport;
+    const update = () => {
+      const rect = anchor.getBoundingClientRect();
+      const top = viewport?.offsetTop ?? 0;
+      const height = viewport?.height ?? window.innerHeight;
+      const above = Math.max(0, rect.top - top - 8);
+      const below = Math.max(0, top + height - rect.bottom - 8);
+      const placement = above >= below ? "above" : "below";
+      popup.dataset.placement = placement;
+      popup.style.maxHeight = `${placement === "above" ? above : below}px`;
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(anchor);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    viewport?.addEventListener("resize", update);
+    viewport?.addEventListener("scroll", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      viewport?.removeEventListener("resize", update);
+      viewport?.removeEventListener("scroll", update);
+    };
+  }, [open]);
   useEffect(() => {
     if (open === null) return;
     const dismiss = (event: PointerEvent) => {
       if (!root.current?.contains(event.target as Node)) setOpen(null);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(null);
+      if (event.key === "Escape") {
+        if (document.activeElement === tooltip.current)
+          root.current?.querySelector("button")?.focus();
+        setOpen(null);
+      }
     };
     document.addEventListener("pointerdown", dismiss);
     document.addEventListener("keydown", escape);
@@ -506,7 +541,7 @@ function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usa
         if (event.pointerType === "mouse") setOpen((current) => current ?? "hover");
       }}
       onPointerLeave={(event) => {
-        if (event.pointerType === "mouse")
+        if (event.pointerType === "mouse" && document.activeElement !== tooltip.current)
           setOpen((current) => (current === "hover" ? null : current));
       }}
     >
@@ -522,8 +557,9 @@ function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usa
             setOpen((current) => current ?? "hover");
         }}
         onBlur={(event) => {
-          if (event.relatedTarget !== null) setOpen(null);
-          else setOpen((current) => (current === "hover" ? null : current));
+          if (event.relatedTarget !== null) {
+            if (!root.current?.contains(event.relatedTarget as Node)) setOpen(null);
+          } else setOpen((current) => (current === "hover" ? null : current));
         }}
         onClick={(event) => {
           const selection = window.getSelection();
@@ -545,7 +581,17 @@ function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usa
           </span>
         )}
       </button>
-      <span id={tooltipId} role="tooltip" class="hwc-context-tooltip" data-open={open !== null}>
+      <span
+        id={tooltipId}
+        ref={tooltip}
+        role="tooltip"
+        class="hwc-context-tooltip"
+        data-open={open !== null}
+        tabIndex={open === null ? -1 : 0}
+        onBlur={(event) => {
+          if (!root.current?.contains(event.relatedTarget as Node | null)) setOpen(null);
+        }}
+      >
         <span class="hwc-context-tooltip-title">直近のコンテキスト使用量</span>
         {contextDetails(context, usage).map(([label, value]) => (
           <span class="hwc-context-tooltip-row" key={label}>

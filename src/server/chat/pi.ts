@@ -552,29 +552,34 @@ function createWindowResolver(
   readCatalogFile: (path: string) => Promise<string>,
   loadPiModels: (agentDir: string) => Promise<PiModelWindow[]>,
 ): WindowResolver {
+  type FileValue = { version: string | null; value: unknown };
   const files = new Map<string, { version: string; value: unknown }>();
-  const catalogs = new Map<string, { store: unknown; config: unknown; catalog: ModelCatalog }>();
+  const catalogs = new Map<
+    string,
+    { store: FileValue; config: FileValue; catalog: ModelCatalog }
+  >();
   const running = new Map<string, Promise<ModelCatalog>>();
   const fallback = new Map<string, { catalog: ModelCatalog; pending: Promise<PiModelWindow[]> }>();
 
-  const readJson = async (path: string): Promise<unknown> => {
+  const readJson = async (path: string): Promise<FileValue> => {
+    let version: string | null = null;
     try {
       const info = await stat(path, { bigint: true });
       if (!info.isFile()) {
         files.delete(path);
-        return null;
+        return { version, value: null };
       }
       // 同サイズの上書きと atomic rename も拾う。時刻は丸めずに比較する。
-      const version = `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`;
+      version = `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`;
       const cached = files.get(path);
-      if (cached?.version === version) return cached.value;
+      if (cached?.version === version) return cached;
       const value: unknown = JSON.parse(await readCatalogFile(path));
       files.set(path, { version, value });
-      return value;
+      return { version, value };
     } catch {
       // 失敗を覚えると、メタデータが同じまま読み取りが復旧しても再試行できない。
       files.delete(path);
-      return null;
+      return { version, value: null };
     }
   };
 
@@ -588,8 +593,15 @@ function createWindowResolver(
     ])
       .then(([store, config]) => {
         const cached = catalogs.get(agentDir);
-        if (cached && cached.store === store && cached.config === config) return cached.catalog;
-        const catalog = catalogOf(store, config);
+        if (
+          cached &&
+          cached.store.value === store.value &&
+          cached.store.version === store.version &&
+          cached.config.value === config.value &&
+          cached.config.version === config.version
+        )
+          return cached.catalog;
+        const catalog = catalogOf(store.value, config.value);
         catalogs.set(agentDir, { store, config, catalog });
         return catalog;
       })

@@ -3107,6 +3107,8 @@ p.hwc-compaction,
   gap: var(--space-1);
   width: 240px;
   max-width: min(280px, 85vw);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-3);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-control);
@@ -3122,6 +3124,15 @@ p.hwc-compaction,
     opacity 150ms ease,
     transform 150ms ease,
     visibility 0s linear 150ms;
+}
+
+.hwc-context-tooltip[data-placement="below"] {
+  top: 100%;
+  bottom: auto;
+}
+
+.hwc-context-tooltip > * {
+  flex: none;
 }
 
 .hwc-context-tooltip[data-open="true"] {
