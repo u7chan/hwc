@@ -30,7 +30,15 @@ test("sending a response does not optimistically restore the composer", () => {
 test("unsupported and unreadable prompts stay in a read-only terminal view", () => {
   expect(confirmationView({ ...state, interaction: { kind: "terminal" } })).toBe("terminal");
   expect(confirmationView({ ...state, failed: true })).toBe("terminal");
-  expect(confirmationView({ ...state, pane: { ...pane, chat: false }, interaction: null })).toBe(
+});
+
+test("Codex accepts its first message before a conversation id is available", () => {
+  const initial = { ...state, pane: { ...pane, chat: false }, interaction: null };
+  expect(confirmationView(initial)).toBe("normal");
+  expect(confirmationView({ ...initial, interaction })).toBe("confirm");
+  expect(confirmationView({ ...initial, interaction: { kind: "terminal" } })).toBe("terminal");
+  expect(confirmationView({ ...initial, failed: true })).toBe("terminal");
+  expect(confirmationView({ ...initial, pane: { ...initial.pane, agentStatus: "blocked" } })).toBe(
     "terminal",
   );
 });

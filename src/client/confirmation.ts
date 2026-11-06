@@ -14,5 +14,5 @@ export function confirmationView(props: {
   if (props.interaction?.kind === "codex-folder-trust") {
     return props.interaction.id === props.dismissedId ? "terminal" : "confirm";
   }
-  return !props.pane.chat || props.pane.agentStatus === "blocked" ? "terminal" : "normal";
+  return props.pane.agentStatus === "blocked" ? "terminal" : "normal";
 }
