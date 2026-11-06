@@ -47,6 +47,11 @@ export function paneParam(paneId: string) {
   return { param: { id: encodeURIComponent(paneId) } };
 }
 
+// スペースの id も同じく 1 セグメントに保つ。
+export function workspaceParam(workspaceId: string) {
+  return { param: { id: encodeURIComponent(workspaceId) } };
+}
+
 // hc は validator のない query / body を入力型に含めない。実行時はそのまま送れるので、
 // ここで形を決めて渡す。
 export type InputBody = { text: string; submit: true; attachments?: string[] };
@@ -382,6 +387,25 @@ export async function closePane(paneId: string, action: PaneCloseAction): Promis
     return closeOutcome(response.status);
   } catch {
     // 通信の失敗と打ち切りは、閉じられなかった結果として扱う。
+    return "failed";
+  }
+}
+
+// チェックアウトの削除は git の走査を含む。BFF のソケット期限（60 秒）より長く待つ。
+export const REMOVE_WORKTREE_TIMEOUT_MS = 70_000;
+
+// 消えたワークツリーは目的の状態に達している。close と同じく 404 は成功として扱う。
+export async function removeWorktree(workspaceId: string): Promise<CloseOutcome> {
+  try {
+    const response = await client.api.workspaces[":id"]["remove-worktree"].$post(
+      workspaceParam(workspaceId),
+      {
+        headers: { "content-type": "application/json" },
+        init: { signal: AbortSignal.timeout(REMOVE_WORKTREE_TIMEOUT_MS) },
+      },
+    );
+    return closeOutcome(response.status);
+  } catch {
     return "failed";
   }
 }

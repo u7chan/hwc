@@ -303,6 +303,19 @@ export function CloseIcon({ size = 20 }: IconProps) {
   );
 }
 
+// チェックアウトの削除。閉じる（×）とは戻せなさが違うので、ゴミ箱で区別する。
+export function TrashIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M4 7h16" />
+      <path d="M9.5 4h5l.5 3h-6z" />
+      <path d="M6.5 7l.9 12a2 2 0 0 0 2 1.9h5.2a2 2 0 0 0 2-1.9L17.5 7" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </Svg>
+  );
+}
+
 export function HwcMark({ size = 24 }: IconProps) {
   return (
     <svg

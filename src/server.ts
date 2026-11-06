@@ -5,6 +5,7 @@ import { createChatClient } from "./server/chat/pi";
 import { createOpencodeChatClient } from "./server/chat/opencode";
 import { createCodexChatClient } from "./server/chat/codex";
 import { createPaneClient } from "./server/herdr/panes";
+import { createWorktreeClient } from "./server/herdr/worktrees";
 import { createBranchReader } from "./server/git";
 import { createStateStore } from "./server/herdr/state";
 import { loadSnapshot, startStateSync } from "./server/herdr/sync";
@@ -25,6 +26,7 @@ const revision = readRevision();
 const app = createApp({
   store,
   panes: createPaneClient(),
+  worktrees: createWorktreeClient(),
   chat: createChatClient(),
   opencode: createOpencodeChatClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   codex: createCodexChatClient(),

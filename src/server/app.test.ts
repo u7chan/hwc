@@ -8,6 +8,7 @@ import { createChatClient } from "./chat/pi";
 import type { ChatSnapshot } from "./chat/contract";
 import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import type { PaneClient } from "./herdr/panes";
+import type { WorktreeClient } from "./herdr/worktrees";
 import { HerdrError } from "./herdr/socket";
 import type { AppState, ChatSource, PaneState, StateStore } from "./herdr/state";
 import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
@@ -48,7 +49,6 @@ const state: AppState = {
 };
 
 const workingPane: PaneState = { ...pane, agent: "pi", agentStatus: "working", chat: true };
-
 const workingState: AppState = {
   ...state,
   workspaces: [
@@ -56,6 +56,22 @@ const workingState: AppState = {
       ...state.workspaces[0]!,
       agentStatus: "working",
       tabs: [{ ...state.workspaces[0]!.tabs[0]!, agentStatus: "working", panes: [workingPane] }],
+    },
+  ],
+};
+
+// linked worktree のスペース。チェックアウトの削除はここからだけ受け付ける。
+const worktreeState: AppState = {
+  ...state,
+  workspaces: [
+    {
+      ...state.workspaces[0]!,
+      worktree: {
+        repoName: "hwc",
+        repoRoot: "/project",
+        checkoutPath: "/project-worktree",
+        isLinkedWorktree: true,
+      },
     },
   ],
 };
@@ -173,12 +189,20 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
   };
 }
 
+function createFakeWorktrees(overrides: Partial<WorktreeClient> = {}): WorktreeClient {
+  return {
+    remove: async () => {},
+    ...overrides,
+  };
+}
+
 // どのテストも同じ BFF を叩く。テストごとに書くのは、そのテストが見たい差分だけにする。
 type TestAppOptions = {
   state?: AppState | null;
   storeFailure?: Error;
   store?: FakeStore;
   panes?: Partial<PaneClient>;
+  worktrees?: Partial<WorktreeClient>;
   chat?: Partial<ChatClient>;
 } & Partial<
   Pick<
@@ -188,11 +212,12 @@ type TestAppOptions = {
 >;
 
 function createTestApp(options: TestAppOptions = {}) {
-  const { state: initial = state, storeFailure, store, panes, chat, ...rest } = options;
+  const { state: initial = state, storeFailure, store, panes, worktrees, chat, ...rest } = options;
   const fakeStore = store ?? createFakeStore(initial, storeFailure);
   const app = createApp({
     store: fakeStore,
     panes: createFakePanes(panes),
+    worktrees: createFakeWorktrees(worktrees),
     chat: createFakeChat(chat),
     ...rest,
   });
@@ -1217,6 +1242,87 @@ test.each([
   expect(seen).toEqual([]);
 });
 
+test("POST /api/workspaces/:id/remove-worktree deletes a linked checkout", async () => {
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    state: worktreeState,
+    worktrees: {
+      remove: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w1/remove-worktree", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual([{ workspaceId: "w1" }]);
+});
+
+test("remove-worktree refuses a workspace that is not a linked checkout", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state,
+    worktrees: {
+      remove: async () => {
+        seen.push("remove");
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w1/remove-worktree", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_linked_worktree" });
+  expect(seen).toEqual([]);
+});
+
+test("remove-worktree requires application/json", async () => {
+  const { app } = createTestApp({ state: worktreeState });
+  const response = await app.request("/api/workspaces/w1/remove-worktree", { method: "POST" });
+
+  expect(response.status).toBe(415);
+});
+
+test("remove-worktree reports a workspace that is no longer listed", async () => {
+  const { app } = createTestApp({ state: worktreeState });
+  const response = await app.request("/api/workspaces/w9/remove-worktree", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "workspace_not_found" });
+});
+
+// 消えたチェックアウトは目的の状態に達している。それ以外の拒否は 409 で区別する。
+test.each([
+  ["not_linked_worktree", 409],
+  ["workspace_not_found", 404],
+  ["worktree_not_found", 404],
+  ["worktree_remove_failed", 502],
+] as const)("remove-worktree maps %s", async (code, status) => {
+  const { app } = createTestApp({
+    state: worktreeState,
+    worktrees: {
+      remove: async () => {
+        throw new HerdrError(code, "cannot remove");
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w1/remove-worktree", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(status);
+});
+
 function createChatApp(options: { store?: FakeStore; chat?: ChatClient } = {}) {
   const { app, store } = createTestApp({
     store: options.store,
@@ -1964,6 +2070,7 @@ function launchModelApp() {
   const app = createApp({
     store,
     chat: createFakeChat(),
+    worktrees: createFakeWorktrees(),
     panes: createFakePanes({ split: async () => ({ paneId: "w1:p2" }) }),
     models: {
       list: async () => [],
@@ -2210,6 +2317,7 @@ test("POST /api/panes/:id/split shows the chosen model until the session records
     chat: createFakeChat({
       snapshot: async (path) => (path === otherSessionPath ? recorded : emptyChat),
     }),
+    worktrees: createFakeWorktrees(),
     panes: createFakePanes({ split: async () => ({ paneId: "w1:p2" }) }),
     models: {
       list: async () => [],
@@ -2277,6 +2385,7 @@ test("POST /api/panes/:id/split shows the chosen model even when the rename fail
   const app = createApp({
     store,
     chat: createFakeChat(),
+    worktrees: createFakeWorktrees(),
     panes: createFakePanes({
       split: async () => ({ paneId: "w1:p2" }),
       rename: async () => {
@@ -2313,6 +2422,7 @@ test("POST /api/panes/:id/split does not show a model when the agent cannot star
   const app = createApp({
     store,
     chat: createFakeChat(),
+    worktrees: createFakeWorktrees(),
     panes: createFakePanes({
       split: async () => ({ paneId: "w1:p2" }),
       startAgent: async () => {
