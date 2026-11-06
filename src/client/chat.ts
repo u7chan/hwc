@@ -4,6 +4,7 @@ import type {
   ChatContext,
   ChatMessage,
   ChatSnapshot,
+  ChatUsage,
 } from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, readChat } from "./api";
@@ -161,6 +162,27 @@ export function contextMeter(context: ChatContext | null): ContextMeterView | nu
     fill: percent === null ? 0 : contextFill(percent),
     tone: percent === null ? "secondary" : contextTone(percent),
   };
+}
+
+export function contextDetails(
+  context: ChatContext,
+  usage: ChatUsage | undefined,
+): [string, string][] {
+  const value = (n: number | null) => (n === null ? "不明" : n.toLocaleString("en-US"));
+  const rows: [string, string][] = [
+    ["使用量", value(context.tokens)],
+    ["設定枠", value(context.window)],
+  ];
+  if (usage !== undefined) {
+    rows.push(
+      ["入力", value(usage.input)],
+      ["出力", value(usage.output)],
+      ["キャッシュ読取", value(usage.cacheRead)],
+      ["キャッシュ書込", value(usage.cacheWrite)],
+    );
+    if (usage.reasoning !== null) rows.push(["推論", value(usage.reasoning)]);
+  }
+  return rows;
 }
 
 type ChatEntry = { paneId: string; snapshot: ChatSnapshot };

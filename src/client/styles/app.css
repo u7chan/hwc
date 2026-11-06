@@ -27,13 +27,17 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* body 全体で許可するとボタンや一覧のラベルまで選べてしまうので、本文と入力に限る。
+/* body 全体で許可するとボタンや一覧のラベルまで選べてしまうので、必要な文字列に限る。
    iOS は body の user-select と touch-callout を継承するため、接頭辞付きの指定と
    callout の解除も必要。 */
 .hwc-output,
 .hwc-md,
 .hwc-msg-body,
-.hwc-input-field {
+.hwc-input-field,
+.hwc-input-model,
+.hwc-input-effort,
+.hwc-context-text,
+.hwc-context-tooltip {
   user-select: text;
   -webkit-user-select: text;
   -webkit-touch-callout: default;
@@ -3074,13 +3078,94 @@ p.hwc-compaction,
   line-height: 1.25rem;
 }
 
-/* 幅は文字サイズに追従させない。数字を縮めると読めなくなるので、縮めるのは model 名だけ。 */
+.hwc-context-wrap {
+  position: relative;
+  flex: none;
+}
+
 .hwc-context {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.hwc-context-tooltip {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 240px;
+  max-width: min(280px, 85vw);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(var(--space-1));
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease,
+    visibility 0s linear 150ms;
+}
+
+.hwc-context-tooltip[data-placement="below"] {
+  top: 100%;
+  bottom: auto;
+}
+
+.hwc-context-tooltip > * {
+  flex: none;
+}
+
+.hwc-context-tooltip[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+
+.hwc-context-tooltip-title {
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+.hwc-context-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.hwc-context-tooltip-row > :last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.hwc-context-tooltip-note {
+  margin-top: var(--space-1);
+  color: var(--color-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-context-tooltip {
+    transition: none;
+  }
 }
 
 .hwc-context[data-tone="secondary"] {

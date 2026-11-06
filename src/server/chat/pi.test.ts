@@ -2,7 +2,15 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { type ChatReader, ChatUnavailableError, createChatClient } from "./pi";
+import {
+  type ChatReader,
+  ChatUnavailableError,
+  createChatClient as createRealChatClient,
+} from "./pi";
+
+function createChatClient(options: Parameters<typeof createRealChatClient>[0] = {}) {
+  return createRealChatClient({ loadPiModels: async () => [], ...options });
+}
 
 let dir: string;
 let fileCount = 0;
@@ -629,6 +637,13 @@ test("a tool-only assistant still reports the usage of the turn", async () => {
 
   expect(snapshot.messages).toHaveLength(1);
   expect(snapshot.context).toEqual({ tokens: 9_000, window: null });
+  expect(snapshot.usage).toEqual({
+    input: 9_000,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    reasoning: null,
+  });
 });
 
 test("an all-zero usage is not a context reading", async () => {
@@ -640,7 +655,9 @@ test("an all-zero usage is not a context reading", async () => {
     }),
   );
 
-  expect((await createChatClient().snapshot(path)).context).toBeNull();
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.context).toBeNull();
+  expect(snapshot.usage).toBeUndefined();
 });
 
 test("the usage total falls back to the sum of its parts", async () => {
@@ -652,9 +669,17 @@ test("the usage total falls back to the sum of its parts", async () => {
     }),
   );
 
-  expect((await createChatClient().snapshot(path)).context).toEqual({
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.context).toEqual({
     tokens: 1_500,
     window: null,
+  });
+  expect(snapshot.usage).toEqual({
+    input: 1_000,
+    output: 200,
+    cacheRead: 300,
+    cacheWrite: 0,
+    reasoning: null,
   });
 });
 
@@ -669,10 +694,12 @@ test("an aborted or failed turn does not report usage", async () => {
     assistant("a3", "u3", text("failed"), { usage: usage(9_000), stopReason: "error" }),
   );
 
-  expect((await createChatClient().snapshot(path)).context).toEqual({
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.context).toEqual({
     tokens: 4_000,
     window: null,
   });
+  expect(snapshot.usage?.input).toBe(4_000);
 });
 
 test("a compaction makes the earlier usage unknowable until the next answer", async () => {
@@ -687,7 +714,9 @@ test("a compaction makes the earlier usage unknowable until the next answer", as
     }),
   );
 
-  expect((await createChatClient().snapshot(path)).context).toBeNull();
+  const compacted = await createChatClient().snapshot(path);
+  expect(compacted.context).toBeNull();
+  expect(compacted.usage).toBeUndefined();
 
   await writeFile(
     path,
@@ -702,6 +731,25 @@ test("a compaction makes the earlier usage unknowable until the next answer", as
   expect((await createChatClient().snapshot(path)).context).toEqual({
     tokens: 3_000,
     window: null,
+  });
+});
+
+test("missing or invalid usage parts are unknown and do not reuse earlier parts", async () => {
+  const path = await writeSession(
+    header(),
+    assistant("a1", null, text("first"), { usage: usage(50) }),
+    assistant("a2", "a1", text("second"), {
+      usage: { totalTokens: 100, input: 80, output: -1, cacheRead: "bad" },
+    }),
+  );
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.context?.tokens).toBe(100);
+  expect(snapshot.usage).toEqual({
+    input: 80,
+    output: null,
+    cacheRead: null,
+    cacheWrite: null,
+    reasoning: null,
   });
 });
 
@@ -1107,6 +1155,87 @@ test("an override becomes usable only while its provider and model exist in the 
   expect((await chat.snapshot(path)).context?.window).toBe(1_000_000);
   await writeCatalog(agent, { store: { p: providerModels([]) } });
   expect((await chat.snapshot(path)).context?.window).toBeNull();
+});
+
+test("a Pi model outside the stored catalog supplies its exact window and is cached per catalog", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, { store: {} });
+  const path = await writeUsageSession(agent);
+  let calls = 0;
+  const chat = createChatClient({
+    loadPiModels: async (dir) => {
+      expect(dir).toBe(agent);
+      calls += 1;
+      return [{ provider: "p", id: "m", window: 500_000 }];
+    },
+  });
+  const first = await chat.snapshot(path);
+  expect(first.context?.window).toBe(500_000);
+  expect((await chat.snapshot(path)).etag).toBe(first.etag);
+  expect(calls).toBe(1);
+  await writeCatalog(agent, { store: {}, config: overriddenWindow(300_000) });
+  await chat.snapshot(path);
+  expect(calls).toBe(2);
+});
+
+test("Pi model fallback failure leaves chat intact and is retried", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, { store: {} });
+  const path = await writeUsageSession(agent);
+  let calls = 0;
+  const chat = createChatClient({
+    loadPiModels: async () => {
+      if (++calls === 1) throw new Error("unavailable");
+      return [{ provider: "p", id: "m", window: 500_000 }];
+    },
+  });
+  const first = await chat.snapshot(path);
+  expect(first.context).toEqual({ tokens: 1_000, window: null });
+  const next = await chat.snapshot(path);
+  expect(next.context?.window).toBe(500_000);
+  expect(next.etag).not.toBe(first.etag);
+  expect(next.messages).toEqual(first.messages);
+});
+
+test("editing a comment-prefixed Pi config refreshes the fallback and etag", async () => {
+  const agent = agentDir();
+  await writeCatalog(agent, { store: {} });
+  const path = await writeUsageSession(agent);
+  const config = join(agent, "models.json");
+  const writeWindow = (window: number) =>
+    writeFile(config, `\ufeff// Pi accepts this comment\n${JSON.stringify({ window })}`);
+  let calls = 0;
+  const chat = createChatClient({
+    loadPiModels: async () => {
+      calls += 1;
+      const text = await readFile(config, "utf8");
+      const data = JSON.parse(text.slice(text.indexOf("\n") + 1)) as { window: number };
+      return [{ provider: "p", id: "m", window: data.window }];
+    },
+  });
+  await writeWindow(500_000);
+  const before = await chat.snapshot(path);
+  expect(before.context?.window).toBe(500_000);
+  expect((await chat.snapshot(path)).etag).toBe(before.etag);
+  expect(calls).toBe(1);
+  await writeWindow(256_000);
+  const after = await chat.snapshot(path);
+  expect(after.context?.window).toBe(256_000);
+  expect(after.etag).not.toBe(before.etag);
+  expect(calls).toBe(2);
+});
+
+test("Pi model fallback works without a stored catalog and never mixes agent directories", async () => {
+  const one = agentDir();
+  const two = join(dir, "another-agent");
+  const paths = await Promise.all([writeUsageSession(one), writeUsageSession(two)]);
+  const chat = createChatClient({
+    loadPiModels: async (dir) => [
+      { provider: "p", id: "m", window: dir === one ? 500_000 : 256_000 },
+    ],
+  });
+  expect((await chat.snapshot(paths[0]!)).context?.window).toBe(500_000);
+  expect((await chat.snapshot(paths[1]!)).context?.window).toBe(256_000);
 });
 
 test("catalog reevaluation preserves the etag when the displayed window does not change", async () => {

@@ -5,6 +5,7 @@ import type {
   ChatContext,
   ChatMessage,
   ChatSnapshot,
+  ChatUsage,
 } from "../server/chat/contract";
 import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
@@ -72,6 +73,28 @@ function toChatContext(value: unknown): ChatContext | null {
   return { tokens: context.tokens, window: context.window };
 }
 
+function toChatUsage(value: unknown): ChatUsage | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const usage = value as Partial<ChatUsage>;
+  const valid = (n: unknown): n is number | null =>
+    n === null || (typeof n === "number" && Number.isFinite(n) && n >= 0);
+  if (
+    !valid(usage.input) ||
+    !valid(usage.output) ||
+    !valid(usage.cacheRead) ||
+    !valid(usage.cacheWrite) ||
+    !valid(usage.reasoning)
+  )
+    return undefined;
+  return {
+    input: usage.input,
+    output: usage.output,
+    cacheRead: usage.cacheRead,
+    cacheWrite: usage.cacheWrite,
+    reasoning: usage.reasoning,
+  };
+}
+
 function toChatCompaction(value: unknown): ChatCompaction | null {
   if (typeof value !== "object" || value === null) return null;
   const compaction = value as Partial<ChatCompaction>;
@@ -130,6 +153,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     if (message === null) return null;
     messages.push(message);
   }
+  const usage = toChatUsage(snapshot.usage);
   return {
     etag: snapshot.etag,
     messages,
@@ -138,6 +162,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     truncated: snapshot.truncated,
     // 飾りの値が壊れても会話は捨てない。数字を出さないだけにする。
     context: toChatContext(snapshot.context),
+    ...(usage === undefined ? {} : { usage }),
     compaction: toChatCompaction(snapshot.compaction),
   };
 }

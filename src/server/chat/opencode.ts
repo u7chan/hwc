@@ -8,6 +8,7 @@ import type {
   ChatContext,
   ChatMessage,
   ChatSnapshot,
+  ChatUsage,
   SessionChatClient,
 } from "./contract";
 import { ChatUnavailableError } from "./errors";
@@ -44,6 +45,7 @@ type Projected = {
   messages: ChatMessage[];
   compaction: ChatCompaction | null;
   tokens: number | null;
+  usage: ChatUsage | null;
   model: ModelRef | null;
   usageModel: ModelRef | null;
 };
@@ -108,6 +110,7 @@ export function createOpencodeChatClient(
         effort: info.model === null ? (projected.model?.variant ?? null) : info.model.variant,
         truncated: limited.truncated,
         context: foldContext(projected.tokens, contextWindow),
+        ...(projected.usage === null ? {} : { usage: projected.usage }),
         compaction: projected.compaction,
       };
 
@@ -214,6 +217,7 @@ function parseContext(raw: unknown): Projected {
   const messages: ChatMessage[] = [];
   let compaction: ChatCompaction | null = null;
   let tokens: number | null = null;
+  let parts: ChatUsage | null = null;
   let model: ModelRef | null = null;
   let usageModel: ModelRef | null = null;
 
@@ -230,6 +234,7 @@ function parseContext(raw: unknown): Projected {
       compaction = { at: timestampOf(record.time), tokensBefore: null, summary, index: 0 };
       messages.length = 0;
       tokens = null;
+      parts = null;
       model = null;
       usageModel = null;
       continue;
@@ -260,6 +265,7 @@ function parseContext(raw: unknown): Projected {
       const output = finiteNumber(asRecord(record.tokens)?.output) ?? 0;
       if (usage !== null && output > 0) {
         tokens = usage;
+        parts = tokenParts(record.tokens);
         usageModel = ref;
       }
 
@@ -271,7 +277,25 @@ function parseContext(raw: unknown): Projected {
     }
   }
 
-  return { messages, compaction, tokens, model, usageModel };
+  return { messages, compaction, tokens, usage: parts, model, usageModel };
+}
+
+function tokenParts(value: unknown): ChatUsage | null {
+  const tokens = asRecord(value);
+  if (tokens === null) return null;
+  const cache = asRecord(tokens.cache);
+  const part = (value: unknown) => {
+    const n = finiteNumber(value);
+    return n !== null && n >= 0 ? n : null;
+  };
+  const result = {
+    input: part(tokens.input),
+    output: part(tokens.output),
+    cacheRead: part(cache?.read),
+    cacheWrite: part(cache?.write),
+    reasoning: part(tokens.reasoning),
+  };
+  return Object.values(result).some((n) => n !== null) ? result : null;
 }
 
 function parseModelRef(value: unknown): ModelRef | null {

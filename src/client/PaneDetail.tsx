@@ -1,6 +1,19 @@
 import { Fragment, type ComponentChildren, type Ref } from "preact";
-import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { ChatCompaction, ChatMessage, ChatSnapshot } from "../server/chat/contract";
+import {
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "preact/hooks";
+import type {
+  ChatCompaction,
+  ChatContext,
+  ChatMessage,
+  ChatSnapshot,
+  ChatUsage,
+} from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
@@ -20,6 +33,7 @@ import {
   agentInfo,
   agentInfoLabel,
   compactionLabel,
+  contextDetails,
   contextMeter,
   type ContextMeterView,
   isPendingConfirmed,
@@ -464,21 +478,131 @@ function CommandBadge(props: { id: CommandId }) {
   );
 }
 
-// 数値は可視テキストと sr-only の全文で伝え、バーは装飾に留める。
-function ContextMeter(props: { view: ContextMeterView }) {
-  const { view } = props;
+function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usage?: ChatUsage }) {
+  const { view, context, usage } = props;
+  const [open, setOpen] = useState<"hover" | "pinned" | null>(null);
+  const root = useRef<HTMLSpanElement>(null);
+  const tooltip = useRef<HTMLSpanElement>(null);
+  const tooltipId = useId();
+  useLayoutEffect(() => {
+    if (open === null || root.current === null || tooltip.current === null) return;
+    const anchor = root.current;
+    const popup = tooltip.current;
+    const viewport = window.visualViewport;
+    const update = () => {
+      const rect = anchor.getBoundingClientRect();
+      const top = viewport?.offsetTop ?? 0;
+      const height = viewport?.height ?? window.innerHeight;
+      const above = Math.max(0, rect.top - top - 8);
+      const below = Math.max(0, top + height - rect.bottom - 8);
+      const placement = above >= below ? "above" : "below";
+      popup.dataset.placement = placement;
+      popup.style.maxHeight = `${placement === "above" ? above : below}px`;
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(anchor);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    viewport?.addEventListener("resize", update);
+    viewport?.addEventListener("scroll", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      viewport?.removeEventListener("resize", update);
+      viewport?.removeEventListener("scroll", update);
+    };
+  }, [open]);
+  useEffect(() => {
+    if (open === null) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(null);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (document.activeElement === tooltip.current)
+          root.current?.querySelector("button")?.focus();
+        setOpen(null);
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
   return (
-    <span class="hwc-context" data-tone={view.tone}>
-      <span class="hwc-context-text" aria-hidden="true">
-        <span class="hwc-context-wide">{view.wide}</span>
-        <span class="hwc-context-narrow">{view.narrow}</span>
-      </span>
-      <span class="hwc-visually-hidden">{view.wide}</span>
-      {view.percent === null ? null : (
-        <span class="hwc-context-bar" aria-hidden="true">
-          <span class="hwc-context-bar-fill" style={{ width: `${view.fill}%` }} />
+    <span
+      class="hwc-context-wrap"
+      ref={root}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") setOpen((current) => current ?? "hover");
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse" && document.activeElement !== tooltip.current)
+          setOpen((current) => (current === "hover" ? null : current));
+      }}
+    >
+      <button
+        type="button"
+        class="hwc-context"
+        data-tone={view.tone}
+        aria-label={`コンテキスト使用量 ${view.wide}`}
+        aria-describedby={open === null ? undefined : tooltipId}
+        aria-expanded={open !== null}
+        onFocus={(event) => {
+          if (event.currentTarget.matches(":focus-visible"))
+            setOpen((current) => current ?? "hover");
+        }}
+        onBlur={(event) => {
+          if (event.relatedTarget !== null) {
+            if (!root.current?.contains(event.relatedTarget as Node)) setOpen(null);
+          } else setOpen((current) => (current === "hover" ? null : current));
+        }}
+        onClick={(event) => {
+          const selection = window.getSelection();
+          if (
+            !selection?.isCollapsed &&
+            event.currentTarget.contains(selection?.anchorNode ?? null)
+          )
+            return;
+          setOpen((current) => (current === "pinned" ? null : "pinned"));
+        }}
+      >
+        <span class="hwc-context-text" aria-hidden="true">
+          <span class="hwc-context-wide">{view.wide}</span>
+          <span class="hwc-context-narrow">{view.narrow}</span>
         </span>
-      )}
+        {view.percent === null ? null : (
+          <span class="hwc-context-bar" aria-hidden="true">
+            <span class="hwc-context-bar-fill" style={{ width: `${view.fill}%` }} />
+          </span>
+        )}
+      </button>
+      <span
+        id={tooltipId}
+        ref={tooltip}
+        role="tooltip"
+        class="hwc-context-tooltip"
+        data-open={open !== null}
+        tabIndex={open === null ? -1 : 0}
+        onBlur={(event) => {
+          if (!root.current?.contains(event.relatedTarget as Node | null)) setOpen(null);
+        }}
+      >
+        <span class="hwc-context-tooltip-title">直近のコンテキスト使用量</span>
+        {contextDetails(context, usage).map(([label, value]) => (
+          <span class="hwc-context-tooltip-row" key={label}>
+            <span>{label}</span>
+            <span>{value}</span>
+          </span>
+        ))}
+        <span class="hwc-context-tooltip-note">
+          設定枠はモデル仕様上の最大値とは限りません。自動圧縮は枠に達する前に行われることがあります。
+        </span>
+      </span>
     </span>
   );
 }
@@ -1488,18 +1612,28 @@ export function PaneDetail(props: PaneDetailProps) {
             <div class="hwc-input-actions">
               <span class="hwc-input-tail">
                 {info === null && meter === null ? null : (
-                  <span
-                    class="hwc-input-info"
-                    title={info === null ? undefined : agentInfoLabel(info)}
-                  >
+                  <span class="hwc-input-info">
                     <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
                       <AgentGlyphIcon agent={pane.agent} size={14} />
                     </span>
-                    {info?.model == null ? null : <span class="hwc-input-model">{info.model}</span>}
-                    {info?.effort == null ? null : (
-                      <span class="hwc-input-effort">{info.effort}</span>
+                    {info?.model == null ? null : (
+                      <span class="hwc-input-model" title={agentInfoLabel(info)}>
+                        {info.model}
+                      </span>
                     )}
-                    {meter === null ? null : <ContextMeter view={meter} />}
+                    {info?.effort == null ? null : (
+                      <span class="hwc-input-effort" title={agentInfoLabel(info)}>
+                        {info.effort}
+                      </span>
+                    )}
+                    {meter === null || snapshot?.context == null ? null : (
+                      <ContextMeter
+                        key={pane.id}
+                        view={meter}
+                        context={snapshot.context}
+                        usage={snapshot.usage}
+                      />
+                    )}
                   </span>
                 )}
                 <button

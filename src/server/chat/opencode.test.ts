@@ -109,6 +109,13 @@ test("opencode messages become the same chat snapshot as pi", async () => {
   expect(snapshot.model).toBe("beam-free");
   expect(snapshot.effort).toBe("low");
   expect(snapshot.context).toEqual({ tokens: 20, window: 1_048_576 });
+  expect(snapshot.usage).toEqual({
+    input: 10,
+    output: 2,
+    reasoning: 3,
+    cacheRead: 5,
+    cacheWrite: 0,
+  });
   expect(snapshot.truncated).toBe(false);
   expect(snapshot.compaction).toBeNull();
 });
@@ -126,6 +133,13 @@ test("a tool-only assistant does not replace the context reading", async () => {
   }).snapshot("ses_1");
 
   expect(snapshot.context).toEqual({ tokens: 12, window: 1_048_576 });
+  expect(snapshot.usage).toEqual({
+    input: 10,
+    output: 2,
+    reasoning: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+  });
 });
 
 test("multiple text parts in one assistant message are separated", async () => {
@@ -194,6 +208,13 @@ test("a completed compaction starts a new window", async () => {
     index: 0,
   });
   expect(snapshot.context).toEqual({ tokens: 40, window: 1_048_576 });
+  expect(snapshot.usage).toEqual({
+    input: 30,
+    output: 1,
+    reasoning: 2,
+    cacheRead: 7,
+    cacheWrite: 0,
+  });
 });
 
 test("a failed compaction does not hide the conversation", async () => {
