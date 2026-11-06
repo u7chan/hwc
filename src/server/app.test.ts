@@ -2275,6 +2275,30 @@ test("POST /api/panes/:id/split stops when the layout already has four panes", a
   expect(seenSplit).toEqual([]);
 });
 
+test("POST /api/panes/:id/split gives the creation the trimmed name and the agent", async () => {
+  // 起動順や Herdr 名の作り方は create-pane.test.ts が見る。ここはルートが
+  // parseSplitBody の結果を渡していることだけを見る。
+  const seenStart: unknown[] = [];
+  const seenRename: unknown[] = [];
+  const { app } = createTestApp({
+    state: twoChatPanesState,
+    panes: {
+      split: async () => ({ paneId: "w1:p3" }),
+      startAgent: async (options) => {
+        seenStart.push(options);
+      },
+      rename: async (options) => {
+        seenRename.push(options);
+      },
+    },
+  });
+  const response = await postSplit(app, "w1:p1", { name: " 実装 ", agent: "pi" });
+
+  expect(response.status).toBe(200);
+  expect(seenStart).toMatchObject([{ paneId: "w1:p3", kind: "pi" }]);
+  expect(seenRename).toEqual([{ paneId: "w1:p3", label: "実装" }]);
+});
+
 test("POST /api/panes/:id/split keeps the pane when the agent cannot start", async () => {
   const seenRename: unknown[] = [];
   const { app } = createTestApp({
