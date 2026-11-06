@@ -216,6 +216,19 @@ test("a context that breaks the contract costs the numbers, not the conversation
   }
 });
 
+test("usage parts survive validation without sacrificing the conversation when malformed", () => {
+  const usage = { input: 81_000, output: 900, cacheRead: 0, cacheWrite: null, reasoning: null };
+  expect(toChatSnapshot({ ...chatBody, usage })).toEqual({ ...chatBody, usage });
+  for (const broken of [
+    { ...usage, input: -1 },
+    { ...usage, output: "900" },
+    { ...usage, cacheRead: NaN },
+    {},
+  ]) {
+    expect(toChatSnapshot({ ...chatBody, usage: broken })).toEqual(chatBody);
+  }
+});
+
 test("a compaction that breaks the contract costs the summary, not the conversation", () => {
   const compaction = { at: 1_700_000_000_000, tokensBefore: 212_959, summary: "so far", index: 0 };
 

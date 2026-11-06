@@ -1,16 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
 import { type FileHandle, open, readFile, stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type {
   ChatCompaction,
   ChatContext,
   ChatMessage,
   ChatSnapshot,
+  ChatUsage,
   SessionChatClient,
 } from "./contract";
 import { stripAttachedFiles } from "../../shared/attachments";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
+import { loadPiModelWindows, type PiModelWindow } from "./pi-models";
 
 // 40MB のセッションを一度に読まないよう、追記分はチャンクに分けて読む。
 const CHUNK_BYTES = 1024 * 1024;
@@ -28,7 +30,7 @@ export { ChatUnavailableError };
 export type ChatClient = SessionChatClient;
 
 type ModelCatalog = {
-  contextWindow: (provider: string | null, model: string | null) => number | null;
+  contextWindow: (provider: string, model: string) => number | null | undefined;
 };
 
 type WindowResolver = (
@@ -52,6 +54,7 @@ type SessionEntry = {
   provider: string | null;
   effort: string | null;
   usageTokens: number | null;
+  usage: ChatUsage | null;
   invalidatesUsage: boolean;
   // 材料の有無とは別に、compaction エントリかどうかを持つ。壊れた最新を古いもので
   // 埋めないため、境界の位置と材料を別々に知る必要がある。
@@ -96,11 +99,13 @@ export function createChatClient(
     limit?: number;
     load?: (reader: ChatReader) => Promise<ChatSnapshot>;
     readCatalogFile?: (path: string) => Promise<string>;
+    loadPiModels?: (agentDir: string) => Promise<PiModelWindow[]>;
   } = {},
 ): ChatClient {
   const limit = options.limit ?? 8;
   const windowFor = createWindowResolver(
     options.readCatalogFile ?? ((path) => readFile(path, "utf8")),
+    options.loadPiModels ?? loadPiModelWindows,
   );
   const load = options.load ?? ((reader: ChatReader) => readSessionFile(reader, windowFor));
   const readers = new Map<string, ChatReader>();
@@ -259,6 +264,7 @@ function applyLine(reader: ChatReader, line: string): void {
     provider: null,
     effort: null,
     usageTokens: null,
+    usage: null,
     // compaction と context_edit は、それ以前の usage を現在のコンテキスト量にしない。
     invalidatesUsage: record.type === "compaction" || record.type === "context_edit",
     compactionEntry: record.type === "compaction",
@@ -274,6 +280,7 @@ function applyLine(reader: ChatReader, line: string): void {
       entry.provider = projected.provider;
       entry.effort = projected.effort;
       entry.usageTokens = projected.usageTokens;
+      entry.usage = projected.usage;
     }
   } else if (record.type === "model_change") {
     entry.model = nonEmptyText(record.modelId);
@@ -296,6 +303,7 @@ type Projected = {
   provider: string | null;
   effort: string | null;
   usageTokens: number | null;
+  usage: ChatUsage | null;
 };
 
 // 要約の無い compaction は材料にしない。要約だけ出して窓がずれる状態を作らないため。
@@ -332,6 +340,7 @@ function project(id: string, message: Record<string, unknown>, entryTimestamp: u
       provider: null,
       effort: null,
       usageTokens: null,
+      usage: null,
     };
   }
 
@@ -339,16 +348,41 @@ function project(id: string, message: Record<string, unknown>, entryTimestamp: u
     // ツール実行だけの返答は本文が空になる。会話としては出さないが、model と
     // thinkingLevel と usage は最新の値として使う。
     const text = assistantText(message.content);
+    const usageTokens = assistantUsageTokens(message);
     return {
       message: text === "" ? null : { id, role: "agent", text, at },
       model: nonEmptyText(message.model),
       provider: nonEmptyText(message.provider),
       effort: nonEmptyText(message.thinkingLevel),
-      usageTokens: assistantUsageTokens(message),
+      usageTokens,
+      usage: usageTokens === null ? null : usageParts(asRecord(message.usage)),
     };
   }
 
-  return { message: null, model: null, provider: null, effort: null, usageTokens: null };
+  return {
+    message: null,
+    model: null,
+    provider: null,
+    effort: null,
+    usageTokens: null,
+    usage: null,
+  };
+}
+
+function usageParts(usage: Record<string, unknown> | null): ChatUsage | null {
+  if (usage === null) return null;
+  const part = (value: unknown) => {
+    const n = finiteNumber(value);
+    return n !== null && n >= 0 ? n : null;
+  };
+  const result = {
+    input: part(usage.input),
+    output: part(usage.output),
+    cacheRead: part(usage.cacheRead),
+    cacheWrite: part(usage.cacheWrite),
+    reasoning: null,
+  };
+  return Object.values(result).some((n) => n !== null) ? result : null;
 }
 
 // pi の getAssistantUsage と同じ条件。中断・失敗の usage と全ゼロの usage は現在の
@@ -428,6 +462,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   // usage は entry 単位で拾う。本文の無い assistant を project が捨てるため、message 側に
   // 持たせると tool-only の最後の応答を取りこぼす。
   let tokens: number | null = null;
+  let usage: ChatUsage | null = null;
   const messages: ChatMessage[] = [];
   // compaction エントリより前にある、表示対象のメッセージ数。区切りを置く位置になる。
   let beforeCompaction = 0;
@@ -449,8 +484,14 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
       provider = entry.provider;
     }
     if (entry.effort !== null) effort = entry.effort;
-    if (entry.invalidatesUsage) tokens = null;
-    if (entry.usageTokens !== null) tokens = entry.usageTokens;
+    if (entry.invalidatesUsage) {
+      tokens = null;
+      usage = null;
+    }
+    if (entry.usageTokens !== null) {
+      tokens = entry.usageTokens;
+      usage = entry.usage;
+    }
   }
 
   // window は表示中のモデルで引く。usage を採った assistant のモデルで引くと、切り替え直後に
@@ -470,6 +511,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
     effort,
     truncated: limited.truncated,
     context: foldContext(tokens, windowTokens),
+    ...(usage === null ? {} : { usage }),
     compaction: compacted === null ? null : { ...compacted.compaction, index: compactionIndex },
   };
 }
@@ -506,10 +548,14 @@ function foldContext(tokens: number | null, window: number | null): ChatContext 
   return { tokens, window };
 }
 
-function createWindowResolver(readCatalogFile: (path: string) => Promise<string>): WindowResolver {
+function createWindowResolver(
+  readCatalogFile: (path: string) => Promise<string>,
+  loadPiModels: (agentDir: string) => Promise<PiModelWindow[]>,
+): WindowResolver {
   const files = new Map<string, { version: string; value: unknown }>();
   const catalogs = new Map<string, { store: unknown; config: unknown; catalog: ModelCatalog }>();
   const running = new Map<string, Promise<ModelCatalog>>();
+  const fallback = new Map<string, { catalog: ModelCatalog; pending: Promise<PiModelWindow[]> }>();
 
   const readJson = async (path: string): Promise<unknown> => {
     try {
@@ -557,18 +603,30 @@ function createWindowResolver(readCatalogFile: (path: string) => Promise<string>
     const agentDir = await sessionAgentDirOf(sessionPath);
     if (agentDir === null) return null;
     const catalog = await catalogFor(agentDir);
-    return catalog.contextWindow(provider, model);
+    const stored = catalog.contextWindow(provider, model);
+    if (stored !== undefined) return stored;
+    let cached = fallback.get(agentDir);
+    if (cached?.catalog !== catalog) {
+      const pending = loadPiModels(agentDir);
+      cached = { catalog, pending };
+      fallback.set(agentDir, cached);
+      void pending.catch(() => {
+        if (fallback.get(agentDir)?.pending === pending) fallback.delete(agentDir);
+      });
+    }
+    const models = await cached.pending.catch(() => []);
+    return models.find((item) => item.provider === provider && item.id === model)?.window ?? null;
   };
 }
 
 // セッションは <agent-dir>/sessions/<slug>/<file>.jsonl に置かれる。BFF の
-// $PI_CODING_AGENT_DIR は pi を custom dir で起動したセッションと一致しないため、path から
-// 導く。models-store.json の実在を条件にして、別の root を agent dir と誤認しない。
+// $PI_CODING_AGENT_DIR は pi を custom dir で起動したセッションと一致しないため、path から導く。
 async function sessionAgentDirOf(sessionPath: string): Promise<string | null> {
+  if (basename(dirname(dirname(sessionPath))) !== "sessions") return null;
   const candidate = dirname(dirname(dirname(sessionPath)));
   try {
-    const info = await stat(join(candidate, MODELS_STORE));
-    return info.isFile() ? candidate : null;
+    const info = await stat(candidate);
+    return info.isDirectory() ? candidate : null;
   } catch {
     return null;
   }
@@ -600,8 +658,7 @@ function catalogOf(store: unknown, config: unknown): ModelCatalog {
 
   return {
     contextWindow(provider, model) {
-      if (provider === null || model === null) return null;
-      return windows.get(catalogKey(provider, model)) ?? null;
+      return windows.get(catalogKey(provider, model));
     },
   };
 }

@@ -12,6 +12,14 @@ export type ChatContext = {
   window: number | null;
 };
 
+export type ChatUsage = {
+  input: number | null;
+  output: number | null;
+  cacheRead: number | null;
+  cacheWrite: number | null;
+  reasoning: number | null;
+};
+
 export type ChatCompaction = {
   at: number;
   tokensBefore: number | null;
@@ -28,6 +36,7 @@ export type ChatSnapshot = {
   effort: string | null;
   truncated: boolean;
   context: ChatContext | null;
+  usage?: ChatUsage;
   compaction: ChatCompaction | null;
 };
 

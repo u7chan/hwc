@@ -7,6 +7,7 @@ import {
   agentInfoLabel,
   chatPollDelay,
   compactionLabel,
+  contextDetails,
   contextFill,
   contextMeter,
   contextPercent,
@@ -195,6 +196,44 @@ test("the meter is drawn only when there is something to show", () => {
     fill: 0,
     tone: "secondary",
   });
+});
+
+test("context details show exact values and unknown usage parts", () => {
+  expect(
+    contextDetails(
+      { tokens: 81_900, window: 200_000 },
+      {
+        input: 11_000,
+        output: 900,
+        cacheRead: 70_000,
+        cacheWrite: null,
+        reasoning: null,
+      },
+    ),
+  ).toEqual([
+    ["使用量", "81,900"],
+    ["設定上限", "200,000"],
+    ["入力", "11,000"],
+    ["出力", "900"],
+    ["キャッシュ読取", "70,000"],
+    ["キャッシュ書込", "不明"],
+  ]);
+  expect(contextDetails({ tokens: null, window: 100_000 }, undefined)).toEqual([
+    ["使用量", "不明"],
+    ["設定上限", "100,000"],
+  ]);
+  expect(
+    contextDetails(
+      { tokens: 8, window: null },
+      {
+        input: 1,
+        output: 2,
+        cacheRead: 1,
+        cacheWrite: 0,
+        reasoning: 4,
+      },
+    ).at(-1),
+  ).toEqual(["推論", "4"]);
 });
 
 test("the compaction line says how much was compressed", () => {

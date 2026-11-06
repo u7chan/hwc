@@ -86,6 +86,12 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeFile(
       join(root, "bin", "pi"),
       `#!/bin/sh
+if [ "$*" = "--offline --mode rpc --no-session --no-extensions" ]; then
+  IFS= read -r request
+  if [ "$request" != '{"type":"get_available_models"}' ]; then exit 2; fi
+  printf '%s\\n' '{"type":"response","command":"get_available_models","success":true,"data":{"models":[{"provider":"anthropic","id":"claude-sonnet-4-5","contextWindow":200000}]}}'
+  exit 0
+fi
 if [ "$1" != "--offline" ] || [ "$2" != "--list-models" ]; then exit 2; fi
 cat <<'MODELS'
 provider  model  context  max-out  thinking  images
@@ -443,9 +449,9 @@ const sessionEntries = [
       provider: "anthropic",
       timestamp: Date.parse("2026-01-01T09:00:07.000Z"),
       usage: {
-        input: 11_000,
+        input: 4_000,
         output: 1_000,
-        cacheRead: 0,
+        cacheRead: 7_000,
         cacheWrite: 0,
         totalTokens: 12_000,
       },

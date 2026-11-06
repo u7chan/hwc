@@ -21,6 +21,7 @@ OpenCode 2.2.5 は TUI とバックグラウンドサービスを分け、会話
 - 会話として出すのは user の `text` と assistant の `text` パートだけにする。reasoning・tool・shell・system・synthetic・idle は出さない。assistant の複数の text パートは空行で区切る。user の hwc 添付注記は `stripAttachedFiles` で本文から外し、`attachments` にファイル名だけを残す
 - 完了した compaction だけを窓の先頭にする。失敗・実行中の compaction は区切りにしない。`summary` を表示し、`tokensBefore` は API から取れないため `null` にする
 - コンテキスト量は、compaction 以降で最後に `output > 0` を持つ assistant の `input + output + reasoning + cache.read + cache.write` とする。opencode の TUI の sidebar と同じ条件で、ツールだけの中間応答では上書きしない。compaction の後は次の usage まで `null`
+- 同じ assistant の入力・出力・推論・キャッシュ読取・書込を内訳として返す。表示と不明値の扱いは [ADR 0013](0013-pi-session-chat.md) に従う
 - コンテキストの window は `GET /api/model` の `limit.context` から、セッションの選択モデルの `providerID` と `id` で引く。選択モデルが無いときは usage を出した assistant のモデルを使う。モデル一覧はサービス URL とディレクトリごとにプロセス内で 1 回だけ読み、引けないときは `window` を `null` にする。失敗は固定せず、次の要求で読み直す
 - 応答の上限は pi と同じ 500 メッセージ / 1MB とし、切ったら `truncated` を立てる。`etag` は session id とスナップショットの内容から作り、`If-None-Match` の弱比較で 304 を返す
 - 入力の送信は今まで通り Herdr の `pane.send_input` を使う。OpenCode の API からメッセージを送ると、TUI と hwc のどちらが正か曖昧になるため使わない
