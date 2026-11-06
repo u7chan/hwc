@@ -18,6 +18,7 @@ import {
 import type { SessionChatClient } from "./chat/contract";
 import { createPane } from "./create-pane";
 import { createPaneCloser } from "./close-pane";
+import { createFolderTrust } from "./folder-trust";
 import type { PaneCloseAction } from "../shared/pane-close";
 import {
   exceedsTextLimit,
@@ -82,6 +83,8 @@ export function createApp(options: {
       // 取得に失敗した時点で状態は無い。呼び出し側がエラーを返す。
       return null;
     });
+
+  const folderTrust = createFolderTrust(panes);
 
   const paneFailure = (c: Context, error: unknown) => {
     if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
@@ -291,8 +294,35 @@ export function createApp(options: {
       if (!query.ok) return c.json({ error: query.error }, query.status);
 
       try {
-        const output = await panes.read({ paneId: c.req.param("id"), ...query.value });
-        return c.json(output);
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+        const paneId = c.req.param("id");
+        const pane = findPane(state, paneId);
+        if (!pane) return c.json({ error: "pane_not_found" }, 404);
+        folderTrust.retain(
+          state.workspaces.flatMap((workspace) =>
+            workspace.tabs.flatMap((tab) => tab.panes.map((item) => item.id)),
+          ),
+        );
+        const output = await panes.read({ paneId, ...query.value });
+        const interaction = await folderTrust.inspect(pane);
+        return c.json({ ...output, interaction });
+      } catch (error) {
+        return paneFailure(c, error);
+      }
+    })
+    .post("/api/panes/:id/confirm-folder-trust", requireJson, async (c) => {
+      const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
+      if (typeof body?.id !== "string" || body.id.length === 0 || body.id.length > 128) {
+        return c.json({ error: "invalid_request" }, 400);
+      }
+      try {
+        const state = await store.refresh();
+        const pane = findPane(state, c.req.param("id"));
+        if (!pane) return c.json({ error: "pane_not_found" }, 404);
+        const result = await folderTrust.accept(pane, body.id);
+        if (result === "changed") return c.json({ error: "confirmation_changed" }, 409);
+        return c.json({ ok: true });
       } catch (error) {
         return paneFailure(c, error);
       }
@@ -307,6 +337,16 @@ export function createApp(options: {
 
       const paneId = c.req.param("id");
       const paths: string[] = [];
+      const state = await current();
+      const pane = state === null ? null : findPane(state, paneId);
+      if (pane?.agent === "codex") {
+        try {
+          if (await folderTrust.inspect(pane))
+            return c.json({ error: "confirmation_pending" }, 409);
+        } catch (error) {
+          return paneFailure(c, error);
+        }
+      }
       // 添付が無いときは Herdr の pane_not_found に任せる。ペインの実在を状態から引くと、
       // 従来の経路に余分な往復が増える。
       if (input.value.attachments.length > 0) {
@@ -356,6 +396,9 @@ export function createApp(options: {
       if (pane.agentStatus !== "working") return c.json({ ok: true });
 
       try {
+        if (pane.agent === "codex" && (await folderTrust.inspect(pane))) {
+          return c.json({ error: "confirmation_pending" }, 409);
+        }
         await panes.stop({ paneId });
         return c.json({ ok: true });
       } catch (error) {

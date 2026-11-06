@@ -82,6 +82,7 @@ export type PaneClient = {
   send: (options: SendOptions) => Promise<void>;
   focus: (options: FocusOptions) => Promise<void>;
   stop: (options: StopOptions) => Promise<void>;
+  confirmFolderTrust: (options: { paneId: string }) => Promise<void>;
   close: (options: CloseOptions) => Promise<void>;
   exit: (options: CloseOptions) => Promise<void>;
   layout: (options: LayoutOptions) => Promise<PaneLayout>;
@@ -257,6 +258,9 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
     async stop({ paneId }) {
       // Herdr は Esc を esc として受ける。文字は送らず、キーだけを 1 回送る。
       await call("pane.send_keys", { pane_id: paneId, keys: ["esc"] }, { path });
+    },
+    async confirmFolderTrust({ paneId }) {
+      await call("pane.send_keys", { pane_id: paneId, keys: ["enter"] }, { path });
     },
     async close({ paneId }) {
       // ペインを閉じるとエージェントのプロセスも終わる。開いていた作業は戻らない。

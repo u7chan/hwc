@@ -394,6 +394,25 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         const keys = Array.isArray(params.keys)
           ? params.keys.filter((key): key is string => typeof key === "string")
           : [];
+        if (
+          keys.length === 1 &&
+          keys[0] === "enter" &&
+          outputs.get(paneId)?.includes("› 1. Trust and continue")
+        ) {
+          if (!target.agent_session) {
+            const sessionId = `thread_${paneId.replaceAll(":", "_")}`;
+            await writeCodexThread(root, sessionId, STARTUP_MODELS[0]!.id);
+            target.agent_session = {
+              agent: "codex",
+              source: "herdr:codex",
+              kind: "id",
+              value: sessionId,
+            };
+          }
+          outputs.set(paneId, "Codex is ready.\n");
+          revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
+          setAgentStatus(paneId, "idle");
+        }
         // 停止ボタンは Esc だけを送る。実 Herdr と同じく、実行中のエージェントは
         // idle に戻ったものとして次のスナップショットを作る。
         if (keys.some((key) => key === "esc" || key === "escape")) {
