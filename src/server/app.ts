@@ -20,6 +20,7 @@ import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import { createPane } from "./create-pane";
 import { createPaneCloser } from "./close-pane";
 import { createFolderTrust } from "./folder-trust";
+import { createLaunchModels } from "./launch-models";
 import type { PaneCloseAction } from "../shared/pane-close";
 import {
   exceedsTextLimit,
@@ -86,6 +87,7 @@ export function createApp(options: {
     });
 
   const folderTrust = createFolderTrust(panes);
+  const launchModels = createLaunchModels();
 
   const paneFailure = (c: Context, error: unknown) => {
     if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
@@ -95,10 +97,12 @@ export function createApp(options: {
 
   const closePane = createPaneCloser(store, panes);
   const requestClose = async (c: Context, action: PaneCloseAction) => {
+    const paneId = c.req.param("id") ?? "";
     try {
-      const result = await closePane(c.req.param("id") ?? "", action);
+      const result = await closePane(paneId, action);
       if (result === "missing") return c.json({ error: "pane_not_found" }, 404);
       if (result === "changed") return c.json({ error: "pane_action_changed" }, 409);
+      launchModels.forget(paneId);
       return c.json({ ok: true });
     } catch (error) {
       if (error instanceof HerdrError && error.code === "agent_exit_unsafe") {
@@ -295,8 +299,9 @@ export function createApp(options: {
       if (client === undefined) return c.json({ error: "chat_unavailable" }, 502);
 
       try {
-        const snapshot = await client.snapshot(
-          source.agent === "pi" ? source.path : source.sessionId,
+        const snapshot = launchModels.apply(
+          paneId,
+          await client.snapshot(source.agent === "pi" ? source.path : source.sessionId),
         );
         c.header("ETag", `"${snapshot.etag}"`);
         if (matchesEtag(c.req.header("if-none-match"), snapshot.etag)) {
@@ -460,6 +465,11 @@ export function createApp(options: {
 
       try {
         const result = await createPane(panes, paneId, request.value, models);
+        // 名前の付け直しに失敗してもエージェントは起動している。起動できた場合だけ、
+        // 選んだモデルを会話に載るまでの表示に使う。
+        if ((result.ok || result.error === "pane_rename_failed") && request.value.model != null) {
+          launchModels.remember(result.paneId, request.value.model, request.value.effort ?? null);
+        }
         if (!result.ok) {
           if (result.error === "pane_limit") return c.json({ error: result.error }, 409);
           return c.json({ error: result.error, paneId: result.paneId }, 502);

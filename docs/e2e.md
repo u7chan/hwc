@@ -65,7 +65,7 @@ BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 OpenCode の未起動表示は、架空の `<root>/opencode/service.json` だけを一時退避してダイアログを開き、「OpenCode サービス未起動」と出ることを確認する。モデル欄は無効でもデフォルト起動は選べ、サービスの自動起動は行わない。接続情報を戻してダイアログを開き直すとモデル一覧が復帰することも確かめる。
 
-effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。起動した架空セッションにも effort を記録し、チャットのモデル・effort 表示で反映を確認する。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
+effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
 
 Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。初期化後の `config/read` / `model/list` / `thread/read` / `thread/turns/list` にだけ応答する。モデル指定した新規ペインは、そのモデルを架空の thread に記録する。入力は本番と同じ Herdr の `pane.send_input` 経由で受け、架空の user と assistant の item を追加する。チャット表示、送信後の確定、起動時のモデル引数を、実 Codex や実会話へ触れずに確認する。
 
@@ -74,7 +74,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 エージェントとセッション参照を外し、`pane.updated` を流す。要対応のペインは実 Herdr と同じく
 `agent_blocked` で拒否する。最後のエージェントの終了要求、拒否、残ったシェルの削除禁止を確認する。
 
-`pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。
+`pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。セッションがまだ無いペインでは、この追記の前にヘッダと `model_change` / `thinking_level_change` を書く。
 
 `/compact`（添付注記なし）を受け取ると、実 Herdr の pi 拡張と同じく `agent_status` は `working` にせず、1.2 秒後に架空の compaction をセッションへ追記して `idle` のままにする。hwc 側のローカルな「会話を圧縮しています」と、完了ログの位置・所要時間を E2E で確かめるため、最後の user メッセージを kept の先頭にする。
 

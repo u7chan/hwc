@@ -89,6 +89,7 @@ const twoChatPanesState: AppState = {
 };
 
 const sessionPath = "/sessions/--home-dev--/2026-01-01.jsonl";
+const otherSessionPath = "/sessions/--home-dev--/2026-01-02.jsonl";
 
 type FakeStore = StateStore & {
   push: (state: AppState) => void;
@@ -1955,6 +1956,30 @@ function postSplit(app: ReturnType<typeof createApp>, paneId: string, body: unkn
   });
 }
 
+// 新しいペインにモデルを指定して作るアプリ。作成先の w1:p2 は最初から状態にある。
+function launchModelApp() {
+  const store = createFakeStore(twoChatPanesState);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
+  store.setChatSource("w1:p2", { agent: "pi", path: otherSessionPath });
+  const app = createApp({
+    store,
+    chat: createFakeChat(),
+    panes: createFakePanes({ split: async () => ({ paneId: "w1:p2" }) }),
+    models: {
+      list: async () => [],
+      efforts: async () => [],
+      startArgs: async () => ["--model", "example/beam"],
+    },
+  });
+  const split = () =>
+    postSplit(app, "w1:p1", {
+      agent: "pi",
+      model: { provider: "example", id: "beam" },
+      effort: "low",
+    });
+  return { app, split };
+}
+
 test.each(["pi", "codex", "opencode"] as const)(
   "GET /api/panes/:id/models lists %s candidates in the pane's directory",
   async (agent) => {
@@ -2174,6 +2199,156 @@ test.each(["pi", "codex"] as const)(
     ]);
   },
 );
+
+test("POST /api/panes/:id/split shows the chosen model until the session records one", async () => {
+  const store = createFakeStore(twoChatPanesState);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
+  store.setChatSource("w1:p2", { agent: "pi", path: otherSessionPath });
+  let recorded: ChatSnapshot = emptyChat;
+  const app = createApp({
+    store,
+    chat: createFakeChat({
+      snapshot: async (path) => (path === otherSessionPath ? recorded : emptyChat),
+    }),
+    panes: createFakePanes({ split: async () => ({ paneId: "w1:p2" }) }),
+    models: {
+      list: async () => [],
+      efforts: async () => [],
+      startArgs: async () => ["--model", "example/beam"],
+    },
+  });
+
+  const split = await postSplit(app, "w1:p1", {
+    agent: "pi",
+    model: { provider: "example", id: "beam" },
+    effort: "low",
+  });
+  expect(split.status).toBe(200);
+
+  const filled = await app.request("/api/panes/w1:p2/chat");
+  expect(await filled.json()).toEqual({
+    ...emptyChat,
+    etag: "etag-1+launch",
+    model: "beam",
+    effort: "low",
+  });
+
+  // 最初のメッセージでセッションにモデルが載ったら、以降はセッションの値だけを出す。
+  recorded = { ...emptyChat, etag: "etag-2", model: "beam-mini" };
+  const fromSession = await app.request("/api/panes/w1:p2/chat");
+  expect(await fromSession.json()).toEqual(recorded);
+  recorded = emptyChat;
+  const after = await app.request("/api/panes/w1:p2/chat");
+  expect(await after.json()).toEqual(emptyChat);
+});
+
+test("a client that read the pane before the split is not pinned to the old snapshot", async () => {
+  const { app, split } = launchModelApp();
+
+  // 分割表示では、作成したペインの会話が split の応答より先に読まれることがある。
+  const before = await app.request("/api/panes/w1:p2/chat");
+  expect(await before.json()).toEqual(emptyChat);
+  expect(before.headers.get("etag")).toBe(`"${emptyChat.etag}"`);
+
+  expect((await split()).status).toBe(200);
+
+  const after = await app.request("/api/panes/w1:p2/chat", {
+    headers: { "if-none-match": `"${emptyChat.etag}"` },
+  });
+  expect(after.status).toBe(200);
+  const filledEtag = "etag-1+launch";
+  expect(await after.json()).toEqual({
+    ...emptyChat,
+    etag: filledEtag,
+    model: "beam",
+    effort: "low",
+  });
+
+  // 補完が続く間は同じ etag を返し、一致する If-None-Match に 304 を返す。
+  const unchanged = await app.request("/api/panes/w1:p2/chat", {
+    headers: { "if-none-match": `"${filledEtag}"` },
+  });
+  expect(unchanged.status).toBe(304);
+});
+
+test("POST /api/panes/:id/split shows the chosen model even when the rename fails", async () => {
+  const store = createFakeStore(twoChatPanesState);
+  store.setChatSource("w1:p2", { agent: "pi", path: otherSessionPath });
+  const app = createApp({
+    store,
+    chat: createFakeChat(),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p2" }),
+      rename: async () => {
+        throw new HerdrError("pane_not_found", "no pane w1:p2");
+      },
+    }),
+    models: {
+      list: async () => [],
+      efforts: async () => [],
+      startArgs: async () => ["--model", "example/beam"],
+    },
+  });
+
+  const split = await postSplit(app, "w1:p1", {
+    name: "実装",
+    agent: "pi",
+    model: { provider: "example", id: "beam" },
+  });
+  expect(split.status).toBe(502);
+  expect(await split.json()).toEqual({ error: "pane_rename_failed", paneId: "w1:p2" });
+
+  const response = await app.request("/api/panes/w1:p2/chat");
+  expect(await response.json()).toEqual({
+    ...emptyChat,
+    etag: "etag-1+launch",
+    model: "beam",
+    effort: null,
+  });
+});
+
+test("POST /api/panes/:id/split does not show a model when the agent cannot start", async () => {
+  const store = createFakeStore(twoChatPanesState);
+  store.setChatSource("w1:p2", { agent: "pi", path: otherSessionPath });
+  const app = createApp({
+    store,
+    chat: createFakeChat(),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p2" }),
+      startAgent: async () => {
+        throw new HerdrError("agent_spawn_failed", "pi is not installed");
+      },
+    }),
+    models: {
+      list: async () => [],
+      efforts: async () => [],
+      startArgs: async () => ["--model", "example/beam"],
+    },
+  });
+
+  const split = await postSplit(app, "w1:p1", {
+    agent: "pi",
+    model: { provider: "example", id: "beam" },
+  });
+  expect(split.status).toBe(502);
+
+  const response = await app.request("/api/panes/w1:p2/chat");
+  expect(await response.json()).toEqual(emptyChat);
+});
+
+test("closing a pane drops the model chosen at startup", async () => {
+  const { app, split } = launchModelApp();
+  expect((await split()).status).toBe(200);
+
+  const close = await app.request("/api/panes/w1:p2/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  expect(close.status).toBe(200);
+
+  const response = await app.request("/api/panes/w1:p2/chat");
+  expect(await response.json()).toEqual(emptyChat);
+});
 
 test("POST /api/panes/:id/split rejects a Claude model override before creating anything", async () => {
   const { app } = createTestApp({
