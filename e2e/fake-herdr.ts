@@ -1,7 +1,7 @@
 import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { isAgentKind } from "../src/shared/agents";
 import { ATTACHED_FILES_OPEN } from "../src/shared/attachments";
 import type { HerdrPane } from "../src/server/herdr/contract";
@@ -36,6 +36,12 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   const snapshot = structuredClone(scenario.snapshot);
   const outputs = new Map(Object.entries(scenario.outputs));
   const revisions = new Map<string, number>();
+  // 実 pi は最初の user / assistant メッセージまでセッション JSONL を書かない（SessionManager の
+  // _hasConversation ガード）。起動直後に会話からモデルを読めない状態を E2E でも再現する。
+  const pendingPiSessions = new Map<
+    string,
+    { path: string; cwd: string | null; provider: string; modelId: string; effort: string }
+  >();
   const sockets = new Set<net.Socket>();
   const subscribers = new Set<net.Socket>();
   const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -52,6 +58,42 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
 
   const findPane = (paneId: string) =>
     snapshot.panes?.find((pane) => pane.pane_id === paneId) ?? null;
+
+  // 最初の user メッセージでセッションを作る。実 pi と同じく、起動時の model_change と
+  // thinking_level_change もこの時点でまとめて書く。
+  const writePiSessionHeader = async (paneId: string): Promise<void> => {
+    const pending = pendingPiSessions.get(paneId);
+    if (pending === undefined) return;
+    pendingPiSessions.delete(paneId);
+    await mkdir(dirname(pending.path), { recursive: true });
+    await writeFile(
+      pending.path,
+      [
+        {
+          type: "session",
+          version: 3,
+          id: crypto.randomUUID(),
+          cwd: pending.cwd,
+          timestamp: "2026-01-01T09:00:00.000Z",
+        },
+        {
+          type: "model_change",
+          id: "m1",
+          parentId: null,
+          provider: pending.provider,
+          modelId: pending.modelId,
+        },
+        {
+          type: "thinking_level_change",
+          id: "t1",
+          parentId: "m1",
+          thinkingLevel: pending.effort,
+        },
+      ]
+        .map((item) => `${JSON.stringify(item)}\n`)
+        .join(""),
+    );
+  };
 
   // 送った本文を架空セッションの user メッセージとして追記する。E2E で確定後の送信カードを
   // 確かめられるようにするためで、対象は agent_session を持つペインの通常本文だけ。
@@ -79,6 +121,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     }
     const path = session?.kind === "path" ? session.value : null;
     if (path === null) return;
+    await writePiSessionHeader(paneId);
     let raw: string;
     try {
       raw = await readFile(path, "utf8");
@@ -515,29 +558,13 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           const selected =
             STARTUP_MODELS.find((item) => `${item.provider}/${item.id}` === model) ??
             STARTUP_MODELS[0]!;
-          await mkdir(directory, { recursive: true });
-          await writeFile(
+          pendingPiSessions.set(paneId, {
             path,
-            [
-              {
-                type: "session",
-                version: 3,
-                id: crypto.randomUUID(),
-                cwd: pane.cwd,
-                timestamp: "2026-01-01T09:00:00.000Z",
-              },
-              {
-                type: "model_change",
-                id: "m1",
-                parentId: null,
-                provider: selected.provider,
-                modelId: selected.id,
-              },
-              { type: "thinking_level_change", id: "t1", parentId: "m1", thinkingLevel: effort },
-            ]
-              .map((item) => `${JSON.stringify(item)}\n`)
-              .join(""),
-          );
+            cwd: pane.cwd ?? null,
+            provider: selected.provider,
+            modelId: selected.id,
+            effort,
+          });
           pane.agent_session = { agent: "pi", source: "herdr:pi", kind: "path", value: path };
         }
         if (kind === "codex") {
