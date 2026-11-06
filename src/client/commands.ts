@@ -41,6 +41,10 @@ export function commandText(id: CommandId): string {
   return AGENT_COMMANDS[id].text;
 }
 
+export function isNewSessionCommand(text: string): boolean {
+  return text.trim() === commandText("new");
+}
+
 // 直接入力の /compact を、チップを通さない経路でも圧縮として扱うための判定。
 // pi は trim 後に `/compact` と完全一致するか、`/compact `（半角空白）で始まるときだけ
 // コマンドにする。改行で指示を続けた本文や、添付注記が後ろに付く本文はコマンドにならない。

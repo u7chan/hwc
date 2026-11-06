@@ -59,6 +59,50 @@ export function paneBody(props: {
 
 export type PendingMessage = ChatMessage & { from: number; waiting: boolean };
 
+export type NewSessionReset = {
+  at: number;
+  etag: string | null;
+  messageIds: ReadonlySet<string>;
+  compactionAt: number | null;
+};
+
+export function newSessionReset(snapshot: ChatSnapshot | null, at: number): NewSessionReset {
+  return {
+    at,
+    etag: snapshot?.etag ?? null,
+    messageIds: new Set(snapshot?.messages.map((message) => message.id)),
+    compactionAt: snapshot?.compaction?.at ?? null,
+  };
+}
+
+export function newSessionPending(reset: NewSessionReset, snapshot: ChatSnapshot | null): boolean {
+  if (snapshot === null || snapshot.etag === reset.etag) return true;
+  // モデル設定などでも etag は変わる。古い発話や圧縮が残る間は新規会話とみなさない。
+  if (snapshot.messages.some((message) => reset.messageIds.has(message.id))) return true;
+  if (reset.compactionAt !== null && snapshot.compaction?.at === reset.compactionAt) return true;
+  // 読み込み前に /new を送った場合、最初に届く古い会話を新規会話として出さない。
+  if (reset.etag === null) {
+    return (
+      snapshot.messages.some((message) => message.at < reset.at) ||
+      (snapshot.compaction !== null && snapshot.compaction.at < reset.at)
+    );
+  }
+  return false;
+}
+
+// 表示だけを先に空にし、取得したスナップショットと条件付き取得の etag は書き換えない。
+export function newSessionSnapshot(snapshot: ChatSnapshot | null): ChatSnapshot {
+  return {
+    etag: snapshot?.etag ?? "",
+    messages: [],
+    model: snapshot?.model ?? null,
+    effort: snapshot?.effort ?? null,
+    truncated: false,
+    context: null,
+    compaction: null,
+  };
+}
+
 export function latestUserAt(messages: ChatMessage[]): number {
   return messages.reduce(
     (latest, message) => (message.role === "user" ? Math.max(latest, message.at) : latest),
@@ -191,7 +235,7 @@ export function usePaneChat(
   paneId: string,
   enabled: boolean,
   status: AgentStatus,
-): { snapshot: ChatSnapshot | null; failed: boolean } {
+): { snapshot: ChatSnapshot | null; failed: boolean; refresh: () => void } {
   const [latest, setLatest] = useState<ChatEntry | null>(null);
   // 失敗したペインを覚える。切り替えた直後に前のペインの失敗を出さない。
   const [failedPane, setFailedPane] = useState<string | null>(null);
@@ -204,6 +248,7 @@ export function usePaneChat(
   const lastStatus = useRef(status);
   // effect の外から「今すぐ 1 回読む」を呼ぶための口。effect の寿命と一致させる。
   const nudge = useRef<(() => void) | null>(null);
+  const reload = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -229,11 +274,12 @@ export function usePaneChat(
 
     async function load() {
       stop();
+      controller?.abort();
       const current = new AbortController();
       controller = current;
       try {
         const read = await readChat(id, etag, current.signal);
-        if (!active) return;
+        if (!active || current.signal.aborted) return;
         if (read.kind === "snapshot") {
           etag = read.snapshot.etag;
           setLatest({ paneId: id, snapshot: read.snapshot });
@@ -270,6 +316,9 @@ export function usePaneChat(
     }
 
     nudge.current = onStatusChange;
+    reload.current = () => {
+      if (document.visibilityState !== "hidden") void load();
+    };
     lastStatus.current = statusRef.current;
     document.addEventListener("visibilitychange", onVisibility);
     // 開いた直後に隠れている場合も読まない。見えるようになったときの 1 回で追いつく。
@@ -278,6 +327,7 @@ export function usePaneChat(
     return () => {
       active = false;
       nudge.current = null;
+      reload.current = null;
       stop();
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisibility);
@@ -292,5 +342,6 @@ export function usePaneChat(
   return {
     snapshot: latest?.paneId === paneId ? latest.snapshot : null,
     failed: failedPane === paneId,
+    refresh: () => reload.current?.(),
   };
 }

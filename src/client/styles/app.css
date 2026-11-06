@@ -1569,6 +1569,11 @@ button {
   opacity: 1;
 }
 
+/* 外側の輪郭は見出しの高さを超え、後に描かれる会話領域に隠れる。 */
+.hwc-pane-head .hwc-pane-more:focus-visible {
+  outline-offset: -3px;
+}
+
 /* 分割表示は広い画面だけ。狭い画面では 1 枚ずつ見る。 */
 .hwc-split-toggle {
   flex: none;

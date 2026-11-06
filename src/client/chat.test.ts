@@ -17,6 +17,9 @@ import {
   isAbortError,
   isPendingConfirmed,
   latestUserAt,
+  newSessionPending,
+  newSessionReset,
+  newSessionSnapshot,
   paneBody,
   pollOnStatusChange,
 } from "./chat";
@@ -104,6 +107,99 @@ test("an empty conversation is still a conversation", () => {
     kind: "chat",
     snapshot: empty,
   });
+});
+
+test("a new session immediately hides the old history and usage without changing the snapshot", () => {
+  const previous: ChatSnapshot = {
+    ...snapshot,
+    truncated: true,
+    context: { tokens: 40_000, window: 200_000 },
+    usage: { input: 39_000, output: 1_000, cacheRead: 0, cacheWrite: 0, reasoning: null },
+    compaction: { at: 900, tokensBefore: 50_000, summary: "previous", index: 0 },
+  };
+  const original = structuredClone(previous);
+  expect(newSessionSnapshot(previous)).toEqual({
+    ...empty,
+    truncated: false,
+    context: null,
+    compaction: null,
+  });
+  expect(previous).toEqual(original);
+});
+
+test("a new session can be displayed before any conversation has loaded", () => {
+  expect(newSessionSnapshot(null)).toEqual({
+    etag: "",
+    messages: [],
+    model: null,
+    effort: null,
+    truncated: false,
+    context: null,
+    compaction: null,
+  });
+});
+
+test("unchanged or unavailable history cannot bring back the previous conversation", () => {
+  const reset = newSessionReset(snapshot, 2_000);
+  expect(newSessionPending(reset, snapshot)).toBe(true);
+  expect(newSessionPending(reset, null)).toBe(true);
+});
+
+test("a changed etag is not a new session while any old message remains", () => {
+  const previous: ChatSnapshot = {
+    ...snapshot,
+    messages: [...snapshot.messages, { id: "a1", role: "agent", text: "reply", at: 1_100 }],
+  };
+  const reset = newSessionReset(previous, 2_000);
+  expect(newSessionPending(reset, { ...previous, etag: "metadata-change" })).toBe(true);
+  expect(newSessionPending(reset, { ...snapshot, etag: "older-read" })).toBe(true);
+  expect(
+    newSessionPending(reset, {
+      ...snapshot,
+      etag: "appended",
+      messages: [...snapshot.messages, { id: "u2", role: "user", text: "later", at: 2_100 }],
+    }),
+  ).toBe(true);
+});
+
+test("an empty or already started new session replaces the local new view", () => {
+  const reset = newSessionReset(snapshot, 2_000);
+  expect(newSessionPending(reset, { ...empty, etag: "new-empty" })).toBe(false);
+  expect(
+    newSessionPending(reset, {
+      ...snapshot,
+      etag: "new-started",
+      messages: [{ id: "u2", role: "user", text: "next conversation", at: 2_100 }],
+    }),
+  ).toBe(false);
+});
+
+test("the old compaction alone still belongs to the previous session", () => {
+  const previous: ChatSnapshot = {
+    ...empty,
+    compaction: { at: 900, tokensBefore: 50_000, summary: "previous", index: 0 },
+  };
+  const reset = newSessionReset(previous, 2_000);
+  expect(newSessionPending(reset, { ...previous, etag: "metadata-change" })).toBe(true);
+  expect(newSessionPending(reset, { ...empty, etag: "new-empty" })).toBe(false);
+});
+
+test("without an initial snapshot, history predating the command stays hidden", () => {
+  const reset = newSessionReset(null, 2_000);
+  expect(newSessionPending(reset, snapshot)).toBe(true);
+  expect(
+    newSessionPending(reset, {
+      ...empty,
+      compaction: { at: 900, tokensBefore: 50_000, summary: "previous", index: 0 },
+    }),
+  ).toBe(true);
+  expect(newSessionPending(reset, empty)).toBe(false);
+  expect(
+    newSessionPending(reset, {
+      ...snapshot,
+      messages: [{ id: "u2", role: "user", text: "next conversation", at: 2_100 }],
+    }),
+  ).toBe(false);
 });
 
 test("model and effort are shown only when the session has them", () => {

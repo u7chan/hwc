@@ -38,6 +38,10 @@ import {
   type ContextMeterView,
   isPendingConfirmed,
   latestUserAt,
+  newSessionPending,
+  newSessionReset,
+  newSessionSnapshot,
+  type NewSessionReset,
   paneBody,
   type PendingMessage,
   usePaneChat,
@@ -54,6 +58,8 @@ import {
   compactAlreadyDone,
   COMPACTED_NOTICE,
   isCompactCommand,
+  isCommandPane,
+  isNewSessionCommand,
   type PaneCommandHandle,
 } from "./commands";
 import { useCopy } from "./copy";
@@ -121,6 +127,7 @@ function OutputSkeleton() {
 const USER_MESSAGE_CLAMP_LINES = 5;
 const USER_MESSAGE_CLAMP_FALLBACK = 128;
 const PENDING_TIMEOUT_MS = 60_000;
+const NEW_SESSION_TIMEOUT_MS = 60_000;
 
 // 選択した本文の上に出す返信ボタン。位置は .hwc-output-wrap を基準にした px。
 type QuoteAnchor = { text: string; left: number; top: number; above: boolean };
@@ -669,6 +676,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const lastHeight = useRef(0);
   const lastClientHeight = useRef(0);
   const [pending, setPending] = useState<PendingMessage[]>([]);
+  const [sessionReset, setSessionReset] = useState<NewSessionReset | null>(null);
   // チップは id だけを持つ。表示名と送信文字列は定数から引く。
   const [chip, setChip] = useState<CommandId | null>(null);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
@@ -696,15 +704,34 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
   const blocked = pane.agentStatus === "blocked";
-  const { snapshot, failed: chatFailed } = usePaneChat(
-    pane.id,
-    pane.chat && !blocked,
-    pane.agentStatus,
-  );
-  const normalBody = paneBody({ chat: pane.chat, blocked, failed: chatFailed, snapshot });
+  const {
+    snapshot: serverSnapshot,
+    failed: chatFailed,
+    refresh: refreshChat,
+  } = usePaneChat(pane.id, pane.chat && !blocked, pane.agentStatus);
+  const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
+  const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
+  const normalBody = paneBody({
+    chat: pane.chat || resetting,
+    blocked,
+    failed: chatFailed && !resetting,
+    snapshot,
+  });
   const pendingMessages = pending.filter(
-    (item) => !isPendingConfirmed(item, snapshot?.messages ?? []),
+    (item) =>
+      (!resetting || sessionReset === null || item.at >= sessionReset.at) &&
+      !isPendingConfirmed(item, snapshot?.messages ?? []),
   );
+
+  useEffect(() => {
+    if (sessionReset === null) return;
+    // TUI コマンドの成否は返らないため、反映されなければサーバーの表示へ戻す。
+    const timer = window.setTimeout(
+      () => setSessionReset(null),
+      Math.max(0, sessionReset.at + NEW_SESSION_TIMEOUT_MS - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [sessionReset]);
 
   const { read, failed } = usePaneOutput(
     pane.agent === "codex" || normalBody.kind === "output" ? pane.id : null,
@@ -781,13 +808,15 @@ export function PaneDetail(props: PaneDetailProps) {
   }, [compactionRun, replying, snapshot?.compaction?.at]);
   const compactionElapsedMs =
     compactionRun === null ? null : Math.max(0, compactionNow - compactionRun.startedAt);
+  const compacting = !resetting && compactionRun !== null;
+  const visibleCompactionEcho = resetting ? null : compactionEcho;
   const chatEmpty =
     body.kind === "chat" &&
     body.snapshot.messages.length === 0 &&
     body.snapshot.compaction === null &&
     pendingMessages.length === 0 &&
-    compactionRun === null &&
-    compactionEcho === null &&
+    !compacting &&
+    visibleCompactionEcho === null &&
     !replying;
   const empty = body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty;
   const info = agentInfo(snapshot);
@@ -1075,6 +1104,28 @@ export function PaneDetail(props: PaneDetailProps) {
     [],
   );
 
+  const startsNewSession = (text: string, names: readonly string[]) =>
+    (pane.chat || serverSnapshot !== null) &&
+    names.length === 0 &&
+    isCommandPane(pane) &&
+    isNewSessionCommand(text);
+
+  const submitInput = async (text: string, names: string[]): Promise<boolean> => {
+    const newSession = startsNewSession(text, names);
+    if (newSession) setSessionReset(newSessionReset(serverSnapshot, Date.now()));
+    const sent = await onSubmit(text, names);
+    if (newSession) {
+      if (sent) {
+        setPending([]);
+        setCompactionRun(null);
+        setCompactionEcho(null);
+        setCompactionDuration(null);
+      } else setSessionReset(null);
+      refreshChat();
+    }
+    return sent;
+  };
+
   const sendText = async () => {
     if (readOnly || !sendable || sending) return;
     const names = attachments
@@ -1083,6 +1134,7 @@ export function PaneDetail(props: PaneDetailProps) {
     const text = reply === null ? draft : composeReply(reply, draft);
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
     const compactCommand = attachments.length === 0 && isCompactCommand(text);
+    const newCommand = startsNewSession(text, names);
     if (compactCommand && compactDone) {
       setNotice(COMPACTED_NOTICE);
       return;
@@ -1096,7 +1148,7 @@ export function PaneDetail(props: PaneDetailProps) {
     // 前の失敗は消す。送り直したのに前の notice が残っていると、いつの結果か読めない。
     setNotice(null);
     // 送れたときだけ空にする。失敗したら本文も添付も残す。
-    if (await onSubmit(text, names)) {
+    if (await submitInput(text, names)) {
       // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
       setPinned(true);
       // 250ms の debounce を待たずに消す。先にペインを切り替えると古い値が戻る。
@@ -1109,7 +1161,7 @@ export function PaneDetail(props: PaneDetailProps) {
       // 代わりに圧縮中の行を出す。
       if (compactCommand) {
         markCompaction(baselineAt, text);
-      } else {
+      } else if (!newCommand) {
         setPending((items) => [
           ...items,
           {
@@ -1162,12 +1214,11 @@ export function PaneDetail(props: PaneDetailProps) {
     const baselineAt = snapshot?.compaction?.at ?? null;
     input.current?.blur();
     setNotice(null);
-    if (await onSubmit(text, [])) {
+    if (await submitInput(text, [])) {
       setPinned(true);
       setChip(null);
       setDraft("");
       if (id === "compact") markCompaction(baselineAt, text);
-      else if (id === "new") setCompactionEcho(null);
     } else setNotice(SEND_FAILED_NOTICE);
   };
 
@@ -1191,8 +1242,8 @@ export function PaneDetail(props: PaneDetailProps) {
     compacting: compactionRun !== null,
     snapshot,
   };
-  const submitLatest = useRef(onSubmit);
-  submitLatest.current = onSubmit;
+  const submitLatest = useRef(submitInput);
+  submitLatest.current = submitInput;
   const sendMenuCommand = async (id: CommandId) => {
     const state = commandState.current;
     if (state.readOnly || state.sending || state.replying || state.compacting) return;
@@ -1204,7 +1255,6 @@ export function PaneDetail(props: PaneDetailProps) {
       setPinned(true);
       setChip(null);
       if (id === "compact") markCompaction(baselineAt, text);
-      else if (id === "new") setCompactionEcho(null);
     } else setNotice(SEND_FAILED_NOTICE);
   };
 
@@ -1344,13 +1394,13 @@ export function PaneDetail(props: PaneDetailProps) {
                 paneId={pane.id}
                 snapshot={body.snapshot}
                 replying={replying}
-                compacting={compactionRun !== null}
+                compacting={compacting}
                 stopping={stopping}
                 waitingMs={waitingMs}
                 copiedId={copiedId}
                 expandable={!compact}
                 compactionElapsedMs={compactionElapsedMs}
-                compactionEcho={compactionEcho}
+                compactionEcho={visibleCompactionEcho}
                 onCancelCompaction={() => void cancelCompaction()}
                 compactionDurationMs={
                   compactionDuration !== null &&

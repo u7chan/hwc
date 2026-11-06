@@ -15,6 +15,7 @@ import {
   conversationEmpty,
   isCommandPane,
   isCompactCommand,
+  isNewSessionCommand,
 } from "./commands";
 
 function pane(agent: string | null, agentStatus: AgentStatus = "idle"): PaneState {
@@ -86,6 +87,16 @@ test("both commands are sent as the string the CLIs read", () => {
 test("the label says what the command does, not how it is typed", () => {
   expect(commandLabel("new")).toBe("新しいセッション");
   expect(commandLabel("compact")).toBe("会話を圧縮");
+});
+
+test("only a bare new command starts a new conversation", () => {
+  expect(isNewSessionCommand("/new")).toBe(true);
+  expect(isNewSessionCommand(" /new\n")).toBe(true);
+  expect(isNewSessionCommand("/NEW")).toBe(false);
+  expect(isNewSessionCommand("/new topic")).toBe(false);
+  expect(isNewSessionCommand("/newer")).toBe(false);
+  expect(isNewSessionCommand("hello /new")).toBe(false);
+  expect(isNewSessionCommand("/compact")).toBe(false);
 });
 
 test("a typed compact command is recognized the same way pi parses it", () => {
