@@ -33,7 +33,8 @@ Herdr は `idle` と `done` をサーバー側の seen 状態で区別し、seen
 - 状態の行の対象は `pane.agent !== null` かつ `agentStatus` が `working` / `blocked` / `done`。`idle` と `unknown` は出さない。窓口の行だけは `idle` を出す例外で、`blocked` の窓口は要対応の側へ回す
 - 表示の並びは `要対応 → 窓口 → 完了 → 実行中`。上から「自分が動く番 → 読む番 → 待つ番」に揃える。窓口と状態の行は重なるので、窓口に置いた行は状態の側から除く
 - `activePanes(state)` の並びは `blocked` → `working` → `done` のまま変えない。同順位は state の並び（ワークスペース → タブ → ペイン）。未読件数がこの契約に乗っている。表示の並びは `activeViewRows(state, sent)` が持ち、窓口の行は `sentPanes(state, sent)` が返す
-- `activePanes(state)` は `selectedPaneId` を取らない。既存の `scopeWorkspaces()` は「絞り込んでも、いま開いているスペースだけは残す」という逆向きの規則を持つが、`active` の状態の行は idle を出さない以上、選択中のペインが一覧から消えるのが正しい。窓口に入っているペインだけは例外で、idle でも行として残る。この非対称は型でも表し、ツリー用の絞り込みには `active` を渡せないようにする
+- `activePanes(state)` は `selectedPaneId` を取らない。`active` の状態の行は idle を出さないため、選択中のペインも一覧から消える。窓口に入っているペインだけは例外で、idle でも行として残る。ツリー用の絞り込みには `active` を渡せないよう型で分ける
+- `agent` は選択に関係なくエージェントのいるスペースだけを表示する。シェルだけのスペースを開いたまま切り替えたり、最後のエージェントを終了したりすると一覧から消えるが、詳細は開いたままにする。シェルは `all` で探せる
 
 ### 既読は Herdr の seen に寄せる
 

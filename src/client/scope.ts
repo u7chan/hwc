@@ -26,18 +26,12 @@ export function workspaceHasAgent(workspace: WorkspaceState): boolean {
   return workspace.tabs.some((tab) => tab.panes.some((pane) => pane.agent !== null));
 }
 
-// 絞り込んでも、いま開いているスペースだけは残す。読んでいるものが消えるほうが困る。
 export function scopeWorkspaces(
   workspaces: readonly WorkspaceState[],
   scope: TreeScope,
-  selectedPaneId: string | null,
 ): readonly WorkspaceState[] {
   if (scope === "all") return workspaces;
-  return workspaces.filter(
-    (workspace) =>
-      workspaceHasAgent(workspace) ||
-      workspace.tabs.some((tab) => tab.panes.some((pane) => pane.id === selectedPaneId)),
-  );
+  return workspaces.filter(workspaceHasAgent);
 }
 
 // 状態を持つエージェントだけを 1 行ずつ並べる。idle と unknown は出さない。
@@ -52,8 +46,7 @@ function isActiveStatus(status: AgentStatus): status is ActiveStatus {
 export type ActivePane = PaneRow;
 
 // 要対応 → 実行中 → 完了。同順位は state の並び（ワークスペース → タブ → ペイン）のまま。
-// ツリーの絞り込みと違い、選択中のペインは残さない。idle を出さない以上、
-// 開いているペインがこの一覧から消えるのが正しい。
+// 選択中のペインでも、idle なら一覧から消える。
 export function activePanes(state: AppState): readonly ActivePane[] {
   const rows: ActivePane[] = [];
   for (const workspace of state.workspaces) {
