@@ -400,18 +400,31 @@ export function toAgentModels(value: unknown): AgentModel[] | null {
   return models.map(({ provider, id }) => ({ provider, id }));
 }
 
+export type AgentModelsRead = AgentModel[] | "opencode_not_running" | null;
+
+export function agentModelsOutcome(status: number, value: unknown): AgentModelsRead {
+  if (
+    status === 502 &&
+    typeof value === "object" &&
+    value !== null &&
+    "error" in value &&
+    value.error === "opencode_not_running"
+  )
+    return "opencode_not_running";
+  return status >= 200 && status < 300 ? toAgentModels(value) : null;
+}
+
 export async function readAgentModels(
   paneId: string,
   agent: ModelAgentKind,
   signal: AbortSignal,
-): Promise<AgentModel[] | null> {
+): Promise<AgentModelsRead> {
   try {
     const input = { ...paneParam(paneId), query: { agent } };
     const response = await client.api.panes[":id"].models.$get(input, {
       init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
     });
-    if (!response.ok) return null;
-    return toAgentModels(await response.json());
+    return agentModelsOutcome(response.status, await response.json());
   } catch {
     return null;
   }

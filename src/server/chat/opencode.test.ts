@@ -6,7 +6,9 @@ import { ChatUnavailableError } from "./errors";
 import {
   createOpencodeChatClient,
   defaultServicePath,
+  OpencodeServiceNotRunningError,
   readServiceFile,
+  requestJson,
   type OpencodeChatClient,
 } from "./opencode";
 
@@ -350,5 +352,68 @@ test("a service file outside loopback is rejected", async () => {
     await expect(readServiceFile(file)).rejects.toBeInstanceOf(ChatUnavailableError);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("missing OpenCode connection information is distinguishable from other service errors", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "hwc-opencode-"));
+  try {
+    await expect(readServiceFile(join(dir, "missing.json"))).rejects.toBeInstanceOf(
+      OpencodeServiceNotRunningError,
+    );
+    await expect(readServiceFile(dir)).rejects.not.toBeInstanceOf(OpencodeServiceNotRunningError);
+    const file = join(dir, "service.json");
+    await writeFile(file, "not json");
+    await expect(readServiceFile(file)).rejects.not.toBeInstanceOf(OpencodeServiceNotRunningError);
+    await writeFile(file, JSON.stringify({ url: service.url.href }));
+    await expect(readServiceFile(file)).rejects.not.toBeInstanceOf(OpencodeServiceNotRunningError);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a stopped OpenCode endpoint is distinguishable even if its service file remains", async () => {
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () => Response.json({ data: [] }),
+  });
+  const url = server.url;
+  server.stop(true);
+  await expect(requestJson({ ...service, url }, "/api/model", 1_000)).rejects.toBeInstanceOf(
+    OpencodeServiceNotRunningError,
+  );
+});
+
+test.each([401, 500])("OpenCode HTTP %i is not mislabeled as a stopped service", async (status) => {
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: () => new Response(null, { status }),
+  });
+  try {
+    await expect(
+      requestJson({ ...service, url: server.url }, "/api/model", 1_000),
+    ).rejects.not.toBeInstanceOf(OpencodeServiceNotRunningError);
+  } finally {
+    server.stop(true);
+  }
+});
+
+test("an OpenCode timeout is not mislabeled as a stopped service", async () => {
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: async () => {
+      await Bun.sleep(100);
+      return Response.json({ data: [] });
+    },
+  });
+  try {
+    await expect(
+      requestJson({ ...service, url: server.url }, "/api/model", 10),
+    ).rejects.not.toBeInstanceOf(OpencodeServiceNotRunningError);
+  } finally {
+    server.stop(true);
   }
 });

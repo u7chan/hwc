@@ -16,6 +16,7 @@ import {
   saveAttachment,
 } from "./attachments";
 import type { SessionChatClient } from "./chat/contract";
+import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import { createPane } from "./create-pane";
 import { createPaneCloser } from "./close-pane";
 import { createFolderTrust } from "./folder-trust";
@@ -203,7 +204,9 @@ export function createApp(options: {
         if (!models) return c.json({ error: "models_unavailable" }, 502);
         const directory = await panes.directory({ paneId });
         return c.json({ models: await models.list(agent, directory) });
-      } catch {
+      } catch (error) {
+        if (agent === "opencode" && error instanceof OpencodeServiceNotRunningError)
+          return c.json({ error: "opencode_not_running" }, 502);
         return c.json({ error: "models_unavailable" }, 502);
       }
     })

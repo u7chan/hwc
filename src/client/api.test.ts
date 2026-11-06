@@ -3,6 +3,7 @@ import type { ClientResponse } from "hono/client";
 import {
   OUTPUT_LINES,
   attachmentUploadUrl,
+  agentModelsOutcome,
   attachmentUrl,
   chatOutcome,
   closeOutcome,
@@ -44,6 +45,19 @@ test("model candidates keep only their provider and id", () => {
 test("model candidates with namespaced @ IDs remain selectable", () => {
   const model = { provider: "cloudflare-workers-ai", id: "@cf/meta/llama-3.2-3b-instruct" };
   expect(toAgentModels({ models: [model] })).toEqual([model]);
+});
+
+test("model lookup distinguishes an unstarted OpenCode service from generic failures", () => {
+  expect(agentModelsOutcome(502, { error: "opencode_not_running" })).toBe("opencode_not_running");
+  expect(agentModelsOutcome(502, { error: "models_unavailable" })).toBeNull();
+  expect(agentModelsOutcome(502, { error: "/private/path: credentials" })).toBeNull();
+  expect(agentModelsOutcome(502, null)).toBeNull();
+  expect(agentModelsOutcome(200, { error: "opencode_not_running" })).toBeNull();
+  expect(agentModelsOutcome(403, { error: "opencode_not_running" })).toBeNull();
+  expect(agentModelsOutcome(200, { models: [] })).toEqual([]);
+  const models = [{ provider: "example", id: "beam" }];
+  expect(agentModelsOutcome(200, { models })).toEqual(models);
+  expect(agentModelsOutcome(502, { models })).toBeNull();
 });
 
 test("model-specific creation also covers candidate lookup and session preparation", () => {

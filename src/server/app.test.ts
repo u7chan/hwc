@@ -6,6 +6,7 @@ import { createApp } from "./app";
 import type { ChatClient } from "./chat/pi";
 import { createChatClient } from "./chat/pi";
 import type { ChatSnapshot } from "./chat/contract";
+import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import type { PaneClient } from "./herdr/panes";
 import { HerdrError } from "./herdr/socket";
 import type { AppState, ChatSource, PaneState, StateStore } from "./herdr/state";
@@ -2430,7 +2431,7 @@ test.each(["claude", "unknown", ""])(
   },
 );
 
-test("GET /api/panes/:id/models does not expose upstream errors or paths", async () => {
+test("GET /api/panes/:id/models identifies an OpenCode service that is not running", async () => {
   const app = createApp({
     chat: createFakeChat(),
     store: createFakeStore(state),
@@ -2438,15 +2439,36 @@ test("GET /api/panes/:id/models does not expose upstream errors or paths", async
     models: {
       efforts: async () => [],
       list: async () => {
-        throw new Error("/private/path: credential failure");
+        throw new OpencodeServiceNotRunningError();
       },
       startArgs: async () => [],
     },
   });
-  const response = await app.request("/api/panes/w1:p1/models?agent=pi");
+  const response = await app.request("/api/panes/w1:p1/models?agent=opencode");
   expect(response.status).toBe(502);
-  expect(await response.json()).toEqual({ error: "models_unavailable" });
+  expect(await response.json()).toEqual({ error: "opencode_not_running" });
 });
+
+test.each(["pi", "opencode"])(
+  "GET /api/panes/:id/models does not expose upstream %s errors or paths",
+  async (agent) => {
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(state),
+      panes: createFakePanes(),
+      models: {
+        efforts: async () => [],
+        list: async () => {
+          throw new Error("/private/path: credential failure");
+        },
+        startArgs: async () => [],
+      },
+    });
+    const response = await app.request(`/api/panes/w1:p1/models?agent=${agent}`);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "models_unavailable" });
+  },
+);
 
 test("GET /api/panes/:id/models requires an existing pane and a readable snapshot", async () => {
   const missing = createApp({

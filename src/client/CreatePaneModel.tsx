@@ -5,7 +5,7 @@ import {
   modelKey,
   supportsModelSelection,
 } from "../shared/agents";
-import { readAgentModels } from "./api";
+import { type AgentModelsRead, readAgentModels } from "./api";
 
 export function CreatePaneModel(props: {
   paneId: string;
@@ -14,27 +14,30 @@ export function CreatePaneModel(props: {
   disabled: boolean;
   onChange: (model: AgentModel | null) => void;
 }) {
-  const [models, setModels] = useState<AgentModel[] | null>();
+  const [result, setResult] = useState<AgentModelsRead>();
+  const models = Array.isArray(result) ? result : null;
   const supported = supportsModelSelection(props.agent);
 
   useEffect(() => {
     if (!supportsModelSelection(props.agent)) return;
     const controller = new AbortController();
-    void readAgentModels(props.paneId, props.agent, controller.signal).then((models) => {
-      if (!controller.signal.aborted) setModels(models);
+    void readAgentModels(props.paneId, props.agent, controller.signal).then((value) => {
+      if (!controller.signal.aborted) setResult(value);
     });
     return () => controller.abort();
   }, [props.paneId, props.agent]);
 
   const note = !supported
     ? null
-    : models === undefined
+    : result === undefined
       ? "モデルを読み込み中…"
-      : models === null
-        ? "モデルを取得できませんでした。デフォルトモデルで起動します。"
-        : models.length === 0
-          ? "選択できるモデルがありません。デフォルトモデルで起動します。"
-          : null;
+      : result === "opencode_not_running"
+        ? "OpenCode サービス未起動。デフォルトモデルで起動します。"
+        : result === null
+          ? "モデルを取得できませんでした。デフォルトモデルで起動します。"
+          : result.length === 0
+            ? "選択できるモデルがありません。デフォルトモデルで起動します。"
+            : null;
 
   return (
     <div class="hwc-create-model">
