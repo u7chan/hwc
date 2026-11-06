@@ -553,6 +553,9 @@ function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usa
             <span>{value}</span>
           </span>
         ))}
+        <span class="hwc-context-tooltip-note">
+          設定枠はモデル仕様上の最大値とは限りません。自動圧縮は枠に達する前に行われることがあります。
+        </span>
       </span>
     </span>
   );

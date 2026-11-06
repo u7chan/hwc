@@ -171,7 +171,7 @@ export function contextDetails(
   const value = (n: number | null) => (n === null ? "不明" : n.toLocaleString("en-US"));
   const rows: [string, string][] = [
     ["使用量", value(context.tokens)],
-    ["設定上限", value(context.window)],
+    ["設定枠", value(context.window)],
   ];
   if (usage !== undefined) {
     rows.push(

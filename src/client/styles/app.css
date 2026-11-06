@@ -3105,8 +3105,7 @@ p.hwc-compaction,
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  width: max-content;
-  min-width: 200px;
+  width: 240px;
   max-width: min(280px, 85vw);
   padding: var(--space-3);
   border: 1px solid var(--color-line);
@@ -3145,6 +3144,11 @@ p.hwc-compaction,
 
 .hwc-context-tooltip-row > :last-child {
   font-variant-numeric: tabular-nums;
+}
+
+.hwc-context-tooltip-note {
+  margin-top: var(--space-1);
+  color: var(--color-secondary);
 }
 
 @media (prefers-reduced-motion: reduce) {

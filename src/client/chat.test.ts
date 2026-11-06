@@ -212,7 +212,7 @@ test("context details show exact values and unknown usage parts", () => {
     ),
   ).toEqual([
     ["使用量", "81,900"],
-    ["設定上限", "200,000"],
+    ["設定枠", "200,000"],
     ["入力", "11,000"],
     ["出力", "900"],
     ["キャッシュ読取", "70,000"],
@@ -220,7 +220,7 @@ test("context details show exact values and unknown usage parts", () => {
   ]);
   expect(contextDetails({ tokens: null, window: 100_000 }, undefined)).toEqual([
     ["使用量", "不明"],
-    ["設定上限", "100,000"],
+    ["設定枠", "100,000"],
   ]);
   expect(
     contextDetails(
