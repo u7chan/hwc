@@ -254,6 +254,16 @@ MODELS
         focused: false,
         agent_session: { agent: "codex", source: "herdr:codex", kind: "id", value: "thread_demo" },
       },
+      {
+        pane_id: "w3:p4",
+        workspace_id: "w3",
+        tab_id: "w3:t1",
+        cwd: scratch,
+        label: "codex-start",
+        agent_status: "idle",
+        focused: false,
+        agent_session: null,
+      },
     ],
     agents: [
       {
@@ -284,7 +294,7 @@ MODELS
         agent: "claude",
         terminal_title_stripped: "docs",
       },
-      ...["w3:p2", "w3:p3"].map((pane_id) => ({
+      ...["w3:p2", "w3:p3", "w3:p4"].map((pane_id) => ({
         pane_id,
         workspace_id: "w3",
         cwd: scratch,
@@ -296,7 +306,12 @@ MODELS
 
   return {
     snapshot,
-    outputs: { ...outputs, "w3:p2": FOLDER_TRUST_SCREEN, "w3:p3": FOLDER_TRUST_SCREEN },
+    outputs: {
+      ...outputs,
+      "w3:p2": FOLDER_TRUST_SCREEN,
+      "w3:p3": FOLDER_TRUST_SCREEN,
+      "w3:p4": "› Ask Codex to do anything\n",
+    },
   };
 }
 
