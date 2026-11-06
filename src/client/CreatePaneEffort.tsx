@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { type AgentModel, type ModelAgentKind } from "../shared/agents";
 import { readAgentEfforts } from "./api";
+import { CreatePaneSelect } from "./CreatePaneSelect";
 
 export function CreatePaneEffort(props: {
   paneId: string;
@@ -31,41 +32,30 @@ export function CreatePaneEffort(props: {
   const note =
     props.model === null
       ? "モデルを選択すると指定できます。"
-      : efforts === undefined
-        ? "エフォートを読み込み中…"
-        : efforts === null
-          ? "エフォートを取得できませんでした。CLI のデフォルトで起動します。"
-          : efforts.length === 0
-            ? "このモデルはエフォート指定に対応していません。"
-            : null;
+      : efforts === null
+        ? "エフォートを取得できませんでした。CLI のデフォルトで起動します。"
+        : efforts?.length === 0
+          ? "このモデルはエフォート指定に対応していません。"
+          : null;
 
   return (
     <div class="hwc-create-effort">
-      <label class="hwc-create-field">
-        <span class="hwc-create-label">エフォート</span>
-        <select
-          class="hwc-create-input"
-          value={props.effort ?? ""}
-          disabled={props.disabled || props.model === null || !efforts?.length}
-          aria-describedby={note === null ? undefined : "hwc-create-effort-note"}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            props.onChange(efforts?.includes(value) ? value : null);
-          }}
-        >
-          <option value="">デフォルト（CLI に任せる）</option>
-          {(efforts ?? []).map((effort) => (
-            <option key={effort} value={effort}>
-              {effort}
-            </option>
-          ))}
-        </select>
-      </label>
-      {note === null ? null : (
-        <p class="hwc-create-note" id="hwc-create-effort-note" role="status">
-          {note}
-        </p>
-      )}
+      <CreatePaneSelect
+        label="エフォート"
+        noteId="hwc-create-effort-note"
+        note={note}
+        loading={props.model !== null && efforts === undefined}
+        value={props.effort ?? ""}
+        disabled={props.disabled || props.model === null || !efforts?.length}
+        onChange={(value) => props.onChange(efforts?.includes(value) ? value : null)}
+      >
+        <option value="">デフォルト（CLI に任せる）</option>
+        {(efforts ?? []).map((effort) => (
+          <option key={effort} value={effort}>
+            {effort}
+          </option>
+        ))}
+      </CreatePaneSelect>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   supportsModelSelection,
 } from "../shared/agents";
 import { type AgentModelsRead, readAgentModels } from "./api";
+import { CreatePaneSelect } from "./CreatePaneSelect";
 
 export function CreatePaneModel(props: {
   paneId: string;
@@ -29,43 +30,35 @@ export function CreatePaneModel(props: {
 
   const note = !supported
     ? null
-    : result === undefined
-      ? "モデルを読み込み中…"
-      : result === "opencode_not_running"
-        ? "OpenCode サービス未起動。デフォルトモデルで起動します。"
-        : result === null
-          ? "モデルを取得できませんでした。デフォルトモデルで起動します。"
-          : result.length === 0
-            ? "選択できるモデルがありません。デフォルトモデルで起動します。"
-            : null;
+    : result === "opencode_not_running"
+      ? "OpenCode サービス未起動。デフォルトモデルで起動します。"
+      : result === null
+        ? "モデルを取得できませんでした。デフォルトモデルで起動します。"
+        : result?.length === 0
+          ? "選択できるモデルがありません。デフォルトモデルで起動します。"
+          : null;
 
   return (
     <div class="hwc-create-model">
-      <label class="hwc-create-field">
-        <span class="hwc-create-label">モデル</span>
-        <select
-          class="hwc-create-input"
-          value={props.model === null ? "" : modelKey(props.model)}
-          disabled={props.disabled || !supported || !models?.length}
-          aria-describedby={note === null ? undefined : "hwc-create-model-note"}
-          onChange={(event) => {
-            const selected = models?.find((model) => modelKey(model) === event.currentTarget.value);
-            props.onChange(selected ?? null);
-          }}
-        >
-          <option value="">デフォルトモデル</option>
-          {(models ?? []).map((model) => (
-            <option key={modelKey(model)} value={modelKey(model)}>
-              {modelKey(model)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {note === null ? null : (
-        <p class="hwc-create-note" id="hwc-create-model-note" role="status">
-          {note}
-        </p>
-      )}
+      <CreatePaneSelect
+        label="モデル"
+        noteId="hwc-create-model-note"
+        note={note}
+        loading={supported && result === undefined}
+        value={props.model === null ? "" : modelKey(props.model)}
+        disabled={props.disabled || !supported || !models?.length}
+        onChange={(value) => {
+          const selected = models?.find((model) => modelKey(model) === value);
+          props.onChange(selected ?? null);
+        }}
+      >
+        <option value="">デフォルトモデル</option>
+        {(models ?? []).map((model) => (
+          <option key={modelKey(model)} value={modelKey(model)}>
+            {modelKey(model)}
+          </option>
+        ))}
+      </CreatePaneSelect>
     </div>
   );
 }
