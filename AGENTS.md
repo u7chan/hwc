@@ -61,6 +61,8 @@ Accepted ADR とタスクが衝突する場合は、迂回実装で無理に両�
 
 ## Verification
 
+`node_modules` が無い場合（ワークツリーを切った直後など）は、先に `bun install` する。
+
 変更後は `bun run fmt:check` / `bun run lint` / `bun run typecheck` / `bun run test` を実行し、結果を報告する。整形が必要なら `bun run fmt` を使う。UI を変えた場合は Test Policy の E2E も行う。
 
 ## Git / PR
