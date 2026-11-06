@@ -1,34 +1,20 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import type { PaneInteraction } from "../shared/confirmation";
-import { confirmFolderTrust } from "./api";
+import type { ConfirmationAttempt } from "./confirmation";
 import { StatusMark } from "./icons";
 import { Spinner } from "./Spinner";
 
 export function PaneConfirmation(props: {
-  paneId: string;
   confirmation: Extract<PaneInteraction, { kind: "codex-folder-trust" }>;
+  attempt: ConfirmationAttempt | null;
+  onConfirm: () => void;
   onDismiss: () => void;
 }) {
-  const [attempt, setAttempt] = useState<"idle" | "sending" | "waiting" | "failed">("idle");
-  const request = useRef<AbortController | null>(null);
+  const attempt = props.attempt ?? "idle";
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
-    return () => request.current?.abort();
   }, []);
-
-  const accept = async () => {
-    if (request.current !== null || props.confirmation.submitted) return;
-    const controller = new AbortController();
-    request.current = controller;
-    setAttempt("sending");
-    try {
-      await confirmFolderTrust(props.paneId, props.confirmation.id, controller.signal);
-      if (!controller.signal.aborted) setAttempt("waiting");
-    } catch {
-      if (!controller.signal.aborted) setAttempt("failed");
-    }
-  };
   const waiting = attempt === "waiting" || props.confirmation.submitted;
 
   return (
@@ -51,7 +37,7 @@ export function PaneConfirmation(props: {
           type="button"
           class="hwc-dialog-button hwc-dialog-primary"
           disabled={attempt !== "idle" || props.confirmation.submitted}
-          onClick={() => void accept()}
+          onClick={props.onConfirm}
         >
           {attempt === "sending" ? <Spinner /> : null}
           信頼して続行

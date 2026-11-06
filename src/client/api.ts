@@ -318,14 +318,10 @@ export async function stopAgent(paneId: string): Promise<void> {
   if (!response.ok) throw new Error(`stop: ${response.status}`);
 }
 
-export async function confirmFolderTrust(
-  paneId: string,
-  id: string,
-  signal: AbortSignal,
-): Promise<void> {
+export async function confirmFolderTrust(paneId: string, id: string): Promise<void> {
   const input = { ...paneParam(paneId), json: { id } };
   const response = await client.api.panes[":id"]["confirm-folder-trust"].$post(input, {
-    init: { signal: AbortSignal.any([signal, AbortSignal.timeout(8_000)]) },
+    init: { signal: AbortSignal.timeout(8_000) },
   });
   if (!response.ok) throw new Error(`confirm-folder-trust: ${response.status}`);
 }

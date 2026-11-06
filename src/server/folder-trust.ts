@@ -76,6 +76,8 @@ export function createFolderTrust(panes: Pick<PaneClient, "read" | "confirmFolde
     // recent は過去の確認を含み、visible は端末側のスクロール位置に従う。承認判定は
     // スクリーン検出用の下部バッファだけで行い、全文が読めなければ端末へ逃がす。
     const read = await panes.read({ paneId: pane.id, source: "detection" });
+    // 空画面は再描画の途中でも返る。解除とみなすと同じ確認への再送が可能になる。
+    if (read.text.trim() === "") return { kind: "terminal" };
     const parsed = read.truncated ? null : parseFolderTrust(read.text);
     if (parsed === null) {
       if (read.truncated || looksLikeFolderTrust(read.text)) return { kind: "terminal" };

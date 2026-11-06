@@ -478,7 +478,7 @@ test("GET /api/panes/:id/output returns 502 when Herdr cannot be reached", async
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });
 
-function folderTrustApp() {
+function folderTrustApp(sendFailure?: Error) {
   let screen = FOLDER_TRUST_SCREEN;
   let sends = 0;
   let inputs = 0;
@@ -503,6 +503,7 @@ function folderTrustApp() {
       }),
       confirmFolderTrust: async () => {
         sends += 1;
+        if (sendFailure) throw sendFailure;
       },
       send: async () => {
         inputs += 1;
@@ -560,6 +561,31 @@ test("a valid confirmation succeeds once and does not optimistically clear the p
   expect(fixture.counts().sends).toBe(1);
   fixture.setScreen("Codex is ready");
   expect((await fixture.inspect()).interaction).toBeNull();
+});
+
+test("a 502 followed by an empty detection frame never issues a second usable approval", async () => {
+  const fixture = folderTrustApp(new Error("unknown send outcome"));
+  const { interaction } = await fixture.inspect();
+  expect((await fixture.confirm(interaction!.id)).status).toBe(502);
+  fixture.setScreen("");
+  expect((await fixture.inspect()).interaction).toHaveProperty("kind", "terminal");
+  expect((await fixture.inspect()).interaction).not.toHaveProperty("id");
+  expect((await fixture.confirm(interaction!.id)).status).toBe(409);
+  for (const action of ["input", "stop"]) {
+    const response = await fixture.app.request(`/api/panes/w1:p1/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "hello", submit: true }),
+    });
+    expect(response.status).toBe(409);
+  }
+  fixture.setScreen(FOLDER_TRUST_SCREEN);
+  expect((await fixture.inspect()).interaction).toMatchObject({
+    id: interaction!.id,
+    submitted: true,
+  });
+  expect((await fixture.confirm((await fixture.inspect()).interaction!.id)).status).toBe(409);
+  expect(fixture.counts()).toEqual({ sends: 1, inputs: 0, stops: 0 });
 });
 
 test("confirmation rejects malformed, forged and stale identifiers without sending keys", async () => {

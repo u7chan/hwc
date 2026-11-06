@@ -179,6 +179,40 @@ test("an unknown send outcome cannot trigger another Enter", async () => {
   expect(sends).toBe(1);
 });
 
+test.each(["", "   ", " \r\n\n "])(
+  "an empty detection frame preserves the identity and response lock after an unknown outcome: %j",
+  async (screen) => {
+    let sends = 0;
+    const { client, setScreen } = setup({
+      confirmFolderTrust: async () => {
+        sends += 1;
+        throw new Error("connection lost");
+      },
+    });
+    const first = await client.inspect(pane);
+    if (first?.kind !== "codex-folder-trust") throw new Error("missing confirmation");
+    await expect(client.accept(pane, first.id)).rejects.toThrow("connection lost");
+    setScreen(screen);
+    expect(await client.inspect(pane)).toEqual({ kind: "terminal" });
+    expect(await client.accept(pane, first.id)).toBe("changed");
+    setScreen(FOLDER_TRUST_SCREEN);
+    expect(await client.inspect(pane)).toEqual({ ...first, submitted: true });
+    expect(await client.accept(pane, first.id)).toBe("changed");
+    expect(sends).toBe(1);
+    setScreen("Codex is ready");
+    expect(await client.inspect(pane)).toBeNull();
+  },
+);
+
+test("an empty detection frame cannot dismiss an unsubmitted confirmation either", async () => {
+  const { client, setScreen } = setup();
+  const first = await client.inspect(pane);
+  setScreen("");
+  expect(await client.inspect(pane)).toEqual({ kind: "terminal" });
+  setScreen(FOLDER_TRUST_SCREEN);
+  expect(await client.inspect(pane)).toEqual(first);
+});
+
 test("closed panes lose their outstanding confirmation identifiers", async () => {
   const { client } = setup();
   const first = await client.inspect(pane);

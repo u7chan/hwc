@@ -9,6 +9,7 @@ import {
   fetchState,
   focusAgent,
   closePane,
+  confirmFolderTrust,
   parseAppState,
   sendInput,
   stopAgent,
@@ -25,6 +26,7 @@ import { CloseIcon, HwcMark, PlusIcon, SettingsIcon } from "./icons";
 import { Menu } from "./Menu";
 import { PaneMenu } from "./PaneMenu";
 import type { PaneCommandHandle } from "./commands";
+import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { type PaneCloseAction, paneCloseAction } from "../shared/pane-close";
 import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
@@ -263,6 +265,9 @@ export function App() {
   // 正はこの集合だけにし、描画には変更通知を使う。
   const inputsInFlight = useRef(new Set<string>());
   const [, inputChanged] = useReducer((revision: number) => revision + 1, 0);
+  // 結果不明の回答は再送できない。詳細の付け外しを越えて、この Map だけに試行状態を残す。
+  const confirmationAttempts = useRef(new Map<string, ConfirmationAttempt>());
+  const [, confirmationChanged] = useReducer((revision: number) => revision + 1, 0);
   const [closing, setClosing] = useState<Closing | null>(null);
   // 作成ダイアログの対象ペイン。空なら閉じている。
   const [createTarget, setCreateTarget] = useState<string | null>(null);
@@ -554,6 +559,21 @@ export function App() {
     return true;
   };
 
+  const confirmPaneFolderTrust = async (paneId: string, id: string) => {
+    if (confirmationAttempts.current.has(id)) return;
+    const update = (attempt: ConfirmationAttempt) => {
+      confirmationAttempts.current.set(id, attempt);
+      confirmationChanged(undefined);
+    };
+    update("sending");
+    try {
+      await confirmFolderTrust(paneId, id);
+      update("waiting");
+    } catch {
+      update("failed");
+    }
+  };
+
   // 詳細のタブバーは、選択中ペインが属するタブのペインだけを出す。
   const siblings = (() => {
     if (!state || !pane) return [];
@@ -649,6 +669,8 @@ export function App() {
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
       sending={inputsInFlight.current.has(item.id)}
       dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
+      confirmationAttempts={confirmationAttempts.current}
+      onConfirmFolderTrust={(id) => void confirmPaneFolderTrust(item.id, id)}
       onDismissConfirmation={(id) =>
         setDismissedConfirmations((current) => ({ ...current, [item.id]: id }))
       }

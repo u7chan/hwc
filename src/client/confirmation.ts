@@ -1,6 +1,8 @@
 import type { PaneState } from "../server/herdr/state";
 import type { PaneInteraction } from "../shared/confirmation";
 
+export type ConfirmationAttempt = "sending" | "waiting" | "failed";
+
 export function confirmationView(props: {
   pane: Pick<PaneState, "agent" | "chat" | "agentStatus">;
   interaction: PaneInteraction | null;

@@ -61,7 +61,7 @@ import {
 import { Markdown } from "./Markdown";
 import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
-import { confirmationView } from "./confirmation";
+import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
 import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
 import { agentGlyph, isShellPane, paneName, type PaneContext } from "./select";
@@ -494,6 +494,8 @@ type PaneDetailProps = {
   waitingMs: number | null;
   sending: boolean;
   dismissedConfirmation: string | null;
+  confirmationAttempts: ReadonlyMap<string, ConfirmationAttempt>;
+  onConfirmFolderTrust: (id: string) => void;
   onDismissConfirmation: (id: string) => void;
   // メニューはセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
   // 中の fixed はセル基準になる。実行口は一覧から同じペインを操作するときにも使う。
@@ -521,6 +523,8 @@ export function PaneDetail(props: PaneDetailProps) {
     waitingMs,
     sending,
     dismissedConfirmation,
+    confirmationAttempts,
+    onConfirmFolderTrust,
     onDismissConfirmation,
     menuOpen,
     onOpenMenu,
@@ -1200,8 +1204,9 @@ export function PaneDetail(props: PaneDetailProps) {
           {confirmation !== null ? (
             <PaneConfirmation
               key={confirmation.id}
-              paneId={pane.id}
               confirmation={confirmation}
+              attempt={confirmationAttempts.get(confirmation.id) ?? null}
+              onConfirm={() => onConfirmFolderTrust(confirmation.id)}
               onDismiss={() => onDismissConfirmation(confirmation.id)}
             />
           ) : body.kind === "skeleton" ? (
