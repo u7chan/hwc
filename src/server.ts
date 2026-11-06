@@ -5,6 +5,7 @@ import { createChatClient } from "./server/chat/pi";
 import { createOpencodeChatClient } from "./server/chat/opencode";
 import { createCodexChatClient } from "./server/chat/codex";
 import { createPaneClient } from "./server/herdr/panes";
+import { createWorktreeClient } from "./server/herdr/worktrees";
 import { createBranchReader } from "./server/git";
 import { createStateStore } from "./server/herdr/state";
 import { loadSnapshot, startStateSync } from "./server/herdr/sync";
@@ -25,6 +26,7 @@ const revision = readRevision();
 const app = createApp({
   store,
   panes: createPaneClient(),
+  worktrees: createWorktreeClient(),
   chat: createChatClient(),
   opencode: createOpencodeChatClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   codex: createCodexChatClient(),
@@ -32,10 +34,15 @@ const app = createApp({
   revision,
 });
 
+// Herdr の応答を待つルート（削除・モデル指定の作成）は数十秒返さない。Bun の既定の
+// idleTimeout（10 秒）で接続を切らないよう、ソケット側の待ち（60 秒）を覆う値を置く。
+const IDLE_TIMEOUT_SECONDS = 120;
+
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 30000),
   hostname: process.env.HOST ?? "0.0.0.0",
   development: true,
+  idleTimeout: IDLE_TIMEOUT_SECONDS,
   routes: {
     "/": index,
     "/api/*": app.fetch,

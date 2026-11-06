@@ -46,8 +46,11 @@ bun run e2e:serve
 - `agent.start`
 - `agent.prompt`
 - `pane.close`
+- `worktree.remove`
 
-`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`pane.split` は
+`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`worktree.remove` は
+linked worktree のスペースをスナップショットから取り除き、`workspace.closed` を流す（実際の
+チェックアウトのフォルダには触らない）。`pane.split` は
 `target_pane_id` のタブにシェルペインを 1 枚足し、`pane_info` を返して `pane.created` を流す。
 `pane.layout` はそのタブのセルを等幅のグリッドとして返す（E2E 用の固定形で、実際の分割方向は
 BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.updated` を流す。`agent.start` は

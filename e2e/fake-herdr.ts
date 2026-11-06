@@ -258,6 +258,39 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     return true;
   };
 
+  // 実 Herdr の worktree.remove は git worktree remove を実行し、スペースも閉じる。
+  // E2E では実際のディレクトリを触らず、スナップショットからスペースを取り除く。
+  const removeWorktree = (workspaceId: string): boolean => {
+    const workspace = (snapshot.workspaces ?? []).find((item) => item.workspace_id === workspaceId);
+    if (workspace === undefined || workspace.worktree?.is_linked_worktree !== true) return false;
+    const paneIds = new Set(
+      (snapshot.panes ?? [])
+        .filter((pane) => pane.workspace_id === workspaceId)
+        .map((pane) => pane.pane_id),
+    );
+    snapshot.panes = (snapshot.panes ?? []).filter((pane) => pane.workspace_id !== workspaceId);
+    snapshot.agents = (snapshot.agents ?? []).filter((agent) => !paneIds.has(agent.pane_id ?? ""));
+    snapshot.tabs = (snapshot.tabs ?? []).filter((tab) => tab.workspace_id !== workspaceId);
+    snapshot.workspaces = (snapshot.workspaces ?? []).filter(
+      (item) => item.workspace_id !== workspaceId,
+    );
+    for (const paneId of paneIds) {
+      outputs.delete(paneId);
+      revisions.delete(paneId);
+    }
+    if (snapshot.focused_workspace_id === workspaceId) {
+      const next = (snapshot.panes ?? [])[0] ?? null;
+      if (next === null) {
+        snapshot.focused_pane_id = null;
+        snapshot.focused_tab_id = null;
+        snapshot.focused_workspace_id = null;
+      } else {
+        focus(next.pane_id);
+      }
+    }
+    return true;
+  };
+
   // 実 Herdr の分割結果そのものではなく、E2E でセルの形を返すための固定のグリッド。
   // 方向や比率の正しさは BFF の unit で確かめ、ここでは画面の流れだけを通す。
   const paneArea = { width: 240, height: 48 };
@@ -618,6 +651,31 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           },
         });
         broadcast("pane.updated", { pane_id: paneId });
+        return;
+      }
+      case "worktree.remove": {
+        const workspaceId = typeof params.workspace_id === "string" ? params.workspace_id : "";
+        const workspace = (snapshot.workspaces ?? []).find(
+          (item) => item.workspace_id === workspaceId,
+        );
+        if (workspace === undefined) {
+          send(socket, { id, error: { code: "workspace_not_found", message: workspaceId } });
+          return;
+        }
+        if (workspace.worktree?.is_linked_worktree !== true) {
+          send(socket, { id, error: { code: "not_linked_worktree", message: workspaceId } });
+          return;
+        }
+        removeWorktree(workspaceId);
+        send(socket, {
+          id,
+          result: {
+            type: "worktree_removed",
+            workspace_id: workspaceId,
+            forced: params.force === true,
+          },
+        });
+        broadcast("workspace.closed", { workspace_id: workspaceId });
         return;
       }
       case "pane.close": {

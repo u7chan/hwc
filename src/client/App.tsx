@@ -11,6 +11,7 @@ import {
   closePane,
   confirmFolderTrust,
   parseAppState,
+  removeWorktree,
   sendInput,
   stopAgent,
 } from "./api";
@@ -22,9 +23,10 @@ import {
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
 import { CreatePane } from "./CreatePane";
-import { CloseIcon, HwcMark, PlusIcon, SettingsIcon } from "./icons";
+import { CloseIcon, HwcMark, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
 import { Menu } from "./Menu";
 import { PaneMenu } from "./PaneMenu";
+import { RemoveWorktreeConfirm } from "./RemoveWorktreeConfirm";
 import type { PaneCommandHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
@@ -198,6 +200,15 @@ type OperationMenu = {
   open: boolean;
 };
 
+// 削除の確認。対象の名前とパスは開いた時点のスナップショットから取る。SSE が
+// スペースを落とした後では、何を消すのかを引けない。
+type Removing = {
+  workspaceId: string;
+  label: string;
+  checkoutPath: string | null;
+  phase: "confirm" | "busy" | "failed";
+};
+
 // 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
 // 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
@@ -269,11 +280,13 @@ export function App() {
   const confirmationAttempts = useRef(new Map<string, ConfirmationAttempt>());
   const [, confirmationChanged] = useReducer((revision: number) => revision + 1, 0);
   const [closing, setClosing] = useState<Closing | null>(null);
+  const [removing, setRemoving] = useState<Removing | null>(null);
   // 作成ダイアログの対象ペイン。空なら閉じている。
   const [createTarget, setCreateTarget] = useState<string | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const closeInFlight = useRef(false);
+  const removeInFlight = useRef(false);
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
@@ -409,6 +422,11 @@ export function App() {
   const closingPane = state === null || closing === null ? null : findPane(state, closing.paneId);
   const closingAvailable =
     state !== null && closing !== null && paneCloseAction(state, closing.paneId) === closing.action;
+  const removingWorkspace =
+    state === null || removing === null
+      ? null
+      : (state.workspaces.find((workspace) => workspace.id === removing.workspaceId) ?? null);
+  const removingAvailable = removingWorkspace?.worktree?.isLinkedWorktree === true;
 
   // 新ペインがスナップショットに現れたら開く。応答の前に SSE が届いていれば、ここで 1 度だけ動く。
   useEffect(() => {
@@ -494,6 +512,41 @@ export function App() {
         setView({ selectedPaneId: target.next, expanded });
       }
       setClosing(null);
+    });
+  };
+
+  // チェックアウトの削除は取り消せない。Herdr の TUI と同じく、確認は 1 回だけにする。
+  const openRemoveWorktreeConfirm = () => {
+    if (menu === null || menu.target.kind !== "workspace" || state === null) return;
+    const workspace = state.workspaces.find((item) => item.id === menu.target.id);
+    if (workspace === undefined || workspace.worktree?.isLinkedWorktree !== true) return;
+    closeMenu();
+    setRemoving({
+      workspaceId: workspace.id,
+      label: workspace.label,
+      checkoutPath: workspace.worktree.checkoutPath,
+      phase: "confirm",
+    });
+  };
+
+  const cancelRemoveWorktree = () => {
+    if (removing?.phase === "busy") return;
+    setRemoving(null);
+  };
+
+  // 消えたスペースはローカルで消さない。一覧の置き換えは SSE のスナップショットに任せる。
+  const confirmRemoveWorktree = () => {
+    if (removing === null || removing.phase === "busy" || !removingAvailable) return;
+    if (removeInFlight.current) return;
+    removeInFlight.current = true;
+    const target = removing;
+    setRemoving({ ...target, phase: "busy" });
+    void removeWorktree(target.workspaceId).then((outcome) => {
+      removeInFlight.current = false;
+      setRemoving((current) => {
+        if (current === null) return null;
+        return outcome === "done" ? null : { ...current, phase: "failed" };
+      });
     });
   };
 
@@ -897,6 +950,20 @@ export function App() {
                   </div>
                 );
               })}
+              {menuWorkspace.worktree?.isLinkedWorktree === true ? (
+                <>
+                  <hr class="hwc-menu-separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="hwc-menu-item hwc-menu-item--danger"
+                    onClick={openRemoveWorktreeConfirm}
+                  >
+                    <TrashIcon size={14} />
+                    ワークツリーを削除
+                  </button>
+                </>
+              ) : null}
             </>
           )}
         </Menu>
@@ -911,6 +978,18 @@ export function App() {
           failed={closing.phase === "failed"}
           onConfirm={confirmClose}
           onCancel={cancelClose}
+        />
+      )}
+
+      {removing === null || removingWorkspace === null ? null : (
+        <RemoveWorktreeConfirm
+          label={removing.label}
+          checkoutPath={removing.checkoutPath}
+          available={removingAvailable}
+          busy={removing.phase === "busy"}
+          failed={removing.phase === "failed"}
+          onConfirm={confirmRemoveWorktree}
+          onCancel={cancelRemoveWorktree}
         />
       )}
 

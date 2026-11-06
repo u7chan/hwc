@@ -34,6 +34,7 @@ import {
   TEXT_WITH_ATTACHMENTS_TOO_LONG,
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
+import type { WorktreeClient } from "./herdr/worktrees";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { isAgentModel, supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
@@ -56,6 +57,7 @@ const requireJson = createMiddleware(async (c, next) => {
 export function createApp(options: {
   store: StateStore;
   panes: PaneClient;
+  worktrees: WorktreeClient;
   chat: SessionChatClient;
   // opencode はローカルサービスの API から読む。サービスを読めない構成でも、ペインの
   // 一覧や端末出力は使えるようにする。
@@ -70,6 +72,7 @@ export function createApp(options: {
   const {
     store,
     panes,
+    worktrees,
     chat,
     opencode,
     codex,
@@ -479,6 +482,34 @@ export function createApp(options: {
         return c.json({ paneId: result.paneId });
       } catch (error) {
         return paneFailure(c, error);
+      }
+    })
+    .post("/api/workspaces/:id/remove-worktree", requireJson, async (c) => {
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const workspaceId = c.req.param("id");
+      const workspace = state.workspaces.find((item) => item.id === workspaceId);
+      if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
+      // worktree.remove は linked worktree 専用。本体（linked でない）は Herdr も拒否する。
+      if (workspace.worktree?.isLinkedWorktree !== true) {
+        return c.json({ error: "not_linked_worktree" }, 409);
+      }
+
+      try {
+        await worktrees.remove({ workspaceId });
+        // スペースが消えるのは Herdr のイベント（workspace.closed）に任せる。
+        return c.json({ ok: true });
+      } catch (error) {
+        if (error instanceof HerdrError) {
+          if (error.code === "not_linked_worktree") {
+            return c.json({ error: error.code }, 409);
+          }
+          if (error.code === "workspace_not_found" || error.code === "worktree_not_found") {
+            return c.json({ error: "workspace_not_found" }, 404);
+          }
+        }
+        return c.json({ error: "herdr_unavailable" }, 502);
       }
     });
 }
