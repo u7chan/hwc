@@ -2359,7 +2359,14 @@ test.each(["pi", "codex"] as const)(
     });
     const response = await postSplit(app, "w1:p1", { agent: kind, model });
     expect(response.status).toBe(200);
-    expect(seen).toEqual([{ paneId: "w1:p2", kind, name: "hwc-w1-p2", args }]);
+    expect(seen).toEqual([
+      {
+        paneId: "w1:p2",
+        kind,
+        name: "hwc-w1-p2",
+        args: kind === "codex" ? ["--no-daemon", ...args] : args,
+      },
+    ]);
   },
 );
 
@@ -2598,7 +2605,9 @@ test("POST /api/panes/:id/split gives the agent a Herdr-valid name derived from 
   const response = await postSplit(app, "w1:p1", { agent: "codex" });
 
   expect(response.status).toBe(200);
-  expect(seenStart).toEqual([{ paneId: "w1:p3", kind: "codex", name: "hwc-w1-p3" }]);
+  expect(seenStart).toEqual([
+    { paneId: "w1:p3", kind: "codex", name: "hwc-w1-p3", args: ["--no-daemon"] },
+  ]);
   expect(seenRename).toEqual([]);
 });
 
