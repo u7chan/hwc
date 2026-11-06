@@ -51,18 +51,19 @@ export function CreatePane(props: CreatePaneProps) {
   const [model, setModel] = useState<AgentModel | null>(null);
   const [effort, setEffort] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(true);
   // ペインができた可能性がある状態。フィールドを閉じ、再送ではなく確認に倒す。
   const [settled, setSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 結果を受け取るまで閉じない。閉じると、作成済みのペインとエラーを見失う。
   const close = () => {
-    if (busy) return;
-    props.onClose();
+    if (busy || !open) return;
+    setOpen(false);
   };
 
   const submit = async () => {
-    if (busy) return;
+    if (busy || !open) return;
     setBusy(true);
     setError(null);
     const result = await createPane(props.paneId, {
@@ -73,7 +74,7 @@ export function CreatePane(props: CreatePaneProps) {
     });
     if (result.ok) {
       props.onCreated(result.paneId);
-      props.onClose();
+      setOpen(false);
       return;
     }
     setBusy(false);
@@ -93,7 +94,9 @@ export function CreatePane(props: CreatePaneProps) {
       role="dialog"
       labelledBy="hwc-create-title"
       describedBy={error === null ? undefined : "hwc-create-error"}
+      open={open}
       onClose={close}
+      onExited={props.onClose}
     >
       <h2 class="hwc-dialog-title" id="hwc-create-title">
         新しいペイン

@@ -967,7 +967,7 @@ button {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-panel);
   background: var(--color-surface);
-  animation: hwc-dialog-bounce 420ms cubic-bezier(0.22, 1.2, 0.36, 1);
+  animation: hwc-dialog-in 240ms ease-out both;
   /* 枠から中身だけ押せるようにする（.hwc-dialog-wrap の none を戻す）。 */
   pointer-events: auto;
 }
@@ -1048,24 +1048,34 @@ button {
   outline-offset: 2px;
 }
 
-/* 置かれた瞬間に少しだけ弾ませて、目が行くようにする。 */
-@keyframes hwc-dialog-bounce {
-  0% {
+.hwc-dialog-layer[data-open="false"] .hwc-dialog {
+  pointer-events: none;
+  animation: hwc-dialog-out 180ms ease-in both;
+}
+
+.hwc-dialog-layer[data-open="false"] .hwc-dialog-backdrop {
+  animation: hwc-scrim-out 180ms ease-in both;
+}
+
+@keyframes hwc-dialog-in {
+  from {
     opacity: 0;
-    transform: scale(0.92) translateY(10px);
+    transform: translateY(6px) scale(0.985);
   }
-
-  55% {
+  to {
     opacity: 1;
-    transform: scale(1.03) translateY(0);
+    transform: none;
   }
+}
 
-  78% {
-    transform: scale(0.99);
+@keyframes hwc-dialog-out {
+  from {
+    opacity: 1;
+    transform: none;
   }
-
-  100% {
-    transform: scale(1);
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
   }
 }
 
@@ -1079,14 +1089,29 @@ button {
   }
 }
 
+@keyframes hwc-scrim-out {
+  from {
+    opacity: 0.32;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hwc-dialog,
-  .hwc-dialog-backdrop {
+  .hwc-dialog-backdrop,
+  .hwc-dialog-layer[data-open="false"] .hwc-dialog,
+  .hwc-dialog-layer[data-open="false"] .hwc-dialog-backdrop {
     animation: none;
   }
 
   .hwc-dialog-backdrop {
     opacity: 0.32;
+  }
+
+  .hwc-dialog-layer[data-open="false"] {
+    opacity: 0;
   }
 }
 
@@ -3568,6 +3593,64 @@ p.hwc-compaction,
 .hwc-create-input:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
+}
+
+.hwc-create-select {
+  display: grid;
+}
+
+.hwc-create-select > * {
+  grid-area: 1 / 1;
+}
+
+.hwc-create-select .hwc-create-input[data-loading="true"] {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.hwc-create-select .hwc-create-input[data-loading="false"] {
+  animation: hwc-create-select-in 200ms ease-out both;
+}
+
+.hwc-create-skeleton {
+  align-self: center;
+  width: 42%;
+  height: 14px;
+  margin-left: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-control-line);
+  pointer-events: none;
+  animation: hwc-create-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes hwc-create-select-in {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hwc-create-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-create-select .hwc-create-input[data-loading="false"],
+  .hwc-create-skeleton {
+    animation: none;
+  }
+
+  .hwc-create-skeleton {
+    opacity: 0.4;
+  }
 }
 
 .hwc-create-modes {
