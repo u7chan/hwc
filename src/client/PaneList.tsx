@@ -247,7 +247,7 @@ function renderList(props: PaneListProps) {
 function TreePaneList(props: TreePaneListProps) {
   const { state, selectedPaneId, scope, expanded, onSelect, onToggle, workingSince, now } = props;
 
-  const visible = scopeWorkspaces(state.workspaces, scope, selectedPaneId);
+  const visible = scopeWorkspaces(state.workspaces, scope);
 
   // ブランチはワークスペースの属性。行ごとに引き直さず、先にペイン id へ配る。
   const branchOf = new Map<string, string | null>();

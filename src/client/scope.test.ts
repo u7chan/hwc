@@ -60,16 +60,17 @@ test("the list starts with the spaces that have an agent", () => {
 test("agent scope keeps the spaces that have an agent and drops shell-only spaces", () => {
   const spaces = [workspace("w1", agents("w1", [null])), workspace("w2", agents("w2", ["pi"]))];
 
-  expect(scopeWorkspaces(spaces, "agent", null).map((space) => space.id)).toEqual(["w2"]);
-  expect(scopeWorkspaces(spaces, "all", null).map((space) => space.id)).toEqual(["w1", "w2"]);
+  expect(scopeWorkspaces(spaces, "agent").map((space) => space.id)).toEqual(["w2"]);
+  expect(scopeWorkspaces(spaces, "all").map((space) => space.id)).toEqual(["w1", "w2"]);
 });
 
-test("agent scope keeps the space that is being read", () => {
-  const spaces = [workspace("w1", agents("w1", [null])), workspace("w2", agents("w2", ["pi"]))];
+test("agent scope updates when the last agent in a space exits", () => {
+  const withAgent = [workspace("w1", agents("w1", ["pi"]))];
+  const shellOnly = [workspace("w1", agents("w1", [null]))];
 
-  // シェルだけのスペースを開いている間は、絞り込んでも消さない。
-  expect(scopeWorkspaces(spaces, "agent", "w1:p1").map((space) => space.id)).toEqual(["w1", "w2"]);
-  expect(scopeWorkspaces(spaces, "agent", "w9:p1").map((space) => space.id)).toEqual(["w2"]);
+  expect(scopeWorkspaces(withAgent, "agent").map((space) => space.id)).toEqual(["w1"]);
+  expect(scopeWorkspaces(shellOnly, "agent")).toEqual([]);
+  expect(scopeWorkspaces(shellOnly, "all").map((space) => space.id)).toEqual(["w1"]);
 });
 
 test("the order stays the order Herdr reports", () => {
@@ -79,7 +80,7 @@ test("the order stays the order Herdr reports", () => {
     workspace("w2", agents("w2", [null])),
   ];
 
-  expect(scopeWorkspaces(spaces, "agent", null).map((space) => space.id)).toEqual(["w3", "w1"]);
+  expect(scopeWorkspaces(spaces, "agent").map((space) => space.id)).toEqual(["w3", "w1"]);
 });
 
 test("active lists the agents that are working, blocked or done", () => {
@@ -138,7 +139,7 @@ test("active carries the workspace and the tab of each pane", () => {
 test("active keeps no room for the open pane, because idle panes are not in it", () => {
   const state = app(workspace("w1", [pane("w1:p1", "pi", "idle")]));
 
-  // ツリーの絞り込みと違い、選択中のペインでも出さない。
+  // 選択中のペインでも出さない。
   expect(activePanes(state)).toEqual([]);
 });
 
