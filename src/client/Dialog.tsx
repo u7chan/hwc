@@ -61,7 +61,14 @@ export function DialogShell(props: DialogShellProps) {
 
   return (
     <div class="hwc-dialog-layer" data-open={open}>
-      <div class="hwc-dialog-backdrop" onPointerDown={open ? props.onClose : undefined} />
+      <div
+        class="hwc-dialog-backdrop"
+        onPointerDown={(event) => {
+          // 復帰を遅延させる代わりに、後続の mousedown がフォーカスを奪うのを防ぐ。
+          event.preventDefault();
+          if (open) props.onClose();
+        }}
+      />
       <div class="hwc-dialog-wrap">
         <div
           ref={card}
