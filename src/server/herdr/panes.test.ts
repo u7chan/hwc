@@ -473,13 +473,16 @@ test("isInvalidRequest tells a rejected request apart from other failures", () =
 test("parseSplitBody trims the name and keeps a known agent", () => {
   expect(parseSplitBody({ name: "  実装  ", agent: "claude" })).toEqual({
     ok: true,
-    value: { name: "実装", agent: "claude", model: null },
+    value: { name: "実装", agent: "claude", model: null, effort: null },
   });
   expect(parseSplitBody({ name: "   ", agent: null })).toEqual({
     ok: true,
-    value: { name: null, agent: null, model: null },
+    value: { name: null, agent: null, model: null, effort: null },
   });
-  expect(parseSplitBody({})).toEqual({ ok: true, value: { name: null, agent: null, model: null } });
+  expect(parseSplitBody({})).toEqual({
+    ok: true,
+    value: { name: null, agent: null, model: null, effort: null },
+  });
 });
 
 test("parseSplitBody rejects an unknown agent, a non-string name, or an overlong name", () => {
@@ -496,7 +499,7 @@ test.each(["pi", "codex", "opencode"])(
     const model = { provider: "example", id: "family/beam-v1:latest" };
     expect(parseSplitBody({ agent, model })).toEqual({
       ok: true,
-      value: { name: null, agent, model },
+      value: { name: null, agent, model, effort: null },
     });
   },
 );
@@ -507,7 +510,7 @@ test.each(["pi", "opencode"])(
     const model = { provider: "cloudflare-workers-ai", id: "@cf/meta/llama-3.2-3b-instruct" };
     expect(parseSplitBody({ agent, model })).toEqual({
       ok: true,
-      value: { name: null, agent, model },
+      value: { name: null, agent, model, effort: null },
     });
   },
 );
@@ -515,6 +518,34 @@ test.each(["pi", "opencode"])(
 test.each(["claude", null, undefined])("parseSplitBody rejects model overrides for %s", (agent) => {
   expect(parseSplitBody({ agent, model: { provider: "example", id: "beam" } }).ok).toBe(false);
   expect(parseSplitBody({ agent, model: null }).ok).toBe(true);
+});
+
+test.each(["pi", "codex", "opencode"])(
+  "parseSplitBody accepts native effort values for an explicit %s model",
+  (agent) => {
+    const model = { provider: "example", id: "beam" };
+    expect(parseSplitBody({ agent, model, effort: "じっくり review" })).toEqual({
+      ok: true,
+      value: { name: null, agent, model, effort: "じっくり review" },
+    });
+  },
+);
+
+test.each(["pi", "codex", "opencode", "claude", null, undefined])(
+  "parseSplitBody rejects effort without an explicit model for %s",
+  (agent) => {
+    expect(parseSplitBody({ agent, effort: "high" }).ok).toBe(false);
+    expect(parseSplitBody({ agent, model: null, effort: "high" }).ok).toBe(false);
+    expect(parseSplitBody({ agent, effort: null }).ok).toBe(true);
+  },
+);
+
+test.each(
+  ["", " ", 1, {}, [], "high\n", "high\u0000", "x".repeat(129)].map((effort) => ({ effort })),
+)("parseSplitBody rejects malformed effort: %j", ({ effort }) => {
+  expect(
+    parseSplitBody({ agent: "pi", model: { provider: "example", id: "beam" }, effort }).ok,
+  ).toBe(false);
 });
 
 test.each([

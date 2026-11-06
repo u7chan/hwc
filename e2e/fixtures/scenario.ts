@@ -19,22 +19,39 @@ export async function writeCodexThread(
   id: string,
   model: string,
   turns: CodexFixture["turns"] = [],
+  reasoningEffort = "high",
 ) {
   const directory = join(root, "codex", "threads");
   await mkdir(directory, { recursive: true });
   await writeFile(
     join(directory, `${id}.json`),
     JSON.stringify({
-      thread: { id, model, reasoningEffort: "high" },
+      thread: { id, model, reasoningEffort },
       turns,
     } satisfies CodexFixture),
   );
 }
 
 export const STARTUP_MODELS = [
-  { provider: "example", id: "beam-small" },
-  { provider: "example", id: "beam-long-name-for-mobile-layout" },
-  { provider: "example", id: "@demo/beam-small" },
+  {
+    provider: "example",
+    id: "beam-small",
+    efforts: {
+      pi: ["low", "high"],
+      codex: ["low", "medium", "high"],
+      opencode: ["eco", "deep-review"],
+    },
+  },
+  {
+    provider: "example",
+    id: "beam-long-name-for-mobile-layout",
+    efforts: {
+      pi: ["minimal", "low", "medium", "high", "xhigh", "max"],
+      codex: ["high", "xhigh"],
+      opencode: ["fast", "じっくり review"],
+    },
+  },
+  { provider: "example", id: "@demo/beam-small", efforts: { pi: [], codex: [], opencode: [] } },
 ];
 
 // 実在のユーザー名・リポジトリ名・パスを fixture に写さない。E2E のスクリーンショットは
@@ -85,19 +102,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     ),
     writeFile(
       join(root, "bin", "pi"),
-      `#!/bin/sh
-if [ "$*" = "--offline --mode rpc --no-session --no-extensions" ]; then
-  IFS= read -r request
-  if [ "$request" != '{"type":"get_available_models"}' ]; then exit 2; fi
-  printf '%s\\n' '{"type":"response","command":"get_available_models","success":true,"data":{"models":[{"provider":"anthropic","id":"claude-sonnet-4-5","contextWindow":200000}]}}'
-  exit 0
-fi
-if [ "$1" != "--offline" ] || [ "$2" != "--list-models" ]; then exit 2; fi
-cat <<'MODELS'
-provider  model  context  max-out  thinking  images
-${STARTUP_MODELS.map(({ provider, id }) => `${provider}  ${id}  200K  32K  yes  yes`).join("\n")}
-MODELS
-`,
+      `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-pi.ts", import.meta.url))}" "$@"\n`,
       { mode: 0o700 },
     ),
   ]);

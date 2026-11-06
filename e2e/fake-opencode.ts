@@ -15,11 +15,12 @@ export async function startFakeOpencode(root: string) {
       const path = new URL(request.url).pathname;
       if (path === "/api/model") {
         return Response.json({
-          data: STARTUP_MODELS.map(({ provider, id }) => ({
+          data: STARTUP_MODELS.map(({ provider, id, efforts }) => ({
             id,
             providerID: provider,
             enabled: true,
             limit: { context: 200_000 },
+            variants: efforts.opencode.map((id) => ({ id })),
           })),
         });
       }

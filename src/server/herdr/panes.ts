@@ -3,6 +3,7 @@ import {
   type AgentKind,
   type AgentModel,
   isAgentKind,
+  isAgentEffort,
   isAgentModel,
   supportsModelSelection,
 } from "../../shared/agents";
@@ -42,6 +43,7 @@ export type SplitRequest = {
   name: string | null;
   agent: AgentKind | null;
   model?: AgentModel | null;
+  effort?: string | null;
 };
 
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
@@ -116,12 +118,26 @@ export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
 
   const model = record.model ?? null;
   if (model !== null && (!supportsModelSelection(rawAgent) || !isAgentModel(model))) {
-    return { ok: false, status: 400, error: "model must identify a Pi or OpenCode model" };
+    return { ok: false, status: 400, error: "model must identify a Pi, Codex, or OpenCode model" };
+  }
+
+  const effort = record.effort ?? null;
+  if (effort !== null && (model === null || !isAgentEffort(effort))) {
+    return {
+      ok: false,
+      status: 400,
+      error: "effort requires an explicit model and a non-empty value",
+    };
   }
 
   return {
     ok: true,
-    value: { name: name === "" ? null : name, agent: rawAgent == null ? null : rawAgent, model },
+    value: {
+      name: name === "" ? null : name,
+      agent: rawAgent == null ? null : rawAgent,
+      model,
+      effort,
+    },
   };
 }
 

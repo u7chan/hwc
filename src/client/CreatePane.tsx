@@ -1,10 +1,18 @@
 import { useState } from "preact/hooks";
-import { AGENT_KINDS, AGENT_LABELS, type AgentKind, type AgentModel } from "../shared/agents";
+import {
+  AGENT_KINDS,
+  AGENT_LABELS,
+  type AgentKind,
+  type AgentModel,
+  modelKey,
+  supportsModelSelection,
+} from "../shared/agents";
 import { createPane, type CreatePaneFailure } from "./api";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
 import { AgentGlyphIcon } from "./icons";
 import { CreatePaneModel } from "./CreatePaneModel";
+import { CreatePaneEffort } from "./CreatePaneEffort";
 
 type CreatePaneProps = {
   paneId: string;
@@ -41,6 +49,7 @@ export function CreatePane(props: CreatePaneProps) {
   const [mode, setMode] = useState<Mode>("agent");
   const [agent, setAgent] = useState<AgentKind>("pi");
   const [model, setModel] = useState<AgentModel | null>(null);
+  const [effort, setEffort] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // ペインができた可能性がある状態。フィールドを閉じ、再送ではなく確認に倒す。
   const [settled, setSettled] = useState(false);
@@ -60,6 +69,7 @@ export function CreatePane(props: CreatePaneProps) {
       name: name.trim() === "" ? null : name.trim(),
       agent: mode === "agent" ? agent : null,
       model: mode === "agent" ? model : null,
+      effort: mode === "agent" ? effort : null,
     });
     if (result.ok) {
       props.onCreated(result.paneId);
@@ -124,6 +134,7 @@ export function CreatePane(props: CreatePaneProps) {
           onClick={() => {
             setMode("shell");
             setModel(null);
+            setEffort(null);
           }}
         >
           シェル
@@ -146,6 +157,7 @@ export function CreatePane(props: CreatePaneProps) {
                   if (kind === agent) return;
                   setAgent(kind);
                   setModel(null);
+                  setEffort(null);
                 }}
                 label={AGENT_LABELS[kind]}
               >
@@ -161,8 +173,22 @@ export function CreatePane(props: CreatePaneProps) {
             agent={agent}
             model={model}
             disabled={busy || settled}
-            onChange={setModel}
+            onChange={(selected) => {
+              setModel(selected);
+              setEffort(null);
+            }}
           />
+          {supportsModelSelection(agent) ? (
+            <CreatePaneEffort
+              key={`${props.paneId}/${agent}/${model === null ? "" : modelKey(model)}`}
+              paneId={props.paneId}
+              agent={agent}
+              model={model}
+              effort={effort}
+              disabled={busy || settled}
+              onChange={setEffort}
+            />
+          ) : null}
         </>
       ) : (
         <p class="hwc-create-note">エージェントを起動せず、シェルだけを作ります。</p>

@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -504,10 +504,49 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           ? params.args.filter((arg): arg is string => typeof arg === "string")
           : [];
         outputs.set(paneId, `$ ${kind}${args.length === 0 ? "" : ` ${args.join(" ")}`}\n`);
+        const modelIndex = args.indexOf("--model");
+        const model =
+          modelIndex < 0 ? STARTUP_MODELS[0]!.id : (args[modelIndex + 1] ?? STARTUP_MODELS[0]!.id);
+        if (kind === "pi") {
+          const thinkingIndex = args.indexOf("--thinking");
+          const effort = thinkingIndex < 0 ? "high" : args[thinkingIndex + 1];
+          const directory = join(root, "agent", "sessions", paneId.replaceAll(":", "_"));
+          const path = join(directory, "session.jsonl");
+          const selected =
+            STARTUP_MODELS.find((item) => `${item.provider}/${item.id}` === model) ??
+            STARTUP_MODELS[0]!;
+          await mkdir(directory, { recursive: true });
+          await writeFile(
+            path,
+            [
+              {
+                type: "session",
+                version: 3,
+                id: crypto.randomUUID(),
+                cwd: pane.cwd,
+                timestamp: "2026-01-01T09:00:00.000Z",
+              },
+              {
+                type: "model_change",
+                id: "m1",
+                parentId: null,
+                provider: selected.provider,
+                modelId: selected.id,
+              },
+              { type: "thinking_level_change", id: "t1", parentId: "m1", thinkingLevel: effort },
+            ]
+              .map((item) => `${JSON.stringify(item)}\n`)
+              .join(""),
+          );
+          pane.agent_session = { agent: "pi", source: "herdr:pi", kind: "path", value: path };
+        }
         if (kind === "codex") {
           const sessionId = `thread_${paneId.replaceAll(":", "_")}`;
-          const model = args[0] === "--model" ? args[1] : STARTUP_MODELS[0]!.id;
-          await writeCodexThread(root, sessionId, model ?? STARTUP_MODELS[0]!.id);
+          const config = args.find((arg) => arg.startsWith("model_reasoning_effort="));
+          const effort = config
+            ? (JSON.parse(config.slice("model_reasoning_effort=".length)) as string)
+            : "high";
+          await writeCodexThread(root, sessionId, model, [], effort);
           pane.agent_session = {
             agent: "codex",
             source: "herdr:codex",

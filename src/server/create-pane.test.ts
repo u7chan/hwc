@@ -61,6 +61,7 @@ test.each(["pi", "claude", "codex", "opencode"] as const)(
     const { panes } = createFakePanes();
     const models = {
       list: mock(async () => []),
+      efforts: mock(async () => []),
       startArgs: mock(async () => []),
     };
     expect(await createPane(panes, "w1:p1", { name: null, agent, model: null }, models)).toEqual({
@@ -75,6 +76,7 @@ test.each(["pi", "claude", "codex", "opencode"] as const)(
     });
     expect(panes.directory).not.toHaveBeenCalled();
     expect(models.list).not.toHaveBeenCalled();
+    expect(models.efforts).not.toHaveBeenCalled();
     expect(models.startArgs).not.toHaveBeenCalled();
   },
 );
@@ -86,12 +88,13 @@ test.each(["pi", "codex", "opencode"] as const)(
     const model = { provider: "example", id: "beam" };
     const models = {
       list: mock(async () => [model]),
+      efforts: mock(async () => []),
       startArgs: mock(async () => ["--model", agent === "codex" ? "beam" : "example/beam"]),
     };
     const result = await createPane(panes, "w1:p1", { name: "実装", agent, model }, models);
     expect(result).toEqual({ ok: true, paneId: "w1:p3" });
     expect(panes.directory).toHaveBeenCalledWith({ paneId: "w1:p3" });
-    expect(models.startArgs).toHaveBeenCalledWith(agent, model, "/project");
+    expect(models.startArgs).toHaveBeenCalledWith(agent, model, "/project", null);
     expect(panes.startAgent).toHaveBeenCalledWith({
       paneId: "w1:p3",
       kind: agent,
@@ -105,12 +108,13 @@ test.each(["pi", "codex", "opencode"] as const)(
   },
 );
 
-test.each(["pi", "codex"] as const)(
-  "a %s model preparation failure keeps the named shell and does not start the default model",
+test.each(["pi", "codex", "opencode"] as const)(
+  "a %s model or effort preparation failure keeps the named shell without falling back",
   async (agent) => {
     const { panes } = createFakePanes();
     const models = {
       list: async () => [],
+      efforts: async () => [],
       startArgs: async () => {
         throw new Error("unavailable");
       },
@@ -123,6 +127,7 @@ test.each(["pi", "codex"] as const)(
           name: "実装",
           agent,
           model: { provider: "example", id: "beam" },
+          effort: "high",
         },
         models,
       ),

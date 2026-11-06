@@ -3,6 +3,7 @@ import type { ClientResponse } from "hono/client";
 import {
   OUTPUT_LINES,
   attachmentUploadUrl,
+  agentModelsOutcome,
   attachmentUrl,
   chatOutcome,
   closeOutcome,
@@ -18,6 +19,7 @@ import {
   toCreatedPane,
   toPaneRead,
   toAgentModels,
+  toAgentEfforts,
   MODEL_CREATE_TIMEOUT_MS,
   toPaneInteraction,
 } from "./api";
@@ -45,8 +47,47 @@ test("model candidates with namespaced @ IDs remain selectable", () => {
   expect(toAgentModels({ models: [model] })).toEqual([model]);
 });
 
+test("model lookup distinguishes an unstarted OpenCode service from generic failures", () => {
+  expect(agentModelsOutcome(502, { error: "opencode_not_running" })).toBe("opencode_not_running");
+  expect(agentModelsOutcome(502, { error: "models_unavailable" })).toBeNull();
+  expect(agentModelsOutcome(502, { error: "/private/path: credentials" })).toBeNull();
+  expect(agentModelsOutcome(502, null)).toBeNull();
+  expect(agentModelsOutcome(200, { error: "opencode_not_running" })).toBeNull();
+  expect(agentModelsOutcome(403, { error: "opencode_not_running" })).toBeNull();
+  expect(agentModelsOutcome(200, { models: [] })).toEqual([]);
+  const models = [{ provider: "example", id: "beam" }];
+  expect(agentModelsOutcome(200, { models })).toEqual(models);
+  expect(agentModelsOutcome(502, { models })).toBeNull();
+});
+
 test("model-specific creation also covers candidate lookup and session preparation", () => {
-  expect(MODEL_CREATE_TIMEOUT_MS).toBeGreaterThan(CREATE_TIMEOUT_MS + 33_000);
+  expect(MODEL_CREATE_TIMEOUT_MS).toBeGreaterThan(CREATE_TIMEOUT_MS + 53_000);
+});
+
+test("effort choices preserve native names and order rather than translating them to a common scale", () => {
+  expect(toAgentEfforts({ efforts: ["none", "xhigh", "max", "じっくり review", "xhigh"] })).toEqual(
+    ["none", "xhigh", "max", "じっくり review"],
+  );
+  expect(toAgentEfforts({ efforts: [] })).toEqual([]);
+  for (const body of [
+    null,
+    {},
+    { efforts: "high" },
+    { efforts: [null] },
+    { efforts: [""] },
+    { efforts: ["a\nb"] },
+  ]) {
+    expect(toAgentEfforts(body)).toBeNull();
+  }
+});
+
+test("the effort request keeps the pane id and namespaced model in their own URL parts", () => {
+  const url = api.api.panes[":id"].efforts.$url({
+    ...paneParam("w1/p2"),
+    query: { agent: "pi", provider: "example", model: "@demo/beam" },
+  });
+  expect(url.pathname).toBe("/api/panes/w1%2Fp2/efforts");
+  expect(url.searchParams.get("model")).toBe("@demo/beam");
 });
 
 test("the JSON pane routes expose their media type rejection through RPC", () => {

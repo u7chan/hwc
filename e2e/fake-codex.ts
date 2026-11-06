@@ -23,7 +23,14 @@ for await (const line of createInterface({ input: process.stdin })) {
         break;
       case "model/list":
         result = {
-          data: STARTUP_MODELS.map(({ id }) => ({ id, model: id, hidden: false })),
+          data: STARTUP_MODELS.map(({ id, efforts }) => ({
+            id,
+            model: id,
+            hidden: false,
+            supportedReasoningEfforts: efforts.codex.map((reasoningEffort) => ({
+              reasoningEffort,
+            })),
+          })),
           nextCursor: null,
         };
         break;

@@ -24,6 +24,12 @@ const SERVICE_USERNAME = "opencode";
 
 export type OpencodeChatClient = SessionChatClient;
 
+export class OpencodeServiceNotRunningError extends ChatUnavailableError {
+  constructor() {
+    super("opencode service is not running");
+  }
+}
+
 export type OpencodeService = {
   url: URL;
   authorization: string;
@@ -132,7 +138,8 @@ export async function readServiceFile(path = defaultServicePath()): Promise<Open
   let raw: unknown;
   try {
     raw = JSON.parse(await readFile(path, "utf8"));
-  } catch {
+  } catch (error) {
+    if (asRecord(error)?.code === "ENOENT") throw new OpencodeServiceNotRunningError();
     throw new ChatUnavailableError("opencode service is not available");
   }
 
@@ -187,7 +194,12 @@ export async function requestJson(
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
-  } catch {
+  } catch (error) {
+    const failure = asRecord(error);
+    const code = failure?.code ?? asRecord(failure?.cause)?.code;
+    // タイムアウトや認証失敗では、サービスが未起動とは判断できない。
+    if (code === "ConnectionRefused" || code === "ECONNREFUSED")
+      throw new OpencodeServiceNotRunningError();
     throw new ChatUnavailableError("opencode service did not answer");
   }
 

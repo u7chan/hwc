@@ -16,6 +16,7 @@ import {
   saveAttachment,
 } from "./attachments";
 import type { SessionChatClient } from "./chat/contract";
+import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import { createPane } from "./create-pane";
 import { createPaneCloser } from "./close-pane";
 import { createFolderTrust } from "./folder-trust";
@@ -33,7 +34,7 @@ import {
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
-import { supportsModelSelection } from "../shared/agents";
+import { isAgentModel, supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
 import { HerdrError } from "./herdr/socket";
 
@@ -203,8 +204,27 @@ export function createApp(options: {
         if (!models) return c.json({ error: "models_unavailable" }, 502);
         const directory = await panes.directory({ paneId });
         return c.json({ models: await models.list(agent, directory) });
-      } catch {
+      } catch (error) {
+        if (agent === "opencode" && error instanceof OpencodeServiceNotRunningError)
+          return c.json({ error: "opencode_not_running" }, 502);
         return c.json({ error: "models_unavailable" }, 502);
+      }
+    })
+    .get("/api/panes/:id/efforts", async (c) => {
+      const agent = c.req.query("agent");
+      const model = { provider: c.req.query("provider"), id: c.req.query("model") };
+      if (!supportsModelSelection(agent) || !isAgentModel(model))
+        return c.json({ error: "invalid_request" }, 400);
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+      const paneId = c.req.param("id");
+      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      try {
+        if (!models) return c.json({ error: "efforts_unavailable" }, 502);
+        const directory = await panes.directory({ paneId });
+        return c.json({ efforts: await models.efforts(agent, model, directory) });
+      } catch {
+        return c.json({ error: "efforts_unavailable" }, 502);
       }
     })
     .get("/api/state", async (c) => {
