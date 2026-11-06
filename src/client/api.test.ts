@@ -128,12 +128,18 @@ test("the output request asks for the recent lines of the pane", () => {
 
 test("the request builders keep the pane id in a single path segment", () => {
   expect(paneParam("w1/p2")).toEqual({ param: { id: "w1%2Fp2" } });
-  expect(api.api.panes[":id"].output.$url(outputRequest("w1/p2")).pathname).toContain(
-    "/api/panes/w1%2Fp2/output",
+  // どのルートも paneParam を 1 度だけ通す。id に / や : が入っても経路は増えない。
+  const paneRoutes = (action: string) => `/api/panes/w1%2Fp2/${action}`;
+  expect(api.api.panes[":id"].output.$url(outputRequest("w1/p2")).pathname).toBe(
+    paneRoutes("output"),
   );
   expect(api.api.panes[":id"].input.$url(inputRequest("w1/p2", "hi")).pathname).toBe(
-    "/api/panes/w1%2Fp2/input",
+    paneRoutes("input"),
   );
+  expect(api.api.panes[":id"].focus.$url(paneParam("w1/p2")).pathname).toBe(paneRoutes("focus"));
+  expect(api.api.panes[":id"].stop.$url(paneParam("w1/p2")).pathname).toBe(paneRoutes("stop"));
+  expect(api.api.panes[":id"].close.$url(paneParam("w1/p2")).pathname).toBe(paneRoutes("close"));
+  expect(api.api.panes[":id"].split.$url(paneParam("w1/p2")).pathname).toBe(paneRoutes("split"));
 });
 
 test("the input request keeps the pane id and JSON body together", () => {
@@ -345,30 +351,6 @@ test("a message keeps its attachments only as names in the saved format", () => 
   expect(
     toChatSnapshot({ ...chatBody, messages: [{ ...message, attachments: [] }] })?.messages,
   ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
-});
-
-test("the focus request keeps the pane id in a single path segment", () => {
-  expect(api.api.panes[":id"].focus.$url(paneParam("w1/p2")).pathname).toBe(
-    "/api/panes/w1%2Fp2/focus",
-  );
-});
-
-test("the stop request keeps the pane id in a single path segment", () => {
-  expect(api.api.panes[":id"].stop.$url(paneParam("w1/p2")).pathname).toBe(
-    "/api/panes/w1%2Fp2/stop",
-  );
-});
-
-test("the close request keeps the pane id in a single path segment", () => {
-  expect(api.api.panes[":id"].close.$url(paneParam("w1/p2")).pathname).toBe(
-    "/api/panes/w1%2Fp2/close",
-  );
-});
-
-test("the split request keeps the pane id in a single path segment", () => {
-  expect(api.api.panes[":id"].split.$url(paneParam("w1/p2")).pathname).toBe(
-    "/api/panes/w1%2Fp2/split",
-  );
 });
 
 test("the created pane id is read from the response", () => {

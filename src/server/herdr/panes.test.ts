@@ -357,9 +357,14 @@ test("parseOutputQuery rejects an unknown source", () => {
 });
 
 test("parseOutputQuery rejects lines that are out of range", () => {
+  // ステータスと文言はルートがそのまま返す。ここが崩れると client は理由を失う。
+  const rejected = {
+    ok: false as const,
+    status: 400 as const,
+    error: "lines must be an integer between 1 and 4294967295",
+  };
   for (const lines of ["0", "-1", "1.5", "abc", "4294967296"]) {
-    const parsed = parseOutputQuery(new URLSearchParams({ lines }));
-    expect(parsed.ok).toBe(false);
+    expect(parseOutputQuery(new URLSearchParams({ lines }))).toEqual(rejected);
   }
   expect(parseOutputQuery(new URLSearchParams("lines=1"))).toEqual({
     ok: true,
