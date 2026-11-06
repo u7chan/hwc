@@ -983,11 +983,14 @@ button {
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   line-height: var(--line-body);
+  /* パスなどの区切りの無い長い文字列で、ダイアログごと横に広がらないようにする。 */
+  overflow-wrap: anywhere;
 }
 
 .hwc-dialog-id {
   color: var(--color-text);
   font-family: var(--font-mono);
+  overflow-wrap: anywhere;
 }
 
 .hwc-dialog-actions {
