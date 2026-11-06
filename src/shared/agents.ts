@@ -8,6 +8,15 @@ export type ModelAgentKind = "pi" | "codex" | "opencode";
 
 export type AgentModel = { provider: string; id: string };
 
+export function isAgentEffort(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim() !== "" &&
+    value.length <= 128 &&
+    !/\p{Cc}/u.test(value)
+  );
+}
+
 export function supportsModelSelection(agent: unknown): agent is ModelAgentKind {
   return agent === "pi" || agent === "codex" || agent === "opencode";
 }

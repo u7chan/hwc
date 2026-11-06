@@ -35,7 +35,12 @@ export async function createPane(
         if (!models || !supportsModelSelection(request.agent))
           throw new Error("Model selection is unavailable");
         const directory = await panes.directory({ paneId: created.paneId });
-        args = await models.startArgs(request.agent, request.model, directory);
+        args = await models.startArgs(
+          request.agent,
+          request.model,
+          directory,
+          request.effort ?? null,
+        );
       }
       if (request.agent === "codex") {
         // 共有デーモンのフックは別ペインの環境を引き継ぎ、会話 ID を誤ったペインに報告する。

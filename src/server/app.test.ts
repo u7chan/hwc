@@ -2269,6 +2269,7 @@ test.each(["pi", "codex", "opencode"] as const)(
       store: createFakeStore(state),
       panes: createFakePanes(),
       models: {
+        efforts: async () => [],
         list: async (...args) => {
           seen.push(args);
           return [{ provider: "example", id: "beam" }];
@@ -2284,6 +2285,137 @@ test.each(["pi", "codex", "opencode"] as const)(
     expect(seen).toEqual([[agent, "/project"]]);
   },
 );
+
+test.each(["pi", "codex", "opencode"] as const)(
+  "GET /api/panes/:id/efforts reads %s choices for the explicit model in the pane's directory",
+  async (agent) => {
+    const seen: unknown[] = [];
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(state),
+      panes: createFakePanes(),
+      models: {
+        list: async () => [],
+        efforts: async (...args) => {
+          seen.push(args);
+          return ["eco", "max"];
+        },
+        startArgs: async () => {
+          throw new Error("Reading must not create a session");
+        },
+      },
+    });
+    const query = new URLSearchParams({ agent, provider: "example", model: "@demo/beam" });
+    const response = await app.request(`/api/panes/w1:p1/efforts?${query}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ efforts: ["eco", "max"] });
+    expect(seen).toEqual([[agent, { provider: "example", id: "@demo/beam" }, "/project"]]);
+  },
+);
+
+test.each([
+  "agent=claude&provider=example&model=beam",
+  "agent=pi",
+  "agent=pi&provider=example&model=--help",
+])("GET /api/panes/:id/efforts rejects an invalid or missing model: %s", async (query) => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes(),
+  });
+  expect((await app.request(`/api/panes/w1:p1/efforts?${query}`)).status).toBe(400);
+});
+
+test("GET /api/panes/:id/efforts preserves unsupported choices and hides upstream errors", async () => {
+  let fail = false;
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes(),
+    models: {
+      list: async () => [],
+      efforts: async () => {
+        if (fail) throw new Error("/private/path: credentials");
+        return [];
+      },
+      startArgs: async () => [],
+    },
+  });
+  const path = "/api/panes/w1:p1/efforts?agent=pi&provider=example&model=beam";
+  const unsupported = await app.request(path);
+  expect(unsupported.status).toBe(200);
+  expect(await unsupported.json()).toEqual({ efforts: [] });
+  fail = true;
+  const unavailable = await app.request(path);
+  expect(unavailable.status).toBe(502);
+  expect(await unavailable.json()).toEqual({ error: "efforts_unavailable" });
+});
+
+test("GET /api/panes/:id/efforts requires an existing pane, a snapshot, and a model client", async () => {
+  const options = {
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes(),
+  };
+  const app = createApp(options);
+  const query = "?agent=pi&provider=example&model=beam";
+  expect((await app.request(`/api/panes/w1:p9/efforts${query}`)).status).toBe(404);
+  expect((await app.request(`/api/panes/w1:p1/efforts${query}`)).status).toBe(502);
+  const unavailable = createApp({
+    ...options,
+    store: createFakeStore(null, new Error("unavailable")),
+  });
+  expect((await unavailable.request(`/api/panes/w1:p1/efforts${query}`)).status).toBe(502);
+});
+
+test.each(["pi", "codex", "opencode"] as const)(
+  "POST /api/panes/:id/split passes the selected %s effort only to the new pane",
+  async (kind) => {
+    const model = { provider: "example", id: "beam" };
+    const seen: unknown[] = [];
+    const app = createApp({
+      chat: createFakeChat(),
+      store: createFakeStore(state),
+      panes: createFakePanes({
+        split: async () => ({ paneId: "w1:p2" }),
+        startAgent: async (options) => {
+          seen.push(options);
+        },
+      }),
+      models: {
+        list: async () => [],
+        efforts: async () => [],
+        startArgs: async (...args) => {
+          expect(args).toEqual([kind, model, "/project", "max"]);
+          return ["fixture-args"];
+        },
+      },
+    });
+    const response = await postSplit(app, "w1:p1", { agent: kind, model, effort: "max" });
+    expect(response.status).toBe(200);
+    expect(seen).toEqual([
+      {
+        paneId: "w1:p2",
+        kind,
+        name: "hwc-w1-p2",
+        args: [...(kind === "codex" ? ["--no-daemon"] : []), "fixture-args"],
+      },
+    ]);
+  },
+);
+
+test("POST /api/panes/:id/split rejects effort without a model before creating anything", async () => {
+  const app = createApp({
+    chat: createFakeChat(),
+    store: createFakeStore(state),
+    panes: createFakePanes({
+      split: async () => {
+        throw new Error("Must not split");
+      },
+    }),
+  });
+  expect((await postSplit(app, "w1:p1", { agent: "pi", effort: "high" })).status).toBe(400);
+});
 
 test.each(["claude", "unknown", ""])(
   "GET /api/panes/:id/models rejects unsupported agent %s",
@@ -2304,6 +2436,7 @@ test("GET /api/panes/:id/models does not expose upstream errors or paths", async
     store: createFakeStore(state),
     panes: createFakePanes(),
     models: {
+      efforts: async () => [],
       list: async () => {
         throw new Error("/private/path: credential failure");
       },
@@ -2346,6 +2479,7 @@ test.each(["pi", "codex"] as const)(
         },
       }),
       models: {
+        efforts: async () => [],
         list: async () => [model],
         startArgs: async (agent, selected, directory) => {
           expect({ agent, selected, directory }).toEqual({

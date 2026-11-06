@@ -291,3 +291,194 @@ test("the OpenCode transport reads models and posts the selected model to sessio
     server.stop(true);
   }
 });
+
+test("Pi effort discovery uses the selected provider/model and directory, not a common scale", async () => {
+  const seen: unknown[] = [];
+  const client = createAgentModelsClient({
+    piModels: async () => table,
+    piEfforts: async (...args) => {
+      seen.push(args);
+      return ["minimal", "high", "max"];
+    },
+  });
+  expect(await client.efforts("pi", model, "/project")).toEqual(["minimal", "high", "max"]);
+  expect(await client.startArgs("pi", model, "/new-project", "max")).toEqual([
+    "--model",
+    "example/beam",
+    "--thinking",
+    "max",
+  ]);
+  expect(seen).toEqual([
+    ["/project", model],
+    ["/new-project", model],
+  ]);
+  await expect(client.startArgs("pi", model, "/new-project", "low")).rejects.toThrow("effort");
+});
+
+test("default Pi effort does not fetch capabilities or pass a thinking override", async () => {
+  const client = createAgentModelsClient({
+    piModels: async () => table,
+    piEfforts: async () => {
+      throw new Error("must not read efforts");
+    },
+  });
+  expect(await client.startArgs("pi", model, "/project", null)).toEqual([
+    "--model",
+    "example/beam",
+  ]);
+});
+
+test("Pi off is an explicit supported value, not an alias for the CLI default", async () => {
+  const client = createAgentModelsClient({
+    piModels: async () => table,
+    piEfforts: async () => ["off", "high"],
+  });
+  expect(await client.startArgs("pi", model, "/project", "off")).toEqual([
+    "--model",
+    "example/beam",
+    "--thinking",
+    "off",
+  ]);
+});
+
+test("Codex exposes only the selected model's returned effort values and passes a one-shot config override", async () => {
+  const { read } = codexReader({
+    provider: "example",
+    pages: [
+      {
+        data: [
+          {
+            model: "beam",
+            supportedReasoningEfforts: [{ reasoningEffort: "none" }, { reasoningEffort: "xhigh" }],
+          },
+          { model: "other", supportedReasoningEfforts: [{ reasoningEffort: "low" }] },
+        ],
+      },
+    ],
+  });
+  const client = createAgentModelsClient({ codex: read });
+  expect(await client.efforts("codex", model, "/project")).toEqual(["none", "xhigh"]);
+  expect(await client.startArgs("codex", model, "/project", "xhigh")).toEqual([
+    "--model",
+    "beam",
+    "--config",
+    'model_reasoning_effort="xhigh"',
+  ]);
+  expect(await client.startArgs("codex", model, "/project", "none")).toEqual([
+    "--model",
+    "beam",
+    "--config",
+    'model_reasoning_effort="none"',
+  ]);
+  await expect(client.startArgs("codex", model, "/project", "low")).rejects.toThrow("effort");
+  await expect(
+    client.efforts("codex", { ...model, provider: "other" }, "/project"),
+  ).rejects.toThrow();
+});
+
+test.each(
+  [undefined, null, [{ reasoningEffort: "" }], [{ reasoningEffort: 1 }]].map(
+    (supportedReasoningEfforts) => ({ supportedReasoningEfforts }),
+  ),
+)(
+  "missing or malformed Codex effort metadata is unavailable: %j",
+  async ({ supportedReasoningEfforts }) => {
+    const { read } = codexReader({
+      provider: "example",
+      pages: [{ data: [{ model: "beam", supportedReasoningEfforts }] }],
+    });
+    await expect(
+      createAgentModelsClient({ codex: read }).efforts("codex", model, "/project"),
+    ).rejects.toThrow();
+  },
+);
+
+test("an explicit Codex effort is never silently replaced when the catalog changes", async () => {
+  let values = ["high"];
+  const read: CodexReader = async (_directory, run) =>
+    run(async (method) =>
+      method === "config/read"
+        ? { config: { model_provider: "example" } }
+        : {
+            data: [
+              {
+                model: "beam",
+                supportedReasoningEfforts: values.map((reasoningEffort) => ({ reasoningEffort })),
+              },
+            ],
+          },
+    );
+  const client = createAgentModelsClient({ codex: read });
+  expect(await client.efforts("codex", model, "/project")).toEqual(["high"]);
+  values = ["low"];
+  await expect(client.startArgs("codex", model, "/project", "high")).rejects.toThrow("effort");
+});
+
+test("OpenCode keeps custom variant names and applies one only to the new session", async () => {
+  const bodies: unknown[] = [];
+  const client = createAgentModelsClient({
+    loadService: async () => service,
+    request: async (_service, path, _timeout, body) => {
+      if (path.startsWith("/api/model"))
+        return {
+          data: [
+            {
+              providerID: "example",
+              id: "beam",
+              enabled: true,
+              variants: [{ id: "eco" }, { id: "じっくり review" }],
+            },
+            { providerID: "other", id: "beam", enabled: true, variants: [{ id: "high" }] },
+          ],
+        };
+      bodies.push(body);
+      return { data: { id: "ses_fixture" } };
+    },
+  });
+  expect(await client.efforts("opencode", model, "/project")).toEqual(["eco", "じっくり review"]);
+  expect(await client.startArgs("opencode", model, "/project", "じっくり review")).toEqual([
+    "--session",
+    "ses_fixture",
+  ]);
+  expect(bodies).toEqual([
+    {
+      model: { providerID: "example", id: "beam", variant: "じっくり review" },
+      location: { directory: "/project" },
+    },
+  ]);
+  await expect(client.startArgs("opencode", model, "/project", "high")).rejects.toThrow("effort");
+  expect(bodies).toHaveLength(1);
+});
+
+test.each(
+  [undefined, null, [{ id: "" }], [{ id: "high\nexit" }], [{ id: 1 }]].map((variants) => ({
+    variants,
+  })),
+)("missing or malformed OpenCode variants are unavailable: %j", async ({ variants }) => {
+  const client = createAgentModelsClient({
+    loadService: async () => service,
+    request: async () => ({
+      data: [{ providerID: "example", id: "beam", enabled: true, variants }],
+    }),
+  });
+  await expect(client.efforts("opencode", model, "/project")).rejects.toThrow();
+});
+
+test.each(["codex", "opencode"] as const)(
+  "%s distinguishes unsupported effort from unavailable metadata",
+  async (agent) => {
+    const { read } = codexReader({
+      provider: "example",
+      pages: [{ data: [{ model: "beam", supportedReasoningEfforts: [] }] }],
+    });
+    const client = createAgentModelsClient({
+      codex: read,
+      loadService: async () => service,
+      request: async () => ({
+        data: [{ providerID: "example", id: "beam", enabled: true, variants: [] }],
+      }),
+    });
+    expect(await client.efforts(agent, model, "/project")).toEqual([]);
+    await expect(client.startArgs(agent, model, "/project", "high")).rejects.toThrow("effort");
+  },
+);

@@ -13,6 +13,7 @@ import {
   type AgentKind,
   type AgentModel,
   type ModelAgentKind,
+  isAgentEffort,
   isAgentModel,
 } from "../shared/agents";
 import { isAttachmentName } from "../shared/attachments";
@@ -389,6 +390,7 @@ export type CreatePaneRequest = {
   name: string | null;
   agent: AgentKind | null;
   model: AgentModel | null;
+  effort: string | null;
 };
 
 export function toAgentModels(value: unknown): AgentModel[] | null {
@@ -410,6 +412,34 @@ export async function readAgentModels(
     });
     if (!response.ok) return null;
     return toAgentModels(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+export function toAgentEfforts(value: unknown): string[] | null {
+  if (typeof value !== "object" || value === null) return null;
+  const efforts = (value as { efforts?: unknown }).efforts;
+  if (!Array.isArray(efforts) || !efforts.every(isAgentEffort)) return null;
+  return [...new Set(efforts)];
+}
+
+export async function readAgentEfforts(
+  paneId: string,
+  agent: ModelAgentKind,
+  model: AgentModel,
+  signal: AbortSignal,
+): Promise<string[] | null> {
+  try {
+    const input = {
+      ...paneParam(paneId),
+      query: { agent, provider: model.provider, model: model.id },
+    };
+    const response = await client.api.panes[":id"].efforts.$get(input, {
+      init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
+    });
+    if (!response.ok) return null;
+    return toAgentEfforts(await response.json());
   } catch {
     return null;
   }
@@ -460,8 +490,8 @@ export function toCreateError(value: unknown): { error: CreatePaneFailure; paneI
 // クライアントだけ諦めて、再試行で 2 枚目を作ってしまう。
 export const CREATE_TIMEOUT_MS = 65_000;
 
-// モデル指定時は作成済みペインの cwd と候補を確認し、OpenCode はセッションも作る。
-export const MODEL_CREATE_TIMEOUT_MS = 100_000;
+// モデル指定時は cwd と候補を確認し、effort 指定なら対応段階も再取得する。
+export const MODEL_CREATE_TIMEOUT_MS = 120_000;
 
 export async function createPane(
   paneId: string,

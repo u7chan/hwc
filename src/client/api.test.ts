@@ -18,6 +18,7 @@ import {
   toCreatedPane,
   toPaneRead,
   toAgentModels,
+  toAgentEfforts,
   MODEL_CREATE_TIMEOUT_MS,
   toPaneInteraction,
 } from "./api";
@@ -46,7 +47,33 @@ test("model candidates with namespaced @ IDs remain selectable", () => {
 });
 
 test("model-specific creation also covers candidate lookup and session preparation", () => {
-  expect(MODEL_CREATE_TIMEOUT_MS).toBeGreaterThan(CREATE_TIMEOUT_MS + 33_000);
+  expect(MODEL_CREATE_TIMEOUT_MS).toBeGreaterThan(CREATE_TIMEOUT_MS + 53_000);
+});
+
+test("effort choices preserve native names and order rather than translating them to a common scale", () => {
+  expect(toAgentEfforts({ efforts: ["none", "xhigh", "max", "じっくり review", "xhigh"] })).toEqual(
+    ["none", "xhigh", "max", "じっくり review"],
+  );
+  expect(toAgentEfforts({ efforts: [] })).toEqual([]);
+  for (const body of [
+    null,
+    {},
+    { efforts: "high" },
+    { efforts: [null] },
+    { efforts: [""] },
+    { efforts: ["a\nb"] },
+  ]) {
+    expect(toAgentEfforts(body)).toBeNull();
+  }
+});
+
+test("the effort request keeps the pane id and namespaced model in their own URL parts", () => {
+  const url = api.api.panes[":id"].efforts.$url({
+    ...paneParam("w1/p2"),
+    query: { agent: "pi", provider: "example", model: "@demo/beam" },
+  });
+  expect(url.pathname).toBe("/api/panes/w1%2Fp2/efforts");
+  expect(url.searchParams.get("model")).toBe("@demo/beam");
 });
 
 test("the JSON pane routes expose their media type rejection through RPC", () => {

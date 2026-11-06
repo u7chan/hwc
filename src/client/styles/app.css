@@ -3608,11 +3608,13 @@ p.hwc-compaction,
   line-height: var(--line-body);
 }
 
-.hwc-create-model {
+.hwc-create-model,
+.hwc-create-effort {
   margin-top: var(--space-4);
 }
 
-.hwc-create-model .hwc-create-field {
+.hwc-create-model .hwc-create-field,
+.hwc-create-effort .hwc-create-field {
   margin-bottom: 0;
 }
 
