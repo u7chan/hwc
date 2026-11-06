@@ -23,7 +23,14 @@ export function createLaunchModels() {
         selections.delete(paneId);
         return snapshot;
       }
-      return { ...snapshot, model: selection.model, effort: snapshot.effort ?? selection.effort };
+      return {
+        ...snapshot,
+        // 補完の有無で本文が変わるので etag も変える。補完前の etag を持ったクライアントに
+        // 304 を返し、古い表示（モデル無し）を残させないため。
+        etag: `${snapshot.etag}+launch`,
+        model: selection.model,
+        effort: snapshot.effort ?? selection.effort,
+      };
     },
   };
 }
