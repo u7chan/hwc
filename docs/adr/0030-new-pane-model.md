@@ -13,7 +13,7 @@ Herdr の `agent.start` は追加の起動引数を `args` 配列で受ける。
 
 - ADR 0027 のダイアログで、エージェントのカードの下に「モデル」のプルダウンを置く。初期値は「デフォルトモデル」
 - Pi / Codex / OpenCode はモデルを選べる。Claude は「デフォルトモデル」のまま選択不可。シェルにはモデル欄を出さない。エージェントを変えたときはモデル指定を解除する
-- 未指定なら起動引数を追加せず、従来どおり CLI の既定に任せる。既定モデルの保存、既存セッションの変更、effort の選択はしない
+- 未指定ならモデルの起動引数を追加せず、CLI の既定に任せる。Codex のモデル以外の起動引数は [ADR 0031](0031-codex-chat.md) に従う。既定モデルの保存、既存セッションの変更、effort の選択はしない
 - 候補は `GET /api/panes/:id/models?agent=pi|codex|opencode` で取得し、`{ models: [{ provider, id }] }` を返す。cwd とサービス認証は BFF の中だけで扱う
   - 対象ペインの cwd は Herdr の `pane.get` から読む
   - Pi はその cwd で `pi --offline --list-models` を実行し、利用可能一覧を読む。候補取得用プロセスから `HERDR_*` を外し、呼び出し元のペインの状態を報告させない
@@ -22,7 +22,7 @@ Herdr の `agent.start` は追加の起動引数を `args` 配列で受ける。
   - 取得中・取得失敗・候補なしではプルダウンを無効にして理由を示す。「デフォルトモデル」での作成は妨げない
 - モデル指定時だけ、分割後の新しいペインの実際の cwd でも候補を確認する。選択が無効になっていたら別モデルへ黙って置き換えず、ADR 0027 の起動失敗として名前付きシェルを残す
   - Pi は `agent.start` に `args: ["--model", "provider/id"]` を渡す
-  - Codex は `args: ["--model", "id"]` を渡す。再取得した cwd の provider と候補の組が一致することを確認し、既定の provider やモデル設定は保存しない
+  - Codex は `--model id` を追加する。再取得した cwd の provider と候補の組が一致することを確認し、既定の provider やモデル設定は保存しない
   - OpenCode は `POST /api/session` に `{ model: { providerID, id }, location: { directory } }` を送り、返された新規セッションを `args: ["--session", "id"]` で開く。プロンプト送信には引き続き Herdr を使う
 - モデル指定時のクライアント期限は、候補の確認とセッション作成を含めて 100 秒にする。未指定時は ADR 0027 の 65 秒のまま。作成中・部分成功・再送抑止も同 ADR に従う
 

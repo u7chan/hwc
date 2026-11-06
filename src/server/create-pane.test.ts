@@ -71,6 +71,7 @@ test.each(["pi", "claude", "codex", "opencode"] as const)(
       paneId: "w1:p3",
       kind: agent,
       name: "hwc-w1-p3",
+      ...(agent === "codex" ? { args: ["--no-daemon"] } : {}),
     });
     expect(panes.directory).not.toHaveBeenCalled();
     expect(models.list).not.toHaveBeenCalled();
@@ -85,7 +86,7 @@ test.each(["pi", "codex", "opencode"] as const)(
     const model = { provider: "example", id: "beam" };
     const models = {
       list: mock(async () => [model]),
-      startArgs: mock(async () => ["--model", "example/beam"]),
+      startArgs: mock(async () => ["--model", agent === "codex" ? "beam" : "example/beam"]),
     };
     const result = await createPane(panes, "w1:p1", { name: "実装", agent, model }, models);
     expect(result).toEqual({ ok: true, paneId: "w1:p3" });
@@ -95,7 +96,11 @@ test.each(["pi", "codex", "opencode"] as const)(
       paneId: "w1:p3",
       kind: agent,
       name: "hwc-w1-p3",
-      args: ["--model", "example/beam"],
+      args: [
+        ...(agent === "codex" ? ["--no-daemon"] : []),
+        "--model",
+        agent === "codex" ? "beam" : "example/beam",
+      ],
     });
   },
 );

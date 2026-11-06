@@ -37,6 +37,10 @@ export async function createPane(
         const directory = await panes.directory({ paneId: created.paneId });
         args = await models.startArgs(request.agent, request.model, directory);
       }
+      if (request.agent === "codex") {
+        // 共有デーモンのフックは別ペインの環境を引き継ぎ、会話 ID を誤ったペインに報告する。
+        args = ["--no-daemon", ...(args ?? [])];
+      }
       await panes.startAgent({
         paneId: created.paneId,
         kind: request.agent,
