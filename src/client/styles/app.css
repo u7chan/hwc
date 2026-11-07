@@ -283,25 +283,22 @@ button {
   background: var(--color-raised);
 }
 
-/* 選んだ側へつまみが滑る。3 等分の 1 つをそのまま覆うので、幅は 3 分の 1 で足りる。 */
+/* 選んだ側へつまみが滑る。2 等分の 1 つをそのまま覆うので、幅は 2 分の 1 で足りる。 */
 .hwc-scope-thumb {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: calc(100% / 3);
+  width: calc(100% / 2);
   border-radius: calc(var(--radius-control) - 1px);
   background: var(--color-surface);
   pointer-events: none;
   transition: transform 180ms ease;
 }
 
+/* 既定の「すべて」は先頭なので、all ではつまみを動かさない。 */
 .hwc-scope[data-scope="active"] .hwc-scope-thumb {
   transform: translateX(100%);
-}
-
-.hwc-scope[data-scope="all"] .hwc-scope-thumb {
-  transform: translateX(200%);
 }
 
 .hwc-scope-option {
@@ -1557,7 +1554,7 @@ button {
   transform: scale(0.9);
 }
 
-/* 触れる画面には hover が無いので、ID は常に出す。 */
+/* ポインタの画面では、ID は見出しに乗ったときだけ出す。 */
 @media (hover: hover) {
   .hwc-pane-id {
     opacity: 0;
@@ -1578,6 +1575,18 @@ button {
   .hwc-pane-head[data-bare="true"] .hwc-pane-id {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* 狭い画面では ID とコピーをメニューに任せ、見出しの幅をブランチに回す。 */
+@media (max-width: 899px) {
+  .hwc-pane-head .hwc-pane-id {
+    display: none;
+  }
+
+  /* ID の margin-left: auto が無くなるので、メニューを右端に寄せる。 */
+  .hwc-pane-head .hwc-pane-more {
+    margin-left: auto;
   }
 }
 
