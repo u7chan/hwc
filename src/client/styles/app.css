@@ -36,8 +36,9 @@ body {
 .hwc-input-field,
 .hwc-input-model,
 .hwc-input-effort,
+.hwc-model-name,
 .hwc-context-text,
-.hwc-context-tooltip {
+.hwc-hint-panel {
   user-select: text;
   -webkit-user-select: text;
   -webkit-touch-callout: default;
@@ -3146,6 +3147,21 @@ p.hwc-compaction,
   white-space: nowrap;
 }
 
+/* モデルと effort は押すと詳細を開く。値を並べるだけの行なので、面は付けず文字をそのまま置く。 */
+.hwc-agent-info {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
 /* 記号は枠を付けず、モデル名の手前に小さく置く。 */
 .hwc-input-agent {
   flex: none;
@@ -3169,7 +3185,7 @@ p.hwc-compaction,
   line-height: 1.25rem;
 }
 
-.hwc-context-wrap {
+.hwc-hint-wrap {
   position: relative;
   flex: none;
 }
@@ -3188,7 +3204,7 @@ p.hwc-compaction,
   cursor: pointer;
 }
 
-.hwc-context-tooltip {
+.hwc-hint-panel {
   position: absolute;
   z-index: 5;
   right: 0;
@@ -3217,44 +3233,92 @@ p.hwc-compaction,
     visibility 0s linear 150ms;
 }
 
-.hwc-context-tooltip[data-placement="below"] {
+.hwc-hint-panel[data-placement="below"] {
   top: 100%;
   bottom: auto;
 }
 
-.hwc-context-tooltip > * {
+.hwc-hint-panel > * {
   flex: none;
 }
 
-.hwc-context-tooltip[data-open="true"] {
+.hwc-hint-panel[data-open="true"] {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
   transition-delay: 0s;
 }
 
-.hwc-context-tooltip-title {
+.hwc-hint-title {
   margin-bottom: var(--space-1);
   font-weight: 600;
 }
 
-.hwc-context-tooltip-row {
+.hwc-hint-row {
   display: flex;
   justify-content: space-between;
   gap: var(--space-4);
 }
 
-.hwc-context-tooltip-row > :last-child {
+.hwc-hint-row > :last-child {
   font-variant-numeric: tabular-nums;
 }
 
-.hwc-context-tooltip-note {
+/* 名前は省略せず折り返して全部出す。読み上げとコピーの対象でもある。 */
+.hwc-model-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hwc-model-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+}
+
+/* 記号は小さく保ち、触れる範囲だけ 44px に広げる。 */
+.hwc-model-copy {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hwc-model-copy::after {
+  content: "";
+  position: absolute;
+  inset: calc((var(--space-6) - var(--tap)) / 2);
+}
+
+.hwc-model-copy:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-model-copy[data-copied="true"] {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.hwc-hint-note {
   margin-top: var(--space-1);
   color: var(--color-secondary);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hwc-context-tooltip {
+  .hwc-hint-panel {
     transition: none;
   }
 }
