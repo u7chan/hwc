@@ -32,6 +32,9 @@ export async function writeCodexThread(
   );
 }
 
+// 起動に失敗する架空モデル。新しいペインやワークツリーの部分成功を、実 CLI に触れずに確かめる。
+export const START_FAILS_MODEL_ID = "@demo/start-fails";
+
 export const STARTUP_MODELS = [
   {
     provider: "example",
@@ -52,6 +55,11 @@ export const STARTUP_MODELS = [
     },
   },
   { provider: "example", id: "@demo/beam-small", efforts: { pi: [], codex: [], opencode: [] } },
+  {
+    provider: "example",
+    id: START_FAILS_MODEL_ID,
+    efforts: { pi: [], codex: [], opencode: [] },
+  },
 ];
 
 // 実在のユーザー名・リポジトリ名・パスを fixture に写さない。E2E のスクリーンショットは

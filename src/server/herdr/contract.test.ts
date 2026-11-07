@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type HerdrSnapshot, parsePaneRead, parseSnapshot } from "./contract";
+import { type HerdrSnapshot, parsePaneRead, parseSnapshot, parseWorktreeCreated } from "./contract";
 
 const snapshot: HerdrSnapshot = {
   focused_workspace_id: "w1",
@@ -230,4 +230,31 @@ test("parseSnapshot leaves a pane without an agent session as null", () => {
   });
 
   expect(parsed.panes?.[0]?.agent_session).toBeNull();
+});
+
+test("parseWorktreeCreated reads the new workspace and its first pane", () => {
+  expect(
+    parseWorktreeCreated({
+      type: "worktree_created",
+      workspace: { workspace_id: "w2", label: "hwc worktree/api" },
+      tab: { tab_id: "w2:t1" },
+      root_pane: { pane_id: "w2:p1", workspace_id: "w2" },
+      worktree: { repo_name: "hwc", is_linked_worktree: true },
+    }),
+  ).toEqual({ workspaceId: "w2", paneId: "w2:p1" });
+});
+
+test.each([
+  ["a result that is not a creation", { type: "worktree_opened" }],
+  ["a creation without the workspace", { type: "worktree_created", root_pane: {} }],
+  [
+    "a creation without the root pane",
+    { type: "worktree_created", workspace: { workspace_id: "w2" } },
+  ],
+  [
+    "a creation with an empty pane id",
+    { type: "worktree_created", workspace: { workspace_id: "w2" }, root_pane: { pane_id: "" } },
+  ],
+])("parseWorktreeCreated rejects %s", (_label, value) => {
+  expect(() => parseWorktreeCreated(value)).toThrow();
 });

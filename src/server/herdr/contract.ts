@@ -264,6 +264,23 @@ export function parsePaneSplit(value: unknown): { paneId: string } {
   return { paneId: expectId(pane.pane_id, "pane_info.pane.pane_id") };
 }
 
+export type WorktreeCreated = { workspaceId: string; paneId: string };
+
+// worktree.create は作った workspace / tab / root_pane / worktree のレコードを返す。
+// hwc が使うのは、新しいスペースの id と最初のペインの id だけ。
+export function parseWorktreeCreated(value: unknown): WorktreeCreated {
+  const record = expectRecord(value, "worktree_created");
+  if (record.type !== "worktree_created") {
+    throw new Error(`worktree_created.type must be worktree_created, got ${String(record.type)}`);
+  }
+  const workspace = expectRecord(record.workspace, "worktree_created.workspace");
+  const rootPane = expectRecord(record.root_pane, "worktree_created.root_pane");
+  return {
+    workspaceId: expectId(workspace.workspace_id, "worktree_created.workspace.workspace_id"),
+    paneId: expectId(rootPane.pane_id, "worktree_created.root_pane.pane_id"),
+  };
+}
+
 export function parsePaneDirectory(value: unknown, paneId: string): string {
   const record = expectRecord(value, "pane_info");
   const pane = expectRecord(record.pane, "pane_info.pane");

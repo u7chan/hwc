@@ -21,6 +21,11 @@ import {
   toAgentModels,
   toAgentEfforts,
   MODEL_CREATE_TIMEOUT_MS,
+  MODEL_CREATE_WORKTREE_TIMEOUT_MS,
+  CREATE_WORKTREE_TIMEOUT_MS,
+  canRetryWorktree,
+  toCreatedWorktree,
+  toWorktreeError,
   toPaneInteraction,
 } from "./api";
 
@@ -389,4 +394,57 @@ test("a create error keeps the pane id only when the split already happened", ()
 
 test("the create timeout leaves room for the agent start wait", () => {
   expect(CREATE_TIMEOUT_MS).toBeGreaterThan(59_000);
+});
+
+test("the created worktree ids are read from the response", () => {
+  expect(toCreatedWorktree({ workspaceId: "w2", paneId: "w2:p1" })).toEqual({
+    workspaceId: "w2",
+    paneId: "w2:p1",
+  });
+  expect(toCreatedWorktree({ workspaceId: "w2" })).toBeNull();
+  expect(toCreatedWorktree({ workspaceId: "", paneId: "w2:p1" })).toBeNull();
+  expect(toCreatedWorktree({ workspaceId: "w2", paneId: 1 })).toBeNull();
+  expect(toCreatedWorktree(null)).toBeNull();
+});
+
+test("a worktree error keeps the ids only when the checkout already exists", () => {
+  expect(
+    toWorktreeError({ error: "agent_start_failed", workspaceId: "w2", paneId: "w2:p1" }),
+  ).toEqual({ error: "agent_start_failed", workspaceId: "w2", paneId: "w2:p1" });
+  expect(toWorktreeError({ error: "worktree_open_failed" })).toEqual({
+    error: "worktree_open_failed",
+    workspaceId: null,
+    paneId: null,
+  });
+  expect(toWorktreeError({ error: "herdr_unavailable" })).toEqual({
+    error: "herdr_unavailable",
+    workspaceId: null,
+    paneId: null,
+  });
+  expect(toWorktreeError({ error: "pane_limit" })).toEqual({
+    error: "failed",
+    workspaceId: null,
+    paneId: null,
+  });
+  expect(toWorktreeError(null)).toEqual({ error: "failed", workspaceId: null, paneId: null });
+});
+
+test("only an explicit creation failure or a busy checkout can be retried", () => {
+  // Herdr が作成失敗を明示した場合と、同じチェックアウトへの同時操作だけ。
+  expect(canRetryWorktree("worktree_create_failed")).toBe(true);
+  expect(canRetryWorktree("worktree_operation_in_progress")).toBe(true);
+  // 作成できたか確認できない失敗は、再送で 2 つ目のワークツリーを作りかねない。
+  expect(canRetryWorktree("worktree_open_failed")).toBe(false);
+  expect(canRetryWorktree("herdr_unavailable")).toBe(false);
+  expect(canRetryWorktree("timeout")).toBe(false);
+  expect(canRetryWorktree("failed")).toBe(false);
+  // 起点を変える必要がある失敗は、同じ入力を送り直しても通らない。
+  expect(canRetryWorktree("linked_worktree_source")).toBe(false);
+  expect(canRetryWorktree("not_git_worktree")).toBe(false);
+  expect(canRetryWorktree("workspace_not_found")).toBe(false);
+});
+
+test("the worktree timeout covers the creation and the agent start", () => {
+  expect(CREATE_WORKTREE_TIMEOUT_MS).toBeGreaterThan(90_000);
+  expect(MODEL_CREATE_WORKTREE_TIMEOUT_MS).toBeGreaterThan(CREATE_WORKTREE_TIMEOUT_MS + 50_000);
 });

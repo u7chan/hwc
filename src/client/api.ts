@@ -409,7 +409,6 @@ export async function closePane(paneId: string, action: PaneCloseAction): Promis
 
 // チェックアウトの削除は git の走査を含む。BFF のソケット期限（60 秒）より長く待つ。
 export const REMOVE_WORKTREE_TIMEOUT_MS = 70_000;
-
 // 消えたワークツリーは目的の状態に達している。close と同じく 404 は成功として扱う。
 export async function removeWorktree(workspaceId: string): Promise<CloseOutcome> {
   try {
@@ -546,6 +545,13 @@ export const CREATE_TIMEOUT_MS = 65_000;
 // モデル指定時は cwd と候補を確認し、effort 指定なら対応段階も再取得する。
 export const MODEL_CREATE_TIMEOUT_MS = 120_000;
 
+// ワークツリー作成は 1 リクエストで worktree.create（ソケット期限 60 秒）とエージェント起動
+// （30 秒）を行う。ここを短くすると、作成済みのワークツリーを見失って再送してしまう。
+export const CREATE_WORKTREE_TIMEOUT_MS = 120_000;
+
+// モデル指定時は root pane の cwd で候補・effort を再検証する。
+export const MODEL_CREATE_WORKTREE_TIMEOUT_MS = 180_000;
+
 export async function createPane(
   paneId: string,
   request: CreatePaneRequest,
@@ -569,5 +575,101 @@ export async function createPane(
     // 返す。reject の名前ではなく signal 自体を見て、ペインができているか確認できない
     // 期限切れを通常の失敗と分ける。
     return { ok: false, error: signal.aborted ? "timeout" : "failed", paneId: null };
+  }
+}
+
+export type CreateWorktreeFailure =
+  | "agent_start_failed"
+  | "pane_rename_failed"
+  | "worktree_create_failed"
+  | "worktree_open_failed"
+  | "worktree_operation_in_progress"
+  | "linked_worktree_source"
+  | "not_git_worktree"
+  | "workspace_not_found"
+  | "invalid_request"
+  | "herdr_unavailable"
+  | "timeout"
+  | "failed";
+
+export type CreateWorktreeOutcome =
+  | { ok: true; workspaceId: string; paneId: string }
+  | { ok: false; error: CreateWorktreeFailure; workspaceId: string | null; paneId: string | null };
+
+const WORKTREE_FAILURES: readonly CreateWorktreeFailure[] = [
+  "agent_start_failed",
+  "pane_rename_failed",
+  "worktree_create_failed",
+  "worktree_open_failed",
+  "worktree_operation_in_progress",
+  "linked_worktree_source",
+  "not_git_worktree",
+  "workspace_not_found",
+  "invalid_request",
+  "herdr_unavailable",
+];
+
+function toId(value: unknown): string | null {
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+// 作成の目的は新しいワークツリーの最初のペイン。どちらかの id が無いと開けないので失敗にする。
+export function toCreatedWorktree(value: unknown): { workspaceId: string; paneId: string } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as { workspaceId?: unknown; paneId?: unknown };
+  const workspaceId = toId(record.workspaceId);
+  const paneId = toId(record.paneId);
+  return workspaceId === null || paneId === null ? null : { workspaceId, paneId };
+}
+
+// 部分成功はペインが既にある。ID の有無で、再送してよい失敗かを見分ける。
+export function toWorktreeError(value: unknown): {
+  error: CreateWorktreeFailure;
+  workspaceId: string | null;
+  paneId: string | null;
+} {
+  if (typeof value !== "object" || value === null) {
+    return { error: "failed", workspaceId: null, paneId: null };
+  }
+  const record = value as { error?: unknown; workspaceId?: unknown; paneId?: unknown };
+  const error =
+    typeof record.error === "string" &&
+    WORKTREE_FAILURES.includes(record.error as CreateWorktreeFailure)
+      ? (record.error as CreateWorktreeFailure)
+      : "failed";
+  return { error, workspaceId: toId(record.workspaceId), paneId: toId(record.paneId) };
+}
+
+// Herdr が作成失敗を明示した場合と、同じチェックアウトへの同時操作だけは待って再送できる。
+// 期限切れ・通信断・worktree_open_failed は、チェックアウトができているか確認できない。
+export function canRetryWorktree(error: CreateWorktreeFailure): boolean {
+  return error === "worktree_create_failed" || error === "worktree_operation_in_progress";
+}
+
+export async function createWorktree(
+  workspaceId: string,
+  request: CreatePaneRequest,
+): Promise<CreateWorktreeOutcome> {
+  const signal = AbortSignal.timeout(
+    request.model === null ? CREATE_WORKTREE_TIMEOUT_MS : MODEL_CREATE_WORKTREE_TIMEOUT_MS,
+  );
+  try {
+    const input = { ...workspaceParam(workspaceId), json: request };
+    const response = await client.api.workspaces[":id"]["create-worktree"].$post(input, {
+      init: { signal },
+    });
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) return { ok: false, ...toWorktreeError(body) };
+    const created = toCreatedWorktree(body);
+    return created === null
+      ? { ok: false, error: "failed", workspaceId: null, paneId: null }
+      : { ok: true, ...created };
+  } catch {
+    return {
+      ok: false,
+      error: signal.aborted ? "timeout" : "failed",
+      workspaceId: null,
+      paneId: null,
+    };
   }
 }

@@ -46,11 +46,15 @@ bun run e2e:serve
 - `agent.start`
 - `agent.prompt`
 - `pane.close`
+- `worktree.create`
 - `worktree.remove`
 
 `pane.close` はスナップショットからペインを消して `pane.closed` を流す。`worktree.remove` は
 linked worktree のスペースをスナップショットから取り除き、`workspace.closed` を流す（実際の
-チェックアウトのフォルダには触らない）。`pane.split` は
+チェックアウトのフォルダには触らない）。`worktree.create` は起点スペースの worktree 情報から
+架空のチェックアウトパスを決め、リンクされたスペース・タブ・root pane をスナップショットに
+足して `workspace.created` / `pane.created` を流す（実際の `git worktree add` はしない）。
+`pane.split` は
 `target_pane_id` のタブにシェルペインを 1 枚足し、`pane_info` を返して `pane.created` を流す。
 `pane.layout` はそのタブのセルを等幅のグリッドとして返す（E2E 用の固定形で、実際の分割方向は
 BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.updated` を流す。`agent.start` は
@@ -68,7 +72,7 @@ BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 OpenCode の未起動表示は、架空の `<root>/opencode/service.json` だけを一時退避してダイアログを開き、「OpenCode サービス未起動」と出ることを確認する。モデル欄は無効でもデフォルト起動は選べ、サービスの自動起動は行わない。接続情報を戻してダイアログを開き直すとモデル一覧が復帰することも確かめる。
 
-effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
+effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。`@demo/start-fails` は起動に失敗するモデルで、`agent.start` が `agent_spawn_failed` を返す。新しいペインやワークツリーの部分成功（シェルを残して理由を出す）を、実 CLI に触れずに確かめるために使う。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
 
 Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。初期化後の `config/read` / `model/list` / `thread/read` / `thread/turns/list` にだけ応答する。モデル指定した新規ペインは、そのモデルを架空の thread に記録する。入力は本番と同じ Herdr の `pane.send_input` 経由で受け、架空の user と assistant の item を追加する。チャット表示、送信後の確定、起動時のモデル引数を、実 Codex や実会話へ触れずに確認する。
 
@@ -90,6 +94,23 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 - 添付注記（`<attached_files>`）の無い `/new` と `/compact`（`/compact <指示>` を含む）。会話を残さないか、履歴を置き換える
 
 添付を持つペインで `Enter` が送信になるときは、常に本文の送信になる（[ADR 0018](adr/0018-pasted-image-attachments.md)）。タッチ端末では `Enter` が改行になる（[ADR 0037](adr/0037-enter-newline-on-touch.md)）。`/compact` と打っても添付と一緒に送れば本文として扱われるので、注記があるときはコマンドではなく通常本文として追記する。
+
+## ワークツリー作成
+
+スペース見出しの「…」から作るワークツリーは、次の手順で確かめる。
+
+1. `acme-dashboard`（リポジトリ本体）の見出しの「…」を開き、「新しいワークツリー」を選ぶ。
+   ダイアログの見出しが「新しいワークツリー」で、ブランチ名と保存先が Herdr 任せである旨が出る。
+2. そのまま「作成して起動」を押すと、架空 Herdr にリンクされたスペースが 1 つ増え、hwc が
+   その root pane を開く。入力欄のモデル表示は起動時の指定で補われる（ADR 0033）。
+3. linked worktree（`acme-dashboard (docs)`）の見出しのメニューには「新しいワークツリー」が無い。
+4. 4 ペインのタブを持つスペースでも、「新しいペイン」だけが無効で「新しいワークツリー」は押せる。
+   4 枚のタブは既存のダイアログで 2 枚追加して用意してよい。
+5. 部分成功は、モデルに `@demo/start-fails` を選んで作成すると確かめられる。ワークツリーと
+   root pane は残り、ダイアログに起動失敗の理由と「閉じる」だけが出る。閉じると新しい root pane
+   が表示される。
+6. `worktree_open_failed`（結果不明）はブラウザのリクエスト差し替えで
+   `/api/workspaces/:id/create-worktree` に 502 を返して確かめる。再送のボタンは出ず、「閉じる」だけになる。
 
 ## データを変える
 

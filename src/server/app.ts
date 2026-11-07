@@ -19,6 +19,7 @@ import type { SessionChatClient } from "./chat/contract";
 import { readActivity } from "./chat/activity";
 import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import { createPane } from "./create-pane";
+import { createWorktree } from "./create-worktree";
 import { createPaneCloser } from "./close-pane";
 import { createFolderTrust } from "./folder-trust";
 import { createLaunchModels } from "./launch-models";
@@ -96,6 +97,28 @@ export function createApp(options: {
   const paneFailure = (c: Context, error: unknown) => {
     if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
     if (isInvalidRequest(error)) return c.json({ error: "invalid_request" }, 400);
+    return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  // 作成できたか・再試行できるかで分ける。ソケットの期限切れ・切断・応答 parser の失敗は
+  // 作成結果が不明なので herdr_unavailable へ畳み、クライアントに再送させない。
+  const worktreeFailure = (c: Context, error: unknown) => {
+    if (error instanceof HerdrError) {
+      switch (error.code) {
+        case "worktree_create_failed":
+        case "worktree_open_failed":
+          return c.json({ error: error.code }, 502);
+        case "worktree_operation_in_progress":
+        case "linked_worktree_source":
+        case "not_git_worktree":
+          return c.json({ error: error.code }, 409);
+        case "workspace_not_found":
+          return c.json({ error: "workspace_not_found" }, 404);
+        case "invalid_params":
+        case "invalid_request":
+          return c.json({ error: "invalid_request" }, 400);
+      }
+    }
     return c.json({ error: "herdr_unavailable" }, 502);
   };
 
@@ -500,6 +523,43 @@ export function createApp(options: {
         return c.json({ paneId: result.paneId });
       } catch (error) {
         return paneFailure(c, error);
+      }
+    })
+    .post("/api/workspaces/:id/create-worktree", requireJson, async (c) => {
+      // 作成後のエージェント起動まで同じ指定を使う。body 無しは不正。
+      const body = await c.req.json().catch(() => null);
+      const request = parseSplitBody(body);
+      if (!request.ok) return c.json({ error: request.error }, request.status);
+
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const workspaceId = c.req.param("id");
+      const workspace = state.workspaces.find((item) => item.id === workspaceId);
+      if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
+      // 起点はリポジトリ本体に限る。worktree 情報が無いスペースも Herdr が拒否する。
+      if (workspace.worktree === null) return c.json({ error: "not_git_worktree" }, 409);
+      if (workspace.worktree.isLinkedWorktree) {
+        return c.json({ error: "linked_worktree_source" }, 409);
+      }
+
+      try {
+        const result = await createWorktree(worktrees, panes, workspaceId, request.value, models);
+        // 分割 API と同じく、名前の付け直しに失敗してもエージェントは起動している。
+        if ((result.ok || result.error === "pane_rename_failed") && request.value.model != null) {
+          launchModels.remember(result.paneId, request.value.model, request.value.effort ?? null);
+        }
+        if (!result.ok) {
+          // ワークツリーと root シェルは残っている。クライアントは理由を見せて閉じるだけにする。
+          return c.json(
+            { error: result.error, workspaceId: result.workspaceId, paneId: result.paneId },
+            502,
+          );
+        }
+        // 状態の取り直しは Herdr のイベント（workspace.created / pane.created）に任せる。
+        return c.json({ workspaceId: result.workspaceId, paneId: result.paneId });
+      } catch (error) {
+        return worktreeFailure(c, error);
       }
     })
     .post("/api/workspaces/:id/remove-worktree", requireJson, async (c) => {

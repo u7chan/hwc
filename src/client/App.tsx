@@ -281,8 +281,11 @@ export function App() {
   const [, confirmationChanged] = useReducer((revision: number) => revision + 1, 0);
   const [closing, setClosing] = useState<Closing | null>(null);
   const [removing, setRemoving] = useState<Removing | null>(null);
-  // 作成ダイアログの対象ペイン。空なら閉じている。
-  const [createTarget, setCreateTarget] = useState<string | null>(null);
+  // 作成ダイアログ。ワークツリーを作る場合は、モデル一覧の取得元になる起点スペースの ID も持つ。
+  const [creating, setCreating] = useState<{
+    paneId: string;
+    worktreeWorkspaceId: string | null;
+  } | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const closeInFlight = useRef(false);
@@ -468,8 +471,21 @@ export function App() {
 
   // 名前とエージェントはダイアログで決める。メニューは入口だけ。
   const openCreateDialog = (paneId: string) => {
-    setCreateTarget(paneId);
+    setCreating({ paneId, worktreeWorkspaceId: null });
     closeMenu();
+  };
+
+  // ワークツリーはリポジトリ本体のスペースからだけ作る。モデル一覧は起点スペースの先頭ペイン
+  // から読み、起動時の再検証は新しい root pane の cwd で BFF が行う。
+  const openCreateWorktreeDialog = () => {
+    if (menu === null || menu.target.kind !== "workspace" || state === null) return;
+    const workspace = state.workspaces.find((item) => item.id === menu.target.id);
+    if (workspace === undefined || workspace.worktree === null) return;
+    if (workspace.worktree.isLinkedWorktree) return;
+    const paneId = workspace.tabs.flatMap((tab) => tab.panes)[0]?.id;
+    if (paneId === undefined) return;
+    closeMenu();
+    setCreating({ paneId, worktreeWorkspaceId: workspace.id });
   };
 
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。
@@ -708,6 +724,9 @@ export function App() {
     menu?.target.kind === "workspace"
       ? (state?.workspaces.find((workspace) => workspace.id === menu.target.id) ?? null)
       : null;
+  // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする（ADR 0038）。
+  const menuWorktree = menuWorkspace?.worktree ?? null;
+  const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
     <PaneDetail
@@ -950,6 +969,20 @@ export function App() {
                   </div>
                 );
               })}
+              {canCreateWorktree ? (
+                <>
+                  <hr class="hwc-menu-separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="hwc-menu-item"
+                    onClick={openCreateWorktreeDialog}
+                  >
+                    <PlusIcon size={14} />
+                    新しいワークツリー
+                  </button>
+                </>
+              ) : null}
               {menuWorkspace.worktree?.isLinkedWorktree === true ? (
                 <>
                   <hr class="hwc-menu-separator" />
@@ -993,11 +1026,12 @@ export function App() {
         />
       )}
 
-      {createTarget === null ? null : (
+      {creating === null ? null : (
         <CreatePane
-          paneId={createTarget}
+          paneId={creating.paneId}
+          worktreeWorkspaceId={creating.worktreeWorkspaceId}
           onCreated={setPendingSelect}
-          onClose={() => setCreateTarget(null)}
+          onClose={() => setCreating(null)}
         />
       )}
     </div>
