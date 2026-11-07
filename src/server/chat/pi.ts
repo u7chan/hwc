@@ -491,7 +491,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   for (let index = 0; index < branch.length; index += 1) {
     const entry = branch[index];
     if (!entry) continue;
-    // compaction をまたいで畳むと、区切りの行位置が試行回数で動く。
+    // 畳んだ行は区切りの手前に残る。またぐと、圧縮後の失敗が圧縮前の行の回数に入る。
     if (entry.compactionEntry) retry = null;
     const before = messages.length;
     // 圧縮より前の会話はモデルの文脈にもう無い。返さない。

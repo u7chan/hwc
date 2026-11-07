@@ -465,12 +465,13 @@ const sessionEntries = [
   // 失敗したターン。本文が空なので、拾わないと送信が届いていないように見える。
   // pi は自動リトライの試行ごとに書くので、同じ失敗を 3 回続けて置く（1 行に畳まれる）。
   ...[1, 2, 3].map((attempt) => {
-    const timestamp = `2026-01-01T09:00:0${7 + attempt}.000Z`;
+    // 文字列連結で秒を作ると 3 回目が 09:00:010 になる。時刻を数値で進める。
+    const at = Date.parse("2026-01-01T09:00:08.000Z") + attempt * 1_000;
     return {
       type: "message",
       id: `a${3 + attempt}`,
       parentId: attempt === 1 ? "a3" : `a${2 + attempt}`,
-      timestamp,
+      timestamp: new Date(at).toISOString(),
       message: {
         role: "assistant",
         content: [],
@@ -479,7 +480,7 @@ const sessionEntries = [
         stopReason: "error",
         errorMessage:
           '429: {"type":"server_error","message":"Upstream request failed: the model is at capacity; retry shortly (after 30 s)"}',
-        timestamp: Date.parse(timestamp),
+        timestamp: at,
         usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 },
       },
     };

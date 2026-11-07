@@ -946,6 +946,28 @@ test("a compaction without tokensBefore still windows the history", async () => 
   expect(snapshot.messages.map((message) => message.id)).toEqual(["u2"]);
 });
 
+test("failures on both sides of a compaction are not folded together", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", [], { stopReason: "error", errorMessage: "429: busy" }),
+    entry("compaction", "c1", "a1", { summary: "so far", firstKeptEntryId: "u1" }),
+    assistant("a2", "c1", [], { stopReason: "error", errorMessage: "429: busy" }),
+    assistant("a3", "a2", text("after")),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  // 畳んだ行は区切りの手前に残る。またぐと、圧縮後の失敗が圧縮前の行の回数に入る。
+  expect(snapshot.messages.map((message) => [message.id, message.count ?? 1])).toEqual([
+    ["u1", 1],
+    ["a1:error", 1],
+    ["a2:error", 1],
+    ["a3", 1],
+  ]);
+  expect(snapshot.compaction?.index).toBe(2);
+});
+
 test("an error row before the compaction counts toward the rule position", async () => {
   const path = await writeSession(
     header(),
