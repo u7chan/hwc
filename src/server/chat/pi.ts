@@ -49,7 +49,8 @@ type SessionCompaction = {
 type SessionEntry = {
   id: string;
   parentId: string | null;
-  message: ChatMessage | null;
+  // 1 エントリが 1 行とは限らない。失敗した assistant は本文と失敗の 2 行になる。
+  messages: ChatMessage[];
   model: string | null;
   provider: string | null;
   effort: string | null;
@@ -259,7 +260,7 @@ function applyLine(reader: ChatReader, line: string): void {
   const entry: SessionEntry = {
     id: record.id,
     parentId: typeof record.parentId === "string" ? record.parentId : null,
-    message: null,
+    messages: [],
     model: null,
     provider: null,
     effort: null,
@@ -275,7 +276,7 @@ function applyLine(reader: ChatReader, line: string): void {
     const message = asRecord(record.message);
     if (message) {
       const projected = project(entry.id, message, record.timestamp);
-      entry.message = projected.message;
+      entry.messages = projected.messages;
       entry.model = projected.model;
       entry.provider = projected.provider;
       entry.effort = projected.effort;
@@ -298,7 +299,7 @@ function applyLine(reader: ChatReader, line: string): void {
 }
 
 type Projected = {
-  message: ChatMessage | null;
+  messages: ChatMessage[];
   model: string | null;
   provider: string | null;
   effort: string | null;
@@ -327,15 +328,17 @@ function project(id: string, message: Record<string, unknown>, entryTimestamp: u
     // 注記を落とした後に本文が空でも、添付があればメッセージとして残す。
     const shown = text === "" && attachments.length === 0;
     return {
-      message: shown
-        ? null
-        : {
-            id,
-            role: "user",
-            text,
-            at,
-            ...(attachments.length === 0 ? {} : { attachments }),
-          },
+      messages: shown
+        ? []
+        : [
+            {
+              id,
+              role: "user",
+              text,
+              at,
+              ...(attachments.length === 0 ? {} : { attachments }),
+            },
+          ],
       model: null,
       provider: null,
       effort: null,
@@ -349,8 +352,14 @@ function project(id: string, message: Record<string, unknown>, entryTimestamp: u
     // thinkingLevel と usage は最新の値として使う。
     const text = assistantText(message.content);
     const usageTokens = assistantUsageTokens(message);
+    const messages: ChatMessage[] = [];
+    if (text !== "") messages.push({ id, role: "agent", text, at });
+    // 失敗したターンは本文が空の assistant として残る。拾わないと、Web では送った
+    // メッセージに何も返らないまま idle に戻り、送信が届いていないように見える。
+    const failed = assistantError(message);
+    if (failed !== null) messages.push({ id: `${id}:error`, role: "error", text: failed, at });
     return {
-      message: text === "" ? null : { id, role: "agent", text, at },
+      messages,
       model: nonEmptyText(message.model),
       provider: nonEmptyText(message.provider),
       effort: nonEmptyText(message.thinkingLevel),
@@ -360,13 +369,19 @@ function project(id: string, message: Record<string, unknown>, entryTimestamp: u
   }
 
   return {
-    message: null,
+    messages: [],
     model: null,
     provider: null,
     effort: null,
     usageTokens: null,
     usage: null,
   };
+}
+
+// 中断は利用者の操作なので失敗にしない。止めたのにエラーが残ると、次の一手を誤る。
+function assistantError(message: Record<string, unknown>): string | null {
+  if (message.stopReason !== "error") return null;
+  return nonEmptyText(message.errorMessage);
 }
 
 function usageParts(usage: Record<string, unknown> | null): ChatUsage | null {
@@ -469,14 +484,30 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
 
   const branch = activeBranch(reader);
   const compacted = compactionWindow(branch);
+  // pi は自動リトライの試行ごとに同じ失敗を書く。同一文言の error が続く間は 1 行に畳み、
+  // 試行回数だけを count に残す。行が減るので区切りの位置は畳んだあとの行数で数える。
+  let retry: ChatMessage | null = null;
 
   for (let index = 0; index < branch.length; index += 1) {
     const entry = branch[index];
     if (!entry) continue;
+    // compaction をまたいで畳むと、区切りの行位置が試行回数で動く。
+    if (entry.compactionEntry) retry = null;
+    const before = messages.length;
     // 圧縮より前の会話はモデルの文脈にもう無い。返さない。
-    if (entry.message && index >= (compacted?.start ?? 0)) {
-      messages.push(entry.message);
-      if (compacted !== null && index < compacted.entryIndex) beforeCompaction += 1;
+    if (index >= (compacted?.start ?? 0)) {
+      for (const message of entry.messages) {
+        if (message.role === "error" && retry !== null && retry.text === message.text) {
+          retry.count = (retry.count ?? 1) + 1;
+          continue;
+        }
+        // 最初の失敗の id を残す。試行が増えても行の id を変えない。
+        retry = message.role === "error" ? { ...message } : null;
+        messages.push(retry ?? message);
+      }
+    }
+    if (compacted !== null && index < compacted.entryIndex) {
+      beforeCompaction += messages.length - before;
     }
     // path 順で新しい方を採る。model_change が assistant より後なら切り替え後の値になる。
     if (entry.model !== null) {

@@ -236,6 +236,27 @@ test("a chat body is accepted as the contract describes it", () => {
   expect(toChatSnapshot({ ...chatBody, model: null })).toEqual({ ...chatBody, model: null });
 });
 
+test("a failed turn is read as an error row", () => {
+  const message = { id: "e1", role: "error" as const, text: "429: busy", at: 1_000 };
+  expect(toChatSnapshot({ ...chatBody, messages: [message] })).toEqual({
+    ...chatBody,
+    messages: [message],
+  });
+});
+
+test("a retry count is kept only when it is a real count", () => {
+  const error = { id: "e1", role: "error" as const, text: "429: busy", at: 1_000 };
+  expect(toChatSnapshot({ ...chatBody, messages: [{ ...error, count: 4 }] })?.messages).toEqual([
+    { ...error, count: 4 },
+  ]);
+  // 1 回だけの失敗は count を持たない。壊れた値は回数を出さないだけで、行は残す。
+  for (const count of [1, 0, -2, 1.5, "4", null]) {
+    expect(toChatSnapshot({ ...chatBody, messages: [{ ...error, count }] })?.messages).toEqual([
+      error,
+    ]);
+  }
+});
+
 test("a context that breaks the contract costs the numbers, not the conversation", () => {
   const wide = { tokens: 122_600, window: 1_000_000 };
 

@@ -2269,6 +2269,39 @@ p.hwc-compaction,
   overflow-wrap: anywhere;
 }
 
+/* 失敗したターン。吹き出しにせず、応答が返らなかった記録として左に線を置く。
+   色だけに意味を持たせないよう、記号と文言も添える。 */
+.hwc-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-attention);
+}
+
+.hwc-error-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+}
+
+/* 自動リトライの回数。ラベルと同じ強さで読ませない。 */
+.hwc-error-count {
+  margin-left: var(--space-1);
+  color: var(--color-secondary);
+}
+
+.hwc-error-text {
+  margin: 0;
+  color: var(--color-text);
+  font: 400 var(--text-secondary) / var(--line-body) var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .hwc-msg[data-role="user"] .hwc-msg-bubble {
   display: flex;
   flex-direction: column;

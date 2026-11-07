@@ -462,6 +462,28 @@ const sessionEntries = [
       },
     },
   },
+  // 失敗したターン。本文が空なので、拾わないと送信が届いていないように見える。
+  // pi は自動リトライの試行ごとに書くので、同じ失敗を 3 回続けて置く（1 行に畳まれる）。
+  ...[1, 2, 3].map((attempt) => {
+    const timestamp = `2026-01-01T09:00:0${7 + attempt}.000Z`;
+    return {
+      type: "message",
+      id: `a${3 + attempt}`,
+      parentId: attempt === 1 ? "a3" : `a${2 + attempt}`,
+      timestamp,
+      message: {
+        role: "assistant",
+        content: [],
+        model: "claude-sonnet-4-5",
+        provider: "anthropic",
+        stopReason: "error",
+        errorMessage:
+          '429: {"type":"server_error","message":"Upstream request failed: the model is at capacity; retry shortly (after 30 s)"}',
+        timestamp: Date.parse(timestamp),
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 },
+      },
+    };
+  }),
 ];
 
 const sessionLines = [sessionHeader, ...sessionEntries].map((line) => JSON.stringify(line));

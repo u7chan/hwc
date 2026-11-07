@@ -330,6 +330,28 @@ function CommandEcho(props: { text: string; at: number }) {
   );
 }
 
+// 失敗したターン。吹き出しにはせず、応答が返らなかった記録として置く。
+// 本文はプロバイダが返した生の文言なので、Markdown として解釈せずそのまま出す。
+function ErrorMessage(props: { message: ChatMessage; copyButton: ComponentChildren }) {
+  const count = props.message.count ?? 1;
+  return (
+    <>
+      <div class="hwc-error">
+        <span class="hwc-error-head">
+          <StatusMark tone="attention" size={12} />
+          応答に失敗しました
+          {count > 1 ? <span class="hwc-error-count">{count} 回</span> : null}
+        </span>
+        <p class="hwc-error-text">{props.message.text}</p>
+      </div>
+      <div class="hwc-msg-meta">
+        <span class="hwc-msg-time">{formatClock(props.message.at)}</span>
+        {props.copyButton}
+      </div>
+    </>
+  );
+}
+
 // 会話として読むための並び。ユーザーは右、エージェントは左。
 // どのエージェントかは入力欄の側に出しているので、ここでは繰り返さない。
 function ChatLog(props: {
@@ -442,6 +464,8 @@ function ChatLog(props: {
                   {copyButton(message)}
                 </div>
               </>
+            ) : message.role === "error" ? (
+              <ErrorMessage message={message} copyButton={copyButton(message)} />
             ) : (
               <UserMessage
                 paneId={props.paneId}
