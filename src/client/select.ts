@@ -132,6 +132,31 @@ export function paneRowTitle(pane: PaneState): string {
   return pane.label ?? pane.agent ?? paneName(pane);
 }
 
+// 名前の区切り。帯が場所を言うので、行の名前からは場所の部分と一緒に落とす。
+const SEPARATOR = /[\s._/·:-]/;
+const LEADING_SEPARATORS = /^[\s._/·:-]+/;
+const TRAILING_SEPARATORS = /[\s._/·:-]+$/;
+
+// アクティブの行は帯がワークスペース名を持つ。行で同じ名前を繰り返すと、識別に使える幅が
+// 減る。区切りを挟んで始まる / 終わるときだけ落とし、残りが空なら元のラベルを使う。
+// 区切りを要求するのは、同じ文字で始まるだけの別の名前を短くしないため。
+export function activeRowName(workspaceLabel: string, name: string): string {
+  const label = workspaceLabel.trim();
+  if (label === "" || name.length <= label.length) return name;
+  const lower = name.toLowerCase();
+  const target = label.toLowerCase();
+  if (lower.startsWith(target) && SEPARATOR.test(name.charAt(label.length))) {
+    const rest = name.slice(label.length).replace(LEADING_SEPARATORS, "");
+    if (rest !== "") return rest;
+  }
+  const before = name.charAt(name.length - label.length - 1);
+  if (lower.endsWith(target) && SEPARATOR.test(before)) {
+    const rest = name.slice(0, name.length - label.length).replace(TRAILING_SEPARATORS, "");
+    if (rest !== "") return rest;
+  }
+  return name;
+}
+
 export type StatusTone = "active" | "attention" | "success" | "neutral";
 
 export function statusTone(status: AgentStatus): StatusTone {

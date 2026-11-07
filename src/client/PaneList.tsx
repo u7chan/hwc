@@ -11,18 +11,23 @@ import {
   WorktreeIcon,
 } from "./icons";
 import {
+  activeRowName,
   agentGlyph,
   countPanes,
   countWorkspacePanes,
   groupWorkspaces,
   paneRowTitle,
   soleTab,
+  statusLabel,
+  statusTone,
 } from "./select";
 import {
+  activeGroups,
   activeUnreadCount,
-  activeViewRows,
-  shouldFocusPane,
+  showsTabName,
   unreadLabel,
+  type ActiveGroup,
+  type ActiveStatus,
   type ListScope,
 } from "./scope";
 import { MENU_ID } from "./Menu";
@@ -37,7 +42,7 @@ type PaneListProps = {
   onScope: (scope: ListScope) => void;
   expanded: ReadonlySet<string>;
   onSelect: (paneId: string) => void;
-  onFocus: (paneId: string) => void;
+  onOpen: (paneId: string) => void;
   onToggle: (groupId: string) => void;
   openPaneMenuId: string | null;
   openWorkspaceMenuId: string | null;
@@ -49,7 +54,7 @@ type PaneListProps = {
   now: number;
 };
 
-type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onFocus">;
+type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onOpen">;
 
 // git 管理下でない / 通常のリポジトリ / linked worktree を形で見分ける。
 function WorkspaceGlyph({ worktree }: { worktree: WorktreeState | null }) {
@@ -125,11 +130,6 @@ function NoPanes() {
   );
 }
 
-// 上段は所在。タブ名が無いスペースでは区切りごと落とす。
-function activePlace(workspaceLabel: string, tabLabel: string): string {
-  return tabLabel === "" ? workspaceLabel : `${workspaceLabel} · ${tabLabel}`;
-}
-
 // 右端は「あとどれだけ待つか」と「いつ終わったか」。要対応だけは時刻ではなく言葉で示す。
 function ActiveTrail(props: {
   pane: PaneState;
@@ -148,11 +148,57 @@ function ActiveTrail(props: {
   return clock === null ? null : <span class="hwc-pane-elapsed">{clock}</span>;
 }
 
-// 窓口と状態の行を 1 行ずつ並べる。ツリーを畳まないので、どのスペースのどのタブで
-// 動いているかがそのまま読める。並びは activeViewRows が持つ。
+// 帯に出す件数。状態の意味（要対応 → 完了 → 実行中）の順に並べる。0 件は出さない。
+const COUNT_STATUSES: readonly ActiveStatus[] = ["blocked", "done", "working"];
+
+function ActiveCount(props: { status: ActiveStatus; count: number }) {
+  if (props.count === 0) return null;
+  const label = `${statusLabel(props.status)} ${props.count} 件`;
+  return (
+    <span class="hwc-active-count" data-tone={statusTone(props.status)} aria-label={label}>
+      <span aria-hidden="true">
+        <StatusIcon status={props.status} />
+      </span>
+      <span aria-hidden="true">{props.count}</span>
+    </span>
+  );
+}
+
+// 帯は場所。行はペイン。同じワークツリーの行を束ね、スクロール中も場所を見失わないよう
+// 上端に貼り付ける。状態の件数は束全体の量で、行の右端はそのペインの時刻。
+function ActiveBand(props: { group: ActiveGroup }) {
+  const { workspace, counts } = props.group;
+  const branch = workspace.branch ?? null;
+  return (
+    <div class="hwc-active-band">
+      <div class="hwc-active-band-main">
+        <h2 class="hwc-active-band-name" id={bandId(workspace.id)} title={workspace.label}>
+          {workspace.label}
+        </h2>
+        {branch === null ? null : (
+          <p class="hwc-active-band-branch" title={branch}>
+            {branch}
+          </p>
+        )}
+      </div>
+      <div class="hwc-active-band-counts">
+        {COUNT_STATUSES.map((status) => (
+          <ActiveCount key={status} status={status} count={counts[status]} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function bandId(workspaceId: string): string {
+  return `hwc-active-band-${workspaceId}`;
+}
+
+// ワークスペース（ワークツリー）ごとに束ねる。並びは activeGroups が持つ。開いた時点では
+// 既読を送らない。保留は App が持ち、選択が離れた時点で done なら送る。
 function ActivePaneList(props: PaneListProps) {
-  const rows = activeViewRows(props.state, props.sent);
-  if (rows.length === 0) {
+  const groups = activeGroups(props.state, props.sent);
+  if (groups.length === 0) {
     return (
       <div class="hwc-list-note">
         <p class="hwc-list-note-title">窓口も動いているエージェントもいません</p>
@@ -164,38 +210,50 @@ function ActivePaneList(props: PaneListProps) {
   }
 
   return (
-    <ul class="hwc-active">
-      {rows.map(({ workspace, tab, pane }) => {
-        const current = pane.id === props.selectedPaneId;
-        return (
-          <li key={pane.id} class="hwc-active-row">
-            <button
-              type="button"
-              class="hwc-active-open"
-              data-current={current}
-              aria-current={current ? "true" : undefined}
-              onClick={() => {
-                props.onSelect(pane.id);
-                // 既読が進むのは done だけ。working / blocked では TUI のフォーカスを動かさない。
-                if (shouldFocusPane(props.scope, pane.agentStatus)) props.onFocus(pane.id);
-              }}
-            >
-              <StatusIcon status={pane.agentStatus} />
-              <span class="hwc-active-main">
-                <span class="hwc-active-place">{activePlace(workspace.label, tab.label)}</span>
-                <span class="hwc-active-name">{pane.label ?? pane.agent}</span>
-              </span>
-              <ActiveTrail
-                pane={pane}
-                workingSince={props.workingSince}
-                finishedAt={props.finishedAt}
-                now={props.now}
-              />
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div class="hwc-active">
+      {groups.map((group) => (
+        <section
+          key={group.workspace.id}
+          class="hwc-active-group"
+          aria-labelledby={bandId(group.workspace.id)}
+        >
+          <ActiveBand group={group} />
+          <ul class="hwc-active-rows">
+            {group.rows.map(({ tab, pane }) => {
+              const current = pane.id === props.selectedPaneId;
+              const name = paneRowTitle(pane);
+              return (
+                <li key={pane.id} class="hwc-active-row">
+                  <button
+                    type="button"
+                    class="hwc-active-open"
+                    data-current={current}
+                    aria-current={current ? "true" : undefined}
+                    onClick={() => props.onOpen(pane.id)}
+                  >
+                    <StatusIcon status={pane.agentStatus} />
+                    <span class="hwc-active-main">
+                      <span class="hwc-active-name" title={name}>
+                        {activeRowName(group.workspace.label, name)}
+                      </span>
+                      {showsTabName(group.workspace) ? (
+                        <span class="hwc-active-tab">· {tab.label}</span>
+                      ) : null}
+                    </span>
+                    <ActiveTrail
+                      pane={pane}
+                      workingSince={props.workingSince}
+                      finishedAt={props.finishedAt}
+                      now={props.now}
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }
 

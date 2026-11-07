@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { AppState, PaneState } from "../server/herdr/state";
 import {
+  activeRowName,
   agentGlyph,
   countPanes,
   countWorkspacePanes,
@@ -411,4 +412,25 @@ test("a row is titled by its name, not by the terminal title", () => {
   expect(paneRowTitle({ ...base, id: "w1:p1", label: "impl" })).toBe("impl");
   expect(paneRowTitle({ ...base, id: "w1:p1" })).toBe("pi");
   expect(paneRowTitle({ ...base, id: "w1:p1", agent: null })).toBe("hwc");
+});
+
+test("an active row drops the workspace name the band already carries", () => {
+  // 帯が場所を言うので、行は残りだけを出す。区切りは一緒に落とす。
+  expect(activeRowName("demo-live-thinking", "demo-live-thinking-review")).toBe("review");
+  expect(activeRowName("demo-live-thinking", "demo-live-thinking/impl")).toBe("impl");
+  expect(activeRowName("demo-live-thinking", "demo-live-thinking_ui")).toBe("ui");
+  expect(activeRowName("demo-live-thinking", "review-demo-live-thinking")).toBe("review");
+  expect(activeRowName("demo-live-thinking", "review.demo-live-thinking")).toBe("review");
+  // 大文字小文字が違っても同じ場所。
+  expect(activeRowName("Demo-Live", "demo-live-review")).toBe("review");
+});
+
+test("a row keeps its name when nothing is left after the workspace name", () => {
+  // 落とした結果が空なら元のラベルを使う。行の名前が消えるよりは繰り返す。
+  expect(activeRowName("demo-live", "demo-live")).toBe("demo-live");
+  expect(activeRowName("demo-live", "demo-live-")).toBe("demo-live-");
+  // 区切りを挟まずに始まるだけの名前は、別の名前として扱う。
+  expect(activeRowName("demo", "demolition")).toBe("demolition");
+  // ワークスペース名が無ければ何も落とさない。
+  expect(activeRowName("", "review")).toBe("review");
 });
