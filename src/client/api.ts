@@ -665,6 +665,8 @@ export async function createWorktree(
       ? { ok: false, error: "failed", workspaceId: null, paneId: null }
       : { ok: true, ...created };
   } catch {
+    // 応答が返らない・途中で切れた場合は、BFF が作成を終えているか分からない。作成済みの
+    // ワークツリーを残したまま再送すると 2 つ目を作るので、期限切れと同じ結果不明に倒す。
     return {
       ok: false,
       error: signal.aborted ? "timeout" : "failed",

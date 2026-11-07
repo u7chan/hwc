@@ -8,15 +8,14 @@ import {
   supportsModelSelection,
 } from "../shared/agents";
 import {
-  canRetryWorktree,
   createPane,
   createWorktree,
   type CreatePaneFailure,
   type CreatePaneRequest,
   type CreatePaneOutcome,
-  type CreateWorktreeFailure,
   type CreateWorktreeOutcome,
 } from "./api";
+import { worktreeFailureNotice, worktreePartialNotice } from "./worktree-create";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
 import { AgentGlyphIcon } from "./icons";
@@ -59,37 +58,6 @@ function partialMessage(error: CreatePaneFailure): string {
     : "ペインは作成しましたが、設定を完了できませんでした。";
 }
 
-function worktreeFailureMessage(error: CreateWorktreeFailure): string {
-  switch (error) {
-    case "timeout":
-    case "herdr_unavailable":
-      return "作成できたか確認できませんでした。Herdr のスペースを確認してから、必要なら TUI で開き直してください。";
-    case "worktree_open_failed":
-      return "チェックアウトは作成されましたが、スペースを開けませんでした。Herdr のワークツリーを確認してください。";
-    case "worktree_create_failed":
-      return "ワークツリーを作成できませんでした。もう一度お試しください。";
-    case "worktree_operation_in_progress":
-      return "同じワークツリーの操作が実行中です。少し待ってからもう一度お試しください。";
-    case "linked_worktree_source":
-      return "linked worktree からは作成できません。リポジトリ本体のスペースから作成してください。";
-    case "not_git_worktree":
-      return "このスペースは git の管理下にありません。";
-    case "workspace_not_found":
-      return "スペースが見つかりませんでした。";
-    case "invalid_request":
-      return "入力内容を確認してください。";
-    default:
-      return "ワークツリーを作成できませんでした。";
-  }
-}
-
-// ワークツリーと root シェルは残っている。黙って閉じず、何が残ったかを伝える。
-function worktreePartialMessage(error: CreateWorktreeFailure): string {
-  return error === "agent_start_failed"
-    ? "ワークツリーは作成しましたが、エージェントを起動できませんでした。最初のペインはシェルとして残っています。"
-    : "ワークツリーは作成しましたが、ペイン名を設定できませんでした。";
-}
-
 function paneFailureView(result: Extract<CreatePaneOutcome, { ok: false }>): FailureView {
   // ペインができているなら、再送ではなく確認に倒す。
   if (result.paneId !== null) return { message: partialMessage(result.error), retry: false };
@@ -98,9 +66,8 @@ function paneFailureView(result: Extract<CreatePaneOutcome, { ok: false }>): Fai
 
 function worktreeFailureView(result: Extract<CreateWorktreeOutcome, { ok: false }>): FailureView {
   // 部分成功ではワークツリーができているので、閉じるだけにする。
-  if (result.paneId !== null)
-    return { message: worktreePartialMessage(result.error), retry: false };
-  return { message: worktreeFailureMessage(result.error), retry: canRetryWorktree(result.error) };
+  if (result.paneId !== null) return { message: worktreePartialNotice(result.error), retry: false };
+  return worktreeFailureNotice(result.error);
 }
 
 export function CreatePane(props: CreatePaneProps) {
