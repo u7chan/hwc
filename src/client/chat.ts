@@ -116,6 +116,15 @@ export function isPendingConfirmed(pending: PendingMessage, messages: ChatMessag
   return messages.some((message) => message.role === "user" && message.at > pending.from);
 }
 
+// 圧縮の控えは、その後に送った未確定メッセージより前へ置く。実行中でも表示を送信順に保つ。
+export function echoInsertIndex(
+  messageCount: number,
+  pendingAt: readonly number[],
+  echoAt: number,
+): number {
+  return messageCount + pendingAt.filter((at) => at < echoAt).length;
+}
+
 export type AgentInfo = { model: string | null; effort: string | null };
 
 // どちらも無ければ札を出さない。片方だけ分かるならそれだけ出す。

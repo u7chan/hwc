@@ -12,6 +12,7 @@ import {
   contextPercent,
   contextText,
   contextTone,
+  echoInsertIndex,
   formatTokens,
   isAbortError,
   isPendingConfirmed,
@@ -369,4 +370,14 @@ test("a pending message is confirmed by a new user message after its baseline", 
     isPendingConfirmed(pending, [{ id: "m2", role: "agent", text: "steer", at: pending.from + 1 }]),
   ).toBe(false);
   expect(isPendingConfirmed(pending, [])).toBe(false);
+});
+
+test("a compaction echo stays before the messages sent after it", () => {
+  // 後から送った未確定メッセージは、控えより後ろに置く。
+  expect(echoInsertIndex(3, [100, 300], 200)).toBe(4);
+  // 控えの後に送ったものだけが後ろに残る。
+  expect(echoInsertIndex(3, [100], 200)).toBe(4);
+  expect(echoInsertIndex(3, [300], 200)).toBe(3);
+  // 未確定メッセージが無ければ、取得済みの末尾に置く。
+  expect(echoInsertIndex(3, [], 200)).toBe(3);
 });

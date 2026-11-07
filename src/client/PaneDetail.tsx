@@ -31,6 +31,7 @@ import {
   contextDetails,
   contextMeter,
   type ContextMeterView,
+  echoInsertIndex,
   isPendingConfirmed,
   latestUserAt,
   newSessionPending,
@@ -317,7 +318,7 @@ function Compaction(props: {
 }
 
 // ローカルで送った /compact の控え。セッションには残らないので、リロードや
-// ペイン切り替えで消える。完了した compaction の直前、実行中は末尾に置く。
+// ペイン切り替えで消える。完了した compaction の直前、実行中は後から送ったメッセージの前に置く。
 function CommandEcho(props: { text: string; at: number }) {
   return (
     <li class="hwc-msg" data-role="command">
@@ -396,7 +397,16 @@ function ChatLog(props: {
   const echoVisible = echoPending || echoAtLog;
   const echoRow =
     echoVisible && echo !== null ? <CommandEcho text={echo.text} at={echo.at} /> : null;
-  // 実行中は末尾、完了後は compaction の区切りの直前に置く。
+  const echoGap =
+    echoPending && echo !== null
+      ? echoInsertIndex(
+          props.snapshot.messages.length,
+          props.pending.map((message) => message.at),
+          echo.at,
+        )
+      : null;
+  // 実行中は未確定メッセージを含む末尾（後から送ったものより前）、完了後は compaction の
+  // 区切りの直前に置く。
   const compactionBlock =
     compactionRow === null ? null : (
       <>
@@ -422,6 +432,7 @@ function ChatLog(props: {
       {compactionBlock !== null && compactionAt === 0 ? compactionBlock : null}
       {rows.map(({ message, pending }, index) => (
         <Fragment key={message.id}>
+          {echoGap === index ? echoRow : null}
           <li class="hwc-msg" data-role={message.role}>
             {message.role === "agent" ? (
               <>
@@ -443,7 +454,7 @@ function ChatLog(props: {
           {compactionBlock !== null && compactionAt === index + 1 ? compactionBlock : null}
         </Fragment>
       ))}
-      {echoPending ? echoRow : null}
+      {echoGap === rows.length ? echoRow : null}
       {props.replying || props.compacting ? (
         <li
           class="hwc-msg"
