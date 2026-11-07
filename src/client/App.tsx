@@ -463,11 +463,12 @@ export function App() {
     setMenu({ target: { kind: "pane", id: paneId }, trigger, fromList, open: true });
   };
 
-  // 表示中のペインは詳細の実行口を使い、クリア直後に出力を読み直す。
-  // 表示していないペインは、次に開いたときの取得で足りる。
-  const clearOutputForMenu = (paneId: string): Promise<boolean> => {
-    const handle = commandHandles.current.get(paneId);
-    return handle === undefined ? clearPaneOutput(paneId) : handle.clearOutput();
+  // 開始時に表示していなくても、応答時点で表示されている詳細には読み直しを伝える。
+  // 一覧でクリアを押し、通信待ち中に対象のペインを開く経路があるため。
+  const clearOutputForMenu = async (paneId: string): Promise<boolean> => {
+    const cleared = await clearPaneOutput(paneId);
+    if (cleared) commandHandles.current.get(paneId)?.refreshOutput();
+    return cleared;
   };
 
   const closeMenu = () => {

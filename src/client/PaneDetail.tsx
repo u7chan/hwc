@@ -11,7 +11,7 @@ import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
 import type { PaneActivity } from "../shared/activity";
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
-import { OUTPUT_LINES, attachmentUrl, clearPaneOutput, uploadAttachment } from "./api";
+import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
 import { isLayoutShift, isNearBottom } from "./scroll";
 import {
   ATTACHMENT_LIMIT_NOTICE,
@@ -1314,13 +1314,9 @@ export function PaneDetail(props: PaneDetailProps) {
         void sendMenuCommand(id);
       }
     },
-    clearOutput: async () => {
-      const cleared = await clearPaneOutput(pane.id);
-      if (cleared) {
-        setPinned(true);
-        setOutputVersion((version) => version + 1);
-      }
-      return cleared;
+    refreshOutput: () => {
+      setPinned(true);
+      setOutputVersion((version) => version + 1);
     },
   };
   useImperativeHandle(props.commandRef, () => menuCommands);
