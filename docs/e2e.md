@@ -89,7 +89,7 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 - text が空、または空白だけの送信
 - 添付注記（`<attached_files>`）の無い `/new` と `/compact`（`/compact <指示>` を含む）。会話を残さないか、履歴を置き換える
 
-添付を持つペインの `Enter` は常に本文の送信になる（[ADR 0018](adr/0018-pasted-image-attachments.md)）。`/compact` と打っても添付と一緒に送れば本文として扱われるので、注記があるときはコマンドではなく通常本文として追記する。
+添付を持つペインで `Enter` が送信になるときは、常に本文の送信になる（[ADR 0018](adr/0018-pasted-image-attachments.md)）。タッチ端末では `Enter` が改行になる（[ADR 0037](adr/0037-enter-newline-on-touch.md)）。`/compact` と打っても添付と一緒に送れば本文として扱われるので、注記があるときはコマンドではなく通常本文として追記する。
 
 ## データを変える
 
