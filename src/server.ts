@@ -34,9 +34,11 @@ const app = createApp({
   revision,
 });
 
-// Herdr の応答を待つルート（削除・モデル指定の作成）は数十秒返さない。Bun の既定の
-// idleTimeout（10 秒）で接続を切らないよう、ソケット側の待ち（60 秒）を覆う値を置く。
-const IDLE_TIMEOUT_SECONDS = 120;
+// Herdr の応答を待つルート（ワークツリー作成・削除・モデル指定の作成）は数十秒返さない。
+// Bun の既定の idleTimeout（10 秒）で接続を切らないよう、ソケット側の待ち（60 秒）と
+// エージェント起動（30 秒）を 1 リクエストで行うワークツリー作成のクライアント期限
+// （180 秒）を覆う値を置く。
+const IDLE_TIMEOUT_SECONDS = 200;
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 30000),

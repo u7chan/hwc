@@ -4,10 +4,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { isAgentKind } from "../src/shared/agents";
 import { ATTACHED_FILES_OPEN } from "../src/shared/attachments";
-import type { HerdrPane } from "../src/server/herdr/contract";
+import type { HerdrPane, HerdrTab, HerdrWorkspace } from "../src/server/herdr/contract";
 import {
   createScenario,
   type CodexFixture,
+  START_FAILS_MODEL_ID,
   STARTUP_MODELS,
   writeCodexThread,
 } from "./fixtures/scenario";
@@ -350,6 +351,68 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     return true;
   };
 
+  // 実 Herdr の worktree.create は git worktree add を実行し、リンクされたスペースを開く。
+  // E2E では架空のチェックアウトを一時ディレクトリに作り、スナップショットにスペース・タブ・
+  // root pane を足す。モデル検証は root pane の cwd で走るので、ディレクトリは実在させる。
+  let worktreeCount = 0;
+  const createWorktree = async (
+    workspaceId: string,
+  ): Promise<{ workspace: HerdrWorkspace; tab: HerdrTab; rootPane: HerdrPane } | null> => {
+    const source = (snapshot.workspaces ?? []).find((item) => item.workspace_id === workspaceId);
+    const sourceWorktree = source?.worktree ?? null;
+    if (source === undefined || sourceWorktree === null) return null;
+    worktreeCount += 1;
+    const number =
+      Math.max(
+        0,
+        ...(snapshot.workspaces ?? []).map(
+          (item) => Number(item.workspace_id.replace(/[^0-9]/g, "")) || 0,
+        ),
+      ) + 1;
+    const id = `w${number}`;
+    const branch = `worktree/acme-dashboard-${worktreeCount}`;
+    const checkoutPath = join(root, "worktrees", branch.replace("/", "-"));
+    await mkdir(join(checkoutPath, ".git"), { recursive: true });
+    await writeFile(join(checkoutPath, ".git", "HEAD"), `ref: refs/heads/${branch}\n`);
+    const workspace: HerdrWorkspace = {
+      workspace_id: id,
+      label: `${sourceWorktree.repo_name} worktree-${worktreeCount}`,
+      agent_status: "idle",
+      focused: false,
+      worktree: {
+        repo_name: sourceWorktree.repo_name,
+        repo_root: sourceWorktree.repo_root ?? null,
+        checkout_path: checkoutPath,
+        is_linked_worktree: true,
+      },
+    };
+    const tab: HerdrTab = {
+      tab_id: `${id}:t1`,
+      workspace_id: id,
+      label: "main",
+      agent_status: "idle",
+      focused: false,
+    };
+    const rootPane: HerdrPane = {
+      pane_id: `${id}:p1`,
+      workspace_id: id,
+      tab_id: tab.tab_id,
+      cwd: checkoutPath,
+      label: null,
+      agent_status: "unknown",
+      focused: false,
+      agent_session: null,
+    };
+    snapshot.workspaces = [...(snapshot.workspaces ?? []), workspace];
+    snapshot.tabs = [...(snapshot.tabs ?? []), tab];
+    snapshot.panes = [...(snapshot.panes ?? []), rootPane];
+    outputs.set(rootPane.pane_id, "$ ");
+    revisions.set(rootPane.pane_id, 0);
+    // focus: true を送っているので、実 Herdr と同じく新しいスペースへ移る。
+    focus(rootPane.pane_id);
+    return { workspace, tab, rootPane };
+  };
+
   // 実 Herdr の分割結果そのものではなく、E2E でセルの形を返すための固定のグリッド。
   // 方向や比率の正しさは BFF の unit で確かめ、ここでは画面の流れだけを通す。
   const paneArea = { width: 240, height: 48 };
@@ -641,6 +704,12 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         const args = Array.isArray(params.args)
           ? params.args.filter((arg): arg is string => typeof arg === "string")
           : [];
+        // 起動失敗の分岐を画面で確かめるための架空モデル（docs/e2e.md）。
+        // Pi は provider/id、Codex は id だけを渡す。どちらでも同じモデルとして扱う。
+        if (args.some((arg) => arg.endsWith(START_FAILS_MODEL_ID))) {
+          send(socket, { id, error: { code: "agent_spawn_failed", message: kind } });
+          return;
+        }
         outputs.set(paneId, `$ ${kind}${args.length === 0 ? "" : ` ${args.join(" ")}`}\n`);
         const modelIndex = args.indexOf("--model");
         const model =
@@ -713,6 +782,43 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           },
         });
         broadcast("pane.updated", { pane_id: paneId });
+        return;
+      }
+      case "worktree.create": {
+        const workspaceId = typeof params.workspace_id === "string" ? params.workspace_id : "";
+        const workspace = (snapshot.workspaces ?? []).find(
+          (item) => item.workspace_id === workspaceId,
+        );
+        if (workspace === undefined) {
+          send(socket, { id, error: { code: "workspace_not_found", message: workspaceId } });
+          return;
+        }
+        if (workspace.worktree?.is_linked_worktree === true) {
+          send(socket, { id, error: { code: "linked_worktree_source", message: workspaceId } });
+          return;
+        }
+        if (workspace.worktree == null) {
+          send(socket, { id, error: { code: "not_git_worktree", message: workspaceId } });
+          return;
+        }
+        const created = await createWorktree(workspaceId);
+        if (created === null) {
+          send(socket, { id, error: { code: "worktree_create_failed", message: workspaceId } });
+          return;
+        }
+        // 端点の指定（branch / path / base）は受けない。hwc は focus だけを送る。
+        send(socket, {
+          id,
+          result: {
+            type: "worktree_created",
+            workspace: created.workspace,
+            tab: created.tab,
+            root_pane: created.rootPane,
+            worktree: created.workspace.worktree,
+          },
+        });
+        broadcast("workspace.created", { workspace_id: created.workspace.workspace_id });
+        broadcast("pane.created", { pane_id: created.rootPane.pane_id });
         return;
       }
       case "worktree.remove": {

@@ -7,7 +7,15 @@ import {
   modelKey,
   supportsModelSelection,
 } from "../shared/agents";
-import { createPane, type CreatePaneFailure } from "./api";
+import {
+  createPane,
+  createWorktree,
+  type CreatePaneFailure,
+  type CreatePaneRequest,
+  type CreatePaneOutcome,
+  type CreateWorktreeOutcome,
+} from "./api";
+import { worktreeFailureNotice, worktreePartialNotice } from "./worktree-create";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
 import { AgentGlyphIcon } from "./icons";
@@ -15,12 +23,18 @@ import { CreatePaneModel } from "./CreatePaneModel";
 import { CreatePaneEffort } from "./CreatePaneEffort";
 
 type CreatePaneProps = {
+  // 分割して作る場合は追加先のペイン。ワークツリーを作る場合はモデル一覧の取得元。
   paneId: string;
+  // 値があればワークツリーを作り、その root pane でエージェントを起動する。
+  worktreeWorkspaceId: string | null;
   onCreated: (paneId: string) => void;
   onClose: () => void;
 };
 
 type Mode = "agent" | "shell";
+
+// 失敗の見せ方。再試行できるかどうかで、フォームを残すか「閉じる」だけにするかが変わる。
+type FailureView = { message: string; retry: boolean };
 
 function failureMessage(error: CreatePaneFailure): string {
   switch (error) {
@@ -44,7 +58,20 @@ function partialMessage(error: CreatePaneFailure): string {
     : "ペインは作成しましたが、設定を完了できませんでした。";
 }
 
+function paneFailureView(result: Extract<CreatePaneOutcome, { ok: false }>): FailureView {
+  // ペインができているなら、再送ではなく確認に倒す。
+  if (result.paneId !== null) return { message: partialMessage(result.error), retry: false };
+  return { message: failureMessage(result.error), retry: result.error !== "timeout" };
+}
+
+function worktreeFailureView(result: Extract<CreateWorktreeOutcome, { ok: false }>): FailureView {
+  // 部分成功ではワークツリーができているので、閉じるだけにする。
+  if (result.paneId !== null) return { message: worktreePartialNotice(result.error), retry: false };
+  return worktreeFailureNotice(result.error);
+}
+
 export function CreatePane(props: CreatePaneProps) {
+  const worktree = props.worktreeWorkspaceId !== null;
   const [name, setName] = useState("");
   const [mode, setMode] = useState<Mode>("agent");
   const [agent, setAgent] = useState<AgentKind>("pi");
@@ -52,7 +79,7 @@ export function CreatePane(props: CreatePaneProps) {
   const [effort, setEffort] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(true);
-  // ペインができた可能性がある状態。フィールドを閉じ、再送ではなく確認に倒す。
+  // 作成済みか結果不明で、再送できない状態。フィールドを閉じ、「閉じる」だけを出す。
   const [settled, setSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,27 +93,37 @@ export function CreatePane(props: CreatePaneProps) {
     if (busy || !open) return;
     setBusy(true);
     setError(null);
-    const result = await createPane(props.paneId, {
+    const request: CreatePaneRequest = {
       name: name.trim() === "" ? null : name.trim(),
       agent: mode === "agent" ? agent : null,
       model: mode === "agent" ? model : null,
       effort: mode === "agent" ? effort : null,
-    });
-    if (result.ok) {
-      props.onCreated(result.paneId);
+    };
+
+    const created = (paneId: string) => {
+      props.onCreated(paneId);
       setOpen(false);
-      return;
+    };
+
+    let paneId: string | null;
+    let view: FailureView;
+    if (props.worktreeWorkspaceId !== null) {
+      const result = await createWorktree(props.worktreeWorkspaceId, request);
+      if (result.ok) return created(result.paneId);
+      paneId = result.paneId;
+      view = worktreeFailureView(result);
+    } else {
+      const result = await createPane(props.paneId, request);
+      if (result.ok) return created(result.paneId);
+      paneId = result.paneId;
+      view = paneFailureView(result);
     }
+
     setBusy(false);
-    if (result.paneId !== null) {
-      setSettled(true);
-      setError(partialMessage(result.error));
-      props.onCreated(result.paneId);
-      return;
-    }
-    // 期限切れはペインができているかもしれない。再送させず、タブを確認してもらう。
-    setSettled(result.error === "timeout");
-    setError(failureMessage(result.error));
+    setSettled(paneId !== null || !view.retry);
+    setError(view.message);
+    // ペインができていれば、理由を見せたまま新しいペインへ移る。
+    if (paneId !== null) props.onCreated(paneId);
   };
 
   return (
@@ -99,8 +136,12 @@ export function CreatePane(props: CreatePaneProps) {
       onExited={props.onClose}
     >
       <h2 class="hwc-dialog-title" id="hwc-create-title">
-        新しいペイン
+        {worktree ? "新しいワークツリー" : "新しいペイン"}
       </h2>
+
+      {worktree ? (
+        <p class="hwc-dialog-text">ブランチ名と保存先は Herdr が自動で決めます。</p>
+      ) : null}
 
       <label class="hwc-create-field">
         <span class="hwc-create-label">ペイン名（任意）</span>
@@ -228,7 +269,7 @@ export function CreatePane(props: CreatePaneProps) {
               {busy ? (
                 <>
                   <span class="hwc-spinner" aria-hidden="true" />
-                  {mode === "agent" ? "起動中…" : "作成中…"}
+                  {worktree ? "作成中…" : mode === "agent" ? "起動中…" : "作成中…"}
                 </>
               ) : mode === "agent" ? (
                 "作成して起動"
