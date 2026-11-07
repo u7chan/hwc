@@ -61,7 +61,9 @@ linked worktree のスペースをスナップショットから取り除き、`
 BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.updated` を流す。`agent.start` は
 架空のエージェントをペインへ付け、`pane.updated` を流す。Codex は架空の thread id と空の会話を
 用意し、既存の `review` ペインには架空の user / assistant の会話を入れる。`agent.focus` は
-フォーカスを移して `pane.focused` を流す。
+フォーカスを移して `pane.focused` を流す。実 Herdr と同じく seen も進むので、対象が `done` の
+ときは `idle` に戻し、そのタブとスペースの集約状態を残りのペインから引き直して `pane.updated`
+を流す。hwc の既読はこの遷移で行が消える（窓口の `done` は `idle` の行として残る）。
 `pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
 

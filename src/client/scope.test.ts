@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
 import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server/herdr/state";
 import {
+  activeGroups,
   activePanes,
   activeUnreadCount,
-  activeViewRows,
   parseListScope,
-  shouldFocusPane,
+  pendingReadAfter,
+  shouldFocusOnLeave,
+  showsTabName,
   unreadLabel,
 } from "./scope";
 
@@ -22,19 +24,26 @@ function pane(id: string, agent: string | null, agentStatus: AgentStatus = "unkn
 }
 
 function workspace(id: string, panes: readonly PaneState[], tabs = 1): WorkspaceState {
+  return tabsWorkspace(
+    id,
+    Array.from({ length: tabs }, (_, index) => (index === 0 ? panes : [])),
+  );
+}
+
+// タブごとにペインを置く。タブ表示や束の中の並びはタブをまたぐ。
+function tabsWorkspace(id: string, tabPanes: readonly (readonly PaneState[])[]): WorkspaceState {
   return {
     id,
     label: id,
     agentStatus: "unknown",
     focused: false,
     worktree: null,
-    tabs: Array.from({ length: tabs }, (_, index) => ({
+    tabs: tabPanes.map((panes, index) => ({
       id: `${id}:t${index + 1}`,
       label: String(index + 1),
       agentStatus: "unknown" as const,
       focused: false,
-      // 1 タブ目にだけペインを置き、2 タブ目以降は空にする。
-      panes: index === 0 ? [...panes] : [],
+      panes: [...panes],
     })),
   };
 }
@@ -112,12 +121,34 @@ test("active keeps no room for the open pane, because idle panes are not in it",
   expect(activePanes(state)).toEqual([]);
 });
 
-test("only a done row in the active scope moves the focus", () => {
-  expect(shouldFocusPane("active", "done")).toBe(true);
-  expect(shouldFocusPane("active", "working")).toBe(false);
-  expect(shouldFocusPane("active", "blocked")).toBe(false);
-  // ツリーからは送らない。詳細のタブ切替と経路が同じになる。
-  expect(shouldFocusPane("all", "done")).toBe(false);
+test("only a done pane that is left after it finishes moves the focus", () => {
+  // 離れる時点で done なら送る。開いた時点の状態は問わない。
+  expect(shouldFocusOnLeave("w1:p1", "w1:p2", "done")).toBe(true);
+  expect(shouldFocusOnLeave("w1:p1", null, "done")).toBe(true);
+  // 同じ行をもう一度押しただけでは離れていない。
+  expect(shouldFocusOnLeave("w1:p1", "w1:p1", "done")).toBe(false);
+  // 離れる時点で done でなければ seen は進めない。
+  expect(shouldFocusOnLeave("w1:p1", "w1:p2", "working")).toBe(false);
+  expect(shouldFocusOnLeave("w1:p1", "w1:p2", "blocked")).toBe(false);
+  expect(shouldFocusOnLeave("w1:p1", "w1:p2", "idle")).toBe(false);
+  // ペインが消えた場合は送らない（保留を捨てる）。
+  expect(shouldFocusOnLeave("w1:p1", "w1:p2", null)).toBe(false);
+  // 保留を作るのはアクティブ一覧の行だけ。ツリー・タブバー・復元では null のまま。
+  expect(shouldFocusOnLeave(null, "w1:p1", "done")).toBe(false);
+  expect(shouldFocusOnLeave(null, null, "done")).toBe(false);
+});
+
+test("the pending read survives a move that does not leave the pane", () => {
+  // アクティブ一覧で開いた行は、その場で保留になる。
+  expect(pendingReadAfter(null, "w1:p1", true)).toBe("w1:p1");
+  expect(pendingReadAfter("w1:p1", "w1:p2", true)).toBe("w1:p2");
+  // 詳細のタブバーやツリーで同じペインを選び直しても、まだ離れていない。
+  expect(pendingReadAfter("w1:p1", "w1:p1", false)).toBe("w1:p1");
+  // 別のペインへ移る（詳細から戻る）と離れるので捨てる。
+  expect(pendingReadAfter("w1:p1", "w1:p2", false)).toBeNull();
+  expect(pendingReadAfter("w1:p1", null, false)).toBeNull();
+  // 保留が無いまま同じペインへ移っても、保留は作らない。
+  expect(pendingReadAfter(null, "w1:p1", false)).toBeNull();
 });
 
 test("the unread count is the finished panes waiting to be seen", () => {
@@ -151,54 +182,92 @@ test("a count past two digits is shown as a range", () => {
   expect(unreadLabel(100)).toBe("99+");
 });
 
-test("the view lists what needs attention, the windows, the finished and the running", () => {
+test("a group holds attention, the window, the finished and the running in that order", () => {
   const state = app(
     workspace("w1", [
       pane("w1:p1", "pi", "done"),
       pane("w1:p2", "pi", "working"),
       pane("w1:p3", "pi", "blocked"),
       pane("w1:p4", "claude", "idle"),
-      pane("w1:p5", "codex", "done"),
     ]),
-    workspace("w2", [pane("w2:p1", "pi", "idle")]),
+  );
+  const sent = new Map([["w1", { paneId: "w1:p4", at: 1_000 }]]);
+
+  const [group] = activeGroups(state, sent);
+
+  // 要対応が窓口より先。窓口は状態の側から除き、二重に出さない。
+  expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p3", "w1:p4", "w1:p1", "w1:p2"]);
+});
+
+test("groups come in the rank of their top row, then the newest window, then the state order", () => {
+  const state = app(
+    workspace("w1", [pane("w1:p1", "pi", "working")]),
+    workspace("w2", [pane("w2:p1", "pi", "done")]),
+    workspace("w3", [pane("w3:p1", "pi", "idle")]),
+    workspace("w4", [pane("w4:p1", "pi", "working")]),
+    workspace("w5", [pane("w5:p1", "pi", "idle")]),
   );
   const sent = new Map([
-    ["w2", { paneId: "w2:p1", at: 3_000 }],
-    ["w1", { paneId: "w1:p4", at: 1_000 }],
+    ["w3", { paneId: "w3:p1", at: 1_000 }],
+    ["w5", { paneId: "w5:p1", at: 5_000 }],
   ]);
 
-  expect(activeViewRows(state, sent).map((row) => row.pane.id)).toEqual([
-    "w1:p3",
-    "w2:p1",
-    "w1:p4",
-    "w1:p1",
-    "w1:p5",
-    "w1:p2",
+  // 要対応 (0) → 窓口 (1) → 完了 (2) → 実行中 (3)。同じ窓口の順位は新しい順。
+  expect(activeGroups(state, sent).map((group) => group.workspace.id)).toEqual([
+    "w5",
+    "w3",
+    "w2",
+    "w1",
+    "w4",
   ]);
 });
 
-test("a window row is not repeated in the status rows", () => {
-  const state = app(workspace("w1", [pane("w1:p1", "pi", "done"), pane("w1:p2", "pi", "working")]));
-  const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
+test("a group carries the tab of each row and the counts of what it shows", () => {
+  const state = app(
+    tabsWorkspace("w1", [
+      [pane("w1:p1", "pi", "blocked"), pane("w1:p2", "pi", "working")],
+      [pane("w1:p3", "pi", "done"), pane("w1:p4", "claude", "idle")],
+    ]),
+  );
+  const sent = new Map([["w1", { paneId: "w1:p4", at: 1_000 }]]);
 
-  // done と working は状態の行にもある。窓口に置いたものを先にし、重ねて出さない。
-  expect(activeViewRows(state, sent).map((row) => row.pane.id)).toEqual(["w1:p1", "w1:p2"]);
+  const [group] = activeGroups(state, sent);
+
+  expect(group?.rows.map((row) => row.tab.id)).toEqual(["w1:t1", "w1:t2", "w1:t2", "w1:t1"]);
+  // 窓口も 1 行として数える。待機の行はどの件数にも入らない。
+  expect(group?.counts).toEqual({ blocked: 1, working: 1, done: 1 });
+});
+
+test("the tab name is added only when the workspace has more than one tab", () => {
+  // 1 タブの既定名「1」は、どの行でも同じなので出さない。
+  expect(showsTabName(workspace("w1", [pane("w1:p1", "pi", "working")]))).toBe(false);
+  expect(showsTabName(workspace("w1", [pane("w1:p1", "pi", "working")], 2))).toBe(true);
 });
 
 test("a window that needs attention moves to the attention side", () => {
   const state = app(workspace("w1", [pane("w1:p1", "pi", "blocked")]));
   const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
 
-  const rows = activeViewRows(state, sent);
+  const [group] = activeGroups(state, sent);
 
-  expect(rows.map((row) => row.pane.id)).toEqual(["w1:p1"]);
-  expect(rows[0]?.pane.agentStatus).toBe("blocked");
+  expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p1"]);
+  expect(group?.rows[0]?.pane.agentStatus).toBe("blocked");
 });
 
-test("nothing to read means no rows at all", () => {
+test("a finished window stays as one window row", () => {
+  const state = app(workspace("w1", [pane("w1:p1", "pi", "done"), pane("w1:p2", "pi", "working")]));
+  const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
+
+  const [group] = activeGroups(state, sent);
+
+  // 窓口の done は窓口の側に 1 行だけ残る。状態の側からは除く。
+  expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p1", "w1:p2"]);
+});
+
+test("nothing to read means no groups at all", () => {
   const state = app(workspace("w1", [pane("w1:p1", "pi", "idle"), pane("w1:p2", null, "unknown")]));
 
   // 窓口がシェルを指していても、状態の行が無ければ空。
-  expect(activeViewRows(state, new Map())).toEqual([]);
-  expect(activeViewRows(state, new Map([["w1", { paneId: "w1:p2", at: 1_000 }]]))).toEqual([]);
+  expect(activeGroups(state, new Map())).toEqual([]);
+  expect(activeGroups(state, new Map([["w1", { paneId: "w1:p2", at: 1_000 }]]))).toEqual([]);
 });

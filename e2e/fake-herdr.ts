@@ -171,6 +171,33 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     broadcast("pane.updated", { pane_id: paneId });
   };
 
+  // focus は 1 枚の seen を進めるだけなので、タブとスペースの集約は残りのペインから
+  // 引き直す。同じ値を上書きすると、他に動いているペインがあるスペースまで idle になる。
+  const STATUS_RANK: Record<string, number> = { blocked: 0, working: 1, done: 2, idle: 3 };
+  const aggregateStatus = (panes: readonly HerdrPane[]): HerdrTab["agent_status"] => {
+    let best: HerdrTab["agent_status"] = "unknown";
+    for (const pane of panes) {
+      const status = pane.agent_status ?? "unknown";
+      if (status === "unknown") continue;
+      if (best === "unknown" || STATUS_RANK[status]! < STATUS_RANK[best]!) best = status;
+    }
+    return best;
+  };
+
+  const refreshAggregates = (pane: HerdrPane) => {
+    const panes = snapshot.panes ?? [];
+    const tab = snapshot.tabs?.find((item) => item.tab_id === pane.tab_id);
+    if (tab) {
+      tab.agent_status = aggregateStatus(panes.filter((item) => item.tab_id === pane.tab_id));
+    }
+    const workspace = snapshot.workspaces?.find((item) => item.workspace_id === pane.workspace_id);
+    if (workspace) {
+      workspace.agent_status = aggregateStatus(
+        panes.filter((item) => item.workspace_id === pane.workspace_id),
+      );
+    }
+  };
+
   // pi 拡張がセッションの隣に書く live の段階（ADR 0035）。実物はターン中に上書きし続けるが、
   // E2E では phase の切り替わりと末尾の描画だけを確かめるため、2 回書いて短時間で消す。
   const piActivityPath = (paneId: string): string | null => {
@@ -645,12 +672,20 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
       }
       case "agent.focus": {
         const paneId = typeof params.target === "string" ? params.target : "";
-        if (!focus(paneId)) {
+        const target = findPane(paneId);
+        if (target === null || !focus(paneId)) {
           send(socket, { id, error: { code: "pane_not_found", message: paneId } });
           return;
         }
         send(socket, { id, result: { type: "ok" } });
         broadcast("pane.focused", { pane_id: paneId });
+        // 実 Herdr は focus したペインの seen を進める。hwc が既読に使うのはこの 1 点で、
+        // done だけが idle に戻る（working / blocked はそのまま）。
+        if (target.agent_status === "done") {
+          target.agent_status = "idle";
+          refreshAggregates(target);
+          broadcast("pane.updated", { pane_id: paneId });
+        }
         return;
       }
       case "pane.get": {

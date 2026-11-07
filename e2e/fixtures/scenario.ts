@@ -233,6 +233,18 @@ export async function createScenario(root: string): Promise<Scenario> {
           value: emptySessionPath,
         },
       },
+      // アクティブ一覧の束と、開いても消えない完了行を確かめるための done。
+      // ラベルは帯のワークスペース名で始まり、行では残り（api）だけが出る。
+      {
+        pane_id: "w1:p5",
+        workspace_id: "w1",
+        tab_id: "w1:t2",
+        cwd: dashboard,
+        label: "acme-dashboard-api",
+        agent_status: "done",
+        focused: false,
+        agent_session: null,
+      },
       {
         pane_id: "w2:p1",
         workspace_id: "w2",
@@ -307,6 +319,13 @@ export async function createScenario(root: string): Promise<Scenario> {
         terminal_title_stripped: "acme-dashboard",
       },
       {
+        pane_id: "w1:p5",
+        workspace_id: "w1",
+        cwd: dashboard,
+        agent: "pi",
+        terminal_title_stripped: "acme-dashboard",
+      },
+      {
         pane_id: "w2:p1",
         workspace_id: "w2",
         cwd: docs,
@@ -327,6 +346,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     snapshot,
     outputs: {
       ...outputs,
+      "w1:p5": "$ echo done\ndone\n$",
       "w3:p2": FOLDER_TRUST_SCREEN,
       "w3:p3": FOLDER_TRUST_SCREEN,
       "w3:p4": "› Ask Codex to do anything\n",

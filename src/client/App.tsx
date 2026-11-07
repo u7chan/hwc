@@ -57,7 +57,13 @@ import {
   writeListOpen,
   writeSelectedPane,
 } from "./selection";
-import { LIST_SCOPE_STORAGE_KEY, parseListScope, type ListScope } from "./scope";
+import {
+  LIST_SCOPE_STORAGE_KEY,
+  parseListScope,
+  pendingReadAfter,
+  shouldFocusOnLeave,
+  type ListScope,
+} from "./scope";
 import {
   SENT_PANE_STORAGE_KEY,
   parseSentPanes,
@@ -291,6 +297,8 @@ export function App() {
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const closeInFlight = useRef(false);
   const removeInFlight = useRef(false);
+  // 既読の保留。アクティブ一覧で開いたペインだけが入り、選択が離れた時点で判定する。
+  const pendingRead = useRef<string | null>(null);
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
@@ -432,21 +440,7 @@ export function App() {
       : (state.workspaces.find((workspace) => workspace.id === removing.workspaceId) ?? null);
   const removingAvailable = removingWorkspace?.worktree?.isLinkedWorktree === true;
 
-  // 新ペインがスナップショットに現れたら開く。応答の前に SSE が届いていれば、ここで 1 度だけ動く。
-  useEffect(() => {
-    if (pendingSelect === null || state === null) return;
-    if (findPane(state, pendingSelect) === null) return;
-    setView({ selectedPaneId: pendingSelect, expanded });
-    setPendingSelect(null);
-  }, [state, pendingSelect, expanded]);
-
-  const select = (paneId: string) => {
-    setPendingSelect(null);
-    setView({ selectedPaneId: paneId, expanded });
-    setSettingsOpen(false);
-  };
-
-  // 既読は Herdr の seen を進めて消す。失敗しても通知しない。次にその行を開いたときに
+  // 既読は Herdr の seen を進めて消す。失敗しても通知しない。次にその行を開いて離れたときに
   // もう一度送られるので、ここで知らせても利用者にできることが無い。
   const focusPane = (paneId: string) => {
     focusAgent(paneId).catch(() => {
@@ -454,10 +448,34 @@ export function App() {
     });
   };
 
-  const back = () => {
+  // 選択の変更は必ずここを通す。保留中の既読は、そのペインを離れる時点で done なら送る。
+  // 開いた時点で送らないので、読んでいる間は行が残る。保留は state にしない（再描画しない）。
+  // 同じペインへの移動（詳細のタブバーやツリーでの選び直し）はまだ離れていないので、保留を残す。
+  const moveTo = (paneId: string | null, opened = false) => {
+    const pending = pendingRead.current;
+    if (pending !== null) {
+      const status = state === null ? null : (findPane(state, pending)?.agentStatus ?? null);
+      if (shouldFocusOnLeave(pending, paneId, status)) focusPane(pending);
+    }
+    pendingRead.current = pendingReadAfter(pending, paneId, opened);
     setPendingSelect(null);
-    setView({ selectedPaneId: null, expanded });
+    setView({ selectedPaneId: paneId, expanded });
+    setSettingsOpen(false);
   };
+
+  // 保留を作るのはアクティブ一覧の行だけ。ツリー・詳細のタブバー・復元では作らない。
+  const openActivePane = (paneId: string) => moveTo(paneId, true);
+
+  const select = (paneId: string) => moveTo(paneId);
+
+  const back = () => moveTo(null);
+
+  // 新ペインがスナップショットに現れたら開く。応答の前に SSE が届いていれば、ここで 1 度だけ動く。
+  useEffect(() => {
+    if (pendingSelect === null || state === null) return;
+    if (findPane(state, pendingSelect) === null) return;
+    moveTo(pendingSelect);
+  }, [state, pendingSelect, expanded]);
 
   const openPaneMenu = (paneId: string, trigger: HTMLElement, fromList = false) => {
     setMenu({ target: { kind: "pane", id: paneId }, trigger, fromList, open: true });
@@ -534,7 +552,7 @@ export function App() {
       }
       // 選んでいないペインを閉じても、読んでいるペインを動かさない。
       if (target.action === "close" && target.next !== null && selectedPaneId === target.paneId) {
-        setView({ selectedPaneId: target.next, expanded });
+        moveTo(target.next);
       }
       setClosing(null);
     });
@@ -816,7 +834,7 @@ export function App() {
               onScope={changeScope}
               expanded={expanded}
               onSelect={select}
-              onFocus={focusPane}
+              onOpen={openActivePane}
               onToggle={toggle}
               openPaneMenuId={menu?.open === true && menu.fromList ? menuPaneId : null}
               openWorkspaceMenuId={menu?.open === true ? (menuWorkspace?.id ?? null) : null}
