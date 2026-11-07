@@ -1,8 +1,12 @@
 export type ChatMessage = {
   id: string;
-  role: "user" | "agent";
+  // error はターンが失敗した記録。本文はプロバイダや CLI が返した失敗の文言で、
+  // エージェントの発話ではない。
+  role: "user" | "agent" | "error";
   text: string;
   at: number;
+  // 同一文言の失敗が連続したときの試行回数。1 のときは持たない。
+  count?: number;
   // ペイン配下のファイル名だけを持つ。絶対パスはクライアントへ渡さない。
   attachments?: string[];
 };

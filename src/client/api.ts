@@ -136,17 +136,26 @@ function toChatMessage(value: unknown): ChatMessage | null {
   if (typeof value !== "object" || value === null) return null;
   const message = value as Partial<ChatMessage>;
   if (typeof message.id !== "string") return null;
-  if (message.role !== "user" && message.role !== "agent") return null;
+  if (message.role !== "user" && message.role !== "agent" && message.role !== "error") {
+    return null;
+  }
   if (typeof message.text !== "string") return null;
   if (typeof message.at !== "number") return null;
   const attachments = toAttachmentNames(message.attachments);
+  const count = message.role === "error" ? toRetryCount(message.count) : undefined;
   return {
     id: message.id,
     role: message.role,
     text: message.text,
     at: message.at,
+    ...(count === undefined ? {} : { count }),
     ...(attachments === undefined ? {} : { attachments }),
   };
+}
+
+// 1 回だけの失敗は count を持たない。飾りの値が壊れても失敗の行は捨てない。
+function toRetryCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 1 ? value : undefined;
 }
 
 export function toChatSnapshot(value: unknown): ChatSnapshot | null {

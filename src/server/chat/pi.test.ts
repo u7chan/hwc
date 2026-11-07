@@ -683,6 +683,98 @@ test("the usage total falls back to the sum of its parts", async () => {
   });
 });
 
+test("a failed turn stays in the conversation as an error row", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    // pi は失敗したターンを本文の無い assistant として書く。行が無いと、送った
+    // メッセージに何も返らないまま idle に戻り、届いていないように見える。
+    assistant("a1", "u1", [], {
+      stopReason: "error",
+      errorMessage: '429: {"type":"server_error","message":"at capacity"}',
+    }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages).toEqual([
+    { id: "u1", role: "user", text: "hello", at: 1_700_000_000_000 },
+    {
+      id: "a1:error",
+      role: "error",
+      text: '429: {"type":"server_error","message":"at capacity"}',
+      at: 1_700_000_000_001,
+    },
+  ]);
+});
+
+test("an aborted turn is not an error row", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", [], { stopReason: "aborted", errorMessage: "Aborted" }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages).toEqual([
+    { id: "u1", role: "user", text: "hello", at: 1_700_000_000_000 },
+  ]);
+});
+
+test("a failed turn keeps the text it had written", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("half an answer"), {
+      stopReason: "error",
+      errorMessage: "Request timed out.",
+    }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages.map((message) => [message.role, message.text])).toEqual([
+    ["user", "hello"],
+    ["agent", "half an answer"],
+    ["error", "Request timed out."],
+  ]);
+});
+
+test("identical failed attempts are folded into one row", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", [], { stopReason: "error", errorMessage: "429: busy" }),
+    entry("context_edit", "x1", "a1", {}),
+    assistant("a2", "x1", [], { stopReason: "error", errorMessage: "429: busy" }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  // 自動リトライの試行ごとに行を増やさない。回数は count に残す。
+  expect(snapshot.messages).toEqual([
+    { id: "u1", role: "user", text: "hello", at: 1_700_000_000_000 },
+    { id: "a1:error", role: "error", text: "429: busy", at: 1_700_000_000_001, count: 2 },
+  ]);
+});
+
+test("a different failure or an answer in between starts a new row", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", [], { stopReason: "error", errorMessage: "429: busy" }),
+    assistant("a2", "a1", [], { stopReason: "error", errorMessage: "Request timed out." }),
+    assistant("a3", "a2", text("half an answer")),
+    assistant("a4", "a3", [], { stopReason: "error", errorMessage: "429: busy" }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages.map((message) => [message.text, message.count ?? 1])).toEqual([
+    ["hello", 1],
+    ["429: busy", 1],
+    ["Request timed out.", 1],
+    ["half an answer", 1],
+    ["429: busy", 1],
+  ]);
+});
+
 test("an aborted or failed turn does not report usage", async () => {
   const path = await writeSession(
     header(),
@@ -852,6 +944,52 @@ test("a compaction without tokensBefore still windows the history", async () => 
     index: 1,
   });
   expect(snapshot.messages.map((message) => message.id)).toEqual(["u2"]);
+});
+
+test("failures on both sides of a compaction are not folded together", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", [], { stopReason: "error", errorMessage: "429: busy" }),
+    entry("compaction", "c1", "a1", { summary: "so far", firstKeptEntryId: "u1" }),
+    assistant("a2", "c1", [], { stopReason: "error", errorMessage: "429: busy" }),
+    assistant("a3", "a2", text("after")),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  // 畳んだ行は区切りの手前に残る。またぐと、圧縮後の失敗が圧縮前の行の回数に入る。
+  expect(snapshot.messages.map((message) => [message.id, message.count ?? 1])).toEqual([
+    ["u1", 1],
+    ["a1:error", 1],
+    ["a2:error", 1],
+    ["a3", 1],
+  ]);
+  expect(snapshot.compaction?.index).toBe(2);
+});
+
+test("an error row before the compaction counts toward the rule position", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "hello"),
+    assistant("a1", "u1", text("hi")),
+    user("u2", "a1", "again"),
+    assistant("a2", "u2", [], { stopReason: "error", errorMessage: "429: busy" }),
+    entry("compaction", "c1", "a2", { summary: "so far", firstKeptEntryId: "u1" }),
+    assistant("a3", "c1", text("after")),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+
+  // 区切りは表示行の位置なので、error 行も 1 行として数える。
+  expect(snapshot.compaction?.index).toBe(4);
+  expect(snapshot.messages.map((message) => message.id)).toEqual([
+    "u1",
+    "a1",
+    "u2",
+    "a2:error",
+    "a3",
+  ]);
 });
 
 test("only the newest compaction is shown", async () => {
