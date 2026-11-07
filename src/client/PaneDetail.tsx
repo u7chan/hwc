@@ -433,7 +433,7 @@ function ChatLog(props: {
       {rows.map(({ message, pending }, index) => (
         <Fragment key={message.id}>
           {echoGap === index ? echoRow : null}
-          <li class="hwc-msg" data-role={message.role}>
+          <li class="hwc-msg" data-role={message.role} data-pending={pending ? "true" : undefined}>
             {message.role === "agent" ? (
               <>
                 <Markdown text={message.text} taskScope={`${index + 1}番目のメッセージ`} />
