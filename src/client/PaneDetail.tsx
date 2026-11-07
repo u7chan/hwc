@@ -41,6 +41,7 @@ import {
   type PendingMessage,
   usePaneChat,
 } from "./chat";
+import { enterInsertsNewline } from "./input";
 import {
   chipOnInput,
   type CommandId,
@@ -1638,8 +1639,11 @@ export function PaneDetail(props: PaneDetailProps) {
                   const composing = event.isComposing || event.keyCode === 229;
                   if (event.key !== "Enter") return;
                   if (composing) return;
-                  // シェルは改行を受け取れない。Shift+Enter で改行を入れさせない。
-                  if (event.shiftKey) {
+                  // シェルは改行を受け取れない。タッチ端末でも Enter で送る。
+                  const newline =
+                    event.shiftKey ||
+                    (!shell && enterInsertsNewline((query) => window.matchMedia(query).matches));
+                  if (newline) {
                     if (shell) event.preventDefault();
                     return;
                   }
