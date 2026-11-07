@@ -477,7 +477,12 @@ function ChatLog(props: {
               <span class="hwc-msg-elapsed">{formatElapsed(waiting)}</span>
             )}
           </div>
-          {thought === "" ? null : <p class="hwc-msg-thought">{thought}</p>}
+          {props.compacting ? null : (
+            // 高さを先に確保する。thinking の改行で伸び縮みすると、底の追従と上の行が跳ねる。
+            <div class="hwc-msg-live">
+              {thought === "" ? null : <p class="hwc-msg-thought">{thought}</p>}
+            </div>
+          )}
         </li>
       ) : null}
     </ol>

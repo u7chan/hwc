@@ -171,7 +171,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   };
 
   // pi 拡張がセッションの隣に書く live の段階（ADR 0035）。実物はターン中に上書きし続けるが、
-  // E2E では phase と末尾の描画だけを確かめるため、1 回書いて短時間で消す。
+  // E2E では phase の切り替わりと末尾の描画だけを確かめるため、2 回書いて短時間で消す。
   const piActivityPath = (paneId: string): string | null => {
     const session = findPane(paneId)?.agent_session ?? null;
     return session?.agent === "pi" && session.kind === "path" && session.value
@@ -179,32 +179,41 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
       : null;
   };
 
+  // 送信のたびに増やす。古いタイマーが新しいターンの状態を上書きしないようにする。
+  const activityEpochs = new Map<string, number>();
+
   const clearPiActivity = async (paneId: string): Promise<void> => {
     const path = piActivityPath(paneId);
     if (path !== null) await rm(path, { force: true }).catch(() => {});
   };
 
-  const startPiActivity = async (paneId: string): Promise<void> => {
+  const writePiActivity = async (paneId: string, body: Record<string, unknown>) => {
     const path = piActivityPath(paneId);
     if (path === null) return;
-    try {
-      await writeFile(
-        path,
-        `${JSON.stringify({
-          v: 1,
-          at: Date.now(),
-          phase: "thinking",
-          text: "E2E: 依頼の手順を組み立てています。\n次に bash で確認します。",
-        })}\n`,
-      );
-    } catch {
-      return;
-    }
+    await writeFile(path, `${JSON.stringify(body)}\n`).catch(() => {});
+  };
+
+  const startPiActivity = async (paneId: string): Promise<void> => {
+    const epoch = (activityEpochs.get(paneId) ?? 0) + 1;
+    activityEpochs.set(paneId, epoch);
+    const current = () => activityEpochs.get(paneId) === epoch;
+    await writePiActivity(paneId, { v: 1, at: Date.now(), phase: "waiting" });
     setAgentStatus(paneId, "working");
+    // 折り返しであふれる長さにして、2 行分の確保と上側の切り取りを E2E で見る。
     later(async () => {
+      if (!current() || findPane(paneId)?.agent_status !== "working") return;
+      await writePiActivity(paneId, {
+        v: 1,
+        at: Date.now(),
+        phase: "thinking",
+        text: "E2E: 依頼の手順を組み立てています。長い行は折り返して 2 行に収まり、あふれた上側は切り取られます。\n次に bash で確認します。",
+      });
+    }, 1_200);
+    later(async () => {
+      if (!current()) return;
       await clearPiActivity(paneId);
       setAgentStatus(paneId, "idle");
-    }, 6000);
+    }, 6_000);
   };
 
   // /compact の完了を架空セッションに追記する。最後の user メッセージを kept の先頭にし、
@@ -530,6 +539,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         // 停止ボタンは Esc だけを送る。実 Herdr と同じく、実行中のエージェントは
         // idle に戻ったものとして次のスナップショットを作る。
         if (keys.some((key) => key === "esc" || key === "escape")) {
+          activityEpochs.set(paneId, (activityEpochs.get(paneId) ?? 0) + 1);
           void clearPiActivity(paneId);
           target.agent_status = "idle";
           const tab = snapshot.tabs?.find((item) => item.tab_id === target.tab_id);

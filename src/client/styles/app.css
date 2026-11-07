@@ -2721,13 +2721,35 @@ p.hwc-compaction,
   font-variant-numeric: tabular-nums;
 }
 
-/* 実行中の段階。何をしているかを、経過時間の左に短く添える。 */
+/* 実行中の段階。何をしているかを、経過時間の左に短く添える。
+   長い文言でも行を増やさず、幅が足りないときは省略する。 */
 .hwc-msg-phase {
+  min-width: 0;
+  overflow: hidden;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* thinking の末尾。積み上げないので、高さは常に 2 行までに収める。 */
+.hwc-msg-elapsed,
+.hwc-typing,
+.hwc-compaction-pending,
+.hwc-compaction-cancel {
+  flex-shrink: 0;
+}
+
+/* thinking は 2 行分の高さを先に確保する。差分のたびに高さが変わると、底の追従が
+   一瞬遅れてスクロールが末尾でなくなり、上の行が跳ねる。中身は下端に寄せ、
+   折り返しであふれた上側を切って、新しい方だけを見せる。 */
+.hwc-msg-live {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: calc(var(--text-secondary) * 3);
+  overflow: hidden;
+}
+
 .hwc-msg-thought {
   margin: 0;
   color: var(--color-secondary);
