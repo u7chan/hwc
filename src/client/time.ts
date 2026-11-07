@@ -97,14 +97,13 @@ export function workingSinceForSave(
   return record;
 }
 
-// 完了からの経過は、観測した完了時刻からの差で出す。覚えていなければ出さない。
-export function finishedMs(
+// 完了した時刻は、観測した完了時刻をそのまま出す。覚えていなければ出さない。
+export function finishedClock(
   finished: ReadonlyMap<string, number>,
   paneId: string,
-  now: number,
-): number | null {
+): string | null {
   const at = finished.get(paneId);
-  return at === undefined ? null : Math.max(0, now - at);
+  return at === undefined ? null : formatClock(at);
 }
 
 // 完了時刻は、直前の観測で working だったペインが done / idle に移ったときだけ記録する。

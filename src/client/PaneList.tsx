@@ -28,7 +28,7 @@ import {
 import { MENU_ID } from "./Menu";
 import type { SentPane } from "./sent";
 import { StatusIcon, StatusLabel } from "./StatusLabel";
-import { finishedMs, formatElapsed, workingMs } from "./time";
+import { finishedClock, formatElapsed, workingMs } from "./time";
 
 type PaneListProps = {
   state: AppState;
@@ -130,7 +130,7 @@ function activePlace(workspaceLabel: string, tabLabel: string): string {
   return tabLabel === "" ? workspaceLabel : `${workspaceLabel} · ${tabLabel}`;
 }
 
-// 右端は「あとどれだけ待つか」。要対応だけは時刻ではなく言葉で示す。
+// 右端は「あとどれだけ待つか」と「いつ終わったか」。要対応だけは時刻ではなく言葉で示す。
 function ActiveTrail(props: {
   pane: PaneState;
   workingSince: ReadonlyMap<string, number>;
@@ -140,11 +140,12 @@ function ActiveTrail(props: {
   if (props.pane.agentStatus === "blocked") {
     return <span class="hwc-active-flag">要対応</span>;
   }
-  const ms =
-    props.pane.agentStatus === "working"
-      ? workingMs(props.workingSince, props.pane.id, props.now)
-      : finishedMs(props.finishedAt, props.pane.id, props.now);
-  return ms === null ? null : <span class="hwc-pane-elapsed">{formatElapsed(ms)}</span>;
+  if (props.pane.agentStatus === "working") {
+    const ms = workingMs(props.workingSince, props.pane.id, props.now);
+    return ms === null ? null : <span class="hwc-pane-elapsed">{formatElapsed(ms)}</span>;
+  }
+  const clock = finishedClock(props.finishedAt, props.pane.id);
+  return clock === null ? null : <span class="hwc-pane-elapsed">{clock}</span>;
 }
 
 // 窓口と状態の行を 1 行ずつ並べる。ツリーを畳まないので、どのスペースのどのタブで

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { AgentStatus, AppState } from "../server/herdr/state";
 import {
-  finishedMs,
+  finishedClock,
   formatClock,
   formatElapsed,
   parseFinishedAt,
@@ -294,12 +294,10 @@ test("a saved finished time is read back from the device", () => {
   expect([...parseFinishedAt(null, 5_000)]).toEqual([]);
 });
 
-test("the time since a pane finished never reads as negative", () => {
-  const finished = new Map([["w1:p1", 9_000]]);
+test("a pane that finished shows when it finished, not how long ago", () => {
+  const finished = new Map([["w1:p1", new Date(2026, 10, 2, 9, 5).getTime()]]);
 
-  expect(finishedMs(finished, "w1:p1", 12_000)).toBe(3_000);
-  // 覚えていないペインには経過を出さない。
-  expect(finishedMs(finished, "w1:p2", 12_000)).toBeNull();
-  // 端末の時計が戻っても負の値は出さない。
-  expect(finishedMs(finished, "w1:p1", 0)).toBe(0);
+  expect(finishedClock(finished, "w1:p1")).toBe("09:05");
+  // 覚えていないペインには時刻を出さない。
+  expect(finishedClock(finished, "w1:p2")).toBeNull();
 });

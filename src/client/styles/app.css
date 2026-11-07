@@ -1131,7 +1131,7 @@ button {
   white-space: nowrap;
 }
 
-/* 経過は目安。数字が揺れないよう等幅の数字で出す。 */
+/* 経過と終了時刻は目安。数字が揺れないよう等幅の数字で出す。 */
 .hwc-pane-elapsed {
   flex: none;
   margin-left: var(--space-2);
