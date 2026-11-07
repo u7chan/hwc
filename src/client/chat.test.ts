@@ -4,7 +4,6 @@ import type { PendingMessage } from "./chat";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
 import {
   agentInfo,
-  agentInfoLabel,
   chatPollDelay,
   compactionLabel,
   contextDetails,
@@ -214,12 +213,6 @@ test("model and effort are shown only when the session has them", () => {
     model: null,
     effort: "low",
   });
-});
-
-test("the label shows the parts that exist", () => {
-  expect(agentInfoLabel({ model: "pi-large", effort: "high" })).toBe("pi-large · effort high");
-  expect(agentInfoLabel({ model: "pi-large", effort: null })).toBe("pi-large");
-  expect(agentInfoLabel({ model: null, effort: "low" })).toBe("effort low");
 });
 
 test("token counts are shortened the way pi's footer does", () => {

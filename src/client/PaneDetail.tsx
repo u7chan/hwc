@@ -1,12 +1,5 @@
 import { Fragment, type ComponentChildren, type Ref } from "preact";
-import {
-  useEffect,
-  useId,
-  useImperativeHandle,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "preact/hooks";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type {
   ChatCompaction,
   ChatContext,
@@ -33,7 +26,7 @@ import {
 } from "./attachments";
 import {
   agentInfo,
-  agentInfoLabel,
+  type AgentInfo,
   compactionLabel,
   contextDetails,
   contextMeter,
@@ -66,6 +59,7 @@ import {
 } from "./commands";
 import { useCopy } from "./copy";
 import { readDraft, readReply, storage, writeDraft, writeReply } from "./drafts";
+import { useHint } from "./hint";
 import {
   AgentGlyphIcon,
   ArrowDownIcon,
@@ -503,96 +497,17 @@ function CommandBadge(props: { id: CommandId }) {
 
 function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usage?: ChatUsage }) {
   const { view, context, usage } = props;
-  const [open, setOpen] = useState<"hover" | "pinned" | null>(null);
-  const root = useRef<HTMLSpanElement>(null);
-  const tooltip = useRef<HTMLSpanElement>(null);
-  const tooltipId = useId();
-  useLayoutEffect(() => {
-    if (open === null || root.current === null || tooltip.current === null) return;
-    const anchor = root.current;
-    const popup = tooltip.current;
-    const viewport = window.visualViewport;
-    const update = () => {
-      const rect = anchor.getBoundingClientRect();
-      const top = viewport?.offsetTop ?? 0;
-      const height = viewport?.height ?? window.innerHeight;
-      const above = Math.max(0, rect.top - top - 8);
-      const below = Math.max(0, top + height - rect.bottom - 8);
-      const placement = above >= below ? "above" : "below";
-      popup.dataset.placement = placement;
-      popup.style.maxHeight = `${placement === "above" ? above : below}px`;
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(anchor);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    viewport?.addEventListener("resize", update);
-    viewport?.addEventListener("scroll", update);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-      viewport?.removeEventListener("resize", update);
-      viewport?.removeEventListener("scroll", update);
-    };
-  }, [open]);
-  useEffect(() => {
-    if (open === null) return;
-    const dismiss = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(null);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        if (document.activeElement === tooltip.current)
-          root.current?.querySelector("button")?.focus();
-        setOpen(null);
-      }
-    };
-    document.addEventListener("pointerdown", dismiss);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", dismiss);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [open]);
+  const hint = useHint();
   return (
-    <span
-      class="hwc-context-wrap"
-      ref={root}
-      onPointerEnter={(event) => {
-        if (event.pointerType === "mouse") setOpen((current) => current ?? "hover");
-      }}
-      onPointerLeave={(event) => {
-        if (event.pointerType === "mouse" && document.activeElement !== tooltip.current)
-          setOpen((current) => (current === "hover" ? null : current));
-      }}
-    >
+    <span class="hwc-hint-wrap" ref={hint.root} {...hint.wrapperProps}>
       <button
         type="button"
         class="hwc-context"
         data-tone={view.tone}
         aria-label={`コンテキスト使用量 ${view.wide}`}
-        aria-describedby={open === null ? undefined : tooltipId}
-        aria-expanded={open !== null}
-        onFocus={(event) => {
-          if (event.currentTarget.matches(":focus-visible"))
-            setOpen((current) => current ?? "hover");
-        }}
-        onBlur={(event) => {
-          if (event.relatedTarget !== null) {
-            if (!root.current?.contains(event.relatedTarget as Node)) setOpen(null);
-          } else setOpen((current) => (current === "hover" ? null : current));
-        }}
-        onClick={(event) => {
-          const selection = window.getSelection();
-          if (
-            !selection?.isCollapsed &&
-            event.currentTarget.contains(selection?.anchorNode ?? null)
-          )
-            return;
-          setOpen((current) => (current === "pinned" ? null : "pinned"));
-        }}
+        aria-describedby={hint.open === null ? undefined : hint.panelId}
+        aria-expanded={hint.open !== null}
+        {...hint.triggerProps}
       >
         <span class="hwc-context-text" aria-hidden="true">
           <span class="hwc-context-wide">{view.wide}</span>
@@ -605,26 +520,76 @@ function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usa
         )}
       </button>
       <span
-        id={tooltipId}
-        ref={tooltip}
+        id={hint.panelId}
+        ref={hint.panel}
         role="tooltip"
-        class="hwc-context-tooltip"
-        data-open={open !== null}
-        tabIndex={open === null ? -1 : 0}
-        onBlur={(event) => {
-          if (!root.current?.contains(event.relatedTarget as Node | null)) setOpen(null);
-        }}
+        class="hwc-hint-panel"
+        data-open={hint.open !== null}
+        tabIndex={hint.panelTabIndex}
       >
-        <span class="hwc-context-tooltip-title">直近のコンテキスト使用量</span>
+        <span class="hwc-hint-title">直近のコンテキスト使用量</span>
         {contextDetails(context, usage).map(([label, value]) => (
-          <span class="hwc-context-tooltip-row" key={label}>
+          <span class="hwc-hint-row" key={label}>
             <span>{label}</span>
             <span>{value}</span>
           </span>
         ))}
-        <span class="hwc-context-tooltip-note">
+        <span class="hwc-hint-note">
           設定枠はモデル仕様上の最大値とは限りません。自動圧縮は枠に達する前に行われることがあります。
         </span>
+      </span>
+    </span>
+  );
+}
+
+// モデル名は狭い画面で省略される。全体を読む口と、名前を持ち出す口を同じパネルに置く。
+function AgentInfoHint(props: { info: AgentInfo }) {
+  const model = props.info.model;
+  const effort = props.info.effort;
+  const hint = useHint();
+  const { copiedId, copy } = useCopy();
+  const copied = copiedId === "model";
+  return (
+    <span class="hwc-hint-wrap hwc-agent-hint" ref={hint.root} {...hint.wrapperProps}>
+      <button
+        type="button"
+        class="hwc-agent-info"
+        aria-expanded={hint.open !== null}
+        aria-controls={hint.panelId}
+        {...hint.triggerProps}
+      >
+        {model === null ? null : <span class="hwc-input-model">{model}</span>}
+        {effort === null ? null : <span class="hwc-input-effort">{effort}</span>}
+      </button>
+      <span
+        id={hint.panelId}
+        ref={hint.panel}
+        role="group"
+        aria-label="モデルとエフォート"
+        class="hwc-hint-panel"
+        data-open={hint.open !== null}
+        tabIndex={hint.panelTabIndex}
+      >
+        {model === null ? null : (
+          <span class="hwc-model-row">
+            <span class="hwc-model-name">{model}</span>
+            <button
+              type="button"
+              class="hwc-model-copy"
+              data-copied={copied}
+              aria-label={copied ? "コピーしました" : "モデル名をコピー"}
+              onClick={() => copy("model", model)}
+            >
+              <CopyGlyph copied={copied} size={14} />
+            </button>
+          </span>
+        )}
+        {effort === null ? null : (
+          <span class="hwc-hint-row">
+            <span>エフォート</span>
+            <span>{effort}</span>
+          </span>
+        )}
       </span>
     </span>
   );
@@ -1690,16 +1655,7 @@ export function PaneDetail(props: PaneDetailProps) {
                     <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
                       <AgentGlyphIcon agent={pane.agent} size={14} />
                     </span>
-                    {info?.model == null ? null : (
-                      <span class="hwc-input-model" title={agentInfoLabel(info)}>
-                        {info.model}
-                      </span>
-                    )}
-                    {info?.effort == null ? null : (
-                      <span class="hwc-input-effort" title={agentInfoLabel(info)}>
-                        {info.effort}
-                      </span>
-                    )}
+                    {info === null ? null : <AgentInfoHint info={info} />}
                     {meter === null || snapshot?.context == null ? null : (
                       <ContextMeter
                         key={pane.id}

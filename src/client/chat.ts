@@ -125,13 +125,6 @@ export function agentInfo(snapshot: ChatSnapshot | null): AgentInfo | null {
   return { model: snapshot.model, effort: snapshot.effort };
 }
 
-// 狭い画面ではモデル名が省略される。触れたときに全体が読めるようにする。
-export function agentInfoLabel(info: AgentInfo): string {
-  return [info.model, info.effort === null ? null : `effort ${info.effort}`]
-    .filter((part): part is string => part !== null)
-    .join(" · ");
-}
-
 // pi の footer と同じ丸め。桁が上がる境目で単位を切り替える。
 export function formatTokens(count: number): string {
   if (count < 1_000) return count.toString();
