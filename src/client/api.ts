@@ -9,6 +9,7 @@ import type {
 } from "../server/chat/contract";
 import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
+import { parsePaneActivity, type PaneActivity } from "../shared/activity";
 import {
   type AgentKind,
   type AgentModel,
@@ -29,6 +30,8 @@ export const OUTPUT_POLL_MS = 2_000;
 // 実行中は返答が届き続けるので短く、待機中は追記が無いので長く寝かせる。
 export const CHAT_POLL_ACTIVE_MS = 2_000;
 export const CHAT_POLL_IDLE_MS = 5_000;
+// 実行中の段階は 1 秒で十分。thinking の末尾が追いつく程度に短くする。
+export const ACTIVITY_POLL_MS = 1_000;
 
 export type ChatRead =
   | { kind: "snapshot"; snapshot: ChatSnapshot }
@@ -293,6 +296,19 @@ export async function readChat(
   const snapshot = toChatSnapshot(await response.json());
   if (snapshot === null) return { kind: "unavailable" };
   return { kind: "snapshot", snapshot };
+}
+
+// 会話とは別の使い捨ての取得口。ETag も持たず、取れなければ null に畳む。
+export async function readActivity(
+  paneId: string,
+  signal?: AbortSignal,
+): Promise<PaneActivity | null> {
+  const response = await client.api.panes[":id"].activity.$get(paneParam(paneId), {
+    init: { signal },
+  });
+  if (!response.ok) throw new Error(`activity: ${response.status}`);
+  const body = (await response.json()) as { activity?: unknown };
+  return parsePaneActivity(body.activity);
 }
 
 export async function sendInput(

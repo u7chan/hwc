@@ -16,6 +16,8 @@ import type {
 } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
+import type { PaneActivity } from "../shared/activity";
+import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
 import { isLayoutShift, isNearBottom } from "./scroll";
 import {
@@ -339,6 +341,9 @@ function ChatLog(props: {
   snapshot: ChatSnapshot;
   replying: boolean;
   compacting: boolean;
+  // 高さの予約は pi の live 表示だけに効かせる。他のエージェントの行を伸ばさない。
+  live: boolean;
+  activity: PaneActivity | null;
   stopping: boolean;
   waitingMs: number | null;
   copiedId: string | null;
@@ -413,6 +418,10 @@ function ChatLog(props: {
   )
     return <ChatEmpty />;
   const waiting = props.compacting ? props.compactionElapsedMs : props.waitingMs;
+  // 圧縮中は hwc のローカル表示が正。拡張の段階と重ねない。
+  const activity = props.compacting ? null : props.activity;
+  const phase = activity === null ? null : activityLabel(activity);
+  const thought = activity === null ? "" : activitySnippet(activity.text);
   return (
     <ol class="hwc-chat">
       {compactionBlock !== null && compactionAt === 0 ? compactionBlock : null}
@@ -446,12 +455,13 @@ function ChatLog(props: {
           data-role="agent"
           aria-label={props.compacting ? "会話を圧縮しています" : "返答を待っています"}
         >
-          <div class="hwc-msg-meta">
+          <div class="hwc-msg-meta hwc-msg-meta-live">
             <span class="hwc-typing">
               <span />
               <span />
               <span />
             </span>
+            {phase === null ? null : <span class="hwc-msg-phase">{phase}</span>}
             {props.compacting ? (
               <>
                 <span class="hwc-compaction-pending">会話を圧縮しています</span>
@@ -469,6 +479,12 @@ function ChatLog(props: {
               <span class="hwc-msg-elapsed">{formatElapsed(waiting)}</span>
             )}
           </div>
+          {props.live && !props.compacting ? (
+            // 高さを先に確保する。thinking の改行で伸び縮みすると、底の追従と上の行が跳ねる。
+            <div class="hwc-msg-live">
+              {thought === "" ? null : <p class="hwc-msg-thought">{thought}</p>}
+            </div>
+          ) : null}
         </li>
       ) : null}
     </ol>
@@ -709,6 +725,12 @@ export function PaneDetail(props: PaneDetailProps) {
     failed: chatFailed,
     refresh: refreshChat,
   } = usePaneChat(pane.id, pane.chat && !blocked, pane.agentStatus);
+  // 実行中の段階は pi 拡張の sidecar からだけ取る（ADR 0035）。
+  const activity = usePaneActivity(
+    pane.id,
+    pane.agent === "pi" && pane.chat && !blocked,
+    pane.agentStatus,
+  );
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
   const normalBody = paneBody({
@@ -1395,6 +1417,8 @@ export function PaneDetail(props: PaneDetailProps) {
                 snapshot={body.snapshot}
                 replying={replying}
                 compacting={compacting}
+                live={pane.agent === "pi"}
+                activity={activity}
                 stopping={stopping}
                 waitingMs={waitingMs}
                 copiedId={copiedId}

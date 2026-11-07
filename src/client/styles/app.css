@@ -2721,6 +2721,55 @@ p.hwc-compaction,
   font-variant-numeric: tabular-nums;
 }
 
+/* 実行中の段階。何をしているかを、経過時間の左に短く添える。
+   長い文言でも行を増やさず、幅が足りないときは省略する。 */
+.hwc-msg-phase {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hwc-msg-elapsed,
+.hwc-typing,
+.hwc-compaction-pending,
+.hwc-compaction-cancel {
+  flex-shrink: 0;
+}
+
+/* 文字はベースラインで揃える。等幅の経過時間と本文のフォントでは行の高さが違い、
+   center だと秒数だけ浮いて見える。3 点とボタンは文字ではないので個別に中央へ。 */
+.hwc-msg-meta-live {
+  align-items: baseline;
+}
+
+.hwc-msg-meta-live .hwc-typing,
+.hwc-msg-meta-live .hwc-compaction-cancel {
+  align-self: center;
+}
+
+/* thinking は 2 行分の高さを先に確保する。差分のたびに高さが変わると、底の追従が
+   一瞬遅れてスクロールが末尾でなくなり、上の行が跳ねる。中身は下端に寄せ、
+   折り返しであふれた上側を切って、新しい方だけを見せる。 */
+.hwc-msg-live {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: calc(var(--text-secondary) * 3);
+  overflow: hidden;
+}
+
+.hwc-msg-thought {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* 圧縮中だけ、返答待ちの 3 点に何が起きているかを添える。 */
 .hwc-compaction-pending {
   color: var(--color-secondary);
