@@ -2283,6 +2283,13 @@ p.hwc-compaction,
   line-height: var(--line-body);
 }
 
+/* 送信が確定するまでは進行中の面にして、送信済みの青い吹き出しと分ける。
+   状態は色だけに頼らず、時刻の代わりに「送信中」と出す。 */
+.hwc-msg[data-pending="true"] .hwc-msg-bubble {
+  background: var(--color-active-bg);
+  color: var(--color-text);
+}
+
 .hwc-msg-body {
   position: relative;
   min-width: 0;
@@ -2326,6 +2333,11 @@ p.hwc-compaction,
   padding-left: var(--space-2);
   border-left: 2px solid currentColor;
   opacity: 0.82;
+}
+
+/* 折り畳みの … は吹き出しの面の色で隠す。 */
+.hwc-msg[data-pending="true"] .hwc-msg-more {
+  background: linear-gradient(90deg, transparent, var(--color-active-bg) 60%);
 }
 
 .hwc-msg-more {
