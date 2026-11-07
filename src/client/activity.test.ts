@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import { ACTIVITY_POLL_MS } from "./api";
-import { activityLabel, activityPollDelay, activitySnippet } from "./activity";
+import {
+  activityLabel,
+  activityLoadAllowed,
+  activityPollDelay,
+  activitySnippet,
+  selectActivity,
+} from "./activity";
 import type { PaneActivity } from "../shared/activity";
 
 const base: PaneActivity = { phase: "thinking", text: "", tool: null, tools: 1, at: 0 };
@@ -44,4 +50,21 @@ test("polls only while working and visible", () => {
   expect(activityPollDelay("working", "hidden")).toBeNull();
   expect(activityPollDelay("idle", "visible")).toBeNull();
   expect(activityPollDelay("unknown", "visible")).toBeNull();
+});
+
+test("never fetches while hidden or while the run is over", () => {
+  expect(activityLoadAllowed("working", "visible")).toBe(true);
+  // 隠れた状態で開いたとき・可視復帰したときも、working でなければ読まない。
+  expect(activityLoadAllowed("working", "hidden")).toBe(false);
+  expect(activityLoadAllowed("idle", "visible")).toBe(false);
+  expect(activityLoadAllowed("blocked", "visible")).toBe(false);
+});
+
+test("a disabled hook does not return the previous pane's activity", () => {
+  const activity: PaneActivity = { ...base, text: "前のターン", at: 1 };
+  expect(selectActivity(true, "w1:p1", { paneId: "w1:p1", activity })).toEqual(activity);
+  // 同じペイン id でも、無効化（codex に変わった等）や別ペインなら出さない。
+  expect(selectActivity(false, "w1:p1", { paneId: "w1:p1", activity })).toBeNull();
+  expect(selectActivity(true, "w1:p2", { paneId: "w1:p1", activity })).toBeNull();
+  expect(selectActivity(true, "w1:p1", null)).toBeNull();
 });

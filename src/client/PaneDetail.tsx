@@ -341,6 +341,8 @@ function ChatLog(props: {
   snapshot: ChatSnapshot;
   replying: boolean;
   compacting: boolean;
+  // 高さの予約は pi の live 表示だけに効かせる。他のエージェントの行を伸ばさない。
+  live: boolean;
   activity: PaneActivity | null;
   stopping: boolean;
   waitingMs: number | null;
@@ -477,12 +479,12 @@ function ChatLog(props: {
               <span class="hwc-msg-elapsed">{formatElapsed(waiting)}</span>
             )}
           </div>
-          {props.compacting ? null : (
+          {props.live && !props.compacting ? (
             // 高さを先に確保する。thinking の改行で伸び縮みすると、底の追従と上の行が跳ねる。
             <div class="hwc-msg-live">
               {thought === "" ? null : <p class="hwc-msg-thought">{thought}</p>}
             </div>
-          )}
+          ) : null}
         </li>
       ) : null}
     </ol>
@@ -1415,6 +1417,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 snapshot={body.snapshot}
                 replying={replying}
                 compacting={compacting}
+                live={pane.agent === "pi"}
                 activity={activity}
                 stopping={stopping}
                 waitingMs={waitingMs}

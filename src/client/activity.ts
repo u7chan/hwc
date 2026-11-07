@@ -17,6 +17,23 @@ export function activityPollDelay(
   return status === "working" ? ACTIVITY_POLL_MS : null;
 }
 
+// 取得してよいかの判断は 1 か所に置く。隠れた直後の初期化や、idle への可視復帰で読まない。
+export function activityLoadAllowed(
+  status: AgentStatus,
+  visibility: DocumentVisibilityState,
+): boolean {
+  return status === "working" && visibility !== "hidden";
+}
+
+// 表示に使う値。無効化・ペイン切替の直後に、前のペインの値を残さない。
+export function selectActivity(
+  enabled: boolean,
+  paneId: string,
+  entry: ActivityEntry | null,
+): PaneActivity | null {
+  return enabled && entry !== null && entry.paneId === paneId ? entry.activity : null;
+}
+
 // 何をしているかを短く言う。tool-call は引数の生成中で一瞬しか続かないため、ラベルを出さない。
 export function activityLabel(activity: PaneActivity): string | null {
   switch (activity.phase) {
@@ -112,6 +129,13 @@ export function usePaneActivity(
       if (active) schedule();
     }
 
+    // 実行中でなくなったら、取得を待たずにその場で消す。idle の sidecar は残骸。
+    function clear() {
+      stop();
+      controller?.abort();
+      setLatest({ paneId: id, activity: null });
+    }
+
     // 実行が始まったら予約を待たずに読み、終わったら最後の 1 回で消す。
     function onStatusChange() {
       const change = pollOnStatusChange({
@@ -119,7 +143,12 @@ export function usePaneActivity(
         next: statusRef.current,
         visible: document.visibilityState !== "hidden",
       });
-      if (change === "load") void load();
+      if (change === "ignore") return;
+      if (!activityLoadAllowed(statusRef.current, document.visibilityState)) {
+        clear();
+        return;
+      }
+      void load();
     }
 
     function onVisibility() {
@@ -128,13 +157,18 @@ export function usePaneActivity(
         controller?.abort();
         return;
       }
+      if (!activityLoadAllowed(statusRef.current, document.visibilityState)) {
+        clear();
+        return;
+      }
       void load();
     }
 
     nudge.current = onStatusChange;
     lastStatus.current = statusRef.current;
     document.addEventListener("visibilitychange", onVisibility);
-    if (statusRef.current === "working") void load();
+    // 隠れた状態で開いたときも読まない。見えるようになったときの 1 回で追いつく。
+    if (activityLoadAllowed(statusRef.current, document.visibilityState)) void load();
 
     return () => {
       active = false;
@@ -149,5 +183,5 @@ export function usePaneActivity(
     nudge.current?.();
   }, [status]);
 
-  return latest?.paneId === paneId ? latest.activity : null;
+  return selectActivity(enabled, paneId, latest);
 }

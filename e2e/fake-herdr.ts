@@ -194,6 +194,19 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   };
 
   const startPiActivity = async (paneId: string): Promise<void> => {
+    const session = findPane(paneId)?.agent_session ?? null;
+    if (session?.agent !== "pi") {
+      // pi 以外は sidecar を持たない。working の間だけ行が出る（live 領域は増えない）ことを
+      // E2E で確かめられるように、同じ長さだけ working にする。
+      const epoch = (activityEpochs.get(paneId) ?? 0) + 1;
+      activityEpochs.set(paneId, epoch);
+      setAgentStatus(paneId, "working");
+      later(async () => {
+        if (activityEpochs.get(paneId) !== epoch) return;
+        setAgentStatus(paneId, "idle");
+      }, 6_000);
+      return;
+    }
     const epoch = (activityEpochs.get(paneId) ?? 0) + 1;
     activityEpochs.set(paneId, epoch);
     const current = () => activityEpochs.get(paneId) === epoch;
