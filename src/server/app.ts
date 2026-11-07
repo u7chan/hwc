@@ -16,6 +16,7 @@ import {
   saveAttachment,
 } from "./attachments";
 import type { SessionChatClient } from "./chat/contract";
+import { readActivity } from "./chat/activity";
 import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import { createPane } from "./create-pane";
 import { createPaneCloser } from "./close-pane";
@@ -314,6 +315,23 @@ export function createApp(options: {
       } catch {
         return c.json({ error: "chat_unavailable" }, 502);
       }
+    })
+    .get("/api/panes/:id/activity", async (c) => {
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      const pane = findPane(state, paneId);
+      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+
+      // 段階は pi 拡張がセッションの隣に書く。会話と同じく、path はペイン id から引く。
+      const source = store.chatSource(paneId);
+      if (!pane.chat || source === null || source.agent !== "pi") {
+        return c.json({ activity: null });
+      }
+      // 使い捨ての値。ブラウザや中間に残さない。
+      c.header("cache-control", "no-store");
+      return c.json({ activity: await readActivity(source.path) });
     })
     .post("/api/panes/:id/attachments", uploadAttachment)
     .get("/api/panes/:id/attachments/:name", serveAttachment)

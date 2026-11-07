@@ -170,6 +170,43 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     broadcast("pane.updated", { pane_id: paneId });
   };
 
+  // pi 拡張がセッションの隣に書く live の段階（ADR 0035）。実物はターン中に上書きし続けるが、
+  // E2E では phase と末尾の描画だけを確かめるため、1 回書いて短時間で消す。
+  const piActivityPath = (paneId: string): string | null => {
+    const session = findPane(paneId)?.agent_session ?? null;
+    return session?.agent === "pi" && session.kind === "path" && session.value
+      ? `${session.value}.thinking.json`
+      : null;
+  };
+
+  const clearPiActivity = async (paneId: string): Promise<void> => {
+    const path = piActivityPath(paneId);
+    if (path !== null) await rm(path, { force: true }).catch(() => {});
+  };
+
+  const startPiActivity = async (paneId: string): Promise<void> => {
+    const path = piActivityPath(paneId);
+    if (path === null) return;
+    try {
+      await writeFile(
+        path,
+        `${JSON.stringify({
+          v: 1,
+          at: Date.now(),
+          phase: "thinking",
+          text: "E2E: 依頼の手順を組み立てています。\n次に bash で確認します。",
+        })}\n`,
+      );
+    } catch {
+      return;
+    }
+    setAgentStatus(paneId, "working");
+    later(async () => {
+      await clearPiActivity(paneId);
+      setAgentStatus(paneId, "idle");
+    }, 6000);
+  };
+
   // /compact の完了を架空セッションに追記する。最後の user メッセージを kept の先頭にし、
   // 圧縮の区切りが会話の時系列に置かれることを E2E で確かめられるようにする。
   const appendCompaction = async (paneId: string): Promise<boolean> => {
@@ -458,6 +495,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         await appendUserEntry(paneId, text);
         send(socket, { id, result: { type: "ok" } });
         broadcast("pane.updated", { pane_id: paneId });
+        await startPiActivity(paneId);
         return;
       }
       case "pane.send_keys": {
@@ -492,6 +530,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         // 停止ボタンは Esc だけを送る。実 Herdr と同じく、実行中のエージェントは
         // idle に戻ったものとして次のスナップショットを作る。
         if (keys.some((key) => key === "esc" || key === "escape")) {
+          void clearPiActivity(paneId);
           target.agent_status = "idle";
           const tab = snapshot.tabs?.find((item) => item.tab_id === target.tab_id);
           if (tab) tab.agent_status = "idle";

@@ -2712,6 +2712,22 @@ p.hwc-compaction,
   font-variant-numeric: tabular-nums;
 }
 
+/* 実行中の段階。何をしているかを、経過時間の左に短く添える。 */
+.hwc-msg-phase {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* thinking の末尾。積み上げないので、高さは常に 2 行までに収める。 */
+.hwc-msg-thought {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* 圧縮中だけ、返答待ちの 3 点に何が起きているかを添える。 */
 .hwc-compaction-pending {
   color: var(--color-secondary);
