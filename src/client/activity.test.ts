@@ -5,6 +5,7 @@ import {
   activityLoadAllowed,
   activityPollDelay,
   activitySnippet,
+  activityStep,
   selectActivity,
 } from "./activity";
 import type { PaneActivity } from "../shared/activity";
@@ -58,6 +59,26 @@ test("never fetches while hidden or while the run is over", () => {
   expect(activityLoadAllowed("working", "hidden")).toBe(false);
   expect(activityLoadAllowed("idle", "visible")).toBe(false);
   expect(activityLoadAllowed("blocked", "visible")).toBe(false);
+});
+
+test("the next run loads again after an idle turn", () => {
+  // 1 ターン目が終わったら idle を消費し、2 ターン目の working を新しい変化として扱う。
+  const ended = activityStep("working", "idle", true);
+  expect(ended).toEqual({ last: "idle", fetch: false, clear: true });
+  const restarted = activityStep(ended.last, "working", true);
+  expect(restarted).toEqual({ last: "working", fetch: true, clear: false });
+  // 同じ状態の再通知では読まない。
+  expect(activityStep("working", "working", true)).toEqual({
+    last: "working",
+    fetch: false,
+    clear: false,
+  });
+  // 隠れている間に始まっても読まない。可視復帰で読む。
+  expect(activityStep("idle", "working", false)).toEqual({
+    last: "working",
+    fetch: false,
+    clear: true,
+  });
 });
 
 test("a disabled hook does not return the previous pane's activity", () => {

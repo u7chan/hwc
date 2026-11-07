@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { AgentStatus } from "../server/herdr/state";
 import type { PaneActivity } from "../shared/activity";
 import { ACTIVITY_POLL_MS, readActivity } from "./api";
-import { isAbortError, pollOnStatusChange } from "./chat";
+import { isAbortError } from "./chat";
 
 // 末尾 2 行だけ出す。積み上げないので、行数は固定して高さを揺らさない。
 export const ACTIVITY_SNIPPET_LINES = 2;
@@ -23,6 +23,20 @@ export function activityLoadAllowed(
   visibility: DocumentVisibilityState,
 ): boolean {
   return status === "working" && visibility !== "hidden";
+}
+
+// 状態変化の消費。前回の状態を必ず次へ進める。進め忘れると、次のターンの
+// working が「同じ状態」に見えて取得が再開しない。
+export type ActivityStep = { last: AgentStatus; fetch: boolean; clear: boolean };
+
+export function activityStep(
+  previous: AgentStatus,
+  next: AgentStatus,
+  visible: boolean,
+): ActivityStep {
+  if (next === previous) return { last: previous, fetch: false, clear: false };
+  const allowed = activityLoadAllowed(next, visible ? "visible" : "hidden");
+  return { last: next, fetch: allowed, clear: !allowed };
 }
 
 // 表示に使う値。無効化・ペイン切替の直後に、前のペインの値を残さない。
@@ -136,19 +150,16 @@ export function usePaneActivity(
       setLatest({ paneId: id, activity: null });
     }
 
-    // 実行が始まったら予約を待たずに読み、終わったら最後の 1 回で消す。
+    // 実行が始まったら予約を待たずに読み、終わったらその場で消す。
     function onStatusChange() {
-      const change = pollOnStatusChange({
-        last: lastStatus.current,
-        next: statusRef.current,
-        visible: document.visibilityState !== "hidden",
-      });
-      if (change === "ignore") return;
-      if (!activityLoadAllowed(statusRef.current, document.visibilityState)) {
-        clear();
-        return;
-      }
-      void load();
+      const step = activityStep(
+        lastStatus.current,
+        statusRef.current,
+        document.visibilityState !== "hidden",
+      );
+      lastStatus.current = step.last;
+      if (step.fetch) void load();
+      else if (step.clear) clear();
     }
 
     function onVisibility() {
