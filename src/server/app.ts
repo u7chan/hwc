@@ -380,6 +380,21 @@ export function createApp(options: {
         return paneFailure(c, error);
       }
     })
+    .post("/api/panes/:id/clear-output", requireJson, async (c) => {
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+
+      try {
+        await panes.clear({ paneId });
+        // 状態は変わらない。表示はクライアントが次の read で置き換える。
+        return c.json({ ok: true });
+      } catch (error) {
+        return paneFailure(c, error);
+      }
+    })
     .post("/api/panes/:id/confirm-folder-trust", requireJson, async (c) => {
       const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
       if (typeof body?.id !== "string" || body.id.length === 0 || body.id.length > 128) {

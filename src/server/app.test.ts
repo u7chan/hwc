@@ -193,6 +193,7 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
     send: async () => {},
     focus: async () => {},
     stop: async () => {},
+    clear: async () => {},
     confirmFolderTrust: async () => {},
     close: async () => {},
     exit: async () => {},
@@ -483,6 +484,14 @@ const paneActionCases = [
   // 添付の無い input は状態を読まずに Herdr へ送る。ペインの有無は Herdr が決める。
   { action: "input", method: "POST", call: "send", state, body: { text: "hi" }, guardsPane: false },
   { action: "stop", method: "POST", call: "stop", state: workingState, body: {}, guardsPane: true },
+  {
+    action: "clear-output",
+    method: "POST",
+    call: "clear",
+    state,
+    body: {},
+    guardsPane: true,
+  },
   { action: "focus", method: "POST", call: "focus", state, body: {}, guardsPane: true },
   {
     action: "close",
@@ -844,7 +853,7 @@ test.each(["stop", "focus", "close", "exit"])(
   },
 );
 
-test.each(["stop", "focus", "split"])(
+test.each(["stop", "clear-output", "focus", "split"])(
   "POST /api/panes/:id/%s leaves snapshot refresh to Herdr events",
   async (action) => {
     let refreshes = 0;
@@ -1000,6 +1009,25 @@ test("POST /api/panes/:id/stop does not send Escape to a pane that is not workin
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true });
   expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/clear-output asks Herdr to clear the pane buffer", async () => {
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    panes: {
+      clear: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/clear-output", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual([{ paneId: "w1:p1" }]);
 });
 
 test("POST /api/panes/:id/focus focuses the pane by id", async () => {

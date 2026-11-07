@@ -303,6 +303,17 @@ export function CloseIcon({ size = 20 }: IconProps) {
   );
 }
 
+// 画面とスクロールバックを消す。削除ではないので、ゴミ箱ではなく消しゴムで表す。
+export function EraserIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+      <path d="M22 21H7" />
+      <path d="m5 11 9 9" />
+    </Svg>
+  );
+}
+
 // チェックアウトの削除。閉じる（×）とは戻せなさが違うので、ゴミ箱で区別する。
 export function TrashIcon({ size = 16 }: IconProps) {
   return (

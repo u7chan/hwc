@@ -35,6 +35,7 @@ bun run e2e:serve
 - `session.snapshot`
 - `events.subscribe`
 - `pane.read`
+- `pane.clear`
 - `pane.process_info`
 - `pane.layout`
 - `pane.get`
@@ -49,7 +50,7 @@ bun run e2e:serve
 - `worktree.create`
 - `worktree.remove`
 
-`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`worktree.remove` は
+`pane.clear` は架空の端末出力を最後の 1 行だけにして、実 Herdr の画面・スクロールバックのクリアを模す。`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`worktree.remove` は
 linked worktree のスペースをスナップショットから取り除き、`workspace.closed` を流す（実際の
 チェックアウトのフォルダには触らない）。`worktree.create` は起点スペースの worktree 情報から
 架空のチェックアウトパスを決め、リンクされたスペース・タブ・root pane をスナップショットに
@@ -63,6 +64,10 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 フォーカスを移して `pane.focused` を流す。
 `pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
+
+シェルペインの「…」メニューには「出力をクリア」が出る。選ぶと BFF が `pane.clear` を呼び、
+架空の端末出力は最後の 1 行（プロンプト）だけになる。hwc はペイン詳細の実行口から直ちに
+出力を読み直し、メニューを閉じる。エージェントのペインにはこの項目を出さない。
 
 `scratch` の `folder-trust` と `folder-trust-saved` は、架空の Codex のフォルダ信頼確認を表示する。前者は会話なし、後者は保存済み会話を持つが `idle` のまま確認待ちになる。「信頼して続行」の Enter を受けると確認を消し、前者には空の会話を作って `idle` にする。「ターミナルで操作」では架空 Herdr へのキー送信がなく、確認が残ることを確かめる。表示するパスと注意文は `e2e/fixtures/folder-trust.ts` の架空データだけを使う。
 

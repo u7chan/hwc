@@ -14,7 +14,10 @@ import {
   type PaneCommandHandle,
 } from "./commands";
 import { useCopy } from "./copy";
-import { CloseIcon, CollapseIcon, CopyGlyph, NewSessionIcon, PlusIcon } from "./icons";
+import { CloseIcon, CollapseIcon, CopyGlyph, EraserIcon, NewSessionIcon, PlusIcon } from "./icons";
+import { isShellPane } from "./select";
+
+const CLEAR_FAILED_NOTICE = "出力をクリアできませんでした。もう一度お試しください。";
 
 type PaneMenuProps = {
   pane: PaneState;
@@ -23,6 +26,7 @@ type PaneMenuProps = {
   commands: PaneCommandHandle | null;
   sending: boolean;
   onCreate: () => void;
+  onClearOutput: () => Promise<boolean>;
   onClosePane: () => void;
   onDismiss: () => void;
   onSubmit: (text: string) => Promise<boolean>;
@@ -31,6 +35,8 @@ type PaneMenuProps = {
 export function PaneMenu(props: PaneMenuProps) {
   const { pane, commands, sending } = props;
   const [failed, setFailed] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearFailed, setClearFailed] = useState(false);
   const { copiedId, copy } = useCopy();
   const copied = copiedId === pane.id;
   // 表示中の詳細が持つ実行状態を優先する。詳細が無いペインだけ、ここで会話を読む。
@@ -52,6 +58,16 @@ export function PaneMenu(props: PaneMenuProps) {
       : !busy && block !== null
         ? COMMAND_BLOCK_NOTES[block]
         : null;
+
+  const clearOutput = async () => {
+    if (clearing) return;
+    setClearing(true);
+    setClearFailed(false);
+    const cleared = await props.onClearOutput();
+    setClearing(false);
+    if (cleared) props.onDismiss();
+    else setClearFailed(true);
+  };
 
   const run = async (id: CommandId) => {
     if (!available(id)) return;
@@ -90,6 +106,25 @@ export function PaneMenu(props: PaneMenuProps) {
         新しいペイン
       </button>
       {props.full ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
+      {isShellPane(pane) ? (
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            class="hwc-menu-item"
+            disabled={clearing}
+            onClick={() => void clearOutput()}
+          >
+            <EraserIcon size={14} />
+            {clearing ? "クリアしています…" : "出力をクリア"}
+          </button>
+          {clearFailed ? (
+            <p class="hwc-menu-note" role="alert">
+              {CLEAR_FAILED_NOTICE}
+            </p>
+          ) : null}
+        </>
+      ) : null}
       {isCommandPane(pane) ? (
         <>
           <button

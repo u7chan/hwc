@@ -56,6 +56,8 @@ export type FocusOptions = { paneId: string };
 
 export type StopOptions = { paneId: string };
 
+export type ClearOptions = { paneId: string };
+
 export type CloseOptions = { paneId: string };
 
 export type LayoutOptions = { paneId: string };
@@ -84,6 +86,7 @@ export type PaneClient = {
   send: (options: SendOptions) => Promise<void>;
   focus: (options: FocusOptions) => Promise<void>;
   stop: (options: StopOptions) => Promise<void>;
+  clear: (options: ClearOptions) => Promise<void>;
   confirmFolderTrust: (options: { paneId: string }) => Promise<void>;
   close: (options: CloseOptions) => Promise<void>;
   exit: (options: CloseOptions) => Promise<void>;
@@ -274,6 +277,10 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
     async stop({ paneId }) {
       // Herdr は Esc を esc として受ける。文字は送らず、キーだけを 1 回送る。
       await call("pane.send_keys", { pane_id: paneId, keys: ["esc"] }, { path });
+    },
+    async clear({ paneId }) {
+      // 画面とスクロールバックを消すだけで、PTY には何も送らない。実行中のコマンドは止まらない。
+      await call("pane.clear", { pane_id: paneId }, { path });
     },
     async confirmFolderTrust({ paneId }) {
       await call("pane.send_keys", { pane_id: paneId, keys: ["enter"] }, { path });
