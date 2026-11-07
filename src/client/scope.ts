@@ -152,3 +152,13 @@ export function shouldFocusOnLeave(
 ): boolean {
   return pendingPaneId !== null && pendingPaneId !== nextPaneId && status === "done";
 }
+
+// 保留は移動先に引き継ぐ。同じペインへの移動（詳細のタブバーやツリーで選び直したとき）は
+// まだ離れていないので捨てない。開いた行（opened）はその場で保留を作る。
+export function pendingReadAfter(
+  pendingPaneId: string | null,
+  nextPaneId: string | null,
+  opened: boolean,
+): string | null {
+  return opened || pendingPaneId === nextPaneId ? nextPaneId : null;
+}

@@ -5,6 +5,7 @@ import {
   activePanes,
   activeUnreadCount,
   parseListScope,
+  pendingReadAfter,
   shouldFocusOnLeave,
   showsTabName,
   unreadLabel,
@@ -135,6 +136,19 @@ test("only a done pane that is left after it finishes moves the focus", () => {
   // 保留を作るのはアクティブ一覧の行だけ。ツリー・タブバー・復元では null のまま。
   expect(shouldFocusOnLeave(null, "w1:p1", "done")).toBe(false);
   expect(shouldFocusOnLeave(null, null, "done")).toBe(false);
+});
+
+test("the pending read survives a move that does not leave the pane", () => {
+  // アクティブ一覧で開いた行は、その場で保留になる。
+  expect(pendingReadAfter(null, "w1:p1", true)).toBe("w1:p1");
+  expect(pendingReadAfter("w1:p1", "w1:p2", true)).toBe("w1:p2");
+  // 詳細のタブバーやツリーで同じペインを選び直しても、まだ離れていない。
+  expect(pendingReadAfter("w1:p1", "w1:p1", false)).toBe("w1:p1");
+  // 別のペインへ移る（詳細から戻る）と離れるので捨てる。
+  expect(pendingReadAfter("w1:p1", "w1:p2", false)).toBeNull();
+  expect(pendingReadAfter("w1:p1", null, false)).toBeNull();
+  // 保留が無いまま同じペインへ移っても、保留は作らない。
+  expect(pendingReadAfter(null, "w1:p1", false)).toBeNull();
 });
 
 test("the unread count is the finished panes waiting to be seen", () => {

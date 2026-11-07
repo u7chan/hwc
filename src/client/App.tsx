@@ -60,6 +60,7 @@ import {
 import {
   LIST_SCOPE_STORAGE_KEY,
   parseListScope,
+  pendingReadAfter,
   shouldFocusOnLeave,
   type ListScope,
 } from "./scope";
@@ -449,13 +450,14 @@ export function App() {
 
   // 選択の変更は必ずここを通す。保留中の既読は、そのペインを離れる時点で done なら送る。
   // 開いた時点で送らないので、読んでいる間は行が残る。保留は state にしない（再描画しない）。
-  const moveTo = (paneId: string | null, keepPending = false) => {
+  // 同じペインへの移動（詳細のタブバーやツリーでの選び直し）はまだ離れていないので、保留を残す。
+  const moveTo = (paneId: string | null, opened = false) => {
     const pending = pendingRead.current;
     if (pending !== null) {
       const status = state === null ? null : (findPane(state, pending)?.agentStatus ?? null);
       if (shouldFocusOnLeave(pending, paneId, status)) focusPane(pending);
     }
-    pendingRead.current = keepPending ? paneId : null;
+    pendingRead.current = pendingReadAfter(pending, paneId, opened);
     setPendingSelect(null);
     setView({ selectedPaneId: paneId, expanded });
     setSettingsOpen(false);
