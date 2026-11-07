@@ -510,6 +510,20 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         });
         return;
       }
+      case "pane.clear": {
+        const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
+        if (findPane(paneId) === null) {
+          send(socket, { id, error: { code: "pane_not_found", message: paneId } });
+          return;
+        }
+        // 実 Herdr は画面とスクロールバックを消し、入力中の 1 行だけを残す。
+        const lines = (outputs.get(paneId) ?? "").split("\n").filter((line) => line !== "");
+        const prompt = lines.at(-1) ?? "";
+        outputs.set(paneId, prompt === "" ? "" : `${prompt}\n`);
+        revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
+        send(socket, { id, result: { type: "ok" } });
+        return;
+      }
       case "pane.process_info": {
         const paneId = typeof params.pane_id === "string" ? params.pane_id : "";
         if (findPane(paneId) === null) {

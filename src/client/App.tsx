@@ -8,6 +8,7 @@ import {
   fetchRevision,
   fetchState,
   focusAgent,
+  clearPaneOutput,
   closePane,
   confirmFolderTrust,
   parseAppState,
@@ -460,6 +461,14 @@ export function App() {
 
   const openPaneMenu = (paneId: string, trigger: HTMLElement, fromList = false) => {
     setMenu({ target: { kind: "pane", id: paneId }, trigger, fromList, open: true });
+  };
+
+  // 開始時に表示していなくても、応答時点で表示されている詳細には読み直しを伝える。
+  // 一覧でクリアを押し、通信待ち中に対象のペインを開く経路があるため。
+  const clearOutputForMenu = async (paneId: string): Promise<boolean> => {
+    const cleared = await clearPaneOutput(paneId);
+    if (cleared) commandHandles.current.get(paneId)?.refreshOutput();
+    return cleared;
   };
 
   const closeMenu = () => {
@@ -940,6 +949,7 @@ export function App() {
               commands={commandHandles.current.get(menuPane.id) ?? null}
               sending={inputsInFlight.current.has(menuPane.id)}
               onCreate={() => openCreateDialog(menuPane.id)}
+              onClearOutput={() => clearOutputForMenu(menuPane.id)}
               onClosePane={openCloseConfirm}
               onDismiss={closeMenu}
               onSubmit={(text) => sendToPane(menuPane.id, text, [])}

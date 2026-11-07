@@ -148,6 +148,26 @@ test("stop reports the failure so the route can map it", async () => {
   await expect(client.stop({ paneId: "w1:p9" })).rejects.toThrow("pane_not_found");
 });
 
+test("clear asks Herdr to clear the pane screen and scrollback", async () => {
+  const { calls, call } = recordingCaller();
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  await client.clear({ paneId: "w1:p1" });
+
+  expect(calls).toEqual([
+    { method: "pane.clear", params: { pane_id: "w1:p1" }, options: { path: "/tmp/test.sock" } },
+  ]);
+});
+
+test("clear reports the failure so the route can map it", async () => {
+  const { call } = recordingCaller({
+    "pane.clear": new HerdrError("pane_not_found", "no pane w1:p9"),
+  });
+  const client = createPaneClient({ call });
+
+  await expect(client.clear({ paneId: "w1:p9" })).rejects.toThrow("pane_not_found");
+});
+
 test("focus asks Herdr to focus the pane by id", async () => {
   const { calls, call } = recordingCaller();
   const client = createPaneClient({ path: "/tmp/test.sock", call });

@@ -685,6 +685,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const [stopping, setStopping] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  // クリア後にポーリングを待たず、出力を取り直すための契機。
+  const [outputVersion, setOutputVersion] = useState(0);
   // 追従するかは state が正。イベント購読からも読むので、同じ値を ref に写す
   // （chat.ts の statusRef と同じ扱い）。更新は setPinned の 1 経路だけ。
   const pinned = useRef(true);
@@ -758,6 +760,7 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const { read, failed } = usePaneOutput(
     pane.agent === "codex" || normalBody.kind === "output" ? pane.id : null,
+    outputVersion,
   );
   const interaction = read?.interaction ?? null;
   const view = confirmationView({ pane, interaction, dismissedId: dismissedConfirmation, failed });
@@ -1310,6 +1313,10 @@ export function PaneDetail(props: PaneDetailProps) {
       ) {
         void sendMenuCommand(id);
       }
+    },
+    refreshOutput: () => {
+      setPinned(true);
+      setOutputVersion((version) => version + 1);
     },
   };
   useImperativeHandle(props.commandRef, () => menuCommands);

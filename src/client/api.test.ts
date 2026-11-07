@@ -100,6 +100,7 @@ test("the JSON pane routes expose their media type rejection through RPC", () =>
   type JsonAction =
     | "input"
     | "stop"
+    | "clear-output"
     | "focus"
     | "close"
     | "exit"
@@ -143,6 +144,9 @@ test("the request builders keep the pane id in a single path segment", () => {
   );
   expect(api.api.panes[":id"].focus.$url(paneParam("w1/p2")).pathname).toBe(paneRoutes("focus"));
   expect(api.api.panes[":id"].stop.$url(paneParam("w1/p2")).pathname).toBe(paneRoutes("stop"));
+  expect(api.api.panes[":id"]["clear-output"].$url(paneParam("w1/p2")).pathname).toBe(
+    paneRoutes("clear-output"),
+  );
   expect(api.api.panes[":id"].close.$url(paneParam("w1/p2")).pathname).toBe(paneRoutes("close"));
   expect(api.api.panes[":id"].split.$url(paneParam("w1/p2")).pathname).toBe(paneRoutes("split"));
 });

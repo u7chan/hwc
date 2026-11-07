@@ -416,6 +416,22 @@ export async function closePane(paneId: string, action: PaneCloseAction): Promis
   }
 }
 
+// 画面のクリアは短いが、BFF に届かない場合にメニューが待ち続けないよう期限を置く。
+export const CLEAR_OUTPUT_TIMEOUT_MS = 8_000;
+
+// ペインが無いなら、消す対象も無い。close と同じく目的の状態には達している。
+export async function clearPaneOutput(paneId: string): Promise<boolean> {
+  try {
+    const response = await client.api.panes[":id"]["clear-output"].$post(paneParam(paneId), {
+      headers: { "content-type": "application/json" },
+      init: { signal: AbortSignal.timeout(CLEAR_OUTPUT_TIMEOUT_MS) },
+    });
+    return response.ok || response.status === 404;
+  } catch {
+    return false;
+  }
+}
+
 // チェックアウトの削除は git の走査を含む。BFF のソケット期限（60 秒）より長く待つ。
 export const REMOVE_WORKTREE_TIMEOUT_MS = 70_000;
 // 消えたワークツリーは目的の状態に達している。close と同じく 404 は成功として扱う。

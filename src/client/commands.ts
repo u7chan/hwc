@@ -31,6 +31,8 @@ export type PaneCommandHandle = {
   // メニューの注記用。押せない理由を 1 つだけ返す。
   blockReason: () => CommandBlockReason | null;
   run: (id: CommandId) => void;
+  // クリア後などに、ポーリングを待たず出力を読み直す。
+  refreshOutput: () => void;
 };
 
 export function isCommandPane(pane: PaneState): boolean {

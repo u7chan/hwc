@@ -7,7 +7,11 @@ export function pollDelay(visibility: DocumentVisibilityState): number | null {
 }
 
 // 出力を持たないペインは何もしない。null を渡すと取得も止まる。
-export function usePaneOutput(paneId: string | null): {
+// version は、クリアのようにポーリングを待たずに読み直したいときだけ変える。
+export function usePaneOutput(
+  paneId: string | null,
+  version = 0,
+): {
   read: OutputRead | null;
   failed: boolean;
 } {
@@ -68,7 +72,7 @@ export function usePaneOutput(paneId: string | null): {
       controller?.abort();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [paneId]);
+  }, [paneId, version]);
 
   // ペインを切り替えた直後に、前のペインの出力を出さない。
   return { read: latest?.paneId === paneId ? latest : null, failed };
