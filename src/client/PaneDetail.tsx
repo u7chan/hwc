@@ -550,7 +550,7 @@ function AgentInfoHint(props: { info: AgentInfo }) {
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "model";
   return (
-    <span class="hwc-hint-wrap" ref={hint.root} {...hint.wrapperProps}>
+    <span class="hwc-hint-wrap hwc-agent-hint" ref={hint.root} {...hint.wrapperProps}>
       <button
         type="button"
         class="hwc-agent-info"

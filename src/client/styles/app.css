@@ -3190,6 +3190,13 @@ p.hwc-compaction,
   flex: none;
 }
 
+/* モデル札は長い名前のとき縮んで省略する。外枠が縮まないと、右の使用量と送信を押し出す。 */
+.hwc-agent-hint {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .hwc-context {
   flex: none;
   display: inline-flex;

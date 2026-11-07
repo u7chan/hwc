@@ -1,5 +1,6 @@
 import type { TargetedFocusEvent, TargetedMouseEvent, TargetedPointerEvent } from "preact";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { isCopyShim } from "./copy";
 
 // 開いた理由。触れて開いたものは指が離れると閉じ、押して開いたものは外側を押すまで残す。
 type Open = "hover" | "pinned" | null;
@@ -108,6 +109,8 @@ export function useHint() {
       },
       // パネルの中のボタンへ移っただけでは閉じない。外へ抜けたら閉じる。
       onFocusOut: (event: TargetedFocusEvent<HTMLElement>) => {
+        // http のコピーは一時 textarea へフォーカスを移す。操作の続きなので閉じない。
+        if (isCopyShim(event.relatedTarget)) return;
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(null);
       },
     },
