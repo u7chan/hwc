@@ -453,7 +453,7 @@ function ChatLog(props: {
           data-role="agent"
           aria-label={props.compacting ? "会話を圧縮しています" : "返答を待っています"}
         >
-          <div class="hwc-msg-meta">
+          <div class="hwc-msg-meta hwc-msg-meta-live">
             <span class="hwc-typing">
               <span />
               <span />

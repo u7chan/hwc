@@ -2739,6 +2739,17 @@ p.hwc-compaction,
   flex-shrink: 0;
 }
 
+/* 文字はベースラインで揃える。等幅の経過時間と本文のフォントでは行の高さが違い、
+   center だと秒数だけ浮いて見える。3 点とボタンは文字ではないので個別に中央へ。 */
+.hwc-msg-meta-live {
+  align-items: baseline;
+}
+
+.hwc-msg-meta-live .hwc-typing,
+.hwc-msg-meta-live .hwc-compaction-cancel {
+  align-self: center;
+}
+
 /* thinking は 2 行分の高さを先に確保する。差分のたびに高さが変わると、底の追従が
    一瞬遅れてスクロールが末尾でなくなり、上の行が跳ねる。中身は下端に寄せ、
    折り返しであふれた上側を切って、新しい方だけを見せる。 */
