@@ -1,37 +1,15 @@
-import type { AgentStatus, AppState, WorkspaceState } from "../server/herdr/state";
+import type { AgentStatus, AppState } from "../server/herdr/state";
 import type { PaneRow } from "./select";
 import { sentPanes, type SentPane } from "./sent";
 
-export type ListScope = "agent" | "active" | "all";
-
-// ツリーで並べるスコープ。active は行の作り方が違うので、ここには含めない。
-export type TreeScope = Exclude<ListScope, "active">;
+export type ListScope = "active" | "all";
 
 export const LIST_SCOPE_STORAGE_KEY = "hwc-list-scope";
 
-// 既定はエージェントのいるスペースだけ。シェルだけのスペースは、そこで
-// エージェントを起こすときに「すべて」で探す。
+// 既定はすべて。片付けたいスペースが既定で隠れると、消す入口（ADR 0034）に辿り着けない。
+// 絞り込みは active が担う。旧値の agent などは既定へ倒す。
 export function parseListScope(raw: string | null): ListScope {
-  switch (raw) {
-    case "active":
-      return "active";
-    case "all":
-      return "all";
-    default:
-      return "agent";
-  }
-}
-
-export function workspaceHasAgent(workspace: WorkspaceState): boolean {
-  return workspace.tabs.some((tab) => tab.panes.some((pane) => pane.agent !== null));
-}
-
-export function scopeWorkspaces(
-  workspaces: readonly WorkspaceState[],
-  scope: TreeScope,
-): readonly WorkspaceState[] {
-  if (scope === "all") return workspaces;
-  return workspaces.filter(workspaceHasAgent);
+  return raw === "active" ? "active" : "all";
 }
 
 // 状態を持つエージェントだけを 1 行ずつ並べる。idle と unknown は出さない。

@@ -21,11 +21,9 @@ import {
 import {
   activeUnreadCount,
   activeViewRows,
-  scopeWorkspaces,
   shouldFocusPane,
   unreadLabel,
   type ListScope,
-  type TreeScope,
 } from "./scope";
 import { MENU_ID } from "./Menu";
 import type { SentPane } from "./sent";
@@ -51,9 +49,7 @@ type PaneListProps = {
   now: number;
 };
 
-type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onFocus"> & {
-  scope: TreeScope;
-};
+type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onFocus">;
 
 // git 管理下でない / 通常のリポジトリ / linked worktree を形で見分ける。
 function WorkspaceGlyph({ worktree }: { worktree: WorktreeState | null }) {
@@ -78,10 +74,10 @@ function GroupStatus(props: { status: PaneState["agentStatus"]; hidden: boolean 
   );
 }
 
+// 既定を先頭に置く。既定が「すべて」なので、開いたときにつまみが左にいる。
 const SCOPE_OPTIONS: readonly { scope: ListScope; label: string }[] = [
-  { scope: "agent", label: "エージェント" },
-  { scope: "active", label: "アクティブ" },
   { scope: "all", label: "すべて" },
+  { scope: "active", label: "アクティブ" },
 ];
 
 function ScopeBar(props: {
@@ -160,7 +156,7 @@ function ActivePaneList(props: PaneListProps) {
       <div class="hwc-list-note">
         <p class="hwc-list-note-title">窓口も動いているエージェントもいません</p>
         <p class="hwc-list-note-text">
-          メッセージを送ったペインと、実行中・要対応・完了のエージェントがここに並びます。「エージェント」に切り替えると、待機中のものも出ます。
+          メッセージを送ったペインと、実行中・要対応・完了のエージェントがここに並びます。待機中のペインは「すべて」に出ます。
         </p>
       </div>
     );
@@ -232,22 +228,18 @@ export function PaneList(props: PaneListProps) {
   );
 }
 
-// 並べ方の分岐はここ 1 か所。active の行はツリーの絞り込みと前提が違うので、
-// scopeWorkspaces に active を渡さないよう型で分ける。
+// 並べ方の分岐はここ 1 か所。active の行はツリーと前提が違う。
 function renderList(props: PaneListProps) {
   switch (props.scope) {
     case "active":
       return <ActivePaneList {...props} />;
-    case "agent":
     case "all":
-      return <TreePaneList {...props} scope={props.scope} />;
+      return <TreePaneList {...props} />;
   }
 }
 
 function TreePaneList(props: TreePaneListProps) {
-  const { state, selectedPaneId, scope, expanded, onSelect, onToggle, workingSince, now } = props;
-
-  const visible = scopeWorkspaces(state.workspaces, scope);
+  const { state, selectedPaneId, expanded, onSelect, onToggle, workingSince, now } = props;
 
   // ブランチはワークスペースの属性。行ごとに引き直さず、先にペイン id へ配る。
   const branchOf = new Map<string, string | null>();
@@ -451,18 +443,9 @@ function TreePaneList(props: TreePaneListProps) {
     );
   }
 
-  if (visible.length === 0) {
-    return (
-      <div class="hwc-list-note">
-        <p class="hwc-list-note-title">エージェントのあるスペースがありません</p>
-        <p class="hwc-list-note-text">「すべて」に切り替えると、ターミナルのスペースも出ます。</p>
-      </div>
-    );
-  }
-
   return (
     <>
-      {groupWorkspaces(visible).map((group) => {
+      {groupWorkspaces(state.workspaces).map((group) => {
         // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
         if (group.repoName === null || group.linked.length === 0) {
           const only = group.host ?? group.linked[0];

@@ -5,7 +5,6 @@ import {
   activeUnreadCount,
   activeViewRows,
   parseListScope,
-  scopeWorkspaces,
   shouldFocusPane,
   unreadLabel,
 } from "./scope";
@@ -44,43 +43,13 @@ function app(...workspaces: WorkspaceState[]): AppState {
   return { focusedWorkspaceId: null, focusedTabId: null, focusedPaneId: null, workspaces };
 }
 
-function agents(workspaceId: string, list: readonly (string | null)[]): PaneState[] {
-  return list.map((agent, index) => pane(`${workspaceId}:p${index + 1}`, agent));
-}
-
-test("the list starts with the spaces that have an agent", () => {
-  expect(parseListScope(null)).toBe("agent");
-  expect(parseListScope("agent")).toBe("agent");
-  expect(parseListScope("active")).toBe("active");
+test("the list opens on every space", () => {
+  expect(parseListScope(null)).toBe("all");
   expect(parseListScope("all")).toBe("all");
-  // 端末に残った知らない値では、既定に倒す。
-  expect(parseListScope("everything")).toBe("agent");
-});
-
-test("agent scope keeps the spaces that have an agent and drops shell-only spaces", () => {
-  const spaces = [workspace("w1", agents("w1", [null])), workspace("w2", agents("w2", ["pi"]))];
-
-  expect(scopeWorkspaces(spaces, "agent").map((space) => space.id)).toEqual(["w2"]);
-  expect(scopeWorkspaces(spaces, "all").map((space) => space.id)).toEqual(["w1", "w2"]);
-});
-
-test("agent scope updates when the last agent in a space exits", () => {
-  const withAgent = [workspace("w1", agents("w1", ["pi"]))];
-  const shellOnly = [workspace("w1", agents("w1", [null]))];
-
-  expect(scopeWorkspaces(withAgent, "agent").map((space) => space.id)).toEqual(["w1"]);
-  expect(scopeWorkspaces(shellOnly, "agent")).toEqual([]);
-  expect(scopeWorkspaces(shellOnly, "all").map((space) => space.id)).toEqual(["w1"]);
-});
-
-test("the order stays the order Herdr reports", () => {
-  const spaces = [
-    workspace("w3", agents("w3", ["pi"])),
-    workspace("w1", agents("w1", ["claude"])),
-    workspace("w2", agents("w2", [null])),
-  ];
-
-  expect(scopeWorkspaces(spaces, "agent").map((space) => space.id)).toEqual(["w3", "w1"]);
+  expect(parseListScope("active")).toBe("active");
+  // 消したスコープと知らない値は、既定に倒す。移行処理は持たない。
+  expect(parseListScope("agent")).toBe("all");
+  expect(parseListScope("everything")).toBe("all");
 });
 
 test("active lists the agents that are working, blocked or done", () => {
@@ -148,7 +117,6 @@ test("only a done row in the active scope moves the focus", () => {
   expect(shouldFocusPane("active", "working")).toBe(false);
   expect(shouldFocusPane("active", "blocked")).toBe(false);
   // ツリーからは送らない。詳細のタブ切替と経路が同じになる。
-  expect(shouldFocusPane("agent", "done")).toBe(false);
   expect(shouldFocusPane("all", "done")).toBe(false);
 });
 
