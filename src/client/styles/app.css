@@ -2741,13 +2741,13 @@ p.hwc-compaction,
 }
 
 /* 文字はベースラインで揃える。等幅の経過時間と本文のフォントでは行の高さが違い、
-   center だと秒数だけ浮いて見える。3 点とボタンは文字ではないので個別に中央へ。 */
+   center だと秒数だけ浮いて見える。3 点は文字ではないので個別に中央へ。中断ボタンは
+   文字なので、ラベルと同じベースラインに乗せる（center のままだと 2px ほど下がる）。 */
 .hwc-msg-meta-live {
   align-items: baseline;
 }
 
-.hwc-msg-meta-live .hwc-typing,
-.hwc-msg-meta-live .hwc-compaction-cancel {
+.hwc-msg-meta-live .hwc-typing {
   align-self: center;
 }
 
