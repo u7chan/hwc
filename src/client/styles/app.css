@@ -2278,7 +2278,9 @@ p.hwc-compaction,
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-panel) var(--radius-panel) var(--radius-sm) var(--radius-panel);
   background: var(--color-accent);
-  color: var(--color-surface);
+  /* 面の上の文字は surface ではなく on-accent。surface はテーマによって面と近く、
+     Solarized などでコントラストが 4.5:1 を割る。 */
+  color: var(--color-on-accent);
   font-size: var(--text-body);
   line-height: var(--line-body);
 }
