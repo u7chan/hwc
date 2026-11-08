@@ -92,7 +92,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 `frontend` の架空セッションは、最後のターンが失敗した状態（`stopReason: "error"` と `errorMessage`、本文は空）で終わる。同じ失敗をリトライの回数だけ並べてあり、Web では 1 行に畳まれて「3 回」と出る。その行が圧縮後の usage を変えないことも確かめる（[ADR 0039](adr/0039-chat-error-rows.md)）。
 
-その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を本文で指す。この画像は実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもので、会話にはパスとサムネイルの行が出る（[ADR 0040](adr/0040-agent-message-images.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
+その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を本文で指す。この画像は実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもので、会話にはパスとサムネイルの行が出る（[ADR 0041](adr/0041-agent-message-images.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
 
 pi のペインでは、あわせてセッションの隣に live の sidecar（`<session>.jsonl.thinking.json`）を書く。まず `waiting` で `working` にし、1.2 秒後に折り返す長さの `thinking` を上書きし、6 秒後に消して `idle` に戻す。実物の pi 拡張はターン中に phase と thinking の末尾を上書きし続ける（[ADR 0035](adr/0035-live-pi-activity.md)）。E2E ではこの 2 段階で、段階の行が会話のスクロール領域の外（入力欄の直上）に出て、スクロールしても残ること、経過時間が右端に固定されること、末尾 2 行だけが出てターン終了で消えることを確かめる。入力欄を 1 行に畳むセルでは thinking を出さず、段階と経過時間だけになる。停止ボタン（`esc`）でも sidecar を消す。
 
