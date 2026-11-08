@@ -145,7 +145,14 @@ function ActiveTrail(props: {
     return ms === null ? null : <span class="hwc-pane-elapsed">{formatElapsed(ms)}</span>;
   }
   const clock = finishedClock(props.finishedAt, props.pane.id);
-  return clock === null ? null : <span class="hwc-pane-elapsed">{clock}</span>;
+  return clock === null ? null : (
+    <span
+      class="hwc-pane-elapsed"
+      data-tone={props.pane.agentStatus === "done" ? "success" : undefined}
+    >
+      {clock}
+    </span>
+  );
 }
 
 // 帯に出す件数。状態の意味（要対応 → 完了 → 実行中）の順に並べる。0 件は出さない。

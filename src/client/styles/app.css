@@ -1143,6 +1143,11 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* 終わった時刻は状態の色に合わせる。待機の窓口は終わっていないので淡いまま。 */
+.hwc-pane-elapsed[data-tone="success"] {
+  color: var(--color-success);
+}
+
 /* 名前の幅を最優先で残す。固定幅の要素で埋まると、実行中の行だけ名前が読めなくなる。 */
 @container (max-width: 320px) {
   .hwc-pane-open {
