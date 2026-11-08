@@ -4335,6 +4335,9 @@ p.hwc-compaction,
 
   .hwc-detail-inner {
     background: var(--color-content);
+    /* 本文と入力欄の左右余白。読み幅を超えた分は左右に均等に振る。
+       分割セルではセル幅が読み幅に満たないので、下限の 24px に落ちて今までと同じになる。 */
+    --hwc-gutter: max(var(--space-6), calc((100% - var(--hwc-measure)) / 2));
   }
 
   .hwc-detail-bar {
@@ -4355,11 +4358,11 @@ p.hwc-compaction,
   }
 
   .hwc-output-scroll {
-    padding: var(--space-4) var(--space-6) var(--space-6);
+    padding: var(--space-4) var(--hwc-gutter) var(--space-6);
   }
 
   .hwc-input {
-    padding: var(--space-4) var(--space-6);
+    padding: var(--space-4) var(--hwc-gutter);
     border-top-color: var(--color-line);
   }
 
@@ -4374,24 +4377,20 @@ p.hwc-compaction,
   }
 
   .hwc-send-notice {
-    padding-right: var(--space-6);
-    padding-left: var(--space-6);
+    padding-right: var(--hwc-gutter);
+    padding-left: var(--hwc-gutter);
   }
 
+  /* 見出し・本文・入力は同じ列に揃える。分割セルはセル幅で同じ式を解くので、
+     読み幅に満たないセルでは下限の 24px になる。 */
   .hwc-pane-head {
-    padding: 0 var(--space-6);
+    padding: 0 var(--hwc-gutter);
   }
 
-  /* 隠して 1 枚になってもセルは残すので、余白は分割前と同じに戻す。 */
-  .hwc-split[data-count="1"] .hwc-pane-head,
-  .hwc-split[data-count="1"] .hwc-input,
-  .hwc-split[data-count="1"] .hwc-send-notice {
-    padding-right: var(--space-6);
-    padding-left: var(--space-6);
-  }
-
+  .hwc-split-cell .hwc-pane-head,
+  .hwc-split-cell .hwc-input,
   .hwc-split-cell .hwc-send-notice {
-    padding-right: var(--space-4);
-    padding-left: var(--space-4);
+    padding-right: var(--hwc-gutter);
+    padding-left: var(--hwc-gutter);
   }
 }

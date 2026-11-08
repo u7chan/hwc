@@ -86,6 +86,9 @@
 
   /* 一覧の幅。広い画面では JS が実際の幅で上書きする。 */
   --hwc-sidebar-width: 352px;
+
+  /* 会話の読み幅。本文と入力欄で共有し、広い画面では中央に置く。 */
+  --hwc-measure: 52rem;
 }
 
 :root[data-theme="dark"] {
