@@ -52,6 +52,17 @@ test("finds a path in inline code with no spaces around it", () => {
   ).toEqual(["docs/preview/app-icon.png"]);
 });
 
+test("drops a sentence period or a Japanese particle after the extension", () => {
+  expect(imagePathCandidates("The mock is at docs/mock.png.")).toEqual(["docs/mock.png"]);
+  expect(imagePathCandidates("スクショはdocs/mock.pngに置きました。")).toEqual(["docs/mock.png"]);
+  // 全角コロンの後ろでも拾う。
+  expect(imagePathCandidates("モック：docs/mock.png")).toEqual(["docs/mock.png"]);
+  // 別の拡張子が続く名前は画像として扱わない。
+  expect(imagePathCandidates("docs/mock.png.bak")).toEqual([]);
+  // 日本語のファイル名はそのまま残す。
+  expect(imagePathCandidates("モック.png")).toEqual(["モック.png"]);
+});
+
 test("does not look inside fenced code", () => {
   expect(imagePathCandidates("```sh\nopen docs/mock.png\n```\n")).toEqual([]);
   expect(imagePathCandidates("~~~\n![x](a.png)\n~~~\n`b.png`")).toEqual(["b.png"]);

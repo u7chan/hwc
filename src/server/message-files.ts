@@ -23,6 +23,9 @@ const UNSAFE_TOKEN = /["'<>[\]{}()\s]/;
 const MARKDOWN_LINK = /!?\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g;
 // インラインコードは前後に空白が無い日本語の文にも埋まるので、中身を独立したトークンにする。
 const INLINE_CODE = /`([^`\n]+)`/g;
+// パスに現れない区切りで割る。全角コロンなどの直後にパスが続く日本語の文でも、
+// 1 つのトークンからパスだけを取り出せるようにする。
+const HARD_SEPARATORS = /[,;:、，；：「」『』（）()[]{}'"<>]/g;
 
 export type MessageFile = ChatFile;
 type ResolvedMessageFile = MessageFile & { path: string };
@@ -53,14 +56,36 @@ export function withoutFencedCode(text: string): string {
   return kept.join("\n");
 }
 
+// 日本語の文に空白なしでパスが続くと、先頭の助詞が名前の一部になる。先頭に区切りが
+// 無く、残りがパスらしい（`/` を含む）ときだけ落とす。日本語のファイル名はそのまま残す。
+function cutLeadingProse(token: string): string {
+  const first = token.search(/[A-Za-z0-9_.~]/);
+  if (first <= 0) return token;
+  if (/[/\\]/.test(token.slice(0, first))) return token;
+  const rest = token.slice(first);
+  return rest.includes("/") ? rest : token;
+}
+
+// 末尾に付いた英語の句点や日本語の助詞を落とす。`png.bak` のように英数字が続く
+// 場合は別の名前なので落とさない。
+function trimToImageName(token: string): string | null {
+  const body = cutLeadingProse(token);
+  for (let end = body.length; end > 0; end -= 1) {
+    const candidate = body.slice(0, end);
+    // 形式の一覧は添付と同じ 1 か所から引く。
+    if (attachmentExtFromName(candidate) !== null) return candidate;
+    if (/[A-Za-z0-9/\\]/.test(body.charAt(end - 1))) return null;
+  }
+  return null;
+}
+
 function trimToken(token: string): string | null {
   const trimmed = token.replace(LEADING_NOISE, "").replace(TRAILING_NOISE, "");
   if (trimmed.length === 0 || trimmed.length > 512) return null;
-  // 形式の一覧は添付と同じ 1 か所から引く。
-  if (attachmentExtFromName(trimmed) === null) return null;
-  if (SCHEME.test(trimmed)) return null;
+  // スキーム付きの URL は区切りで割ったあと `//host/...` になる。
+  if (SCHEME.test(trimmed) || trimmed.startsWith("//")) return null;
   if (UNSAFE_TOKEN.test(trimmed)) return null;
-  return trimmed;
+  return trimToImageName(trimmed);
 }
 
 // 本文に書かれた画像パスの候補。実在するかはここでは見ない。
@@ -69,7 +94,8 @@ export function imagePathCandidates(text: string): string[] {
   const seen = new Set<string>();
   const body = withoutFencedCode(text)
     .replace(INLINE_CODE, (_match, code: string) => ` ${code} `)
-    .replace(MARKDOWN_LINK, (_match, destination: string) => ` ${destination} `);
+    .replace(MARKDOWN_LINK, (_match, destination: string) => ` ${destination} `)
+    .replace(HARD_SEPARATORS, " ");
   for (const token of body.split(/\s+/u)) {
     const candidate = trimToken(token);
     if (candidate === null || seen.has(candidate)) continue;
