@@ -1371,6 +1371,15 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   outline-offset: -3px;
 }
 
+/* ブランチ / PR の概要と同じ行に、上流との差を置く。概要だけを縮め、数字は残す。 */
+.hwc-active-band-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
 /* PR のタイトルは、ブランチの等幅と区別する。 */
 .hwc-active-band-summary {
   margin: 0;
@@ -1783,6 +1792,67 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   user-select: text;
   -webkit-user-select: text;
   -webkit-touch-callout: default;
+}
+
+/* 上流との差。0 は淡く、動きがある側だけを色付きにする。見た目は小さいが、
+   押せる範囲は上下に広げて 32px 確保する。 */
+.hwc-git-status {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 20px;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.hwc-git-status::before {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
+/* 一覧では行の高さに余裕があるので、状態表示の操作領域を 44px まで広げる。
+   チャットの見出しは 32px なので、上の 32px のままにする。 */
+.hwc-group-row .hwc-git-status::before,
+.hwc-active-band .hwc-git-status::before {
+  inset: -12px -4px;
+}
+
+.hwc-git-status:hover {
+  background: var(--color-surface);
+}
+
+.hwc-git-status:active {
+  background: var(--color-line);
+}
+
+.hwc-git-status:focus-visible {
+  outline-offset: -3px;
+}
+
+.hwc-git-status-part[data-tone="ahead"] {
+  color: var(--color-success);
+}
+
+.hwc-git-status-part[data-tone="behind"] {
+  color: var(--color-attention);
+}
+
+.hwc-git-status-part[data-tone="zero"] {
+  color: var(--color-secondary);
 }
 
 /* ブランチに PR が紐づいているときだけ出る。潰さないため、縮むのはブランチ側だけにする。

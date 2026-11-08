@@ -128,6 +128,28 @@ export async function createScenario(root: string): Promise<Scenario> {
       `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-gh.ts", import.meta.url))}" "$@"\n`,
       { mode: 0o700 },
     ),
+    writeFile(
+      join(root, "bin", "git"),
+      `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-git.ts", import.meta.url))}" "$@"\n`,
+      { mode: 0o700 },
+    ),
+    writeFile(
+      join(root, "git-state.json"),
+      JSON.stringify({
+        [dashboard]: {
+          upstream: "origin/feat/empty-state",
+          ahead: 1,
+          behind: 2,
+          hasRemote: true,
+        },
+        [docs]: {
+          upstream: "origin/docs/quickstart",
+          ahead: 0,
+          behind: 1,
+          hasRemote: true,
+        },
+      }),
+    ),
   ]);
 
   const snapshot: HerdrSnapshot = {

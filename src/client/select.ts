@@ -5,6 +5,7 @@ import type {
   TabState,
   WorkspaceState,
 } from "../server/herdr/state";
+import type { GitSync } from "../shared/git";
 
 export type PaneRow = {
   workspace: WorkspaceState;
@@ -97,6 +98,7 @@ export type PaneContext = {
   tabLabel: string;
   // ブランチはスペースの属性。同じスペースのペインは同じ値になる。
   branch: string | null;
+  sync: GitSync | null;
 };
 
 // 画面上部に出す、いま見ている対象の要約。選択が無いときは null。
@@ -108,6 +110,7 @@ export function findPaneContext(state: AppState, paneId: string | null): PaneCon
     workspaceLabel: row.workspace.label,
     tabLabel: row.tab.label,
     branch: row.workspace.branch ?? null,
+    sync: row.workspace.sync ?? null,
   };
 }
 

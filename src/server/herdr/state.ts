@@ -1,6 +1,7 @@
 import type { AgentStatus, HerdrAgent, HerdrAgentSession, HerdrSnapshot } from "./contract";
 import { isAbsolute } from "node:path";
-import type { BranchReader } from "../git";
+import type { BranchReader, GitClient } from "../git";
+import type { GitSync } from "../../shared/git";
 
 export type { AgentStatus };
 
@@ -37,6 +38,8 @@ export type WorkspaceState = {
   worktree: WorktreeState | null;
   // ブランチは Herdr の snapshot に無いので、BFF が checkoutPath から読んで足す。
   branch?: string | null;
+  // 上流ブランチとの差。リモートが無い・読めない場合は null。
+  sync?: GitSync | null;
   tabs: TabState[];
 };
 
@@ -138,6 +141,8 @@ export type StateStore = {
   workspaceRoot: (paneId: string) => string | null;
   // スペースのチェックアウト。ブランチと同じ場所を、PR の問い合わせ先にも使う。
   workspacePath: (workspaceId: string) => string | null;
+  // fetch / pull の後、次に状態を公開するときに読み直す。
+  invalidateGit: (workspaceId: string) => void;
 };
 
 function toChatSources(snapshot: HerdrSnapshot): Map<string, ChatSource> {
@@ -202,10 +207,30 @@ async function withBranches(
   return { ...state, workspaces };
 }
 
+// 上流ブランチとの差は、ブランチが読めたスペースだけに足す。git の失敗で状態を止めない。
+async function withSync(
+  state: AppState,
+  read: GitClient | undefined,
+  paths: Map<string, string>,
+): Promise<AppState> {
+  if (read === undefined) return state;
+  const workspaces = await Promise.all(
+    state.workspaces.map(async (workspace) => {
+      const path = paths.get(workspace.id);
+      const branch = workspace.branch ?? null;
+      if (path === undefined || branch === null) return { ...workspace, sync: null };
+      const sync = await read.read({ checkoutPath: path, branch }).catch(() => null);
+      return { ...workspace, sync };
+    }),
+  );
+  return { ...state, workspaces };
+}
+
 export function createStateStore(options: {
   load: () => Promise<HerdrSnapshot>;
   retryDelayMs?: number;
   branch?: BranchReader;
+  git?: GitClient;
 }): StateStore {
   const retryDelayMs = options.retryDelayMs ?? 1_000;
   const listeners = new Set<(state: AppState) => void>();
@@ -230,7 +255,8 @@ export function createStateStore(options: {
   const publish = async (): Promise<AppState> => {
     const snapshot = await options.load();
     const roots = checkoutPaths(snapshot);
-    const state = await withBranches(toAppState(snapshot), options.branch, roots);
+    const branched = await withBranches(toAppState(snapshot), options.branch, roots);
+    const state = await withSync(branched, options.git, roots);
     if (retryTimer) {
       clearTimeout(retryTimer);
       retryTimer = null;
@@ -278,6 +304,10 @@ export function createStateStore(options: {
     chatSource: (paneId) => sources.get(paneId) ?? null,
     workspaceRoot: (paneId) => paneRoots.get(paneId) ?? null,
     workspacePath: (workspaceId) => workspacePaths.get(workspaceId) ?? null,
+    invalidateGit: (workspaceId) => {
+      const path = workspacePaths.get(workspaceId);
+      if (path !== undefined) options.git?.invalidate(path);
+    },
     onChange: (listener) => {
       listeners.add(listener);
       return () => {

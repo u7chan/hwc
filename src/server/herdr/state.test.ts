@@ -520,3 +520,90 @@ test("a readable branch ends up on the workspace", async () => {
   const state = await store.refresh();
   expect(state.workspaces[0]?.branch).toBe("feat/row");
 });
+
+function repoSnapshot(): HerdrSnapshot {
+  return {
+    focused_workspace_id: "w1",
+    focused_tab_id: "w1:t1",
+    focused_pane_id: "w1:p1",
+    workspaces: [
+      {
+        workspace_id: "w1",
+        label: "hwc",
+        worktree: {
+          repo_name: "hwc",
+          repo_root: "/repo",
+          checkout_path: "/repo",
+          is_linked_worktree: false,
+        },
+      },
+    ],
+    tabs: [{ tab_id: "w1:t1", workspace_id: "w1", label: "1" }],
+    panes: [{ pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1" }],
+    agents: [],
+  } as HerdrSnapshot;
+}
+
+test("a readable upstream ends up on the workspace", async () => {
+  const calls: { checkoutPath: string; branch: string }[] = [];
+  const store = createStateStore({
+    load: async () => repoSnapshot(),
+    branch: async () => "feat/row",
+    git: {
+      read: async (options) => {
+        calls.push(options);
+        return { upstream: "origin/feat/row", ahead: 1, behind: 2, hasRemote: true };
+      },
+      invalidate: () => {},
+      fetch: async () => {},
+      pull: async () => {},
+    },
+  });
+
+  const state = await store.refresh();
+
+  expect(state.workspaces[0]?.sync).toEqual({
+    upstream: "origin/feat/row",
+    ahead: 1,
+    behind: 2,
+    hasRemote: true,
+  });
+  expect(calls).toEqual([{ checkoutPath: "/repo", branch: "feat/row" }]);
+});
+
+test("a git failure leaves the sync empty without stopping the state", async () => {
+  const store = createStateStore({
+    load: async () => repoSnapshot(),
+    branch: async () => "feat/row",
+    git: {
+      read: async () => {
+        throw new Error("git is not installed");
+      },
+      invalidate: () => {},
+      fetch: async () => {},
+      pull: async () => {},
+    },
+  });
+
+  const state = await store.refresh();
+  expect(state.workspaces[0]?.sync).toBeNull();
+});
+
+test("invalidateGit clears the checkout of the workspace", async () => {
+  const invalidated: string[] = [];
+  const store = createStateStore({
+    load: async () => repoSnapshot(),
+    branch: async () => "feat/row",
+    git: {
+      read: async () => null,
+      invalidate: (path) => invalidated.push(path),
+      fetch: async () => {},
+      pull: async () => {},
+    },
+  });
+
+  await store.refresh();
+  store.invalidateGit("w1");
+
+  expect(invalidated).toEqual(["/repo"]);
+});
