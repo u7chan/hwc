@@ -43,6 +43,9 @@ type PaneListProps = {
   expanded: ReadonlySet<string>;
   onSelect: (paneId: string) => void;
   onOpen: (paneId: string) => void;
+  // 帯から「すべて」のその場所へ移る。スコープの切り替えは PaneList が先に行う。
+  onRevealWorkspace: (workspaceId: string) => void;
+  reveal: { workspaceId: string; token: number } | null;
   onToggle: (groupId: string) => void;
   openPaneMenuId: string | null;
   openWorkspaceMenuId: string | null;
@@ -178,7 +181,8 @@ function ActiveCount(props: { status: ActiveStatus; count: number }) {
 // 帯は場所。行はペイン。同じワークツリーの行を束ね、スクロール中も場所を見失わないよう
 // 上端に貼り付ける。状態の件数は束全体の量で、行の右端はそのペインの時刻。
 // 場所の記号は行の親を示す目印にする。子の段はこのアイコンの中心から線でつなぐ。
-function ActiveBand(props: { group: ActiveGroup }) {
+// 帯全体は「すべて」のその場所へ移る入口。中身の上に透明なボタンを重ねる。
+function ActiveBand(props: { group: ActiveGroup; onOpen: () => void }) {
   const { workspace, counts } = props.group;
   const branch = workspace.branch ?? null;
   return (
@@ -187,26 +191,37 @@ function ActiveBand(props: { group: ActiveGroup }) {
         <WorkspaceGlyph worktree={workspace.worktree} />
       </span>
       <div class="hwc-active-band-main">
-        <h2 class="hwc-active-band-name" id={bandId(workspace.id)} title={workspace.label}>
+        <h2 class="hwc-active-band-name" id={bandId(workspace.id)}>
           {workspace.label}
         </h2>
-        {branch === null ? null : (
-          <p class="hwc-active-band-branch" title={branch}>
-            {branch}
-          </p>
-        )}
+        {branch === null ? null : <p class="hwc-active-band-branch">{branch}</p>}
       </div>
       <div class="hwc-active-band-counts">
         {COUNT_STATUSES.map((status) => (
           <ActiveCount key={status} status={status} count={counts[status]} />
         ))}
       </div>
+      <span class="hwc-active-band-chevron" aria-hidden="true">
+        <ChevronRightIcon />
+      </span>
+      <button
+        type="button"
+        class="hwc-active-band-open"
+        aria-label={`${workspace.label} をすべての一覧で開く`}
+        title={branch === null ? workspace.label : `${workspace.label} · ${branch}`}
+        onClick={props.onOpen}
+      />
     </div>
   );
 }
 
 function bandId(workspaceId: string): string {
   return `hwc-active-band-${workspaceId}`;
+}
+
+// ツリーでそのスペースの見出し（メニューの入口）まで送るための目印。
+function spaceId(workspaceId: string): string {
+  return `hwc-space-${workspaceId}`;
 }
 
 // ワークスペース（ワークツリー）ごとに束ねる。並びは activeGroups が持つ。開いた時点では
@@ -232,7 +247,7 @@ function ActivePaneList(props: PaneListProps) {
           class="hwc-active-group"
           aria-labelledby={bandId(group.workspace.id)}
         >
-          <ActiveBand group={group} />
+          <ActiveBand group={group} onOpen={() => props.onRevealWorkspace(group.workspace.id)} />
           <ul class="hwc-active-rows">
             {group.rows.map(({ tab, pane }) => {
               const current = pane.id === props.selectedPaneId;
@@ -288,7 +303,33 @@ export function PaneList(props: PaneListProps) {
     if (node) node.scrollTop = positions.current.get(props.scope) ?? 0;
   }, [props.scope]);
 
+  // 帯から移ったときは、そのスペースの見出しまで送る。スコープの復元より後に置き、
+  // 復元した位置を上書きする。同じ要求で二度動かないよう、token で 1 回だけ処理する。
+  const revealed = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const request = props.reveal;
+    if (request === null || props.scope !== "all") return;
+    if (revealed.current === request.token) return;
+    revealed.current = request.token;
+
+    const node = scroll.current;
+    const target = document.getElementById(spaceId(request.workspaceId));
+    if (node === null || target === null) return;
+    const padding = Number.parseFloat(getComputedStyle(node).paddingTop) || 0;
+    const top =
+      target.getBoundingClientRect().top - node.getBoundingClientRect().top + node.scrollTop;
+    node.scrollTop = Math.max(0, top - padding);
+    // キーボードでも続けられるよう、移動先の見出しへフォーカスを送る。次の Tab がメニュー。
+    target.querySelector<HTMLElement>(".hwc-group")?.focus({ preventScroll: true });
+  }, [props.scope, props.reveal]);
+
   if (countPanes(props.state) === 0) return <NoPanes />;
+
+  // 帯からの移動は、いまの active の位置を控えてからスコープを切り替える。
+  const revealWorkspace = (workspaceId: string) => {
+    changeScope("all");
+    props.onRevealWorkspace(workspaceId);
+  };
 
   // セグメントと一覧のスクロール枠は分岐の外に置く。スコープを切り替えても同じ要素を
   // 使い続けるので、つまみが滑り、スクロール枠も作り直されない。
@@ -296,7 +337,7 @@ export function PaneList(props: PaneListProps) {
     <>
       <ScopeBar scope={props.scope} unread={activeUnreadCount(props.state)} onScope={changeScope} />
       <div class="hwc-list-scroll" ref={scroll}>
-        {renderList(props)}
+        {renderList({ ...props, onRevealWorkspace: revealWorkspace })}
       </div>
     </>
   );
@@ -336,11 +377,13 @@ function TreePaneList(props: TreePaneListProps) {
     status: PaneState["agentStatus"];
     controlsId: string;
     workspaceId?: string;
+    // 代表の見出しを持たないホスト（リポジトリ束の先頭）は、束の見出しをその場所の入口にする。
+    domId?: string;
   }) {
     const open = expanded.has(props2.id);
     const workspaceId = props2.workspaceId;
     return (
-      <div class="hwc-group-row" data-menu={workspaceId !== undefined}>
+      <div class="hwc-group-row" data-menu={workspaceId !== undefined} id={props2.domId}>
         <button
           type="button"
           class="hwc-group"
@@ -495,7 +538,12 @@ function TreePaneList(props: TreePaneListProps) {
     const groupId = `hwc-group-${workspace.id}`;
     const open = expanded.has(workspace.id);
     return (
-      <section class="hwc-group-block" data-depth={depth} key={workspace.id}>
+      <section
+        class="hwc-group-block"
+        data-depth={depth}
+        id={spaceId(workspace.id)}
+        key={workspace.id}
+      >
         {withHeader
           ? renderHeader({
               id: workspace.id,
@@ -542,6 +590,7 @@ function TreePaneList(props: TreePaneListProps) {
               status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
               controlsId: groupId,
               workspaceId: group.host?.id,
+              domId: group.host === null ? undefined : spaceId(group.host.id),
             })}
             <GroupChildren id={groupId} open={open}>
               {group.host ? renderTabLevel(group.host, 1, false) : null}

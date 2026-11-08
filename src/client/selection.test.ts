@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import type { AppState } from "../server/herdr/state";
-import { expandForPane, parseSelectedPane, restorePane } from "./selection";
+import {
+  defaultPaneOf,
+  expandForPane,
+  expandForWorkspace,
+  parseSelectedPane,
+  restorePane,
+  workspaceGroupIds,
+} from "./selection";
 
 const state: AppState = {
   focusedWorkspaceId: "w1",
@@ -99,4 +106,23 @@ test("a group the user folded stays folded", () => {
 test("a pane outside the tree opens nothing extra", () => {
   const open = new Set(["w1"]);
   expect([...expandForPane(state, "w9:p1", open, new Map())]).toEqual(["w1"]);
+});
+
+test("the default pane is the first pane of the leftmost non-empty tab", () => {
+  expect(defaultPaneOf(state.workspaces[1])?.tab.id).toBe("w2:t1");
+  expect(defaultPaneOf(state.workspaces[1])?.pane.id).toBe("w2:p1");
+
+  const workspace = state.workspaces[1];
+  const emptyFirst = {
+    ...workspace,
+    tabs: [{ ...workspace.tabs[0], id: "w2:t0", panes: [] }, ...workspace.tabs],
+  };
+  expect(defaultPaneOf(emptyFirst)?.tab.id).toBe("w2:t1");
+});
+
+test("moving from a band opens the space, its tab and the repo group", () => {
+  const open = expandForWorkspace(state, "w2", new Set(["w1"]));
+  expect(open === null ? [] : [...open].sort()).toEqual(["repo:u7agent", "w1", "w2", "w2:t1"]);
+  expect(workspaceGroupIds(state.workspaces[1])).toEqual(["w2", "w2:t1", "repo:u7agent"]);
+  expect(expandForWorkspace(state, "w9", new Set(["w1"]))).toBeNull();
 });
