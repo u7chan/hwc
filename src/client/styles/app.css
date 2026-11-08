@@ -149,8 +149,27 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   background: var(--color-attention);
 }
 
+/* 正常な間は点をゆっくり明滅させる。点自身を動かすだけなら、拡大しても中心は動かない。
+   合図は補助なので、文字だけでも状態は読める。 */
+@keyframes hwc-conn-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 .hwc-conn[data-status="live"] .hwc-conn-dot {
   background: var(--color-success);
+  animation: hwc-conn-breathe 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-conn[data-status="live"] .hwc-conn-dot {
+    animation: none;
+  }
 }
 
 .hwc-conn[data-status="unavailable"] .hwc-conn-dot {
