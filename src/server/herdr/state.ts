@@ -134,6 +134,8 @@ export type StateStore = {
   refresh: () => Promise<AppState>;
   onChange: (listener: (state: AppState) => void) => () => void;
   chatSource: (paneId: string) => ChatSource | null;
+  // ペインが作業しているチェックアウト。画像の配信元を決めるのに使う。
+  workspaceRoot: (paneId: string) => string | null;
 };
 
 function toChatSources(snapshot: HerdrSnapshot): Map<string, ChatSource> {
@@ -168,6 +170,16 @@ export function checkoutPaths(snapshot: HerdrSnapshot): Map<string, string> {
   return paths;
 }
 
+// チェックアウトの在り処はワークスペース単位で決まる。ペインから引けるように引き直す。
+function toPaneRoots(snapshot: HerdrSnapshot, roots: Map<string, string>): Map<string, string> {
+  const paneRoots = new Map<string, string>();
+  for (const pane of snapshot.panes ?? []) {
+    const root = roots.get(pane.workspace_id);
+    if (root !== undefined) paneRoots.set(pane.pane_id, root);
+  }
+  return paneRoots;
+}
+
 // ブランチは Herdr が返さないので、ワークツリーの置き場所から読んで足す。
 // 読めなくても状態そのものは流す（ブランチが出ないだけ）。
 async function withBranches(
@@ -197,6 +209,7 @@ export function createStateStore(options: {
   const listeners = new Set<(state: AppState) => void>();
   let current: AppState | null = null;
   let sources = new Map<string, ChatSource>();
+  let paneRoots = new Map<string, string>();
   let running: Promise<AppState> | null = null;
   let pending = false;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -213,13 +226,15 @@ export function createStateStore(options: {
 
   const publish = async (): Promise<AppState> => {
     const snapshot = await options.load();
-    const state = await withBranches(toAppState(snapshot), options.branch, checkoutPaths(snapshot));
+    const roots = checkoutPaths(snapshot);
+    const state = await withBranches(toAppState(snapshot), options.branch, roots);
     if (retryTimer) {
       clearTimeout(retryTimer);
       retryTimer = null;
     }
     current = state;
     sources = toChatSources(snapshot);
+    paneRoots = toPaneRoots(snapshot, roots);
     for (const listener of listeners) listener(state);
     return state;
   };
@@ -257,6 +272,7 @@ export function createStateStore(options: {
     get: () => current,
     refresh,
     chatSource: (paneId) => sources.get(paneId) ?? null,
+    workspaceRoot: (paneId) => paneRoots.get(paneId) ?? null,
     onChange: (listener) => {
       listeners.add(listener);
       return () => {

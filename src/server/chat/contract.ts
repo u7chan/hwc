@@ -1,3 +1,10 @@
+export type ChatFile = {
+  // ワークスペースのチェックアウトからの相対パス。絶対パスは渡さない。
+  name: string;
+  // 中身の版（mtime とサイズ）。URL のキャッシュ破棄に使う。
+  version: string;
+};
+
 export type ChatMessage = {
   id: string;
   // error はターンが失敗した記録。本文はプロバイダや CLI が返した失敗の文言で、
@@ -9,6 +16,8 @@ export type ChatMessage = {
   count?: number;
   // ペイン配下のファイル名だけを持つ。絶対パスはクライアントへ渡さない。
   attachments?: string[];
+  // エージェントの本文が指していた画像。ユーザーの添付とは別の一覧。
+  files?: ChatFile[];
 };
 
 export type ChatContext = {

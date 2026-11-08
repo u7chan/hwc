@@ -5,6 +5,7 @@ import {
   attachmentUploadUrl,
   agentModelsOutcome,
   attachmentUrl,
+  chatFileUrl,
   chatOutcome,
   closeOutcome,
   createApiClient,
@@ -381,6 +382,44 @@ test("a message keeps its attachments only as names in the saved format", () => 
   expect(
     toChatSnapshot({ ...chatBody, messages: [{ ...message, attachments: [] }] })?.messages,
   ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
+});
+
+test("a preview url carries the relative path and the version", () => {
+  expect(chatFileUrl("w1:p2", { name: "docs/モック.png", version: "1767225600000-12" })).toBe(
+    `/api/panes/w1%3Ap2/files?path=${encodeURIComponent("docs/モック.png")}&v=1767225600000-12`,
+  );
+  // 区切りの入った名前も、クエリの 1 値として送る。
+  expect(chatFileUrl("w1:p1", { name: "../x.png", version: "1-2" })).toBe(
+    "/api/panes/w1%3Ap1/files?path=..%2Fx.png&v=1-2",
+  );
+});
+
+test("an agent message keeps the images the server found", () => {
+  const message = {
+    id: "m1",
+    role: "agent" as const,
+    text: "`docs/mock.png` に置きました。",
+    at: 1_000,
+    files: [{ name: "docs/mock.png", version: "1767225600000-12" }],
+  };
+  expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
+
+  // 配信 URL になる。根の外を指す名前や壊れた版は捨てる。
+  const broken = {
+    ...message,
+    files: [
+      { name: "/etc/passwd.png", version: "1-2" },
+      { name: "../secret.png", version: "1-2" },
+      { name: "", version: "1-2" },
+      { name: "docs/ok.png", version: 3 },
+    ],
+  };
+  expect(toChatSnapshot({ ...chatBody, messages: [broken] })?.messages).toEqual([
+    { id: "m1", role: "agent", text: message.text, at: 1_000 },
+  ]);
+  expect(toChatSnapshot({ ...chatBody, messages: [{ ...message, files: [] }] })?.messages).toEqual([
+    { id: "m1", role: "agent", text: message.text, at: 1_000 },
+  ]);
 });
 
 test("the created pane id is read from the response", () => {

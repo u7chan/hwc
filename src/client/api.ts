@@ -3,6 +3,7 @@ import type { AppType } from "../server/app";
 import type {
   ChatCompaction,
   ChatContext,
+  ChatFile,
   ChatMessage,
   ChatSnapshot,
   ChatUsage,
@@ -132,6 +133,21 @@ function toAttachmentNames(value: unknown): string[] | undefined {
   return names.length === 0 ? undefined : names;
 }
 
+function toChatFiles(value: unknown): ChatFile[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const files: ChatFile[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue;
+    const file = item as Partial<ChatFile>;
+    if (typeof file.name !== "string" || typeof file.version !== "string") continue;
+    // 配信 URL になる。根の外を指す名前は捨て、リンクも画像も作らない。
+    if (file.name === "" || file.name.startsWith("/")) continue;
+    if (file.name.split("/").includes("..")) continue;
+    files.push({ name: file.name, version: file.version });
+  }
+  return files.length === 0 ? undefined : files;
+}
+
 function toChatMessage(value: unknown): ChatMessage | null {
   if (typeof value !== "object" || value === null) return null;
   const message = value as Partial<ChatMessage>;
@@ -142,6 +158,7 @@ function toChatMessage(value: unknown): ChatMessage | null {
   if (typeof message.text !== "string") return null;
   if (typeof message.at !== "number") return null;
   const attachments = toAttachmentNames(message.attachments);
+  const files = toChatFiles(message.files);
   const count = message.role === "error" ? toRetryCount(message.count) : undefined;
   return {
     id: message.id,
@@ -150,6 +167,7 @@ function toChatMessage(value: unknown): ChatMessage | null {
     at: message.at,
     ...(count === undefined ? {} : { count }),
     ...(attachments === undefined ? {} : { attachments }),
+    ...(files === undefined ? {} : { files }),
   };
 }
 
@@ -191,6 +209,12 @@ export function attachmentUploadUrl(paneId: string): string {
 
 export function attachmentUrl(paneId: string, name: string): string {
   return `${attachmentUploadUrl(paneId)}/${encodeURIComponent(name)}`;
+}
+
+// 版を URL に含める。同じ名前で作り直された画像を、ブラウザのキャッシュから拾わない。
+export function chatFileUrl(paneId: string, file: ChatFile): string {
+  const query = `path=${encodeURIComponent(file.name)}&v=${encodeURIComponent(file.version)}`;
+  return `/api/panes/${encodeURIComponent(paneId)}/files?${query}`;
 }
 
 export function toAppState(value: unknown): AppState | null {
