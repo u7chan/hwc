@@ -354,7 +354,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   font-weight: 600;
 }
 
-/* 未読は目安。押す対象ではなく、急かさない色で小さく添える。 */
+/* 件数は目安。押す対象ではなく、急かさない色で小さく添える。 */
 .hwc-scope-count {
   display: inline-flex;
   align-items: center;
