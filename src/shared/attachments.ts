@@ -19,6 +19,8 @@ const CONTENT_TYPE_BY_EXT: ReadonlyMap<AttachmentExt, string> = new Map([
   ["webp", "image/webp"],
 ]);
 
+const EXTENSIONS: ReadonlySet<string> = new Set(CONTENT_TYPE_BY_EXT.keys());
+
 // 案内文の表記だけを持つ。受け付ける形式とその並びは allowlist から引く。
 const LABEL_BY_EXT: ReadonlyMap<AttachmentExt, string> = new Map([
   ["png", "PNG"],
@@ -40,10 +42,26 @@ export function attachmentExtOf(contentType: string | undefined): AttachmentExt 
   return EXT_BY_CONTENT_TYPE.get(type) ?? null;
 }
 
+const EXT_ALIASES: ReadonlyMap<string, AttachmentExt> = new Map([["jpeg", "jpg"]]);
+
+// 保存名だけでなく、エージェントが書いた任意のファイル名からも型を決める。
+// allowlist を 2 か所に分けないよう、拡張子の対応はここだけが持つ。
+export function attachmentExtFromName(name: string): AttachmentExt | null {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) return null;
+  const ext = name.slice(dot + 1).toLowerCase();
+  if (EXTENSIONS.has(ext)) return ext as AttachmentExt;
+  return EXT_ALIASES.get(ext) ?? null;
+}
+
+export function attachmentContentTypeFromName(name: string): string | null {
+  const ext = attachmentExtFromName(name);
+  return ext === null ? null : (CONTENT_TYPE_BY_EXT.get(ext) ?? null);
+}
+
 export function attachmentContentType(name: string): string | null {
   if (!isAttachmentName(name)) return null;
-  const ext = name.slice(name.lastIndexOf(".") + 1);
-  return CONTENT_TYPE_BY_EXT.get(ext as AttachmentExt) ?? null;
+  return attachmentContentTypeFromName(name);
 }
 
 // 利用者に見せる形式の一覧。allowlist を変えたときに案内文だけが古くならないようにする。

@@ -3,6 +3,7 @@ import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } fro
 import type {
   ChatCompaction,
   ChatContext,
+  ChatFile,
   ChatMessage,
   ChatSnapshot,
   ChatUsage,
@@ -10,7 +11,7 @@ import type {
 import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
-import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
+import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
 import { isLayoutShift, isNearBottom } from "./scroll";
 import {
   ATTACHMENT_LIMIT_NOTICE,
@@ -188,6 +189,29 @@ function MessageAttachments(props: { paneId: string; names: string[] }) {
         return (
           <a class="hwc-msg-attachment" key={name} href={url} target="_blank" rel="noreferrer">
             <img class="hwc-msg-attachment-image" src={url} alt="添付画像" loading="lazy" />
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+// エージェントが本文で示した画像。ユーザーの添付と同じ見た目にして、押すと新しいタブで開く。
+function MessageFiles(props: { paneId: string; files: ChatFile[] }) {
+  return (
+    <div class="hwc-msg-attachments">
+      {props.files.map((file) => {
+        const url = chatFileUrl(props.paneId, file);
+        const label = file.name.slice(file.name.lastIndexOf("/") + 1);
+        return (
+          <a
+            class="hwc-msg-attachment"
+            key={`${file.name}@${file.version}`}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <img class="hwc-msg-attachment-image" src={url} alt={label} loading="lazy" />
           </a>
         );
       })}
@@ -446,6 +470,9 @@ function ChatLog(props: {
             {message.role === "agent" ? (
               <>
                 <Markdown text={message.text} taskScope={`${index + 1}番目のメッセージ`} />
+                {message.files === undefined ? null : (
+                  <MessageFiles paneId={props.paneId} files={message.files} />
+                )}
                 <div class="hwc-msg-meta">
                   <span class="hwc-msg-time">{formatClock(message.at)}</span>
                   {copyButton(message)}

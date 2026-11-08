@@ -144,6 +144,7 @@ function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
       return current;
     },
     chatSource: (paneId) => sources.get(paneId) ?? null,
+    workspaceRoot: () => null,
     onChange: (listener) => {
       listeners.add(listener);
       if (pendingOnSubscribe) {
@@ -2051,6 +2052,28 @@ function createAttachmentApp(
   }).app;
 }
 
+// エージェントが書いた画像の配信。根は作業ディレクトリで、添付の保存先とは別に渡す。
+async function withCheckout<T>(run: (root: string) => Promise<T>): Promise<T> {
+  const root = await mkdtemp(join(tmpdir(), "hwc-checkout-"));
+  try {
+    return await run(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+function createFilesApp(
+  root: string,
+  options: { state?: AppState; chat?: Partial<ChatClient> } = {},
+) {
+  const store = createFakeStore(options.state ?? chatState);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
+  return createTestApp({
+    store: { ...store, workspaceRoot: () => root },
+    chat: options.chat,
+  }).app;
+}
+
 async function uploadImage(
   app: ReturnType<typeof createApp>,
   options: {
@@ -2254,6 +2277,89 @@ test("GET /api/panes/:id/attachments/:name returns 404 no_chat for a pane withou
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "no_chat" });
+  });
+});
+
+test("GET /api/panes/:id/files serves an image below the checkout", async () => {
+  await withCheckout(async (root) => {
+    await mkdir(join(root, "docs"), { recursive: true });
+    await writeFile(join(root, "docs", "mock.png"), pngBytes);
+    const app = createFilesApp(root);
+
+    const response = await app.request("/api/panes/w1:p1/files?path=docs%2Fmock.png");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(pngBytes);
+  });
+});
+
+test("GET /api/panes/:id/files refuses a path outside the checkout", async () => {
+  await withCheckout(async (root) => {
+    await writeFile(join(root, "mock.png"), pngBytes);
+    const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
+    const outsidePath = join(outside, "secret.png");
+    await writeFile(outsidePath, pngBytes);
+
+    try {
+      const app = createFilesApp(root);
+      for (const path of [
+        `..%2F${outside.split("/").pop()}%2Fsecret.png`,
+        encodeURIComponent(outsidePath),
+        "missing.png",
+        "",
+      ]) {
+        const response = await app.request(`/api/panes/w1:p1/files?path=${path}`);
+        expect(response.status).toBe(404);
+        expect(await response.json()).toEqual({ error: "not_found" });
+      }
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+test("GET /api/panes/:id/files returns no_chat for a pane without a session", async () => {
+  await withCheckout(async (root) => {
+    const response = await createFilesApp(root, { state }).request(
+      "/api/panes/w1:p1/files?path=mock.png",
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "no_chat" });
+  });
+});
+
+test("GET /api/panes/:id/chat adds the images the agent pointed at", async () => {
+  await withCheckout(async (root) => {
+    await writeFile(join(root, "mock.png"), pngBytes);
+    const app = createFilesApp(root, {
+      chat: {
+        snapshot: async () => ({
+          ...emptyChat,
+          messages: [
+            { id: "a1", role: "agent", text: "モックは `mock.png` に置きました。", at: 1 },
+          ],
+        }),
+      },
+    });
+
+    const response = await app.request("/api/panes/w1:p1/chat");
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      etag: string;
+      messages: { files?: { name: string; version: string }[] }[];
+    };
+    expect(body.messages[0]?.files?.map((file) => file.name)).toEqual(["mock.png"]);
+    expect(body.etag).not.toBe(emptyChat.etag);
+
+    // 画像を作り直すと本文は同じでも etag が変わり、次の取得で新しい URL になる。
+    await writeFile(join(root, "mock.png"), new Uint8Array([...pngBytes, 0]));
+    const refreshed = await app.request("/api/panes/w1:p1/chat");
+    expect(refreshed.headers.get("etag")).not.toBe(response.headers.get("etag"));
   });
 });
 

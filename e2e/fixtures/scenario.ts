@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HerdrSnapshot } from "../../src/server/herdr/contract";
@@ -80,6 +80,13 @@ export async function createScenario(root: string): Promise<Scenario> {
     mkdir(join(agentDir, "sessions", "empty"), { recursive: true }),
     mkdir(join(root, "bin"), { recursive: true }),
   ]);
+
+  // エージェントが書いた画像のプレビュー。チェックアウトの内側に置いた実在の PNG だけが出る。
+  await mkdir(join(dashboard, "docs", "preview"), { recursive: true });
+  await copyFile(
+    fileURLToPath(new URL("../../src/client/assets/apple-touch-icon.png", import.meta.url)),
+    join(dashboard, "docs", "preview", "app-icon.png"),
+  );
 
   await Promise.all([
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
@@ -490,6 +497,31 @@ const sessionEntries = [
       },
     },
   },
+  {
+    type: "message",
+    id: "a3-preview",
+    parentId: "a3",
+    timestamp: "2026-01-01T09:00:08.000Z",
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: "空状態の確認に使った画面です。`docs/preview/app-icon.png` に置きました。",
+        },
+      ],
+      model: "claude-sonnet-4-5",
+      provider: "anthropic",
+      timestamp: Date.parse("2026-01-01T09:00:08.000Z"),
+      usage: {
+        input: 4_000,
+        output: 1_000,
+        cacheRead: 7_000,
+        cacheWrite: 0,
+        totalTokens: 12_000,
+      },
+    },
+  },
   // 失敗したターン。本文が空なので、拾わないと送信が届いていないように見える。
   // pi は自動リトライの試行ごとに書くので、同じ失敗を 3 回続けて置く（1 行に畳まれる）。
   ...[1, 2, 3].map((attempt) => {
@@ -498,7 +530,8 @@ const sessionEntries = [
     return {
       type: "message",
       id: `a${3 + attempt}`,
-      parentId: attempt === 1 ? "a3" : `a${2 + attempt}`,
+      // 画像のメッセージを本流に挟む。parentId の鎖から外れた枝は会話に出ない。
+      parentId: attempt === 1 ? "a3-preview" : `a${2 + attempt}`,
       timestamp: new Date(at).toISOString(),
       message: {
         role: "assistant",
