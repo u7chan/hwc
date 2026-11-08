@@ -4366,6 +4366,13 @@ p.hwc-compaction,
     border-top-color: var(--color-line);
   }
 
+  /* 本文と入力本文のあいだに積まれる行も同じ列に置く。面（背景と上罫線）は全幅。 */
+  .hwc-live,
+  .hwc-terminal-note {
+    padding-right: var(--hwc-gutter);
+    padding-left: var(--hwc-gutter);
+  }
+
   .hwc-send {
     width: 36px;
     height: 36px;
