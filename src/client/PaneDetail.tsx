@@ -32,6 +32,7 @@ import {
   contextMeter,
   type ContextMeterView,
   echoInsertIndex,
+  idleEchoExpired,
   isPendingConfirmed,
   latestUserAt,
   newSessionPending,
@@ -40,6 +41,7 @@ import {
   type NewSessionReset,
   paneBody,
   type PendingMessage,
+  PENDING_TURN_GRACE_MS,
   usePaneChat,
 } from "./chat";
 import { enterInsertsNewline } from "./input";
@@ -1072,6 +1074,24 @@ export function PaneDetail(props: PaneDetailProps) {
     });
   }, [replying, pending.length]);
 
+  // 送信したのにエージェントが動き出さない echo は、TUI がコマンドとして処理したか、
+  // 入力を受け取らなかったものとして畳む。コマンドは user 発話を残さないため、
+  // セッションを待っても確定しない。working を観測できた echo は確認まで残す。
+  useEffect(() => {
+    const idle = pending.filter((item) => !item.waiting);
+    if (idle.length === 0 || replying) return;
+    const oldest = Math.min(...idle.map((item) => item.at));
+    const delay = Math.max(0, oldest + PENDING_TURN_GRACE_MS - Date.now());
+    const timer = setTimeout(() => {
+      const now = Date.now();
+      setPending((items) => {
+        const next = items.filter((item) => !idleEchoExpired(item, now));
+        return next.length === items.length ? items : next;
+      });
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [pending, replying]);
+
   useEffect(() => {
     const idle = pending.filter((item) => !item.waiting);
     if (idle.length === 0) return;
@@ -1229,7 +1249,6 @@ export function PaneDetail(props: PaneDetailProps) {
       return;
     }
     const baselineAt = snapshot?.compaction?.at ?? null;
-    const at = Date.now();
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
     // 送信したらキーボードを閉じて出力を見せる。
@@ -1238,6 +1257,8 @@ export function PaneDetail(props: PaneDetailProps) {
     setNotice(null);
     // 送れたときだけ空にする。失敗したら本文も添付も残す。
     if (await submitInput(text, names)) {
+      // 猶予は送信が通った時点から測る。POST が遅いときに、届く前の echo を畳まない。
+      const at = Date.now();
       // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
       setPinned(true);
       // 250ms の debounce を待たずに消す。先にペインを切り替えると古い値が戻る。

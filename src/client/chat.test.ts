@@ -14,6 +14,7 @@ import {
   contextTone,
   echoInsertIndex,
   formatTokens,
+  idleEchoExpired,
   isAbortError,
   isPendingConfirmed,
   latestUserAt,
@@ -21,6 +22,7 @@ import {
   newSessionReset,
   newSessionSnapshot,
   paneBody,
+  PENDING_TURN_GRACE_MS,
   pollOnStatusChange,
 } from "./chat";
 
@@ -370,6 +372,14 @@ test("a pending message is confirmed by a new user message after its baseline", 
     isPendingConfirmed(pending, [{ id: "m2", role: "agent", text: "steer", at: pending.from + 1 }]),
   ).toBe(false);
   expect(isPendingConfirmed(pending, [])).toBe(false);
+});
+
+test("an echo whose pane never started working expires after the turn grace", () => {
+  const idle: PendingMessage = { ...pending, waiting: false, at: 1_000_000 };
+  expect(idleEchoExpired(idle, idle.at + PENDING_TURN_GRACE_MS - 1)).toBe(false);
+  expect(idleEchoExpired(idle, idle.at + PENDING_TURN_GRACE_MS)).toBe(true);
+  // 実行中に送った echo はターンの終了で畳む。猶予では消さない。
+  expect(idleEchoExpired({ ...idle, waiting: true }, idle.at + 60_000)).toBe(false);
 });
 
 test("a compaction echo stays before the messages sent after it", () => {

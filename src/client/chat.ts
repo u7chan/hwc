@@ -116,6 +116,15 @@ export function isPendingConfirmed(pending: PendingMessage, messages: ChatMessag
   return messages.some((message) => message.role === "user" && message.at > pending.from);
 }
 
+// TUI のコマンド（/reload、!bash など）は user 発話を残さず、agent_status も working に
+// ならない。待っても isPendingConfirmed では消えないので、動き出さなかった送信は畳む。
+// working を観測できた echo はターンの確認まで残す。
+export const PENDING_TURN_GRACE_MS = 3_000;
+
+export function idleEchoExpired(pending: PendingMessage, now: number): boolean {
+  return !pending.waiting && pending.at + PENDING_TURN_GRACE_MS <= now;
+}
+
 // 圧縮の控えは、その後に送った未確定メッセージより前へ置く。実行中でも表示を送信順に保つ。
 export function echoInsertIndex(
   messageCount: number,

@@ -106,6 +106,7 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 - `agent_session` を持たないペイン（シェルや、会話を読まないペイン）。端末出力にだけ追記する
 - text が空、または空白だけの送信
 - 添付注記（`<attached_files>`）の無い `/new` と `/compact`（`/compact <指示>` を含む）。会話を残さないか、履歴を置き換える
+- 同じく添付注記の無い `/reload`。実 Pi と同じくセッションに何も書かず、`agent_status` も `working` にしない（[ADR 0045](adr/0045-pending-echo-turn-grace.md)）
 
 添付を持つペインで `Enter` が送信になるときは、常に本文の送信になる（[ADR 0018](adr/0018-pasted-image-attachments.md)）。タッチ端末では `Enter` が改行になる（[ADR 0037](adr/0037-enter-newline-on-touch.md)）。`/compact` と打っても添付と一緒に送れば本文として扱われるので、注記があるときはコマンドではなく通常本文として追記する。
 

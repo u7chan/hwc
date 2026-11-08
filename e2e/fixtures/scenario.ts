@@ -377,6 +377,9 @@ export async function createScenario(root: string): Promise<Scenario> {
     snapshot,
     outputs: {
       ...outputs,
+      // 入力を受け付けるペインには画面がある。空の検出フレームは、再描画中かもしれない
+      // ため folder-trust が入力欄を閉じる（ADR 0044）。
+      "w1:p4": "› Ask pi to do anything\n",
       "w1:p5": "$ echo done\ndone\n$",
       "w3:p2": FOLDER_TRUST_SCREEN,
       "w3:p3": FOLDER_TRUST_SCREEN,
