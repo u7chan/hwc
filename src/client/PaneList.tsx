@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
+import type { PullRequest } from "../shared/pull-request";
 import {
   AgentGlyphIcon,
   ArrowRightIcon,
@@ -55,6 +56,7 @@ type PaneListProps = {
   workingSince: ReadonlyMap<string, number>;
   finishedAt: ReadonlyMap<string, number>;
   sent: ReadonlyMap<string, SentPane>;
+  pullRequests: ReadonlyMap<string, PullRequest | null>;
   now: number;
 };
 
@@ -185,19 +187,46 @@ function ActiveCount(props: { status: ActiveStatus; count: number }) {
 // 帯全体は「すべて」のその場所へ移る入口。中身の上に透明なボタンを重ねる。
 // その移動は矢印で示す。ツリーの行末は同じ向きのシェブロンで開閉するため、同じ記号にすると
 // どちらも「進む／開く」に見えて意味が重なる。
-function ActiveBand(props: { group: ActiveGroup; onOpen: () => void }) {
+function ActiveBand(props: {
+  group: ActiveGroup;
+  pullRequest: PullRequest | null;
+  onOpen: () => void;
+}) {
   const { workspace, counts } = props.group;
   const branch = workspace.branch ?? null;
+  const pullRequest = props.pullRequest;
+  // PR が無いときは今までどおりブランチを出す。PR があれば、merge 後もタスク名を残す。
+  const summary = pullRequest?.title ?? branch;
   return (
     <div class="hwc-active-band">
       <span class="hwc-active-band-icon">
         <WorkspaceGlyph worktree={workspace.worktree} />
       </span>
       <div class="hwc-active-band-main">
-        <h2 class="hwc-active-band-name" id={bandId(workspace.id)}>
-          {workspace.label}
-        </h2>
-        {branch === null ? null : <p class="hwc-active-band-branch">{branch}</p>}
+        <div class="hwc-active-band-title">
+          <h2 class="hwc-active-band-name" id={bandId(workspace.id)}>
+            {workspace.label}
+          </h2>
+          {pullRequest?.state === "OPEN" ? (
+            <a
+              class="hwc-active-band-pr"
+              href={pullRequest.url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`PR #${pullRequest.number} を GitHub で開く`}
+            >
+              #{pullRequest.number}
+            </a>
+          ) : null}
+        </div>
+        {summary === null ? null : (
+          <p
+            class={pullRequest === null ? "hwc-active-band-branch" : "hwc-active-band-summary"}
+            title={summary}
+          >
+            {summary}
+          </p>
+        )}
       </div>
       <div class="hwc-active-band-counts">
         {COUNT_STATUSES.map((status) => (
@@ -250,7 +279,11 @@ function ActivePaneList(props: PaneListProps) {
           class="hwc-active-group"
           aria-labelledby={bandId(group.workspace.id)}
         >
-          <ActiveBand group={group} onOpen={() => props.onRevealWorkspace(group.workspace.id)} />
+          <ActiveBand
+            group={group}
+            pullRequest={props.pullRequests.get(group.workspace.id) ?? null}
+            onOpen={() => props.onRevealWorkspace(group.workspace.id)}
+          />
           <ul class="hwc-active-rows">
             {group.rows.map(({ tab, pane }) => {
               const current = pane.id === props.selectedPaneId;
@@ -540,6 +573,7 @@ function TreePaneList(props: TreePaneListProps) {
   ) {
     const groupId = `hwc-group-${workspace.id}`;
     const open = expanded.has(workspace.id);
+    const pullRequest = props.pullRequests.get(workspace.id) ?? null;
     return (
       <section
         class="hwc-group-block"
@@ -554,9 +588,10 @@ function TreePaneList(props: TreePaneListProps) {
               icon: <WorkspaceGlyph worktree={workspace.worktree} />,
               label: workspace.label,
               sub:
-                workspace.worktree?.isLinkedWorktree === true
+                pullRequest?.title ??
+                (workspace.worktree?.isLinkedWorktree === true
                   ? `${workspace.worktree.repoName} · ${countWorkspacePanes(workspace.id, state)} ペイン`
-                  : `${countWorkspacePanes(workspace.id, state)} ペイン`,
+                  : `${countWorkspacePanes(workspace.id, state)} ペイン`),
               title: workspace.worktree?.checkoutPath ?? undefined,
               status: workspace.agentStatus,
               controlsId: groupId,
@@ -581,6 +616,10 @@ function TreePaneList(props: TreePaneListProps) {
 
         const open = expanded.has(group.key);
         const groupId = `hwc-group-${group.key}`;
+        // ホストは自分の見出しを持たない。束の見出しがホストの入口も兼ねるので、
+        // ホストに PR があればそのタイトルを出す。無ければ今までどおりワークツリー数。
+        const hostPullRequest =
+          group.host === null ? null : (props.pullRequests.get(group.host.id) ?? null);
         return (
           <section class="hwc-group-block" data-depth={0} key={group.key}>
             {renderHeader({
@@ -588,7 +627,9 @@ function TreePaneList(props: TreePaneListProps) {
               depth: 0,
               icon: <RepoIcon />,
               label: group.repoName,
-              sub: `${group.linked.length + (group.host ? 1 : 0)} ワークツリー`,
+              sub:
+                hostPullRequest?.title ??
+                `${group.linked.length + (group.host ? 1 : 0)} ワークツリー`,
               title: group.host?.worktree?.repoRoot ?? undefined,
               status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
               controlsId: groupId,

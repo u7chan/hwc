@@ -10,6 +10,8 @@ export const PULL_REQUEST_MISSING_TTL_MS = 120_000;
 export type PullRequestReader = (options: {
   checkoutPath: string;
   branch: string;
+  // 一覧に戻ったときに、ブランチの状態変化を待たずに引き直すための口。
+  refresh?: boolean;
 }) => Promise<PullRequest | null>;
 
 export function createPullRequestReader(
@@ -20,18 +22,20 @@ export function createPullRequestReader(
     now?: () => number;
   } = {},
 ): PullRequestReader {
-  const run = options.run ?? listOpenPullRequests;
+  const run = options.run ?? listLatestPullRequests;
   const ttlMs = options.ttlMs ?? PULL_REQUEST_TTL_MS;
   const missingTtlMs = options.missingTtlMs ?? PULL_REQUEST_MISSING_TTL_MS;
   const now = options.now ?? Date.now;
   const cache = new Map<string, { pullRequest: PullRequest | null; at: number; ttlMs: number }>();
 
-  return async ({ checkoutPath, branch }) => {
+  return async ({ checkoutPath, branch, refresh = false }) => {
     // ブランチ切り替えのイベントは無いので、ブランチ名を鍵に含めて読み直す。
     const key = `${checkoutPath}\n${branch}`;
     const at = now();
-    const hit = cache.get(key);
-    if (hit !== undefined && at - hit.at < hit.ttlMs) return hit.pullRequest;
+    if (!refresh) {
+      const hit = cache.get(key);
+      if (hit !== undefined && at - hit.at < hit.ttlMs) return hit.pullRequest;
+    }
 
     let pullRequest: PullRequest | null = null;
     try {
@@ -49,7 +53,7 @@ export function createPullRequestReader(
   };
 }
 
-async function listOpenPullRequests(checkoutPath: string, branch: string): Promise<unknown> {
+async function listLatestPullRequests(checkoutPath: string, branch: string): Promise<unknown> {
   // 調査用プロセスが呼び出し元のペインを自分のものとして報告しないようにする。
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
@@ -62,11 +66,11 @@ async function listOpenPullRequests(checkoutPath: string, branch: string): Promi
       "--head",
       branch,
       "--state",
-      "open",
+      "all",
       "--limit",
       "1",
       "--json",
-      "number,url",
+      "number,url,title,state",
     ],
     {
       cwd: checkoutPath,

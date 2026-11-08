@@ -5,6 +5,8 @@ import type { PullRequest } from "../shared/pull-request";
 const pullRequest: PullRequest = {
   number: 123,
   url: "https://github.com/example/acme/pull/123",
+  title: "Add an empty state",
+  state: "OPEN",
 };
 
 function reader(
@@ -24,7 +26,7 @@ function reader(
   return { read, calls };
 }
 
-test("the reader returns the open pull request of the checkout", async () => {
+test("the reader returns the latest pull request of the checkout", async () => {
   const { read, calls } = reader(async () => [pullRequest]);
   expect(await read({ checkoutPath: "/work/acme", branch: "feat/x" })).toEqual(pullRequest);
   expect(calls).toEqual([{ checkoutPath: "/work/acme", branch: "feat/x" }]);
@@ -54,6 +56,26 @@ test("a missing pull request is remembered longer than a found one", async () =>
   expect(calls).toHaveLength(2);
 });
 
+test("refresh bypasses the cache and replaces the remembered value", async () => {
+  let now = 0;
+  let response: PullRequest[] = [];
+  const { read, calls } = reader(async () => response, { now: () => now });
+
+  expect(await read({ checkoutPath: "/work/acme", branch: "feat/x" })).toBeNull();
+  response = [pullRequest];
+  now = 1;
+  expect(await read({ checkoutPath: "/work/acme", branch: "feat/x", refresh: true })).toEqual(
+    pullRequest,
+  );
+  expect(calls).toHaveLength(2);
+
+  // 引き直した値は、その後の通常の取得でも使う。
+  response = [];
+  now = 2;
+  expect(await read({ checkoutPath: "/work/acme", branch: "feat/x" })).toEqual(pullRequest);
+  expect(calls).toHaveLength(2);
+});
+
 test("the cache separates worktrees and branches", async () => {
   const { read, calls } = reader(async (_checkoutPath, branch) =>
     branch === "feat/x" ? [pullRequest] : [],
@@ -77,6 +99,25 @@ test("a failed lookup is not reported and is cached as a miss", async () => {
   now = 9_999;
   await read({ checkoutPath: "/work/acme", branch: "feat/x" });
   expect(calls).toHaveLength(1);
+});
+
+test("a failed refresh replaces the remembered value with a miss", async () => {
+  let now = 0;
+  let fail = false;
+  const { read } = reader(
+    async () => {
+      if (fail) throw new Error("gh is not installed");
+      return [pullRequest];
+    },
+    { now: () => now },
+  );
+  expect(await read({ checkoutPath: "/work/acme", branch: "feat/x" })).toEqual(pullRequest);
+  fail = true;
+  now = 1;
+  expect(await read({ checkoutPath: "/work/acme", branch: "feat/x", refresh: true })).toBeNull();
+  fail = false;
+  now = 2;
+  expect(await read({ checkoutPath: "/work/acme", branch: "feat/x" })).toBeNull();
 });
 
 test("an unexpected gh response is treated as no pull request", async () => {

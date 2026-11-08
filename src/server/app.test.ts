@@ -348,9 +348,14 @@ const pullRequestState: AppState = {
   workspaces: [{ ...state.workspaces[0]!, branch: "feat/empty-state" }],
 };
 
-test("GET /api/workspaces/:id/pull-request returns the open pull request of the branch", async () => {
-  const calls: { checkoutPath: string; branch: string }[] = [];
-  const pullRequest = { number: 123, url: "https://github.com/example/acme/pull/123" };
+test("GET /api/workspaces/:id/pull-request returns the latest pull request of the branch", async () => {
+  const calls: { checkoutPath: string; branch: string; refresh?: boolean }[] = [];
+  const pullRequest = {
+    number: 123,
+    url: "https://github.com/example/acme/pull/123",
+    title: "Add an empty state",
+    state: "MERGED" as const,
+  };
   const { app } = createTestApp({
     state: pullRequestState,
     pullRequests: async (options) => {
@@ -364,7 +369,26 @@ test("GET /api/workspaces/:id/pull-request returns the open pull request of the 
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(await response.json()).toEqual({ pullRequest });
-  expect(calls).toEqual([{ checkoutPath, branch: "feat/empty-state" }]);
+  expect(calls).toEqual([{ checkoutPath, branch: "feat/empty-state", refresh: false }]);
+});
+
+test("GET /api/workspaces/:id/pull-request passes refresh through to the reader", async () => {
+  const calls: { checkoutPath: string; branch: string; refresh?: boolean }[] = [];
+  const { app } = createTestApp({
+    state: pullRequestState,
+    pullRequests: async (options) => {
+      calls.push(options);
+      return null;
+    },
+  });
+
+  await app.request("/api/workspaces/w1/pull-request?refresh=1");
+  await app.request("/api/workspaces/w1/pull-request?refresh=0");
+
+  expect(calls).toEqual([
+    { checkoutPath, branch: "feat/empty-state", refresh: true },
+    { checkoutPath, branch: "feat/empty-state", refresh: false },
+  ]);
 });
 
 test("GET /api/workspaces/:id/pull-request answers null when the workspace has no branch", async () => {

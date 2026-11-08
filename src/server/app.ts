@@ -328,14 +328,16 @@ export function createApp(options: {
         if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
 
         // チップを出さないだけで足りるので、引けない場合は「PR が無い」と同じ応答にする。
-        // gh の失敗や期限切れで画面を止めない。
+        // gh の失敗や期限切れで画面を止めない。概要は merge 後も出すため、最新の PR を
+        // 状態不問で返し、チップを出すかはクライアントが state で決める。
         c.header("cache-control", "no-store");
         const branch = workspace.branch ?? null;
         const checkoutPath = store.workspacePath(workspace.id);
         if (branch === null || checkoutPath === null || pullRequests === undefined) {
           return c.json({ pullRequest: null });
         }
-        const pullRequest = await pullRequests({ checkoutPath, branch }).catch(() => null);
+        const refresh = c.req.query("refresh") === "1";
+        const pullRequest = await pullRequests({ checkoutPath, branch, refresh }).catch(() => null);
         return c.json({ pullRequest });
       })
       .get("/api/panes/:id/chat", async (c) => {

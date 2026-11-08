@@ -25,10 +25,11 @@ import {
 import { CloseConfirm } from "./CloseConfirm";
 import { CreatePane } from "./CreatePane";
 import { ImageViewer } from "./ImageViewer";
-import { CloseIcon, HwcMark, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
+import { ChevronRightIcon, CloseIcon, HwcMark, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
 import { Menu } from "./Menu";
 import { PaneMenu } from "./PaneMenu";
 import { usePaneProcesses } from "./process";
+import { useWorkspacePullRequests } from "./pull-request";
 import { RemoveWorktreeConfirm } from "./RemoveWorktreeConfirm";
 import type { PaneCommandHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
@@ -238,6 +239,8 @@ function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean> |
 
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
+  // 一覧の見出しに出す最新の PR。ペイン見出しのチップとは別に、表示中の一覧ぶんをまとめて持つ。
+  const pullRequests = useWorkspacePullRequests(state);
   const [connection, setConnection] = useState<ConnectionStatus>(INITIAL_CONNECTION);
   // 利用者が選んだ・開いた結果だけを持つ。まだ触っていない間はスナップショットから導く。
   const [view, setView] = useState<View | null>(null);
@@ -788,6 +791,8 @@ export function App() {
     menu?.target.kind === "workspace"
       ? (state?.workspaces.find((workspace) => workspace.id === menu.target.id) ?? null)
       : null;
+  const menuPullRequest =
+    menuWorkspace === null ? null : (pullRequests.get(menuWorkspace.id) ?? null);
   // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする（ADR 0038）。
   const menuWorktree = menuWorkspace?.worktree ?? null;
   const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
@@ -894,6 +899,7 @@ export function App() {
               workingSince={workingSince}
               finishedAt={finishedAt}
               sent={sent}
+              pullRequests={pullRequests}
               now={now}
             />
           )}
@@ -1042,6 +1048,22 @@ export function App() {
                   </div>
                 );
               })}
+              {menuPullRequest === null ? null : (
+                <>
+                  <hr class="hwc-menu-separator" />
+                  <a
+                    class="hwc-menu-item"
+                    role="menuitem"
+                    href={menuPullRequest.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={closeMenu}
+                  >
+                    <ChevronRightIcon size={14} />
+                    PR #{menuPullRequest.number} を開く
+                  </a>
+                </>
+              )}
               {canCreateWorktree ? (
                 <>
                   <hr class="hwc-menu-separator" />

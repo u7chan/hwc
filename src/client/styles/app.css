@@ -914,6 +914,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   color: var(--color-text);
   font-size: var(--text-body);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -1217,6 +1218,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 .hwc-pane-sub,
 .hwc-active-band-name,
 .hwc-active-band-branch,
+.hwc-active-band-summary,
 .hwc-active-name,
 .hwc-active-tab,
 .hwc-group-name,
@@ -1328,6 +1330,51 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   margin: 0;
   color: var(--color-secondary);
   font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+}
+
+/* 名前と同じ行に置く。チップだけを帯全体の移動ボタンより上に重ね、名前のタップは
+   今までどおり移動に残す。 */
+.hwc-active-band-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.hwc-active-band-pr {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 140ms ease;
+}
+
+.hwc-active-band-pr:hover {
+  background: var(--color-surface);
+}
+
+.hwc-active-band-pr:active {
+  background: var(--color-line);
+}
+
+.hwc-active-band-pr:focus-visible {
+  outline-offset: -3px;
+}
+
+/* PR のタイトルは、ブランチの等幅と区別する。 */
+.hwc-active-band-summary {
+  margin: 0;
+  color: var(--color-secondary);
   font-size: var(--text-secondary);
   line-height: var(--line-tight);
 }
