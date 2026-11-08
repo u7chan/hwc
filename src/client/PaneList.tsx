@@ -25,9 +25,8 @@ import {
 } from "./select";
 import {
   activeGroups,
-  activeUnreadCount,
+  countLabel,
   showsTabName,
-  unreadLabel,
   type ActiveGroup,
   type ActiveStatus,
   type ListScope,
@@ -91,30 +90,26 @@ const SCOPE_OPTIONS: readonly { scope: ListScope; label: string }[] = [
   { scope: "active", label: "アクティブ" },
 ];
 
-function ScopeBar(props: {
-  scope: ListScope;
-  unread: number;
-  onScope: (scope: ListScope) => void;
-}) {
+function ScopeBar(props: { scope: ListScope; count: number; onScope: (scope: ListScope) => void }) {
   return (
     <div class="hwc-scope" role="group" aria-label="一覧の絞り込み" data-scope={props.scope}>
       <span class="hwc-scope-thumb" aria-hidden="true" />
       {SCOPE_OPTIONS.map((option) => {
-        // 未読は「アクティブ」の意味そのもの。0 のときは何も出さない。
-        const unread = option.scope === "active" ? props.unread : 0;
+        // 件数はアクティブ一覧の帯（スペース）の数。行数ではない。0 のときは何も出さない。
+        const count = option.scope === "active" ? props.count : 0;
         return (
           <button
             key={option.scope}
             type="button"
             class="hwc-scope-option"
             aria-pressed={props.scope === option.scope}
-            aria-label={unread > 0 ? `${option.label}、未読 ${unread} 件` : undefined}
+            aria-label={count > 0 ? `${option.label}、${count} スペース` : undefined}
             onClick={() => props.onScope(option.scope)}
           >
             {option.label}
-            {unread > 0 && (
+            {count > 0 && (
               <span class="hwc-scope-count" aria-hidden="true">
-                {unreadLabel(unread)}
+                {countLabel(count)}
               </span>
             )}
           </button>
@@ -256,10 +251,10 @@ function spaceId(workspaceId: string): string {
   return `hwc-space-${workspaceId}`;
 }
 
-// ワークスペース（ワークツリー）ごとに束ねる。並びは activeGroups が持つ。開いた時点では
-// 既読を送らない。保留は App が持ち、選択が離れた時点で done なら送る。
-function ActivePaneList(props: PaneListProps) {
-  const groups = activeGroups(props.state, props.sent);
+// ワークスペース（ワークツリー）ごとに束ねた行を並べる。束は PaneList が activeGroups で作る。
+// 開いた時点では既読を送らない。保留は App が持ち、選択が離れた時点で done なら送る。
+function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] }) {
+  const { groups } = props;
   if (groups.length === 0) {
     return (
       <div class="hwc-list-note">
@@ -361,6 +356,9 @@ export function PaneList(props: PaneListProps) {
 
   if (countPanes(props.state) === 0) return <NoPanes />;
 
+  // 件数は一覧に出ている帯（スペース）の数。行を数え直さず、同じ束をそのまま使う。
+  const groups = activeGroups(props.state, props.sent);
+
   // 帯からの移動は、いまの active の位置を控えてからスコープを切り替える。
   const revealWorkspace = (workspaceId: string) => {
     changeScope("all");
@@ -371,19 +369,19 @@ export function PaneList(props: PaneListProps) {
   // 使い続けるので、つまみが滑り、スクロール枠も作り直されない。
   return (
     <>
-      <ScopeBar scope={props.scope} unread={activeUnreadCount(props.state)} onScope={changeScope} />
+      <ScopeBar scope={props.scope} count={groups.length} onScope={changeScope} />
       <div class="hwc-list-scroll" ref={scroll}>
-        {renderList({ ...props, onRevealWorkspace: revealWorkspace })}
+        {renderList({ ...props, onRevealWorkspace: revealWorkspace }, groups)}
       </div>
     </>
   );
 }
 
 // 並べ方の分岐はここ 1 か所。active の行はツリーと前提が違う。
-function renderList(props: PaneListProps) {
+function renderList(props: PaneListProps, groups: readonly ActiveGroup[]) {
   switch (props.scope) {
     case "active":
-      return <ActivePaneList {...props} />;
+      return <ActivePaneList {...props} groups={groups} />;
     case "all":
       return <TreePaneList {...props} />;
   }

@@ -3,12 +3,11 @@ import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server
 import {
   activeGroups,
   activePanes,
-  activeUnreadCount,
+  countLabel,
   parseListScope,
   pendingReadAfter,
   shouldFocusOnLeave,
   showsTabName,
-  unreadLabel,
 } from "./scope";
 
 function pane(id: string, agent: string | null, agentStatus: AgentStatus = "unknown"): PaneState {
@@ -151,7 +150,7 @@ test("the pending read survives a move that does not leave the pane", () => {
   expect(pendingReadAfter(null, "w1:p1", false)).toBeNull();
 });
 
-test("the unread count is the finished panes waiting to be seen", () => {
+test("the count is the spaces in the active list, not the rows", () => {
   const state = app(
     workspace("w1", [
       pane("w1:p1", "pi", "working"),
@@ -161,25 +160,27 @@ test("the unread count is the finished panes waiting to be seen", () => {
       pane("w1:p5", "pi", "idle"),
       pane("w1:p6", null, "done"),
     ]),
+    workspace("w2", [pane("w2:p1", "pi", "done")]),
+    workspace("w3", [pane("w3:p1", "pi", "idle")]),
   );
 
-  // blocked は未読ではない。エージェントのいない done は active に載らない。
-  expect(activeUnreadCount(state)).toBe(2);
+  // 同じスペースの行は 1。done だけのスペースも一覧に出るので 1。idle だけのスペースは帯を作らない。
+  expect(activeGroups(state, new Map()).length).toBe(2);
 });
 
-test("nothing unfinished means nothing unread", () => {
-  const state = app(
-    workspace("w1", [pane("w1:p1", "pi", "working"), pane("w1:p2", "pi", "blocked")]),
-  );
+test("a space with only its window row counts as a space", () => {
+  const state = app(workspace("w1", [pane("w1:p1", "pi", "idle")]));
+  const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
 
-  expect(activeUnreadCount(state)).toBe(0);
+  // 窓口は idle でも一覧に残る。帯が出ている以上、件数にも入れる。
+  expect(activeGroups(state, sent).length).toBe(1);
 });
 
 test("a count past two digits is shown as a range", () => {
-  expect(unreadLabel(0)).toBe("0");
-  expect(unreadLabel(9)).toBe("9");
-  expect(unreadLabel(99)).toBe("99");
-  expect(unreadLabel(100)).toBe("99+");
+  expect(countLabel(0)).toBe("0");
+  expect(countLabel(9)).toBe("9");
+  expect(countLabel(99)).toBe("99");
+  expect(countLabel(100)).toBe("99+");
 });
 
 test("a group holds attention, the window, the finished and the running in that order", () => {
