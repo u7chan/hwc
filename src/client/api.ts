@@ -21,6 +21,7 @@ import {
 import { isAttachmentName } from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
 import type { PaneInteraction } from "../shared/confirmation";
+import { parsePullRequest, type PullRequest } from "../shared/pull-request";
 
 export type OutputRead = PaneRead & { interaction: PaneInteraction | null };
 
@@ -342,6 +343,20 @@ export async function readActivity(
   if (!response.ok) throw new Error(`activity: ${response.status}`);
   const body = (await response.json()) as { activity?: unknown };
   return parsePaneActivity(body.activity);
+}
+
+// ブランチから引いた open の PR。チップを出すためだけの値なので、失敗は null に畳む。
+export async function readPullRequest(
+  workspaceId: string,
+  signal?: AbortSignal,
+): Promise<PullRequest | null> {
+  const response = await client.api.workspaces[":id"]["pull-request"].$get(
+    workspaceParam(workspaceId),
+    { init: { signal } },
+  );
+  if (!response.ok) throw new Error(`pull-request: ${response.status}`);
+  const body = (await response.json()) as { pullRequest?: unknown };
+  return parsePullRequest(body.pullRequest);
 }
 
 export async function sendInput(

@@ -120,6 +120,7 @@ const twoChatPanesState: AppState = {
   ],
 };
 
+const checkoutPath = "/work/acme";
 const sessionPath = "/sessions/--home-dev--/2026-01-01.jsonl";
 const otherSessionPath = "/sessions/--home-dev--/2026-01-02.jsonl";
 
@@ -145,6 +146,7 @@ function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
     },
     chatSource: (paneId) => sources.get(paneId) ?? null,
     workspaceRoot: () => null,
+    workspacePath: () => checkoutPath,
     onChange: (listener) => {
       listeners.add(listener);
       if (pendingOnSubscribe) {
@@ -226,7 +228,13 @@ type TestAppOptions = {
 } & Partial<
   Pick<
     Parameters<typeof createApp>[0],
-    "models" | "opencode" | "codex" | "revision" | "sseHeartbeatMs" | "attachmentsRoot"
+    | "models"
+    | "opencode"
+    | "codex"
+    | "pullRequests"
+    | "revision"
+    | "sseHeartbeatMs"
+    | "attachmentsRoot"
   >
 >;
 
@@ -328,6 +336,76 @@ test("GET /api/state returns 502 when Herdr cannot be read", async () => {
     storeFailure: new Error("socket closed"),
   });
   const response = await app.request("/api/state");
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+const pullRequestState: AppState = {
+  ...state,
+  workspaces: [{ ...state.workspaces[0]!, branch: "feat/empty-state" }],
+};
+
+test("GET /api/workspaces/:id/pull-request returns the open pull request of the branch", async () => {
+  const calls: { checkoutPath: string; branch: string }[] = [];
+  const pullRequest = { number: 123, url: "https://github.com/example/acme/pull/123" };
+  const { app } = createTestApp({
+    state: pullRequestState,
+    pullRequests: async (options) => {
+      calls.push(options);
+      return pullRequest;
+    },
+  });
+
+  const response = await app.request("/api/workspaces/w1/pull-request");
+
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.json()).toEqual({ pullRequest });
+  expect(calls).toEqual([{ checkoutPath, branch: "feat/empty-state" }]);
+});
+
+test("GET /api/workspaces/:id/pull-request answers null when the workspace has no branch", async () => {
+  let called = false;
+  const { app } = createTestApp({
+    pullRequests: async () => {
+      called = true;
+      return null;
+    },
+  });
+
+  const response = await app.request("/api/workspaces/w1/pull-request");
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ pullRequest: null });
+  expect(called).toBe(false);
+});
+
+test("GET /api/workspaces/:id/pull-request answers null when gh cannot be read", async () => {
+  const { app } = createTestApp({
+    state: pullRequestState,
+    pullRequests: async () => {
+      throw new Error("gh is not installed");
+    },
+  });
+
+  const response = await app.request("/api/workspaces/w1/pull-request");
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ pullRequest: null });
+});
+
+test("GET /api/workspaces/:id/pull-request returns 404 for an unknown workspace", async () => {
+  const { app } = createTestApp({ state: pullRequestState });
+  const response = await app.request("/api/workspaces/w9/pull-request");
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "workspace_not_found" });
+});
+
+test("GET /api/workspaces/:id/pull-request returns 502 when Herdr cannot be read", async () => {
+  const { app } = createTestApp({ state: null, storeFailure: new Error("socket closed") });
+  const response = await app.request("/api/workspaces/w1/pull-request");
 
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });

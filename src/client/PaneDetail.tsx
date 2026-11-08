@@ -79,6 +79,7 @@ import {
 import { Markdown } from "./Markdown";
 import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
+import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
 import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
@@ -764,6 +765,8 @@ export function PaneDetail(props: PaneDetailProps) {
     pane.agent === "pi" && pane.chat && !blocked,
     pane.agentStatus,
   );
+  // ブランチを出している見出しでだけ引く。広い画面と分割セルは branch が null で来る。
+  const pullRequest = usePullRequest(context.workspaceId, branch);
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
   const normalBody = paneBody({
@@ -1384,6 +1387,17 @@ export function PaneDetail(props: PaneDetailProps) {
           <span class="hwc-pane-head-branch" title={branch}>
             {branch}
           </span>
+        )}
+        {pullRequest === null ? null : (
+          <a
+            class="hwc-pane-head-pr"
+            href={pullRequest.url}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`PR #${pullRequest.number} を GitHub で開く`}
+          >
+            #{pullRequest.number}
+          </a>
         )}
         <span class="hwc-pane-id" data-copied={copied}>
           <span class="hwc-pane-id-text">{pane.id}</span>

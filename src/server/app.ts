@@ -37,6 +37,7 @@ import {
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
 import type { WorktreeClient } from "./herdr/worktrees";
+import type { PullRequestReader } from "./pull-request";
 import {
   attachMessageFiles,
   messageFileContentType,
@@ -72,6 +73,8 @@ export function createApp(options: {
   opencode?: SessionChatClient;
   codex?: SessionChatClient;
   models?: AgentModelsClient;
+  // PR は gh の起動を伴うので、状態の取得経路には載せない。求めたときだけ引く。
+  pullRequests?: PullRequestReader;
   revision?: string;
   sseHeartbeatMs?: number;
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
@@ -85,6 +88,7 @@ export function createApp(options: {
     opencode,
     codex,
     models,
+    pullRequests,
     revision = "dev",
     sseHeartbeatMs = SSE_HEARTBEAT_MS,
     attachmentsRoot = defaultAttachmentsRoot(),
@@ -317,6 +321,23 @@ export function createApp(options: {
           });
         }),
       )
+      .get("/api/workspaces/:id/pull-request", async (c) => {
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+        const workspace = state.workspaces.find((item) => item.id === c.req.param("id"));
+        if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
+
+        // チップを出さないだけで足りるので、引けない場合は「PR が無い」と同じ応答にする。
+        // gh の失敗や期限切れで画面を止めない。
+        c.header("cache-control", "no-store");
+        const branch = workspace.branch ?? null;
+        const checkoutPath = store.workspacePath(workspace.id);
+        if (branch === null || checkoutPath === null || pullRequests === undefined) {
+          return c.json({ pullRequest: null });
+        }
+        const pullRequest = await pullRequests({ checkoutPath, branch }).catch(() => null);
+        return c.json({ pullRequest });
+      })
       .get("/api/panes/:id/chat", async (c) => {
         const state = await current();
         if (!state) return c.json({ error: "herdr_unavailable" }, 502);

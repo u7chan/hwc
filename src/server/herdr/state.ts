@@ -136,6 +136,8 @@ export type StateStore = {
   chatSource: (paneId: string) => ChatSource | null;
   // ペインが作業しているチェックアウト。画像の配信元を決めるのに使う。
   workspaceRoot: (paneId: string) => string | null;
+  // スペースのチェックアウト。ブランチと同じ場所を、PR の問い合わせ先にも使う。
+  workspacePath: (workspaceId: string) => string | null;
 };
 
 function toChatSources(snapshot: HerdrSnapshot): Map<string, ChatSource> {
@@ -209,6 +211,7 @@ export function createStateStore(options: {
   const listeners = new Set<(state: AppState) => void>();
   let current: AppState | null = null;
   let sources = new Map<string, ChatSource>();
+  let workspacePaths = new Map<string, string>();
   let paneRoots = new Map<string, string>();
   let running: Promise<AppState> | null = null;
   let pending = false;
@@ -234,6 +237,7 @@ export function createStateStore(options: {
     }
     current = state;
     sources = toChatSources(snapshot);
+    workspacePaths = roots;
     paneRoots = toPaneRoots(snapshot, roots);
     for (const listener of listeners) listener(state);
     return state;
@@ -273,6 +277,7 @@ export function createStateStore(options: {
     refresh,
     chatSource: (paneId) => sources.get(paneId) ?? null,
     workspaceRoot: (paneId) => paneRoots.get(paneId) ?? null,
+    workspacePath: (workspaceId) => workspacePaths.get(workspaceId) ?? null,
     onChange: (listener) => {
       listeners.add(listener);
       return () => {

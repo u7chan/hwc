@@ -129,12 +129,14 @@ test("findPaneRow returns the original pane and its containing tab and workspace
 
 test("findPaneContext names the workspace, tab, and branch of a pane", () => {
   expect(findPaneContext(state, "w1:p1")).toEqual({
+    workspaceId: "w1",
     workspaceLabel: "hwc",
     tabLabel: "main",
     branch: "feat/board",
   });
   // git 管理外のスペースはブランチを持たない。
   expect(findPaneContext(state, "w2:p1")).toEqual({
+    workspaceId: "w2",
     workspaceLabel: "hwc-verify",
     tabLabel: "main",
     branch: null,

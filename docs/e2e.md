@@ -20,6 +20,7 @@ bun run e2e:serve
 | pi セッション           | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                |
 | pi モデルカタログ       | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                   |
 | pi モデル・effort・上限 | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                     |
+| GitHub の PR            | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                       |
 | Codex App Server        | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない |
 | OpenCode サービス       | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                  |
 | ブランチ                | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                     |
@@ -122,6 +123,15 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
    が表示される。
 6. `worktree_open_failed`（結果不明）はブラウザのリクエスト差し替えで
    `/api/workspaces/:id/create-worktree` に 502 を返して確かめる。再送のボタンは出ず、「閉じる」だけになる。
+
+## PR のチップ
+
+PR のチップは、狭い画面で 1 枚表示にしたときだけ、見出しのブランチの右に出る。
+
+1. `acme-dashboard` のペインを狭い画面で開く。見出しは `feat/empty-state` と `#481` になる。
+2. `#481` をタップすると `https://github.com/example/acme-dashboard/pull/481` が新しいタブで開く。
+3. `acme-dashboard (docs)` のペインは `docs/quickstart` だけで、チップは出ない。
+4. 広い画面にすると、見出しはブランチもチップも出さない（一覧がブランチを持っている）。
 
 ## データを変える
 

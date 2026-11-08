@@ -1638,6 +1638,34 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   -webkit-touch-callout: default;
 }
 
+/* ブランチに PR が紐づいているときだけ出る。潰さないため、縮むのはブランチ側だけにする。
+   タップ領域は見出しの高さ (32px) いっぱい。44px に広げると下の会話領域に重なる。 */
+.hwc-pane-head-pr {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 140ms ease;
+}
+
+.hwc-pane-head-pr:hover {
+  background: var(--color-surface);
+}
+
+.hwc-pane-head-pr:active {
+  background: var(--color-line);
+}
+
+.hwc-pane-head-pr:focus-visible {
+  outline-offset: -3px;
+}
+
 .hwc-pane-head .hwc-pane-id {
   margin-left: auto;
 }
