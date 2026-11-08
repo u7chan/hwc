@@ -9,7 +9,6 @@ import type {
 } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
-import type { PaneActivity } from "../shared/activity";
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
 import { isLayoutShift, isNearBottom } from "./scroll";
@@ -359,17 +358,10 @@ function ChatLog(props: {
   snapshot: ChatSnapshot;
   replying: boolean;
   compacting: boolean;
-  // 高さの予約は pi の live 表示だけに効かせる。他のエージェントの行を伸ばさない。
-  live: boolean;
-  activity: PaneActivity | null;
-  stopping: boolean;
-  waitingMs: number | null;
   copiedId: string | null;
   expandable: boolean;
   compactionDurationMs: number | null;
-  compactionElapsedMs: number | null;
   compactionEcho: { text: string; at: number; completedAt: number | null } | null;
-  onCancelCompaction: () => void;
   onCopy: (id: string, text: string) => void;
   pending: ChatMessage[];
 }) {
@@ -444,11 +436,6 @@ function ChatLog(props: {
     !echoVisible
   )
     return <ChatEmpty />;
-  const waiting = props.compacting ? props.compactionElapsedMs : props.waitingMs;
-  // 圧縮中は hwc のローカル表示が正。拡張の段階と重ねない。
-  const activity = props.compacting ? null : props.activity;
-  const phase = activity === null ? null : activityLabel(activity);
-  const thought = activity === null ? "" : activitySnippet(activity.text);
   return (
     <ol class="hwc-chat">
       {compactionBlock !== null && compactionAt === 0 ? compactionBlock : null}
@@ -479,45 +466,55 @@ function ChatLog(props: {
         </Fragment>
       ))}
       {echoGap === rows.length ? echoRow : null}
-      {props.replying || props.compacting ? (
-        <li
-          class="hwc-msg"
-          data-role="agent"
-          aria-label={props.compacting ? "会話を圧縮しています" : "返答を待っています"}
-        >
-          <div class="hwc-msg-meta hwc-msg-meta-live">
-            <span class="hwc-typing">
-              <span />
-              <span />
-              <span />
-            </span>
-            {phase === null ? null : <span class="hwc-msg-phase">{phase}</span>}
-            {props.compacting ? (
-              <>
-                <span class="hwc-compaction-pending">会話を圧縮しています</span>
-                <button
-                  type="button"
-                  class="hwc-compaction-cancel"
-                  disabled={props.stopping}
-                  onClick={props.onCancelCompaction}
-                >
-                  {props.stopping ? "中断中" : "中断"}
-                </button>
-              </>
-            ) : null}
-            {waiting === null ? null : (
-              <span class="hwc-msg-elapsed">{formatElapsed(waiting)}</span>
-            )}
-          </div>
-          {props.live && !props.compacting ? (
-            // 高さを先に確保する。thinking の改行で伸び縮みすると、底の追従と上の行が跳ねる。
-            <div class="hwc-msg-live">
-              {thought === "" ? null : <p class="hwc-msg-thought">{thought}</p>}
-            </div>
-          ) : null}
-        </li>
-      ) : null}
     </ol>
+  );
+}
+
+// 実行中の段階と thinking の末尾。会話の外（入力欄の直上）に固定して出し、
+// 読み返している間も何が起きているかを見せる。入力欄の上なので、高さが変わっても
+// 入力欄の位置は動かない。
+function LiveStatus(props: {
+  phase: string | null;
+  thought: string;
+  elapsedMs: number | null;
+  compacting: boolean;
+  stopping: boolean;
+  // 低いセルでは会話の高さを優先する。thinking を出さず、段階と経過だけにする。
+  showThought: boolean;
+  onCancelCompaction: () => void;
+}) {
+  return (
+    <div class="hwc-live">
+      <div class="hwc-live-head">
+        <span class="hwc-typing">
+          <span />
+          <span />
+          <span />
+        </span>
+        {props.phase === null ? null : <span class="hwc-live-phase">{props.phase}</span>}
+        {props.compacting ? <span class="hwc-compaction-pending">会話を圧縮しています</span> : null}
+        <span class="hwc-live-tail">
+          {props.elapsedMs === null ? null : (
+            <span class="hwc-live-elapsed">{formatElapsed(props.elapsedMs)}</span>
+          )}
+          {props.compacting ? (
+            <button
+              type="button"
+              class="hwc-compaction-cancel"
+              disabled={props.stopping}
+              onClick={props.onCancelCompaction}
+            >
+              {props.stopping ? "中断中" : "中断"}
+            </button>
+          ) : null}
+        </span>
+      </div>
+      {props.showThought && props.thought !== "" ? (
+        <div class="hwc-live-thought">
+          <p class="hwc-live-thought-text">{props.thought}</p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1338,6 +1335,10 @@ export function PaneDetail(props: PaneDetailProps) {
     void sendText();
   };
 
+  // 圧縮中は hwc のローカル表示が正。拡張の段階と重ねない。
+  const livePhase = compacting || activity === null ? null : activityLabel(activity);
+  const liveThought = compacting || activity === null ? "" : activitySnippet(activity.text);
+
   return (
     <>
       <div class="hwc-pane-head" data-bare={!labeled}>
@@ -1425,15 +1426,9 @@ export function PaneDetail(props: PaneDetailProps) {
                 snapshot={body.snapshot}
                 replying={replying}
                 compacting={compacting}
-                live={pane.agent === "pi"}
-                activity={activity}
-                stopping={stopping}
-                waitingMs={waitingMs}
                 copiedId={copiedId}
                 expandable={!compact}
-                compactionElapsedMs={compactionElapsedMs}
                 compactionEcho={visibleCompactionEcho}
-                onCancelCompaction={() => void cancelCompaction()}
                 compactionDurationMs={
                   compactionDuration !== null &&
                   compactionDuration.at === body.snapshot.compaction?.at
@@ -1499,6 +1494,18 @@ export function PaneDetail(props: PaneDetailProps) {
           </button>
         )}
       </div>
+
+      {body.kind === "chat" && (replying || compacting) ? (
+        <LiveStatus
+          phase={livePhase}
+          thought={liveThought}
+          elapsedMs={compacting ? compactionElapsedMs : waitingMs}
+          compacting={compacting}
+          stopping={stopping}
+          showThought={!compact}
+          onCancelCompaction={() => void cancelCompaction()}
+        />
+      ) : null}
 
       {notice === null ? null : (
         <p class="hwc-send-notice" role="status">

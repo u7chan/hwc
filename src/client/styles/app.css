@@ -2856,16 +2856,38 @@ p.hwc-compaction,
   text-align: right;
 }
 
-.hwc-msg-time,
-.hwc-msg-elapsed {
+.hwc-msg-time {
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
-/* 実行中の段階。何をしているかを、経過時間の左に短く添える。
-   長い文言でも行を増やさず、幅が足りないときは省略する。 */
-.hwc-msg-phase {
+/* 実行中の段階と thinking の末尾。会話のスクロール領域の外に置くので、読み返して
+   いる間も見える。高さが変わっても下の入力欄は動かない。 */
+.hwc-live {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-content);
+}
+
+/* 文字はベースラインで揃える。等幅の経過時間と本文のフォントでは行の高さが違い、
+   center だと秒数だけ浮いて見える。3 点は文字ではないので個別に中央へ。 */
+.hwc-live-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.hwc-live-head .hwc-typing {
+  align-self: center;
+}
+
+/* 何をしているかを、経過時間の左に短く添える。長い文言でも行を増やさず、
+   幅が足りないときは省略する。 */
+.hwc-live-phase {
   min-width: 0;
   overflow: hidden;
   color: var(--color-secondary);
@@ -2874,28 +2896,28 @@ p.hwc-compaction,
   text-overflow: ellipsis;
 }
 
-.hwc-msg-elapsed,
-.hwc-typing,
-.hwc-compaction-pending,
-.hwc-compaction-cancel {
-  flex-shrink: 0;
-}
-
-/* 文字はベースラインで揃える。等幅の経過時間と本文のフォントでは行の高さが違い、
-   center だと秒数だけ浮いて見える。3 点は文字ではないので個別に中央へ。中断ボタンは
-   文字なので、ラベルと同じベースラインに乗せる（center のままだと 2px ほど下がる）。 */
-.hwc-msg-meta-live {
+/* 経過時間は右端に固定する。文言の長さや秒数の桁が変わっても右端が動かないので、
+   時間の位置が揺れない。中断ボタンは時間の右に並べる。 */
+.hwc-live-tail {
+  flex: none;
+  display: flex;
   align-items: baseline;
+  gap: var(--space-2);
+  margin-left: auto;
 }
 
-.hwc-msg-meta-live .hwc-typing {
-  align-self: center;
+.hwc-live-elapsed {
+  flex: none;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
-/* thinking は 2 行分の高さを先に確保する。差分のたびに高さが変わると、底の追従が
-   一瞬遅れてスクロールが末尾でなくなり、上の行が跳ねる。中身は下端に寄せ、
-   折り返しであふれた上側を切って、新しい方だけを見せる。 */
-.hwc-msg-live {
+/* thinking は 2 行分の高さを先に確保する。差分のたびに高さが変わると、上に載る
+   会話の見える範囲が動く。中身は下端に寄せ、折り返しであふれた上側を切って
+   新しい方だけを見せる（切れる位置は行の境界なので、文字は欠けない）。 */
+.hwc-live-thought {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -2903,8 +2925,11 @@ p.hwc-compaction,
   overflow: hidden;
 }
 
-.hwc-msg-thought {
+/* 会話の本文ではなく、いま組み立てている途中の文章であることを左の線で示す。 */
+.hwc-live-thought-text {
   margin: 0;
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--color-control-line);
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   line-height: 1.5;
@@ -2940,9 +2965,10 @@ p.hwc-compaction,
   cursor: default;
 }
 
-/* 返答までの時間は、時刻と区別できるよう等幅で添える。 */
-.hwc-msg-elapsed {
-  font-family: var(--font-mono);
+.hwc-typing,
+.hwc-compaction-pending,
+.hwc-compaction-cancel {
+  flex-shrink: 0;
 }
 
 /* 返答待ちの 3 点。行の高さを保って、返答が来たときに跳ねないようにする。 */
