@@ -2787,6 +2787,7 @@ p.hwc-compaction,
   border-radius: var(--radius-mark);
 }
 
+/* 開閉は一覧の disclosure と同じシェブロン。軸のある矢印は場所の移動に使うので、ここでは使わない。 */
 .hwc-msg-expand-icon {
   display: grid;
   place-items: center;
@@ -2794,7 +2795,7 @@ p.hwc-compaction,
 }
 
 .hwc-msg-expand[aria-expanded="true"] .hwc-msg-expand-icon {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 
 @media (prefers-reduced-motion: reduce) {

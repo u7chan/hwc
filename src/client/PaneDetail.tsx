@@ -70,6 +70,7 @@ import { useHint } from "./hint";
 import {
   AgentGlyphIcon,
   ArrowDownIcon,
+  ChevronRightIcon,
   CloseIcon,
   CollapseIcon,
   CopyGlyph,
@@ -303,7 +304,7 @@ function UserMessage(props: {
           >
             <span>{expanded ? "閉じる" : "もっとみる"}</span>
             <span class="hwc-msg-expand-icon">
-              <ArrowDownIcon size={12} />
+              <ChevronRightIcon size={16} />
             </span>
           </button>
         ) : null}
