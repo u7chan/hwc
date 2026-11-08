@@ -1,8 +1,11 @@
-export type PaneInteraction =
-  | {
-      kind: "codex-folder-trust";
-      id: string;
-      directory: string;
-      submitted: boolean;
-    }
-  | { kind: "terminal" };
+import type { FolderTrustAgent } from "./agents";
+
+export type FolderTrustInteraction = {
+  kind: "folder-trust";
+  id: string;
+  agent: FolderTrustAgent;
+  directory: string;
+  submitted: boolean;
+};
+
+export type PaneInteraction = FolderTrustInteraction | { kind: "terminal" };

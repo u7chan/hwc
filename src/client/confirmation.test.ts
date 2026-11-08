@@ -4,8 +4,9 @@ import { confirmationView } from "./confirmation";
 
 const pane = { agent: "codex", chat: true, agentStatus: "idle" as const };
 const interaction: PaneInteraction = {
-  kind: "codex-folder-trust",
+  kind: "folder-trust",
   id: "prompt-1",
+  agent: "codex",
   directory: "/workspace/demo",
   submitted: false,
 };
@@ -50,6 +51,29 @@ test("chat returns only after the confirmation and blocked state have cleared", 
   ).toBe("terminal");
 });
 
-test("other agents keep their existing input and view behavior", () => {
-  expect(confirmationView({ ...state, pane: { ...pane, agent: "pi" } })).toBe("normal");
+test("Pi shows the confirmation while the idle trust prompt is on screen", () => {
+  const piPane = { ...pane, agent: "pi", chat: false };
+  const pi = { ...interaction, agent: "pi" as const };
+  expect(
+    confirmationView({ pane: piPane, interaction: pi, dismissedId: null, failed: false }),
+  ).toBe("confirm");
+  expect(
+    confirmationView({ pane: piPane, interaction: null, dismissedId: null, failed: false }),
+  ).toBe("normal");
+  expect(
+    confirmationView({
+      pane: { ...piPane, agentStatus: "blocked" },
+      interaction: null,
+      dismissedId: null,
+      failed: false,
+    }),
+  ).toBe("terminal");
+});
+
+test("agents without a known trust prompt keep their existing view behavior", () => {
+  for (const agent of ["claude", "opencode", null] as const) {
+    expect(
+      confirmationView({ ...state, pane: { ...pane, agent }, interaction: { kind: "terminal" } }),
+    ).toBe("normal");
+  }
 });

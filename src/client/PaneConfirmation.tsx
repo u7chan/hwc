@@ -1,11 +1,23 @@
 import { useEffect, useRef } from "preact/hooks";
-import type { PaneInteraction } from "../shared/confirmation";
+import { AGENT_LABELS } from "../shared/agents";
+import type { FolderTrustInteraction } from "../shared/confirmation";
 import type { ConfirmationAttempt } from "./confirmation";
 import { StatusMark } from "./icons";
 import { Spinner } from "./Spinner";
 
+const DISCLOSURE = {
+  codex:
+    "Codex は権限設定の範囲で、このフォルダのファイルを読み取り・編集・実行できます。" +
+    "フォルダ内の設定や hooks は、モデルへの依頼がなくてもコードを自動実行する場合があります。" +
+    "信頼できるファイルであることを確認してください。この判断は Codex に保存されます。",
+  pi:
+    "Pi は .pi の設定・スキル・拡張を読み込み、不足しているプロジェクトのパッケージを導入し、拡張を実行します。" +
+    "フォルダ内の設定や拡張は、モデルへの依頼がなくてもコードを実行する場合があります。" +
+    "信頼できるファイルであることを確認してください。この判断は Pi に保存されます。",
+};
+
 export function PaneConfirmation(props: {
-  confirmation: Extract<PaneInteraction, { kind: "codex-folder-trust" }>;
+  confirmation: FolderTrustInteraction;
   attempt: ConfirmationAttempt | null;
   onConfirm: () => void;
   onDismiss: () => void;
@@ -16,9 +28,10 @@ export function PaneConfirmation(props: {
     heading.current?.focus({ preventScroll: true });
   }, []);
   const waiting = attempt === "waiting" || props.confirmation.submitted;
+  const agent = props.confirmation.agent;
 
   return (
-    <section class="hwc-confirmation" aria-label="Codex のフォルダ信頼確認">
+    <section class="hwc-confirmation" aria-label={`${AGENT_LABELS[agent]} のフォルダ信頼確認`}>
       <p class="hwc-confirmation-eyebrow">
         <StatusMark tone="attention" size={14} />
         確認が必要です
@@ -27,11 +40,7 @@ export function PaneConfirmation(props: {
         このフォルダを信頼して続行しますか？
       </h2>
       <p class="hwc-confirmation-path">{props.confirmation.directory}</p>
-      <p class="hwc-confirmation-text">
-        Codex は権限設定の範囲で、このフォルダのファイルを読み取り・編集・実行できます。
-        フォルダ内の設定や hooks は、モデルへの依頼がなくてもコードを自動実行する場合があります。
-        信頼できるファイルであることを確認してください。この判断は Codex に保存されます。
-      </p>
+      <p class="hwc-confirmation-text">{DISCLOSURE[agent]}</p>
       <div class="hwc-confirmation-actions">
         <button
           type="button"

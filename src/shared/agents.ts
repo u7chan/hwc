@@ -21,6 +21,13 @@ export function supportsModelSelection(agent: unknown): agent is ModelAgentKind 
   return agent === "pi" || agent === "codex" || agent === "opencode";
 }
 
+// 起動時に、既知のフォルダ信頼確認で止まるエージェント。
+export type FolderTrustAgent = "pi" | "codex";
+
+export function supportsFolderTrust(agent: unknown): agent is FolderTrustAgent {
+  return agent === "pi" || agent === "codex";
+}
+
 export function isAgentModel(value: unknown): value is AgentModel {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const { provider, id } = value as Partial<AgentModel>;

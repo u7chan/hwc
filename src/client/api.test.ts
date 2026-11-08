@@ -197,15 +197,21 @@ test("empty output is still valid output", () => {
 
 test("confirmation snapshots validate their identity, scope and submitted state", () => {
   const confirmation = {
-    kind: "codex-folder-trust" as const,
+    kind: "folder-trust" as const,
     id: "prompt-1",
+    agent: "codex" as const,
     directory: "/workspace/demo",
     submitted: false,
   };
   expect(toPaneInteraction(confirmation)).toEqual(confirmation);
+  expect(toPaneInteraction({ ...confirmation, agent: "pi" })).toEqual({
+    ...confirmation,
+    agent: "pi",
+  });
   expect(toPaneInteraction(null)).toBeNull();
   for (const value of [
     { kind: "unknown" },
+    { ...confirmation, agent: "claude" },
     { ...confirmation, id: null },
     { ...confirmation, submitted: "false" },
   ]) {

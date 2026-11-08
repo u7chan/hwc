@@ -830,7 +830,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const readOnly = view !== "normal";
   const body = readOnly ? { kind: "output" as const } : normalBody;
   const confirmation =
-    view === "confirm" && interaction?.kind === "codex-folder-trust" ? interaction : null;
+    view === "confirm" && interaction?.kind === "folder-trust" ? interaction : null;
   const output = read?.text ?? null;
   const outputEmpty = output !== null && output.trim() === "";
   const replying = pane.agentStatus === "working";

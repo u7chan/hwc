@@ -25,11 +25,12 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | メッセージ内の画像プレビュー             | ○            | ×      | ○             | ○                 |
 | 引用返信                                 | ○            | ×      | ○             | ○                 |
 | `/new` `/compact` の候補                 | ○            | △      | △             | △                 |
-| 起動時の信頼確認                         | ×            | ×      | ○             | –                 |
+| 起動時の信頼確認                         | ○            | ×      | ○             | –                 |
 | ライブ activity                          | △（pi 拡張） | ×      | ×             | ×                 |
 
 - 添付画像の UI 自体は会話を持つペインで使えるが、hwc は画像の実体を CLI へ渡さず、本文に `<attached_files>` のパス注記を足すだけ。Pi はこの経路を前提にしている（[ADR 0018](adr/0018-pasted-image-attachments.md)）。Codex と OpenCode は、それぞれの CLI がそのパスを読めるか次第（[ADR 0028](adr/0028-opencode-chat.md)、[ADR 0031](adr/0031-codex-chat.md)）。
-- Pi と Claude の起動時の信頼確認は hwc では操作しない。応答は端末で行う。`blocked` 中も入力欄は有効なので、確認画面へ Enter を送らないよう注意する。
+- Pi と Codex のフォルダ信頼確認は、専用ビューで「信頼して続行」だけを回答できる（[ADR 0032](adr/0032-codex-folder-trust.md)、[ADR 0044](adr/0044-pi-project-trust.md)）。それ以外の選択肢は端末で行う。
+- Claude の起動時の信頼確認は hwc では操作しない。応答は端末で行う。`blocked` 中も入力欄は有効なので、確認画面へ Enter を送らないよう注意する。
 - Codex の会話表示は、hwc が `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインだけ。既に起動している Codex や hwc 外で起動した Codex は端末出力になる（[ADR 0031](adr/0031-codex-chat.md)）。
 - ライブ activity は pi 拡張がセッションの隣に sidecar を書く場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）。拡張が無いペインでは表示されない。
 - コマンド候補のガードは会話スナップショットに依存する。Claude はスナップショットが無いため会話状態のガードが効かず、実行中以外は候補になる。Codex は context と compaction が無いため、履歴の小ささと圧縮済みの判定が効かない。OpenCode は圧縮済みの判定がほぼ効かない（[ADR 0013](adr/0013-pi-session-chat.md)）。
@@ -60,7 +61,8 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 - 会話はセッション JSONL の active branch から読む（[ADR 0013](adr/0013-pi-session-chat.md)）
 - モデル・effort・context・usage・圧縮・添付・引用の基準実装
-- プロジェクトの trust prompt は hwc では操作しない。`.pi` や `.agents/skills` など信頼対象のリソースがあるフォルダでは、起動が確認で止まることがある。hwc は `--approve` を渡さない。応答は端末で行う（上の注意）
+- プロジェクトの `Trust project folder?` は、既定の `Trust` だけを専用ビューで回答する。`.pi` や `.agents/skills` など信頼対象のリソースがあるフォルダでは、起動がこの確認で止まる。他の選択肢は端末で行う（[ADR 0044](adr/0044-pi-project-trust.md)）。hwc は `--approve` を渡さない
+- Herdr は Pi の信頼確認を `blocked` としないため、一覧の行は `idle` のまま。確認ビューは、開いているペインの画面から出す
 - ライブ activity は pi 拡張の sidecar がある場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）
 
 ## 実装の入口
@@ -73,7 +75,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`          |
 | コマンド候補とガード                    | `src/client/commands.ts`                                           |
 | ライブ activity                         | `src/server/chat/activity.ts`                                      |
-| Codex のフォルダ信頼確認                | `src/client/confirmation.ts`、`src/server/folder-trust.ts`         |
+| フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`         |
 | 添付・引用・activity の UI 分岐         | `src/client/PaneDetail.tsx`                                        |
 | E2E の架空データ                        | `e2e/fixtures/scenario.ts`、`e2e/fake-*.ts`、[docs/e2e.md](e2e.md) |
 
@@ -96,3 +98,4 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - [ADR 0033: 起動直後のモデル表示は起動時の指定で補う](adr/0033-launch-model-before-first-message.md)
 - [ADR 0035: 実行中の段階と thinking の末尾は pi 拡張の sidecar から一時表示する](adr/0035-live-pi-activity.md)
 - [ADR 0041: エージェントが書いた画像をメッセージ内でプレビューする](adr/0041-agent-message-images.md)
+- [ADR 0044: Pi のプロジェクト信頼確認も確認ビューで回答する](adr/0044-pi-project-trust.md)

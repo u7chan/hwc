@@ -76,6 +76,8 @@ BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 `scratch` の `codex-start` は、会話 ID がまだない起動直後の Codex を表す。通常の入力待ちなら端末出力と入力欄が表示され、最初のメッセージを送れることを確認する。
 
+`scratch` の `pi-trust` は、架空の Pi のプロジェクト信頼確認を表示する。会話を持たず `idle` のまま確認待ちになる。入力欄の代わりに確認ビューが出ること、「信頼して続行」の Enter で確認が消えて端末表示と入力欄に戻ること、「ターミナルで操作」では架空 Herdr へのキー送信がなく、確認が残ることを確かめる。表示するパスと注意文は `e2e/fixtures/folder-trust.ts` の `PI_TRUST_SCREEN` だけを使う。
+
 モデル選択では、`pane.get` が fixture の cwd を返す。Pi の一覧は架空 CLI から、OpenCode の一覧と新規セッションは `e2e/fake-opencode.ts` の loopback サービスから読み書きする。候補の正は `e2e/fixtures/scenario.ts` の `STARTUP_MODELS`。`agent.start` は受け取った引数を架空の端末出力にも残し、モデル指定した OpenCode には架空のセッション参照を付ける。
 
 OpenCode の未起動表示は、架空の `<root>/opencode/service.json` だけを一時退避してダイアログを開き、「OpenCode サービス未起動」と出ることを確認する。モデル欄は無効でもデフォルト起動は選べ、サービスの自動起動は行わない。接続情報を戻してダイアログを開き直すとモデル一覧が復帰することも確かめる。
