@@ -24,8 +24,9 @@ const MARKDOWN_LINK = /!?\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+(?:"[^"]*"|'[^']*'))
 // インラインコードは前後に空白が無い日本語の文にも埋まるので、中身を独立したトークンにする。
 const INLINE_CODE = /`([^`\n]+)`/g;
 // パスに現れない区切りで割る。全角コロンなどの直後にパスが続く日本語の文でも、
-// 1 つのトークンからパスだけを取り出せるようにする。
-const HARD_SEPARATORS = /[,;:、，；：「」『』（）()[]{}'"<>]/g;
+// 1 つのトークンからパスだけを取り出せるようにする。`[` と `]` は入れない。
+// 文字クラスの中で `]` が閉じ位置になり、クラスごと壊れる。
+const HARD_SEPARATORS = /[,;:、，；：「」『』（）(){}'"<>]/g;
 
 export type MessageFile = ChatFile;
 type ResolvedMessageFile = MessageFile & { path: string };

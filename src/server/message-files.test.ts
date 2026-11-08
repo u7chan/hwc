@@ -63,6 +63,12 @@ test("drops a sentence period or a Japanese particle after the extension", () =>
   expect(imagePathCandidates("モック.png")).toEqual(["モック.png"]);
 });
 
+test("splits paths joined by punctuation in one token", () => {
+  // 全角の区切りで並んだ 2 枚を別々に拾う。区切りの分割が効かないと 1 件にもならない。
+  expect(imagePathCandidates("docs/a.png、docs/b.png")).toEqual(["docs/a.png", "docs/b.png"]);
+  expect(imagePathCandidates("（docs/a.png）")).toEqual(["docs/a.png"]);
+});
+
 test("does not look inside fenced code", () => {
   expect(imagePathCandidates("```sh\nopen docs/mock.png\n```\n")).toEqual([]);
   expect(imagePathCandidates("~~~\n![x](a.png)\n~~~\n`b.png`")).toEqual(["b.png"]);
