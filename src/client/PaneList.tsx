@@ -196,8 +196,17 @@ function ActiveBand(props: {
   const pullRequest = props.pullRequest;
   const sync = workspace.sync ?? null;
   const showsSync = sync !== null && sync.upstream !== null;
-  // PR が無いときは今までどおりブランチを出す。PR があれば、merge 後もタスク名を残す。
-  const summary = pullRequest?.title ?? branch;
+  // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば
+  // タイトルを先頭に置き、名前は帯全体のボタンの読み上げとツリーに残す。
+  const heading = pullRequest?.title ?? workspace.label;
+  // 件数は最後の行の右端に置く。タイトルの幅を件数に削らせない。
+  const countsNode = (
+    <span class="hwc-active-band-counts">
+      {COUNT_STATUSES.map((status) => (
+        <ActiveCount key={status} status={status} count={counts[status]} />
+      ))}
+    </span>
+  );
   return (
     <div class="hwc-active-band">
       <span class="hwc-active-band-icon">
@@ -205,8 +214,8 @@ function ActiveBand(props: {
       </span>
       <div class="hwc-active-band-main">
         <div class="hwc-active-band-title">
-          <h2 class="hwc-active-band-name" id={bandId(workspace.id)}>
-            {workspace.label}
+          <h2 class="hwc-active-band-name" id={bandId(workspace.id)} title={heading}>
+            {heading}
           </h2>
           {pullRequest?.state === "OPEN" ? (
             <a
@@ -220,25 +229,19 @@ function ActiveBand(props: {
             </a>
           ) : null}
         </div>
-        {summary === null && !showsSync ? null : (
+        {branch === null && !showsSync ? null : (
           <p class="hwc-active-band-line">
-            {summary === null ? null : (
-              <span
-                class={pullRequest === null ? "hwc-active-band-branch" : "hwc-active-band-summary"}
-                title={summary}
-              >
-                {summary}
+            {branch === null ? null : (
+              <span class="hwc-active-band-branch" title={branch}>
+                {branch}
               </span>
             )}
             <GitStatus sync={sync} expanded={props.menuOpen} onOpen={props.onWorkspaceMenu} />
+            {countsNode}
           </p>
         )}
       </div>
-      <div class="hwc-active-band-counts">
-        {COUNT_STATUSES.map((status) => (
-          <ActiveCount key={status} status={status} count={counts[status]} />
-        ))}
-      </div>
+      {branch === null && !showsSync ? countsNode : null}
       <span class="hwc-active-band-jump" aria-hidden="true">
         <ArrowRightIcon />
       </span>
