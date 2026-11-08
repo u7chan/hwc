@@ -196,8 +196,9 @@ test("request rejects when the socket path does not exist", async () => {
   expect(error.message).toContain(path);
 });
 
-// パスの値が不正なとき net.connect は同期 throw する。握らないと起動時の未捕捉例外になる。
-test("subscribe reports a synchronous connect failure instead of throwing", async () => {
+// パスの値が不正なとき net.connect は同期 throw する。握らないと起動時の未捕捉例外になり、
+// 握っても再試行しなければ購読が復帰しない。エラーを報告しつつ再試行することを固定する。
+test("subscribe reports a synchronous connect failure and keeps retrying", async () => {
   const errors: Error[] = [];
   const stop = subscribe({
     events: [{ type: "pane.updated" }],
@@ -208,10 +209,10 @@ test("subscribe reports a synchronous connect failure instead of throwing", asyn
     onError: (error) => errors.push(error),
   });
 
-  await waitFor(() => errors.length >= 1);
+  await waitFor(() => errors.length >= 2);
   stop();
 
-  expect(errors[0]?.message).toContain("Port should be");
+  expect(errors[0]).toBeInstanceOf(Error);
 });
 
 test("subscribe keeps the connection event-only and forwards pushed events", async () => {
