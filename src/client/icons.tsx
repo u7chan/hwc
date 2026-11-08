@@ -37,6 +37,16 @@ export function ChevronRightIcon({ size = 16 }: IconProps) {
   );
 }
 
+// 開閉のシェブロンと形を分けるための、軸のある矢印。行の移動にだけ使う。
+export function ArrowRightIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M5 12h13" />
+      <path d="M12.5 6.5L19 12l-6.5 5.5" />
+    </Svg>
+  );
+}
+
 export function WorkspaceIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
