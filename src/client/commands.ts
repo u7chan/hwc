@@ -9,7 +9,7 @@ type AgentCommand = { label: string; text: string };
 // ペインへ送る文字列を持つのはここだけ。増やすときは、4 つの CLI が同じ名前で
 // 受け付けることを確かめてから 1 行足す。
 export const AGENT_COMMANDS: Readonly<Record<CommandId, AgentCommand>> = {
-  new: { label: "新しいセッション", text: "/new" },
+  new: { label: "新しい会話", text: "/new" },
   compact: { label: "会話を圧縮", text: "/compact" },
 };
 

@@ -13,7 +13,7 @@ hwc の入力欄は、書かれた文字列をそのままペインへ送る。B
 - Claude Code と opencode は `Unknown command:` で止める
 - ピッカーを開くコマンド（`/model` など）は、hwc が汎用のキー入力を持たないため、開いたあと GUI から操作も取消もできない。停止の Esc（[ADR 0025](0025-stop-working-agent.md)）と、既知のフォルダ信頼確認への回答（[ADR 0032](0032-codex-folder-trust.md)）は例外
 
-GUI で意味のあるのは、ピッカーを開かず、即時実行される「新しいセッション」と「会話を圧縮」に限られる。4 つの CLI はいずれも `/new` と `/compact` を受け付ける（Claude Code の `/new` は `/clear` の別名、opencode の `/clear` は `/new` の別名、Codex CLI の `/clear` は端末表示も消すため別物）。
+GUI で意味のあるのは、ピッカーを開かず、即時実行される「新しい会話」と「会話を圧縮」に限られる。4 つの CLI はいずれも `/new` と `/compact` を受け付ける（Claude Code の `/new` は `/clear` の別名、opencode の `/clear` は `/new` の別名、Codex CLI の `/clear` は端末表示も消すため別物）。
 
 引数の扱いはコマンドごとに違う。`/compact` だけは要約の指示を取り（pi の `dist/modes/interactive/interactive-mode.js` は `/compact <指示>` を解釈する）、hwc はこの 1 コマンドの引数だけをチップ経由で組み立てる。
 
@@ -24,7 +24,7 @@ GUI で意味のあるのは、ピッカーを開かず、即時実行される�
 - 入力契約は「hwc は入力欄の文字列を解釈しない」のままにする。例外は hwc が存在を知っている `/new` と `/compact` だけで、送信経路は通常の文字列送信と同じ（BFF と Herdr の変更なし）
 - Codex のフォルダ信頼確認は通常入力から切り離し、[ADR 0032](0032-codex-folder-trust.md) の確認ビューと専用の回答経路を使う。任意のキーを送る機能には広げない
 - 送る文字列の基底は `src/client/commands.ts` の 1 つの表に固定し、`commands.test.ts` が文字列そのものを見張る。`/compact` だけは入力欄の文字列を後ろに付けて組み立てる純関数（`commandSendText()`）を通す
-- 表示名は「新しいセッション」「会話を圧縮」。`/compact` の結果は履歴の区切りで「圧縮」と呼んでいる（`compactionLabel`）ため、チップ・メニュー・placeholder の語を揃える
+- 表示名は「新しい会話」「会話を圧縮」。`/compact` の結果は履歴の区切りで「圧縮」と呼んでいる（`compactionLabel`）ため、チップ・メニュー・placeholder の語を揃える
 - 詳細の「…」メニューにも同じ 2 コマンドを置く。メニューは入力欄の状態に依存しない経路として bare の `/new` / `/compact` を送り、`draft`・添付・引用は残す。`compact` の指示には使わない（指示付きはチップか直接入力）。表示はコマンド対応 agent のペインだけ、`working` と送信中は無効、空の会話では 2 つとも無効、`compact` は閾値未満と圧縮済みでも無効にして理由を 1 行添える
 - 会話のスナップショットが読めていて、メッセージが 0 件かつ `compaction` も無い（新規セッション）ときは、候補を出さずメニューも 2 つとも無効にする。空の会話への `/new` は同じ空のセッションを作り直すだけで、`/compact` は対象が無い。`snapshot` が無いとき（読み込み前、会話を持たない CLI）は空と区別できないので、従来どおり両方を出す
 - メニューの注記は、空の会話・圧縮済み・履歴の小ささの順に 1 つだけ出す
