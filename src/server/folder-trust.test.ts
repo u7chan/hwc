@@ -73,6 +73,11 @@ test("the complete Pi project trust prompt identifies the directory being truste
   });
 });
 
+test("a prompt that ends the detection screen is read even with output above it", () => {
+  const screen = `build finished\n${PI_TRUST_SCREEN}`;
+  expect(parseFolderTrust("pi", screen)).toEqual({ directory: "/workspace/acme-dashboard" });
+});
+
 test("a Pi prompt wrapped by a narrow terminal is still approvable", () => {
   const wrapped = PI_TRUST_SCREEN.replace(
     "and execute project extensions.",
@@ -90,8 +95,8 @@ test.each([
   PI_TRUST_SCREEN.replace("/workspace/acme-dashboard", "/workspace/acme…board"),
   PI_TRUST_SCREEN.replace("/workspace/acme-dashboard", "/workspace/acme\n-dashboard"),
   PI_TRUST_SCREEN.replace("/workspace/acme-dashboard", "workspace/acme-dashboard"),
-  `Earlier output\n${PI_TRUST_SCREEN}`,
-  `${PI_TRUST_SCREEN}\nUnexpected error`,
+  `Earlier output\n${PI_TRUST_SCREEN}\nUnexpected error`,
+  `${PI_TRUST_SCREEN}\nTrust project folder?`,
 ])("incomplete, ambiguous or non-selected Pi prompts are not approvable: %j", (screen) => {
   expect(parseFolderTrust("pi", screen)).toBeNull();
 });

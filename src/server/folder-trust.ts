@@ -60,17 +60,21 @@ function parsePiProjectTrust(text: string): { directory: string } | null {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line !== "" && !/^─+$/.test(line));
-  // 過去の出力が上に残った画面を承認しない。起動直後の確認は画面の先頭に出る。
-  if (lines[0] !== PI_TITLE) return null;
-  const directory = lines[1] ?? "";
+  // 確認は起動直後の画面の末尾に描かれる。上にはシェルが打った起動コマンドの行が残るので、
+  // 画面の先頭ではなく、最後に現れたタイトルから下を確認として読む。
+  const start = lines.lastIndexOf(PI_TITLE);
+  if (start === -1) return null;
+  const prompt = lines.slice(start);
+  const directory = prompt[1] ?? "";
   if (!fullPath(directory)) return null;
 
-  const selected = lines.indexOf("→ Trust");
+  const selected = prompt.indexOf("→ Trust");
   // 選択中の文言をそのまま比べる。既定は「Trust」で、それ以外は端末での操作に任せる。
-  if (selected < 2 || lines.findIndex((line) => line.startsWith("→ ")) !== selected) return null;
-  if (oneLine(lines.slice(2, selected).join(" ")) !== PI_DISCLOSURE) return null;
+  if (selected < 2 || prompt.findIndex((line) => line.startsWith("→ ")) !== selected) return null;
+  if (oneLine(prompt.slice(2, selected).join(" ")) !== PI_DISCLOSURE) return null;
 
-  const tail = lines.slice(selected + 1);
+  // フッターより下に出力が続くなら、回答済みの確認が残っているだけ。
+  const tail = prompt.slice(selected + 1);
   if (oneLine(tail.at(-1) ?? "") !== oneLine(PI_FOOTER)) return null;
   const options = tail.slice(0, -1);
   if (options.length < 4) return null;
