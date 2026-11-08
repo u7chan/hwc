@@ -1223,7 +1223,6 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 .hwc-pane-sub,
 .hwc-active-band-name,
 .hwc-active-band-branch,
-.hwc-active-band-summary,
 .hwc-active-name,
 .hwc-active-tab,
 .hwc-group-name,
@@ -1376,7 +1375,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   outline-offset: -3px;
 }
 
-/* ブランチ / PR の概要と同じ行に、上流との差を置く。概要だけを縮め、数字は残す。 */
+/* ブランチと上流との差を同じ行に置く。ブランチだけを縮め、数字は残す。 */
 .hwc-active-band-line {
   display: flex;
   align-items: center;
@@ -1385,19 +1384,16 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   margin: 0;
 }
 
-/* PR のタイトルは、ブランチの等幅と区別する。 */
-.hwc-active-band-summary {
-  margin: 0;
-  color: var(--color-secondary);
-  font-size: var(--text-secondary);
-  line-height: var(--line-tight);
-}
-
 .hwc-active-band-counts {
   display: flex;
   flex: none;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* 2 行目に置いたときは右端へ寄せる。ブランチと上流の差だけを縮める。 */
+.hwc-active-band-line .hwc-active-band-counts {
+  margin-left: auto;
 }
 
 /* 帯全体が「すべて」のその場所へ移る入口。中身はそのまま、上に透明なボタンを重ねる。
