@@ -88,49 +88,54 @@ export function request<T>(
   const id = `hwc-${++sequence}`;
 
   return new Promise<T>((resolve, reject) => {
-    const socket = net.connect(path);
-    socket.setEncoding("utf8");
+    // Bun 1.3.14 では、Bun.serve のハンドラの同期スタックで net.connect が失敗すると、'error' を
+    // 登録していても未捕捉例外として報告されプロセスが落ちる（Herdr 不在時の /api/state で再現）。
+    // 接続の開始をマクロタスクへ逃がすと、失敗は 'error' だけで届く。Bun 側が直れば不要。
+    setTimeout(() => {
+      const socket = net.connect(path);
+      socket.setEncoding("utf8");
 
-    let settled = false;
-    const settle = (complete: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      socket.destroy();
-      complete();
-    };
+      let settled = false;
+      const settle = (complete: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        socket.destroy();
+        complete();
+      };
 
-    const timer = setTimeout(() => {
-      settle(() => reject(new Error(`${method}: timed out after ${timeoutMs}ms`)));
-    }, timeoutMs);
+      const timer = setTimeout(() => {
+        settle(() => reject(new Error(`${method}: timed out after ${timeoutMs}ms`)));
+      }, timeoutMs);
 
-    const reader = createLineReader(
-      (line) => {
-        const message = parseMessage(line);
-        if (!message) {
-          settle(() => reject(new Error(`${method}: invalid JSON from Herdr`)));
-          return;
-        }
-        // Herdr replies with an empty id only when it cannot tell which request the line belongs to.
-        if (message.id !== undefined && message.id !== "" && message.id !== id) return;
-        const error = message.error;
-        if (error) {
-          settle(() => reject(new HerdrError(error.code ?? "error", error.message ?? "")));
-          return;
-        }
-        settle(() => resolve(message.result as T));
-      },
-      (reason) => settle(() => reject(new Error(`${method}: ${reason}`))),
-    );
+      const reader = createLineReader(
+        (line) => {
+          const message = parseMessage(line);
+          if (!message) {
+            settle(() => reject(new Error(`${method}: invalid JSON from Herdr`)));
+            return;
+          }
+          // Herdr replies with an empty id only when it cannot tell which request the line belongs to.
+          if (message.id !== undefined && message.id !== "" && message.id !== id) return;
+          const error = message.error;
+          if (error) {
+            settle(() => reject(new HerdrError(error.code ?? "error", error.message ?? "")));
+            return;
+          }
+          settle(() => resolve(message.result as T));
+        },
+        (reason) => settle(() => reject(new Error(`${method}: ${reason}`))),
+      );
 
-    socket.on("connect", () => {
-      socket.write(`${JSON.stringify({ id, method, params })}\n`);
-    });
-    socket.on("data", (chunk: string) => reader.push(chunk));
-    socket.on("error", (error) => settle(() => reject(error)));
-    socket.on("close", () => {
-      settle(() => reject(new Error(`${method}: connection closed before a response`)));
-    });
+      socket.on("connect", () => {
+        socket.write(`${JSON.stringify({ id, method, params })}\n`);
+      });
+      socket.on("data", (chunk: string) => reader.push(chunk));
+      socket.on("error", (error) => settle(() => reject(error)));
+      socket.on("close", () => {
+        settle(() => reject(new Error(`${method}: connection closed before a response`)));
+      });
+    }, 0);
   });
 }
 
