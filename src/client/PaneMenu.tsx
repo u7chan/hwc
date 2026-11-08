@@ -95,17 +95,6 @@ export function PaneMenu(props: PaneMenuProps) {
           <CopyGlyph copied={copied} />
         </button>
       </div>
-      <button
-        type="button"
-        role="menuitem"
-        class="hwc-menu-item"
-        disabled={props.full}
-        onClick={props.onCreate}
-      >
-        <PlusIcon size={14} />
-        新しいペイン
-      </button>
-      {props.full ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
       {isShellPane(pane) ? (
         <>
           <button
@@ -160,6 +149,17 @@ export function PaneMenu(props: PaneMenuProps) {
           {SEND_FAILED_NOTICE}
         </p>
       ) : null}
+      <button
+        type="button"
+        role="menuitem"
+        class="hwc-menu-item"
+        disabled={props.full}
+        onClick={props.onCreate}
+      >
+        <PlusIcon size={14} />
+        新しいペイン
+      </button>
+      {props.full ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
       <hr class="hwc-menu-separator" />
       <button
         type="button"
