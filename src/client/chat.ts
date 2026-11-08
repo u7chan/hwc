@@ -57,7 +57,14 @@ export function paneBody(props: {
   return { kind: "chat", snapshot: props.snapshot };
 }
 
-export type PendingMessage = ChatMessage & { from: number; waiting: boolean };
+export type PendingMessage = ChatMessage & {
+  from: number;
+  waiting: boolean;
+  // 送信したときに会話にあったメッセージ数。確定後も送信位置へ戻すために持つ。
+  after: number;
+  // 猶予内にターンが始まらなかった送信。TUI のコマンドとしてローカルの履歴に残す。
+  command: boolean;
+};
 
 export type NewSessionReset = {
   at: number;
@@ -113,16 +120,88 @@ export function latestUserAt(messages: ChatMessage[]): number {
 // 本文は pi 側で trim やテンプレート展開されることがあるため、送信時点の最後の user 発話より後に
 // 新しい user 発話が現れたかで対応付ける。
 export function isPendingConfirmed(pending: PendingMessage, messages: ChatMessage[]): boolean {
+  if (pending.command) {
+    // コマンドの本文は展開されない。位置だけで判定すると、次の通常のメッセージでも
+    // コマンドの控えが消える。同じ文言の user 発話が現れたときだけ置き換える。
+    return messages.some(
+      (message) =>
+        message.role === "user" &&
+        message.at > pending.from &&
+        message.text.trim() === pending.text.trim(),
+    );
+  }
   return messages.some((message) => message.role === "user" && message.at > pending.from);
 }
 
-// 圧縮の控えは、その後に送った未確定メッセージより前へ置く。実行中でも表示を送信順に保つ。
-export function echoInsertIndex(
-  messageCount: number,
-  pendingAt: readonly number[],
-  echoAt: number,
-): number {
-  return messageCount + pendingAt.filter((at) => at < echoAt).length;
+// TUI のコマンド（/reload、!bash など）は user 発話を残さず、agent_status も working に
+// ならない。待っても isPendingConfirmed では確定しないので、動き出さなかった送信は
+// コマンドの控えに切り替える。working を観測できた echo はターンの確認まで残す。
+export const PENDING_TURN_GRACE_MS = 3_000;
+
+export function idleEchoExpired(pending: PendingMessage, now: number): boolean {
+  return !pending.waiting && pending.at + PENDING_TURN_GRACE_MS <= now;
+}
+
+export type ChatRow = {
+  message: ChatMessage;
+  // none はセッションのメッセージ。pending は送信中の echo、command はコマンドの控え。
+  echo: "none" | "pending" | "command";
+  // この行までに並ぶセッションのメッセージ数。圧縮の区切りの位置を決める。
+  seen: number;
+};
+
+// コマンドの控えは、送信したときに会話へあったメッセージ数を目印に差し込む。単純に末尾へ
+// 足すと、次の発話が届いたときにコマンドがその後ろへ回る。
+export function chatRows(
+  messages: readonly ChatMessage[],
+  echoes: readonly PendingMessage[],
+): readonly ChatRow[] {
+  const commands = new Map<number, PendingMessage[]>();
+  const pending: PendingMessage[] = [];
+  for (const echo of echoes) {
+    if (!echo.command) {
+      pending.push(echo);
+      continue;
+    }
+    const anchor = Math.min(Math.max(0, echo.after), messages.length);
+    const group = commands.get(anchor);
+    if (group === undefined) commands.set(anchor, [echo]);
+    else group.push(echo);
+  }
+
+  const rows: ChatRow[] = [];
+  for (let index = 0; index <= messages.length; index += 1) {
+    for (const echo of commands.get(index) ?? []) {
+      rows.push({ message: echo, echo: "command", seen: index });
+    }
+    if (index === messages.length) break;
+    rows.push({ message: messages[index]!, echo: "none", seen: index + 1 });
+  }
+  // 送信中の echo は、まだ届いていないメッセージより後ろに置く。
+  for (const echo of pending) {
+    rows.push({ message: echo, echo: "pending", seen: messages.length });
+  }
+  return rows;
+}
+
+// 圧縮の区切りはメッセージ境界に置く。同じ境界のコマンド控えは、圧縮より前に送ったものとして
+// その手前に残す。末尾の送信中 echo より前を既定にする。
+export function compactionInsertIndex(
+  rows: readonly ChatRow[],
+  compactionAt: number | null,
+): number | null {
+  if (compactionAt === null) return null;
+  const next = rows.findIndex((row) => row.echo === "none" && row.seen > compactionAt);
+  if (next !== -1) return next;
+  const tail = rows.findIndex((row) => row.echo === "pending");
+  return tail === -1 ? rows.length : tail;
+}
+
+// 実行中の圧縮の控えは、メッセージの末尾（後から送ったローカル echo より前）に置く。
+export function echoInsertIndex(rows: readonly ChatRow[], echoAt: number): number {
+  const messageEnd = rows.reduce((end, row, index) => (row.echo === "none" ? index + 1 : end), 0);
+  const later = rows.findIndex((row) => row.echo !== "none" && row.message.at > echoAt);
+  return later === -1 ? rows.length : Math.max(messageEnd, later);
 }
 
 export type AgentInfo = { model: string | null; effort: string | null };

@@ -680,6 +680,12 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           }, 1200);
           return;
         }
+        // 実 Pi の /reload はセッションに何も書かず、agent_status も変えない。
+        // hwc が「送信中」を畳むことを確かめるため、ここでも working にしない。
+        if (!text.includes(ATTACHED_FILES_OPEN) && text.trim() === "/reload") {
+          send(socket, { id, result: { type: "ok" } });
+          return;
+        }
         await appendUserEntry(paneId, text);
         send(socket, { id, result: { type: "ok" } });
         broadcast("pane.updated", { pane_id: paneId });
