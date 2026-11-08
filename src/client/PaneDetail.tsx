@@ -12,6 +12,7 @@ import type { PaneState } from "../server/herdr/state";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
+import { OutputText } from "./OutputText";
 import { isLayoutShift, isNearBottom } from "./scroll";
 import {
   ATTACHMENT_LIMIT_NOTICE,
@@ -1572,7 +1573,9 @@ export function PaneDetail(props: PaneDetailProps) {
               ) : outputEmpty ? (
                 <OutputEmpty />
               ) : (
-                <pre class="hwc-output">{output}</pre>
+                <pre class="hwc-output">
+                  <OutputText text={output} />
+                </pre>
               )}
             </>
           )}

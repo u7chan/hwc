@@ -6,6 +6,7 @@ import {
   resolveTheme,
   saveThemePreference,
   themeGroups,
+  themeScheme,
 } from "./theme";
 
 test("every listed theme can be stored as a preference", () => {
@@ -34,6 +35,13 @@ test("system follows the device and the rest is fixed", () => {
   expect(resolveTheme("system", false)).toBe("light");
   expect(resolveTheme("light", true)).toBe("light");
   expect(resolveTheme("nord", false)).toBe("nord");
+});
+
+test("every theme knows whether its palette is light or dark", () => {
+  expect(themeScheme("dark")).toBe("dark");
+  expect(themeScheme("one-light")).toBe("light");
+  expect(themeScheme("solarized-dark")).toBe("dark");
+  expect(THEMES.every((theme) => themeScheme(theme.id) === theme.scheme)).toBe(true);
 });
 
 test("a stored preference is restored", () => {

@@ -100,6 +100,7 @@ import {
   loadThemePreference,
   resolveTheme,
   saveThemePreference,
+  themeScheme,
   type ThemePreference,
 } from "./theme";
 
@@ -363,7 +364,9 @@ export function App() {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      document.documentElement.dataset.theme = resolveTheme(theme, media.matches);
+      const resolved = resolveTheme(theme, media.matches);
+      document.documentElement.dataset.theme = resolved;
+      document.documentElement.dataset.scheme = themeScheme(resolved);
     };
     apply();
     if (theme !== "system") return;
