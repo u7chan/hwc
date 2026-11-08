@@ -112,6 +112,8 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を本文で指す。この画像は実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもので、会話にはパスとサムネイルの行が出る（[ADR 0041](adr/0041-agent-message-images.md)）。サムネイルを押すとダイアログで拡大でき、背景・`Esc`・閉じるボタンで閉じる（[ADR 0042](adr/0042-image-preview-dialog.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
 
+送信前の添付チップも同じように拡大できる。入力欄に画像を貼り付けるかドロップし、アップロードが終わってサムネイルが出てから押すとダイアログが開く。`Esc` で閉じるとサムネイルへフォーカスが戻り、チップは残ったままになる。
+
 pi のペインでは、あわせてセッションの隣に live の sidecar（`<session>.jsonl.thinking.json`）を書く。まず `waiting` で `working` にし、1.2 秒後に折り返す長さの `thinking` を上書きし、6 秒後に消して `idle` に戻す。実物の pi 拡張はターン中に phase と thinking の末尾を上書きし続ける（[ADR 0035](adr/0035-live-pi-activity.md)）。E2E ではこの 2 段階で、段階の行が会話のスクロール領域の外（入力欄の直上）に出て、スクロールしても残ること、経過時間が右端に固定されること、末尾 2 行だけが出てターン終了で消えることを確かめる。入力欄を 1 行に畳むセルでは thinking を出さず、段階と経過時間だけになる。停止ボタン（`esc`）でも sidecar を消す。
 
 `/compact`（添付注記なし）を受け取ると、実 Herdr の pi 拡張と同じく `agent_status` は `working` にせず、1.2 秒後に架空の compaction をセッションへ追記して `idle` のままにする。hwc 側のローカルな「会話を圧縮しています」と、完了ログの位置・所要時間を E2E で確かめるため、最後の user メッセージを kept の先頭にする。

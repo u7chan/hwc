@@ -1731,27 +1731,38 @@ export function PaneDetail(props: PaneDetailProps) {
             )}
             {attachments.length > 0 ? (
               <div class="hwc-commands" role="group" aria-label="添付画像">
-                {attachments.map((item) => (
-                  <span class="hwc-command hwc-attachment" data-chip="true" key={item.key}>
-                    {item.name === null ? (
-                      <span class="hwc-attachment-sending">送信中</span>
-                    ) : (
-                      <img
-                        class="hwc-attachment-thumb"
-                        src={attachmentUrl(pane.id, item.name)}
-                        alt=""
-                      />
-                    )}
-                    <button
-                      type="button"
-                      class="hwc-command-clear"
-                      aria-label="添付を外す"
-                      onClick={() => removeAttachment(item.key)}
-                    >
-                      <CloseIcon size={14} />
-                    </button>
-                  </span>
-                ))}
+                {attachments.map((item) => {
+                  const name = item.name;
+                  return (
+                    <span class="hwc-command hwc-attachment" data-chip="true" key={item.key}>
+                      {name === null ? (
+                        <span class="hwc-attachment-sending">送信中</span>
+                      ) : (
+                        <button
+                          type="button"
+                          class="hwc-attachment-open"
+                          aria-label="添付画像を拡大"
+                          aria-haspopup="dialog"
+                          onClick={() => onOpenImage(attachmentUrl(pane.id, name), name)}
+                        >
+                          <img
+                            class="hwc-attachment-thumb"
+                            src={attachmentUrl(pane.id, name)}
+                            alt=""
+                          />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        class="hwc-command-clear"
+                        aria-label="添付を外す"
+                        onClick={() => removeAttachment(item.key)}
+                      >
+                        <CloseIcon size={14} />
+                      </button>
+                    </span>
+                  );
+                })}
               </div>
             ) : chip !== null ? (
               <div class="hwc-commands">
