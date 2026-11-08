@@ -322,6 +322,7 @@ export function PaneList(props: PaneListProps) {
   // スコープごとの位置を控える。中身が総入れ替えになるので、ブラウザに任せると
   // 先頭や途中の位置へ飛ぶ。
   const scroll = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
   const positions = useRef(new Map<ListScope, number>());
 
   const changeScope = (next: ListScope) => {
@@ -344,9 +345,10 @@ export function PaneList(props: PaneListProps) {
     revealed.current = request.token;
 
     const node = scroll.current;
+    const bodyNode = body.current;
     const target = document.getElementById(spaceId(request.workspaceId));
-    if (node === null || target === null) return;
-    const padding = Number.parseFloat(getComputedStyle(node).paddingTop) || 0;
+    if (node === null || bodyNode === null || target === null) return;
+    const padding = Number.parseFloat(getComputedStyle(bodyNode).paddingTop) || 0;
     const top =
       target.getBoundingClientRect().top - node.getBoundingClientRect().top + node.scrollTop;
     node.scrollTop = Math.max(0, top - padding);
@@ -371,7 +373,9 @@ export function PaneList(props: PaneListProps) {
     <>
       <ScopeBar scope={props.scope} count={groups.length} onScope={changeScope} />
       <div class="hwc-list-scroll" ref={scroll}>
-        {renderList({ ...props, onRevealWorkspace: revealWorkspace }, groups)}
+        <div class="hwc-list-body" ref={body}>
+          {renderList({ ...props, onRevealWorkspace: revealWorkspace }, groups)}
+        </div>
       </div>
     </>
   );
