@@ -593,6 +593,8 @@ const outputs: Record<string, string> = {
     "",
     "\u001b[36m  VITE v7.1.0\u001b[0m  ready in 210 ms",
     "",
+    "\u001b[38;2;222;224;225m  truecolor #dee0e1\u001b[0m  follows the theme",
+    "",
     "  \u001b[32m➜\u001b[0m  \u001b[1mLocal:\u001b[0m   \u001b[34mhttp://localhost:{port}/\u001b[0m",
     "  \u001b[32m➜\u001b[0m  \u001b[1mNetwork:\u001b[0m use --host to expose",
     "",
