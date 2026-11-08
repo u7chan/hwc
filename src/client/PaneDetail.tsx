@@ -695,8 +695,10 @@ type PaneDetailProps = {
   compact: boolean;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
-  // 一覧が隠れる狭い画面でだけ渡す。広い画面では一覧がブランチを持っている。
+  // 1 枚表示のときだけ渡す。分割セルは同じ PR が並ぶので、チップを引かない。
   branch: string | null;
+  // 一覧が隠れる狭い画面でだけ、ブランチを名前に代えて出す。
+  showBranch: boolean;
   waitingMs: number | null;
   sending: boolean;
   dismissedConfirmation: string | null;
@@ -728,6 +730,7 @@ export function PaneDetail(props: PaneDetailProps) {
     compact,
     labeled,
     branch,
+    showBranch,
     waitingMs,
     sending,
     dismissedConfirmation,
@@ -795,7 +798,7 @@ export function PaneDetail(props: PaneDetailProps) {
     pane.agent === "pi" && pane.chat && !blocked,
     pane.agentStatus,
   );
-  // ブランチを出している見出しでだけ引く。広い画面と分割セルは branch が null で来る。
+  // 分割セルは branch が null で来る。広い画面はブランチを出さないが、PR のチップは出す。
   const pullRequest = usePullRequest(context.workspaceId, branch);
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
@@ -1413,7 +1416,7 @@ export function PaneDetail(props: PaneDetailProps) {
         </span>
         {labeled ? (
           <span class="hwc-pane-head-name">{paneName(pane)}</span>
-        ) : branch === null ? null : (
+        ) : branch === null || !showBranch ? null : (
           <span class="hwc-pane-head-branch" title={branch}>
             {branch}
           </span>
