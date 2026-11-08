@@ -359,7 +359,7 @@ function Compaction(props: {
           {shown}
         </span>
         <span class="hwc-compaction-icon">
-          <ArrowDownIcon size={12} />
+          <ChevronRightIcon size={16} />
         </span>
         <CompactionRule />
       </summary>
