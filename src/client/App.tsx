@@ -253,6 +253,10 @@ export function App() {
   const [theme, setTheme] = useState<ThemePreference>(() =>
     loadThemePreference(typeof localStorage === "undefined" ? null : localStorage),
   );
+  // 端末の外観は React の外にある。解決した明暗は、ANSI 色の補正と属性の両方で使う。
+  const systemPrefersDark = useMediaQuery("(prefers-color-scheme: dark)");
+  const resolvedTheme = resolveTheme(theme, systemPrefersDark);
+  const scheme = themeScheme(resolvedTheme);
   const [split, setSplit] = useState(() => {
     if (typeof localStorage === "undefined") return false;
     try {
@@ -362,17 +366,9 @@ export function App() {
 
   // 端末の外観に追従するかは利用者の選択で決まる。解決した結果だけを attribute に出す。
   useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => {
-      const resolved = resolveTheme(theme, media.matches);
-      document.documentElement.dataset.theme = resolved;
-      document.documentElement.dataset.scheme = themeScheme(resolved);
-    };
-    apply();
-    if (theme !== "system") return;
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, [theme]);
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.dataset.scheme = scheme;
+  }, [resolvedTheme, scheme]);
 
   const changeTheme = (next: ThemePreference) => {
     setTheme(next);
@@ -802,6 +798,7 @@ export function App() {
       pane={item}
       context={where}
       compact={compact}
+      scheme={scheme}
       // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
       labeled={cells.length > 1}
       // ブランチは一覧が隠れる狭い画面でだけ出す。広い画面では一覧がブランチを持っている。

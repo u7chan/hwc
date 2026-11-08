@@ -698,6 +698,8 @@ type PaneDetailProps = {
   pane: PaneState;
   context: PaneContext;
   compact: boolean;
+  // 端末出力の ANSI 色を補正する基準。テーマの解決結果を App から受け取る。
+  scheme: "light" | "dark";
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
   // 1 枚表示のときだけ渡す。分割セルは同じ PR が並ぶので、チップを引かない。
@@ -735,6 +737,7 @@ export function PaneDetail(props: PaneDetailProps) {
     pane,
     context,
     compact,
+    scheme,
     labeled,
     branch,
     showBranch,
@@ -1574,7 +1577,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 <OutputEmpty />
               ) : (
                 <pre class="hwc-output">
-                  <OutputText text={output} />
+                  <OutputText text={output} scheme={scheme} />
                 </pre>
               )}
             </>

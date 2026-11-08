@@ -2,16 +2,12 @@ import { Fragment } from "preact";
 import type { CSSProperties } from "preact";
 import { useMemo } from "preact/hooks";
 import { parseAnsi, type AnsiStyle } from "./ansi";
+import { ansiCssColor, type ColorScheme } from "./ansi-color";
 import { linkify } from "./links";
 
-function css(style: AnsiStyle): CSSProperties {
+function css(style: AnsiStyle, scheme: ColorScheme): CSSProperties {
   const result: CSSProperties = {};
-  if (style.fg !== null) {
-    result.color =
-      style.fg.kind === "basic"
-        ? `var(--ansi-${style.fg.index})`
-        : `rgb(${style.fg.r} ${style.fg.g} ${style.fg.b})`;
-  }
+  if (style.fg !== null) result.color = ansiCssColor(style.fg, scheme);
   if (style.bold) result.fontWeight = 700;
   if (style.dim) result.opacity = 0.65;
   if (style.italic) result.fontStyle = "italic";
@@ -36,12 +32,16 @@ function unstyled(style: AnsiStyle): boolean {
 }
 
 // 端末出力は 1 本の文字列だが、SGR の区間と URL で切って描く。innerHTML は使わない。
-export function OutputText({ text }: { text: string }) {
+export function OutputText({ text, scheme }: { text: string; scheme: ColorScheme }) {
   const parts = useMemo(() => linkify(parseAnsi(text)), [text]);
+  const rows = useMemo(
+    () => parts.map((part) => ({ part, style: css(part.style, scheme) })),
+    [parts, scheme],
+  );
 
   return (
     <>
-      {parts.map((part, index) => {
+      {rows.map(({ part, style }, index) => {
         const content =
           part.kind === "link" ? (
             <a href={part.href} target="_blank" rel="noopener noreferrer">
@@ -53,7 +53,7 @@ export function OutputText({ text }: { text: string }) {
         return unstyled(part.style) ? (
           <Fragment key={index}>{content}</Fragment>
         ) : (
-          <span key={index} style={css(part.style)}>
+          <span key={index} style={style}>
             {content}
           </span>
         );
