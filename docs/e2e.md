@@ -142,9 +142,19 @@ PR のチップは、1 枚表示の見出しにだけ出る。狭い画面では
 
 1. `acme-dashboard` のペインを狭い画面で開く。見出しは `feat/empty-state` と `#481` になる。
 2. `#481` をタップすると `https://github.com/example/acme-dashboard/pull/481` が新しいタブで開く。
-3. `acme-dashboard (docs)` のペインは `docs/quickstart` だけで、チップは出ない。
+3. `acme-dashboard (docs)` のペインは `docs/quickstart` だけで、チップは出ない（PR #482 は merged なので出さない）。
 4. 広い画面にすると、見出しはブランチを出さず、`#481` だけを出す（一覧がブランチを持っている）。
 5. 分割表示にすると、どのセルの見出しにもチップは出ない。
+
+## ワークツリーの概要
+
+一覧のワークツリー見出しには、ブランチの最新 PR のタイトルを出す。チップは open のときだけ、ツリーのメニューは state を問わない。
+
+1. `アクティブ` を開く。`acme-dashboard` の帯の 1 行目に `#481`、2 行目に `Add an empty state to the dashboard` が出る。
+2. `#481` のリンク先が `https://github.com/example/acme-dashboard/pull/481` であることを確かめる。
+3. `acme-dashboard (docs)` の帯には `Write the quickstart guide` が出て、`#482` は出ない（merged のため）。
+4. `すべて` に切り替える。`acme-dashboard` の見出しの 2 行目が同じタイトルになる。`…` を開くと `PR #481 を開く` があり、リンク先が同じ URL である。
+5. PR の無い `scratch` の見出しは、今までどおりペイン数だけを出す。
 
 ## 読み幅
 

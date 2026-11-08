@@ -1460,7 +1460,7 @@ export function PaneDetail(props: PaneDetailProps) {
             {branch}
           </span>
         )}
-        {pullRequest === null ? null : (
+        {pullRequest === null || pullRequest.state !== "OPEN" ? null : (
           <a
             class="hwc-pane-head-pr"
             href={pullRequest.url}

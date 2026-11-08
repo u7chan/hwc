@@ -359,15 +359,19 @@ export async function readPaneProcess(paneId: string, signal?: AbortSignal): Pro
   return parsePaneProcess(body.process);
 }
 
-// ブランチから引いた open の PR。チップを出すためだけの値なので、失敗は null に畳む。
+// ブランチから引いた最新の PR。チップや概要を出すためだけの値なので、失敗は null に畳む。
 export async function readPullRequest(
   workspaceId: string,
-  signal?: AbortSignal,
+  options: { refresh?: boolean; signal?: AbortSignal } = {},
 ): Promise<PullRequest | null> {
-  const response = await client.api.workspaces[":id"]["pull-request"].$get(
-    workspaceParam(workspaceId),
-    { init: { signal } },
-  );
+  // BFF のキャッシュを飛ばすのは、一覧に戻ったときだけ。通常の取得はキャッシュに任せる。
+  const input =
+    options.refresh === true
+      ? { ...workspaceParam(workspaceId), query: { refresh: "1" } }
+      : workspaceParam(workspaceId);
+  const response = await client.api.workspaces[":id"]["pull-request"].$get(input, {
+    init: { signal: options.signal },
+  });
   if (!response.ok) throw new Error(`pull-request: ${response.status}`);
   const body = (await response.json()) as { pullRequest?: unknown };
   return parsePullRequest(body.pullRequest);
