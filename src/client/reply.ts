@@ -56,10 +56,12 @@ export type ComposeState = {
   reply: string | null;
 };
 
-// 停止は実行中の既知エージェントだけ。入力が残っていれば、その送信（steering）を優先する。
+// 停止は実行中の既知エージェントと、前景プロセスが動いているシェル。入力が残っていれば、
+// その送信（steering）を優先する。
 export type StopState = {
   replying: boolean;
   agent: string | null;
+  running: boolean;
   draft: string;
   attachments: number;
   reply: string | null;
@@ -67,14 +69,18 @@ export type StopState = {
 };
 
 export function canStop(state: StopState): boolean {
-  return (
-    state.replying &&
-    agentGlyph(state.agent) !== "generic" &&
-    state.draft.trim() === "" &&
-    state.attachments === 0 &&
-    state.reply === null &&
-    state.chip === null
-  );
+  if (
+    state.draft.trim() !== "" ||
+    state.attachments !== 0 ||
+    state.reply !== null ||
+    state.chip !== null
+  ) {
+    return false;
+  }
+  if (state.replying) return agentGlyph(state.agent) !== "generic";
+  // シェルの C-c は前景プロセスを止める。プロンプトで押しても入力行が消えるだけなので、
+  // 何か動いているときだけ停止ボタンにする。
+  return state.agent === null && state.running;
 }
 
 // 引用だけでも送れる。アップロード中は添付が揃うまで待ち、チップは会話が動いていないときだけ。

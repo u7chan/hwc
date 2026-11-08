@@ -700,6 +700,8 @@ type PaneDetailProps = {
   // 一覧が隠れる狭い画面でだけ、ブランチを名前に代えて出す。
   showBranch: boolean;
   waitingMs: number | null;
+  // シェルの前景プロセスが動いているか。停止ボタンの出し分けにだけ使う。
+  running: boolean;
   sending: boolean;
   dismissedConfirmation: string | null;
   confirmationAttempts: ReadonlyMap<string, ConfirmationAttempt>;
@@ -732,6 +734,7 @@ export function PaneDetail(props: PaneDetailProps) {
     branch,
     showBranch,
     waitingMs,
+    running,
     sending,
     dismissedConfirmation,
     confirmationAttempts,
@@ -944,6 +947,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const stop = canStop({
     replying,
     agent: pane.agent,
+    running,
     draft,
     attachments: attachments.length,
     reply,

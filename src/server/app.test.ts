@@ -196,6 +196,8 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
     send: async () => {},
     focus: async () => {},
     stop: async () => {},
+    interrupt: async () => {},
+    process: async () => ({ running: false, command: null, ports: [] }),
     clear: async () => {},
     confirmFolderTrust: async () => {},
     close: async () => {},
@@ -1126,6 +1128,91 @@ test("POST /api/panes/:id/stop does not send Escape to a pane that is not workin
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true });
   expect(seen).toEqual([]);
+});
+
+test("GET /api/panes/:id/process returns the foreground command", async () => {
+  const { app } = createTestApp({
+    panes: {
+      process: async ({ paneId }) => ({
+        running: true,
+        command: `bun --watch ${paneId}`,
+        ports: [3000],
+      }),
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/process");
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    process: { running: true, command: "bun --watch w1:p1", ports: [3000] },
+  });
+});
+
+test("GET /api/panes/:id/process rejects a pane that is not in the snapshot", async () => {
+  const { app } = createTestApp();
+  const response = await app.request("/api/panes/w1:p9/process");
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
+});
+
+test("GET /api/panes/:id/process maps a Herdr failure to 502", async () => {
+  const { app } = createTestApp({
+    panes: {
+      process: async () => {
+        throw new HerdrError("pane_not_found", "no pane");
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/process");
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
+});
+
+test("POST /api/panes/:id/stop sends Ctrl+C to a shell that is running something", async () => {
+  const interrupted: unknown[] = [];
+  const escaped: unknown[] = [];
+  const { app } = createTestApp({
+    panes: {
+      process: async () => ({ running: true, command: "bun --watch src/server.ts", ports: [3000] }),
+      interrupt: async (options) => {
+        interrupted.push(options);
+      },
+      stop: async (options) => {
+        escaped.push(options);
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/stop", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(interrupted).toEqual([{ paneId: "w1:p1" }]);
+  expect(escaped).toEqual([]);
+});
+
+test("POST /api/panes/:id/stop leaves a shell at a prompt alone", async () => {
+  const interrupted: unknown[] = [];
+  const { app } = createTestApp({
+    panes: {
+      process: async () => ({ running: false, command: null, ports: [] }),
+      interrupt: async (options) => {
+        interrupted.push(options);
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/stop", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(interrupted).toEqual([]);
 });
 
 test("POST /api/panes/:id/clear-output asks Herdr to clear the pane buffer", async () => {

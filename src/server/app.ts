@@ -526,6 +526,19 @@ export function createApp(options: {
           return paneFailure(c, error);
         }
       })
+      .get("/api/panes/:id/process", async (c) => {
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+        const paneId = c.req.param("id");
+        if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+
+        try {
+          return c.json({ process: await panes.process({ paneId }) });
+        } catch (error) {
+          return paneFailure(c, error);
+        }
+      })
       .post("/api/panes/:id/stop", requireJson, async (c) => {
         const state = await current();
         if (!state) return c.json({ error: "herdr_unavailable" }, 502);
@@ -533,6 +546,17 @@ export function createApp(options: {
         const paneId = c.req.param("id");
         const pane = findPane(state, paneId);
         if (!pane) return c.json({ error: "pane_not_found" }, 404);
+
+        // シェルは前景プロセスを C-c で止める。プロンプトへの C-c は入力中の行を消すだけなので、
+        // 何か動いているときだけ送る。画面が古いだけの再クリックは成功として扱う。
+        if (pane.agent === null) {
+          try {
+            if ((await panes.process({ paneId })).running) await panes.interrupt({ paneId });
+            return c.json({ ok: true });
+          } catch (error) {
+            return paneFailure(c, error);
+          }
+        }
 
         // 止まっているペインに Esc を送ると、入力欄やダイアログを閉じてしまう。
         // 画面が古いだけの再クリックは成功として扱い、状態の反映はイベントに任せる。

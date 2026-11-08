@@ -1,4 +1,6 @@
 import { isAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
+import { IDLE_PANE_PROCESS, type PaneProcess } from "../../shared/panes";
+import { listeningPorts } from "../ports";
 import {
   type AgentKind,
   type AgentModel,
@@ -86,6 +88,8 @@ export type PaneClient = {
   send: (options: SendOptions) => Promise<void>;
   focus: (options: FocusOptions) => Promise<void>;
   stop: (options: StopOptions) => Promise<void>;
+  interrupt: (options: StopOptions) => Promise<void>;
+  process: (options: StopOptions) => Promise<PaneProcess>;
   clear: (options: ClearOptions) => Promise<void>;
   confirmFolderTrust: (options: { paneId: string }) => Promise<void>;
   close: (options: CloseOptions) => Promise<void>;
@@ -229,6 +233,50 @@ type Caller = <T>(
   options?: { path?: string; timeoutMs?: number },
 ) => Promise<T>;
 
+// タブ名に出すので、長いコマンド行はここで切る。表示側の幅は CSS の省略に任せる。
+const MAX_COMMAND_CHARS = 200;
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+// 前景プロセス群のうち最も深い（最後の）コマンド行を表示に使う。`bun run dev` の下に
+// `bun --watch src/server.ts` がいる場合、利用者が知りたいのは後者。待ち受けポートは
+// ここで見つけた pid から引く。
+export type ProcessInfo = { process: PaneProcess; pids: number[] };
+
+export function parseProcessInfo(value: unknown, paneId: string): ProcessInfo {
+  const idle: ProcessInfo = { process: IDLE_PANE_PROCESS, pids: [] };
+  const result = recordOf(value);
+  if (result === null || result.type !== "pane_process_info") return idle;
+  const info = recordOf(result.process_info);
+  if (info === null || info.pane_id !== paneId) return idle;
+
+  const shell = info.shell_pid;
+  const foreground = info.foreground_process_group_id;
+  if (typeof shell !== "number" || typeof foreground !== "number" || shell === foreground) {
+    return idle;
+  }
+
+  const processes = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
+  const pids = processes
+    .map((entry) => recordOf(entry)?.pid)
+    .filter((pid): pid is number => typeof pid === "number" && Number.isInteger(pid) && pid > 0);
+
+  for (let index = processes.length - 1; index >= 0; index -= 1) {
+    const cmdline = recordOf(processes[index])?.cmdline;
+    if (typeof cmdline === "string" && cmdline.trim() !== "") {
+      return {
+        process: { running: true, command: cmdline.trim().slice(0, MAX_COMMAND_CHARS), ports: [] },
+        pids,
+      };
+    }
+  }
+  return { process: { running: true, command: null, ports: [] }, pids };
+}
+
 function hasParentShell(value: unknown, paneId: string): boolean {
   if (typeof value !== "object" || value === null) return false;
   const result = value as Record<string, unknown>;
@@ -277,6 +325,16 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
     async stop({ paneId }) {
       // Herdr は Esc を esc として受ける。文字は送らず、キーだけを 1 回送る。
       await call("pane.send_keys", { pane_id: paneId, keys: ["esc"] }, { path });
+    },
+    async interrupt({ paneId }) {
+      // シェルの前景プロセスを止める。Herdr のキー名は C-c で、PTY に SIGINT として届く。
+      await call("pane.send_keys", { pane_id: paneId, keys: ["C-c"] }, { path });
+    },
+    async process({ paneId }) {
+      const result = await call<unknown>("pane.process_info", { pane_id: paneId }, { path });
+      const { process, pids } = parseProcessInfo(result, paneId);
+      if (!process.running) return process;
+      return { ...process, ports: await listeningPorts(pids) };
     },
     async clear({ paneId }) {
       // 画面とスクロールバックを消すだけで、PTY には何も送らない。実行中のコマンドは止まらない。
