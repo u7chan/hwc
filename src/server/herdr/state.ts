@@ -36,6 +36,10 @@ export type WorkspaceState = {
   agentStatus: AgentStatus;
   focused: boolean;
   worktree: WorktreeState | null;
+  // スペースの作業ディレクトリ。Herdr が worktree を返さないスペースでは先頭ペインの
+  // cwd に落とす。worktree.checkoutPath は非 git スペースで null になるため、表示と
+  // コピーにはこちらを使う。
+  path?: string | null;
   // ブランチは Herdr の snapshot に無いので、BFF が checkoutPath から読んで足す。
   branch?: string | null;
   // 上流ブランチとの差。リモートが無い・読めない場合は null。
@@ -68,7 +72,10 @@ function chatSourceOf(session: HerdrAgentSession | null | undefined): ChatSource
   return null;
 }
 
-export function toAppState(snapshot: HerdrSnapshot): AppState {
+export function toAppState(
+  snapshot: HerdrSnapshot,
+  paths: ReadonlyMap<string, string> = new Map(),
+): AppState {
   const agentsByPane = new Map<string, HerdrAgent>();
   for (const agent of snapshot.agents ?? []) {
     if (agent.pane_id) agentsByPane.set(agent.pane_id, agent);
@@ -120,6 +127,7 @@ export function toAppState(snapshot: HerdrSnapshot): AppState {
             isLinkedWorktree: workspace.worktree.is_linked_worktree,
           }
         : null,
+      path: paths.get(workspace.workspace_id) ?? null,
       tabs,
     });
   }
@@ -255,7 +263,7 @@ export function createStateStore(options: {
   const publish = async (): Promise<AppState> => {
     const snapshot = await options.load();
     const roots = checkoutPaths(snapshot);
-    const branched = await withBranches(toAppState(snapshot), options.branch, roots);
+    const branched = await withBranches(toAppState(snapshot, roots), options.branch, roots);
     const state = await withSync(branched, options.git, roots);
     if (retryTimer) {
       clearTimeout(retryTimer);

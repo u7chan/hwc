@@ -14,6 +14,7 @@ import {
   nextPaneInTab,
   paneName,
   paneRowTitle,
+  shortenPath,
   soleTab,
   splitPanes,
   statusLabel,
@@ -432,6 +433,25 @@ test("a row is titled by its name, not by the terminal title", () => {
   expect(paneRowTitle({ ...base, id: "w1:p1" })).toBe("pi");
   expect(paneRowTitle({ ...base, id: "w1:p1", agent: null })).toBe("hwc");
   expect(paneRowTitle({ ...base, id: "w1:p1", title: null, agent: null })).toBe("シェル");
+});
+
+test("a long path keeps the tail that identifies the place", () => {
+  expect(shortenPath("/srv/app")).toBe("/srv/app");
+  expect(shortenPath("/home/dev/.herdr/worktrees/hwc/worktree-silver-cloud-c4cf")).toBe(
+    "…/hwc/worktree-silver-cloud-c4cf",
+  );
+  expect(shortenPath("/home/example/work/acme-dashboard/worktrees/feature-empty-state")).toBe(
+    "…/worktrees/feature-empty-state",
+  );
+});
+
+test("a long path without a separator in the tail keeps its last characters", () => {
+  const name = "a".repeat(40);
+  expect(shortenPath(`/${name}`)).toBe(`…${name.slice(-35)}`);
+
+  // 絵文字を途中で割らない。
+  const emoji = "📁".repeat(40);
+  expect(shortenPath(`/${emoji}`)).toBe(`…${emoji.slice(0, 35 * 2)}`);
 });
 
 test("an active row drops the workspace name the band already carries", () => {

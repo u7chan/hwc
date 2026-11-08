@@ -888,6 +888,45 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   padding-right: 0;
 }
 
+.hwc-menu-space-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-right: 0;
+}
+
+/* パスは末尾で場所を見分ける。省略は shortenPath が行い、ここでは枠から溢れない
+   ようにするだけにする。 */
+.hwc-menu-space-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hwc-menu-space-name {
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: var(--line-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-menu-space-path {
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hwc-menu-copy {
   flex: none;
   display: grid;

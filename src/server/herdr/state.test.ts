@@ -68,6 +68,18 @@ test("toAppState nests panes under tabs and tabs under workspaces", () => {
   expect(state.workspaces[1]?.tabs[0]?.panes.map((pane) => pane.id)).toEqual(["w2:p1"]);
 });
 
+test("toAppState carries the resolved workspace path", () => {
+  const state = toAppState(
+    snapshot,
+    new Map([
+      ["w1", "/repo"],
+      ["w2", "/runner"],
+    ]),
+  );
+
+  expect(state.workspaces.map((workspace) => workspace.path)).toEqual(["/repo", "/runner"]);
+});
+
 test("toAppState carries labels, agent names and agent statuses", () => {
   const state = toAppState(snapshot);
   const panes = state.workspaces[0]?.tabs[0]?.panes ?? [];
@@ -457,6 +469,21 @@ test("a checkout path falls back to the first pane when herdr sees no worktree",
     ["w2", "/runner"],
     ["w3", "/tmp"],
   ]);
+});
+
+test("the published state carries the path used for git", async () => {
+  const store = createStateStore({
+    load: async () => ({
+      workspaces: [{ workspace_id: "w1", label: "runner" }],
+      tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
+      panes: [{ pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1", cwd: "/runner" }],
+    }),
+  });
+
+  await store.refresh();
+
+  expect(store.get()?.workspaces[0]?.path).toBe("/runner");
+  expect(store.workspacePath("w1")).toBe("/runner");
 });
 
 test("a branch that cannot be read still publishes the state", async () => {

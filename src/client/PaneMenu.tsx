@@ -21,6 +21,7 @@ const CLEAR_FAILED_NOTICE = "出力をクリアできませんでした。もう
 
 type PaneMenuProps = {
   pane: PaneState;
+  workspacePath: string | null;
   full: boolean;
   closeAction: ReturnType<typeof paneCloseAction>;
   commands: PaneCommandHandle | null;
@@ -33,12 +34,13 @@ type PaneMenuProps = {
 };
 
 export function PaneMenu(props: PaneMenuProps) {
-  const { pane, commands, sending } = props;
+  const { pane, workspacePath, commands, sending } = props;
   const [failed, setFailed] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearFailed, setClearFailed] = useState(false);
   const { copiedId, copy } = useCopy();
   const copied = copiedId === pane.id;
+  const copiedPath = copiedId === "workspace-path";
   // 表示中の詳細が持つ実行状態を優先する。詳細が無いペインだけ、ここで会話を読む。
   const readsChat = commands === null && pane.chat && pane.agentStatus !== "blocked";
   const { snapshot, failed: chatFailed } = usePaneChat(pane.id, readsChat, pane.agentStatus);
@@ -95,6 +97,18 @@ export function PaneMenu(props: PaneMenuProps) {
           <CopyGlyph copied={copied} />
         </button>
       </div>
+      {workspacePath === null ? null : (
+        <button
+          type="button"
+          role="menuitem"
+          class="hwc-menu-item"
+          aria-label={copiedPath ? "コピーしました" : "スペースのパスをコピー"}
+          onClick={() => copy("workspace-path", workspacePath)}
+        >
+          <CopyGlyph copied={copiedPath} size={14} />
+          スペースのパスをコピー
+        </button>
+      )}
       {isShellPane(pane) ? (
         <>
           <button

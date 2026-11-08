@@ -34,6 +34,7 @@ import { usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import { RemoveWorktreeConfirm } from "./RemoveWorktreeConfirm";
 import { WorkspaceGitActions } from "./WorkspaceGitActions";
+import { WorkspaceMenuHead } from "./WorkspaceMenuHead";
 import type { PaneCommandHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
@@ -833,9 +834,10 @@ export function App() {
 
   // 4 枚の判定は BFF と同じタブの枚数で行う。
   const menuPaneId = menu?.target.kind === "pane" ? menu.target.id : null;
-  const menuTab = state === null ? null : (findPaneRow(state, menuPaneId)?.tab ?? null);
+  const menuRow = state === null ? null : findPaneRow(state, menuPaneId);
+  const menuTab = menuRow?.tab ?? null;
   const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
-  const menuPane = state === null ? null : findPane(state, menuPaneId);
+  const menuPane = menuRow?.pane ?? null;
   const menuCloseAction =
     state === null || menuPaneId === null ? null : paneCloseAction(state, menuPaneId);
   const menuWorkspace =
@@ -1082,6 +1084,7 @@ export function App() {
           {menuPane === null ? null : (
             <PaneMenu
               pane={menuPane}
+              workspacePath={menuRow?.workspace.path ?? null}
               full={menuFull}
               closeAction={menuCloseAction}
               commands={commandHandles.current.get(menuPane.id) ?? null}
@@ -1095,7 +1098,7 @@ export function App() {
           )}
           {menuWorkspace === null ? null : (
             <>
-              <p class="hwc-menu-head">{menuWorkspace.label}</p>
+              <WorkspaceMenuHead label={menuWorkspace.label} path={menuWorkspace.path ?? null} />
               {menuWorkspace.tabs.map((tab) => {
                 const source = tab.panes[0];
                 const full = tab.panes.length >= MAX_PANES_PER_TAB;
