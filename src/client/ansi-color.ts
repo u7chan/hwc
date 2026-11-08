@@ -4,11 +4,13 @@ export type ColorScheme = "light" | "dark";
 
 type Rgb = { r: number; g: number; b: number };
 
-// 15 テーマの content の地色は、明暗それぞれ狭い範囲に収まる。補正の基準は、
-// 前景が最も読みにくくなる側（明るいテーマで最も暗い地、暗いテーマで最も明るい地）に取る。
+// 補正の基準は、実際の --color-content より一段厳しい面に取る。15 テーマの
+// content は明暗それぞれ狭い範囲に収まるが、前景が最も読みにくくなる側で判定し、
+// どのテーマでも 4.5:1 を下回らないようにするため。
+// light: Catppuccin Latte の --color-surface、dark: Everforest の --color-bg。
 const REFERENCE_BACKGROUND: Record<ColorScheme, Rgb> = {
-  light: { r: 0xef, g: 0xf1, b: 0xf5 }, // Catppuccin Latte
-  dark: { r: 0x2d, g: 0x35, b: 0x3b }, // Everforest
+  light: { r: 0xef, g: 0xf1, b: 0xf5 },
+  dark: { r: 0x2d, g: 0x35, b: 0x3b },
 };
 
 const MIN_CONTRAST = 4.5;
