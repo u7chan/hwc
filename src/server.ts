@@ -11,6 +11,7 @@ import { createStateStore } from "./server/herdr/state";
 import { loadSnapshot, startStateSync } from "./server/herdr/sync";
 import { createApp } from "./server/app";
 import { createAgentModelsClient } from "./server/agent-models";
+import { createPullRequestReader } from "./server/pull-request";
 import index from "../index.html";
 
 const store = createStateStore({ load: () => loadSnapshot(), branch: createBranchReader() });
@@ -31,6 +32,7 @@ const app = createApp({
   opencode: createOpencodeChatClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   codex: createCodexChatClient(),
   models: createAgentModelsClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
+  pullRequests: createPullRequestReader(),
   revision,
 });
 

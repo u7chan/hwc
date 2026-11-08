@@ -120,6 +120,11 @@ export async function createScenario(root: string): Promise<Scenario> {
       `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-pi.ts", import.meta.url))}" "$@"\n`,
       { mode: 0o700 },
     ),
+    writeFile(
+      join(root, "bin", "gh"),
+      `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-gh.ts", import.meta.url))}" "$@"\n`,
+      { mode: 0o700 },
+    ),
   ]);
 
   const snapshot: HerdrSnapshot = {

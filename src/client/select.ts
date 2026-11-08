@@ -92,6 +92,7 @@ export function soleTab(workspace: WorkspaceState): TabState | null {
 }
 
 export type PaneContext = {
+  workspaceId: string;
   workspaceLabel: string;
   tabLabel: string;
   // ブランチはスペースの属性。同じスペースのペインは同じ値になる。
@@ -103,6 +104,7 @@ export function findPaneContext(state: AppState, paneId: string | null): PaneCon
   const row = findPaneRow(state, paneId);
   if (row === null) return null;
   return {
+    workspaceId: row.workspace.id,
     workspaceLabel: row.workspace.label,
     tabLabel: row.tab.label,
     branch: row.workspace.branch ?? null,
