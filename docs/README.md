@@ -5,6 +5,7 @@
 ## 内部
 
 - [ADR](adr/) - 重要な技術判断の記録
+- [エージェント対応状況](agents.md) - 各 CLI の対応範囲と更新手順
 - [CI](ci.md) - GitHub Actions の workflow、action の固定、Dependabot
 - [E2E](e2e.md) - 架空 Herdr で実データを混ぜずに画面を確認する
 - [DESIGN スキル](../.agents/skills/design/SKILL.md) - 再利用可能な UI デザイン仕様
