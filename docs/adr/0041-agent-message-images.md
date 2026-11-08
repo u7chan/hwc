@@ -23,7 +23,7 @@ hwc は Herdr の入力契約（文字列）しか持たず、モデルへ画像
 - `name` は根からの相対パスだけ。絶対パスはクライアントへ渡さない。`version` は mtime とサイズ
 - 配信は `GET /api/panes/:id/files?path=<相対>&v=<version>`。ペインの実在と `chat: true` を確認してから、上と同じ解決を通す。型は名前の拡張子から決め、`X-Content-Type-Options: nosniff` と `Cache-Control: private, max-age=31536000, immutable` を付ける。`v` は内容の版なので、同じ URL の中では内容が変わらない
 - snapshot の etag に `name@version` を混ぜる。本文が変わらないまま画像を作り直したときに、304 で古い URL が残らないようにする
-- クライアントは既存の添付行（`.hwc-msg-attachments`）と同じ見た目で、エージェントのメッセージの下に出す。押すと配信 URL を新しいタブで開く。拡大表示は持たない
+- クライアントは既存の添付行（`.hwc-msg-attachments`）と同じ見た目で、エージェントのメッセージの下に出す。押すと配信 URL を新しいタブで開く。拡大表示は持たない（[ADR 0042](0042-image-preview-dialog.md) でダイアログに変更）
 - SVG は対象外。同一オリジンでスクリプトが動く形式なので、添付と同じく保存も配信もしない
 - パスを拾えなかったメッセージは今までどおり文字列のまま
 

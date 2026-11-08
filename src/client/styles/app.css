@@ -1055,6 +1055,77 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   outline-offset: 2px;
 }
 
+/* 画像の拡大。会話の中のサムネイルと同じ配信 URL を、ダイアログで大きく出す。
+   画像は縦に伸びても画面からはみ出さないよう、ヘッダーとフッターの分を引いた高さで止める。 */
+.hwc-image-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* 画像の大きさに合わせて縮み、大きな画像だけ 960px で止める。名前とリンクの分は残す。 */
+  width: fit-content;
+  min-width: min(100%, 20rem);
+  max-width: min(100%, 960px);
+  padding: var(--space-2);
+}
+
+.hwc-image-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-2);
+}
+
+.hwc-image-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-image-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-image-close:hover {
+  background: var(--color-raised);
+}
+
+.hwc-image-full {
+  display: block;
+  align-self: center;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100dvh - 12rem);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+  object-fit: contain;
+}
+
+.hwc-image-open {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+}
+
 .hwc-dialog-layer[data-open="false"] .hwc-dialog {
   pointer-events: none;
   animation: hwc-dialog-out 180ms ease-in both;
@@ -2535,7 +2606,7 @@ p.hwc-compaction,
   transition: max-height 220ms ease;
 }
 
-/* 添付の画像。押すと新しいタブで実寸を開く。 */
+/* 添付の画像。押すとダイアログで原寸を開く。 */
 .hwc-msg-attachments {
   display: flex;
   flex-wrap: wrap;
@@ -2544,8 +2615,12 @@ p.hwc-compaction,
 
 .hwc-msg-attachment {
   display: block;
+  padding: 0;
+  border: 0;
   border-radius: var(--radius-sm);
+  background: transparent;
   overflow: hidden;
+  cursor: zoom-in;
 }
 
 .hwc-msg-attachment:focus-visible {
