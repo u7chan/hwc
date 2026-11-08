@@ -175,6 +175,16 @@ test("a failed connect inside a fetch handler rejects without crashing the proce
   }
 });
 
+// マクロタスクへ逃がした接続は、同期 throw が executor を抜けると未捕捉例外になる。
+// 呼び出し元が扱える reject として返ること。
+test("request rejects when net.connect throws synchronously", async () => {
+  const error = await request("ping", {}, { path: "" }).catch((reason: unknown) => reason);
+
+  if (!(error instanceof Error)) throw new Error(`unexpected rejection: ${String(error)}`);
+  await Bun.sleep(50);
+  expect(error.message.length).toBeGreaterThan(0);
+});
+
 test("request rejects when the socket path does not exist", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hwc-missing-"));
   const path = join(directory, "herdr.sock");

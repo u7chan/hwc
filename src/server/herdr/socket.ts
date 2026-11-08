@@ -92,7 +92,15 @@ export function request<T>(
     // 登録していても未捕捉例外として報告されプロセスが落ちる（Herdr 不在時の /api/state で再現）。
     // 接続の開始をマクロタスクへ逃がすと、失敗は 'error' だけで届く。Bun 側が直れば不要。
     setTimeout(() => {
-      const socket = net.connect(path);
+      let socket: net.Socket;
+      try {
+        socket = net.connect(path);
+      } catch (error) {
+        // マクロタスクへ逃がしたことで、同期 throw は executor を抜けて未捕捉例外になる。
+        // 呼び出し元が扱える reject に戻す。
+        reject(error);
+        return;
+      }
       socket.setEncoding("utf8");
 
       let settled = false;
