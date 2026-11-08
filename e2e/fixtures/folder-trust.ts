@@ -13,6 +13,8 @@ export const FOLDER_TRUST_SCREEN = `
 `;
 
 export const PI_TRUST_SCREEN = `
+ /workspace ❯ pi
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
  Trust project folder?
