@@ -371,9 +371,23 @@ test("the pane name uses the Herdr label, then the title without the agent mark"
   expect(paneName({ ...base, label: "impl", agent: "pi" })).toBe("impl");
   expect(paneName({ ...base, title: "π - hwc" })).toBe("hwc");
   expect(paneName({ ...base, title: "OC | Single letter a" })).toBe("Single letter a");
-  expect(paneName({ ...base, title: "π - " })).toBe("w1:p9");
+  expect(paneName({ ...base, title: "π - " })).toBe("シェル");
   expect(paneName({ ...base, agent: "pi" })).toBe("pi");
-  expect(paneName(base)).toBe("w1:p9");
+});
+
+test("a shell without a name is called シェル, not its pane id", () => {
+  const base = {
+    id: "w1:p9",
+    title: null,
+    label: null,
+    agent: null,
+    agentStatus: "idle" as const,
+    focused: false,
+    chat: false,
+  };
+
+  expect(paneName(base)).toBe("シェル");
+  expect(paneName({ ...base, label: "notes" })).toBe("notes");
 });
 
 test("the tab chip and the detail header name a pane by its label", () => {
@@ -412,6 +426,7 @@ test("a row is titled by its name, not by the terminal title", () => {
   expect(paneRowTitle({ ...base, id: "w1:p1", label: "impl" })).toBe("impl");
   expect(paneRowTitle({ ...base, id: "w1:p1" })).toBe("pi");
   expect(paneRowTitle({ ...base, id: "w1:p1", agent: null })).toBe("hwc");
+  expect(paneRowTitle({ ...base, id: "w1:p1", title: null, agent: null })).toBe("シェル");
 });
 
 test("an active row drops the workspace name the band already carries", () => {
