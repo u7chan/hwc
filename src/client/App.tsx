@@ -28,6 +28,7 @@ import { ImageViewer } from "./ImageViewer";
 import { CloseIcon, HwcMark, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
 import { Menu } from "./Menu";
 import { PaneMenu } from "./PaneMenu";
+import { usePaneProcesses } from "./process";
 import { RemoveWorktreeConfirm } from "./RemoveWorktreeConfirm";
 import type { PaneCommandHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
@@ -699,6 +700,10 @@ export function App() {
     return [];
   })();
 
+  // シェルの前景プロセスは Herdr のイベントに載らない。見えているタブのシェルだけを読む。
+  const shellPanes = siblings.filter((item) => item.agent === null);
+  const processes = usePaneProcesses(shellPanes.map((item) => item.id));
+
   // 画面が狭くなったら一覧も詰める。詳細が読めない幅にはしない。
   useEffect(() => {
     const fit = () => setSidebarWidth((width) => clampSidebarWidth(width, window.innerWidth));
@@ -799,6 +804,7 @@ export function App() {
       // ブランチは一覧が隠れる狭い画面でだけ出す。広い画面の一覧と分割のセルでは重なる。
       branch={wide || cells.length > 1 ? null : where.branch}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
+      running={processes.get(item.id)?.running === true}
       sending={inputsInFlight.current.has(item.id)}
       dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
       confirmationAttempts={confirmationAttempts.current}
@@ -953,6 +959,7 @@ export function App() {
               <TabBar
                 pane={pane}
                 panes={siblings}
+                processes={processes}
                 split={wide && split}
                 hidden={hidden}
                 status={detailStatus}

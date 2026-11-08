@@ -8,6 +8,7 @@ import {
   isPaneNotFound,
   parseInputBody,
   parseOutputQuery,
+  parsePaneProcess,
   parseSplitBody,
 } from "./panes";
 
@@ -687,4 +688,118 @@ test("rename sets the pane label", async () => {
       options: { path: "/tmp/test.sock" },
     },
   ]);
+});
+
+test("interrupt sends Ctrl+C to the foreground process", async () => {
+  const { calls, call } = recordingCaller();
+  await createPaneClient({ path: "/tmp/test.sock", call }).interrupt({ paneId: "w1:p2" });
+
+  expect(calls).toEqual([
+    {
+      method: "pane.send_keys",
+      params: { pane_id: "w1:p2", keys: ["C-c"] },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});
+
+test("process reads the pane and reports the deepest command", async () => {
+  const { calls, call } = recordingCaller({
+    "pane.process_info": {
+      type: "pane_process_info",
+      process_info: {
+        pane_id: "w1:p2",
+        shell_pid: 100,
+        foreground_process_group_id: 300,
+        foreground_processes: [
+          { pid: 300, name: "bun", cmdline: "bun run dev" },
+          { pid: 301, name: "bun", cmdline: "bun --watch src/server.ts" },
+        ],
+      },
+    },
+  });
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  expect(await client.process({ paneId: "w1:p2" })).toEqual({
+    running: true,
+    command: "bun --watch src/server.ts",
+  });
+  expect(calls).toEqual([
+    {
+      method: "pane.process_info",
+      params: { pane_id: "w1:p2" },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});
+
+test("a pane whose foreground group is the shell is idle", () => {
+  expect(
+    parsePaneProcess(
+      {
+        type: "pane_process_info",
+        process_info: {
+          pane_id: "w1:p2",
+          shell_pid: 100,
+          foreground_process_group_id: 100,
+          foreground_processes: [{ pid: 100, name: "bash", cmdline: "/bin/bash" }],
+        },
+      },
+      "w1:p2",
+    ),
+  ).toEqual({ running: false, command: null });
+});
+
+test("a foreground group without a readable command still counts as running", () => {
+  expect(
+    parsePaneProcess(
+      {
+        type: "pane_process_info",
+        process_info: {
+          pane_id: "w1:p2",
+          shell_pid: 100,
+          foreground_process_group_id: 300,
+          foreground_processes: [],
+        },
+      },
+      "w1:p2",
+    ),
+  ).toEqual({ running: true, command: null });
+});
+
+test("process info for another pane or a malformed reply is ignored", () => {
+  const reply = (paneId: string) => ({
+    type: "pane_process_info",
+    process_info: {
+      pane_id: paneId,
+      shell_pid: 100,
+      foreground_process_group_id: 300,
+      foreground_processes: [{ pid: 300, name: "bun", cmdline: "bun run dev" }],
+    },
+  });
+
+  expect(parsePaneProcess(reply("w1:p3"), "w1:p2")).toEqual({ running: false, command: null });
+  expect(parsePaneProcess({ type: "pane_read" }, "w1:p2")).toEqual({
+    running: false,
+    command: null,
+  });
+  expect(parsePaneProcess(null, "w1:p2")).toEqual({ running: false, command: null });
+});
+
+test("a long command line is cut before it reaches the tab", () => {
+  const command = `bun ${"x".repeat(400)}`;
+  const parsed = parsePaneProcess(
+    {
+      type: "pane_process_info",
+      process_info: {
+        pane_id: "w1:p2",
+        shell_pid: 100,
+        foreground_process_group_id: 300,
+        foreground_processes: [{ pid: 300, name: "bun", cmdline: command }],
+      },
+    },
+    "w1:p2",
+  );
+
+  expect(parsed.command).toHaveLength(200);
 });

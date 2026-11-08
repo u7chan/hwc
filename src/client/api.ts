@@ -21,6 +21,7 @@ import {
 } from "../shared/agents";
 import { isAttachmentName } from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
+import { parsePaneProcess, type PaneProcess } from "../shared/panes";
 import type { FolderTrustInteraction, PaneInteraction } from "../shared/confirmation";
 import { parsePullRequest, type PullRequest } from "../shared/pull-request";
 
@@ -346,6 +347,16 @@ export async function readActivity(
   if (!response.ok) throw new Error(`activity: ${response.status}`);
   const body = (await response.json()) as { activity?: unknown };
   return parsePaneActivity(body.activity);
+}
+
+// シェルの前景プロセス。Herdr のイベントで降ってこないので、見えている間だけ読む。
+export async function readPaneProcess(paneId: string, signal?: AbortSignal): Promise<PaneProcess> {
+  const response = await client.api.panes[":id"].process.$get(paneParam(paneId), {
+    init: { signal },
+  });
+  if (!response.ok) throw new Error(`process: ${response.status}`);
+  const body = (await response.json()) as { process?: unknown };
+  return parsePaneProcess(body.process);
 }
 
 // ブランチから引いた open の PR。チップを出すためだけの値なので、失敗は null に畳む。

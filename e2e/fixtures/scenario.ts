@@ -7,6 +7,8 @@ import { FOLDER_TRUST_SCREEN, PI_TRUST_SCREEN } from "./folder-trust";
 export type Scenario = {
   snapshot: HerdrSnapshot;
   outputs: Record<string, string>;
+  // ペインで動いている前景コマンド。指定の無いシェルはプロンプトで待っている。
+  foreground: Record<string, string>;
 };
 
 export type CodexFixture = {
@@ -375,6 +377,10 @@ export async function createScenario(root: string): Promise<Scenario> {
 
   return {
     snapshot,
+    foreground: {
+      // シェルで開発サーバーが動いているペイン。タブ名がコマンドに変わり、停止ボタンが出る。
+      "w1:p2": "bun --watch src/server.ts",
+    },
     outputs: {
       ...outputs,
       "w1:p5": "$ echo done\ndone\n$",
@@ -578,13 +584,12 @@ const sessionLines = [sessionHeader, ...sessionEntries].map((line) => JSON.strin
 const outputs: Record<string, string> = {
   "w1:p1": "dev@example ~/work/acme-dashboard  feat/empty-state ❯ pi\n",
   "w1:p2": [
-    "dev@example ~/work/acme-dashboard  feat/empty-state ❯ bun test",
-    "✓ src/lib/empty-state.test.ts (4 tests)",
-    "✓ src/components/dashboard.test.tsx (7 tests)",
-    "✓ src/routes/index.test.tsx (2 tests)",
+    "dev@example ~/work/acme-dashboard  feat/empty-state ❯ bun run dev",
     "",
-    "13 pass, 0 fail",
-    "dev@example ~/work/acme-dashboard  feat/empty-state ❯",
+    "  VITE v7.1.0  ready in 210 ms",
+    "",
+    "  ➜  Local:   http://localhost:5173/",
+    "  ➜  Network: use --host to expose",
     "",
   ].join("\n"),
   "w1:p3": [

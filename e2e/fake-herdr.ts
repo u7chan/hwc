@@ -36,6 +36,8 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   const opencode = await startFakeOpencode(root);
   const snapshot = structuredClone(scenario.snapshot);
   const outputs = new Map(Object.entries(scenario.outputs));
+  // シェルの前景コマンド。C-c で消え、プロンプトに戻る。
+  const foreground = new Map(Object.entries(scenario.foreground));
   const revisions = new Map<string, number>();
   // 実 pi は最初の user / assistant メッセージまでセッション JSONL を書かない（SessionManager の
   // _hasConversation ガード）。起動直後に会話からモデルを読めない状態を E2E でも再現する。
@@ -59,6 +61,15 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
 
   const findPane = (paneId: string) =>
     snapshot.panes?.find((pane) => pane.pane_id === paneId) ?? null;
+
+  // エージェントのペインは、実 Herdr と同じく前景グループがシェルと別になる。
+  // シェルのペインは、何か動いていると fixture で指定したときだけ別グループになる。
+  const foregroundJob = (paneId: string): { pid: number; name: string; cmdline: string } | null => {
+    const cmdline = foreground.get(paneId);
+    if (cmdline !== undefined) return { pid: 200, name: cmdline.split(" ")[0] ?? cmdline, cmdline };
+    const agent = snapshot.agents?.find((item) => item.pane_id === paneId)?.agent;
+    return agent ? { pid: 200, name: agent, cmdline: agent } : null;
+  };
 
   // 最初の user メッセージでセッションを作る。実 pi と同じく、起動時の model_change と
   // thinking_level_change もこの時点でまとめて書く。
@@ -557,11 +568,17 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           send(socket, { id, error: { code: "pane_not_found", message: paneId } });
           return;
         }
+        const job = foregroundJob(paneId);
         send(socket, {
           id,
           result: {
             type: "pane_process_info",
-            process_info: { pane_id: paneId, shell_pid: 100, foreground_process_group_id: 200 },
+            process_info: {
+              pane_id: paneId,
+              shell_pid: 100,
+              foreground_process_group_id: job === null ? 100 : job.pid,
+              foreground_processes: [job ?? { pid: 100, name: "bash", cmdline: "/bin/bash" }],
+            },
           },
         });
         return;
@@ -674,6 +691,12 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
             (item) => item.workspace_id === target.workspace_id,
           );
           if (workspace) workspace.agent_status = "idle";
+        }
+        // シェルの C-c は前景プロセスを止める。端末にも送ったキーを残す。
+        if (keys.some((key) => key === "C-c")) {
+          foreground.delete(paneId);
+          outputs.set(paneId, `${outputs.get(paneId) ?? ""}^C\n`);
+          revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
         }
         send(socket, { id, result: { type: "ok" } });
         broadcast("pane.updated", { pane_id: paneId });

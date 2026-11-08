@@ -120,6 +120,7 @@ test("a chip can be sent unless the agent is working", () => {
 const stoppable = {
   replying: true,
   agent: "pi",
+  running: false,
   draft: "",
   attachments: 0,
   reply: null,
@@ -138,6 +139,18 @@ test("only known agents can be stopped", () => {
   for (const agent of [null, "custom", "shell"]) {
     expect(canStop({ ...stoppable, agent })).toBe(false);
   }
+});
+
+// シェルの停止は前景プロセスがあるときだけ。プロンプトへの C-c は入力行を消すだけ。
+test("a shell with a foreground process can be stopped", () => {
+  const shell = { ...stoppable, replying: false, agent: null, running: true };
+  expect(canStop(shell)).toBe(true);
+  expect(canStop({ ...shell, running: false })).toBe(false);
+  expect(canStop({ ...shell, draft: "続き" })).toBe(false);
+});
+
+test("an idle agent is not stopped by the shell rule", () => {
+  expect(canStop({ ...stoppable, replying: false, agent: "pi", running: true })).toBe(false);
 });
 
 test("content in the composer keeps the send action", () => {
