@@ -93,10 +93,16 @@ export function parseFolderTrust(
 
 const CODEX_HINTS =
   /Folder access|Trust this folder\?|Trust and continue|enter continue · esc (?:quit|back|cancel)/;
-const PI_HINTS = /Trust project folder\?|Trust \(this session only\)|↑↓ navigate/;
+// フッターの `↑↓ navigate` は Pi の選択ダイアログ全般に付く。これだけで確認とみなすと、
+// 会話やツール出力に含まれた通常のペインまで入力欄を閉じてしまう。
+const PI_TITLE_HINT = /Trust project folder\?/;
+const PI_OPTION_HINT =
+  /Trust parent folder \(|Trust \(this session only\)|Do not trust \(this session only\)/;
 
 function looksLikeFolderTrust(agent: FolderTrustAgent, text: string): boolean {
-  return (agent === "codex" ? CODEX_HINTS : PI_HINTS).test(text);
+  return agent === "codex"
+    ? CODEX_HINTS.test(text)
+    : PI_TITLE_HINT.test(text) && PI_OPTION_HINT.test(text);
 }
 
 type Observation = { id: string; agent: FolderTrustAgent; directory: string; submitted: boolean };

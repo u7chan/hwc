@@ -832,6 +832,19 @@ test("a Pi project trust prompt is reported, guarded and answered like Codex", a
   expect(fixture.counts()).toEqual({ sends: 1, inputs: 0, stops: 0 });
 });
 
+test("a Pi conversation that only mentions the dialog footer still accepts input", async () => {
+  const fixture = folderTrustApp(undefined, "pi");
+  fixture.setScreen("› Ask pi to do anything\n\n↑↓ navigate  enter select  escape/ctrl+c cancel\n");
+  expect((await fixture.inspect()).interaction).toBeNull();
+  const response = await fixture.app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+  expect(response.status).toBe(200);
+  expect(fixture.counts()).toEqual({ sends: 0, inputs: 1, stops: 0 });
+});
+
 test("message and stop requests cannot answer or cancel the pending trust screen", async () => {
   const fixture = folderTrustApp();
   for (const action of ["input", "stop"]) {

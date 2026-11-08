@@ -111,6 +111,24 @@ test("a pane that changes agent gets a new confirmation identity", async () => {
   expect(pi).not.toHaveProperty("id", codex.id);
 });
 
+test("a normal Pi conversation that mentions the dialog footer is not a trust prompt", async () => {
+  const { client } = setup(
+    {},
+    "› Ask pi to do anything\n\n↑↓ navigate  enter select  escape/ctrl+c cancel\n",
+  );
+  expect(await client.inspect(piPane)).toBeNull();
+});
+
+test("a screen that only mentions the title is not a confirmation", async () => {
+  const { client } = setup({}, "› Ask pi to do anything\n\nTrust project folder?\n");
+  expect(await client.inspect(piPane)).toBeNull();
+});
+
+test("a Pi prompt with an unfamiliar disclosure stays read-only", async () => {
+  const { client } = setup({}, PI_TRUST_SCREEN.replace("This allows pi", "This allows Pi"));
+  expect(await client.inspect(piPane)).toEqual({ kind: "terminal" });
+});
+
 function setup(
   overrides: Partial<Pick<PaneClient, "read" | "confirmFolderTrust">> = {},
   initial = FOLDER_TRUST_SCREEN,
