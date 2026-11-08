@@ -484,7 +484,13 @@ function LiveStatus(props: {
   onCancelCompaction: () => void;
 }) {
   return (
-    <div class="hwc-live">
+    // pi 以外や sidecar の無いペインでは、中身が経過時間だけになる。状態名を
+    // 支援技術へも渡すため、名前は帯に持たせる。
+    <div
+      class="hwc-live"
+      role="group"
+      aria-label={props.compacting ? "会話を圧縮しています" : "返答を待っています"}
+    >
       <div class="hwc-live-head">
         <span class="hwc-typing">
           <span />
@@ -494,9 +500,6 @@ function LiveStatus(props: {
         {props.phase === null ? null : <span class="hwc-live-phase">{props.phase}</span>}
         {props.compacting ? <span class="hwc-compaction-pending">会話を圧縮しています</span> : null}
         <span class="hwc-live-tail">
-          {props.elapsedMs === null ? null : (
-            <span class="hwc-live-elapsed">{formatElapsed(props.elapsedMs)}</span>
-          )}
           {props.compacting ? (
             <button
               type="button"
@@ -507,6 +510,9 @@ function LiveStatus(props: {
               {props.stopping ? "中断中" : "中断"}
             </button>
           ) : null}
+          {props.elapsedMs === null ? null : (
+            <span class="hwc-live-elapsed">{formatElapsed(props.elapsedMs)}</span>
+          )}
         </span>
       </div>
       {props.showThought && props.thought !== "" ? (
