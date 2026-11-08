@@ -93,9 +93,12 @@ export function createGitClient(
   const runRead = options.runRead ?? readGit;
   const runAction = options.runAction ?? runGitAction;
   const cache = new Map<string, { sync: GitSync | null; at: number }>();
+  // 読み取りの途中で invalidate された結果をキャッシュへ戻さないための世代。
+  let generation = 0;
 
   const read: GitClient["read"] = async ({ checkoutPath, branch }) => {
     if (!isAbsolute(checkoutPath) || branch === "") return null;
+    const started = generation;
     const key = `${checkoutPath}\n${branch}`;
     const at = now();
     const hit = cache.get(key);
@@ -116,11 +119,14 @@ export function createGitClient(
       // git が無い・リポジトリが壊れている・期限切れでは、同期状態だけを出さない。
       // ブランチの表示は .git/HEAD から読めているので残す。
     }
-    cache.set(key, { sync, at });
+    // 読み取り中に fetch / pull が終わっていたら、この値は操作前のものかもしれない。
+    // キャッシュに戻すと、次の状態公開が古い値を読んでしまう。
+    if (started === generation) cache.set(key, { sync, at });
     return sync;
   };
 
   const invalidate = (checkoutPath: string) => {
+    generation += 1;
     const prefix = `${checkoutPath}\n`;
     for (const key of cache.keys()) {
       if (key.startsWith(prefix)) cache.delete(key);

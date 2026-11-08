@@ -179,6 +179,42 @@ test("invalidate drops the cached sync of a checkout", async () => {
   expect(reads).toBe(4);
 });
 
+test("a read that overlaps an invalidate does not cache its stale result", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reads = 0;
+  const client = createGitClient({
+    runRead: async (_path, args) => {
+      reads += 1;
+      if (args[0] === "remote") return "origin\n";
+      // 最初の for-each-ref だけを遅らせ、読み取り中に invalidate を割り込ませる。
+      if (reads === 2) await gate;
+      return reads <= 2 ? "origin/main\t[ahead 1, behind 2]\n" : "origin/main\t[ahead 1]\n";
+    },
+  });
+
+  const pending = client.read({ checkoutPath: "/repo", branch: "main" });
+  // read() は開始時に世代を取っている。invalidate を先に進めても、
+  // 遅れて解決した古い値をキャッシュへ戻してはいけない。
+  client.invalidate("/repo");
+  release();
+
+  expect(await pending).toEqual({
+    upstream: "origin/main",
+    ahead: 1,
+    behind: 2,
+    hasRemote: true,
+  });
+  expect(await client.read({ checkoutPath: "/repo", branch: "main" })).toEqual({
+    upstream: "origin/main",
+    ahead: 1,
+    behind: 0,
+    hasRemote: true,
+  });
+});
+
 test("a git read failure yields no sync and does not throw", async () => {
   const client = createGitClient({
     runRead: async () => {

@@ -515,6 +515,8 @@ export function App() {
 
   // スペースの状態表示と見出しの「…」は同じメニューを開く。操作の入口を 1 つに保つ。
   const openWorkspaceMenu = (workspaceId: string, trigger: HTMLElement, fromList = false) => {
+    // 前回の失敗を今回の結果として見せない。開き直したときは空の状態から始める。
+    setGitAction((current) => (current?.phase === "failed" ? null : current));
     setMenu({ target: { kind: "workspace", id: workspaceId }, trigger, fromList, open: true });
   };
 
