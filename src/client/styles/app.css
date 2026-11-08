@@ -293,9 +293,14 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-top: var(--space-2);
   padding-bottom: var(--space-6);
   overscroll-behavior: contain;
+}
+
+/* 上は中身側で取る。枠に padding-top を置くと、帯を貼り付けたときに上端まで届かず、
+   その隙間に後ろの行が覗く。 */
+.hwc-list-body {
+  padding-top: var(--space-2);
 }
 
 /* 出すスペースの切り替え。タブではなく絞り込みなので、下線ではなく面で示す。 */
@@ -349,7 +354,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   font-weight: 600;
 }
 
-/* 未読は目安。押す対象ではなく、急かさない色で小さく添える。 */
+/* 件数は目安。押す対象ではなく、急かさない色で小さく添える。 */
 .hwc-scope-count {
   display: inline-flex;
   align-items: center;
@@ -383,8 +388,8 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   line-height: var(--line-body);
 }
 
-/* 空状態をスクロール枠の内側に置いたぶん、枠の上余白を打ち消して従来の位置に揃える。 */
-.hwc-list-scroll > .hwc-list-note {
+/* 空状態を中身の内側に置いたぶん、中身の上余白を打ち消して従来の位置に揃える。 */
+.hwc-list-body > .hwc-list-note {
   margin-top: calc(var(--space-2) * -1);
 }
 
@@ -1855,8 +1860,9 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   color: var(--color-secondary);
 }
 
-/* ブランチに PR が紐づいているときだけ出る。潰さないため、縮むのはブランチ側だけにする。
-   タップ領域は見出しの高さ (32px) いっぱい。44px に広げると下の会話領域に重なる。 */
+/* ブランチに PR が紐づいているときだけ出る。潰さないため、チップ以外が縮む
+   （1 枚表示はブランチ、分割セルはペイン名）。タップ領域は見出しの高さ (32px) いっぱい。
+   44px に広げると下の会話領域に重なる。 */
 .hwc-pane-head-pr {
   flex: none;
   display: inline-flex;
@@ -2573,6 +2579,7 @@ p.hwc-compaction,
   white-space: nowrap;
 }
 
+/* 開閉は一覧の disclosure と同じシェブロン。軸のある矢印は場所の移動に使うので、ここでは使わない。 */
 .hwc-compaction-icon {
   flex: none;
   display: grid;
@@ -2581,7 +2588,7 @@ p.hwc-compaction,
 }
 
 .hwc-compaction[open] .hwc-compaction-icon {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 
 /* 要約は長いが、内側でスクロールさせない。会話のスクロール 1 本で読ませる。 */
@@ -2857,6 +2864,7 @@ p.hwc-compaction,
   border-radius: var(--radius-mark);
 }
 
+/* 開閉は一覧の disclosure と同じシェブロン。軸のある矢印は場所の移動に使うので、ここでは使わない。 */
 .hwc-msg-expand-icon {
   display: grid;
   place-items: center;
@@ -2864,7 +2872,7 @@ p.hwc-compaction,
 }
 
 .hwc-msg-expand[aria-expanded="true"] .hwc-msg-expand-icon {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 
 @media (prefers-reduced-motion: reduce) {

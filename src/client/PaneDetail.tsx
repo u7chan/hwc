@@ -71,6 +71,7 @@ import { useHint } from "./hint";
 import {
   AgentGlyphIcon,
   ArrowDownIcon,
+  ChevronRightIcon,
   CloseIcon,
   CollapseIcon,
   CopyGlyph,
@@ -305,7 +306,7 @@ function UserMessage(props: {
           >
             <span>{expanded ? "閉じる" : "もっとみる"}</span>
             <span class="hwc-msg-expand-icon">
-              <ArrowDownIcon size={12} />
+              <ChevronRightIcon size={16} />
             </span>
           </button>
         ) : null}
@@ -360,7 +361,7 @@ function Compaction(props: {
           {shown}
         </span>
         <span class="hwc-compaction-icon">
-          <ArrowDownIcon size={12} />
+          <ChevronRightIcon size={16} />
         </span>
         <CompactionRule />
       </summary>
@@ -704,7 +705,8 @@ type PaneDetailProps = {
   scheme: "light" | "dark";
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
-  // 1 枚表示のときだけ渡す。分割セルは同じ PR が並ぶので、チップを引かない。
+  // スペースのブランチ。分割セルでも PR のチップを引くために渡す。
+  // 文字として出すかは showBranch と labeled が決める。
   branch: string | null;
   // 一覧が隠れる狭い画面でだけ、ブランチを名前に代えて出す。
   showBranch: boolean;
@@ -818,7 +820,7 @@ export function PaneDetail(props: PaneDetailProps) {
     pane.agent === "pi" && pane.chat && !blocked,
     pane.agentStatus,
   );
-  // 分割セルは branch が null で来る。広い画面はブランチを出さないが、PR のチップは出す。
+  // 分割セルも含め、見出しごとに引く。同じスペースのセルは同じ PR になる。
   const pullRequest = usePullRequest(context.workspaceId, branch);
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;

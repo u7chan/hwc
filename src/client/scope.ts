@@ -131,14 +131,8 @@ export function showsTabName(workspace: WorkspaceState): boolean {
   return workspace.tabs.length > 1;
 }
 
-// 未読は「完了してまだ見ていない」数だけ。開くと seen が進んで消えるので、受信箱の件数になる。
-// blocked を混ぜると意味が変わる（未読ではなく、止まっている）。
-export function activeUnreadCount(state: AppState): number {
-  return activePanes(state).filter((row) => row.pane.agentStatus === "done").length;
-}
-
 // 3 桁を超えたら数えても読めない。件数は目安で足りる。
-export function unreadLabel(count: number): string {
+export function countLabel(count: number): string {
   return count > 99 ? "99+" : String(count);
 }
 

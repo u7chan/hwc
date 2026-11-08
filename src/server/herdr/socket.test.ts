@@ -150,6 +150,71 @@ test("request rejects when the connection closes before a response", async () =>
   await expect(request("ping", {}, { path: herdr.path })).rejects.toThrow("connection closed");
 });
 
+// Bun 1.3.14 では、Bun.serve のハンドラの同期スタックで net.connect が失敗すると、'error' を
+// 握っていても未捕捉例外として報告されプロセスが落ちる（Herdr 不在時に /api/state が 502 を
+// 返した直後に BFF が落ちる）。接続の開始を次のマクロタスクへ逃がすことで避けている。
+test("a failed connect inside a fetch handler rejects without crashing the process", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hwc-missing-"));
+  const path = join(directory, "herdr.sock");
+  const server = Bun.serve({
+    port: 0,
+    async fetch() {
+      const reason = await request("ping", {}, { path }).catch((error: unknown) => error);
+      return new Response(reason instanceof Error ? "rejected" : "resolved");
+    },
+  });
+
+  try {
+    const response = await fetch(`http://localhost:${server.port}/`);
+    expect(await response.text()).toBe("rejected");
+    // 未捕捉例外として上がる場合、この待ちの間にプロセスが落ちてテストが失敗する。
+    await Bun.sleep(50);
+  } finally {
+    server.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+// マクロタスクへ逃がした接続は、同期 throw が executor を抜けると未捕捉例外になる。
+// 呼び出し元が扱える reject として返ること。
+test("request rejects when net.connect throws synchronously", async () => {
+  const error = await request("ping", {}, { path: "" }).catch((reason: unknown) => reason);
+
+  if (!(error instanceof Error)) throw new Error(`unexpected rejection: ${String(error)}`);
+  await Bun.sleep(50);
+  expect(error.message.length).toBeGreaterThan(0);
+});
+
+test("request rejects when the socket path does not exist", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "hwc-missing-"));
+  const path = join(directory, "herdr.sock");
+
+  const error = await request("ping", {}, { path }).catch((reason: unknown) => reason);
+  await rm(directory, { recursive: true, force: true });
+
+  if (!(error instanceof Error)) throw new Error(`unexpected rejection: ${String(error)}`);
+  expect(error.message).toContain(path);
+});
+
+// パスの値が不正なとき net.connect は同期 throw する。握らないと起動時の未捕捉例外になり、
+// 握っても再試行しなければ購読が復帰しない。エラーを報告しつつ再試行することを固定する。
+test("subscribe reports a synchronous connect failure and keeps retrying", async () => {
+  const errors: Error[] = [];
+  const stop = subscribe({
+    events: [{ type: "pane.updated" }],
+    path: " ",
+    reconnectDelayMs: 10,
+    onEvent: () => {},
+    onLost: () => {},
+    onError: (error) => errors.push(error),
+  });
+
+  await waitFor(() => errors.length >= 2);
+  stop();
+
+  expect(errors[0]).toBeInstanceOf(Error);
+});
+
 test("subscribe keeps the connection event-only and forwards pushed events", async () => {
   const herdr = await startFakeHerdr((message, socket) => {
     if (message.method !== "events.subscribe") return;
