@@ -1,4 +1,4 @@
-# ADR 0038: 失敗したターンは会話の error 行として出す
+# ADR 0039: 失敗したターンは会話の error 行として出す
 
 - Status: Accepted
 - Date: 2026-11-07
