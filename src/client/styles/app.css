@@ -1339,8 +1339,9 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   gap: var(--space-2);
 }
 
-/* 帯全体が「すべて」のその場所へ移る入口。中身はそのまま、上に透明なボタンを重ねる。 */
-.hwc-active-band-chevron {
+/* 帯全体が「すべて」のその場所へ移る入口。中身はそのまま、上に透明なボタンを重ねる。
+   記号は移動を表す矢印で、開閉のシェブロンと形で区別する。 */
+.hwc-active-band-jump {
   flex: none;
   display: grid;
   place-items: center;
@@ -1365,7 +1366,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 /* ポインタの画面では、押せることが分かるように名前と矢印をアクセント色にする。 */
 @media (hover: hover) {
   .hwc-active-band:hover .hwc-active-band-name,
-  .hwc-active-band:hover .hwc-active-band-chevron {
+  .hwc-active-band:hover .hwc-active-band-jump {
     color: var(--color-accent);
   }
 }

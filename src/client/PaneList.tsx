@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
 import {
   AgentGlyphIcon,
+  ArrowRightIcon,
   ChevronRightIcon,
   MoreIcon,
   PaneIcon,
@@ -182,6 +183,8 @@ function ActiveCount(props: { status: ActiveStatus; count: number }) {
 // 上端に貼り付ける。状態の件数は束全体の量で、行の右端はそのペインの時刻。
 // 場所の記号は行の親を示す目印にする。子の段はこのアイコンの中心から線でつなぐ。
 // 帯全体は「すべて」のその場所へ移る入口。中身の上に透明なボタンを重ねる。
+// その移動は矢印で示す。ツリーの行末は同じ向きのシェブロンで開閉するため、同じ記号にすると
+// どちらも「進む／開く」に見えて意味が重なる。
 function ActiveBand(props: { group: ActiveGroup; onOpen: () => void }) {
   const { workspace, counts } = props.group;
   const branch = workspace.branch ?? null;
@@ -201,8 +204,8 @@ function ActiveBand(props: { group: ActiveGroup; onOpen: () => void }) {
           <ActiveCount key={status} status={status} count={counts[status]} />
         ))}
       </div>
-      <span class="hwc-active-band-chevron" aria-hidden="true">
-        <ChevronRightIcon />
+      <span class="hwc-active-band-jump" aria-hidden="true">
+        <ArrowRightIcon />
       </span>
       <button
         type="button"
