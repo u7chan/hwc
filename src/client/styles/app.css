@@ -2578,7 +2578,7 @@ p.hwc-compaction,
   transition: max-height 220ms ease;
 }
 
-/* 添付の画像。押すと新しいタブで実寸を開く。 */
+/* 添付の画像。押すとダイアログで原寸を開く。 */
 .hwc-msg-attachments {
   display: flex;
   flex-wrap: wrap;

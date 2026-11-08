@@ -24,6 +24,7 @@ import {
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
 import { CreatePane } from "./CreatePane";
+import { ImageViewer } from "./ImageViewer";
 import { CloseIcon, HwcMark, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
 import { Menu } from "./Menu";
 import { PaneMenu } from "./PaneMenu";
@@ -300,6 +301,8 @@ export function App() {
     paneId: string;
     worktreeWorkspaceId: string | null;
   } | null>(null);
+  // 拡大中の画像。ダイアログはセルの containment の外（App 直下）に置く（ADR 0021）。
+  const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const closeInFlight = useRef(false);
@@ -811,6 +814,7 @@ export function App() {
       onOpenMenu={openPaneMenu}
       onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
       onStop={() => stopPane(item.id)}
+      onOpenImage={(url, name) => setViewer({ url, name })}
     />
   );
 
@@ -1093,6 +1097,10 @@ export function App() {
           onCreated={setPendingSelect}
           onClose={() => setCreating(null)}
         />
+      )}
+
+      {viewer === null ? null : (
+        <ImageViewer url={viewer.url} name={viewer.name} onClose={() => setViewer(null)} />
       )}
     </div>
   );

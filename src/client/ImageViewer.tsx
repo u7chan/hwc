@@ -11,7 +11,6 @@ export function ImageViewer(props: { url: string; name: string; onClose: () => v
       role="dialog"
       labelledBy={titleId}
       className="hwc-image-dialog"
-      layerClassName="hwc-image-viewer"
       onClose={props.onClose}
     >
       <div class="hwc-image-head">

@@ -76,7 +76,6 @@ import {
   StopIcon,
   TerminalIcon,
 } from "./icons";
-import { ImageViewer } from "./ImageViewer";
 import { Markdown } from "./Markdown";
 import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
@@ -710,6 +709,8 @@ type PaneDetailProps = {
   onOpenMenu: (paneId: string, trigger: HTMLElement) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
   onStop: () => Promise<boolean>;
+  // ダイアログは App 直下に 1 つだけ出す。セルの中に置くと containment の内側に閉じる。
+  onOpenImage: (url: string, name: string) => void;
 };
 
 // 名前はアップロードが終わるまで無い。controller は取り外しと離脱で送信を止めるために持つ。
@@ -736,6 +737,7 @@ export function PaneDetail(props: PaneDetailProps) {
     onOpenMenu,
     onSubmit,
     onStop,
+    onOpenImage,
   } = props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
@@ -758,8 +760,6 @@ export function PaneDetail(props: PaneDetailProps) {
   const [chip, setChip] = useState<CommandId | null>(null);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
   const nextAttachmentKey = useRef(0);
-  // 拡大中の画像は配信 URL と表示名だけを持つ。中身は同じ URL から読み直す。
-  const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
   // ファイルをドラッグしている間だけ composer を光らせる。dragenter / dragleave は
   // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
   const [dropping, setDropping] = useState(false);
@@ -1125,8 +1125,6 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
-  const openImage = (url: string, name: string) => setViewer({ url, name });
-
   const removeAttachment = (key: string) => {
     attachments.find((item) => item.key === key)?.controller.abort();
     setAttachments((items) => items.filter((item) => item.key !== key));
@@ -1501,7 +1499,7 @@ export function PaneDetail(props: PaneDetailProps) {
                     : null
                 }
                 onCopy={copy}
-                onOpenImage={openImage}
+                onOpenImage={onOpenImage}
                 pending={pendingMessages}
               />
             </>
@@ -1800,9 +1798,6 @@ export function PaneDetail(props: PaneDetailProps) {
             </div>
           </div>
         </form>
-      )}
-      {viewer === null ? null : (
-        <ImageViewer url={viewer.url} name={viewer.name} onClose={() => setViewer(null)} />
       )}
     </>
   );
