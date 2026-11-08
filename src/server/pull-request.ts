@@ -27,6 +27,9 @@ export function createPullRequestReader(
   const missingTtlMs = options.missingTtlMs ?? PULL_REQUEST_MISSING_TTL_MS;
   const now = options.now ?? Date.now;
   const cache = new Map<string, { pullRequest: PullRequest | null; at: number; ttlMs: number }>();
+  // 分割セルは同じスペースの PR を同時に引く。進行中の問い合わせを共有し、gh の起動を
+  // セル数ぶん増やさない。
+  const inFlight = new Map<string, Promise<PullRequest | null>>();
 
   return async ({ checkoutPath, branch, refresh = false }) => {
     // ブランチ切り替えのイベントは無いので、ブランチ名を鍵に含めて読み直す。
@@ -35,21 +38,32 @@ export function createPullRequestReader(
     if (!refresh) {
       const hit = cache.get(key);
       if (hit !== undefined && at - hit.at < hit.ttlMs) return hit.pullRequest;
+      const pending = inFlight.get(key);
+      if (pending !== undefined) return pending;
     }
 
-    let pullRequest: PullRequest | null = null;
+    const lookup = (async () => {
+      let pullRequest: PullRequest | null = null;
+      try {
+        pullRequest = parsePullRequestList(await run(checkoutPath, branch));
+      } catch {
+        // gh が無い・未認証・オフライン・期限切れは、PR が無い場合と同じ扱いにする。
+        // 表示はどちらもチップ無しなので、区別しても利用者に伝えることがない。
+      }
+      cache.set(key, {
+        pullRequest,
+        at,
+        ttlMs: pullRequest === null ? missingTtlMs : ttlMs,
+      });
+      return pullRequest;
+    })();
+
+    inFlight.set(key, lookup);
     try {
-      pullRequest = parsePullRequestList(await run(checkoutPath, branch));
-    } catch {
-      // gh が無い・未認証・オフライン・期限切れは、PR が無い場合と同じ扱いにする。
-      // 表示はどちらもチップ無しなので、区別しても利用者に伝えることがない。
+      return await lookup;
+    } finally {
+      if (inFlight.get(key) === lookup) inFlight.delete(key);
     }
-    cache.set(key, {
-      pullRequest,
-      at,
-      ttlMs: pullRequest === null ? missingTtlMs : ttlMs,
-    });
-    return pullRequest;
   };
 }
 

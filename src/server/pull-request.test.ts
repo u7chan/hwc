@@ -44,6 +44,22 @@ test("a pull request is reused until its TTL passes", async () => {
   expect(calls).toHaveLength(2);
 });
 
+test("concurrent lookups for the same branch share one gh run", async () => {
+  let resolve: (value: unknown) => void = () => {};
+  const pending = new Promise<unknown>((done) => {
+    resolve = done;
+  });
+  const { read, calls } = reader(() => pending);
+
+  const first = read({ checkoutPath: "/work/acme", branch: "feat/x" });
+  const second = read({ checkoutPath: "/work/acme", branch: "feat/x" });
+  expect(calls).toHaveLength(1);
+
+  resolve([pullRequest]);
+  expect(await Promise.all([first, second])).toEqual([pullRequest, pullRequest]);
+  expect(calls).toHaveLength(1);
+});
+
 test("a missing pull request is remembered longer than a found one", async () => {
   let now = 0;
   const { read, calls } = reader(async () => [], { now: () => now });
