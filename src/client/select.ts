@@ -122,8 +122,9 @@ function titleText(title: string | null): string | null {
 
 // 一覧・タブ・見出しで同じ名前を出す。label は Herdr で付けた作業名、title は端末のタイトル。
 // 端末タイトルは同じリポジトリのペインで同じ値になるので、ラベルがあればそちらを主にする。
+// エージェントのいないペインはシェル。ID は詳細ヘッダと読み上げに任せ、名前には出さない。
 export function paneName(pane: PaneState): string {
-  return pane.label ?? titleText(pane.title) ?? pane.agent ?? pane.id;
+  return pane.label ?? titleText(pane.title) ?? pane.agent ?? "シェル";
 }
 
 // 一覧の 1 段目はペイン名。端末タイトルは同じリポジトリで同じ値になるので、
