@@ -1628,6 +1628,15 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   animation: hwc-bars-fade 0.75s linear infinite;
 }
 
+/* 送信中の回転は、止めると送信が止まったように見える。ダイアログのスピナー
+   （.hwc-spinner）と同じく遅くして動きの量を減らす。一覧の状態記号は StatusIcon が
+   静止した記号に差し替えるので、ここでは扱わない。 */
+@media (prefers-reduced-motion: reduce) {
+  .hwc-arc {
+    animation-duration: 2s;
+  }
+}
+
 /* 詳細 */
 
 .hwc-detail-inner {
@@ -2347,6 +2356,12 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   border-radius: var(--radius-sm);
   background: var(--color-raised);
   animation: hwc-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-skeleton-line {
+    animation: none;
+  }
 }
 
 .hwc-output {
