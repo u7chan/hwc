@@ -13,6 +13,8 @@ import {
   contextText,
   contextTone,
   chatRows,
+  compactionInsertIndex,
+  echoInsertIndex,
   formatTokens,
   idleEchoExpired,
   isAbortError,
@@ -459,4 +461,54 @@ test("an anchor past the loaded messages falls back to the end", () => {
   const messages: ChatMessage[] = [{ id: "u1", role: "user", text: "first", at: 100 }];
   const command: PendingMessage = { ...pending, id: "c1", command: true, after: 9 };
   expect(chatRows(messages, [command]).map((row) => row.message.id)).toEqual(["u1", "c1"]);
+});
+
+test("the compaction line sits at its message boundary", () => {
+  const messages: ChatMessage[] = [
+    { id: "u1", role: "user", text: "first", at: 100 },
+    { id: "u2", role: "user", text: "second", at: 200 },
+  ];
+  expect(compactionInsertIndex([], null)).toBeNull();
+  expect(compactionInsertIndex(chatRows(messages, []), 1)).toBe(1);
+  // 末尾の圧縮は送信中の echo より前。
+  const tail: PendingMessage = { ...pending, id: "p1" };
+  expect(compactionInsertIndex(chatRows(messages, [tail]), 2)).toBe(2);
+  // 同じ境界のコマンドの控えは、圧縮より前。
+  const command: PendingMessage = {
+    ...pending,
+    id: "c1",
+    command: true,
+    waiting: false,
+    after: 2,
+  };
+  expect(compactionInsertIndex(chatRows(messages, [command, tail]), 2)).toBe(3);
+});
+
+test("a running compaction echo stays after the messages and before later echoes", () => {
+  const messages: ChatMessage[] = [
+    { id: "u1", role: "user", text: "first", at: 100 },
+    { id: "a1", role: "agent", text: "reply", at: 200 },
+  ];
+  const command: PendingMessage = {
+    ...pending,
+    id: "c1",
+    command: true,
+    waiting: false,
+    after: 2,
+    at: 250,
+  };
+  const later: PendingMessage = { ...pending, id: "p1", waiting: false, at: 400 };
+  const rows = chatRows(messages, [command, later]);
+  expect(echoInsertIndex(rows, 300)).toBe(3);
+  expect(echoInsertIndex(rows, 500)).toBe(rows.length);
+  // メッセージの前に差し込まれたコマンドの控えより後ろに置く。
+  const anchored: PendingMessage = {
+    ...pending,
+    id: "c2",
+    command: true,
+    waiting: false,
+    after: 1,
+    at: 50,
+  };
+  expect(echoInsertIndex(chatRows(messages, [anchored]), 10)).toBe(3);
 });

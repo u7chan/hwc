@@ -32,6 +32,8 @@ import {
   contextMeter,
   type ContextMeterView,
   chatRows,
+  compactionInsertIndex,
+  echoInsertIndex,
   idleEchoExpired,
   isPendingConfirmed,
   latestUserAt,
@@ -459,20 +461,9 @@ function ChatLog(props: {
     echoVisible && echo !== null ? <CommandEcho text={echo.text} at={echo.at} /> : null;
   // 実行中はメッセージの末尾（後から送った echo より前）、完了後は compaction の
   // 区切りの直前に置く。
-  const echoIndex = (() => {
-    if (!echoPending || echo === null) return null;
-    const messageEnd = rows.reduce((end, row, index) => (row.echo === "none" ? index + 1 : end), 0);
-    const later = rows.findIndex((row) => row.echo !== "none" && row.message.at > echo.at);
-    return later === -1 ? rows.length : Math.max(messageEnd, later);
-  })();
+  const echoIndex = echoPending && echo !== null ? echoInsertIndex(rows, echo.at) : null;
   // 圧縮の区切りはメッセージ境界に置く。同じ境界のコマンドの控えは、その手前に残す。
-  const compactionIndex = (() => {
-    if (compactionAt === null) return null;
-    const next = rows.findIndex((row) => row.echo === "none" && row.seen > compactionAt);
-    if (next !== -1) return next;
-    const tail = rows.findIndex((row) => row.echo === "pending");
-    return tail === -1 ? rows.length : tail;
-  })();
+  const compactionIndex = compactionInsertIndex(rows, compactionAt);
   const compactionBlock =
     compactionRow === null ? null : (
       <>

@@ -184,6 +184,26 @@ export function chatRows(
   return rows;
 }
 
+// 圧縮の区切りはメッセージ境界に置く。同じ境界のコマンド控えは、圧縮より前に送ったものとして
+// その手前に残す。末尾の送信中 echo より前を既定にする。
+export function compactionInsertIndex(
+  rows: readonly ChatRow[],
+  compactionAt: number | null,
+): number | null {
+  if (compactionAt === null) return null;
+  const next = rows.findIndex((row) => row.echo === "none" && row.seen > compactionAt);
+  if (next !== -1) return next;
+  const tail = rows.findIndex((row) => row.echo === "pending");
+  return tail === -1 ? rows.length : tail;
+}
+
+// 実行中の圧縮の控えは、メッセージの末尾（後から送ったローカル echo より前）に置く。
+export function echoInsertIndex(rows: readonly ChatRow[], echoAt: number): number {
+  const messageEnd = rows.reduce((end, row, index) => (row.echo === "none" ? index + 1 : end), 0);
+  const later = rows.findIndex((row) => row.echo !== "none" && row.message.at > echoAt);
+  return later === -1 ? rows.length : Math.max(messageEnd, later);
+}
+
 export type AgentInfo = { model: string | null; effort: string | null };
 
 // どちらも無ければ札を出さない。片方だけ分かるならそれだけ出す。
