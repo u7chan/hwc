@@ -8,7 +8,7 @@ import {
   isPaneNotFound,
   parseInputBody,
   parseOutputQuery,
-  parsePaneProcess,
+  parseProcessInfo,
   parseSplitBody,
 } from "./panes";
 
@@ -723,6 +723,7 @@ test("process reads the pane and reports the deepest command", async () => {
   expect(await client.process({ paneId: "w1:p2" })).toEqual({
     running: true,
     command: "bun --watch src/server.ts",
+    ports: [],
   });
   expect(calls).toEqual([
     {
@@ -735,7 +736,7 @@ test("process reads the pane and reports the deepest command", async () => {
 
 test("a pane whose foreground group is the shell is idle", () => {
   expect(
-    parsePaneProcess(
+    parseProcessInfo(
       {
         type: "pane_process_info",
         process_info: {
@@ -747,12 +748,12 @@ test("a pane whose foreground group is the shell is idle", () => {
       },
       "w1:p2",
     ),
-  ).toEqual({ running: false, command: null });
+  ).toEqual({ process: { running: false, command: null, ports: [] }, pids: [] });
 });
 
 test("a foreground group without a readable command still counts as running", () => {
   expect(
-    parsePaneProcess(
+    parseProcessInfo(
       {
         type: "pane_process_info",
         process_info: {
@@ -764,7 +765,7 @@ test("a foreground group without a readable command still counts as running", ()
       },
       "w1:p2",
     ),
-  ).toEqual({ running: true, command: null });
+  ).toEqual({ process: { running: true, command: null, ports: [] }, pids: [] });
 });
 
 test("process info for another pane or a malformed reply is ignored", () => {
@@ -778,17 +779,15 @@ test("process info for another pane or a malformed reply is ignored", () => {
     },
   });
 
-  expect(parsePaneProcess(reply("w1:p3"), "w1:p2")).toEqual({ running: false, command: null });
-  expect(parsePaneProcess({ type: "pane_read" }, "w1:p2")).toEqual({
-    running: false,
-    command: null,
-  });
-  expect(parsePaneProcess(null, "w1:p2")).toEqual({ running: false, command: null });
+  const idle = { process: { running: false, command: null, ports: [] }, pids: [] };
+  expect(parseProcessInfo(reply("w1:p3"), "w1:p2")).toEqual(idle);
+  expect(parseProcessInfo({ type: "pane_read" }, "w1:p2")).toEqual(idle);
+  expect(parseProcessInfo(null, "w1:p2")).toEqual(idle);
 });
 
 test("a long command line is cut before it reaches the tab", () => {
   const command = `bun ${"x".repeat(400)}`;
-  const parsed = parsePaneProcess(
+  const parsed = parseProcessInfo(
     {
       type: "pane_process_info",
       process_info: {
@@ -801,5 +800,5 @@ test("a long command line is cut before it reaches the tab", () => {
     "w1:p2",
   );
 
-  expect(parsed.command).toHaveLength(200);
+  expect(parsed.process.command).toHaveLength(200);
 });

@@ -8,7 +8,8 @@ export type Scenario = {
   snapshot: HerdrSnapshot;
   outputs: Record<string, string>;
   // ペインで動いている前景コマンド。指定の無いシェルはプロンプトで待っている。
-  foreground: Record<string, string>;
+  // listen が true のコマンドは、架空 Herdr が実プロセスとして待ち受けさせる。
+  foreground: Record<string, { cmdline: string; listen: boolean }>;
 };
 
 export type CodexFixture = {
@@ -378,8 +379,9 @@ export async function createScenario(root: string): Promise<Scenario> {
   return {
     snapshot,
     foreground: {
-      // シェルで開発サーバーが動いているペイン。タブ名がコマンドに変わり、停止ボタンが出る。
-      "w1:p2": "bun --watch src/server.ts",
+      // シェルで開発サーバーが動いているペイン。タブ名がコマンドとポートに変わり、
+      // 停止ボタンが出る。
+      "w1:p2": { cmdline: "bun --watch src/server.ts", listen: true },
     },
     outputs: {
       ...outputs,

@@ -16,10 +16,15 @@ export function processPollAllowed(visibility: DocumentVisibilityState): boolean
 
 // タブの見出しは、シェルでコマンドが動いている間だけコマンドにする。止まれば元の名前に
 // 戻るので、手で付けた名前は失われない。エージェントのペインはエージェント名のまま。
+// 待ち受けポートが分かれば「bun 30000」のように添える。Web のサーバーかどうかは、
+// ポートが出ているかで見分ける。
 export function paneTabName(pane: PaneState, process: PaneProcess | null): string {
   const name = paneName(pane);
   if (pane.agent !== null || process === null || !process.running) return name;
-  return process.command === null ? name : commandName(process.command);
+  if (process.command === null) return name;
+  const program = commandName(process.command);
+  const port = process.ports[0];
+  return port === undefined ? program : `${program} ${port}`;
 }
 
 // タブに出すのはプログラム名だけ。コマンド行全体はタブ 1 つで画面幅を埋め、隣のペインを

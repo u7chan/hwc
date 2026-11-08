@@ -197,7 +197,7 @@ function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient {
     focus: async () => {},
     stop: async () => {},
     interrupt: async () => {},
-    process: async () => ({ running: false, command: null }),
+    process: async () => ({ running: false, command: null, ports: [] }),
     clear: async () => {},
     confirmFolderTrust: async () => {},
     close: async () => {},
@@ -1133,14 +1133,18 @@ test("POST /api/panes/:id/stop does not send Escape to a pane that is not workin
 test("GET /api/panes/:id/process returns the foreground command", async () => {
   const { app } = createTestApp({
     panes: {
-      process: async ({ paneId }) => ({ running: true, command: `bun --watch ${paneId}` }),
+      process: async ({ paneId }) => ({
+        running: true,
+        command: `bun --watch ${paneId}`,
+        ports: [3000],
+      }),
     },
   });
   const response = await app.request("/api/panes/w1:p1/process");
 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({
-    process: { running: true, command: "bun --watch w1:p1" },
+    process: { running: true, command: "bun --watch w1:p1", ports: [3000] },
   });
 });
 
@@ -1171,7 +1175,7 @@ test("POST /api/panes/:id/stop sends Ctrl+C to a shell that is running something
   const escaped: unknown[] = [];
   const { app } = createTestApp({
     panes: {
-      process: async () => ({ running: true, command: "bun --watch src/server.ts" }),
+      process: async () => ({ running: true, command: "bun --watch src/server.ts", ports: [3000] }),
       interrupt: async (options) => {
         interrupted.push(options);
       },
@@ -1195,7 +1199,7 @@ test("POST /api/panes/:id/stop leaves a shell at a prompt alone", async () => {
   const interrupted: unknown[] = [];
   const { app } = createTestApp({
     panes: {
-      process: async () => ({ running: false, command: null }),
+      process: async () => ({ running: false, command: null, ports: [] }),
       interrupt: async (options) => {
         interrupted.push(options);
       },

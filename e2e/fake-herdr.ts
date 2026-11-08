@@ -38,6 +38,9 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   const outputs = new Map(Object.entries(scenario.outputs));
   // シェルの前景コマンド。C-c で消え、プロンプトに戻る。
   const foreground = new Map(Object.entries(scenario.foreground));
+  // 待ち受けるコマンドは実プロセスで動かす。pid とポートが本物になるので、BFF の
+  // /proc 経由のポート検出を E2E でもそのまま通せる。
+  const listeners = new Map<string, { child: Bun.Subprocess; port: number }>();
   const revisions = new Map<string, number>();
   // 実 pi は最初の user / assistant メッセージまでセッション JSONL を書かない（SessionManager の
   // _hasConversation ガード）。起動直後に会話からモデルを読めない状態を E2E でも再現する。
@@ -65,10 +68,48 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   // エージェントのペインは、実 Herdr と同じく前景グループがシェルと別になる。
   // シェルのペインは、何か動いていると fixture で指定したときだけ別グループになる。
   const foregroundJob = (paneId: string): { pid: number; name: string; cmdline: string } | null => {
-    const cmdline = foreground.get(paneId);
-    if (cmdline !== undefined) return { pid: 200, name: cmdline.split(" ")[0] ?? cmdline, cmdline };
+    const job = foreground.get(paneId);
+    if (job !== undefined) {
+      const listener = listeners.get(paneId);
+      return {
+        pid: listener?.child.pid ?? 200,
+        name: job.cmdline.split(" ")[0] ?? job.cmdline,
+        cmdline: job.cmdline,
+      };
+    }
     const agent = snapshot.agents?.find((item) => item.pane_id === paneId)?.agent;
     return agent ? { pid: 200, name: agent, cmdline: agent } : null;
+  };
+
+  const stopListener = (paneId: string) => {
+    const listener = listeners.get(paneId);
+    if (listener === undefined) return;
+    listeners.delete(paneId);
+    listener.child.kill("SIGINT");
+  };
+
+  const startListener = async (paneId: string) => {
+    const child = Bun.spawn([process.execPath, join(import.meta.dir, "fake-listen.ts")], {
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    listeners.set(paneId, { child, port: await readPort(child.stdout) });
+  };
+
+  const readPort = async (stream: ReadableStream<Uint8Array>): Promise<number> => {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error("fake listener exited before it reported a port");
+      buffer += decoder.decode(value, { stream: true });
+      const match = /port:(\d+)/.exec(buffer);
+      if (match?.[1] !== undefined) {
+        reader.releaseLock();
+        return Number(match[1]);
+      }
+    }
   };
 
   // 最初の user メッセージでセッションを作る。実 pi と同じく、起動時の model_change と
@@ -694,6 +735,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         }
         // シェルの C-c は前景プロセスを止める。端末にも送ったキーを残す。
         if (keys.some((key) => key === "C-c")) {
+          stopListener(paneId);
           foreground.delete(paneId);
           outputs.set(paneId, `${outputs.get(paneId) ?? ""}^C\n`);
           revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
@@ -976,12 +1018,18 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     server.listen(socketPath, () => resolve());
   });
 
+  for (const [paneId, job] of foreground) {
+    if (job.listen) await startListener(paneId);
+  }
+
   return {
     socketPath,
     root,
     close: async () => {
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
+      for (const listener of listeners.values()) listener.child.kill("SIGINT");
+      listeners.clear();
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       opencode.close();
