@@ -1,5 +1,6 @@
 import type { TargetedFocusEvent, TargetedMouseEvent, TargetedPointerEvent } from "preact";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { isKeyboardInput } from "./focus";
 import { isCopyShim } from "./copy";
 
 // 開いた理由。触れて開いたものは指が離れると閉じ、押して開いたものは外側を押すまで残す。
@@ -115,8 +116,8 @@ export function useHint() {
       },
     },
     triggerProps: {
-      onFocus: (event: TargetedFocusEvent<HTMLElement>) => {
-        if (event.currentTarget.matches(":focus-visible")) setOpen((current) => current ?? "hover");
+      onFocus: () => {
+        if (isKeyboardInput()) setOpen((current) => current ?? "hover");
       },
       onBlur: (event: TargetedFocusEvent<HTMLElement>) => {
         if (event.relatedTarget !== null) {
