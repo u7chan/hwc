@@ -163,6 +163,16 @@ export function activeRowName(workspaceLabel: string, name: string): string {
   return name;
 }
 
+// メニューに出すときは末尾を残す。パスは末尾で場所を見分けるので、先頭を削る。
+// コピーする値は省略しない。
+export function shortenPath(path: string, max = 36): string {
+  const chars = Array.from(path);
+  if (chars.length <= max) return path;
+  const tail = chars.slice(-(max - 1)).join("");
+  const boundary = tail.indexOf("/");
+  return `…${boundary < 0 ? tail : tail.slice(boundary)}`;
+}
+
 export type StatusTone = "active" | "attention" | "success" | "neutral";
 
 export function statusTone(status: AgentStatus): StatusTone {
