@@ -11,7 +11,7 @@ import type {
 import type { PaneState } from "../server/herdr/state";
 import type { GitSync } from "../shared/git";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
-import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
+import { activityLabel, activitySnippet, formatTokPerSecond, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
 import { OutputText } from "./OutputText";
 import { isLayoutShift, isNearBottom } from "./scroll";
@@ -544,8 +544,11 @@ function LiveStatus(props: {
   stopping: boolean;
   // 低いセルでは会話の高さを優先する。thinking を出さず、段階と経過だけにする。
   showThought: boolean;
+  // 生成中だけ入る。低いセルでは親が null にする。
+  tokPerSecond: number | null;
   onCancelCompaction: () => void;
 }) {
+  const tok = props.tokPerSecond === null ? null : formatTokPerSecond(props.tokPerSecond);
   return (
     // pi 以外や sidecar の無いペインでは、中身が経過時間だけになる。状態名を
     // 支援技術へも渡すため、名前は帯に持たせる。
@@ -573,6 +576,7 @@ function LiveStatus(props: {
               {props.stopping ? "中断中" : "中断"}
             </button>
           ) : null}
+          {tok === null ? null : <span class="hwc-live-tok">{tok} tok/s</span>}
           {props.elapsedMs === null ? null : (
             <span class="hwc-live-elapsed">{formatElapsed(props.elapsedMs)}</span>
           )}
@@ -1457,6 +1461,9 @@ export function PaneDetail(props: PaneDetailProps) {
   // 圧縮中は hwc のローカル表示が正。拡張の段階と重ねない。
   const livePhase = compacting || activity === null ? null : activityLabel(activity);
   const liveThought = compacting || activity === null ? "" : activitySnippet(activity.text);
+  // 低いセルは ADR 0035 のとおり段階と経過時間だけにする。速度は通常セルでだけ出す。
+  const liveTokPerSecond =
+    compacting || compact || activity === null ? null : activity.tokPerSecond;
 
   return (
     <>
@@ -1641,6 +1648,7 @@ export function PaneDetail(props: PaneDetailProps) {
           compacting={compacting}
           stopping={stopping}
           showThought={!compact}
+          tokPerSecond={liveTokPerSecond}
           onCancelCompaction={() => void cancelCompaction()}
         />
       ) : null}

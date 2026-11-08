@@ -3263,6 +3263,16 @@ p.hwc-compaction,
   font-variant-numeric: tabular-nums;
 }
 
+/* 生成速度。経過時間の左に置き、速度の有無で右端の時間を押し出さない。 */
+.hwc-live-tok {
+  flex: none;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* thinking は 2 行分の高さを先に確保する。差分のたびに高さが変わると、上に載る
    会話の見える範囲が動く。中身は下端に寄せ、折り返しであふれた上側を切って
    新しい方だけを見せる（切れる位置は行の境界なので、文字は欠けない）。 */

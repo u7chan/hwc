@@ -304,6 +304,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         at: Date.now(),
         phase: "thinking",
         text: "E2E: 依頼の手順を組み立てています。長い行は折り返して 2 行に収まり、あふれた上側は切り取られます。\n次に bash で確認します。",
+        tokPerSecond: 42.3,
       });
     }, 1_200);
     later(async () => {

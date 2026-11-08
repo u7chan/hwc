@@ -20,7 +20,13 @@ test("reads the sidecar next to the session file", async () => {
   const session = join(root, "2026-01-01T09-00-00-000Z_abc.jsonl");
   await writeFile(
     activityPath(session),
-    JSON.stringify({ v: 1, at: now, phase: "thinking", text: "手順を考えています" }),
+    JSON.stringify({
+      v: 1,
+      at: now,
+      phase: "thinking",
+      text: "手順を考えています",
+      tokPerSecond: 42.3,
+    }),
   );
 
   expect(activityPath(session)).toBe(`${session}.thinking.json`);
@@ -29,6 +35,7 @@ test("reads the sidecar next to the session file", async () => {
     text: "手順を考えています",
     tool: null,
     tools: 1,
+    tokPerSecond: 42.3,
     at: now,
   });
 });

@@ -20,6 +20,8 @@ export type PaneActivity = {
   // tool のときだけ、最後に開始した実行中ツール。
   tool: string | null;
   tools: number;
+  // 生成中の phase だけ、差分から推定した tok/s。測定できないときは null。
+  tokPerSecond: number | null;
   at: number;
 };
 
@@ -28,8 +30,17 @@ export const ACTIVITY_TEXT_LIMIT = 1_200;
 // 残骸を弾くだけの緩い上限にする。
 export const ACTIVITY_MAX_AGE_MS = 30 * 60 * 1_000;
 
+// 生成中の phase だけ速度を持つ。tool 実行中に前の応答の速度を残すと、tool の速度に見える。
+export const ACTIVITY_RATE_PHASES = ["thinking", "writing", "tool-call"] as const;
+// 文字数推定でも数千 tok/s を超えることはない。壊れた writer の値で行を壊さないための上限。
+export const ACTIVITY_TOK_PER_SECOND_LIMIT = 10_000;
+
 const TOOL_NAME_LIMIT = 64;
 const TOOLS_LIMIT = 99;
+
+function isRatePhase(phase: LivePhase): boolean {
+  return (ACTIVITY_RATE_PHASES as readonly LivePhase[]).includes(phase);
+}
 
 export function isLivePhase(value: unknown): value is LivePhase {
   return typeof value === "string" && (LIVE_PHASES as readonly string[]).includes(value);
@@ -62,7 +73,14 @@ function normalizeActivity(value: unknown, now: number): PaneActivity | null {
     record.phase === "tool" && typeof record.tools === "number" && Number.isFinite(record.tools)
       ? Math.min(Math.max(Math.trunc(record.tools), 1), TOOLS_LIMIT)
       : 1;
-  return { phase: record.phase, text, tool, tools, at: record.at };
+  const tokPerSecond =
+    isRatePhase(record.phase) &&
+    typeof record.tokPerSecond === "number" &&
+    Number.isFinite(record.tokPerSecond) &&
+    record.tokPerSecond > 0
+      ? Math.min(record.tokPerSecond, ACTIVITY_TOK_PER_SECOND_LIMIT)
+      : null;
+  return { phase: record.phase, text, tool, tools, tokPerSecond, at: record.at };
 }
 
 // sidecar の本文。拡張の形式（v）まで確かめる。

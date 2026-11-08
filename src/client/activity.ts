@@ -48,6 +48,12 @@ export function selectActivity(
   return enabled && entry !== null && entry.paneId === paneId ? entry.activity : null;
 }
 
+// TUI の tok-rate と同じ桁感にする。100 以上は整数、それ未満は小数 1 桁。
+export function formatTokPerSecond(tokPerSecond: number): string | null {
+  if (!Number.isFinite(tokPerSecond) || tokPerSecond <= 0) return null;
+  return tokPerSecond >= 100 ? String(Math.round(tokPerSecond)) : tokPerSecond.toFixed(1);
+}
+
 // 何をしているかを短く言う。tool-call は引数の生成中で一瞬しか続かないため、ラベルを出さない。
 export function activityLabel(activity: PaneActivity): string | null {
   switch (activity.phase) {
