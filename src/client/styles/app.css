@@ -293,9 +293,14 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-top: var(--space-2);
   padding-bottom: var(--space-6);
   overscroll-behavior: contain;
+}
+
+/* 上は中身側で取る。枠に padding-top を置くと、帯を貼り付けたときに上端まで届かず、
+   その隙間に後ろの行が覗く。 */
+.hwc-list-body {
+  padding-top: var(--space-2);
 }
 
 /* 出すスペースの切り替え。タブではなく絞り込みなので、下線ではなく面で示す。 */
@@ -383,8 +388,8 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   line-height: var(--line-body);
 }
 
-/* 空状態をスクロール枠の内側に置いたぶん、枠の上余白を打ち消して従来の位置に揃える。 */
-.hwc-list-scroll > .hwc-list-note {
+/* 空状態を中身の内側に置いたぶん、中身の上余白を打ち消して従来の位置に揃える。 */
+.hwc-list-body > .hwc-list-note {
   margin-top: calc(var(--space-2) * -1);
 }
 
