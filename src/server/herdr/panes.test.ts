@@ -33,7 +33,7 @@ const paneReadReply = {
     text: "hello\n",
     truncated: true,
     revision: 12,
-    format: "text",
+    format: "ansi",
     source: "recent",
   },
 };
@@ -47,7 +47,7 @@ test("read maps the request to pane.read and returns the output", async () => {
   expect(calls).toEqual([
     {
       method: "pane.read",
-      params: { pane_id: "w1:p1", source: "recent", lines: 40, format: "text" },
+      params: { pane_id: "w1:p1", source: "recent", lines: 40, format: "ansi", strip_ansi: false },
       options: { path: "/tmp/test.sock" },
     },
   ]);
@@ -60,7 +60,12 @@ test("read omits lines when the request does not set one", async () => {
 
   await client.read({ paneId: "w1:p1", source: "visible" });
 
-  expect(calls[0]?.params).toEqual({ pane_id: "w1:p1", source: "visible", format: "text" });
+  expect(calls[0]?.params).toEqual({
+    pane_id: "w1:p1",
+    source: "visible",
+    format: "ansi",
+    strip_ansi: false,
+  });
 });
 
 test("read fails when Herdr answers with something else than a pane read", async () => {

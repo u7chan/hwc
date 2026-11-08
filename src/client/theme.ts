@@ -154,6 +154,13 @@ export function resolveTheme(preference: ThemePreference, systemPrefersDark: boo
   return systemPrefersDark ? "dark" : "light";
 }
 
+const THEME_SCHEMES = new Map(THEMES.map((theme) => [theme.id, theme.scheme] as const));
+
+// 端末出力の ANSI 色は、地色に合わせて明暗を切り替える（ADR 0046）。
+export function themeScheme(id: ThemeId): "light" | "dark" {
+  return THEME_SCHEMES.get(id) ?? "light";
+}
+
 type StorageLike = { getItem: (key: string) => string | null };
 
 export function loadThemePreference(storage: StorageLike | null): ThemePreference {

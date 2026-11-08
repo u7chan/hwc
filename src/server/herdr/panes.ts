@@ -305,7 +305,13 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
     async read({ paneId, source, lines }) {
       const result = await call<unknown>(
         "pane.read",
-        { pane_id: paneId, source, format: "text", ...(lines === undefined ? {} : { lines }) },
+        {
+          pane_id: paneId,
+          source,
+          format: "ansi",
+          strip_ansi: false,
+          ...(lines === undefined ? {} : { lines }),
+        },
         { path },
       );
       return parsePaneRead(result, paneId);

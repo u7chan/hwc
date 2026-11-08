@@ -2357,6 +2357,17 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   tab-size: 2;
 }
 
+/* 端末の色を残すため、リンクは色を変えず下線だけで示す。 */
+.hwc-output a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hwc-output a:hover {
+  text-decoration-thickness: 2px;
+}
+
 /* 会話。ユーザーは右、エージェントは左に置いて、誰の発話かを行の寄せで示す。 */
 .hwc-chat {
   display: flex;

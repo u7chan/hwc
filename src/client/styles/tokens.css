@@ -41,6 +41,25 @@
   --color-danger: #b3333c;
   --color-agent-claude: #c15f3c;
 
+  /* 端末出力の ANSI 8/16 色。明るい地では、暗い地を前提にした端末の値をそのまま
+     使うと読めないため、地色に合わせた値にする。並びは SGR 30-37 / 90-97。 */
+  --ansi-0: #5d6878;
+  --ansi-1: #b3333c;
+  --ansi-2: #216549;
+  --ansi-3: #8a5a00;
+  --ansi-4: #255cd6;
+  --ansi-5: #8b2f98;
+  --ansi-6: #0b6b7c;
+  --ansi-7: #18212f;
+  --ansi-8: #7a8494;
+  --ansi-9: #c4454d;
+  --ansi-10: #2c7a55;
+  --ansi-11: #a06c00;
+  --ansi-12: #3b6fe0;
+  --ansi-13: #a542b0;
+  --ansi-14: #0f7f92;
+  --ansi-15: #101215;
+
   /* UI は同梱の Noto Sans JP。読み込めない環境では OS 標準へ落とす。 */
   --font-ui:
     "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI",
@@ -479,6 +498,25 @@
   --color-neutral-bg: #0f4553;
   --color-danger: #dc322f;
   --color-agent-claude: #cb4b16;
+}
+
+:root[data-scheme="dark"] {
+  --ansi-0: #5c6370;
+  --ansi-1: #ff7b86;
+  --ansi-2: #98c379;
+  --ansi-3: #e5c07b;
+  --ansi-4: #61afef;
+  --ansi-5: #c678dd;
+  --ansi-6: #56b6c2;
+  --ansi-7: #d7dae0;
+  --ansi-8: #8b93a1;
+  --ansi-9: #ff8f98;
+  --ansi-10: #a9d68d;
+  --ansi-11: #f0d090;
+  --ansi-12: #7cc0ff;
+  --ansi-13: #d98fe8;
+  --ansi-14: #6fcbd6;
+  --ansi-15: #ffffff;
 }
 
 @media (min-width: 900px) {
