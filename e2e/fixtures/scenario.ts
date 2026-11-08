@@ -2,7 +2,7 @@ import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HerdrSnapshot } from "../../src/server/herdr/contract";
-import { FOLDER_TRUST_SCREEN } from "./folder-trust";
+import { FOLDER_TRUST_SCREEN, PI_TRUST_SCREEN } from "./folder-trust";
 
 export type Scenario = {
   snapshot: HerdrSnapshot;
@@ -307,6 +307,18 @@ export async function createScenario(root: string): Promise<Scenario> {
         focused: false,
         agent_session: null,
       },
+      {
+        pane_id: "w3:p5",
+        workspace_id: "w3",
+        tab_id: "w3:t1",
+        cwd: scratch,
+        label: "pi-trust",
+        // 実 Herdr は pi の信頼確認を blocked として検出しない。会話が無いペインでも
+        // 画面から確認を見つけられることを、この状態で確かめる。
+        agent_status: "idle",
+        focused: false,
+        agent_session: null,
+      },
     ],
     agents: [
       {
@@ -351,6 +363,13 @@ export async function createScenario(root: string): Promise<Scenario> {
         agent: "codex",
         terminal_title_stripped: "scratch",
       })),
+      {
+        pane_id: "w3:p5",
+        workspace_id: "w3",
+        cwd: scratch,
+        agent: "pi",
+        terminal_title_stripped: "scratch",
+      },
     ],
   };
 
@@ -362,6 +381,7 @@ export async function createScenario(root: string): Promise<Scenario> {
       "w3:p2": FOLDER_TRUST_SCREEN,
       "w3:p3": FOLDER_TRUST_SCREEN,
       "w3:p4": "› Ask Codex to do anything\n",
+      "w3:p5": PI_TRUST_SCREEN,
     },
   };
 }

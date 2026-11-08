@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { FOLDER_TRUST_SCREEN } from "../../e2e/fixtures/folder-trust";
+import { FOLDER_TRUST_SCREEN, PI_TRUST_SCREEN } from "../../e2e/fixtures/folder-trust";
 import { createFolderTrust, parseFolderTrust } from "./folder-trust";
 import type { PaneClient } from "./herdr/panes";
 import type { PaneState } from "./herdr/state";
@@ -14,8 +14,12 @@ const pane: PaneState = {
   chat: false,
 };
 
+const piPane: PaneState = { ...pane, agent: "pi" };
+
 test("the complete Codex folder disclosure identifies the directory being trusted", () => {
-  expect(parseFolderTrust(FOLDER_TRUST_SCREEN)).toEqual({ directory: "/workspace/acme-dashboard" });
+  expect(parseFolderTrust("codex", FOLDER_TRUST_SCREEN)).toEqual({
+    directory: "/workspace/acme-dashboard",
+  });
 });
 
 test.each([
@@ -25,6 +29,7 @@ test.each([
 ])("the %s variant still requires Trust and continue to be selected", (cancel, footer) => {
   expect(
     parseFolderTrust(
+      "codex",
       FOLDER_TRUST_SCREEN.replace("Back to Agent Command Center", cancel).replace(
         "esc back",
         `esc ${footer}`,
@@ -40,7 +45,7 @@ test("the repository-root warning changes the displayed trust scope, not just th
   Note: You’re in a subdirectory of a Git project. Trusting will apply to the repository root:
   /workspace
 `;
-  expect(parseFolderTrust(screen)).toEqual({ directory: "/workspace" });
+  expect(parseFolderTrust("codex", screen)).toEqual({ directory: "/workspace" });
 });
 
 test.each([
@@ -58,12 +63,59 @@ test.each([
 ])(
   "incomplete, ambiguous, historical and non-selected prompts are not approvable: %j",
   (screen) => {
-    expect(parseFolderTrust(screen)).toBeNull();
+    expect(parseFolderTrust("codex", screen)).toBeNull();
   },
 );
 
-function setup(overrides: Partial<Pick<PaneClient, "read" | "confirmFolderTrust">> = {}) {
-  let screen = FOLDER_TRUST_SCREEN;
+test("the complete Pi project trust prompt identifies the directory being trusted", () => {
+  expect(parseFolderTrust("pi", PI_TRUST_SCREEN)).toEqual({
+    directory: "/workspace/acme-dashboard",
+  });
+});
+
+test("a Pi prompt wrapped by a narrow terminal is still approvable", () => {
+  const wrapped = PI_TRUST_SCREEN.replace(
+    "and execute project extensions.",
+    "and execute\n project extensions.",
+  ).replace("Trust parent folder (/workspace)", "Trust parent folder\n   (/workspace)");
+  expect(parseFolderTrust("pi", wrapped)).toEqual({ directory: "/workspace/acme-dashboard" });
+});
+
+test.each([
+  PI_TRUST_SCREEN.replace("→ Trust", "  Trust").replace("Do not trust\n", "→ Do not trust\n"),
+  PI_TRUST_SCREEN.replace("This allows pi", "This lets pi"),
+  PI_TRUST_SCREEN.replace("↑↓ navigate", "↑↓ move"),
+  PI_TRUST_SCREEN.replace("   Trust parent folder (/workspace)\n", ""),
+  PI_TRUST_SCREEN.replace("Trust (this session only)", "Trust for this session"),
+  PI_TRUST_SCREEN.replace("/workspace/acme-dashboard", "/workspace/acme…board"),
+  PI_TRUST_SCREEN.replace("/workspace/acme-dashboard", "/workspace/acme\n-dashboard"),
+  PI_TRUST_SCREEN.replace("/workspace/acme-dashboard", "workspace/acme-dashboard"),
+  `Earlier output\n${PI_TRUST_SCREEN}`,
+  `${PI_TRUST_SCREEN}\nUnexpected error`,
+])("incomplete, ambiguous or non-selected Pi prompts are not approvable: %j", (screen) => {
+  expect(parseFolderTrust("pi", screen)).toBeNull();
+});
+
+test("a prompt for another agent is never approvable", () => {
+  expect(parseFolderTrust("pi", FOLDER_TRUST_SCREEN)).toBeNull();
+  expect(parseFolderTrust("codex", PI_TRUST_SCREEN)).toBeNull();
+});
+
+test("a pane that changes agent gets a new confirmation identity", async () => {
+  const { client, setScreen } = setup();
+  const codex = await client.inspect(pane);
+  if (codex?.kind !== "folder-trust") throw new Error("missing confirmation");
+  setScreen(PI_TRUST_SCREEN);
+  const pi = await client.inspect(piPane);
+  expect(pi).toMatchObject({ kind: "folder-trust", agent: "pi", submitted: false });
+  expect(pi).not.toHaveProperty("id", codex.id);
+});
+
+function setup(
+  overrides: Partial<Pick<PaneClient, "read" | "confirmFolderTrust">> = {},
+  initial = FOLDER_TRUST_SCREEN,
+) {
+  let screen = initial;
   const calls: unknown[] = [];
   const client = createFolderTrust({
     read: async (options) => {
@@ -88,7 +140,8 @@ test("inspection uses the detection buffer even before there is a conversation",
   const { client, calls } = setup();
   const first = await client.inspect(pane);
   expect(first).toMatchObject({
-    kind: "codex-folder-trust",
+    kind: "folder-trust",
+    agent: "codex",
     directory: "/workspace/acme-dashboard",
     submitted: false,
   });
@@ -99,9 +152,10 @@ test("inspection uses the detection buffer even before there is a conversation",
   ]);
 });
 
-test("non-Codex panes are not inspected or approved", async () => {
+test("agents without a known trust prompt are not inspected or approved", async () => {
   const { client, calls } = setup();
   expect(await client.inspect({ ...pane, agent: "claude" })).toBeNull();
+  expect(await client.inspect({ ...pane, agent: "opencode" })).toBeNull();
   expect(await client.accept({ ...pane, agent: "claude" }, "forged")).toBe("changed");
   expect(calls).toEqual([]);
 });
@@ -109,7 +163,7 @@ test("non-Codex panes are not inspected or approved", async () => {
 test("terminal reflow keeps the same confirmation identity and submitted state", async () => {
   const { client, setScreen } = setup();
   const first = await client.inspect(pane);
-  if (first?.kind !== "codex-folder-trust") throw new Error("missing confirmation");
+  if (first?.kind !== "folder-trust") throw new Error("missing confirmation");
   await client.accept(pane, first.id);
   setScreen(FOLDER_TRUST_SCREEN.replace("Folder settings can", "Folder settings\n  can"));
   expect(await client.inspect(pane)).toEqual({ ...first, submitted: true });
@@ -136,7 +190,7 @@ test("a truncated detection buffer cannot be approved", async () => {
 test("approval rechecks the screen, sends only once and remains submitted until the prompt disappears", async () => {
   const { client, calls, setScreen } = setup();
   const first = await client.inspect(pane);
-  if (first?.kind !== "codex-folder-trust") throw new Error("missing confirmation");
+  if (first?.kind !== "folder-trust") throw new Error("missing confirmation");
   const results = await Promise.all([client.accept(pane, first.id), client.accept(pane, first.id)]);
   expect(results).toEqual(["done", "changed"]);
   expect(calls.filter((call) => "confirm" in (call as object))).toEqual([
@@ -147,7 +201,7 @@ test("approval rechecks the screen, sends only once and remains submitted until 
   expect(await client.inspect(pane)).toBeNull();
   setScreen(FOLDER_TRUST_SCREEN);
   const next = await client.inspect(pane);
-  expect(next).toMatchObject({ kind: "codex-folder-trust", submitted: false });
+  expect(next).toMatchObject({ kind: "folder-trust", submitted: false });
   expect(next).not.toHaveProperty("id", first.id);
 });
 
@@ -158,7 +212,7 @@ test.each([
 ])("a changed prompt never receives Enter from an old approval: %j", async (screen) => {
   const { client, calls, setScreen } = setup();
   const first = await client.inspect(pane);
-  if (first?.kind !== "codex-folder-trust") throw new Error("missing confirmation");
+  if (first?.kind !== "folder-trust") throw new Error("missing confirmation");
   setScreen(screen);
   expect(await client.accept(pane, first.id)).toBe("changed");
   expect(calls.filter((call) => "confirm" in (call as object))).toEqual([]);
@@ -173,7 +227,7 @@ test("an unknown send outcome cannot trigger another Enter", async () => {
     },
   });
   const first = await client.inspect(pane);
-  if (first?.kind !== "codex-folder-trust") throw new Error("missing confirmation");
+  if (first?.kind !== "folder-trust") throw new Error("missing confirmation");
   await expect(client.accept(pane, first.id)).rejects.toThrow("connection lost");
   expect(await client.accept(pane, first.id)).toBe("changed");
   expect(sends).toBe(1);
@@ -190,7 +244,7 @@ test.each(["", "   ", " \r\n\n "])(
       },
     });
     const first = await client.inspect(pane);
-    if (first?.kind !== "codex-folder-trust") throw new Error("missing confirmation");
+    if (first?.kind !== "folder-trust") throw new Error("missing confirmation");
     await expect(client.accept(pane, first.id)).rejects.toThrow("connection lost");
     setScreen(screen);
     expect(await client.inspect(pane)).toEqual({ kind: "terminal" });
@@ -216,7 +270,7 @@ test("an empty detection frame cannot dismiss an unsubmitted confirmation either
 test("closed panes lose their outstanding confirmation identifiers", async () => {
   const { client } = setup();
   const first = await client.inspect(pane);
-  if (first?.kind !== "codex-folder-trust") throw new Error("missing confirmation");
+  if (first?.kind !== "folder-trust") throw new Error("missing confirmation");
   client.retain([]);
   expect(await client.accept(pane, first.id)).toBe("changed");
 });
@@ -224,7 +278,7 @@ test("closed panes lose their outstanding confirmation identifiers", async () =>
 test("a temporarily incomplete or differently selected prompt does not forget an attempted response", async () => {
   const { client, setScreen, calls } = setup();
   const first = await client.inspect(pane);
-  if (first?.kind !== "codex-folder-trust") throw new Error("missing confirmation");
+  if (first?.kind !== "folder-trust") throw new Error("missing confirmation");
   await client.accept(pane, first.id);
   for (const screen of [
     "enter continue · esc back",
@@ -237,4 +291,26 @@ test("a temporarily incomplete or differently selected prompt does not forget an
     expect(await client.accept(pane, first.id)).toBe("changed");
   }
   expect(calls.filter((call) => "confirm" in (call as object))).toHaveLength(1);
+});
+
+test("Pi project trust gets an identifier and is answered with only Enter", async () => {
+  const { client, calls } = setup({}, PI_TRUST_SCREEN);
+  const first = await client.inspect(piPane);
+  expect(first).toMatchObject({
+    kind: "folder-trust",
+    agent: "pi",
+    directory: "/workspace/acme-dashboard",
+    submitted: false,
+  });
+  if (first?.kind !== "folder-trust") throw new Error("missing confirmation");
+  expect(await client.accept(piPane, first.id)).toBe("done");
+  expect(calls.filter((call) => "confirm" in (call as object))).toEqual([
+    { confirm: { paneId: piPane.id } },
+  ]);
+  expect(await client.inspect(piPane)).toEqual({ ...first, submitted: true });
+});
+
+test("an incomplete Pi prompt falls back to the terminal without an identifier", async () => {
+  const { client } = setup({}, PI_TRUST_SCREEN.replace("escape/ctrl+c cancel", "esc cancel"));
+  expect(await client.inspect(piPane)).toEqual({ kind: "terminal" });
 });

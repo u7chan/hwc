@@ -17,10 +17,11 @@ import {
   type ModelAgentKind,
   isAgentEffort,
   isAgentModel,
+  supportsFolderTrust,
 } from "../shared/agents";
 import { isAttachmentName } from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
-import type { PaneInteraction } from "../shared/confirmation";
+import type { FolderTrustInteraction, PaneInteraction } from "../shared/confirmation";
 import { parsePullRequest, type PullRequest } from "../shared/pull-request";
 
 export type OutputRead = PaneRead & { interaction: PaneInteraction | null };
@@ -252,9 +253,10 @@ export function toPaneRead(value: unknown, paneId: string): OutputRead | null {
 export function toPaneInteraction(value: unknown): PaneInteraction | null {
   if (value === null || value === undefined) return null;
   if (typeof value !== "object") return { kind: "terminal" };
-  const interaction = value as Partial<Extract<PaneInteraction, { kind: "codex-folder-trust" }>>;
+  const interaction = value as Partial<FolderTrustInteraction>;
   if (
-    interaction.kind === "codex-folder-trust" &&
+    interaction.kind === "folder-trust" &&
+    supportsFolderTrust(interaction.agent) &&
     typeof interaction.id === "string" &&
     interaction.id !== "" &&
     typeof interaction.directory === "string" &&
@@ -264,6 +266,7 @@ export function toPaneInteraction(value: unknown): PaneInteraction | null {
     return {
       kind: interaction.kind,
       id: interaction.id,
+      agent: interaction.agent,
       directory: interaction.directory,
       submitted: interaction.submitted,
     };

@@ -653,6 +653,15 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
           setAgentStatus(paneId, "idle");
         }
+        if (
+          keys.length === 1 &&
+          keys[0] === "enter" &&
+          outputs.get(paneId)?.includes("Trust project folder?")
+        ) {
+          outputs.set(paneId, "› Ask pi to do anything\n");
+          revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
+          setAgentStatus(paneId, "idle");
+        }
         // 停止ボタンは Esc だけを送る。実 Herdr と同じく、実行中のエージェントは
         // idle に戻ったものとして次のスナップショットを作る。
         if (keys.some((key) => key === "esc" || key === "escape")) {

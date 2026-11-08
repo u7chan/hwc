@@ -45,7 +45,7 @@ import {
   resolveMessageFile,
 } from "./message-files";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
-import { isAgentModel, supportsModelSelection } from "../shared/agents";
+import { isAgentModel, supportsFolderTrust, supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
 import { HerdrError } from "./herdr/socket";
 
@@ -482,7 +482,7 @@ export function createApp(options: {
         const paths: string[] = [];
         const state = await current();
         const pane = state === null ? null : findPane(state, paneId);
-        if (pane?.agent === "codex") {
+        if (pane !== null && supportsFolderTrust(pane.agent)) {
           try {
             if (await folderTrust.inspect(pane))
               return c.json({ error: "confirmation_pending" }, 409);
@@ -539,7 +539,7 @@ export function createApp(options: {
         if (pane.agentStatus !== "working") return c.json({ ok: true });
 
         try {
-          if (pane.agent === "codex" && (await folderTrust.inspect(pane))) {
+          if (supportsFolderTrust(pane.agent) && (await folderTrust.inspect(pane))) {
             return c.json({ error: "confirmation_pending" }, 409);
           }
           await panes.stop({ paneId });

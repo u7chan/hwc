@@ -11,3 +11,22 @@ export const FOLDER_TRUST_SCREEN = `
 
   enter continue · esc back
 `;
+
+export const PI_TRUST_SCREEN = `
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Trust project folder?
+ /workspace/acme-dashboard
+
+ This allows pi to load .pi settings and resources, install missing project packages, and execute project extensions.
+
+ → Trust
+   Trust parent folder (/workspace)
+   Trust (this session only)
+   Do not trust
+   Do not trust (this session only)
+
+ ↑↓ navigate  enter select  escape/ctrl+c cancel
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+`;
