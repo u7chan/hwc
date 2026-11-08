@@ -166,11 +166,15 @@ function ActiveCount(props: { status: ActiveStatus; count: number }) {
 
 // 帯は場所。行はペイン。同じワークツリーの行を束ね、スクロール中も場所を見失わないよう
 // 上端に貼り付ける。状態の件数は束全体の量で、行の右端はそのペインの時刻。
+// 場所の記号は行の親を示す目印にする。子の段はこのアイコンの中心から線でつなぐ。
 function ActiveBand(props: { group: ActiveGroup }) {
   const { workspace, counts } = props.group;
   const branch = workspace.branch ?? null;
   return (
     <div class="hwc-active-band">
+      <span class="hwc-active-band-icon">
+        <WorkspaceGlyph worktree={workspace.worktree} />
+      </span>
       <div class="hwc-active-band-main">
         <h2 class="hwc-active-band-name" id={bandId(workspace.id)} title={workspace.label}>
           {workspace.label}
