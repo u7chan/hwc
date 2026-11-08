@@ -92,7 +92,7 @@ export function PlusIcon({ size = 16 }: IconProps) {
   );
 }
 
-// 新しいセッション。会話を閉じずにやり直すので、円を描き直す向きの矢印にする。
+// 新しい会話。会話を閉じずにやり直すので、円を描き直す向きの矢印にする。
 export function NewSessionIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

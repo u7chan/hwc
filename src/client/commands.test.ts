@@ -85,7 +85,7 @@ test("both commands are sent as the string the CLIs read", () => {
 });
 
 test("the label says what the command does, not how it is typed", () => {
-  expect(commandLabel("new")).toBe("新しいセッション");
+  expect(commandLabel("new")).toBe("新しい会話");
   expect(commandLabel("compact")).toBe("会話を圧縮");
 });
 
