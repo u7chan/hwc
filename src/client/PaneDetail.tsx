@@ -76,6 +76,7 @@ import {
   StopIcon,
   TerminalIcon,
 } from "./icons";
+import { ImageViewer } from "./ImageViewer";
 import { Markdown } from "./Markdown";
 import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
@@ -180,39 +181,55 @@ function readQuoteAnchor(scroller: HTMLElement, frame: HTMLElement): QuoteAnchor
   };
 }
 
-// 添付の配信 URL は新しいタブで開く。ライトボックスを持たないので、拡大はブラウザに任せる。
-function MessageAttachments(props: { paneId: string; names: string[] }) {
+// サムネイルは会話の高さに合わせて小さく出す。押したら同じ配信 URL を拡大する。
+function MessageAttachments(props: {
+  paneId: string;
+  names: string[];
+  onOpen: (url: string, name: string) => void;
+}) {
   return (
     <div class="hwc-msg-attachments">
       {props.names.map((name) => {
         const url = attachmentUrl(props.paneId, name);
         return (
-          <a class="hwc-msg-attachment" key={name} href={url} target="_blank" rel="noreferrer">
-            <img class="hwc-msg-attachment-image" src={url} alt="添付画像" loading="lazy" />
-          </a>
+          <button
+            type="button"
+            class="hwc-msg-attachment"
+            key={name}
+            aria-label="添付画像を拡大"
+            aria-haspopup="dialog"
+            onClick={() => props.onOpen(url, name)}
+          >
+            <img class="hwc-msg-attachment-image" src={url} alt="" loading="lazy" />
+          </button>
         );
       })}
     </div>
   );
 }
 
-// エージェントが本文で示した画像。ユーザーの添付と同じ見た目にして、押すと新しいタブで開く。
-function MessageFiles(props: { paneId: string; files: ChatFile[] }) {
+// エージェントが本文で示した画像。ユーザーの添付と同じ見た目で、押すと拡大する。
+function MessageFiles(props: {
+  paneId: string;
+  files: ChatFile[];
+  onOpen: (url: string, name: string) => void;
+}) {
   return (
     <div class="hwc-msg-attachments">
       {props.files.map((file) => {
         const url = chatFileUrl(props.paneId, file);
         const label = file.name.slice(file.name.lastIndexOf("/") + 1);
         return (
-          <a
+          <button
+            type="button"
             class="hwc-msg-attachment"
             key={`${file.name}@${file.version}`}
-            href={url}
-            target="_blank"
-            rel="noreferrer"
+            aria-label={`${label} を拡大`}
+            aria-haspopup="dialog"
+            onClick={() => props.onOpen(url, label)}
           >
-            <img class="hwc-msg-attachment-image" src={url} alt={label} loading="lazy" />
-          </a>
+            <img class="hwc-msg-attachment-image" src={url} alt="" loading="lazy" />
+          </button>
         );
       })}
     </div>
@@ -223,6 +240,7 @@ function UserMessage(props: {
   paneId: string;
   message: ChatMessage;
   copyButton: ComponentChildren;
+  onOpenImage: (url: string, name: string) => void;
   pending?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -285,7 +303,11 @@ function UserMessage(props: {
           </button>
         ) : null}
         {props.message.attachments === undefined ? null : (
-          <MessageAttachments paneId={props.paneId} names={props.message.attachments} />
+          <MessageAttachments
+            paneId={props.paneId}
+            names={props.message.attachments}
+            onOpen={props.onOpenImage}
+          />
         )}
       </div>
       <div class="hwc-msg-meta">
@@ -387,6 +409,7 @@ function ChatLog(props: {
   compactionDurationMs: number | null;
   compactionEcho: { text: string; at: number; completedAt: number | null } | null;
   onCopy: (id: string, text: string) => void;
+  onOpenImage: (url: string, name: string) => void;
   pending: ChatMessage[];
 }) {
   const copyButton = (message: ChatMessage) => {
@@ -471,7 +494,11 @@ function ChatLog(props: {
               <>
                 <Markdown text={message.text} taskScope={`${index + 1}番目のメッセージ`} />
                 {message.files === undefined ? null : (
-                  <MessageFiles paneId={props.paneId} files={message.files} />
+                  <MessageFiles
+                    paneId={props.paneId}
+                    files={message.files}
+                    onOpen={props.onOpenImage}
+                  />
                 )}
                 <div class="hwc-msg-meta">
                   <span class="hwc-msg-time">{formatClock(message.at)}</span>
@@ -485,6 +512,7 @@ function ChatLog(props: {
                 paneId={props.paneId}
                 message={message}
                 copyButton={userCopyButton(message)}
+                onOpenImage={props.onOpenImage}
                 pending={pending}
               />
             )}
@@ -730,6 +758,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const [chip, setChip] = useState<CommandId | null>(null);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
   const nextAttachmentKey = useRef(0);
+  // 拡大中の画像は配信 URL と表示名だけを持つ。中身は同じ URL から読み直す。
+  const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
   // ファイルをドラッグしている間だけ composer を光らせる。dragenter / dragleave は
   // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
   const [dropping, setDropping] = useState(false);
@@ -1095,6 +1125,8 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
+  const openImage = (url: string, name: string) => setViewer({ url, name });
+
   const removeAttachment = (key: string) => {
     attachments.find((item) => item.key === key)?.controller.abort();
     setAttachments((items) => items.filter((item) => item.key !== key));
@@ -1469,6 +1501,7 @@ export function PaneDetail(props: PaneDetailProps) {
                     : null
                 }
                 onCopy={copy}
+                onOpenImage={openImage}
                 pending={pendingMessages}
               />
             </>
@@ -1767,6 +1800,9 @@ export function PaneDetail(props: PaneDetailProps) {
             </div>
           </div>
         </form>
+      )}
+      {viewer === null ? null : (
+        <ImageViewer url={viewer.url} name={viewer.name} onClose={() => setViewer(null)} />
       )}
     </>
   );

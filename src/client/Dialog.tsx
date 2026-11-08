@@ -6,6 +6,7 @@ type DialogShellProps = {
   labelledBy: string;
   describedBy?: string;
   className?: string;
+  layerClassName?: string;
   open?: boolean;
   onClose: () => void;
   onExited?: () => void;
@@ -60,7 +61,10 @@ export function DialogShell(props: DialogShellProps) {
   }, [open, props.onClose]);
 
   return (
-    <div class="hwc-dialog-layer" data-open={open}>
+    <div
+      class={props.layerClassName ? `hwc-dialog-layer ${props.layerClassName}` : "hwc-dialog-layer"}
+      data-open={open}
+    >
       <div
         class="hwc-dialog-backdrop"
         onPointerDown={(event) => {
