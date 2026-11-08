@@ -196,6 +196,24 @@ test("request rejects when the socket path does not exist", async () => {
   expect(error.message).toContain(path);
 });
 
+// パスの値が不正なとき net.connect は同期 throw する。握らないと起動時の未捕捉例外になる。
+test("subscribe reports a synchronous connect failure instead of throwing", async () => {
+  const errors: Error[] = [];
+  const stop = subscribe({
+    events: [{ type: "pane.updated" }],
+    path: " ",
+    reconnectDelayMs: 10,
+    onEvent: () => {},
+    onLost: () => {},
+    onError: (error) => errors.push(error),
+  });
+
+  await waitFor(() => errors.length >= 1);
+  stop();
+
+  expect(errors[0]?.message).toContain("Port should be");
+});
+
 test("subscribe keeps the connection event-only and forwards pushed events", async () => {
   const herdr = await startFakeHerdr((message, socket) => {
     if (message.method !== "events.subscribe") return;

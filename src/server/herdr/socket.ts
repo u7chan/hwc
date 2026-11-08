@@ -188,7 +188,15 @@ export function subscribe(options: SubscribeOptions): () => void {
     lostNotified = false;
 
     const id = `hwc-sub-${++sequence}`;
-    const current = net.connect(path);
+    let current: net.Socket;
+    try {
+      current = net.connect(path);
+    } catch (error) {
+      // パスの値が不正なときは net.connect が同期 throw する。握らないと起動時の未捕捉例外になる。
+      onError?.(error instanceof Error ? error : new Error(String(error)));
+      scheduleReconnect();
+      return;
+    }
     current.setEncoding("utf8");
     socket = current;
 
