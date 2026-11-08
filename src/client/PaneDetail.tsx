@@ -31,7 +31,7 @@ import {
   contextDetails,
   contextMeter,
   type ContextMeterView,
-  echoInsertIndex,
+  chatRows,
   idleEchoExpired,
   isPendingConfirmed,
   latestUserAt,
@@ -412,7 +412,7 @@ function ChatLog(props: {
   compactionEcho: { text: string; at: number; completedAt: number | null } | null;
   onCopy: (id: string, text: string) => void;
   onOpenImage: (url: string, name: string) => void;
-  pending: ChatMessage[];
+  pending: readonly PendingMessage[];
 }) {
   const copyButton = (message: ChatMessage) => {
     const copied = props.copiedId === message.id;
@@ -433,10 +433,7 @@ function ChatLog(props: {
     message.text === "" ? null : copyButton(message);
 
   // ツール実行だけのターンは会話に残らない。返答待ちの表示だけが動いていることを示す。
-  const rows = [
-    ...props.snapshot.messages.map((message) => ({ message, pending: false })),
-    ...props.pending.map((message) => ({ message, pending: true })),
-  ];
+  const rows = chatRows(props.snapshot.messages, props.pending);
   const compaction = props.snapshot.compaction;
   // サーバーが返す位置は messages 基準。再取得の境目で欠けても落ちないよう clamp する。
   const compactionAt =
@@ -460,16 +457,22 @@ function ChatLog(props: {
   const echoVisible = echoPending || echoAtLog;
   const echoRow =
     echoVisible && echo !== null ? <CommandEcho text={echo.text} at={echo.at} /> : null;
-  const echoGap =
-    echoPending && echo !== null
-      ? echoInsertIndex(
-          props.snapshot.messages.length,
-          props.pending.map((message) => message.at),
-          echo.at,
-        )
-      : null;
-  // 実行中は未確定メッセージを含む末尾（後から送ったものより前）、完了後は compaction の
+  // 実行中はメッセージの末尾（後から送った echo より前）、完了後は compaction の
   // 区切りの直前に置く。
+  const echoIndex = (() => {
+    if (!echoPending || echo === null) return null;
+    const messageEnd = rows.reduce((end, row, index) => (row.echo === "none" ? index + 1 : end), 0);
+    const later = rows.findIndex((row) => row.echo !== "none" && row.message.at > echo.at);
+    return later === -1 ? rows.length : Math.max(messageEnd, later);
+  })();
+  // 圧縮の区切りはメッセージ境界に置く。同じ境界のコマンドの控えは、その手前に残す。
+  const compactionIndex = (() => {
+    if (compactionAt === null) return null;
+    const next = rows.findIndex((row) => row.echo === "none" && row.seen > compactionAt);
+    if (next !== -1) return next;
+    const tail = rows.findIndex((row) => row.echo === "pending");
+    return tail === -1 ? rows.length : tail;
+  })();
   const compactionBlock =
     compactionRow === null ? null : (
       <>
@@ -487,42 +490,50 @@ function ChatLog(props: {
     return <ChatEmpty />;
   return (
     <ol class="hwc-chat">
-      {compactionBlock !== null && compactionAt === 0 ? compactionBlock : null}
-      {rows.map(({ message, pending }, index) => (
-        <Fragment key={message.id}>
-          {echoGap === index ? echoRow : null}
-          <li class="hwc-msg" data-role={message.role} data-pending={pending ? "true" : undefined}>
-            {message.role === "agent" ? (
-              <>
-                <Markdown text={message.text} taskScope={`${index + 1}番目のメッセージ`} />
-                {message.files === undefined ? null : (
-                  <MessageFiles
-                    paneId={props.paneId}
-                    files={message.files}
-                    onOpen={props.onOpenImage}
-                  />
-                )}
-                <div class="hwc-msg-meta">
-                  <span class="hwc-msg-time">{formatClock(message.at)}</span>
-                  {copyButton(message)}
-                </div>
-              </>
-            ) : message.role === "error" ? (
-              <ErrorMessage message={message} copyButton={copyButton(message)} />
-            ) : (
-              <UserMessage
-                paneId={props.paneId}
-                message={message}
-                copyButton={userCopyButton(message)}
-                onOpenImage={props.onOpenImage}
-                pending={pending}
-              />
-            )}
-          </li>
-          {compactionBlock !== null && compactionAt === index + 1 ? compactionBlock : null}
+      {rows.map((row, index) => (
+        <Fragment key={row.message.id}>
+          {echoIndex === index ? echoRow : null}
+          {compactionIndex === index ? compactionBlock : null}
+          {row.echo === "command" ? (
+            <CommandEcho text={row.message.text} at={row.message.at} />
+          ) : (
+            <li
+              class="hwc-msg"
+              data-role={row.message.role}
+              data-pending={row.echo === "pending" ? "true" : undefined}
+            >
+              {row.message.role === "agent" ? (
+                <>
+                  <Markdown text={row.message.text} taskScope={`${index + 1}番目のメッセージ`} />
+                  {row.message.files === undefined ? null : (
+                    <MessageFiles
+                      paneId={props.paneId}
+                      files={row.message.files}
+                      onOpen={props.onOpenImage}
+                    />
+                  )}
+                  <div class="hwc-msg-meta">
+                    <span class="hwc-msg-time">{formatClock(row.message.at)}</span>
+                    {copyButton(row.message)}
+                  </div>
+                </>
+              ) : row.message.role === "error" ? (
+                <ErrorMessage message={row.message} copyButton={copyButton(row.message)} />
+              ) : (
+                <UserMessage
+                  paneId={props.paneId}
+                  message={row.message}
+                  copyButton={userCopyButton(row.message)}
+                  onOpenImage={props.onOpenImage}
+                  pending={row.echo === "pending"}
+                />
+              )}
+            </li>
+          )}
         </Fragment>
       ))}
-      {echoGap === rows.length ? echoRow : null}
+      {echoIndex === rows.length ? echoRow : null}
+      {compactionIndex === rows.length ? compactionBlock : null}
     </ol>
   );
 }
@@ -1075,32 +1086,37 @@ export function PaneDetail(props: PaneDetailProps) {
   }, [replying, pending.length]);
 
   // 送信したのにエージェントが動き出さない echo は、TUI がコマンドとして処理したか、
-  // 入力を受け取らなかったものとして畳む。コマンドは user 発話を残さないため、
-  // セッションを待っても確定しない。working を観測できた echo は確認まで残す。
+  // 入力を受け取らなかったものとして、ローカルのコマンド控えに切り替える。コマンドは
+  // user 発話を残さないため、セッションを待っても確定しない。
   useEffect(() => {
-    const idle = pending.filter((item) => !item.waiting);
+    const idle = pending.filter((item) => !item.waiting && !item.command);
     if (idle.length === 0 || replying) return;
     const oldest = Math.min(...idle.map((item) => item.at));
     const delay = Math.max(0, oldest + PENDING_TURN_GRACE_MS - Date.now());
     const timer = setTimeout(() => {
       const now = Date.now();
       setPending((items) => {
-        const next = items.filter((item) => !idleEchoExpired(item, now));
-        return next.length === items.length ? items : next;
+        let changed = false;
+        const next = items.map((item) => {
+          if (item.command || !idleEchoExpired(item, now)) return item;
+          changed = true;
+          return { ...item, command: true };
+        });
+        return changed ? next : items;
       });
     }, delay);
     return () => clearTimeout(timer);
   }, [pending, replying]);
 
   useEffect(() => {
-    const idle = pending.filter((item) => !item.waiting);
+    const idle = pending.filter((item) => !item.waiting && !item.command);
     if (idle.length === 0) return;
     const oldest = Math.min(...idle.map((item) => item.at));
     const delay = Math.max(0, oldest + PENDING_TIMEOUT_MS - Date.now());
     const timer = setTimeout(() => {
       const now = Date.now();
       setPending((items) =>
-        items.filter((item) => item.waiting || item.at + PENDING_TIMEOUT_MS > now),
+        items.filter((item) => item.command || item.waiting || item.at + PENDING_TIMEOUT_MS > now),
       );
     }, delay);
     return () => clearTimeout(timer);
@@ -1251,6 +1267,7 @@ export function PaneDetail(props: PaneDetailProps) {
     const baselineAt = snapshot?.compaction?.at ?? null;
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
+    const after = snapshot?.messages.length ?? 0;
     // 送信したらキーボードを閉じて出力を見せる。
     input.current?.blur();
     // 前の失敗は消す。送り直したのに前の notice が残っていると、いつの結果か読めない。
@@ -1281,6 +1298,8 @@ export function PaneDetail(props: PaneDetailProps) {
             at,
             from,
             waiting,
+            after,
+            command: false,
             ...(names.length === 0 ? {} : { attachments: names }),
           },
         ]);

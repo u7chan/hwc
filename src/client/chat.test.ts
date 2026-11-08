@@ -12,7 +12,7 @@ import {
   contextPercent,
   contextText,
   contextTone,
-  echoInsertIndex,
+  chatRows,
   formatTokens,
   idleEchoExpired,
   isAbortError,
@@ -348,6 +348,8 @@ const pending: PendingMessage = {
   at: 1_000_000,
   from: 990_000,
   waiting: true,
+  after: 0,
+  command: false,
 };
 
 test("the latest user message sets the pending baseline", () => {
@@ -382,12 +384,79 @@ test("an echo whose pane never started working expires after the turn grace", ()
   expect(idleEchoExpired({ ...idle, waiting: true }, idle.at + 60_000)).toBe(false);
 });
 
-test("a compaction echo stays before the messages sent after it", () => {
-  // 後から送った未確定メッセージは、控えより後ろに置く。
-  expect(echoInsertIndex(3, [100, 300], 200)).toBe(4);
-  // 控えの後に送ったものだけが後ろに残る。
-  expect(echoInsertIndex(3, [100], 200)).toBe(4);
-  expect(echoInsertIndex(3, [300], 200)).toBe(3);
-  // 未確定メッセージが無ければ、取得済みの末尾に置く。
-  expect(echoInsertIndex(3, [], 200)).toBe(3);
+test("a command echo leaves only when the session records the same text", () => {
+  const command: PendingMessage = { ...pending, waiting: false, text: "/reload", command: true };
+  // 次の通常のメッセージでは消さない。コマンドの控えを履歴に残すため。
+  expect(
+    isPendingConfirmed(command, [
+      { id: "m2", role: "user", text: "next message", at: pending.from + 1 },
+    ]),
+  ).toBe(false);
+  expect(
+    isPendingConfirmed(command, [
+      { id: "m2", role: "user", text: " /reload ", at: pending.from + 1 },
+    ]),
+  ).toBe(true);
+  // 送信前からあった同じ文言は、そのコマンドの発話ではない。
+  expect(
+    isPendingConfirmed(command, [{ id: "m2", role: "user", text: "/reload", at: pending.from }]),
+  ).toBe(false);
+});
+
+test("a command echo stays after the messages it was sent after", () => {
+  const messages: ChatMessage[] = [
+    { id: "u1", role: "user", text: "first", at: 100 },
+    { id: "a1", role: "agent", text: "reply", at: 200 },
+  ];
+  const command: PendingMessage = {
+    ...pending,
+    id: "command-1",
+    text: "/reload",
+    at: 300,
+    waiting: false,
+    after: 2,
+    command: true,
+  };
+  // 次の発話が届いても、コマンドは送った位置（2 件の後ろ）に残る。
+  const rows = chatRows(
+    [...messages, { id: "u2", role: "user", text: "next", at: 400 }],
+    [command],
+  );
+  expect(rows.map((row) => `${row.echo}:${row.message.id}`)).toEqual([
+    "none:u1",
+    "none:a1",
+    "command:command-1",
+    "none:u2",
+  ]);
+  expect(rows[2]!.seen).toBe(2);
+});
+
+test("commands keep their send order and pending echoes stay at the end", () => {
+  const messages: ChatMessage[] = [{ id: "u1", role: "user", text: "first", at: 100 }];
+  const first: PendingMessage = {
+    ...pending,
+    id: "c1",
+    command: true,
+    waiting: false,
+    after: 0,
+    at: 200,
+  };
+  const second: PendingMessage = {
+    ...pending,
+    id: "c2",
+    command: true,
+    waiting: false,
+    after: 0,
+    at: 300,
+  };
+  const tail: PendingMessage = { ...pending, id: "p1" };
+  expect(
+    chatRows(messages, [first, second, tail]).map((row) => `${row.echo}:${row.message.id}`),
+  ).toEqual(["command:c1", "command:c2", "none:u1", "pending:p1"]);
+});
+
+test("an anchor past the loaded messages falls back to the end", () => {
+  const messages: ChatMessage[] = [{ id: "u1", role: "user", text: "first", at: 100 }];
+  const command: PendingMessage = { ...pending, id: "c1", command: true, after: 9 };
+  expect(chatRows(messages, [command]).map((row) => row.message.id)).toEqual(["u1", "c1"]);
 });
