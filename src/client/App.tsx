@@ -806,8 +806,9 @@ export function App() {
       scheme={scheme}
       // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
       labeled={cells.length > 1}
-      // ブランチは一覧が隠れる狭い画面でだけ出す。広い画面では一覧がブランチを持っている。
-      branch={cells.length > 1 ? null : where.branch}
+      // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
+      // 値そのものは常に渡す。
+      branch={where.branch}
       // 広い画面でも PR のチップは見出しに出す。ブランチだけを隠す。
       showBranch={!wide}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
