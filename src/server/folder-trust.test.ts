@@ -116,7 +116,25 @@ test("a normal Pi conversation that mentions the dialog footer is not a trust pr
     {},
     "› Ask pi to do anything\n\n↑↓ navigate  enter select  escape/ctrl+c cancel\n",
   );
-  expect(await client.inspect(piPane)).toBeNull();
+  expect(await client.inspect({ ...piPane, chat: true })).toBeNull();
+});
+
+test("a chatless pane that only shows a dialog footer stays read-only", async () => {
+  const { client } = setup(
+    {},
+    "› Ask pi to do anything\n\n↑↓ navigate  enter select  escape/ctrl+c cancel\n",
+  );
+  expect(await client.inspect(piPane)).toEqual({ kind: "terminal" });
+});
+
+test("a trust prompt split by a narrow terminal stays read-only before the session starts", async () => {
+  const { client } = setup(
+    {},
+    PI_TRUST_SCREEN.replace("Trust project folder?", "Trust project\n folder?"),
+  );
+  expect(await client.inspect(piPane)).toEqual({ kind: "terminal" });
+  // 会話が始まっているペインでは、同じ文字列が出ているだけで入力欄を閉じない。
+  expect(await client.inspect({ ...piPane, chat: true })).toBeNull();
 });
 
 test("a screen that only mentions the title is not a confirmation", async () => {

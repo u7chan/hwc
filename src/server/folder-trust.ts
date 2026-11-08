@@ -93,16 +93,18 @@ export function parseFolderTrust(
 
 const CODEX_HINTS =
   /Folder access|Trust this folder\?|Trust and continue|enter continue · esc (?:quit|back|cancel)/;
-// フッターの `↑↓ navigate` は Pi の選択ダイアログ全般に付く。これだけで確認とみなすと、
-// 会話やツール出力に含まれた通常のペインまで入力欄を閉じてしまう。
 const PI_TITLE_HINT = /Trust project folder\?/;
 const PI_OPTION_HINT =
   /Trust parent folder \(|Trust \(this session only\)|Do not trust \(this session only\)/;
+// `↑↓ navigate` は Pi の選択ダイアログ全般に付く。会話を持つペインでこれだけで確認と
+// みなすと、出力に含まれた通常のペインまで入力欄を閉じてしまう。信頼確認はセッションが
+// 始まる前（会話が無いとき）にだけ出るので、起動時だけは汎用のフッターも手掛かりにする。
+const PI_DIALOG_HINT = /↑↓ navigate/;
 
-function looksLikeFolderTrust(agent: FolderTrustAgent, text: string): boolean {
-  return agent === "codex"
-    ? CODEX_HINTS.test(text)
-    : PI_TITLE_HINT.test(text) && PI_OPTION_HINT.test(text);
+function looksLikeFolderTrust(agent: FolderTrustAgent, text: string, chat: boolean): boolean {
+  if (agent === "codex") return CODEX_HINTS.test(text);
+  if (PI_TITLE_HINT.test(text) && PI_OPTION_HINT.test(text)) return true;
+  return !chat && PI_DIALOG_HINT.test(text);
 }
 
 type Observation = { id: string; agent: FolderTrustAgent; directory: string; submitted: boolean };
@@ -136,7 +138,7 @@ export function createFolderTrust(panes: Pick<PaneClient, "read" | "confirmFolde
     if (read.text.trim() === "") return { kind: "terminal" };
     const parsed = read.truncated ? null : parseFolderTrust(pane.agent, read.text);
     if (parsed === null) {
-      if (read.truncated || looksLikeFolderTrust(pane.agent, read.text))
+      if (read.truncated || looksLikeFolderTrust(pane.agent, read.text, pane.chat))
         return { kind: "terminal" };
       observations.delete(pane.id);
       return null;
