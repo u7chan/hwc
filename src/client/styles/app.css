@@ -59,8 +59,8 @@ button {
 }
 
 /* iOS の Safari は、タッチ後にプログラムで移したフォーカスにも :focus-visible を当てる。
-   タッチ・ペン操作の間は輪郭を出さない。マウスとキーボードは :focus-visible に任せる。 */
-html[data-input-modality="pointer"] :focus-visible {
+   タッチ・ペン操作の間は輪郭を出さない。入力欄は、タップで入ったことが分かるよう自前の輪郭に任せる。 */
+html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(select) {
   outline: none !important;
 }
 
