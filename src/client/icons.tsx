@@ -92,12 +92,14 @@ export function PlusIcon({ size = 16 }: IconProps) {
   );
 }
 
-// 新しい会話。会話を閉じずにやり直すので、円を描き直す向きの矢印にする。
+// 新しい会話。同じペインで会話だけを作り直すが、円を描き直す矢印は更新に見えるので、会話の吹き出しに + を添える。
 export function NewSessionIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
-      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-      <path d="M21 3v6h-6" />
+      <rect x="3" y="4" width="18" height="13" rx="3" />
+      <path d="M7.5 17v3.5L12 17" />
+      <path d="M12 7.5v6" />
+      <path d="M9 10.5h6" />
     </Svg>
   );
 }
