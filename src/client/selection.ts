@@ -1,4 +1,4 @@
-import type { AppState } from "../server/herdr/state";
+import type { AppState, PaneState, TabState, WorkspaceState } from "../server/herdr/state";
 import { storage } from "./drafts";
 import { findPane } from "./select";
 
@@ -63,6 +63,37 @@ export function writeListOpen(open: boolean): void {
   } catch {
     // 保存できなくてもその場の表示は変える。
   }
+}
+
+export type WorkspacePane = { tab: TabState; pane: PaneState };
+
+// スペースの代表ペイン。先頭タブ（左端）の先頭ペインを既定にする。空のタブは飛ばす。
+export function defaultPaneOf(workspace: WorkspaceState): WorkspacePane | null {
+  const tab = workspace.tabs.find((candidate) => candidate.panes.length > 0);
+  const pane = tab?.panes[0];
+  return tab !== undefined && pane !== undefined ? { tab, pane } : null;
+}
+
+// ツリーでそのスペースを見せるために開く単位。代表タブと、同じリポジトリの束も含める。
+export function workspaceGroupIds(workspace: WorkspaceState): string[] {
+  const target = defaultPaneOf(workspace);
+  const groups = [workspace.id];
+  if (target !== null) groups.push(target.tab.id);
+  if (workspace.worktree !== null) groups.push(`repo:${workspace.worktree.repoName}`);
+  return groups;
+}
+
+// 帯からの移動は「いまこの場所を見たい」という指示。自分で畳んでいた記憶より優先して開く。
+export function expandForWorkspace(
+  state: AppState,
+  workspaceId: string,
+  open: ReadonlySet<string>,
+): Set<string> | null {
+  const workspace = state.workspaces.find((candidate) => candidate.id === workspaceId);
+  if (workspace === undefined) return null;
+  const next = new Set(open);
+  for (const groupId of workspaceGroupIds(workspace)) next.add(groupId);
+  return next;
 }
 
 export function writeSelectedPane(paneId: string | null): void {

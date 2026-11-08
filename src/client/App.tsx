@@ -50,10 +50,13 @@ import {
   rememberGroup,
 } from "./expanded";
 import {
+  defaultPaneOf,
   expandForPane,
+  expandForWorkspace,
   readListOpen,
   readSelectedPane,
   restorePane,
+  workspaceGroupIds,
   writeListOpen,
   writeSelectedPane,
 } from "./selection";
@@ -270,6 +273,10 @@ export function App() {
       typeof localStorage === "undefined" ? null : localStorage.getItem(LIST_SCOPE_STORAGE_KEY),
     ),
   );
+  // 帯から「すべて」の場所へ移ったとき、一覧をその見出しまで送るための要求。
+  // 同じ場所を何度も開けるよう、token で 1 回ずつ処理する。
+  const [reveal, setReveal] = useState<{ workspaceId: string; token: number } | null>(null);
+  const revealSeq = useRef(0);
   // 窓口はスペースごとに 1 つ。一覧が読む値なので state に置き、送信のたびに入れ替える。
   const [sent, setSent] = useState<ReadonlyMap<string, SentPane>>(() =>
     parseSentPanes(readStored(SENT_PANE_STORAGE_KEY)),
@@ -451,7 +458,11 @@ export function App() {
   // 選択の変更は必ずここを通す。保留中の既読は、そのペインを離れる時点で done なら送る。
   // 開いた時点で送らないので、読んでいる間は行が残る。保留は state にしない（再描画しない）。
   // 同じペインへの移動（詳細のタブバーやツリーでの選び直し）はまだ離れていないので、保留を残す。
-  const moveTo = (paneId: string | null, opened = false) => {
+  const moveTo = (
+    paneId: string | null,
+    opened = false,
+    nextExpanded: ReadonlySet<string> = expanded,
+  ) => {
     const pending = pendingRead.current;
     if (pending !== null) {
       const status = state === null ? null : (findPane(state, pending)?.agentStatus ?? null);
@@ -459,7 +470,7 @@ export function App() {
     }
     pendingRead.current = pendingReadAfter(pending, paneId, opened);
     setPendingSelect(null);
-    setView({ selectedPaneId: paneId, expanded });
+    setView({ selectedPaneId: paneId, expanded: nextExpanded });
     setSettingsOpen(false);
   };
 
@@ -594,13 +605,9 @@ export function App() {
   };
 
   // 開閉は次に開いたときも同じにしたいので、既定からの差分として覚える。
-  const toggle = (groupId: string) => {
-    const next = new Set(expanded);
-    if (next.has(groupId)) next.delete(groupId);
-    else next.add(groupId);
-    setView({ selectedPaneId, expanded: next });
-
-    const remembered = rememberGroup(openGroups.current ?? new Map(), groupId, next.has(groupId));
+  const rememberOpen = (groupIds: readonly string[], open: boolean) => {
+    let remembered = openGroups.current ?? new Map<string, boolean>();
+    for (const groupId of groupIds) remembered = rememberGroup(remembered, groupId, open);
     openGroups.current = remembered;
     if (typeof localStorage !== "undefined") {
       try {
@@ -612,6 +619,14 @@ export function App() {
         // 保存できなくてもその場の表示は変える。
       }
     }
+  };
+
+  const toggle = (groupId: string) => {
+    const next = new Set(expanded);
+    if (next.has(groupId)) next.delete(groupId);
+    else next.add(groupId);
+    setView({ selectedPaneId, expanded: next });
+    rememberOpen([groupId], next.has(groupId));
   };
 
   // 窓口は「最後に送ったペイン」。開いただけでは入れ替えないので、送信が通ったときだけ呼ぶ。
@@ -703,6 +718,21 @@ export function App() {
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
+
+  // アクティブの帯から「すべて」のその場所へ移る。スコープと一覧のスクロールは PaneList が
+  // 持ち、ここでは代表ペインと開閉だけを決める。狭い画面は一覧と詳細を同時に出せず、
+  // 目的はワークツリーメニューなので、代表ペインは選ばず一覧のまま移る。
+  const revealWorkspace = (workspaceId: string) => {
+    if (state === null) return;
+    const workspace = state.workspaces.find((item) => item.id === workspaceId);
+    if (workspace === undefined) return;
+    const nextExpanded = expandForWorkspace(state, workspaceId, expanded);
+    if (nextExpanded === null) return;
+    const target = defaultPaneOf(workspace);
+    moveTo(wide && target !== null ? target.pane.id : null, false, nextExpanded);
+    rememberOpen(workspaceGroupIds(workspace), true);
+    setReveal({ workspaceId, token: ++revealSeq.current });
+  };
 
   const connChip = (
     <span class="hwc-conn" data-status={connection}>
@@ -835,6 +865,8 @@ export function App() {
               expanded={expanded}
               onSelect={select}
               onOpen={openActivePane}
+              onRevealWorkspace={revealWorkspace}
+              reveal={reveal}
               onToggle={toggle}
               openPaneMenuId={menu?.open === true && menu.fromList ? menuPaneId : null}
               openWorkspaceMenuId={menu?.open === true ? (menuWorkspace?.id ?? null) : null}
