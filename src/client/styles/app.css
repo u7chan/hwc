@@ -2503,6 +2503,7 @@ p.hwc-compaction,
   white-space: nowrap;
 }
 
+/* 開閉は一覧の disclosure と同じシェブロン。軸のある矢印は場所の移動に使うので、ここでは使わない。 */
 .hwc-compaction-icon {
   flex: none;
   display: grid;
@@ -2511,7 +2512,7 @@ p.hwc-compaction,
 }
 
 .hwc-compaction[open] .hwc-compaction-icon {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 
 /* 要約は長いが、内側でスクロールさせない。会話のスクロール 1 本で読ませる。 */
