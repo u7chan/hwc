@@ -142,7 +142,11 @@ function ActiveTrail(props: {
   }
   if (props.pane.agentStatus === "working") {
     const ms = workingMs(props.workingSince, props.pane.id, props.now);
-    return ms === null ? null : <span class="hwc-pane-elapsed">{formatElapsed(ms)}</span>;
+    return ms === null ? null : (
+      <span class="hwc-pane-elapsed" data-tone="active">
+        {formatElapsed(ms)}
+      </span>
+    );
   }
   const clock = finishedClock(props.finishedAt, props.pane.id);
   return clock === null ? null : (
@@ -441,7 +445,9 @@ function TreePaneList(props: TreePaneListProps) {
                     )}
                   </span>
                   {startedAt === undefined ? null : (
-                    <span class="hwc-pane-elapsed">{formatElapsed(now - startedAt)}</span>
+                    <span class="hwc-pane-elapsed" data-tone="active">
+                      {formatElapsed(now - startedAt)}
+                    </span>
                   )}
                 </button>
                 <button

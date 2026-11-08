@@ -1143,7 +1143,11 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* 終わった時刻は状態の色に合わせる。待機の窓口は終わっていないので淡いまま。 */
+/* 時刻は状態の色に合わせる。待機の窓口は終わっていないので淡いまま。 */
+.hwc-pane-elapsed[data-tone="active"] {
+  color: var(--color-active);
+}
+
 .hwc-pane-elapsed[data-tone="success"] {
   color: var(--color-success);
 }
