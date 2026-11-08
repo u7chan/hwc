@@ -377,6 +377,44 @@ export async function readPullRequest(
   return parsePullRequest(body.pullRequest);
 }
 
+export type GitSyncFailure =
+  | "no_remote"
+  | "no_upstream"
+  | "not_git_worktree"
+  | "git_unavailable"
+  | "failed";
+
+export type GitSyncOutcome = { ok: true } | { ok: false; error: GitSyncFailure };
+
+// fetch / pull はネットワークと git の走査を伴う。BFF の git 期限（60 秒）を覆う。
+export const GIT_SYNC_TIMEOUT_MS = 70_000;
+
+export async function syncWorkspace(
+  workspaceId: string,
+  action: "fetch" | "pull",
+): Promise<GitSyncOutcome> {
+  try {
+    const input = { ...workspaceParam(workspaceId), json: { action } };
+    const response = await client.api.workspaces[":id"].git.$post(input, {
+      init: { signal: AbortSignal.timeout(GIT_SYNC_TIMEOUT_MS) },
+    });
+    if (response.ok) return { ok: true };
+    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    const error = body?.error;
+    if (
+      error === "no_remote" ||
+      error === "no_upstream" ||
+      error === "not_git_worktree" ||
+      error === "git_unavailable"
+    ) {
+      return { ok: false, error };
+    }
+    return { ok: false, error: "failed" };
+  } catch {
+    return { ok: false, error: "failed" };
+  }
+}
+
 export async function sendInput(
   paneId: string,
   text: string,

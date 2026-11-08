@@ -10,6 +10,7 @@ import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import type { PaneClient } from "./herdr/panes";
 import type { WorktreeClient } from "./herdr/worktrees";
 import { HerdrError } from "./herdr/socket";
+import type { GitClient } from "./git";
 import type { AppState, ChatSource, PaneState, StateStore } from "./herdr/state";
 import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
 import { FOLDER_TRUST_SCREEN, PI_TRUST_SCREEN } from "../../e2e/fixtures/folder-trust";
@@ -131,7 +132,11 @@ type FakeStore = StateStore & {
   setChatSource: (paneId: string, source: ChatSource | null) => void;
 };
 
-function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
+function createFakeStore(
+  initial: AppState | null,
+  failure?: Error,
+  workspacePath: string | null = checkoutPath,
+): FakeStore {
   const listeners = new Set<(state: AppState) => void>();
   const sources = new Map<string, ChatSource>();
   let current = initial;
@@ -146,7 +151,8 @@ function createFakeStore(initial: AppState | null, failure?: Error): FakeStore {
     },
     chatSource: (paneId) => sources.get(paneId) ?? null,
     workspaceRoot: () => null,
-    workspacePath: () => checkoutPath,
+    workspacePath: () => workspacePath,
+    invalidateGit: () => {},
     onChange: (listener) => {
       listeners.add(listener);
       if (pendingOnSubscribe) {
@@ -234,6 +240,7 @@ type TestAppOptions = {
     | "opencode"
     | "codex"
     | "pullRequests"
+    | "git"
     | "revision"
     | "sseHeartbeatMs"
     | "attachmentsRoot"
@@ -433,6 +440,199 @@ test("GET /api/workspaces/:id/pull-request returns 502 when Herdr cannot be read
   const { app } = createTestApp({ state: null, storeFailure: new Error("socket closed") });
   const response = await app.request("/api/workspaces/w1/pull-request");
 
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+const syncState: AppState = {
+  ...state,
+  workspaces: [
+    {
+      ...state.workspaces[0]!,
+      branch: "feat/empty-state",
+      sync: {
+        upstream: "origin/feat/empty-state",
+        ahead: 1,
+        behind: 2,
+        hasRemote: true,
+      },
+    },
+  ],
+};
+
+function createFakeGit(overrides: Partial<GitClient> = {}): GitClient {
+  return {
+    read: async () => null,
+    invalidate: () => {},
+    fetch: async () => {},
+    pull: async () => {},
+    ...overrides,
+  };
+}
+
+function postGit(action: unknown): RequestInit {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action }),
+  };
+}
+
+test("POST /api/workspaces/:id/git fetches and republishes the state", async () => {
+  const calls: string[] = [];
+  const invalidated: string[] = [];
+  let refreshes = 0;
+  const store = createFakeStore(syncState);
+  const refresh = store.refresh;
+  store.refresh = async () => {
+    refreshes += 1;
+    return refresh();
+  };
+  store.invalidateGit = (workspaceId) => invalidated.push(workspaceId);
+  const { app } = createTestApp({
+    state: syncState,
+    store,
+    git: createFakeGit({
+      fetch: async (path) => {
+        calls.push(path);
+      },
+    }),
+  });
+
+  const response = await app.request("/api/workspaces/w1/git", postGit("fetch"));
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(calls).toEqual([checkoutPath]);
+  expect(invalidated).toEqual(["w1"]);
+  expect(refreshes).toBe(1);
+});
+
+test("POST /api/workspaces/:id/git pulls with fast-forward only", async () => {
+  const calls: string[] = [];
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit({
+      pull: async (path) => {
+        calls.push(path);
+      },
+    }),
+  });
+
+  const response = await app.request("/api/workspaces/w1/git", postGit("pull"));
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(calls).toEqual([checkoutPath]);
+});
+
+test("POST /api/workspaces/:id/git refuses a fetch without a remote", async () => {
+  let called = false;
+  const stateWithoutRemote: AppState = {
+    ...syncState,
+    workspaces: [
+      {
+        ...syncState.workspaces[0]!,
+        sync: { upstream: null, ahead: 0, behind: 0, hasRemote: false },
+      },
+    ],
+  };
+  const { app } = createTestApp({
+    state: stateWithoutRemote,
+    git: createFakeGit({
+      fetch: async () => {
+        called = true;
+      },
+    }),
+  });
+
+  const response = await app.request("/api/workspaces/w1/git", postGit("fetch"));
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "no_remote" });
+  expect(called).toBe(false);
+});
+
+test("POST /api/workspaces/:id/git refuses a pull without an upstream", async () => {
+  let called = false;
+  const stateWithoutUpstream: AppState = {
+    ...syncState,
+    workspaces: [
+      {
+        ...syncState.workspaces[0]!,
+        sync: { upstream: null, ahead: 0, behind: 0, hasRemote: true },
+      },
+    ],
+  };
+  const { app } = createTestApp({
+    state: stateWithoutUpstream,
+    git: createFakeGit({
+      pull: async () => {
+        called = true;
+      },
+    }),
+  });
+
+  const response = await app.request("/api/workspaces/w1/git", postGit("pull"));
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "no_upstream" });
+  expect(called).toBe(false);
+});
+
+test("POST /api/workspaces/:id/git requires a known action", async () => {
+  const { app } = createTestApp({ state: syncState, git: createFakeGit() });
+  const response = await app.request("/api/workspaces/w1/git", postGit("push"));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_request" });
+});
+
+test("POST /api/workspaces/:id/git refuses a workspace without a checkout", async () => {
+  const { app } = createTestApp({
+    state: syncState,
+    store: createFakeStore(syncState, undefined, null),
+    git: createFakeGit(),
+  });
+  const response = await app.request("/api/workspaces/w1/git", postGit("fetch"));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_git_worktree" });
+});
+
+test("POST /api/workspaces/:id/git refuses a workspace without a branch", async () => {
+  const { app } = createTestApp({ state, git: createFakeGit() });
+  const response = await app.request("/api/workspaces/w1/git", postGit("fetch"));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_git_worktree" });
+});
+
+test("POST /api/workspaces/:id/git reports an unknown workspace", async () => {
+  const { app } = createTestApp({ state: syncState, git: createFakeGit() });
+  const response = await app.request("/api/workspaces/w9/git", postGit("fetch"));
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "workspace_not_found" });
+});
+
+test("POST /api/workspaces/:id/git reports a git failure", async () => {
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit({
+      fetch: async () => {
+        throw new Error("git failed");
+      },
+    }),
+  });
+  const response = await app.request("/api/workspaces/w1/git", postGit("fetch"));
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "git_fetch_failed" });
+});
+
+test("POST /api/workspaces/:id/git returns 502 when Herdr cannot be read", async () => {
+  const { app } = createTestApp({
+    state: null,
+    storeFailure: new Error("socket closed"),
+    git: createFakeGit(),
+  });
+  const response = await app.request("/api/workspaces/w1/git", postGit("fetch"));
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });

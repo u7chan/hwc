@@ -9,6 +9,7 @@ import type {
   ChatUsage,
 } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
+import type { GitSync } from "../shared/git";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
@@ -82,6 +83,7 @@ import {
   StopIcon,
   TerminalIcon,
 } from "./icons";
+import { GitStatus } from "./GitStatus";
 import { Markdown } from "./Markdown";
 import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
@@ -708,6 +710,9 @@ type PaneDetailProps = {
   branch: string | null;
   // 一覧が隠れる狭い画面でだけ、ブランチを名前に代えて出す。
   showBranch: boolean;
+  // 1 枚表示のときだけ渡す。分割セルは同じ上流の差が並ぶので出さない。
+  sync: GitSync | null;
+  workspaceMenuOpen: boolean;
   waitingMs: number | null;
   // シェルの前景プロセスが動いているか。停止ボタンの出し分けにだけ使う。
   running: boolean;
@@ -721,6 +726,7 @@ type PaneDetailProps = {
   menuOpen: boolean;
   commandRef: Ref<PaneCommandHandle>;
   onOpenMenu: (paneId: string, trigger: HTMLElement) => void;
+  onOpenWorkspaceMenu: (workspaceId: string, trigger: HTMLElement) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
   onStop: () => Promise<boolean>;
   // ダイアログは App 直下に 1 つだけ出す。セルの中に置くと containment の内側に閉じる。
@@ -743,6 +749,8 @@ export function PaneDetail(props: PaneDetailProps) {
     labeled,
     branch,
     showBranch,
+    sync,
+    workspaceMenuOpen,
     waitingMs,
     running,
     sending,
@@ -752,6 +760,7 @@ export function PaneDetail(props: PaneDetailProps) {
     onDismissConfirmation,
     menuOpen,
     onOpenMenu,
+    onOpenWorkspaceMenu,
     onSubmit,
     onStop,
     onOpenImage,
@@ -1462,6 +1471,11 @@ export function PaneDetail(props: PaneDetailProps) {
             {branch}
           </span>
         )}
+        <GitStatus
+          sync={sync}
+          expanded={workspaceMenuOpen}
+          onOpen={(trigger) => onOpenWorkspaceMenu(context.workspaceId, trigger)}
+        />
         {pullRequest === null || pullRequest.state !== "OPEN" ? null : (
           <a
             class="hwc-pane-head-pr"

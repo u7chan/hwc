@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
+import type { GitSync } from "../shared/git";
 import type { PullRequest } from "../shared/pull-request";
 import {
   AgentGlyphIcon,
@@ -31,6 +32,7 @@ import {
   type ActiveStatus,
   type ListScope,
 } from "./scope";
+import { GitStatus } from "./GitStatus";
 import { MENU_ID } from "./Menu";
 import type { SentPane } from "./sent";
 import { StatusIcon, StatusLabel } from "./StatusLabel";
@@ -186,10 +188,14 @@ function ActiveBand(props: {
   group: ActiveGroup;
   pullRequest: PullRequest | null;
   onOpen: () => void;
+  onWorkspaceMenu: (trigger: HTMLElement) => void;
+  menuOpen: boolean;
 }) {
   const { workspace, counts } = props.group;
   const branch = workspace.branch ?? null;
   const pullRequest = props.pullRequest;
+  const sync = workspace.sync ?? null;
+  const showsSync = sync !== null && sync.upstream !== null;
   // PR が無いときは今までどおりブランチを出す。PR があれば、merge 後もタスク名を残す。
   const summary = pullRequest?.title ?? branch;
   return (
@@ -214,12 +220,17 @@ function ActiveBand(props: {
             </a>
           ) : null}
         </div>
-        {summary === null ? null : (
-          <p
-            class={pullRequest === null ? "hwc-active-band-branch" : "hwc-active-band-summary"}
-            title={summary}
-          >
-            {summary}
+        {summary === null && !showsSync ? null : (
+          <p class="hwc-active-band-line">
+            {summary === null ? null : (
+              <span
+                class={pullRequest === null ? "hwc-active-band-branch" : "hwc-active-band-summary"}
+                title={summary}
+              >
+                {summary}
+              </span>
+            )}
+            <GitStatus sync={sync} expanded={props.menuOpen} onOpen={props.onWorkspaceMenu} />
           </p>
         )}
       </div>
@@ -278,6 +289,8 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
             group={group}
             pullRequest={props.pullRequests.get(group.workspace.id) ?? null}
             onOpen={() => props.onRevealWorkspace(group.workspace.id)}
+            onWorkspaceMenu={(trigger) => props.onWorkspaceMenu(group.workspace.id, trigger)}
+            menuOpen={props.openWorkspaceMenuId === group.workspace.id}
           />
           <ul class="hwc-active-rows">
             {group.rows.map(({ tab, pane }) => {
@@ -415,11 +428,14 @@ function TreePaneList(props: TreePaneListProps) {
     status: PaneState["agentStatus"];
     controlsId: string;
     workspaceId?: string;
+    sync?: GitSync | null;
     // 代表の見出しを持たないホスト（リポジトリ束の先頭）は、束の見出しをその場所の入口にする。
     domId?: string;
   }) {
     const open = expanded.has(props2.id);
     const workspaceId = props2.workspaceId;
+    const sync = props2.sync ?? null;
+    const showsSync = sync !== null && sync.upstream !== null;
     return (
       <div class="hwc-group-row" data-menu={workspaceId !== undefined} id={props2.domId}>
         <button
@@ -441,7 +457,15 @@ function TreePaneList(props: TreePaneListProps) {
             <ChevronRightIcon />
           </span>
         </button>
-        {workspaceId === undefined ? null : (
+        {workspaceId === undefined ? null : showsSync ? (
+          // 上流がある間は状態表示がメニューの入口を兼ねる。名前の幅を空けるため、
+          // 同じメニューを開く「…」は重ねて出さない。
+          <GitStatus
+            sync={sync}
+            expanded={props.openWorkspaceMenuId === workspaceId}
+            onOpen={(trigger) => props.onWorkspaceMenu(workspaceId, trigger)}
+          />
+        ) : (
           <button
             type="button"
             class="hwc-pane-more"
@@ -598,6 +622,7 @@ function TreePaneList(props: TreePaneListProps) {
               status: workspace.agentStatus,
               controlsId: groupId,
               workspaceId: workspace.id,
+              sync: workspace.sync ?? null,
             })
           : null}
         <GroupChildren id={groupId} open={withHeader ? open : true}>
@@ -636,6 +661,7 @@ function TreePaneList(props: TreePaneListProps) {
               status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
               controlsId: groupId,
               workspaceId: group.host?.id,
+              sync: group.host?.sync ?? null,
               domId: group.host === null ? undefined : spaceId(group.host.id),
             })}
             <GroupChildren id={groupId} open={open}>

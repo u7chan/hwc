@@ -15,6 +15,8 @@ import {
   removeWorktree,
   sendInput,
   stopAgent,
+  syncWorkspace,
+  type GitSyncFailure,
 } from "./api";
 import {
   INITIAL_CONNECTION,
@@ -31,6 +33,7 @@ import { PaneMenu } from "./PaneMenu";
 import { usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import { RemoveWorktreeConfirm } from "./RemoveWorktreeConfirm";
+import { WorkspaceGitActions } from "./WorkspaceGitActions";
 import type { PaneCommandHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
@@ -214,6 +217,16 @@ type OperationMenu = {
   open: boolean;
 };
 
+// メニューを閉じても続く操作。busy はメニューの外に置き、開き直しても実行中を出す。
+type GitAction =
+  | { workspaceId: string; action: "fetch" | "pull"; phase: "busy" }
+  | {
+      workspaceId: string;
+      action: "fetch" | "pull";
+      phase: "failed";
+      error: GitSyncFailure;
+    };
+
 // 削除の確認。対象の名前とパスは開いた時点のスナップショットから取る。SSE が
 // スペースを落とした後では、何を消すのかを引けない。
 type Removing = {
@@ -294,6 +307,8 @@ export function App() {
   // メニューと確認はセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
   const [menu, setMenu] = useState<OperationMenu | null>(null);
+  const [gitAction, setGitAction] = useState<GitAction | null>(null);
+  const gitActionInFlight = useRef(false);
   // 会話と圧縮の状態は各詳細が持つ。一覧も同じ実行口を使う。
   const commandHandles = useRef(new Map<string, PaneCommandHandle>());
   // メニューや詳細の寿命でロックを失わず、次の描画より前の連打も抑える。
@@ -498,6 +513,13 @@ export function App() {
     setMenu({ target: { kind: "pane", id: paneId }, trigger, fromList, open: true });
   };
 
+  // スペースの状態表示と見出しの「…」は同じメニューを開く。操作の入口を 1 つに保つ。
+  const openWorkspaceMenu = (workspaceId: string, trigger: HTMLElement, fromList = false) => {
+    // 前回の失敗を今回の結果として見せない。開き直したときは空の状態から始める。
+    setGitAction((current) => (current?.phase === "failed" ? null : current));
+    setMenu({ target: { kind: "workspace", id: workspaceId }, trigger, fromList, open: true });
+  };
+
   // 開始時に表示していなくても、応答時点で表示されている詳細には読み直しを伝える。
   // 一覧でクリアを押し、通信待ち中に対象のペインを開く経路があるため。
   const clearOutputForMenu = async (paneId: string): Promise<boolean> => {
@@ -511,6 +533,35 @@ export function App() {
     setMenu((current) =>
       current !== null && current === menu ? { ...current, open: false } : current,
     );
+  };
+
+  // fetch / pull の実行中は、背景のタップや Esc でメニューを閉じない。閉じても操作は
+  // 続くが、結果の表示先が無くなる。明示的な項目（PR リンクなど）はそのまま閉じられる。
+  const dismissMenu = () => {
+    if (
+      gitAction !== null &&
+      gitAction.phase === "busy" &&
+      menu !== null &&
+      menu.target.kind === "workspace" &&
+      menu.target.id === gitAction.workspaceId
+    ) {
+      return;
+    }
+    closeMenu();
+  };
+
+  const runGitSync = async (workspaceId: string, action: "fetch" | "pull") => {
+    if (gitActionInFlight.current) return;
+    gitActionInFlight.current = true;
+    setGitAction({ workspaceId, action, phase: "busy" });
+    const outcome = await syncWorkspace(workspaceId, action);
+    gitActionInFlight.current = false;
+    if (outcome.ok) {
+      setGitAction(null);
+      closeMenu();
+      return;
+    }
+    setGitAction({ workspaceId, action, phase: "failed", error: outcome.error });
   };
 
   // 名前とエージェントはダイアログで決める。メニューは入口だけ。
@@ -793,6 +844,20 @@ export function App() {
       : null;
   const menuPullRequest =
     menuWorkspace === null ? null : (pullRequests.get(menuWorkspace.id) ?? null);
+  const menuGitBusy =
+    menuWorkspace !== null &&
+    gitAction !== null &&
+    gitAction.workspaceId === menuWorkspace.id &&
+    gitAction.phase === "busy"
+      ? gitAction.action
+      : null;
+  const menuGitFailed =
+    menuWorkspace !== null &&
+    gitAction !== null &&
+    gitAction.workspaceId === menuWorkspace.id &&
+    gitAction.phase === "failed"
+      ? { action: gitAction.action, error: gitAction.error }
+      : null;
   // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする（ADR 0038）。
   const menuWorktree = menuWorkspace?.worktree ?? null;
   const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
@@ -809,6 +874,13 @@ export function App() {
       // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
       // 値そのものは常に渡す。
       branch={where.branch}
+      // 上流との差はワークスペースの属性。分割セルでは同じ値が並ぶので出さない。
+      sync={cells.length > 1 ? null : where.sync}
+      workspaceMenuOpen={
+        menu?.open === true &&
+        menu.target.kind === "workspace" &&
+        menu.target.id === where.workspaceId
+      }
       // 広い画面でも PR のチップは見出しに出す。ブランチだけを隠す。
       showBranch={!wide}
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
@@ -826,6 +898,7 @@ export function App() {
         else commandHandles.current.set(item.id, handle);
       }}
       onOpenMenu={openPaneMenu}
+      onOpenWorkspaceMenu={openWorkspaceMenu}
       onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
       onStop={() => stopPane(item.id)}
       onOpenImage={(url, name) => setViewer({ url, name })}
@@ -890,12 +963,7 @@ export function App() {
               openWorkspaceMenuId={menu?.open === true ? (menuWorkspace?.id ?? null) : null}
               onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
               onWorkspaceMenu={(workspaceId, trigger) =>
-                setMenu({
-                  target: { kind: "workspace", id: workspaceId },
-                  trigger,
-                  fromList: true,
-                  open: true,
-                })
+                openWorkspaceMenu(workspaceId, trigger, true)
               }
               workingSince={workingSince}
               finishedAt={finishedAt}
@@ -1007,7 +1075,7 @@ export function App() {
           label={`${menuWorkspace?.label ?? menuPaneId} の操作`}
           trigger={menu.trigger}
           open={menu.open}
-          onClose={closeMenu}
+          onClose={dismissMenu}
           onExited={() => setMenu((current) => (current?.open === false ? null : current))}
           closeOnScroll={menu.fromList}
         >
@@ -1065,6 +1133,12 @@ export function App() {
                   </a>
                 </>
               )}
+              <WorkspaceGitActions
+                sync={menuWorkspace.sync ?? null}
+                busy={menuGitBusy}
+                failed={menuGitFailed}
+                onRun={(action) => void runGitSync(menuWorkspace.id, action)}
+              />
               {canCreateWorktree ? (
                 <>
                   <hr class="hwc-menu-separator" />

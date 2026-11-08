@@ -83,6 +83,29 @@ export function WorktreeIcon({ size = 16 }: IconProps) {
   );
 }
 
+// リモートの情報を取ってくる。下向きの矢印だけだと取り込みと区別できないので、
+// 雲から降ろす形にする。
+export function FetchIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M7 17a4 4 0 0 1-.7-7.9A5.5 5.5 0 0 1 17 9.5a3.5 3.5 0 0 1 .5 7" />
+      <path d="M12 12v8" />
+      <path d="M8.5 16.5L12 20l3.5-3.5" />
+    </Svg>
+  );
+}
+
+// 上流の変更を今のブランチへ取り込む。下向きの矢印を線の上に置く。
+export function PullIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M12 4v10" />
+      <path d="M8 10l4 4 4-4" />
+      <path d="M5 20h14" />
+    </Svg>
+  );
+}
+
 export function MoreIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

@@ -38,6 +38,7 @@ import {
 import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
 import type { WorktreeClient } from "./herdr/worktrees";
 import type { PullRequestReader } from "./pull-request";
+import type { GitClient } from "./git";
 import {
   attachMessageFiles,
   messageFileContentType,
@@ -75,6 +76,8 @@ export function createApp(options: {
   models?: AgentModelsClient;
   // PR は gh の起動を伴うので、状態の取得経路には載せない。求めたときだけ引く。
   pullRequests?: PullRequestReader;
+  // fetch / pull は状態を変えるので、状態の取得とは別の口から呼ぶ。
+  git?: GitClient;
   revision?: string;
   sseHeartbeatMs?: number;
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
@@ -89,6 +92,7 @@ export function createApp(options: {
     codex,
     models,
     pullRequests,
+    git,
     revision = "dev",
     sseHeartbeatMs = SSE_HEARTBEAT_MS,
     attachmentsRoot = defaultAttachmentsRoot(),
@@ -339,6 +343,51 @@ export function createApp(options: {
         const refresh = c.req.query("refresh") === "1";
         const pullRequest = await pullRequests({ checkoutPath, branch, refresh }).catch(() => null);
         return c.json({ pullRequest });
+      })
+      .post("/api/workspaces/:id/git", requireJson, async (c) => {
+        const body = await c.req.json().catch(() => null);
+        const action =
+          typeof body === "object" && body !== null
+            ? (body as { action?: unknown }).action
+            : undefined;
+        if (action !== "fetch" && action !== "pull") {
+          return c.json({ error: "invalid_request" }, 400);
+        }
+
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+        const workspaceId = c.req.param("id");
+        const workspace = state.workspaces.find((item) => item.id === workspaceId);
+        if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
+
+        const checkoutPath = store.workspacePath(workspace.id);
+        if (checkoutPath === null) return c.json({ error: "not_git_worktree" }, 409);
+        // ブランチが読めない場所は git のワークツリーではない。detached HEAD もここに入る。
+        if (workspace.branch == null) return c.json({ error: "not_git_worktree" }, 409);
+        if (git === undefined) return c.json({ error: "git_unavailable" }, 502);
+        // 状態が古い場合も、クライアントが同じ条件で出し分けている。ここでは最後の砦。
+        if (workspace.sync?.hasRemote !== true) {
+          return c.json({ error: "no_remote" }, 409);
+        }
+        if (action === "pull" && workspace.sync?.upstream == null) {
+          return c.json({ error: "no_upstream" }, 409);
+        }
+
+        try {
+          if (action === "fetch") await git.fetch(checkoutPath);
+          else await git.pull(checkoutPath);
+        } catch {
+          return c.json(
+            { error: action === "fetch" ? "git_fetch_failed" : "git_pull_failed" },
+            502,
+          );
+        }
+
+        // 次の状態公開で上流との差を読み直す。取得に失敗しても git の操作自体は終わっている。
+        store.invalidateGit(workspace.id);
+        await store.refresh().catch(() => {});
+        return c.json({ ok: true });
       })
       .get("/api/panes/:id/chat", async (c) => {
         const state = await current();

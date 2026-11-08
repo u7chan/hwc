@@ -24,6 +24,7 @@ bun run e2e:serve
 | Codex App Server        | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない |
 | OpenCode サービス       | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                  |
 | ブランチ                | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                     |
+| git のリモートと差      | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の upstream / ahead / behind を返す  |
 | 添付の保存先            | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                         |
 | ポート                  | 30000                                               | 31000                                                                                                              |
 
@@ -67,6 +68,11 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 を流す。hwc の既読はこの遷移で行が消える（窓口の `done` は `idle` の行として残る）。
 `pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
+
+`<root>/bin/git` は `e2e/fake-git.ts` を起動する。`remote` と `for-each-ref` は
+`<root>/git-state.json` の架空の upstream / ahead / behind を返し、`fetch` は何も変えない。
+`pull --ff-only` は behind を 0 にして状態ファイルを書き換えるので、BFF が状態を取り直すと
+見出しの `↓N` が消える。実リポジトリ・実リモート・認証には触れない。
 
 シェルペインの「…」メニューには「出力をクリア」が出る。選ぶと BFF が `pane.clear` を呼び、
 架空の端末出力は最後の 1 行（プロンプト）だけになる。hwc はペイン詳細の実行口から直ちに
