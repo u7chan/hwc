@@ -93,7 +93,11 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
       stdout: "pipe",
       stderr: "ignore",
     });
-    listeners.set(paneId, { child, port: await readPort(child.stdout) });
+    const port = await readPort(child.stdout);
+    listeners.set(paneId, { child, port });
+    // 端末出力の `{port}` を実リスナーのポートに合わせる。fixture の固定値と実ポートが
+    // 食い違うと、検出結果が誤っているように見える。
+    outputs.set(paneId, (outputs.get(paneId) ?? "").replaceAll("{port}", String(port)));
   };
 
   const readPort = async (stream: ReadableStream<Uint8Array>): Promise<number> => {

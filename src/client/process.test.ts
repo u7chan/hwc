@@ -63,6 +63,18 @@ test("a pane that could not be read keeps its last value", () => {
   expect(mergeProcesses(before, [[shell.id, null]])).toBe(before);
 });
 
+// コマンドが動いたまま bind する（python3 -m http.server など）と、running と command は
+// 変わらず ports だけが現れる。ここを取りこぼすとタブにポートが出ない。
+test("a port that appears while the command keeps running replaces the entry", () => {
+  const before = new Map([[shell.id, running]]);
+  const withPort = { ...running, ports: [8000] };
+  const next = mergeProcesses(before, [[shell.id, withPort]]);
+  expect(next).not.toBe(before);
+  expect(next.get(shell.id)).toEqual(withPort);
+  expect(mergeProcesses(next, [[shell.id, withPort]])).toBe(next);
+  expect(mergeProcesses(next, [[shell.id, { ...withPort, ports: [8001] }]])).not.toBe(next);
+});
+
 test("a changed command replaces the entry", () => {
   const before = new Map([[shell.id, { running: false, command: null, ports: [] }]]);
   const next = mergeProcesses(before, [[shell.id, running]]);

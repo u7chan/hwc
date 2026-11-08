@@ -590,7 +590,7 @@ const outputs: Record<string, string> = {
     "",
     "  VITE v7.1.0  ready in 210 ms",
     "",
-    "  ➜  Local:   http://localhost:5173/",
+    "  ➜  Local:   http://localhost:{port}/",
     "  ➜  Network: use --host to expose",
     "",
   ].join("\n"),

@@ -36,8 +36,18 @@ export function commandName(command: string): string {
 
 type Entry = readonly [paneId: string, process: PaneProcess | null];
 
+function sameProcess(left: PaneProcess, right: PaneProcess): boolean {
+  return (
+    left.running === right.running &&
+    left.command === right.command &&
+    left.ports.length === right.ports.length &&
+    left.ports.every((port, index) => port === right.ports[index])
+  );
+}
+
 // 取れなかったペインは前回の値を残す。毎回同じ Map を作り直すと、変化が無いのに
-// 詳細全体が再描画されるので、変わったときだけ差し替える。
+// 詳細全体が再描画されるので、変わったときだけ差し替える。ポートはコマンドの起動後に
+// 現れることがあるので、比較に含める。
 export function mergeProcesses(
   previous: ReadonlyMap<string, PaneProcess>,
   results: readonly Entry[],
@@ -46,13 +56,7 @@ export function mergeProcesses(
   for (const [paneId, process] of results) {
     if (process === null) continue;
     const before = previous.get(paneId);
-    if (
-      before !== undefined &&
-      before.running === process.running &&
-      before.command === process.command
-    ) {
-      continue;
-    }
+    if (before !== undefined && sameProcess(before, process)) continue;
     next ??= new Map(previous);
     next.set(paneId, process);
   }
