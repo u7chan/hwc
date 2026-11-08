@@ -3527,6 +3527,24 @@ p.hwc-compaction,
   gap: var(--space-1);
 }
 
+/* サムネイルは小さいまま、押せる範囲だけチップの中で 44px に広げる。 */
+.hwc-attachment-open {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.hwc-attachment-open:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 .hwc-attachment-thumb {
   display: block;
   width: 2.25rem;
