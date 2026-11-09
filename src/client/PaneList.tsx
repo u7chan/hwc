@@ -7,6 +7,7 @@ import {
   AgentGlyphIcon,
   ArrowRightIcon,
   ChevronRightIcon,
+  MergeIcon,
   MoreIcon,
   PaneIcon,
   RepoIcon,
@@ -20,6 +21,8 @@ import {
   countWorkspacePanes,
   groupWorkspaces,
   paneRowTitle,
+  pullRequestLabel,
+  pullRequestTone,
   soleTab,
   statusLabel,
   statusTone,
@@ -197,6 +200,7 @@ function ActiveBand(props: {
   // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば
   // タイトルを先頭に置き、名前は帯全体のボタンの読み上げとツリーに残す。
   const heading = pullRequest?.title ?? workspace.label;
+  const pullRequestState = pullRequest === null ? null : pullRequestTone(pullRequest.state);
   // 件数は最後の行の右端に置く。タイトルの幅を件数に削らせない。
   const countsNode = (
     <span class="hwc-active-band-counts">
@@ -215,17 +219,18 @@ function ActiveBand(props: {
           <h2 class="hwc-active-band-name" id={bandId(workspace.id)} title={heading}>
             {heading}
           </h2>
-          {pullRequest?.state === "OPEN" ? (
+          {pullRequest === null || pullRequestState === null ? null : (
             <a
               class="hwc-active-band-pr"
+              data-state={pullRequestState}
               href={pullRequest.url}
               target="_blank"
               rel="noreferrer"
-              aria-label={`PR #${pullRequest.number} を GitHub で開く`}
+              aria-label={pullRequestLabel(pullRequest)}
             >
-              #{pullRequest.number}
+              {pullRequestState === "merged" ? <MergeIcon size={13} /> : null}#{pullRequest.number}
             </a>
-          ) : null}
+          )}
         </div>
         {branch === null && !showsSync ? null : (
           <p class="hwc-active-band-line">
@@ -405,6 +410,23 @@ function renderList(props: PaneListProps, groups: readonly ActiveGroup[]) {
   }
 }
 
+// マージ済みはタスクの終わり。タイトルの前に記号を置き、番号は帯とメニューに任せる。
+// 開いている PR はレビュー中の現在地なので、タイトルだけで足りる。
+function PullRequestSummary(props: { pullRequest: PullRequest | null; fallback: string }) {
+  const pullRequest = props.pullRequest;
+  if (pullRequest === null || pullRequestTone(pullRequest.state) !== "merged") {
+    return <>{pullRequest?.title ?? props.fallback}</>;
+  }
+  return (
+    <>
+      <span class="hwc-merged-mark" role="img" aria-label="マージ済み" title="マージ済み">
+        <MergeIcon size={13} />
+      </span>{" "}
+      {pullRequest.title}
+    </>
+  );
+}
+
 function TreePaneList(props: TreePaneListProps) {
   const { state, selectedPaneId, expanded, onSelect, onToggle, workingSince, now } = props;
 
@@ -424,7 +446,7 @@ function TreePaneList(props: TreePaneListProps) {
     depth: number;
     icon: ComponentChildren;
     label: string;
-    sub: string;
+    sub: ComponentChildren;
     title?: string;
     status: PaneState["agentStatus"];
     controlsId: string;
@@ -614,11 +636,16 @@ function TreePaneList(props: TreePaneListProps) {
               depth,
               icon: <WorkspaceGlyph worktree={workspace.worktree} />,
               label: workspace.label,
-              sub:
-                pullRequest?.title ??
-                (workspace.worktree?.isLinkedWorktree === true
-                  ? `${workspace.worktree.repoName} · ${countWorkspacePanes(workspace.id, state)} ペイン`
-                  : `${countWorkspacePanes(workspace.id, state)} ペイン`),
+              sub: (
+                <PullRequestSummary
+                  pullRequest={pullRequest}
+                  fallback={
+                    workspace.worktree?.isLinkedWorktree === true
+                      ? `${workspace.worktree.repoName} · ${countWorkspacePanes(workspace.id, state)} ペイン`
+                      : `${countWorkspacePanes(workspace.id, state)} ペイン`
+                  }
+                />
+              ),
               title: workspace.worktree?.checkoutPath ?? undefined,
               status: workspace.agentStatus,
               controlsId: groupId,
@@ -655,9 +682,12 @@ function TreePaneList(props: TreePaneListProps) {
               depth: 0,
               icon: <RepoIcon />,
               label: group.repoName,
-              sub:
-                hostPullRequest?.title ??
-                `${group.linked.length + (group.host ? 1 : 0)} ワークツリー`,
+              sub: (
+                <PullRequestSummary
+                  pullRequest={hostPullRequest}
+                  fallback={`${group.linked.length + (group.host ? 1 : 0)} ワークツリー`}
+                />
+              ),
               title: group.host?.worktree?.repoRoot ?? undefined,
               status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
               controlsId: groupId,

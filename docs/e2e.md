@@ -156,7 +156,7 @@ PR のチップは、1 枚表示と分割セルのペイン見出し、アクテ
 
 1. `acme-dashboard` のペインを狭い画面で開く。見出しは `feat/empty-state` と `#481` になる。
 2. `#481` をタップすると `https://github.com/example/acme-dashboard/pull/481` が新しいタブで開く。
-3. `acme-dashboard (docs)` のペインは `docs/quickstart` だけで、チップは出ない（PR #482 は merged なので出さない）。
+3. `acme-dashboard (docs)` のペインは `docs/quickstart` だけで、チップは出ない（ペイン見出しに merged は出さない）。
 4. 広い画面にすると、見出しはブランチを出さず、`#481` だけを出す（一覧がブランチを持っている）。
 5. 分割表示にすると、どのセルの見出しにも `#481` が出る。どれをタップしても同じ URL が開く。
 
@@ -174,13 +174,14 @@ PR のチップは、1 枚表示と分割セルのペイン見出し、アクテ
 
 ## ワークツリーの概要
 
-一覧のワークツリー見出しには、ブランチの最新 PR のタイトルを出す。チップは open のときだけ、ツリーのメニューは state を問わない。
+一覧のワークツリー見出しには、ブランチの最新 PR のタイトルを出す。チップは open と merged のとき、ツリーのメニューは state を問わない。
 
 1. `アクティブ` を開く。`acme-dashboard` の帯は 1 行目に `Add an empty state to the dashboard` と `#481`、2 行目に `feat/empty-state` が出る。
 2. `#481` のリンク先が `https://github.com/example/acme-dashboard/pull/481` であることを確かめる。
-3. `acme-dashboard (docs)` の帯は 1 行目に `Write the quickstart guide`、2 行目に `docs/quickstart` が出て、`#482` は出ない（merged のため）。
+3. `acme-dashboard (docs)` の帯は 1 行目に `Write the quickstart guide`、2 行目に `docs/quickstart` が出る。チップは `#482` で、緑色のマージ記号が番号の手前に付く（merged）。
 4. `すべて` に切り替える。`acme-dashboard` の見出しの 2 行目が同じタイトルになる。`…` を開くと `PR #481 を開く` があり、リンク先が同じ URL である。
-5. PR の無い `scratch` の見出しは、今までどおりペイン数だけを出す。
+5. `acme-dashboard (docs)` の見出しは、タイトルの手前にマージの記号だけが出る（番号は帯とメニュー）。
+6. PR の無い `scratch` の見出しは、今までどおりペイン数だけを出す。
 
 ## スペースのパスをコピー
 

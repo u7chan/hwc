@@ -106,6 +106,19 @@ export function PullIcon({ size = 16 }: IconProps) {
   );
 }
 
+// マージ済みの PR。左の 2 つの点を束ねる枝で、開いている PR の番号だけのチップと形で区別する。
+export function MergeIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="7" cy="5.5" r="2.2" />
+      <circle cx="7" cy="18.5" r="2.2" />
+      <circle cx="17" cy="12" r="2.4" />
+      <path d="M7 7.7v8.6" />
+      <path d="M9.2 9.2c1.6 3 3.3 2.8 5.4 2.8" />
+    </Svg>
+  );
+}
+
 export function MoreIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

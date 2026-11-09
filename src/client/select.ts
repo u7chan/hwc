@@ -6,6 +6,7 @@ import type {
   WorkspaceState,
 } from "../server/herdr/state";
 import type { GitSync } from "../shared/git";
+import type { PullRequest, PullRequestState } from "../shared/pull-request";
 
 export type PaneRow = {
   workspace: WorkspaceState;
@@ -186,6 +187,28 @@ export function statusTone(status: AgentStatus): StatusTone {
     default:
       return "neutral";
   }
+}
+
+export type PullRequestTone = "open" | "merged";
+
+// 一覧のチップは open と merged にだけ出す。closed は作業の現在地でも終わりでもないので、
+// 今までどおり何も出さない。
+export function pullRequestTone(state: PullRequestState): PullRequestTone | null {
+  switch (state) {
+    case "OPEN":
+      return "open";
+    case "MERGED":
+      return "merged";
+    default:
+      return null;
+  }
+}
+
+// 記号だけでは状態が伝わらない読み上げのために、merged のときだけ言葉を添える。
+export function pullRequestLabel(pullRequest: PullRequest): string {
+  return pullRequest.state === "MERGED"
+    ? `PR #${pullRequest.number}（マージ済み）を GitHub で開く`
+    : `PR #${pullRequest.number} を GitHub で開く`;
 }
 
 export function statusLabel(status: AgentStatus): string {

@@ -10,7 +10,7 @@ const PULL_REQUESTS: Record<
     title: "Add an empty state to the dashboard",
     state: "OPEN",
   },
-  // merge 後も概要は残し、チップだけを消すことを確かめる。
+  // merge 後も概要とチップは残り、チップのマージ記号で区別できることを確かめる。
   "docs/quickstart": {
     number: 482,
     url: "https://github.com/example/acme-dashboard/pull/482",

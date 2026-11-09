@@ -14,6 +14,8 @@ import {
   nextPaneInTab,
   paneName,
   paneRowTitle,
+  pullRequestLabel,
+  pullRequestTone,
   shortenPath,
   soleTab,
   splitPanes,
@@ -473,4 +475,24 @@ test("a row keeps its name when nothing is left after the workspace name", () =>
   expect(activeRowName("demo", "demolition")).toBe("demolition");
   // ワークスペース名が無ければ何も落とさない。
   expect(activeRowName("", "review")).toBe("review");
+});
+
+test("the list shows a chip for open and merged, and none for closed", () => {
+  // マージ後もワークツリーは残る。終わったタスクを取り違えないよう、merged にも印を出す。
+  expect(pullRequestTone("OPEN")).toBe("open");
+  expect(pullRequestTone("MERGED")).toBe("merged");
+  expect(pullRequestTone("CLOSED")).toBeNull();
+});
+
+test("the merged chip says the state when read aloud", () => {
+  const pullRequest = {
+    number: 481,
+    url: "https://github.com/example/acme-dashboard/pull/481",
+    title: "Add an empty state to the dashboard",
+  };
+
+  expect(pullRequestLabel({ ...pullRequest, state: "OPEN" })).toBe("PR #481 を GitHub で開く");
+  expect(pullRequestLabel({ ...pullRequest, state: "MERGED" })).toBe(
+    "PR #481（マージ済み）を GitHub で開く",
+  );
 });

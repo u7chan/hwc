@@ -599,6 +599,12 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   font-size: var(--text-secondary);
 }
 
+/* マージ済みの印。色だけに意味を持たせないよう、記号の形と読み上げの両方で伝える。 */
+.hwc-merged-mark {
+  color: var(--color-success);
+  vertical-align: -0.15em;
+}
+
 .hwc-chevron {
   flex: none;
   display: grid;
@@ -1392,6 +1398,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   flex: none;
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   min-height: 32px;
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
@@ -1400,6 +1407,11 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   text-decoration: none;
   white-space: nowrap;
   transition: background-color 140ms ease;
+}
+
+/* マージ済みは終わったタスク。開いている PR と同じ青にせず、完了と同じ緑に記号を添える。 */
+.hwc-active-band-pr[data-state="merged"] {
+  color: var(--color-success);
 }
 
 .hwc-active-band-pr:hover {
