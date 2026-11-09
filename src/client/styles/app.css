@@ -1464,6 +1464,17 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   gap: var(--space-3);
   min-height: var(--row-head);
   padding: var(--space-2) var(--space-4);
+  /* 上の角の外側は一覧の地で塗る。要素の背景に角丸を持たせると角の外側が透明になり、
+     貼り付いた帯の後ろを流れる行がそこから覗く。 */
+  background: var(--color-bg);
+}
+
+/* 帯の面。角丸は面にだけ持ち、角の外側は一覧の地のまま残す。 */
+.hwc-active-band::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: var(--color-raised);
   border-radius: var(--radius-panel) var(--radius-panel) 0 0;
   box-shadow: inset 0 -1px 0 var(--color-line);
