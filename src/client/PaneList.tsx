@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useLayoutEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState, TabState, WorktreeState } from "../server/herdr/state";
 import type { GitSync } from "../shared/git";
 import type { PullRequest } from "../shared/pull-request";
@@ -37,6 +37,14 @@ import {
 } from "./scope";
 import { GitStatus } from "./GitStatus";
 import { MENU_ID } from "./Menu";
+import {
+  adjacentBeforeKey,
+  dropBeforeId,
+  isOrderChange,
+  orderUnits,
+  type OrderUnit,
+} from "./order";
+import { useOrderDrag } from "./order-drag";
 import { StatusIcon, StatusLabel } from "./StatusLabel";
 import { finishedClock, formatElapsed, workingMs } from "./time";
 
@@ -56,6 +64,11 @@ type PaneListProps = {
   openWorkspaceMenuId: string | null;
   onPaneMenu: (paneId: string, trigger: HTMLElement) => void;
   onWorkspaceMenu: (workspaceId: string, trigger: HTMLElement) => void;
+  // 一覧の束を Herdr のワークスペース順で動かす。成功したら true。
+  onMoveWorkspaces: (
+    workspaceIds: readonly string[],
+    beforeWorkspaceId: string | null,
+  ) => Promise<boolean>;
   workingSince: ReadonlyMap<string, number>;
   finishedAt: ReadonlyMap<string, number>;
   pullRequests: ReadonlyMap<string, PullRequest | null>;
@@ -441,6 +454,64 @@ function TreePaneList(props: TreePaneListProps) {
 
   const toggle = (id: string) => () => onToggle(id);
 
+  const groups = groupWorkspaces(state.workspaces);
+  const units = orderUnits(groups, state.workspaces);
+  const unitByKey = new Map(units.map((unit) => [unit.key, unit]));
+
+  const [notice, setNotice] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const moving = useRef(false);
+
+  // 送るのは、掴んだ束の全 id と落とし先の先頭 id。同じ位置なら送らない。
+  const commit = (key: string, beforeKey: string | null) => {
+    const unit = unitByKey.get(key);
+    if (unit === undefined || moving.current || !isOrderChange(units, key, beforeKey)) return;
+
+    const rest = units.filter((item) => item.key !== key);
+    const to = beforeKey === null ? rest.length : rest.findIndex((item) => item.key === beforeKey);
+    if (to < 0) return;
+
+    moving.current = true;
+    setNotice(null);
+    void props.onMoveWorkspaces(unit.ids, dropBeforeId(units, beforeKey)).then(
+      (ok) => {
+        if (ok) setAnnouncement(`${unit.label} を ${to + 1} 番目に移動しました`);
+        else setNotice("並べ替えを保存できませんでした。");
+        moving.current = false;
+      },
+      () => {
+        setNotice("並べ替えを保存できませんでした。");
+        moving.current = false;
+      },
+    );
+  };
+
+  const onOrderKeyDown = (key: string, event: KeyboardEvent) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    const beforeKey = adjacentBeforeKey(units, key, event.key === "ArrowUp" ? -1 : 1);
+    if (beforeKey === undefined) return;
+    commit(key, beforeKey);
+  };
+
+  const orderDrag = useOrderDrag({
+    units,
+    onDrop: (drop) => commit(drop.key, drop.beforeKey),
+  });
+  const dragged = orderDrag.drag;
+  const lastRemainingKey =
+    dragged === null
+      ? null
+      : (units.filter((unit) => unit.key !== dragged.key).at(-1)?.key ?? null);
+  const dropEdge = (key: string): "before" | "after" | undefined => {
+    if (dragged === null || dragged.anchor === undefined) return undefined;
+    // 今と同じ位置へ落ちるなら、移動しないので線も出さない。
+    if (!isOrderChange(units, dragged.key, dragged.anchor)) return undefined;
+    if (dragged.anchor === key) return "before";
+    if (dragged.anchor === null && key === lastRemainingKey) return "after";
+    return undefined;
+  };
+
   function renderHeader(props2: {
     id: string;
     depth: number;
@@ -454,11 +525,28 @@ function TreePaneList(props: TreePaneListProps) {
     sync?: GitSync | null;
     // 代表の見出しを持たないホスト（リポジトリ束の先頭）は、束の見出しをその場所の入口にする。
     domId?: string;
+    // 最上位の束だけが並べ替えの対象。子のワークスペース見出しには渡さない。
+    order?: OrderUnit;
   }) {
     const open = expanded.has(props2.id);
     const workspaceId = props2.workspaceId;
     const sync = props2.sync ?? null;
     const showsSync = sync !== null && sync.upstream !== null;
+    const order = props2.order;
+    const orderProps =
+      order === undefined
+        ? {}
+        : {
+            onPointerDown: orderDrag.begin(order.key),
+            onPointerMove: orderDrag.move,
+            onPointerUp: orderDrag.up,
+            onPointerCancel: orderDrag.cancel,
+            onLostPointerCapture: orderDrag.lostCapture,
+            onClickCapture: orderDrag.clickCapture,
+            onContextMenu: orderDrag.contextMenu,
+            onKeyDown: (event: KeyboardEvent) => onOrderKeyDown(order.key, event),
+            "aria-keyshortcuts": "ArrowUp ArrowDown",
+          };
     return (
       <div class="hwc-group-row" data-menu={workspaceId !== undefined} id={props2.domId}>
         <button
@@ -469,6 +557,7 @@ function TreePaneList(props: TreePaneListProps) {
           aria-expanded={open}
           aria-controls={props2.controlsId}
           onClick={toggle(props2.id)}
+          {...orderProps}
         >
           <span class="hwc-group-icon">{props2.icon}</span>
           <span class="hwc-group-main">
@@ -619,6 +708,7 @@ function TreePaneList(props: TreePaneListProps) {
     workspace: AppState["workspaces"][number],
     depth: number,
     withHeader: boolean,
+    order?: OrderUnit,
   ) {
     const groupId = `hwc-group-${workspace.id}`;
     const open = expanded.has(workspace.id);
@@ -629,6 +719,9 @@ function TreePaneList(props: TreePaneListProps) {
         data-depth={depth}
         id={spaceId(workspace.id)}
         key={workspace.id}
+        data-order-key={order?.key}
+        data-dragging={order !== undefined && dragged?.key === order.key ? "true" : undefined}
+        data-drop={order === undefined ? undefined : dropEdge(order.key)}
       >
         {withHeader
           ? renderHeader({
@@ -651,6 +744,7 @@ function TreePaneList(props: TreePaneListProps) {
               controlsId: groupId,
               workspaceId: workspace.id,
               sync: workspace.sync ?? null,
+              order,
             })
           : null}
         <GroupChildren id={groupId} open={withHeader ? open : true}>
@@ -662,11 +756,20 @@ function TreePaneList(props: TreePaneListProps) {
 
   return (
     <>
-      {groupWorkspaces(state.workspaces).map((group) => {
+      {notice === null ? null : (
+        <p class="hwc-list-notice" role="alert">
+          {notice}
+        </p>
+      )}
+      <p class="hwc-visually-hidden" role="status">
+        {announcement}
+      </p>
+      {groups.map((group) => {
+        const order = unitByKey.get(group.key);
         // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
         if (group.repoName === null || group.linked.length === 0) {
           const only = group.host ?? group.linked[0];
-          return renderWorkspace(only, 0, true);
+          return renderWorkspace(only, 0, true, order);
         }
 
         const open = expanded.has(group.key);
@@ -676,7 +779,14 @@ function TreePaneList(props: TreePaneListProps) {
         const hostPullRequest =
           group.host === null ? null : (props.pullRequests.get(group.host.id) ?? null);
         return (
-          <section class="hwc-group-block" data-depth={0} key={group.key}>
+          <section
+            class="hwc-group-block"
+            data-depth={0}
+            key={group.key}
+            data-order-key={group.key}
+            data-dragging={dragged?.key === group.key ? "true" : undefined}
+            data-drop={dropEdge(group.key)}
+          >
             {renderHeader({
               id: group.key,
               depth: 0,
@@ -694,6 +804,7 @@ function TreePaneList(props: TreePaneListProps) {
               workspaceId: group.host?.id,
               sync: group.host?.sync ?? null,
               domId: group.host === null ? undefined : spaceId(group.host.id),
+              order,
             })}
             <GroupChildren id={groupId} open={open}>
               {group.host ? renderTabLevel(group.host, 1, false) : null}
