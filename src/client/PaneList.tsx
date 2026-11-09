@@ -7,6 +7,7 @@ import {
   AgentGlyphIcon,
   ArrowRightIcon,
   ChevronRightIcon,
+  GripIcon,
   MergeIcon,
   MoreIcon,
   PaneIcon,
@@ -460,10 +461,27 @@ function TreePaneList(props: TreePaneListProps) {
 
   const [notice, setNotice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [dropGuide, setDropGuide] = useState<{ top: number } | null>(null);
   const moving = useRef(false);
+  const pendingAnimation = useRef<{
+    order: string;
+    liftedKey: string;
+    offsets: ReadonlyMap<string, number>;
+  } | null>(null);
+  const orderKey = units.map((unit) => unit.key).join("\n");
+
+  // キーボード操作ではドラッグ側の offset が無い。状態が届く前の位置をここで控える。
+  const readOffsets = (): Map<string, number> => {
+    const offsets = new Map<string, number>();
+    for (const node of document.querySelectorAll<HTMLElement>("[data-order-key]")) {
+      const key = node.dataset.orderKey;
+      if (key !== undefined) offsets.set(key, node.offsetTop);
+    }
+    return offsets;
+  };
 
   // 送るのは、掴んだ束の全 id と落とし先の先頭 id。同じ位置なら送らない。
-  const commit = (key: string, beforeKey: string | null) => {
+  const commit = (key: string, beforeKey: string | null, offsets?: ReadonlyMap<string, number>) => {
     const unit = unitByKey.get(key);
     if (unit === undefined || moving.current || !isOrderChange(units, key, beforeKey)) return;
 
@@ -471,20 +489,65 @@ function TreePaneList(props: TreePaneListProps) {
     const to = beforeKey === null ? rest.length : rest.findIndex((item) => item.key === beforeKey);
     if (to < 0) return;
 
+    pendingAnimation.current = {
+      order: orderKey,
+      liftedKey: key,
+      offsets: offsets ?? readOffsets(),
+    };
     moving.current = true;
     setNotice(null);
     void props.onMoveWorkspaces(unit.ids, dropBeforeId(units, beforeKey)).then(
       (ok) => {
         if (ok) setAnnouncement(`${unit.label} を ${to + 1} 番目に移動しました`);
-        else setNotice("並べ替えを保存できませんでした。");
+        else {
+          pendingAnimation.current = null;
+          setNotice("並べ替えを保存できませんでした。");
+        }
         moving.current = false;
       },
       () => {
+        pendingAnimation.current = null;
         setNotice("並べ替えを保存できませんでした。");
         moving.current = false;
       },
     );
   };
+
+  // 状態が新しい順序で描き直された直後、ドロップ前の位置との差分を transform で戻す。
+  // 位置は offsetTop なのでスクロール位置に影響されない。
+  useLayoutEffect(() => {
+    const pendingMove = pendingAnimation.current;
+    if (pendingMove === null) return;
+    // 応答の期限は API 側（10 秒）と失敗時の掃除に任せる。遅い応答でもアニメーションする。
+    if (orderKey === pendingMove.order) return;
+    pendingAnimation.current = null;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    for (const node of document.querySelectorAll<HTMLElement>("[data-order-key]")) {
+      const key = node.dataset.orderKey;
+      if (key === undefined) continue;
+      const before = pendingMove.offsets.get(key);
+      if (before === undefined) continue;
+      const delta = before - node.offsetTop;
+      if (Math.abs(delta) < 1 || typeof node.animate !== "function") continue;
+
+      const lifted = key === pendingMove.liftedKey;
+      node.style.position = "relative";
+      node.style.zIndex = lifted ? "2" : "1";
+      if (lifted) node.dataset.reorderLifted = "true";
+      const cleanup = () => {
+        node.style.position = "";
+        node.style.zIndex = "";
+        delete node.dataset.reorderLifted;
+      };
+      const animation = node.animate(
+        [{ transform: `translateY(${delta}px)` }, { transform: "none" }],
+        { duration: 220, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+      );
+      animation.onfinish = cleanup;
+      animation.oncancel = cleanup;
+    }
+  });
 
   const onOrderKeyDown = (key: string, event: KeyboardEvent) => {
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
@@ -496,21 +559,45 @@ function TreePaneList(props: TreePaneListProps) {
 
   const orderDrag = useOrderDrag({
     units,
-    onDrop: (drop) => commit(drop.key, drop.beforeKey),
+    onDrop: (drop) => commit(drop.key, drop.beforeKey, drop.offsets),
   });
   const dragged = orderDrag.drag;
   const lastRemainingKey =
     dragged === null
       ? null
       : (units.filter((unit) => unit.key !== dragged.key).at(-1)?.key ?? null);
-  const dropEdge = (key: string): "before" | "after" | undefined => {
-    if (dragged === null || dragged.anchor === undefined) return undefined;
-    // 今と同じ位置へ落ちるなら、移動しないので線も出さない。
-    if (!isOrderChange(units, dragged.key, dragged.anchor)) return undefined;
-    if (dragged.anchor === key) return "before";
-    if (dragged.anchor === null && key === lastRemainingKey) return "after";
-    return undefined;
-  };
+  // 「ここに移動」の線を、落とし先のブロックの境界に置く。無変化なら出さない。
+  useLayoutEffect(() => {
+    if (dragged === null || dragged.anchor === undefined) {
+      setDropGuide(null);
+      return;
+    }
+    if (!isOrderChange(units, dragged.key, dragged.anchor)) {
+      setDropGuide(null);
+      return;
+    }
+
+    const targetKey = dragged.anchor ?? lastRemainingKey;
+    if (targetKey === null) {
+      setDropGuide(null);
+      return;
+    }
+    const node = Array.from(document.querySelectorAll<HTMLElement>("[data-order-key]")).find(
+      (item) => item.dataset.orderKey === targetKey,
+    );
+    if (node === undefined) {
+      setDropGuide(null);
+      return;
+    }
+
+    const edge = dragged.anchor === null ? "after" : "before";
+    // 先頭の前へ落とすときは、ラベルがスクロール領域の上端で切れないよう少し下げる。
+    const top = Math.max(
+      12,
+      edge === "before" ? node.offsetTop - 8 : node.offsetTop + node.offsetHeight + 8,
+    );
+    setDropGuide((current) => (current !== null && current.top === top ? current : { top }));
+  }, [dragged, lastRemainingKey, orderKey, units]);
 
   function renderHeader(props2: {
     id: string;
@@ -537,7 +624,7 @@ function TreePaneList(props: TreePaneListProps) {
       order === undefined
         ? {}
         : {
-            onPointerDown: orderDrag.begin(order.key),
+            onPointerDown: orderDrag.begin(order.key, order.label),
             onPointerMove: orderDrag.move,
             onPointerUp: orderDrag.up,
             onPointerCancel: orderDrag.cancel,
@@ -721,7 +808,6 @@ function TreePaneList(props: TreePaneListProps) {
         key={workspace.id}
         data-order-key={order?.key}
         data-dragging={order !== undefined && dragged?.key === order.key ? "true" : undefined}
-        data-drop={order === undefined ? undefined : dropEdge(order.key)}
       >
         {withHeader
           ? renderHeader({
@@ -785,7 +871,6 @@ function TreePaneList(props: TreePaneListProps) {
             key={group.key}
             data-order-key={group.key}
             data-dragging={dragged?.key === group.key ? "true" : undefined}
-            data-drop={dropEdge(group.key)}
           >
             {renderHeader({
               id: group.key,
@@ -813,6 +898,26 @@ function TreePaneList(props: TreePaneListProps) {
           </section>
         );
       })}
+      {dropGuide === null ? null : (
+        <>
+          <div class="hwc-order-drop" style={{ top: `${dropGuide.top}px` }} aria-hidden="true" />
+          <span
+            class="hwc-order-drop-label"
+            style={{ top: `${dropGuide.top}px` }}
+            aria-hidden="true"
+          >
+            ここに移動
+          </span>
+        </>
+      )}
+      {dragged === null ? null : (
+        <div class="hwc-order-ghost" aria-hidden="true">
+          <span class="hwc-order-ghost-grip">
+            <GripIcon size={16} />
+          </span>
+          <span class="hwc-order-ghost-name">{dragged.label}</span>
+        </div>
+      )}
     </>
   );
 }
