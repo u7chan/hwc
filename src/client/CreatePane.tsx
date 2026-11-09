@@ -129,6 +129,7 @@ export function CreatePane(props: CreatePaneProps) {
   return (
     <DialogShell
       role="dialog"
+      className="hwc-create-dialog"
       labelledBy="hwc-create-title"
       describedBy={error === null ? undefined : "hwc-create-error"}
       open={open}

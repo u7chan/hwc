@@ -4551,6 +4551,28 @@ p.hwc-compaction,
   margin-top: var(--space-4);
 }
 
+/* 広い画面はフォームに幅を使える。狭い画面の縦積みとタップ領域の寸法は変えない。 */
+@media (min-width: 900px) {
+  .hwc-dialog.hwc-create-dialog {
+    max-width: 480px;
+    padding: var(--space-6);
+  }
+
+  .hwc-create-dialog .hwc-dialog-title {
+    font-size: var(--text-page);
+  }
+
+  .hwc-create-dialog .hwc-dialog-actions {
+    justify-content: flex-end;
+  }
+
+  .hwc-create-dialog .hwc-dialog-button {
+    flex: 0 0 auto;
+    min-width: 9rem;
+    padding-inline: var(--space-4);
+  }
+}
+
 .hwc-spinner {
   display: inline-block;
   width: 14px;
