@@ -51,6 +51,7 @@ bun run e2e:serve
 - `pane.close`
 - `worktree.create`
 - `worktree.remove`
+- `workspace.move_block`
 
 `pane.clear` は架空の端末出力を最後の 1 行だけにして、実 Herdr の画面・スクロールバックのクリアを模す。`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`worktree.remove` は
 linked worktree のスペースをスナップショットから取り除き、`workspace.closed` を流す（実際の
@@ -67,6 +68,8 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 ときは `idle` に戻し、そのタブとスペースの集約状態を残りのペインから引き直して `pane.updated`
 を流す。hwc の既読はこの遷移で完了から待機に変わる（行そのものは残る）。
 `pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
+`workspace.move_block` は `workspaces` を並べ替えて `workspace.reordered` を流す。実 Herdr と同じく、
+渡された id の列を 1 ブロックとしてアンカーの前へ置く。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 `<root>/bin/git` は `e2e/fake-git.ts` を起動する。`remote` と `for-each-ref` は
@@ -132,6 +135,17 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 1. `アクティブ` を開く。エージェントのいるペインが、待機中も含めて帯ごとに状態順（要対応 → 完了 → 実行中 → 待機 → 不明）で並ぶ。`scratch` では `notes`（エージェントなし）が出ず、`folder-trust-saved` などの待機が帯に並ぶ。
 2. `acme-dashboard` の帯で `api`（完了）を開き、`一覧へ戻る` で戻る。`api` は `待機` になって帯の最後へ移り、帯の件数から完了が消える（[ADR 0050](adr/0050-active-lists-every-agent.md)）。
 3. `すべて` に切り替えて、シェルだけのペインと待機のペインがツリーに出ることを確かめる。
+
+## 一覧の並べ替え
+
+`すべて` の束の並びは Herdr のワークスペース順で、ネイティブ Herdr と同じ（[ADR 0052](adr/0052-workspace-order-drag.md)）。
+
+1. `すべて` を開く。`acme-dashboard`（リポジトリ束）と `scratch` が並ぶ。
+2. `scratch` の見出しを長押しする（PC は見出しを少しドラッグする）。掴んだ束が淡くなり、落とし先の境界に線が出る。
+3. `acme-dashboard` の上へ落とす。`scratch` が先頭へ移り、架空 Herdr の並びも変わる。
+4. `acme-dashboard` の見出しにフォーカスし、`↓` を押すと 1 つ下がる。`↑` で戻る。
+5. 同じ位置へ落としても通信しない。`アクティブ` に切り替えても並びは状態順のまま。
+6. 失敗時は `/api/workspaces/move` に 502 を返して確かめる。一覧は Herdr の順のままで、上部に「並べ替えを保存できませんでした。」が出る。
 
 ## ワークツリー作成
 

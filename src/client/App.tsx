@@ -13,6 +13,7 @@ import {
   clearPaneOutput,
   closePane,
   confirmFolderTrust,
+  moveWorkspaceBlock,
   parseAppState,
   removeWorktree,
   sendInput,
@@ -974,6 +975,9 @@ export function App() {
               onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
               onWorkspaceMenu={(workspaceId, trigger) =>
                 openWorkspaceMenu(workspaceId, trigger, true)
+              }
+              onMoveWorkspaces={(workspaceIds, beforeWorkspaceId) =>
+                moveWorkspaceBlock(workspaceIds, beforeWorkspaceId)
               }
               workingSince={workingSince}
               finishedAt={finishedAt}

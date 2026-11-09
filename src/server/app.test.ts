@@ -8,6 +8,7 @@ import { createChatClient } from "./chat/pi";
 import type { ChatSnapshot } from "./chat/contract";
 import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import type { PaneClient } from "./herdr/panes";
+import type { WorkspaceClient } from "./herdr/workspaces";
 import type { WorktreeClient } from "./herdr/worktrees";
 import { HerdrError } from "./herdr/socket";
 import type { GitClient } from "./git";
@@ -50,6 +51,18 @@ const state: AppState = {
 };
 
 const workingPane: PaneState = { ...pane, agent: "pi", agentStatus: "working", chat: true };
+
+const threeWorkspaces: AppState = {
+  ...state,
+  workspaces: ["w1", "w2", "w3"].map((id) => ({
+    ...state.workspaces[0]!,
+    id,
+    label: id,
+    focused: id === "w1",
+    tabs: [],
+  })),
+};
+
 const workingState: AppState = {
   ...state,
   workspaces: [
@@ -130,6 +143,7 @@ type FakeStore = StateStore & {
   listenerCount: () => number;
   fireOnSubscribe: (state: AppState) => void;
   setChatSource: (paneId: string, source: ChatSource | null) => void;
+  refreshCount: () => number;
 };
 
 function createFakeStore(
@@ -141,10 +155,12 @@ function createFakeStore(
   const sources = new Map<string, ChatSource>();
   let current = initial;
   let pendingOnSubscribe: AppState | null = null;
+  let refreshes = 0;
 
   return {
     get: () => current,
     refresh: async () => {
+      refreshes += 1;
       if (failure) throw failure;
       current ??= state;
       return current;
@@ -165,6 +181,7 @@ function createFakeStore(
       };
     },
     listenerCount: () => listeners.size,
+    refreshCount: () => refreshes,
     fireOnSubscribe: (state) => {
       pendingOnSubscribe = state;
     },
@@ -225,6 +242,13 @@ function createFakeWorktrees(overrides: Partial<WorktreeClient> = {}): WorktreeC
   };
 }
 
+function createFakeWorkspaces(overrides: Partial<WorkspaceClient> = {}): WorkspaceClient {
+  return {
+    moveBlock: async () => {},
+    ...overrides,
+  };
+}
+
 // どのテストも同じ BFF を叩く。テストごとに書くのは、そのテストが見たい差分だけにする。
 type TestAppOptions = {
   state?: AppState | null;
@@ -232,6 +256,7 @@ type TestAppOptions = {
   store?: FakeStore;
   panes?: Partial<PaneClient>;
   worktrees?: Partial<WorktreeClient>;
+  workspaces?: Partial<WorkspaceClient>;
   chat?: Partial<ChatClient>;
 } & Partial<
   Pick<
@@ -249,12 +274,22 @@ type TestAppOptions = {
 >;
 
 function createTestApp(options: TestAppOptions = {}) {
-  const { state: initial = state, storeFailure, store, panes, worktrees, chat, ...rest } = options;
+  const {
+    state: initial = state,
+    storeFailure,
+    store,
+    panes,
+    worktrees,
+    workspaces,
+    chat,
+    ...rest
+  } = options;
   const fakeStore = store ?? createFakeStore(initial, storeFailure);
   const app = createApp({
     store: fakeStore,
     panes: createFakePanes(panes),
     worktrees: createFakeWorktrees(worktrees),
+    workspaces: createFakeWorkspaces(workspaces),
     chat: createFakeChat(chat),
     ...rest,
   });
@@ -634,6 +669,150 @@ test("POST /api/workspaces/:id/git returns 502 when Herdr cannot be read", async
     git: createFakeGit(),
   });
   const response = await app.request("/api/workspaces/w1/git", postGit("fetch"));
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+});
+
+function postMove(body: unknown): RequestInit {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
+test("POST /api/workspaces/move moves the block and republishes the state", async () => {
+  const seen: unknown[] = [];
+  const { app, store } = createTestApp({
+    state: threeWorkspaces,
+    workspaces: {
+      moveBlock: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+
+  const response = await app.request(
+    "/api/workspaces/move",
+    postMove({ workspaceIds: ["w3", "w2"], beforeWorkspaceId: "w1" }),
+  );
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual([{ workspaceIds: ["w3", "w2"], beforeWorkspaceId: "w1" }]);
+  expect(store.refreshCount()).toBe(1);
+});
+
+test("POST /api/workspaces/move moves the block to the end without an anchor", async () => {
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    state: threeWorkspaces,
+    workspaces: {
+      moveBlock: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+
+  const response = await app.request(
+    "/api/workspaces/move",
+    postMove({ workspaceIds: ["w1", "w2"], beforeWorkspaceId: null }),
+  );
+
+  expect(response.status).toBe(200);
+  expect(seen).toEqual([{ workspaceIds: ["w1", "w2"], beforeWorkspaceId: null }]);
+});
+
+test("POST /api/workspaces/move validates the block before moving", async () => {
+  for (const body of [
+    {},
+    { workspaceIds: [] },
+    { workspaceIds: ["w1", "w1"] },
+    { workspaceIds: ["w1"], beforeWorkspaceId: "w1" },
+    { workspaceIds: ["w1"], beforeWorkspaceId: 1 },
+  ]) {
+    const { app } = createTestApp({ state: threeWorkspaces });
+    const response = await app.request("/api/workspaces/move", postMove(body));
+    expect(response.status).toBe(400);
+  }
+});
+
+test("POST /api/workspaces/move requires application/json", async () => {
+  const { app } = createTestApp({ state: threeWorkspaces });
+  const response = await app.request("/api/workspaces/move", { method: "POST" });
+
+  expect(response.status).toBe(415);
+});
+
+test("POST /api/workspaces/move refuses ids that are not in the state", async () => {
+  let called = false;
+  const { app } = createTestApp({
+    state: threeWorkspaces,
+    workspaces: {
+      moveBlock: async () => {
+        called = true;
+      },
+    },
+  });
+
+  const missing = await app.request("/api/workspaces/move", postMove({ workspaceIds: ["w9"] }));
+  const anchor = await app.request(
+    "/api/workspaces/move",
+    postMove({ workspaceIds: ["w1"], beforeWorkspaceId: "w9" }),
+  );
+
+  expect(missing.status).toBe(404);
+  expect(await missing.json()).toEqual({ error: "workspace_not_found" });
+  expect(anchor.status).toBe(404);
+  expect(called).toBe(false);
+});
+
+test("POST /api/workspaces/move maps Herdr failures", async () => {
+  const cases = [
+    {
+      error: new HerdrError("workspace_not_found", "w9"),
+      status: 404,
+      body: { error: "workspace_not_found" },
+    },
+    {
+      error: new HerdrError("invalid_params", "block"),
+      status: 400,
+      body: { error: "invalid_request" },
+    },
+    {
+      error: new HerdrError("herdr_internal", "boom"),
+      status: 502,
+      body: { error: "herdr_unavailable" },
+    },
+    { error: new Error("socket closed"), status: 502, body: { error: "herdr_unavailable" } },
+  ];
+
+  for (const item of cases) {
+    const { app } = createTestApp({
+      state: threeWorkspaces,
+      workspaces: {
+        moveBlock: async () => {
+          throw item.error;
+        },
+      },
+    });
+    const response = await app.request(
+      "/api/workspaces/move",
+      postMove({ workspaceIds: ["w3"], beforeWorkspaceId: "w1" }),
+    );
+
+    expect(response.status).toBe(item.status);
+    expect(await response.json()).toEqual(item.body);
+  }
+});
+
+test("POST /api/workspaces/move returns 502 when Herdr cannot be read", async () => {
+  const { app } = createTestApp({ state: null, storeFailure: new Error("socket closed") });
+  const response = await app.request(
+    "/api/workspaces/move",
+    postMove({ workspaceIds: ["w3"], beforeWorkspaceId: null }),
+  );
+
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });
@@ -1833,6 +2012,7 @@ function createWorktreeApp(options: { panes?: Partial<PaneClient> } = {}) {
     worktrees: createFakeWorktrees({
       create: async () => ({ workspaceId: "w2", paneId: "w1:p2" }),
     }),
+    workspaces: createFakeWorkspaces(),
     panes: createFakePanes({
       startAgent: async () => {},
       rename: async () => {},
@@ -3135,6 +3315,7 @@ function launchModelApp() {
     store,
     chat: createFakeChat(),
     worktrees: createFakeWorktrees(),
+    workspaces: createFakeWorkspaces(),
     panes: createFakePanes({ split: async () => ({ paneId: "w1:p2" }) }),
     models: {
       list: async () => [],
@@ -3382,6 +3563,7 @@ test("POST /api/panes/:id/split shows the chosen model until the session records
       snapshot: async (path) => (path === otherSessionPath ? recorded : emptyChat),
     }),
     worktrees: createFakeWorktrees(),
+    workspaces: createFakeWorkspaces(),
     panes: createFakePanes({ split: async () => ({ paneId: "w1:p2" }) }),
     models: {
       list: async () => [],
@@ -3450,6 +3632,7 @@ test("POST /api/panes/:id/split shows the chosen model even when the rename fail
     store,
     chat: createFakeChat(),
     worktrees: createFakeWorktrees(),
+    workspaces: createFakeWorkspaces(),
     panes: createFakePanes({
       split: async () => ({ paneId: "w1:p2" }),
       rename: async () => {
@@ -3487,6 +3670,7 @@ test("POST /api/panes/:id/split does not show a model when the agent cannot star
     store,
     chat: createFakeChat(),
     worktrees: createFakeWorktrees(),
+    workspaces: createFakeWorkspaces(),
     panes: createFakePanes({
       split: async () => ({ paneId: "w1:p2" }),
       startAgent: async () => {

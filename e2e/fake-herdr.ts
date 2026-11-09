@@ -402,6 +402,40 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     return true;
   };
 
+  // 実 Herdr と同じく、渡された id の列をその順のまま 1 ブロックとして動かす。
+  // アンカーの前に入れ、アンカーが無ければ末尾へ置く。
+  const moveWorkspaceBlock = (
+    workspaceIds: readonly string[],
+    beforeWorkspaceId: string | null,
+  ): HerdrWorkspace[] | null => {
+    const all = snapshot.workspaces ?? [];
+    const known = new Set(all.map((workspace) => workspace.workspace_id));
+    if (workspaceIds.length === 0 || new Set(workspaceIds).size !== workspaceIds.length)
+      return null;
+    if (!workspaceIds.every((id) => known.has(id))) return null;
+    if (
+      beforeWorkspaceId !== null &&
+      (!known.has(beforeWorkspaceId) || workspaceIds.includes(beforeWorkspaceId))
+    ) {
+      return null;
+    }
+
+    const moved = workspaceIds.map(
+      (id) => all.find((workspace) => workspace.workspace_id === id) as HerdrWorkspace,
+    );
+    const movedIds = new Set(workspaceIds);
+    const rest = all.filter((workspace) => !movedIds.has(workspace.workspace_id));
+    const at =
+      beforeWorkspaceId === null
+        ? rest.length
+        : rest.findIndex((workspace) => workspace.workspace_id === beforeWorkspaceId);
+    if (at < 0) return null;
+
+    const ordered = [...rest.slice(0, at), ...moved, ...rest.slice(at)];
+    snapshot.workspaces = ordered;
+    return ordered;
+  };
+
   // 実 Herdr の worktree.remove は git worktree remove を実行し、スペースも閉じる。
   // E2E では実際のディレクトリを触らず、スナップショットからスペースを取り除く。
   const removeWorktree = (workspaceId: string): boolean => {
@@ -916,6 +950,33 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           },
         });
         broadcast("pane.updated", { pane_id: paneId });
+        return;
+      }
+      case "workspace.move_block": {
+        const ids = params.workspace_ids;
+        const before = params.before_workspace_id;
+        if (
+          !Array.isArray(ids) ||
+          !ids.every((id) => typeof id === "string") ||
+          (before !== undefined && before !== null && typeof before !== "string")
+        ) {
+          send(socket, { id, error: { code: "invalid_params", message: "workspace_ids" } });
+          return;
+        }
+        const ordered = moveWorkspaceBlock(
+          ids as string[],
+          typeof before === "string" ? before : null,
+        );
+        if (ordered === null) {
+          send(socket, { id, error: { code: "invalid_params", message: "workspace block" } });
+          return;
+        }
+        send(socket, { id, result: { type: "workspace_list", workspaces: ordered } });
+        broadcast("workspace.reordered", {
+          workspace_ids: ids,
+          before_workspace_id: typeof before === "string" ? before : null,
+          workspaces: ordered,
+        });
         return;
       }
       case "worktree.create": {

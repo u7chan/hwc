@@ -557,6 +557,24 @@ export async function removeWorktree(workspaceId: string): Promise<CloseOutcome>
   }
 }
 
+// 並びは Herdr の状態そのもの。ソケットの期限（8 秒）と取り直しの分を少し上乗せする。
+export const MOVE_WORKSPACES_TIMEOUT_MS = 10_000;
+
+export async function moveWorkspaceBlock(
+  workspaceIds: readonly string[],
+  beforeWorkspaceId: string | null,
+): Promise<boolean> {
+  try {
+    const response = await client.api.workspaces.move.$post(
+      { json: { workspaceIds: [...workspaceIds], beforeWorkspaceId } },
+      { init: { signal: AbortSignal.timeout(MOVE_WORKSPACES_TIMEOUT_MS) } },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export type CreatePaneRequest = {
   name: string | null;
   agent: AgentKind | null;

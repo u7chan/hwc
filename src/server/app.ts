@@ -36,6 +36,7 @@ import {
   TEXT_WITH_ATTACHMENTS_TOO_LONG,
 } from "./herdr/panes";
 import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
+import { parseMoveWorkspacesBody, type WorkspaceClient } from "./herdr/workspaces";
 import type { WorktreeClient } from "./herdr/worktrees";
 import type { PullRequestReader } from "./pull-request";
 import type { GitClient } from "./git";
@@ -101,6 +102,7 @@ export function createApp(options: {
   store: StateStore;
   panes: PaneClient;
   worktrees: WorktreeClient;
+  workspaces: WorkspaceClient;
   chat: SessionChatClient;
   // opencode はローカルサービスの API から読む。サービスを読めない構成でも、ペインの
   // 一覧や端末出力は使えるようにする。
@@ -122,6 +124,7 @@ export function createApp(options: {
     store,
     panes,
     worktrees,
+    workspaces,
     chat,
     opencode,
     codex,
@@ -167,6 +170,18 @@ export function createApp(options: {
         case "invalid_params":
         case "invalid_request":
           return c.json({ error: "invalid_request" }, 400);
+      }
+    }
+    return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  const workspaceFailure = (c: Context, error: unknown) => {
+    if (error instanceof HerdrError) {
+      if (error.code === "workspace_not_found") {
+        return c.json({ error: "workspace_not_found" }, 404);
+      }
+      if (error.code === "invalid_params" || error.code === "invalid_request") {
+        return c.json({ error: "invalid_request" }, 400);
       }
     }
     return c.json({ error: "herdr_unavailable" }, 502);
@@ -422,6 +437,34 @@ export function createApp(options: {
 
         // 次の状態公開で上流との差を読み直す。取得に失敗しても git の操作自体は終わっている。
         store.invalidateGit(workspace.id);
+        await store.refresh().catch(() => {});
+        return c.json({ ok: true });
+      })
+      .post("/api/workspaces/move", requireJson, async (c) => {
+        const body = await c.req.json().catch(() => null);
+        const parsed = parseMoveWorkspacesBody(body);
+        if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+        // 状態に無い id は、クライアントと BFF の取り違え。Herdr に渡す前に止める。
+        const known = new Set(state.workspaces.map((workspace) => workspace.id));
+        if (!parsed.value.workspaceIds.every((id) => known.has(id))) {
+          return c.json({ error: "workspace_not_found" }, 404);
+        }
+        const before = parsed.value.beforeWorkspaceId;
+        if (before !== null && !known.has(before)) {
+          return c.json({ error: "workspace_not_found" }, 404);
+        }
+
+        try {
+          await workspaces.moveBlock(parsed.value);
+        } catch (error) {
+          return workspaceFailure(c, error);
+        }
+
+        // イベントでも取り直すが、応答と SSE の前後で古い順に戻って見えるのを避ける。
         await store.refresh().catch(() => {});
         return c.json({ ok: true });
       })

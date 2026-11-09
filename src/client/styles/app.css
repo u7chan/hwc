@@ -402,6 +402,21 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   margin: 0;
 }
 
+/* 並べ替えを Herdr に渡せなかったとき。一覧の並びは Herdr のまま変えない。
+   一覧の下の方で落としても見えるよう、スクロール領域の上端に貼り付ける。 */
+.hwc-list-notice {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 var(--space-4) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-attention);
+  border-radius: var(--radius-sm);
+  background: var(--color-attention-bg);
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
+}
+
 .hwc-detail {
   flex: 1;
   min-height: 0;
@@ -453,6 +468,23 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 /* 子のブロックは親の内側に収める。外側の余白を重ねると字下げが二重になる。 */
 .hwc-group-block[data-depth="1"] {
   margin-inline: 0;
+}
+
+/* 並べ替え中は、掴んでいる束を淡くする。位置は動かさず、落とし先の境界に線を出す。 */
+.hwc-group-block[data-dragging="true"] {
+  opacity: 0.55;
+}
+
+.hwc-group-block[data-dragging="true"] .hwc-group {
+  cursor: grabbing;
+}
+
+.hwc-group-block[data-drop="before"] {
+  box-shadow: 0 -2px 0 var(--color-accent);
+}
+
+.hwc-group-block[data-drop="after"] {
+  box-shadow: 0 2px 0 var(--color-accent);
 }
 
 .hwc-group-children {
