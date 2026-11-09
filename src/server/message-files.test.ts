@@ -313,7 +313,7 @@ test("finds the HTML in an extra root only when the root is passed", async () =>
   }
 });
 
-test("keeps the checkout first for an image that only exists in an extra root", async () => {
+test("finds an image in an extra root and keeps the root it was found in", async () => {
   const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
   await writeFile(join(extra, "photo.png"), png);
 
@@ -323,10 +323,11 @@ test("keeps the checkout first for an image that only exists in an extra root", 
   };
 
   try {
-    // 画像は /files がチェックアウトだけを根にする。追加根から拾うと配信先が無い。
-    expect((await attachMessageFiles(chat, root, [extra])).messages[0]?.files).toBeUndefined();
+    expect((await attachMessageFiles(chat, root, [extra])).messages[0]?.files).toMatchObject([
+      { name: "photo.png", kind: "image", root: 1 },
+    ]);
 
-    // チェックアウトに置けば、これまでどおり root 0 で出る。
+    // チェックアウトにも置けば、検出順で 0 番が勝つ。
     await write("photo.png", png);
     expect((await attachMessageFiles(chat, root, [extra])).messages[0]?.files).toMatchObject([
       { name: "photo.png", kind: "image", root: 0 },
@@ -336,7 +337,7 @@ test("keeps the checkout first for an image that only exists in an extra root", 
   }
 });
 
-test("never accepts an image from an extra root, even without a checkout", async () => {
+test("finds an image in an extra root even without a checkout", async () => {
   const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
   await writeFile(join(extra, "photo.png"), png);
   await writeFile(join(extra, "mock.html"), "<!doctype html>");
@@ -347,10 +348,10 @@ test("never accepts an image from an extra root, even without a checkout", async
   };
 
   try {
-    // チェックアウトの無いペインでは、追加根が 0 番になる。それでも画像は拾わない。
-    // /files はチェックアウトだけを根にするので、拾うと 404 のチップになる。
+    // チェックアウトの無いペインでは、追加根が 0 番になる。配信も同じ番号を使う。
     const attached = await attachMessageFiles(chat, null, [extra]);
     expect(attached.messages[0]?.files).toMatchObject([
+      { name: "photo.png", kind: "image", root: 0 },
       { name: "mock.html", kind: "html", root: 0 },
     ]);
   } finally {

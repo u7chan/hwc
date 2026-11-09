@@ -117,7 +117,7 @@ export function createApp(options: {
   sseHeartbeatMs?: number;
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
   attachmentsRoot?: string;
-  // HTML のプレビューで読んでよい追加の根（チェックアウトの外）。
+  // エージェントが示したファイルを配信してよい追加の根（チェックアウトの外）。
   previewRoots?: string[];
 }) {
   const {
@@ -143,6 +143,11 @@ export function createApp(options: {
       // 取得に失敗した時点で状態は無い。呼び出し側がエラーを返す。
       return null;
     });
+
+  // 根の番号は /files と /preview で共通。片方だけ順を変えると、チップと配信が
+  // 別の実体を指す。番号は 0 がチェックアウト、1 以上が追加根（無い場合は 0 から）。
+  const rootsFor = (workspaceRoot: string | null): string[] =>
+    workspaceRoot === null ? previewRoots : [workspaceRoot, ...previewRoots];
 
   const folderTrust = createFolderTrust(panes);
   const launchModels = createLaunchModels();
@@ -522,8 +527,8 @@ export function createApp(options: {
       })
       .post("/api/panes/:id/attachments", uploadAttachment)
       .get("/api/panes/:id/attachments/:name", serveAttachment)
-      // エージェントが本文で示した画像を返す。根はワークスペースのチェックアウトで、
-      // realpath で解決した実体がその配下にあるときだけ返す。
+      // エージェントが本文で示した画像を返す。根はチェックアウトと追加根で、
+      // realpath で解決した実体がその配下にあるときだけ返す。root は根の番号。
       .get("/api/panes/:id/files", async (c) => {
         const state = await current();
         if (!state) return c.json({ error: "herdr_unavailable" }, 502);
@@ -533,8 +538,13 @@ export function createApp(options: {
         if (!pane) return c.json({ error: "pane_not_found" }, 404);
         if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
-        const root = store.workspaceRoot(paneId);
-        if (root === null) return c.json({ error: "not_found" }, 404);
+        const roots = rootsFor(store.workspaceRoot(paneId));
+        const rootIndex = Number(c.req.query("root") ?? "0");
+        if (!Number.isInteger(rootIndex) || rootIndex < 0) {
+          return c.json({ error: "not_found" }, 404);
+        }
+        const root = roots[rootIndex];
+        if (root === undefined) return c.json({ error: "not_found" }, 404);
 
         const file = await resolveMessageFile({ root, path: c.req.query("path") ?? "" });
         if (file === null) return c.json({ error: "not_found" }, 404);
@@ -567,8 +577,7 @@ export function createApp(options: {
         const rootIndex = Number(c.req.param("root"));
         if (!Number.isInteger(rootIndex) || rootIndex < 0) return previewNotFound(c, requested);
 
-        const workspaceRoot = store.workspaceRoot(paneId);
-        const roots = workspaceRoot === null ? previewRoots : [workspaceRoot, ...previewRoots];
+        const roots = rootsFor(store.workspaceRoot(paneId));
         const root = roots[rootIndex];
         if (root === undefined) return previewNotFound(c, requested);
 

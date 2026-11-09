@@ -406,7 +406,7 @@ test("a preview url keeps the root and the path separators", () => {
   ).toBe("/api/panes/w1%3Ap1/preview/0/preview/index.html");
 });
 
-test("an image url carries the relative path and the version", () => {
+test("an image url carries the root, relative path and version", () => {
   expect(
     chatFileUrl("w1:p2", {
       name: "docs/モック.png",
@@ -415,11 +415,15 @@ test("an image url carries the relative path and the version", () => {
       root: 0,
     }),
   ).toBe(
-    `/api/panes/w1%3Ap2/files?path=${encodeURIComponent("docs/モック.png")}&v=1767225600000-12`,
+    `/api/panes/w1%3Ap2/files?root=0&path=${encodeURIComponent("docs/モック.png")}&v=1767225600000-12`,
+  );
+  // 追加根の画像も同じ URL の形で、根の番号だけが変わる。
+  expect(chatFileUrl("w1:p1", { name: "mock.png", version: "1-2", kind: "image", root: 1 })).toBe(
+    "/api/panes/w1%3Ap1/files?root=1&path=mock.png&v=1-2",
   );
   // 区切りの入った名前も、クエリの 1 値として送る。
   expect(chatFileUrl("w1:p1", { name: "../x.png", version: "1-2", kind: "image", root: 0 })).toBe(
-    "/api/panes/w1%3Ap1/files?path=..%2Fx.png&v=1-2",
+    "/api/panes/w1%3Ap1/files?root=0&path=..%2Fx.png&v=1-2",
   );
 });
 
