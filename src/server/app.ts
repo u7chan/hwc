@@ -41,10 +41,13 @@ import type { PullRequestReader } from "./pull-request";
 import type { GitClient } from "./git";
 import {
   attachMessageFiles,
+  defaultPreviewRoots,
   messageFileContentType,
   readMessageFile,
   resolveMessageFile,
+  resolvePreviewFile,
 } from "./message-files";
+import { isHtmlName } from "../shared/message-files";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { isAgentModel, supportsFolderTrust, supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
@@ -64,6 +67,36 @@ const requireJson = createMiddleware(async (c, next) => {
   await next();
 });
 
+const PREVIEW_CSP = "sandbox allow-scripts";
+
+// HTML はアプリと同じオリジンで配信する。モックの script から BFF を触れないよう、
+// sandbox で文書のオリジンを不透明にする。iframe の属性だけに頼らず、直接開いた
+// ときにも効くよう応答にも付ける（ADR 0051）。
+function previewHeaders(contentType: string): Record<string, string> {
+  return {
+    "content-type": contentType,
+    "x-content-type-options": "nosniff",
+    // 書き直した HTML をそのまま見たい。版を URL に入れないのでキャッシュさせない。
+    "cache-control": "no-store",
+    // 不透明なオリジンからの ES modules と fetch は CORS になる。このルートだけ開ける。
+    "access-control-allow-origin": "*",
+    "content-security-policy": PREVIEW_CSP,
+  };
+}
+
+// 書き出し直しや削除でファイルが消えても、iframe に生の JSON を出さない。
+const PREVIEW_MISSING = `<!doctype html><meta charset="utf-8"><title>ファイルが見つかりません</title>
+<body style="margin:0;display:grid;place-items:center;min-height:100vh;font:14px/1.6 system-ui;color:#5b6068;background:#fff">
+<p>ファイルが見つかりません。書き出し直してから再読み込みしてください。</p>`;
+
+function previewNotFound(c: Context, requested: string): Response {
+  if (!isHtmlName(requested)) return c.json({ error: "not_found" }, 404);
+  return new Response(PREVIEW_MISSING, {
+    status: 404,
+    headers: previewHeaders("text/html; charset=utf-8"),
+  });
+}
+
 export function createApp(options: {
   store: StateStore;
   panes: PaneClient;
@@ -82,6 +115,8 @@ export function createApp(options: {
   sseHeartbeatMs?: number;
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
   attachmentsRoot?: string;
+  // HTML のプレビューで読んでよい追加の根（チェックアウトの外）。
+  previewRoots?: string[];
 }) {
   const {
     store,
@@ -96,6 +131,7 @@ export function createApp(options: {
     revision = "dev",
     sseHeartbeatMs = SSE_HEARTBEAT_MS,
     attachmentsRoot = defaultAttachmentsRoot(),
+    previewRoots = defaultPreviewRoots(),
   } = options;
 
   const current = async (): Promise<AppState | null> =>
@@ -409,8 +445,12 @@ export function createApp(options: {
             paneId,
             await client.snapshot(source.agent === "pi" ? source.path : source.sessionId),
           );
-          // 本文が指している画像を足す。画像が変わると etag も変わり、次の取得で新しい URL になる。
-          const withFiles = await attachMessageFiles(snapshot, store.workspaceRoot(paneId));
+          // 本文が指しているファイルを足す。中身が変わると etag も変わり、次の取得で新しい URL になる。
+          const withFiles = await attachMessageFiles(
+            snapshot,
+            store.workspaceRoot(paneId),
+            previewRoots,
+          );
           c.header("ETag", `"${withFiles.etag}"`);
           if (matchesEtag(c.req.header("if-none-match"), withFiles.etag)) {
             return c.body(null, 304);
@@ -467,6 +507,33 @@ export function createApp(options: {
             "cache-control": "private, max-age=31536000, immutable",
           },
         });
+      })
+      // エージェントが書いた HTML と、そこから相対参照されるファイル。パス形式にして、
+      // `<link href="./app.css">` のような参照をそのまま解決させる。先頭の番号は根の番号で、
+      // 相対参照でも保たれる（同名ファイルが別の根にあっても取り違えない）。
+      .get("/api/panes/:id/preview/:root/:path{.+}", async (c) => {
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+        const paneId = c.req.param("id");
+        const pane = findPane(state, paneId);
+        if (!pane) return c.json({ error: "pane_not_found" }, 404);
+        if (!pane.chat) return c.json({ error: "no_chat" }, 404);
+
+        const requested = c.req.param("path") ?? "";
+        const rootIndex = Number(c.req.param("root"));
+        if (!Number.isInteger(rootIndex) || rootIndex < 0) return previewNotFound(c, requested);
+
+        const workspaceRoot = store.workspaceRoot(paneId);
+        const roots = workspaceRoot === null ? previewRoots : [workspaceRoot, ...previewRoots];
+        const root = roots[rootIndex];
+        if (root === undefined) return previewNotFound(c, requested);
+
+        const file = await resolvePreviewFile({ root, path: requested });
+        const bytes = file === null ? null : await readMessageFile(file);
+        if (file === null || bytes === null) return previewNotFound(c, requested);
+
+        return new Response(bytes, { headers: previewHeaders(file.contentType) });
       })
       .get("/api/panes/:id/output", async (c) => {
         const query = parseOutputQuery(new URL(c.req.url).searchParams);

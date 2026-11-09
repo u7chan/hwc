@@ -1,5 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from "preact/hooks";
+import type { ChatFile } from "../server/chat/contract";
 import type { AppState, PaneState } from "../server/herdr/state";
+import { messageFileLabel } from "../shared/message-files";
 import { PaneDetail } from "./PaneDetail";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
@@ -27,6 +29,7 @@ import {
 import { CloseConfirm } from "./CloseConfirm";
 import { CreatePane } from "./CreatePane";
 import { ImageViewer } from "./ImageViewer";
+import { Preview } from "./Preview";
 import { ChevronRightIcon, CloseIcon, HwcMark, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
 import { Menu } from "./Menu";
 import { PaneMenu } from "./PaneMenu";
@@ -195,6 +198,10 @@ function useMediaQuery(query: string) {
 
 type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
 
+// 開いているプレビュー。Herdr のペインではないので、状態には載せない。shown は
+// タブの選択と同じで、ペインのタブを選ぶと false に戻る（ADR 0051）。
+type PreviewTarget = { paneId: string; file: ChatFile; shown: boolean };
+
 // 閉じる確認。後継は確認を開いた時点で決める。SSE が閉じたペインを落とした後では、
 // 次のペインを引けないため。
 type Closing = {
@@ -317,6 +324,8 @@ export function App() {
   } | null>(null);
   // 拡大中の画像。ダイアログはセルの containment の外（App 直下）に置く（ADR 0021）。
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
+  // 開いているプレビュー。対象のペインは、そのタブを開いている間だけ出す。
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   const closeInFlight = useRef(false);
@@ -447,6 +456,21 @@ export function App() {
     writeListOpen(pane === null);
   }, [state, selectedPaneId, pane]);
   const context = state ? findPaneContext(state, selectedPaneId) : null;
+
+  // プレビューは、対象ペインと同じタブを開いている間だけ出す。別のタブへ移っても
+  // 閉じはせず、戻ればまた選べるようにする。
+  const activeTabId =
+    state === null || pane === null ? null : (findPaneRow(state, pane.id)?.tab.id ?? null);
+  const previewRow = state === null || preview === null ? null : findPaneRow(state, preview.paneId);
+  const previewInTab =
+    previewRow !== null && activeTabId !== null && previewRow.tab.id === activeTabId;
+  const previewing = preview?.shown === true && previewInTab;
+
+  // 閉じたペインのプレビューは残さない。配信の根が消えて、iframe は 404 になるだけ。
+  useEffect(() => {
+    if (preview === null || state === null) return;
+    if (findPane(state, preview.paneId) === null) setPreview(null);
+  }, [state, preview]);
   // 確認の文言は状態を開いた時点で固定しない。ダイアログ中に変わればその値で読む。
   // スナップショットから消えたペインはもう無いので、確認は出さない。
   const closingPane = state === null || closing === null ? null : findPane(state, closing.paneId);
@@ -481,6 +505,10 @@ export function App() {
     }
     pendingRead.current = pendingReadAfter(pending, paneId, opened);
     setPendingSelect(null);
+    // ペインのタブを選んだら、プレビューは閉じずに隠す。閉じるのはプレビュー自身の操作。
+    setPreview((current) =>
+      current === null || !current.shown ? current : { ...current, shown: false },
+    );
     setView({ selectedPaneId: paneId, expanded: nextExpanded });
     setSettingsOpen(false);
   };
@@ -883,6 +911,7 @@ export function App() {
       onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
       onStop={() => stopPane(item.id)}
       onOpenImage={(url, name) => setViewer({ url, name })}
+      onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
     />
   );
 
@@ -1017,15 +1046,33 @@ export function App() {
                 pane={pane}
                 panes={siblings}
                 processes={processes}
+                preview={
+                  preview !== null && previewInTab
+                    ? {
+                        name: messageFileLabel(preview.file.name),
+                        selected: preview.shown,
+                      }
+                    : null
+                }
                 split={wide && split}
                 hidden={hidden}
                 status={detailStatus}
                 onSelectPane={select}
                 onToggleHidden={toggleHidden}
+                onSelectPreview={() =>
+                  setPreview((current) => (current === null ? null : { ...current, shown: true }))
+                }
                 onBack={back}
                 onToggleSplit={toggleSplit}
               />
-              {wide ? (
+              {previewing && preview !== null ? (
+                <Preview
+                  key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
+                  paneId={preview.paneId}
+                  file={preview.file}
+                  onClose={() => setPreview(null)}
+                />
+              ) : wide ? (
                 <div class="hwc-split" data-count={cells.length}>
                   {cells.map((item) => (
                     <section class="hwc-split-cell" data-compact={compact} key={item.id}>

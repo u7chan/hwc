@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { createApp } from "./app";
 import type { ChatClient } from "./chat/pi";
 import { createChatClient } from "./chat/pi";
@@ -244,6 +244,7 @@ type TestAppOptions = {
     | "revision"
     | "sseHeartbeatMs"
     | "attachmentsRoot"
+    | "previewRoots"
   >
 >;
 
@@ -2491,13 +2492,14 @@ async function withCheckout<T>(run: (root: string) => Promise<T>): Promise<T> {
 
 function createFilesApp(
   root: string,
-  options: { state?: AppState; chat?: Partial<ChatClient> } = {},
+  options: { state?: AppState; chat?: Partial<ChatClient>; previewRoots?: string[] } = {},
 ) {
   const store = createFakeStore(options.state ?? chatState);
   store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
   return createTestApp({
     store: { ...store, workspaceRoot: () => root },
     chat: options.chat,
+    previewRoots: options.previewRoots,
   }).app;
 }
 
@@ -2759,6 +2761,162 @@ test("GET /api/panes/:id/files returns no_chat for a pane without a session", as
   });
 });
 
+test("GET /api/panes/:id/preview serves HTML that cannot reach the BFF origin", async () => {
+  await withCheckout(async (root) => {
+    await mkdir(join(root, "preview"), { recursive: true });
+    await writeFile(join(root, "preview", "index.html"), "<!doctype html><p>mock</p>");
+    const app = createFilesApp(root);
+
+    const response = await app.request("/api/panes/w1:p1/preview/0/preview/index.html");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    // 書き直したものをそのまま見たいので、版を URL に入れずにキャッシュさせない。
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    // 不透明なオリジンからの module / fetch は CORS になる。このルートだけ開ける。
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    // iframe 属性を外されても、直接開いても、同じオリジンには戻らない。
+    expect(response.headers.get("content-security-policy")).toBe("sandbox allow-scripts");
+    expect(await response.text()).toBe("<!doctype html><p>mock</p>");
+  });
+});
+
+test("GET /api/panes/:id/preview serves the files the HTML refers to", async () => {
+  await withCheckout(async (root) => {
+    await mkdir(join(root, "preview"), { recursive: true });
+    await writeFile(join(root, "preview", "app.css"), "body{}");
+    await writeFile(join(root, "preview", "app.js"), "export const ready = true;");
+    await writeFile(join(root, "preview", "shot.png"), pngBytes);
+    await writeFile(join(root, "preview", "notes.txt"), "text");
+    const app = createFilesApp(root);
+
+    const css = await app.request("/api/panes/w1:p1/preview/0/preview/app.css");
+    expect(css.status).toBe(200);
+    expect(css.headers.get("content-type")).toBe("text/css; charset=utf-8");
+
+    const js = await app.request("/api/panes/w1:p1/preview/0/preview/app.js");
+    expect(js.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+
+    const image = await app.request("/api/panes/w1:p1/preview/0/preview/shot.png");
+    expect(image.headers.get("content-type")).toBe("image/png");
+
+    // 一覧に無い形式は配信しない。
+    expect((await app.request("/api/panes/w1:p1/preview/0/preview/notes.txt")).status).toBe(404);
+  });
+});
+
+test("GET /api/panes/:id/preview reads an extra root only when it is configured", async () => {
+  await withCheckout(async (root) => {
+    const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+    const page = join(extra, "mock.html");
+    await writeFile(page, "<!doctype html>");
+
+    try {
+      const denied = await createFilesApp(root).request(
+        `/api/panes/w1:p1/preview/1/${encodeURIComponent(page)}`,
+      );
+      expect(denied.status).toBe(404);
+
+      const app = createFilesApp(root, { previewRoots: [extra] });
+      const allowed = await app.request(`/api/panes/w1:p1/preview/1/${encodeURIComponent(page)}`);
+      expect(allowed.status).toBe(200);
+      expect(await allowed.text()).toBe("<!doctype html>");
+    } finally {
+      await rm(extra, { recursive: true, force: true });
+    }
+  });
+});
+
+test("GET /api/panes/:id/preview keeps the root the chip was found in", async () => {
+  await withCheckout(async (root) => {
+    await writeFile(join(root, "mock.html"), "<!doctype html><p>checkout</p>");
+    const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+    await writeFile(join(extra, "mock.html"), "<!doctype html><p>extra</p>");
+    await mkdir(join(extra, "assets"), { recursive: true });
+    await writeFile(join(extra, "assets", "app.css"), "body{}");
+
+    try {
+      const app = createFilesApp(root, { previewRoots: [extra] });
+
+      // 同じ相対名でも、根の番号が違えば別のファイルを返す。
+      expect(await (await app.request("/api/panes/w1:p1/preview/0/mock.html")).text()).toBe(
+        "<!doctype html><p>checkout</p>",
+      );
+      expect(await (await app.request("/api/panes/w1:p1/preview/1/mock.html")).text()).toBe(
+        "<!doctype html><p>extra</p>",
+      );
+
+      // 相対参照も URL の根の番号を引き継ぐ（/preview/1/assets/app.css）。
+      const css = await app.request("/api/panes/w1:p1/preview/1/assets/app.css");
+      expect(css.status).toBe(200);
+      expect(css.headers.get("content-type")).toBe("text/css; charset=utf-8");
+    } finally {
+      await rm(extra, { recursive: true, force: true });
+    }
+  });
+});
+
+test("GET /api/panes/:id/preview refuses a root that does not exist", async () => {
+  await withCheckout(async (root) => {
+    await writeFile(join(root, "mock.html"), "<!doctype html>");
+    const app = createFilesApp(root);
+
+    for (const index of ["1", "-1", "1.5", "x"]) {
+      const response = await app.request(`/api/panes/w1:p1/preview/${index}/mock.html`);
+      expect(response.status).toBe(404);
+    }
+  });
+});
+
+test("GET /api/panes/:id/preview shows a page, not JSON, when the HTML is gone", async () => {
+  await withCheckout(async (root) => {
+    const app = createFilesApp(root);
+
+    const missing = await app.request("/api/panes/w1:p1/preview/0/preview/gone.html");
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(missing.headers.get("content-security-policy")).toBe("sandbox allow-scripts");
+    expect(await missing.text()).toContain("ファイルが見つかりません");
+
+    // HTML 以外は JSON のまま。iframe は html しか要求しない。
+    const css = await app.request("/api/panes/w1:p1/preview/0/preview/gone.css");
+    expect(css.status).toBe(404);
+    expect(await css.json()).toEqual({ error: "not_found" });
+  });
+});
+
+test("GET /api/panes/:id/preview refuses traversal and a pane without a session", async () => {
+  await withCheckout(async (root) => {
+    const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
+    const outsidePath = join(outside, "secret.html");
+    await writeFile(outsidePath, "<!doctype html>");
+
+    try {
+      const app = createFilesApp(root);
+      for (const path of [
+        `..%2F${basename(outside)}%2Fsecret.html`,
+        encodeURIComponent(outsidePath),
+        "missing.html",
+      ]) {
+        expect((await app.request(`/api/panes/w1:p1/preview/0/${path}`)).status).toBe(404);
+      }
+
+      const noChat = await createFilesApp(root, { state }).request(
+        "/api/panes/w1:p1/preview/0/mock.html",
+      );
+      expect(noChat.status).toBe(404);
+      expect(await noChat.json()).toEqual({ error: "no_chat" });
+
+      const noPane = await app.request("/api/panes/w9:p9/preview/0/mock.html");
+      expect(noPane.status).toBe(404);
+      expect(await noPane.json()).toEqual({ error: "pane_not_found" });
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
+
 test("GET /api/panes/:id/chat adds the images the agent pointed at", async () => {
   await withCheckout(async (root) => {
     await writeFile(join(root, "mock.png"), pngBytes);
@@ -2778,9 +2936,10 @@ test("GET /api/panes/:id/chat adds the images the agent pointed at", async () =>
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       etag: string;
-      messages: { files?: { name: string; version: string }[] }[];
+      messages: { files?: { name: string; version: string; kind: string }[] }[];
     };
     expect(body.messages[0]?.files?.map((file) => file.name)).toEqual(["mock.png"]);
+    expect(body.messages[0]?.files?.map((file) => file.kind)).toEqual(["image"]);
     expect(body.etag).not.toBe(emptyChat.etag);
 
     // 画像を作り直すと本文は同じでも etag が変わり、次の取得で新しい URL になる。

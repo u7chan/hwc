@@ -11,6 +11,7 @@ import type {
 import type { PaneState } from "../server/herdr/state";
 import type { GitSync } from "../shared/git";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
+import { messageFileLabel } from "../shared/message-files";
 import { activityLabel, activitySnippet, formatTokPerSecond, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
 import { OutputText } from "./OutputText";
@@ -76,6 +77,7 @@ import {
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
+  EyeIcon,
   MoreIcon,
   PaneIcon,
   SendIcon,
@@ -216,31 +218,56 @@ function MessageAttachments(props: {
   );
 }
 
-// エージェントが本文で示した画像。ユーザーの添付と同じ見た目で、押すと拡大する。
+// エージェントが本文で示したファイル。画像はユーザーの添付と同じ見た目で拡大し、
+// HTML はプレビューのタブで開く（ADR 0051）。
 function MessageFiles(props: {
   paneId: string;
   files: ChatFile[];
   onOpen: (url: string, name: string) => void;
+  onPreview: (file: ChatFile) => void;
 }) {
+  const images = props.files.filter((file) => file.kind === "image");
+  const pages = props.files.filter((file) => file.kind === "html");
   return (
-    <div class="hwc-msg-attachments">
-      {props.files.map((file) => {
-        const url = chatFileUrl(props.paneId, file);
-        const label = file.name.slice(file.name.lastIndexOf("/") + 1);
-        return (
-          <button
-            type="button"
-            class="hwc-msg-attachment"
-            key={`${file.name}@${file.version}`}
-            aria-label={`${label} を拡大`}
-            aria-haspopup="dialog"
-            onClick={() => props.onOpen(url, label)}
-          >
-            <img class="hwc-msg-attachment-image" src={url} alt="" loading="lazy" />
-          </button>
-        );
-      })}
-    </div>
+    <>
+      {images.length === 0 ? null : (
+        <div class="hwc-msg-attachments">
+          {images.map((file) => {
+            const url = chatFileUrl(props.paneId, file);
+            const label = messageFileLabel(file.name);
+            return (
+              <button
+                type="button"
+                class="hwc-msg-attachment"
+                key={`${file.name}@${file.version}`}
+                aria-label={`${label} を拡大`}
+                aria-haspopup="dialog"
+                onClick={() => props.onOpen(url, label)}
+              >
+                <img class="hwc-msg-attachment-image" src={url} alt="" loading="lazy" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {pages.length === 0 ? null : (
+        <div class="hwc-msg-pages">
+          {pages.map((file) => (
+            <button
+              type="button"
+              class="hwc-msg-page"
+              key={`${file.name}@${file.version}`}
+              title={file.name}
+              onClick={() => props.onPreview(file)}
+            >
+              <EyeIcon size={16} />
+              <span class="hwc-msg-page-name">{messageFileLabel(file.name)}</span>
+              <span class="hwc-msg-page-kind">HTML</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -418,6 +445,7 @@ function ChatLog(props: {
   compactionEcho: { text: string; at: number; completedAt: number | null } | null;
   onCopy: (id: string, text: string) => void;
   onOpenImage: (url: string, name: string) => void;
+  onOpenPreview: (file: ChatFile) => void;
   pending: readonly PendingMessage[];
 }) {
   const copyButton = (message: ChatMessage) => {
@@ -505,6 +533,7 @@ function ChatLog(props: {
                       paneId={props.paneId}
                       files={row.message.files}
                       onOpen={props.onOpenImage}
+                      onPreview={props.onOpenPreview}
                     />
                   )}
                   <div class="hwc-msg-meta">
@@ -735,6 +764,8 @@ type PaneDetailProps = {
   onStop: () => Promise<boolean>;
   // ダイアログは App 直下に 1 つだけ出す。セルの中に置くと containment の内側に閉じる。
   onOpenImage: (url: string, name: string) => void;
+  // HTML のプレビューは、タブの 1 つとして会話の外に出す。
+  onOpenPreview: (file: ChatFile) => void;
 };
 
 // 名前はアップロードが終わるまで無い。controller は取り外しと離脱で送信を止めるために持つ。
@@ -768,6 +799,7 @@ export function PaneDetail(props: PaneDetailProps) {
     onSubmit,
     onStop,
     onOpenImage,
+    onOpenPreview,
   } = props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
@@ -1579,6 +1611,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 }
                 onCopy={copy}
                 onOpenImage={onOpenImage}
+                onOpenPreview={onOpenPreview}
                 pending={pendingMessages}
               />
             </>

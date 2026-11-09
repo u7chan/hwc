@@ -1784,6 +1784,43 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   container: hwc-cell / size;
 }
 
+/* プレビューはタブの 1 つ。分割は止め、detail の残りをそのまま iframe に渡す。 */
+.hwc-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hwc-preview-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--row-head);
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.hwc-preview-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-preview-frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: var(--color-content);
+}
+
 /* 半分の幅になるので、見出しと入力欄の左右は詰める。 */
 .hwc-split-cell .hwc-pane-head,
 .hwc-split-cell .hwc-input {
@@ -2839,6 +2876,47 @@ p.hwc-compaction,
   height: auto;
   max-width: 100%;
   max-height: 180px;
+}
+
+/* エージェントが書いた HTML。押すとプレビューのタブが開く。 */
+.hwc-msg-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.hwc-msg-page {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.hwc-msg-page:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.hwc-msg-page-name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-msg-page-kind {
+  flex: none;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
 }
 
 /* 送信後の引用。吹き出しの中で本文と区別できるよう、左に線を置く。 */

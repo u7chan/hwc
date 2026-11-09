@@ -143,10 +143,14 @@ function toChatFiles(value: unknown): ChatFile[] | undefined {
     if (typeof item !== "object" || item === null) continue;
     const file = item as Partial<ChatFile>;
     if (typeof file.name !== "string" || typeof file.version !== "string") continue;
+    // 見せ方を知らないファイルは出さない。画像とプレビューだけを扱う。
+    if (file.kind !== "image" && file.kind !== "html") continue;
+    // 根の番号は配信 URL の一部になる。負数や小数は捨てる。
+    if (typeof file.root !== "number" || !Number.isInteger(file.root) || file.root < 0) continue;
     // 配信 URL になる。根の外を指す名前は捨て、リンクも画像も作らない。
     if (file.name === "" || file.name.startsWith("/")) continue;
     if (file.name.split("/").includes("..")) continue;
-    files.push({ name: file.name, version: file.version });
+    files.push({ name: file.name, version: file.version, kind: file.kind, root: file.root });
   }
   return files.length === 0 ? undefined : files;
 }
@@ -215,9 +219,17 @@ export function attachmentUrl(paneId: string, name: string): string {
 }
 
 // 版を URL に含める。同じ名前で作り直された画像を、ブラウザのキャッシュから拾わない。
+// 画像はチェックアウトだけを根にする（追加根からは検出しない）ので、root は使わない。
 export function chatFileUrl(paneId: string, file: ChatFile): string {
   const query = `path=${encodeURIComponent(file.name)}&v=${encodeURIComponent(file.version)}`;
   return `/api/panes/${encodeURIComponent(paneId)}/files?${query}`;
+}
+
+// パス形式にするのは、HTML の中の相対参照（`./app.css`）をそのまま解決させるため。
+// 先頭の根の番号もパスに入れて、相対参照が別の根へずれないようにする。
+export function previewUrl(paneId: string, file: ChatFile): string {
+  const encoded = file.name.split("/").map(encodeURIComponent).join("/");
+  return `/api/panes/${encodeURIComponent(paneId)}/preview/${file.root}/${encoded}`;
 }
 
 export function toAppState(value: unknown): AppState | null {

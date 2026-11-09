@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>空状態のモック</title>
+    <link rel="stylesheet" href="./mock.css" />
+  </head>
+  <body>
+    <main class="phone">
+      <p class="eyebrow">モック</p>
+      <h1>ダッシュボード</h1>
+      <div class="tabs" role="tablist" aria-label="状態">
+        <button type="button" class="tab is-selected" data-panel="empty" role="tab">空状態</button>
+        <button type="button" class="tab" data-panel="filled" role="tab">一覧</button>
+      </div>
+      <section class="panel" id="empty" data-panel="empty">
+        <div class="card empty">
+          <span class="mark">ア</span>
+          <h2>まだ何もありません</h2>
+          <p>最初の項目を作ると、ここに一覧が出ます。</p>
+          <button type="button" class="primary">項目を作成</button>
+        </div>
+      </section>
+      <section class="panel" id="filled" data-panel="filled" hidden>
+        <ul class="list">
+          <li><span>請求書の下書き</span><span class="meta">2 分前</span></li>
+          <li><span>四半期のまとめ</span><span class="meta">昨日</span></li>
+          <li><span>リリースノート</span><span class="meta">3 日前</span></li>
+        </ul>
+      </section>
+    </main>
+    <script src="./mock.js"></script>
+  </body>
+</html>
