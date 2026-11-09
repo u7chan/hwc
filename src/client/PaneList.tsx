@@ -5,6 +5,7 @@ import type { GitSync } from "../shared/git";
 import type { PullRequest } from "../shared/pull-request";
 import {
   AgentGlyphIcon,
+  AgentIcon,
   ArrowRightIcon,
   ChevronRightIcon,
   GripIcon,
@@ -19,6 +20,8 @@ import {
   activeRowName,
   agentGlyph,
   countPanes,
+  countTabAgents,
+  countWorkspaceAgents,
   countWorkspacePanes,
   groupWorkspaces,
   paneRowTitle,
@@ -30,6 +33,7 @@ import {
 } from "./select";
 import {
   activeGroups,
+  agentPresence,
   countLabel,
   showsTabName,
   type ActiveGroup,
@@ -93,10 +97,34 @@ function GroupChildren(props: { id: string; open: boolean; children: ComponentCh
 }
 
 // 折りたたみの状態は、開いている間は子の状態で分かるので、まとめは淡く消して場所だけ残す。
-function GroupStatus(props: { status: PaneState["agentStatus"]; hidden: boolean }) {
+// エージェントの居ない束は状態の集約が意味を持たない（待機や不明はシェルだけでも出る）ので、
+// 状態の代わりにシェルの記号を置き、エージェントの有無を右端でも読めるようにする。
+function GroupStatus(props: { status: PaneState["agentStatus"]; agents: number; hidden: boolean }) {
   return (
     <span class="hwc-group-status" data-hidden={props.hidden}>
-      <StatusLabel status={props.status} />
+      {props.agents === 0 ? (
+        <span class="hwc-group-shell" role="img" aria-label="シェルのみ" title="シェルのみ">
+          <PaneIcon />
+        </span>
+      ) : (
+        <StatusLabel status={props.status} />
+      )}
+    </span>
+  );
+}
+
+// エージェントの数の札。副題が PR のタイトルに変わっても消えないよう、名前の行に置く。
+// 数は status の件数ではなく、エージェントの居るペインの数。
+function GroupAgents(props: { agents: number }) {
+  return (
+    <span
+      class="hwc-group-agents"
+      role="img"
+      aria-label={agentPresence(props.agents)}
+      title={agentPresence(props.agents)}
+    >
+      <AgentIcon size={12} />
+      <span aria-hidden="true">{countLabel(props.agents)}</span>
     </span>
   );
 }
@@ -607,6 +635,7 @@ function TreePaneList(props: TreePaneListProps) {
     sub: ComponentChildren;
     title?: string;
     status: PaneState["agentStatus"];
+    agents: number;
     controlsId: string;
     workspaceId?: string;
     sync?: GitSync | null;
@@ -648,10 +677,13 @@ function TreePaneList(props: TreePaneListProps) {
         >
           <span class="hwc-group-icon">{props2.icon}</span>
           <span class="hwc-group-main">
-            <span class="hwc-group-name">{props2.label}</span>
+            <span class="hwc-group-title">
+              <span class="hwc-group-name">{props2.label}</span>
+              {props2.agents === 0 ? null : <GroupAgents agents={props2.agents} />}
+            </span>
             <span class="hwc-group-sub">{props2.sub}</span>
           </span>
-          <GroupStatus status={props2.status} hidden={open} />
+          <GroupStatus status={props2.status} agents={props2.agents} hidden={open} />
           <span class="hwc-chevron" data-open={open}>
             <ChevronRightIcon />
           </span>
@@ -684,6 +716,7 @@ function TreePaneList(props: TreePaneListProps) {
   function renderTabs(tab: TabState, depth: number) {
     const tabOpen = expanded.has(tab.id);
     const tabGroupId = `hwc-group-${tab.id}`;
+    const agents = countTabAgents(tab);
     return (
       <li class="hwc-tab-block" key={tab.id}>
         <button
@@ -695,10 +728,15 @@ function TreePaneList(props: TreePaneListProps) {
           onClick={toggle(tab.id)}
         >
           <span class="hwc-tabrow-main">
-            <span class="hwc-tabrow-name">{tab.label}</span>
-            <span class="hwc-tabrow-sub">{tab.panes.length} ペイン</span>
+            <span class="hwc-tabrow-title">
+              <span class="hwc-tabrow-name">{tab.label}</span>
+              {agents === 0 ? null : <GroupAgents agents={agents} />}
+            </span>
+            <span class="hwc-tabrow-sub">
+              {agents === 0 ? agentPresence(agents) : `${tab.panes.length} ペイン`}
+            </span>
           </span>
-          <GroupStatus status={tab.agentStatus} hidden={tabOpen} />
+          <GroupStatus status={tab.agentStatus} agents={agents} hidden={tabOpen} />
           <span class="hwc-chevron" data-open={tabOpen}>
             <ChevronRightIcon />
           </span>
@@ -800,6 +838,8 @@ function TreePaneList(props: TreePaneListProps) {
     const groupId = `hwc-group-${workspace.id}`;
     const open = expanded.has(workspace.id);
     const pullRequest = props.pullRequests.get(workspace.id) ?? null;
+    const agents = countWorkspaceAgents(workspace);
+    const panes = countWorkspacePanes(workspace.id, state);
     return (
       <section
         class="hwc-group-block"
@@ -819,14 +859,17 @@ function TreePaneList(props: TreePaneListProps) {
                 <PullRequestSummary
                   pullRequest={pullRequest}
                   fallback={
-                    workspace.worktree?.isLinkedWorktree === true
-                      ? `${workspace.worktree.repoName} · ${countWorkspacePanes(workspace.id, state)} ペイン`
-                      : `${countWorkspacePanes(workspace.id, state)} ペイン`
+                    agents === 0
+                      ? agentPresence(agents)
+                      : workspace.worktree?.isLinkedWorktree === true
+                        ? `${workspace.worktree.repoName} · ${panes} ペイン`
+                        : `${panes} ペイン`
                   }
                 />
               ),
               title: workspace.worktree?.checkoutPath ?? undefined,
               status: workspace.agentStatus,
+              agents,
               controlsId: groupId,
               workspaceId: workspace.id,
               sync: workspace.sync ?? null,
@@ -860,6 +903,11 @@ function TreePaneList(props: TreePaneListProps) {
 
         const open = expanded.has(group.key);
         const groupId = `hwc-group-${group.key}`;
+        const worktrees = group.linked.length + (group.host ? 1 : 0);
+        const agents = [group.host, ...group.linked].reduce(
+          (total, workspace) => total + (workspace === null ? 0 : countWorkspaceAgents(workspace)),
+          0,
+        );
         // ホストは自分の見出しを持たない。束の見出しがホストの入口も兼ねるので、
         // ホストに PR があればそのタイトルを出す。無ければ今までどおりワークツリー数。
         const hostPullRequest =
@@ -880,11 +928,12 @@ function TreePaneList(props: TreePaneListProps) {
               sub: (
                 <PullRequestSummary
                   pullRequest={hostPullRequest}
-                  fallback={`${group.linked.length + (group.host ? 1 : 0)} ワークツリー`}
+                  fallback={agents === 0 ? agentPresence(agents) : `${worktrees} ワークツリー`}
                 />
               ),
               title: group.host?.worktree?.repoRoot ?? undefined,
               status: group.host?.agentStatus ?? group.linked[0]?.agentStatus ?? "unknown",
+              agents,
               controlsId: groupId,
               workspaceId: group.host?.id,
               sync: group.host?.sync ?? null,

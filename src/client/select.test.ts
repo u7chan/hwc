@@ -4,6 +4,8 @@ import {
   activeRowName,
   agentGlyph,
   countPanes,
+  countTabAgents,
+  countWorkspaceAgents,
   countWorkspacePanes,
   findPane,
   findPaneContext,
@@ -154,6 +156,16 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
 test("the counts follow the nesting", () => {
   expect(countPanes(state)).toBe(4);
   expect(countWorkspacePanes("w1", state)).toBe(3);
+});
+
+test("agents are counted apart from shells", () => {
+  const [multiTab, singleTab] = state.workspaces;
+
+  expect(countWorkspaceAgents(multiTab)).toBe(1);
+  expect(countTabAgents(multiTab.tabs[0])).toBe(1);
+  expect(countTabAgents(multiTab.tabs[1])).toBe(0);
+  // シェルだけのスペース。ペインの agentStatus が blocked でも、エージェントはいない。
+  expect(countWorkspaceAgents(singleTab)).toBe(0);
 });
 
 test("a tab row is only worth showing when it gathers more than one tab", () => {

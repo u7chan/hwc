@@ -3,6 +3,7 @@ import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server
 import {
   activeGroups,
   activePanes,
+  agentPresence,
   countLabel,
   parseListScope,
   pendingReadAfter,
@@ -176,6 +177,13 @@ test("a count past two digits is shown as a range", () => {
   expect(countLabel(9)).toBe("9");
   expect(countLabel(99)).toBe("99");
   expect(countLabel(100)).toBe("99+");
+});
+
+test("the group summary tells whether there is an agent", () => {
+  expect(agentPresence(1)).toBe("エージェント 1");
+  expect(agentPresence(4)).toBe("エージェント 4");
+  // 0 は数えず、何が居るかを言う。状態の集約だけではシェルだけの束を見分けられない。
+  expect(agentPresence(0)).toBe("シェルのみ");
 });
 
 test("a group holds attention, the finished, the running and the waiting in that order", () => {
