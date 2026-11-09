@@ -162,7 +162,7 @@ export async function resolveMessageFile(options: {
 // 根は実在するディレクトリ。無ければ何も返さない（プレビューを出さないだけ）。
 export async function collectMessageFiles(text: string, root: string): Promise<MessageFile[]> {
   try {
-    return await collectAgainstRoots(text, [await realpath(root)]);
+    return await collectAgainstRoots(text, [await realpath(root)], 0);
   } catch {
     return [];
   }
@@ -170,9 +170,11 @@ export async function collectMessageFiles(text: string, root: string): Promise<M
 
 // 根は順に試し、最初に見つかったものを採る。採った根の番号をファイルに持たせるので、
 // 配信は同じ実体を引き直せる（同名ファイルが別の根にあっても取り違えない）。
+// checkoutRoot はチェックアウトの番号。無いペインでは -1 になる。
 async function collectAgainstRoots(
   text: string,
   rootsReal: readonly (string | null)[],
+  checkoutRoot: number,
 ): Promise<MessageFile[]> {
   if (text === "" || rootsReal.length === 0) return [];
   const candidates = messagePathCandidates(text);
@@ -192,8 +194,9 @@ async function collectAgainstRoots(
         (name) => {
           const kind = messageFileKindFromName(name);
           // 画像は既存の /files がチェックアウトだけを根にする。追加根から拾うと配信先が無い。
+          // チェックアウトの無いペインでは、番号が 0 の追加根も画像の根にしない。
           if (kind === null) return false;
-          return kind === "image" ? root === 0 : true;
+          return kind === "image" ? root === checkoutRoot : true;
         },
         root,
       );
@@ -282,7 +285,9 @@ export async function attachMessageFiles(
     snapshot.messages.map(async (message) => {
       // 失敗の行はプロバイダの文言で、エージェントの発話ではない。
       if (message.role !== "agent" || message.text === "") return message;
-      const files = await collectAgainstRoots(message.text, rootsReal);
+      // チェックアウトが無ければ、追加根が 0 番から並ぶ。画像の根にはしない。
+      const checkoutRoot = root === null ? -1 : 0;
+      const files = await collectAgainstRoots(message.text, rootsReal, checkoutRoot);
       return files.length === 0 ? message : { ...message, files };
     }),
   );

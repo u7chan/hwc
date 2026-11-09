@@ -336,6 +336,28 @@ test("keeps the checkout first for an image that only exists in an extra root", 
   }
 });
 
+test("never accepts an image from an extra root, even without a checkout", async () => {
+  const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+  await writeFile(join(extra, "photo.png"), png);
+  await writeFile(join(extra, "mock.html"), "<!doctype html>");
+
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: "`photo.png` と `mock.html`", at: 1 }],
+  };
+
+  try {
+    // チェックアウトの無いペインでは、追加根が 0 番になる。それでも画像は拾わない。
+    // /files はチェックアウトだけを根にするので、拾うと 404 のチップになる。
+    const attached = await attachMessageFiles(chat, null, [extra]);
+    expect(attached.messages[0]?.files).toMatchObject([
+      { name: "mock.html", kind: "html", root: 0 },
+    ]);
+  } finally {
+    await rm(extra, { recursive: true, force: true });
+  }
+});
+
 test("keeps the root of a same-named file so delivery cannot swap it", async () => {
   await write("mock.html", new TextEncoder().encode("<!doctype html><p>checkout</p>"));
   const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
