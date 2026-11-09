@@ -8,7 +8,7 @@ import { CloseIcon, ExternalIcon, ReloadIcon } from "./icons";
 // 再読み込みは同じ URL を作り直すだけ。配信は no-store なので常に最新が出る。
 export function Preview(props: { paneId: string; file: ChatFile; onClose: () => void }) {
   const [reload, setReload] = useState(0);
-  const url = previewUrl(props.paneId, props.file.name);
+  const url = previewUrl(props.paneId, props.file);
   const name = messageFileLabel(props.file.name);
 
   return (

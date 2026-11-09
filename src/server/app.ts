@@ -509,8 +509,9 @@ export function createApp(options: {
         });
       })
       // エージェントが書いた HTML と、そこから相対参照されるファイル。パス形式にして、
-      // `<link href="./app.css">` のような参照をそのまま解決させる。
-      .get("/api/panes/:id/preview/:path{.+}", async (c) => {
+      // `<link href="./app.css">` のような参照をそのまま解決させる。先頭の番号は根の番号で、
+      // 相対参照でも保たれる（同名ファイルが別の根にあっても取り違えない）。
+      .get("/api/panes/:id/preview/:root/:path{.+}", async (c) => {
         const state = await current();
         if (!state) return c.json({ error: "herdr_unavailable" }, 502);
 
@@ -520,9 +521,15 @@ export function createApp(options: {
         if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
         const requested = c.req.param("path") ?? "";
+        const rootIndex = Number(c.req.param("root"));
+        if (!Number.isInteger(rootIndex) || rootIndex < 0) return previewNotFound(c, requested);
+
         const workspaceRoot = store.workspaceRoot(paneId);
         const roots = workspaceRoot === null ? previewRoots : [workspaceRoot, ...previewRoots];
-        const file = await resolvePreviewFile({ roots, path: requested });
+        const root = roots[rootIndex];
+        if (root === undefined) return previewNotFound(c, requested);
+
+        const file = await resolvePreviewFile({ root, path: requested });
         const bytes = file === null ? null : await readMessageFile(file);
         if (file === null || bytes === null) return previewNotFound(c, requested);
 

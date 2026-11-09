@@ -228,40 +228,37 @@ test("serves the HTML and the files it references from the same root", async () 
   await write("preview/logo.svg", new TextEncoder().encode("<svg/>"));
   await write("preview/notes.txt", new TextEncoder().encode("text"));
 
-  const roots = [root];
-  expect((await resolvePreviewFile({ roots, path: "preview/index.html" }))?.contentType).toBe(
+  expect((await resolvePreviewFile({ root, path: "preview/index.html" }))?.contentType).toBe(
     "text/html; charset=utf-8",
   );
-  expect((await resolvePreviewFile({ roots, path: "preview/app.css" }))?.contentType).toBe(
+  expect((await resolvePreviewFile({ root, path: "preview/app.css" }))?.contentType).toBe(
     "text/css; charset=utf-8",
   );
-  expect((await resolvePreviewFile({ roots, path: "preview/app.js" }))?.contentType).toBe(
+  expect((await resolvePreviewFile({ root, path: "preview/app.js" }))?.contentType).toBe(
     "text/javascript; charset=utf-8",
   );
-  expect((await resolvePreviewFile({ roots, path: "preview/data.json" }))?.contentType).toBe(
+  expect((await resolvePreviewFile({ root, path: "preview/data.json" }))?.contentType).toBe(
     "application/json; charset=utf-8",
   );
-  expect((await resolvePreviewFile({ roots, path: "preview/logo.svg" }))?.contentType).toBe(
+  expect((await resolvePreviewFile({ root, path: "preview/logo.svg" }))?.contentType).toBe(
     "image/svg+xml",
   );
   // 一覧に無い形式は配信しない。
-  expect(await resolvePreviewFile({ roots, path: "preview/notes.txt" })).toBeNull();
+  expect(await resolvePreviewFile({ root, path: "preview/notes.txt" })).toBeNull();
 });
 
-test("reads an absolute path only from the roots it was given", async () => {
+test("serves an absolute path only from the root it was given", async () => {
   const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
   const page = join(extra, "mock.html");
   await writeFile(page, "<!doctype html>");
 
   try {
-    expect(await resolvePreviewFile({ roots: [root], path: page })).toBeNull();
-    const found = await resolvePreviewFile({ roots: [root, extra], path: page });
+    expect(await resolvePreviewFile({ root, path: page })).toBeNull();
+    const found = await resolvePreviewFile({ root: extra, path: page });
     expect(found?.name).toBe("mock.html");
     expect(found?.path).toBe(page);
-    // 相対パスも追加の根から読める。
-    expect((await resolvePreviewFile({ roots: [root, extra], path: "mock.html" }))?.name).toBe(
-      "mock.html",
-    );
+    // 相対パスも同じ根から読める。
+    expect((await resolvePreviewFile({ root: extra, path: "mock.html" }))?.name).toBe("mock.html");
   } finally {
     await rm(extra, { recursive: true, force: true });
   }
@@ -275,12 +272,11 @@ test("refuses traversal and unknown extensions in the preview route", async () =
   await symlink(outsidePath, join(root, "link.html"));
 
   try {
-    const roots = [root];
     expect(
-      await resolvePreviewFile({ roots, path: `../${basename(outside)}/secret.html` }),
+      await resolvePreviewFile({ root, path: `../${basename(outside)}/secret.html` }),
     ).toBeNull();
-    expect(await resolvePreviewFile({ roots, path: "link.html" })).toBeNull();
-    expect(await resolvePreviewFile({ roots, path: "" })).toBeNull();
+    expect(await resolvePreviewFile({ root, path: "link.html" })).toBeNull();
+    expect(await resolvePreviewFile({ root, path: "" })).toBeNull();
   } finally {
     await rm(outside, { recursive: true, force: true });
   }
@@ -309,7 +305,55 @@ test("finds the HTML in an extra root only when the root is passed", async () =>
     expect((await attachMessageFiles(chat, root)).messages[0]?.files).toBeUndefined();
 
     const attached = await attachMessageFiles(chat, root, [extra]);
-    expect(attached.messages[0]?.files).toMatchObject([{ name: "mock.html", kind: "html" }]);
+    expect(attached.messages[0]?.files).toMatchObject([
+      { name: "mock.html", kind: "html", root: 1 },
+    ]);
+  } finally {
+    await rm(extra, { recursive: true, force: true });
+  }
+});
+
+test("keeps the checkout first for an image that only exists in an extra root", async () => {
+  const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+  await writeFile(join(extra, "photo.png"), png);
+
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: "`photo.png` と `photo.png`", at: 1 }],
+  };
+
+  try {
+    // 画像は /files がチェックアウトだけを根にする。追加根から拾うと配信先が無い。
+    expect((await attachMessageFiles(chat, root, [extra])).messages[0]?.files).toBeUndefined();
+
+    // チェックアウトに置けば、これまでどおり root 0 で出る。
+    await write("photo.png", png);
+    expect((await attachMessageFiles(chat, root, [extra])).messages[0]?.files).toMatchObject([
+      { name: "photo.png", kind: "image", root: 0 },
+    ]);
+  } finally {
+    await rm(extra, { recursive: true, force: true });
+  }
+});
+
+test("keeps the root of a same-named file so delivery cannot swap it", async () => {
+  await write("mock.html", new TextEncoder().encode("<!doctype html><p>checkout</p>"));
+  const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+  const page = join(extra, "mock.html");
+  await writeFile(page, "<!doctype html><p>extra</p>");
+
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: `モックは \`${page}\` です。`, at: 1 }],
+  };
+
+  try {
+    const files = (await attachMessageFiles(chat, root, [extra])).messages[0]?.files ?? [];
+    // 絶対パスは追加根に実在するので、チェックアウトの同名ファイルではなく root 1 を記録する。
+    expect(files).toMatchObject([{ name: "mock.html", kind: "html", root: 1 }]);
+    // 配信も同じ根を引けば、チェックアウトの同名ファイルとは別の中身になる。
+    const served = await resolvePreviewFile({ root: extra, path: files[0]!.name });
+    expect(served?.path).toBe(page);
   } finally {
     await rm(extra, { recursive: true, force: true });
   }

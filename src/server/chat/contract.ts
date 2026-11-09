@@ -8,6 +8,8 @@ export type ChatFile = {
   version: string;
   // 見せ方。image はサムネイル、html はプレビュー。
   kind: MessageFileKind;
+  // 配信の根の番号。0 はチェックアウト、1 以上は HWC_PREVIEW_ROOTS の順。
+  root: number;
 };
 
 export type ChatMessage = {

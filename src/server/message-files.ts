@@ -6,11 +6,7 @@ import {
   MAX_ATTACHMENTS,
   MAX_ATTACHMENT_BYTES,
 } from "../shared/attachments";
-import {
-  messageFileKindFromName,
-  previewContentType,
-  type MessageFileKind,
-} from "../shared/message-files";
+import { messageFileKindFromName, previewContentType } from "../shared/message-files";
 import type { ChatFile, ChatMessage, ChatSnapshot } from "./chat/contract";
 
 // 1 通の本文から試す候補の上限。実在確認は候補ごとに fs を叩くので、本文が長くても止まるようにする。
@@ -111,13 +107,15 @@ export function messagePathCandidates(text: string): string[] {
   return candidates;
 }
 
-type ResolvedFile = { name: string; version: string; path: string };
+type ResolvedFile = { name: string; version: string; path: string; root: number };
 
 // 根の外を指すパスは realpath で落とす。受け入れる形式は呼び出し側が決める。
+// root は根の番号で、配信の URL と突き合わせるために結果へ残す。
 async function resolveAgainstRoot(
   rootReal: string,
   candidate: string,
   accept: (name: string) => boolean,
+  root: number,
 ): Promise<ResolvedFile | null> {
   try {
     const target = isAbsolute(candidate) ? candidate : resolve(rootReal, candidate);
@@ -135,6 +133,7 @@ async function resolveAgainstRoot(
       name: name.split(sep).join("/"),
       version: `${Math.trunc(info.mtimeMs)}-${info.size}`,
       path: real,
+      root,
     };
   } catch {
     return null;
@@ -151,6 +150,7 @@ export async function resolveMessageFile(options: {
       await realpath(options.root),
       options.path,
       (name) => messageFileKindFromName(name) === "image",
+      0,
     );
     if (file === null) return null;
     return { ...file, kind: "image" };
@@ -168,11 +168,11 @@ export async function collectMessageFiles(text: string, root: string): Promise<M
   }
 }
 
-// 根は順に試し、最初に見つかったものを採る。配信（resolvePreviewFile）と同じ順にして、
-// 検出したファイルと配信するファイルを並べる。
+// 根は順に試し、最初に見つかったものを採る。採った根の番号をファイルに持たせるので、
+// 配信は同じ実体を引き直せる（同名ファイルが別の根にあっても取り違えない）。
 async function collectAgainstRoots(
   text: string,
-  rootsReal: readonly string[],
+  rootsReal: readonly (string | null)[],
 ): Promise<MessageFile[]> {
   if (text === "" || rootsReal.length === 0) return [];
   const candidates = messagePathCandidates(text);
@@ -183,48 +183,57 @@ async function collectAgainstRoots(
   for (const candidate of candidates) {
     if (files.length >= MAX_ATTACHMENTS) break;
     let resolved: ResolvedFile | null = null;
-    for (const rootReal of rootsReal) {
+    for (const [root, rootReal] of rootsReal.entries()) {
+      // 実在しない根も番号を詰めずに飛ばす。番号は配信の URL と共有している。
+      if (rootReal === null) continue;
       resolved = await resolveAgainstRoot(
         rootReal,
         candidate,
-        (name) => messageFileKindFromName(name) !== null,
+        (name) => {
+          const kind = messageFileKindFromName(name);
+          // 画像は既存の /files がチェックアウトだけを根にする。追加根から拾うと配信先が無い。
+          if (kind === null) return false;
+          return kind === "image" ? root === 0 : true;
+        },
+        root,
       );
       if (resolved !== null) break;
     }
-    if (resolved === null || seen.has(resolved.name)) continue;
-    const kind: MessageFileKind = messageFileKindFromName(resolved.name) ?? "image";
-    seen.add(resolved.name);
-    files.push({ name: resolved.name, version: resolved.version, kind });
+    if (resolved === null) continue;
+    const key = `${resolved.root}:${resolved.name}`;
+    if (seen.has(key)) continue;
+    const kind = messageFileKindFromName(resolved.name);
+    if (kind === null) continue;
+    seen.add(key);
+    files.push({ name: resolved.name, version: resolved.version, kind, root: resolved.root });
   }
   return files;
 }
 
 // プレビューで配信するファイル。html と同じディレクトリの css / js / 画像も、
-// 同じ根の中なら配信する。根は順に試し、最初に見つかったものを返す（チェックアウトが勝つ）。
+// 同じ根の中なら配信する。どの根かは URL の先頭の番号で決まるので、ここでは 1 つだけ見る。
 export type PreviewFile = { name: string; path: string; contentType: string };
 
 export async function resolvePreviewFile(options: {
-  roots: readonly string[];
+  root: string;
   path: string;
 }): Promise<PreviewFile | null> {
-  for (const root of options.roots) {
-    let rootReal: string;
-    try {
-      rootReal = await realpath(root);
-    } catch {
-      continue;
-    }
-    const file = await resolveAgainstRoot(
-      rootReal,
-      options.path,
-      (name) => previewContentType(name) !== null,
-    );
-    if (file === null) continue;
-    const contentType = previewContentType(file.name);
-    if (contentType === null) continue;
-    return { name: file.name, path: file.path, contentType };
+  let rootReal: string;
+  try {
+    rootReal = await realpath(options.root);
+  } catch {
+    return null;
   }
-  return null;
+  const file = await resolveAgainstRoot(
+    rootReal,
+    options.path,
+    (name) => previewContentType(name) !== null,
+    0,
+  );
+  if (file === null) return null;
+  const contentType = previewContentType(file.name);
+  if (contentType === null) return null;
+  return { name: file.name, path: file.path, contentType };
 }
 
 // 追加の根は利用者が明示する。既定ではチェックアウトの外を見ない（ADR 0051）。
@@ -258,15 +267,16 @@ export async function attachMessageFiles(
   const roots = root === null ? extraRoots : [root, ...extraRoots];
   if (roots.length === 0) return snapshot;
 
-  const rootsReal: string[] = [];
+  // 実在しない根も空きとして残す。番号が詰まると、配信の URL と別の根を指してしまう。
+  const rootsReal: (string | null)[] = [];
   for (const item of roots) {
     try {
       rootsReal.push(await realpath(item));
     } catch {
-      // 無い根は飛ばす。読めないディレクトリがあるだけで、会話を出さない理由は無い。
+      rootsReal.push(null);
     }
   }
-  if (rootsReal.length === 0) return snapshot;
+  if (rootsReal.every((item) => item === null)) return snapshot;
 
   const messages = await Promise.all(
     snapshot.messages.map(async (message) => {
