@@ -87,6 +87,16 @@ export function countWorkspacePanes(workspaceId: string, state: AppState): numbe
   return workspace.tabs.reduce((total, tab) => total + tab.panes.length, 0);
 }
 
+// シェルだけの束は、状態の集約だけではエージェントの居る束と見分けられない。Herdr は
+// シェルだけのスペースにも idle を返すことがあるため、見出しはペインとは別に数える。
+export function countWorkspaceAgents(workspace: WorkspaceState): number {
+  return workspace.tabs.reduce((total, tab) => total + countTabAgents(tab), 0);
+}
+
+export function countTabAgents(tab: TabState): number {
+  return tab.panes.filter((pane) => pane.agent !== null).length;
+}
+
 // タブが 1 つだけのワークスペースでは、タブは何も束ねていない。タブ行を出さず、
 // ペインを親の直下に並べるために、そのタブを返す。
 export function soleTab(workspace: WorkspaceState): TabState | null {

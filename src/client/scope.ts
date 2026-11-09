@@ -109,6 +109,12 @@ export function countLabel(count: number): string {
   return count > 99 ? "99+" : String(count);
 }
 
+// 「すべて」の見出しの副題。エージェントの有無を先に出す。シェルしか居ない束に
+// 「エージェント 0」と書かず、何が居るかを言う。
+export function agentPresence(agents: number): string {
+  return agents === 0 ? "シェルのみ" : `エージェント ${agents}`;
+}
+
 // 既読は「見終わったとき」に送る。開いた時点で送ると、読んでいる間に完了の印が消える。
 // 保留はアクティブ一覧の行を開いたときだけ作るので、ここでは登録元を問わない。
 // 同じ行の再選択は離れていないので送らない。消えたペイン（status が null）も送らない。

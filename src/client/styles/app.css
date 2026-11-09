@@ -711,6 +711,40 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   font-weight: 600;
 }
 
+/* 名前の行。長い名前は省略し、エージェントの数の札は残す。 */
+.hwc-group-title,
+.hwc-tabrow-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.hwc-group-title .hwc-group-name,
+.hwc-tabrow-title .hwc-tabrow-name {
+  flex: 0 1 auto;
+}
+
+/* エージェントの数の札。状態の記号とは別に、居るかどうかを名前の横で示す。 */
+.hwc-group-agents {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.hwc-group-agents svg {
+  color: var(--color-secondary);
+}
+
 .hwc-group-sub,
 .hwc-pane-sub {
   margin-top: var(--space-1);
@@ -1737,6 +1771,17 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 .hwc-group-status[data-hidden="true"] {
   opacity: 0;
   pointer-events: none;
+}
+
+/* エージェントの居ない束は、状態の代わりにシェルの記号を置く。状態の記号と同じ 32px の枠に
+   収め、右端の位置を揃える。シェルだけだと分かるよう、記号の濃さは状態より淡くする。 */
+.hwc-group-shell {
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  color: var(--color-neutral);
+  opacity: 0.6;
 }
 
 @keyframes hwc-status-in {
