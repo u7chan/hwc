@@ -238,7 +238,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 }
 
 /* スクロールバーは細く、面に馴染ませる。矢印も枠も出さない。
-   入力欄は max-height を超えたときだけスクロールするので、同じ見た目に揃える。 */
+   入力欄は、内容が入力欄の高さを超えたときだけスクロールするので、同じ見た目に揃える。 */
 .hwc-list-scroll,
 .hwc-output-scroll,
 .hwc-settings-scroll,
