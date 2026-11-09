@@ -74,13 +74,6 @@ import {
   shouldFocusOnLeave,
   type ListScope,
 } from "./scope";
-import {
-  SENT_PANE_STORAGE_KEY,
-  parseSentPanes,
-  recordSent,
-  sentForSave,
-  type SentPane,
-} from "./sent";
 import { gateSnapshot, nextObservation, type SnapshotOrigin } from "./snapshot";
 import {
   FINISHED_AT_STORAGE_KEY,
@@ -301,10 +294,6 @@ export function App() {
   // 同じ場所を何度も開けるよう、token で 1 回ずつ処理する。
   const [reveal, setReveal] = useState<{ workspaceId: string; token: number } | null>(null);
   const revealSeq = useRef(0);
-  // 窓口はスペースごとに 1 つ。一覧が読む値なので state に置き、送信のたびに入れ替える。
-  const [sent, setSent] = useState<ReadonlyMap<string, SentPane>>(() =>
-    parseSentPanes(readStored(SENT_PANE_STORAGE_KEY)),
-  );
   // メニューと確認はセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
   const [menu, setMenu] = useState<OperationMenu | null>(null);
@@ -687,15 +676,6 @@ export function App() {
     rememberOpen([groupId], next.has(groupId));
   };
 
-  // 窓口は「最後に送ったペイン」。開いただけでは入れ替えないので、送信が通ったときだけ呼ぶ。
-  const rememberSent = (paneId: string) => {
-    if (state === null) return;
-    const next = recordSent(sent, findPaneRow(state, paneId), Date.now());
-    if (next === sent) return;
-    setSent(next);
-    writeStored(SENT_PANE_STORAGE_KEY, JSON.stringify(sentForSave(state, next)));
-  };
-
   // 送れたかどうかを返す。失敗したら入力欄が下書きを残せるようにする。
   // 失敗は送信した入口で伝える。本文は消さず、再試行できるようにする。
   const sendToPane = async (
@@ -714,7 +694,6 @@ export function App() {
       inputsInFlight.current.delete(paneId);
       inputChanged(undefined);
     }
-    rememberSent(paneId);
     return true;
   };
 
@@ -969,7 +948,6 @@ export function App() {
               }
               workingSince={workingSince}
               finishedAt={finishedAt}
-              sent={sent}
               pullRequests={pullRequests}
               now={now}
             />

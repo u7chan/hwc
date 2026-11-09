@@ -1284,7 +1284,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   font-variant-numeric: tabular-nums;
 }
 
-/* 時刻は状態の色に合わせる。待機の窓口は終わっていないので淡いまま。 */
+/* 時刻は状態の色に合わせる。待機は終わった時刻を持っていても淡いまま。 */
 .hwc-pane-elapsed[data-tone="active"] {
   color: var(--color-active);
 }

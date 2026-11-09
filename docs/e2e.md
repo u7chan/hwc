@@ -65,7 +65,7 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 用意し、既存の `review` ペインには架空の user / assistant の会話を入れる。`agent.focus` は
 フォーカスを移して `pane.focused` を流す。実 Herdr と同じく seen も進むので、対象が `done` の
 ときは `idle` に戻し、そのタブとスペースの集約状態を残りのペインから引き直して `pane.updated`
-を流す。hwc の既読はこの遷移で行が消える（窓口の `done` は `idle` の行として残る）。
+を流す。hwc の既読はこの遷移で完了から待機に変わる（行そのものは残る）。
 `pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
@@ -126,6 +126,12 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 - 同じく添付注記の無い `/reload`。実 Pi と同じくセッションに何も書かず、`agent_status` も `working` にしない。hwc は控えを履歴に残す（[ADR 0045](adr/0045-pending-echo-turn-grace.md)）
 
 添付を持つペインで `Enter` が送信になるときは、常に本文の送信になる（[ADR 0018](adr/0018-pasted-image-attachments.md)）。タッチ端末では `Enter` が改行になる（[ADR 0037](adr/0037-enter-newline-on-touch.md)）。`/compact` と打っても添付と一緒に送れば本文として扱われるので、注記があるときはコマンドではなく通常本文として追記する。
+
+## アクティブ一覧
+
+1. `アクティブ` を開く。エージェントのいるペインが、待機中も含めて帯ごとに状態順（要対応 → 完了 → 実行中 → 待機 → 不明）で並ぶ。`scratch` では `notes`（エージェントなし）が出ず、`folder-trust-saved` などの待機が帯に並ぶ。
+2. `acme-dashboard` の帯で `api`（完了）を開き、`一覧へ戻る` で戻る。`api` は `待機` になって帯の最後へ移り、帯の件数から完了が消える（[ADR 0050](adr/0050-active-lists-every-agent.md)）。
+3. `すべて` に切り替えて、シェルだけのペインと待機のペインがツリーに出ることを確かめる。
 
 ## ワークツリー作成
 
