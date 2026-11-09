@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-09
+- Supersedes: [ADR 0047](0047-worktree-task-summary.md) の「すべてツリーの見出しの 2 行目」
 
 ## Context
 

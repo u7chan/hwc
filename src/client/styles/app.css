@@ -732,8 +732,9 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   align-items: center;
   gap: 2px;
   padding: 0 var(--space-1);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
-  background: var(--color-raised);
+  background: var(--color-surface);
   color: var(--color-text);
   font-size: var(--text-secondary);
   font-weight: 600;
