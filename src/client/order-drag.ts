@@ -50,11 +50,16 @@ function clearTimer(pending: Pending) {
 }
 
 // 固定配置のガイドは、毎回の再描画を避けて CSS 変数だけで動かす。値は viewport 座標。
-function setGhostPoint(x: number, y: number) {
+// 「ここに移動」のラベルは、掴んでいる指の反対側へ置いて重ならないようにする。
+function setGhostPoint(x: number, y: number, scroll: HTMLElement | null) {
   const root = document.documentElement;
   root.style.setProperty("--hwc-order-ghost-x", `${x}px`);
   root.style.setProperty("--hwc-order-ghost-y", `${y}px`);
   root.dataset.orderGhost = y < GHOST_BELOW_Y ? "below" : "above";
+  if (scroll !== null) {
+    const rect = scroll.getBoundingClientRect();
+    root.dataset.orderGuide = x < rect.left + rect.width / 2 ? "right" : "left";
+  }
 }
 
 function clearGhostPoint() {
@@ -62,6 +67,7 @@ function clearGhostPoint() {
   root.style.removeProperty("--hwc-order-ghost-x");
   root.style.removeProperty("--hwc-order-ghost-y");
   delete root.dataset.orderGhost;
+  delete root.dataset.orderGuide;
 }
 
 // 見出しの offsetTop はスクロール位置に依存しない。落とした後に、この位置から
@@ -159,7 +165,7 @@ export function useOrderDrag(options: {
       current.blockingScroll = true;
       document.addEventListener("touchmove", stopScroll, { passive: false });
     }
-    setGhostPoint(current.lastX, current.lastY);
+    setGhostPoint(current.lastX, current.lastY, current.scroll);
     setDrag({ key: current.key, label: current.label, anchor: undefined });
     current.frame = requestAnimationFrame(tick);
   }
@@ -240,7 +246,7 @@ export function useOrderDrag(options: {
       activate();
     } else {
       event.preventDefault();
-      setGhostPoint(current.lastX, current.lastY);
+      setGhostPoint(current.lastX, current.lastY, current.scroll);
     }
 
     updateTarget();

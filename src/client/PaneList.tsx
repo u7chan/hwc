@@ -920,14 +920,21 @@ function TreePaneList(props: TreePaneListProps) {
         );
       })}
       {dropGuide === null ? null : (
-        <div
-          class="hwc-order-drop"
-          data-edge={dropGuide.edge}
-          style={{ top: `${dropGuide.top}px` }}
-          aria-hidden="true"
-        >
-          <span class="hwc-order-drop-label">ここに移動</span>
-        </div>
+        <>
+          <div
+            class="hwc-order-drop"
+            data-edge={dropGuide.edge}
+            style={{ top: `${dropGuide.top}px` }}
+            aria-hidden="true"
+          />
+          <span
+            class="hwc-order-drop-label"
+            style={{ top: `${dropGuide.top}px` }}
+            aria-hidden="true"
+          >
+            ここに移動
+          </span>
+        </>
       )}
       {dragged === null ? null : (
         <div class="hwc-order-ghost" aria-hidden="true">

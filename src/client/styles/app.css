@@ -509,9 +509,8 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 
 .hwc-order-drop-label {
   position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  left: var(--space-4);
+  z-index: 40;
   padding: 2px var(--space-2);
   border-radius: 999px;
   background: var(--color-accent);
@@ -519,6 +518,14 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   font-size: var(--text-secondary);
   line-height: 1.4;
   white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+/* 指の反対側へ置く。追従するガイドが重なっても、ラベルは前面に残す。 */
+html[data-order-guide="right"] .hwc-order-drop-label {
+  right: var(--space-4);
+  left: auto;
 }
 
 /* 掴んでいる束の名前。指の下に隠れないよう、少し上に浮かせる。 */
