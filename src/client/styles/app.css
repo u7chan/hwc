@@ -4568,7 +4568,8 @@ p.hwc-compaction,
 
   .hwc-create-dialog .hwc-dialog-button {
     flex: 0 0 auto;
-    min-width: 9rem;
+    /* ルート文字サイズを上げた環境でも、2 つのボタンが行幅を超えないようにする。 */
+    min-width: min(9rem, calc((100% - var(--space-2)) / 2));
     padding-inline: var(--space-4);
   }
 }
