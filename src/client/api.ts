@@ -143,10 +143,12 @@ function toChatFiles(value: unknown): ChatFile[] | undefined {
     if (typeof item !== "object" || item === null) continue;
     const file = item as Partial<ChatFile>;
     if (typeof file.name !== "string" || typeof file.version !== "string") continue;
+    // 見せ方を知らないファイルは出さない。画像とプレビューだけを扱う。
+    if (file.kind !== "image" && file.kind !== "html") continue;
     // 配信 URL になる。根の外を指す名前は捨て、リンクも画像も作らない。
     if (file.name === "" || file.name.startsWith("/")) continue;
     if (file.name.split("/").includes("..")) continue;
-    files.push({ name: file.name, version: file.version });
+    files.push({ name: file.name, version: file.version, kind: file.kind });
   }
   return files.length === 0 ? undefined : files;
 }
@@ -218,6 +220,13 @@ export function attachmentUrl(paneId: string, name: string): string {
 export function chatFileUrl(paneId: string, file: ChatFile): string {
   const query = `path=${encodeURIComponent(file.name)}&v=${encodeURIComponent(file.version)}`;
   return `/api/panes/${encodeURIComponent(paneId)}/files?${query}`;
+}
+
+// パス形式にするのは、HTML の中の相対参照（`./app.css`）をそのまま解決させるため。
+// 区切りは残し、ファイル名だけをエンコードする。
+export function previewUrl(paneId: string, path: string): string {
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  return `/api/panes/${encodeURIComponent(paneId)}/preview/${encoded}`;
 }
 
 export function toAppState(value: unknown): AppState | null {

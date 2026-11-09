@@ -7,8 +7,10 @@ import type { ChatSnapshot } from "./chat/contract";
 import {
   attachMessageFiles,
   collectMessageFiles,
-  imagePathCandidates,
+  defaultPreviewRoots,
+  messagePathCandidates,
   resolveMessageFile,
+  resolvePreviewFile,
 } from "./message-files";
 
 let root: string;
@@ -38,7 +40,7 @@ test("collects paths from prose, inline code, links and images", () => {
     "詳細は [こちら](docs/preview.jpeg) を見てください。",
   ].join("\n");
 
-  expect(imagePathCandidates(text)).toEqual([
+  expect(messagePathCandidates(text)).toEqual([
     ".artifacts/mock.png",
     "docs/before.jpg",
     "docs/after.webp",
@@ -48,44 +50,46 @@ test("collects paths from prose, inline code, links and images", () => {
 
 test("finds a path in inline code with no spaces around it", () => {
   expect(
-    imagePathCandidates("空状態の確認に使った画面です。`docs/preview/app-icon.png` に置きました。"),
+    messagePathCandidates(
+      "空状態の確認に使った画面です。`docs/preview/app-icon.png` に置きました。",
+    ),
   ).toEqual(["docs/preview/app-icon.png"]);
 });
 
 test("drops a sentence period or a Japanese particle after the extension", () => {
-  expect(imagePathCandidates("The mock is at docs/mock.png.")).toEqual(["docs/mock.png"]);
-  expect(imagePathCandidates("スクショはdocs/mock.pngに置きました。")).toEqual(["docs/mock.png"]);
+  expect(messagePathCandidates("The mock is at docs/mock.png.")).toEqual(["docs/mock.png"]);
+  expect(messagePathCandidates("スクショはdocs/mock.pngに置きました。")).toEqual(["docs/mock.png"]);
   // 全角コロンの後ろでも拾う。
-  expect(imagePathCandidates("モック：docs/mock.png")).toEqual(["docs/mock.png"]);
+  expect(messagePathCandidates("モック：docs/mock.png")).toEqual(["docs/mock.png"]);
   // 別の拡張子が続く名前は画像として扱わない。
-  expect(imagePathCandidates("docs/mock.png.bak")).toEqual([]);
+  expect(messagePathCandidates("docs/mock.png.bak")).toEqual([]);
   // 日本語のファイル名はそのまま残す。
-  expect(imagePathCandidates("モック.png")).toEqual(["モック.png"]);
+  expect(messagePathCandidates("モック.png")).toEqual(["モック.png"]);
 });
 
 test("splits paths joined by punctuation in one token", () => {
   // 全角の区切りで並んだ 2 枚を別々に拾う。区切りの分割が効かないと 1 件にもならない。
-  expect(imagePathCandidates("docs/a.png、docs/b.png")).toEqual(["docs/a.png", "docs/b.png"]);
-  expect(imagePathCandidates("（docs/a.png）")).toEqual(["docs/a.png"]);
+  expect(messagePathCandidates("docs/a.png、docs/b.png")).toEqual(["docs/a.png", "docs/b.png"]);
+  expect(messagePathCandidates("（docs/a.png）")).toEqual(["docs/a.png"]);
 });
 
 test("does not look inside fenced code", () => {
-  expect(imagePathCandidates("```sh\nopen docs/mock.png\n```\n")).toEqual([]);
-  expect(imagePathCandidates("~~~\n![x](a.png)\n~~~\n`b.png`")).toEqual(["b.png"]);
+  expect(messagePathCandidates("```sh\nopen docs/mock.png\n```\n")).toEqual([]);
+  expect(messagePathCandidates("~~~\n![x](a.png)\n~~~\n`b.png`")).toEqual(["b.png"]);
 });
 
 test("ignores paths that are not local images", () => {
-  expect(imagePathCandidates("https://example.com/a.png")).toEqual([]);
-  expect(imagePathCandidates("[remote](https://example.com/a.png)")).toEqual([]);
-  expect(imagePathCandidates("data:image/png;base64,AAAA")).toEqual([]);
-  expect(imagePathCandidates("docs/README.md と src/app.ts")).toEqual([]);
+  expect(messagePathCandidates("https://example.com/a.png")).toEqual([]);
+  expect(messagePathCandidates("[remote](https://example.com/a.png)")).toEqual([]);
+  expect(messagePathCandidates("data:image/png;base64,AAAA")).toEqual([]);
+  expect(messagePathCandidates("docs/README.md と src/app.ts")).toEqual([]);
 });
 
 test("keeps each path once and stops at the candidate limit", () => {
-  expect(imagePathCandidates("a.png `a.png` [x](a.png)")).toEqual(["a.png"]);
+  expect(messagePathCandidates("a.png `a.png` [x](a.png)")).toEqual(["a.png"]);
 
   const many = Array.from({ length: 30 }, (_, index) => `f${index}.png`).join(" ");
-  expect(imagePathCandidates(many)).toHaveLength(20);
+  expect(messagePathCandidates(many)).toHaveLength(20);
 });
 
 test("finds an existing image below the root", async () => {
@@ -93,8 +97,20 @@ test("finds an existing image below the root", async () => {
 
   const files = await collectMessageFiles("![モック](docs/mock.png)", root);
 
-  expect(files.map((file) => file.name)).toEqual(["docs/mock.png"]);
+  expect(files.map((file) => ({ name: file.name, kind: file.kind }))).toEqual([
+    { name: "docs/mock.png", kind: "image" },
+  ]);
   expect(files[0]?.version).toMatch(/^\d+-\d+$/);
+});
+
+test("finds an HTML file below the root and marks it for preview", async () => {
+  await write("docs/preview/index.html", new TextEncoder().encode("<!doctype html>"));
+
+  const files = await collectMessageFiles("モックは `docs/preview/index.html` です。", root);
+
+  expect(files).toHaveLength(1);
+  expect(files[0]?.name).toBe("docs/preview/index.html");
+  expect(files[0]?.kind).toBe("html");
 });
 
 test("accepts an absolute path only inside the root", async () => {
@@ -131,11 +147,14 @@ test("refuses traversal and a symlink that leaves the root", async () => {
 test("only serves a regular file with an allowed image extension", async () => {
   await write("docs/note.txt", png);
   await write("docs/empty.png", new Uint8Array());
+  await write("docs/mock.html", new TextEncoder().encode("<!doctype html>"));
   await mkdir(join(root, "docs/folder.png"), { recursive: true });
 
   expect(await resolveMessageFile({ root, path: "docs/note.txt" })).toBeNull();
   expect(await resolveMessageFile({ root, path: "docs/empty.png" })).toBeNull();
   expect(await resolveMessageFile({ root, path: "docs/folder.png" })).toBeNull();
+  // HTML はプレビューの経路が受ける。画像の配信では返さない。
+  expect(await resolveMessageFile({ root, path: "docs/mock.html" })).toBeNull();
   expect(await resolveMessageFile({ root, path: "../" })).toBeNull();
   expect(await resolveMessageFile({ root, path: "" })).toBeNull();
 });
@@ -198,4 +217,100 @@ test("keeps the etag stable while the image does not change", async () => {
   const second = await attachMessageFiles(snapshot, root);
 
   expect(second.etag).toBe(first.etag);
+});
+
+test("serves the HTML and the files it references from the same root", async () => {
+  await write("preview/index.html", new TextEncoder().encode("<!doctype html>"));
+  await write("preview/app.css", new TextEncoder().encode("body{}"));
+  await write("preview/app.js", new TextEncoder().encode("export {}"));
+  await write("preview/data.json", new TextEncoder().encode("{}"));
+  // svg はモックの装飾に使う。単体で開いても CSP の sandbox が効く。
+  await write("preview/logo.svg", new TextEncoder().encode("<svg/>"));
+  await write("preview/notes.txt", new TextEncoder().encode("text"));
+
+  const roots = [root];
+  expect((await resolvePreviewFile({ roots, path: "preview/index.html" }))?.contentType).toBe(
+    "text/html; charset=utf-8",
+  );
+  expect((await resolvePreviewFile({ roots, path: "preview/app.css" }))?.contentType).toBe(
+    "text/css; charset=utf-8",
+  );
+  expect((await resolvePreviewFile({ roots, path: "preview/app.js" }))?.contentType).toBe(
+    "text/javascript; charset=utf-8",
+  );
+  expect((await resolvePreviewFile({ roots, path: "preview/data.json" }))?.contentType).toBe(
+    "application/json; charset=utf-8",
+  );
+  expect((await resolvePreviewFile({ roots, path: "preview/logo.svg" }))?.contentType).toBe(
+    "image/svg+xml",
+  );
+  // 一覧に無い形式は配信しない。
+  expect(await resolvePreviewFile({ roots, path: "preview/notes.txt" })).toBeNull();
+});
+
+test("reads an absolute path only from the roots it was given", async () => {
+  const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+  const page = join(extra, "mock.html");
+  await writeFile(page, "<!doctype html>");
+
+  try {
+    expect(await resolvePreviewFile({ roots: [root], path: page })).toBeNull();
+    const found = await resolvePreviewFile({ roots: [root, extra], path: page });
+    expect(found?.name).toBe("mock.html");
+    expect(found?.path).toBe(page);
+    // 相対パスも追加の根から読める。
+    expect((await resolvePreviewFile({ roots: [root, extra], path: "mock.html" }))?.name).toBe(
+      "mock.html",
+    );
+  } finally {
+    await rm(extra, { recursive: true, force: true });
+  }
+});
+
+test("refuses traversal and unknown extensions in the preview route", async () => {
+  await write("index.html", new TextEncoder().encode("<!doctype html>"));
+  const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
+  const outsidePath = join(outside, "secret.html");
+  await writeFile(outsidePath, "<!doctype html>");
+  await symlink(outsidePath, join(root, "link.html"));
+
+  try {
+    const roots = [root];
+    expect(
+      await resolvePreviewFile({ roots, path: `../${basename(outside)}/secret.html` }),
+    ).toBeNull();
+    expect(await resolvePreviewFile({ roots, path: "link.html" })).toBeNull();
+    expect(await resolvePreviewFile({ roots, path: "" })).toBeNull();
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("reads the extra preview roots from the environment", () => {
+  expect(defaultPreviewRoots({})).toEqual([]);
+  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "" })).toEqual([]);
+  // 相対パスは作業ディレクトリに依存するので採らない。
+  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "relative:/tmp/mock" })).toEqual(["/tmp/mock"]);
+  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "/tmp/a:/tmp/b" })).toEqual(["/tmp/a", "/tmp/b"]);
+});
+
+test("finds the HTML in an extra root only when the root is passed", async () => {
+  const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+  const page = join(extra, "mock.html");
+  await writeFile(page, "<!doctype html>");
+
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: `モックは \`${page}\` です。`, at: 1 }],
+  };
+
+  try {
+    // 追加根を渡さなければ、チェックアウトの外は検出しない。
+    expect((await attachMessageFiles(chat, root)).messages[0]?.files).toBeUndefined();
+
+    const attached = await attachMessageFiles(chat, root, [extra]);
+    expect(attached.messages[0]?.files).toMatchObject([{ name: "mock.html", kind: "html" }]);
+  } finally {
+    await rm(extra, { recursive: true, force: true });
+  }
 });

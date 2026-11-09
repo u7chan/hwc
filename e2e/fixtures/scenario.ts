@@ -90,6 +90,15 @@ export async function createScenario(root: string): Promise<Scenario> {
     fileURLToPath(new URL("../../src/client/assets/apple-touch-icon.png", import.meta.url)),
     join(dashboard, "docs", "preview", "app-icon.png"),
   );
+  // HTML のプレビュー。css と js を相対参照しているので、配信の根とパス形式も通る。
+  await Promise.all(
+    ["mock.html", "mock.css", "mock.js"].map((name) =>
+      copyFile(
+        fileURLToPath(new URL(`./preview/${name}`, import.meta.url)),
+        join(dashboard, "docs", "preview", name),
+      ),
+    ),
+  );
 
   await Promise.all([
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
@@ -604,6 +613,32 @@ const sessionEntries = [
       },
     };
   }),
+  // エージェントが書いた HTML。押すとプレビューのタブが開く。
+  {
+    type: "message",
+    id: "a7-preview",
+    parentId: "a6",
+    timestamp: "2026-01-01T09:00:12.000Z",
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: "空状態のモックを HTML で作りました。`docs/preview/mock.html` で確認できます。",
+        },
+      ],
+      model: "claude-sonnet-4-5",
+      provider: "anthropic",
+      timestamp: Date.parse("2026-01-01T09:00:12.000Z"),
+      usage: {
+        input: 4_000,
+        output: 2_000,
+        cacheRead: 8_000,
+        cacheWrite: 0,
+        totalTokens: 14_000,
+      },
+    },
+  },
 ];
 
 const sessionLines = [sessionHeader, ...sessionEntries].map((line) => JSON.stringify(line));

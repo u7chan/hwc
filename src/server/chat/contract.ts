@@ -1,8 +1,13 @@
+import type { MessageFileKind } from "../../shared/message-files";
+
 export type ChatFile = {
-  // ワークスペースのチェックアウトからの相対パス。絶対パスは渡さない。
+  // 配信の根（ワークスペースのチェックアウト、またはプレビュー用の追加根）からの
+  // 相対パス。絶対パスは渡さない。
   name: string;
   // 中身の版（mtime とサイズ）。URL のキャッシュ破棄に使う。
   version: string;
+  // 見せ方。image はサムネイル、html はプレビュー。
+  kind: MessageFileKind;
 };
 
 export type ChatMessage = {
@@ -16,7 +21,7 @@ export type ChatMessage = {
   count?: number;
   // ペイン配下のファイル名だけを持つ。絶対パスはクライアントへ渡さない。
   attachments?: string[];
-  // エージェントの本文が指していた画像。ユーザーの添付とは別の一覧。
+  // エージェントの本文が指していたファイル。ユーザーの添付とは別の一覧。
   files?: ChatFile[];
 };
 

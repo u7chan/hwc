@@ -13,6 +13,7 @@ import {
   outputRequest,
   paneParam,
   parseAppState,
+  previewUrl,
   toAppState,
   toChatSnapshot,
   CREATE_TIMEOUT_MS,
@@ -390,34 +391,55 @@ test("a message keeps its attachments only as names in the saved format", () => 
   ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
 });
 
-test("a preview url carries the relative path and the version", () => {
-  expect(chatFileUrl("w1:p2", { name: "docs/モック.png", version: "1767225600000-12" })).toBe(
+test("a preview url keeps the path separators and encodes each name", () => {
+  expect(previewUrl("w1:p2", "docs/モック.html")).toBe(
+    `/api/panes/w1%3Ap2/preview/docs/${encodeURIComponent("モック.html")}`,
+  );
+  // 区切りは残す。相対参照がそのまま効く。
+  expect(previewUrl("w1:p1", "preview/index.html")).toBe(
+    "/api/panes/w1%3Ap1/preview/preview/index.html",
+  );
+});
+
+test("an image url carries the relative path and the version", () => {
+  expect(
+    chatFileUrl("w1:p2", {
+      name: "docs/モック.png",
+      version: "1767225600000-12",
+      kind: "image",
+    }),
+  ).toBe(
     `/api/panes/w1%3Ap2/files?path=${encodeURIComponent("docs/モック.png")}&v=1767225600000-12`,
   );
   // 区切りの入った名前も、クエリの 1 値として送る。
-  expect(chatFileUrl("w1:p1", { name: "../x.png", version: "1-2" })).toBe(
+  expect(chatFileUrl("w1:p1", { name: "../x.png", version: "1-2", kind: "image" })).toBe(
     "/api/panes/w1%3Ap1/files?path=..%2Fx.png&v=1-2",
   );
 });
 
-test("an agent message keeps the images the server found", () => {
+test("an agent message keeps the files the server found", () => {
   const message = {
     id: "m1",
     role: "agent" as const,
     text: "`docs/mock.png` に置きました。",
     at: 1_000,
-    files: [{ name: "docs/mock.png", version: "1767225600000-12" }],
+    files: [
+      { name: "docs/mock.png", version: "1767225600000-12", kind: "image" as const },
+      { name: "docs/preview/index.html", version: "1767225600000-20", kind: "html" as const },
+    ],
   };
   expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
 
-  // 配信 URL になる。根の外を指す名前や壊れた版は捨てる。
+  // 配信 URL になる。根の外を指す名前や壊れた版、知らない見せ方は捨てる。
   const broken = {
     ...message,
     files: [
-      { name: "/etc/passwd.png", version: "1-2" },
-      { name: "../secret.png", version: "1-2" },
-      { name: "", version: "1-2" },
-      { name: "docs/ok.png", version: 3 },
+      { name: "/etc/passwd.png", version: "1-2", kind: "image" },
+      { name: "../secret.png", version: "1-2", kind: "image" },
+      { name: "", version: "1-2", kind: "image" },
+      { name: "docs/ok.png", version: 3, kind: "image" },
+      { name: "docs/note.md", version: "1-2", kind: "markdown" },
+      { name: "docs/note.md", version: "1-2" },
     ],
   };
   expect(toChatSnapshot({ ...chatBody, messages: [broken] })?.messages).toEqual([

@@ -411,6 +411,27 @@ export function CollapseIcon({ size = 20 }: IconProps) {
   );
 }
 
+// 同じ内容を読み直す。プレビューの再読み込みにだけ使う。
+export function ReloadIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M19.5 12a7.5 7.5 0 1 1-2.5-5.6" />
+      <path d="M19.5 4v4.5H15" />
+    </Svg>
+  );
+}
+
+// アプリの外（新しいタブ）へ渡す。
+export function ExternalIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M13.5 4H20v6.5" />
+      <path d="M20 4l-8.5 8.5" />
+      <path d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5" />
+    </Svg>
+  );
+}
+
 export function StatusMark({ tone, size = 16 }: { tone: string; size?: number }) {
   return (
     <svg
