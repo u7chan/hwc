@@ -60,7 +60,7 @@ test("the list opens on every space", () => {
   expect(parseListScope("everything")).toBe("all");
 });
 
-test("active lists the agents that are working, blocked or done", () => {
+test("active lists every pane that has an agent, whatever its status", () => {
   const state = app(
     workspace("w1", [
       pane("w1:p1", "pi", "working"),
@@ -72,11 +72,16 @@ test("active lists the agents that are working, blocked or done", () => {
     ]),
   );
 
-  // エージェントのいないシェルには状態が付かない。idle は一覧に載せない。
-  expect(activePanes(state).map((row) => row.pane.id)).toEqual(["w1:p4", "w1:p1", "w1:p5"]);
+  // エージェントのいないシェルだけを外す。待機中も、起動していれば並べる。
+  expect(activePanes(state).map((row) => row.pane.id)).toEqual([
+    "w1:p1",
+    "w1:p3",
+    "w1:p4",
+    "w1:p5",
+  ]);
 });
 
-test("active puts what needs attention first and keeps the state order inside a status", () => {
+test("active keeps the state order, because the group decides how to show it", () => {
   const state = app(
     workspace(
       "w1",
@@ -84,8 +89,7 @@ test("active puts what needs attention first and keeps the state order inside a 
         pane("w1:p1", "pi", "done"),
         pane("w1:p2", "pi", "working"),
         pane("w1:p3", "pi", "blocked"),
-        pane("w1:p4", "pi", "done"),
-        pane("w1:p5", "pi", "working"),
+        pane("w1:p4", "pi", "idle"),
       ],
       // 2 タブ目は空。タブをまたいでも state の並びを保つ。
       2,
@@ -94,12 +98,11 @@ test("active puts what needs attention first and keeps the state order inside a 
   );
 
   expect(activePanes(state).map((row) => row.pane.id)).toEqual([
-    "w1:p3",
-    "w2:p1",
-    "w1:p2",
-    "w1:p5",
     "w1:p1",
+    "w1:p2",
+    "w1:p3",
     "w1:p4",
+    "w2:p1",
   ]);
 });
 
@@ -113,11 +116,11 @@ test("active carries the workspace and the tab of each pane", () => {
   expect(row?.pane.id).toBe("w1:p1");
 });
 
-test("active keeps no room for the open pane, because idle panes are not in it", () => {
+test("a waiting agent stays in the list", () => {
   const state = app(workspace("w1", [pane("w1:p1", "pi", "idle")]));
 
-  // 選択中のペインでも出さない。
-  expect(activePanes(state)).toEqual([]);
+  // 開いても消えない。起動している限り、待機中も行は残る。
+  expect(activePanes(state).map((row) => row.pane.id)).toEqual(["w1:p1"]);
 });
 
 test("only a done pane that is left after it finishes moves the focus", () => {
@@ -164,16 +167,8 @@ test("the count is the spaces in the active list, not the rows", () => {
     workspace("w3", [pane("w3:p1", "pi", "idle")]),
   );
 
-  // 同じスペースの行は 1。done だけのスペースも一覧に出るので 1。idle だけのスペースは帯を作らない。
-  expect(activeGroups(state, new Map()).length).toBe(2);
-});
-
-test("a space with only its window row counts as a space", () => {
-  const state = app(workspace("w1", [pane("w1:p1", "pi", "idle")]));
-  const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
-
-  // 窓口は idle でも一覧に残る。帯が出ている以上、件数にも入れる。
-  expect(activeGroups(state, sent).length).toBe(1);
+  // 同じスペースの行は 1。完了だけのスペースも、待機だけのスペースも帯を作るので 1。
+  expect(activeGroups(state).length).toBe(3);
 });
 
 test("a count past two digits is shown as a range", () => {
@@ -183,43 +178,45 @@ test("a count past two digits is shown as a range", () => {
   expect(countLabel(100)).toBe("99+");
 });
 
-test("a group holds attention, the window, the finished and the running in that order", () => {
+test("a group holds attention, the finished, the running and the waiting in that order", () => {
   const state = app(
     workspace("w1", [
-      pane("w1:p1", "pi", "done"),
+      pane("w1:p1", "pi", "idle"),
       pane("w1:p2", "pi", "working"),
       pane("w1:p3", "pi", "blocked"),
-      pane("w1:p4", "claude", "idle"),
+      pane("w1:p4", "claude", "done"),
+      pane("w1:p5", "pi", "unknown"),
     ]),
   );
-  const sent = new Map([["w1", { paneId: "w1:p4", at: 1_000 }]]);
 
-  const [group] = activeGroups(state, sent);
+  const [group] = activeGroups(state);
 
-  // 要対応が窓口より先。窓口は状態の側から除き、二重に出さない。
-  expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p3", "w1:p4", "w1:p1", "w1:p2"]);
+  // 待機と不明は並びの最後にまとめ、動いている行や未読の完了を押し下げない。
+  expect(group?.rows.map((row) => row.pane.id)).toEqual([
+    "w1:p3",
+    "w1:p4",
+    "w1:p2",
+    "w1:p1",
+    "w1:p5",
+  ]);
 });
 
-test("groups come in the rank of their top row, then the newest window, then the state order", () => {
+test("groups come in the rank of their top row, then the state order", () => {
   const state = app(
     workspace("w1", [pane("w1:p1", "pi", "working")]),
     workspace("w2", [pane("w2:p1", "pi", "done")]),
     workspace("w3", [pane("w3:p1", "pi", "idle")]),
     workspace("w4", [pane("w4:p1", "pi", "working")]),
-    workspace("w5", [pane("w5:p1", "pi", "idle")]),
+    workspace("w5", [pane("w5:p1", "pi", "blocked")]),
   );
-  const sent = new Map([
-    ["w3", { paneId: "w3:p1", at: 1_000 }],
-    ["w5", { paneId: "w5:p1", at: 5_000 }],
-  ]);
 
-  // 要対応 (0) → 窓口 (1) → 完了 (2) → 実行中 (3)。同じ窓口の順位は新しい順。
-  expect(activeGroups(state, sent).map((group) => group.workspace.id)).toEqual([
+  // 要対応 (0) → 完了 (1) → 実行中 (2) → 待機 (3)。同順位は state の並び。
+  expect(activeGroups(state).map((group) => group.workspace.id)).toEqual([
     "w5",
-    "w3",
     "w2",
     "w1",
     "w4",
+    "w3",
   ]);
 });
 
@@ -230,12 +227,11 @@ test("a group carries the tab of each row and the counts of what it shows", () =
       [pane("w1:p3", "pi", "done"), pane("w1:p4", "claude", "idle")],
     ]),
   );
-  const sent = new Map([["w1", { paneId: "w1:p4", at: 1_000 }]]);
 
-  const [group] = activeGroups(state, sent);
+  const [group] = activeGroups(state);
 
-  expect(group?.rows.map((row) => row.tab.id)).toEqual(["w1:t1", "w1:t2", "w1:t2", "w1:t1"]);
-  // 窓口も 1 行として数える。待機の行はどの件数にも入らない。
+  expect(group?.rows.map((row) => row.tab.id)).toEqual(["w1:t1", "w1:t2", "w1:t1", "w1:t2"]);
+  // 待機の行は並ぶが、どの件数にも入らない。
   expect(group?.counts).toEqual({ blocked: 1, working: 1, done: 1 });
 });
 
@@ -245,30 +241,9 @@ test("the tab name is added only when the workspace has more than one tab", () =
   expect(showsTabName(workspace("w1", [pane("w1:p1", "pi", "working")], 2))).toBe(true);
 });
 
-test("a window that needs attention moves to the attention side", () => {
-  const state = app(workspace("w1", [pane("w1:p1", "pi", "blocked")]));
-  const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
+test("a space with only shells makes no group", () => {
+  const state = app(workspace("w1", [pane("w1:p1", null, "unknown"), pane("w1:p2", null, "idle")]));
 
-  const [group] = activeGroups(state, sent);
-
-  expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p1"]);
-  expect(group?.rows[0]?.pane.agentStatus).toBe("blocked");
-});
-
-test("a finished window stays as one window row", () => {
-  const state = app(workspace("w1", [pane("w1:p1", "pi", "done"), pane("w1:p2", "pi", "working")]));
-  const sent = new Map([["w1", { paneId: "w1:p1", at: 1_000 }]]);
-
-  const [group] = activeGroups(state, sent);
-
-  // 窓口の done は窓口の側に 1 行だけ残る。状態の側からは除く。
-  expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p1", "w1:p2"]);
-});
-
-test("nothing to read means no groups at all", () => {
-  const state = app(workspace("w1", [pane("w1:p1", "pi", "idle"), pane("w1:p2", null, "unknown")]));
-
-  // 窓口がシェルを指していても、状態の行が無ければ空。
-  expect(activeGroups(state, new Map())).toEqual([]);
-  expect(activeGroups(state, new Map([["w1", { paneId: "w1:p2", at: 1_000 }]]))).toEqual([]);
+  // シェルだけのスペースは「すべて」で見る。
+  expect(activeGroups(state)).toEqual([]);
 });

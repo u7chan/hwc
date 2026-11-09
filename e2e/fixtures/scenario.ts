@@ -270,7 +270,7 @@ export async function createScenario(root: string): Promise<Scenario> {
           value: emptySessionPath,
         },
       },
-      // アクティブ一覧の束と、開いても消えない完了行を確かめるための done。
+      // アクティブ一覧の束と、既読で完了から待機に変わる行を確かめるための done。
       // ラベルは帯のワークスペース名で始まり、行では残り（api）だけが出る。
       {
         pane_id: "w1:p5",

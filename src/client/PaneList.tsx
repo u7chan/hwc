@@ -34,7 +34,6 @@ import {
 } from "./scope";
 import { GitStatus } from "./GitStatus";
 import { MENU_ID } from "./Menu";
-import type { SentPane } from "./sent";
 import { StatusIcon, StatusLabel } from "./StatusLabel";
 import { finishedClock, formatElapsed, workingMs } from "./time";
 
@@ -56,7 +55,6 @@ type PaneListProps = {
   onWorkspaceMenu: (workspaceId: string, trigger: HTMLElement) => void;
   workingSince: ReadonlyMap<string, number>;
   finishedAt: ReadonlyMap<string, number>;
-  sent: ReadonlyMap<string, SentPane>;
   pullRequests: ReadonlyMap<string, PullRequest | null>;
   now: number;
 };
@@ -272,9 +270,9 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
   if (groups.length === 0) {
     return (
       <div class="hwc-list-note">
-        <p class="hwc-list-note-title">窓口も動いているエージェントもいません</p>
+        <p class="hwc-list-note-title">エージェントがいません</p>
         <p class="hwc-list-note-text">
-          メッセージを送ったペインと、実行中・要対応・完了のエージェントがここに並びます。待機中のペインは「すべて」に出ます。
+          起動しているエージェントのペインが、待機中も含めてここに並びます。シェルだけのスペースは「すべて」に出ます。
         </p>
       </div>
     );
@@ -375,7 +373,7 @@ export function PaneList(props: PaneListProps) {
   if (countPanes(props.state) === 0) return <NoPanes />;
 
   // 件数は一覧に出ている帯（スペース）の数。行を数え直さず、同じ束をそのまま使う。
-  const groups = activeGroups(props.state, props.sent);
+  const groups = activeGroups(props.state);
 
   // 帯からの移動は、いまの active の位置を控えてからスコープを切り替える。
   const revealWorkspace = (workspaceId: string) => {
