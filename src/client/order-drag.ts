@@ -8,22 +8,32 @@ const MOUSE_THRESHOLD = 5;
 const TOUCH_THRESHOLD = 10;
 const AUTO_SCROLL_EDGE = 56;
 const AUTO_SCROLL_STEP = 12;
+// 画面上端に近いときは、ガイドを指の上ではなく下に出す。上に出すと画面外へ切れる。
+const GHOST_BELOW_Y = 96;
 
 export type OrderDrag = {
   key: string;
+  label: string;
   // undefined は「掴んだが、まだ落とし先を決めていない」。null は末尾。
   anchor: string | null | undefined;
 };
 
-export type OrderDrop = { key: string; beforeKey: string | null };
+export type OrderDrop = {
+  key: string;
+  beforeKey: string | null;
+  // ドロップ直前の各ブロックの縦位置。落とした後の入れ替えを見せるアニメーションに使う。
+  offsets: ReadonlyMap<string, number>;
+};
 
 type Pending = {
   element: HTMLElement;
   key: string;
+  label: string;
   pointerId: number;
   pointerType: string;
   startX: number;
   startY: number;
+  lastX: number;
   lastY: number;
   active: boolean;
   anchor: string | null | undefined;
@@ -37,6 +47,33 @@ function clearTimer(pending: Pending) {
   if (pending.timer === null) return;
   clearTimeout(pending.timer);
   pending.timer = null;
+}
+
+// 固定配置のガイドは、毎回の再描画を避けて CSS 変数だけで動かす。値は viewport 座標。
+function setGhostPoint(x: number, y: number) {
+  const root = document.documentElement;
+  root.style.setProperty("--hwc-order-ghost-x", `${x}px`);
+  root.style.setProperty("--hwc-order-ghost-y", `${y}px`);
+  root.dataset.orderGhost = y < GHOST_BELOW_Y ? "below" : "above";
+}
+
+function clearGhostPoint() {
+  const root = document.documentElement;
+  root.style.removeProperty("--hwc-order-ghost-x");
+  root.style.removeProperty("--hwc-order-ghost-y");
+  delete root.dataset.orderGhost;
+}
+
+// 見出しの offsetTop はスクロール位置に依存しない。落とした後に、この位置から
+// 新しい位置までの差分を transform で見せる。
+function collectOffsets(scroll: HTMLElement | null): Map<string, number> {
+  const offsets = new Map<string, number>();
+  if (scroll === null) return offsets;
+  for (const node of scroll.querySelectorAll<HTMLElement>("[data-order-key]")) {
+    const key = node.dataset.orderKey;
+    if (key !== undefined) offsets.set(key, node.offsetTop);
+  }
+  return offsets;
 }
 
 export function useOrderDrag(options: {
@@ -62,6 +99,7 @@ export function useOrderDrag(options: {
       if (current?.timer != null) clearTimeout(current.timer);
       if (current?.frame != null) cancelAnimationFrame(current.frame);
       pending.current = null;
+      clearGhostPoint();
     };
   }, [stopScroll]);
 
@@ -80,7 +118,7 @@ export function useOrderDrag(options: {
     const anchor = dropAnchor(rects, current.lastY);
     if (anchor === current.anchor) return;
     current.anchor = anchor;
-    setDrag({ key: current.key, anchor });
+    setDrag({ key: current.key, label: current.label, anchor });
   }
 
   function tick() {
@@ -121,7 +159,8 @@ export function useOrderDrag(options: {
       current.blockingScroll = true;
       document.addEventListener("touchmove", stopScroll, { passive: false });
     }
-    setDrag({ key: current.key, anchor: undefined });
+    setGhostPoint(current.lastX, current.lastY);
+    setDrag({ key: current.key, label: current.label, anchor: undefined });
     current.frame = requestAnimationFrame(tick);
   }
 
@@ -135,13 +174,14 @@ export function useOrderDrag(options: {
       document.removeEventListener("touchmove", stopScroll);
     }
     pending.current = null;
+    clearGhostPoint();
     setDrag(null);
     if (release && current.element.hasPointerCapture(current.pointerId)) {
       current.element.releasePointerCapture(current.pointerId);
     }
   }
 
-  function begin(key: string) {
+  function begin(key: string, label: string) {
     return (event: PointerEvent) => {
       if (event.button !== 0 || options.units.length < 2) return;
       if (pending.current !== null) return;
@@ -158,10 +198,12 @@ export function useOrderDrag(options: {
       pending.current = {
         element,
         key,
+        label,
         pointerId: event.pointerId,
         pointerType: event.pointerType,
         startX: event.clientX,
         startY: event.clientY,
+        lastX: event.clientX,
         lastY: event.clientY,
         active: false,
         anchor: undefined,
@@ -184,6 +226,7 @@ export function useOrderDrag(options: {
   function move(event: PointerEvent) {
     const current = pending.current;
     if (current === null || current.pointerId !== event.pointerId) return;
+    current.lastX = event.clientX;
     current.lastY = event.clientY;
 
     if (!current.active) {
@@ -197,6 +240,7 @@ export function useOrderDrag(options: {
       activate();
     } else {
       event.preventDefault();
+      setGhostPoint(current.lastX, current.lastY);
     }
 
     updateTarget();
@@ -208,7 +252,11 @@ export function useOrderDrag(options: {
 
     const drop =
       current.active && current.anchor !== undefined
-        ? { key: current.key, beforeKey: current.anchor }
+        ? {
+            key: current.key,
+            beforeKey: current.anchor,
+            offsets: collectOffsets(current.scroll),
+          }
         : null;
     reset(false);
     if (drop !== null) options.onDrop(drop);

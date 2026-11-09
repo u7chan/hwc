@@ -129,6 +129,20 @@ export function MoreIcon({ size = 16 }: IconProps) {
   );
 }
 
+// 6 点のグリップ。並べ替えで持ち上げていることを示す。
+export function GripIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="9" cy="6" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="6" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="18" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="18" r="1.4" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
 export function PlusIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

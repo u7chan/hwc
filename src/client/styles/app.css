@@ -300,6 +300,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 /* 上は中身側で取る。枠に padding-top を置くと、帯を貼り付けたときに上端まで届かず、
    その隙間に後ろの行が覗く。 */
 .hwc-list-body {
+  position: relative;
   padding-top: var(--space-2);
 }
 
@@ -479,12 +480,80 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   cursor: grabbing;
 }
 
-.hwc-group-block[data-drop="before"] {
-  box-shadow: 0 -2px 0 var(--color-accent);
+/* 落とした直後、動く束を一瞬浮かせる。他のカードとの重なりを見分けやすくする。 */
+.hwc-group-block[data-reorder-lifted="true"] {
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--color-text) 18%, transparent);
 }
 
-.hwc-group-block[data-drop="after"] {
-  box-shadow: 0 2px 0 var(--color-accent);
+/* 落とし先の境界。線だけでは細いので、指の近くに出るガイドと合わせて「ここに移動」を添える。 */
+.hwc-order-drop {
+  position: absolute;
+  right: var(--space-4);
+  left: var(--space-4);
+  z-index: 2;
+  height: 0;
+  border-top: 2px solid var(--color-accent);
+  pointer-events: none;
+}
+
+.hwc-order-drop-label {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* 掴んでいる束の名前。指の下に隠れないよう、少し上に浮かせる。 */
+:root {
+  /* 位置はドラッグ中だけ JS が :root に書く。var() の解決と初期値のために宣言しておく。 */
+  --hwc-order-ghost-x: 0px;
+  --hwc-order-ghost-y: 0px;
+}
+
+.hwc-order-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: min(280px, 78vw);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--color-text) 22%, transparent);
+  pointer-events: none;
+  transform: translate3d(var(--hwc-order-ghost-x, 0px), var(--hwc-order-ghost-y, 0px), 0)
+    translate(-50%, calc(-100% - 14px));
+}
+
+html[data-order-ghost="below"] .hwc-order-ghost {
+  transform: translate3d(var(--hwc-order-ghost-x, 0px), var(--hwc-order-ghost-y, 0px), 0)
+    translate(-50%, 18px);
+}
+
+.hwc-order-ghost-grip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--color-secondary);
+}
+
+.hwc-order-ghost-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hwc-group-children {
