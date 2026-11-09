@@ -18,7 +18,7 @@ import {
 import { worktreeFailureNotice, worktreePartialNotice } from "./worktree-create";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
-import { AgentGlyphIcon } from "./icons";
+import { AgentGlyphIcon, AgentIcon, TerminalIcon } from "./icons";
 import { CreatePaneModel } from "./CreatePaneModel";
 import { CreatePaneEffort } from "./CreatePaneEffort";
 
@@ -167,6 +167,7 @@ export function CreatePane(props: CreatePaneProps) {
           disabled={busy || settled}
           onClick={() => setMode("agent")}
         >
+          <AgentIcon size={16} />
           エージェント
         </button>
         <button
@@ -181,6 +182,7 @@ export function CreatePane(props: CreatePaneProps) {
             setEffort(null);
           }}
         >
+          <TerminalIcon size={16} />
           シェル
         </button>
       </div>
