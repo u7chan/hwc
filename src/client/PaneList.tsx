@@ -461,16 +461,12 @@ function TreePaneList(props: TreePaneListProps) {
 
   const [notice, setNotice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
-  const [dropGuide, setDropGuide] = useState<{
-    top: number;
-    edge: "before" | "after";
-  } | null>(null);
+  const [dropGuide, setDropGuide] = useState<{ top: number } | null>(null);
   const moving = useRef(false);
   const pendingAnimation = useRef<{
     order: string;
     liftedKey: string;
     offsets: ReadonlyMap<string, number>;
-    at: number;
   } | null>(null);
   const orderKey = units.map((unit) => unit.key).join("\n");
 
@@ -497,7 +493,6 @@ function TreePaneList(props: TreePaneListProps) {
       order: orderKey,
       liftedKey: key,
       offsets: offsets ?? readOffsets(),
-      at: Date.now(),
     };
     moving.current = true;
     setNotice(null);
@@ -523,10 +518,7 @@ function TreePaneList(props: TreePaneListProps) {
   useLayoutEffect(() => {
     const pendingMove = pendingAnimation.current;
     if (pendingMove === null) return;
-    if (Date.now() - pendingMove.at > 3_000) {
-      pendingAnimation.current = null;
-      return;
-    }
+    // 応答の期限は API 側（10 秒）と失敗時の掃除に任せる。遅い応答でもアニメーションする。
     if (orderKey === pendingMove.order) return;
     pendingAnimation.current = null;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -574,15 +566,6 @@ function TreePaneList(props: TreePaneListProps) {
     dragged === null
       ? null
       : (units.filter((unit) => unit.key !== dragged.key).at(-1)?.key ?? null);
-  const dropEdge = (key: string): "before" | "after" | undefined => {
-    if (dragged === null || dragged.anchor === undefined) return undefined;
-    // 今と同じ位置へ落ちるなら、移動しないので線も出さない。
-    if (!isOrderChange(units, dragged.key, dragged.anchor)) return undefined;
-    if (dragged.anchor === key) return "before";
-    if (dragged.anchor === null && key === lastRemainingKey) return "after";
-    return undefined;
-  };
-
   // 「ここに移動」の線を、落とし先のブロックの境界に置く。無変化なら出さない。
   useLayoutEffect(() => {
     if (dragged === null || dragged.anchor === undefined) {
@@ -613,9 +596,7 @@ function TreePaneList(props: TreePaneListProps) {
       12,
       edge === "before" ? node.offsetTop - 8 : node.offsetTop + node.offsetHeight + 8,
     );
-    setDropGuide((current) =>
-      current !== null && current.top === top && current.edge === edge ? current : { top, edge },
-    );
+    setDropGuide((current) => (current !== null && current.top === top ? current : { top }));
   }, [dragged, lastRemainingKey, orderKey, units]);
 
   function renderHeader(props2: {
@@ -827,7 +808,6 @@ function TreePaneList(props: TreePaneListProps) {
         key={workspace.id}
         data-order-key={order?.key}
         data-dragging={order !== undefined && dragged?.key === order.key ? "true" : undefined}
-        data-drop={order === undefined ? undefined : dropEdge(order.key)}
       >
         {withHeader
           ? renderHeader({
@@ -891,7 +871,6 @@ function TreePaneList(props: TreePaneListProps) {
             key={group.key}
             data-order-key={group.key}
             data-dragging={dragged?.key === group.key ? "true" : undefined}
-            data-drop={dropEdge(group.key)}
           >
             {renderHeader({
               id: group.key,
@@ -921,12 +900,7 @@ function TreePaneList(props: TreePaneListProps) {
       })}
       {dropGuide === null ? null : (
         <>
-          <div
-            class="hwc-order-drop"
-            data-edge={dropGuide.edge}
-            style={{ top: `${dropGuide.top}px` }}
-            aria-hidden="true"
-          />
+          <div class="hwc-order-drop" style={{ top: `${dropGuide.top}px` }} aria-hidden="true" />
           <span
             class="hwc-order-drop-label"
             style={{ top: `${dropGuide.top}px` }}

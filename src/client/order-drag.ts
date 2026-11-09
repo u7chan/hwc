@@ -53,7 +53,10 @@ function clearTimer(pending: Pending) {
 // 「ここに移動」のラベルは、掴んでいる指の反対側へ置いて重ならないようにする。
 function setGhostPoint(x: number, y: number, scroll: HTMLElement | null) {
   const root = document.documentElement;
-  root.style.setProperty("--hwc-order-ghost-x", `${x}px`);
+  // ガイドは最大 280px。中心を viewport 内へ収め、画面端でも名前とグリップを切らない。
+  const margin = Math.min(140, window.innerWidth / 2);
+  const clampedX = Math.max(margin, Math.min(window.innerWidth - margin, x));
+  root.style.setProperty("--hwc-order-ghost-x", `${clampedX}px`);
   root.style.setProperty("--hwc-order-ghost-y", `${y}px`);
   root.dataset.orderGhost = y < GHOST_BELOW_Y ? "below" : "above";
   if (scroll !== null) {
