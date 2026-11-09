@@ -471,9 +471,20 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   margin-inline: 0;
 }
 
-/* 並べ替え中は、掴んでいる束を淡くする。位置は動かさず、落とし先の境界に線を出す。 */
+/* 並べ替え中は、掴んだ束のカードを破線の青い枠で囲み、見出しは読める濃さのまま
+   中身を淡くする。枠はカードの角丸に沿わせる。位置は動かさず、落とし先の境界には
+   別の線を出す。 */
 .hwc-group-block[data-dragging="true"] {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-group-block[data-dragging="true"] > * {
   opacity: 0.55;
+}
+
+.hwc-group-block[data-dragging="true"] > .hwc-group-row {
+  opacity: 1;
 }
 
 .hwc-group-block[data-dragging="true"] .hwc-group {
