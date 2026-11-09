@@ -4457,6 +4457,10 @@ p.hwc-compaction,
 }
 
 .hwc-create-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
   min-height: var(--tap);
   border: 0;
   border-radius: calc(var(--radius-control) - 2px);
