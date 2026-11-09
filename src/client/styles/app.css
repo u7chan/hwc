@@ -237,15 +237,23 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   animation: hwc-view-in 200ms ease-out;
 }
 
-/* スクロールバーは細く、面に馴染ませる。矢印も枠も出さない。 */
+/* スクロールバーは細く、面に馴染ませる。矢印も枠も出さない。
+   入力欄は、内容が入力欄の高さを超えたときだけスクロールするので、同じ見た目に揃える。 */
 .hwc-list-scroll,
 .hwc-output-scroll,
-.hwc-settings-scroll {
+.hwc-settings-scroll,
+.hwc-input-field {
   scrollbar-width: thin;
   scrollbar-color: var(--color-control-line) transparent;
 }
 
-:is(.hwc-list-scroll, .hwc-output-scroll, .hwc-settings-scroll, .hwc-tabs)::-webkit-scrollbar {
+:is(
+  .hwc-list-scroll,
+  .hwc-output-scroll,
+  .hwc-settings-scroll,
+  .hwc-tabs,
+  .hwc-input-field
+)::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
@@ -254,7 +262,8 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   .hwc-list-scroll,
   .hwc-output-scroll,
   .hwc-settings-scroll,
-  .hwc-tabs
+  .hwc-tabs,
+  .hwc-input-field
 )::-webkit-scrollbar-track {
   background: transparent;
 }
@@ -263,7 +272,8 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   .hwc-list-scroll,
   .hwc-output-scroll,
   .hwc-settings-scroll,
-  .hwc-tabs
+  .hwc-tabs,
+  .hwc-input-field
 )::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 999px;
@@ -275,7 +285,8 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
     .hwc-list-scroll,
     .hwc-output-scroll,
     .hwc-settings-scroll,
-    .hwc-tabs
+    .hwc-tabs,
+    .hwc-input-field
   )::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-secondary);
 }
@@ -284,7 +295,8 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   .hwc-list-scroll,
   .hwc-output-scroll,
   .hwc-settings-scroll,
-  .hwc-tabs
+  .hwc-tabs,
+  .hwc-input-field
 )::-webkit-scrollbar-button {
   display: none;
 }
