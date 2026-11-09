@@ -93,7 +93,7 @@ import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
 import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
-import { agentGlyph, isShellPane, paneName, type PaneContext } from "./select";
+import { agentGlyph, isShellPane, paneName, pullRequestLabel, type PaneContext } from "./select";
 import { Spinner } from "./Spinner";
 import { formatClock, formatElapsed } from "./time";
 
@@ -1521,7 +1521,7 @@ export function PaneDetail(props: PaneDetailProps) {
             href={pullRequest.url}
             target="_blank"
             rel="noreferrer"
-            aria-label={`PR #${pullRequest.number} を GitHub で開く`}
+            aria-label={pullRequestLabel(pullRequest)}
           >
             #{pullRequest.number}
           </a>
