@@ -218,10 +218,10 @@ export function attachmentUrl(paneId: string, name: string): string {
   return `${attachmentUploadUrl(paneId)}/${encodeURIComponent(name)}`;
 }
 
-// 版を URL に含める。同じ名前で作り直された画像を、ブラウザのキャッシュから拾わない。
-// 画像はチェックアウトだけを根にする（追加根からは検出しない）ので、root は使わない。
+// 根の番号と版を URL に含める。根が無いと、同名ファイルが別の根にあるときに配信先を
+// 取り違える。版は、同じ名前で作り直された画像をブラウザのキャッシュから拾わないため。
 export function chatFileUrl(paneId: string, file: ChatFile): string {
-  const query = `path=${encodeURIComponent(file.name)}&v=${encodeURIComponent(file.version)}`;
+  const query = `root=${file.root}&path=${encodeURIComponent(file.name)}&v=${encodeURIComponent(file.version)}`;
   return `/api/panes/${encodeURIComponent(paneId)}/files?${query}`;
 }
 

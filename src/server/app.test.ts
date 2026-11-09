@@ -2671,7 +2671,7 @@ async function withCheckout<T>(run: (root: string) => Promise<T>): Promise<T> {
 }
 
 function createFilesApp(
-  root: string,
+  root: string | null,
   options: { state?: AppState; chat?: Partial<ChatClient>; previewRoots?: string[] } = {},
 ) {
   const store = createFakeStore(options.state ?? chatState);
@@ -2939,6 +2939,52 @@ test("GET /api/panes/:id/files returns no_chat for a pane without a session", as
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "no_chat" });
   });
+});
+
+test("GET /api/panes/:id/files serves an image from an extra root by root number", async () => {
+  await withCheckout(async (root) => {
+    const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+    await mkdir(join(extra, "docs"), { recursive: true });
+    await writeFile(join(extra, "docs", "mock.png"), pngBytes);
+
+    try {
+      const app = createFilesApp(root, { previewRoots: [extra] });
+
+      const response = await app.request("/api/panes/w1:p1/files?root=1&path=docs%2Fmock.png");
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/png");
+      expect(new Uint8Array(await response.arrayBuffer())).toEqual(pngBytes);
+
+      // 追加根の画像は、チェックアウトの root 0 には無い。
+      expect((await app.request("/api/panes/w1:p1/files?root=0&path=docs%2Fmock.png")).status).toBe(
+        404,
+      );
+      // 範囲外と整数でない番号は受けない。
+      for (const index of ["2", "-1", "1.5", "x"]) {
+        const denied = await app.request(
+          `/api/panes/w1:p1/files?root=${index}&path=docs%2Fmock.png`,
+        );
+        expect(denied.status).toBe(404);
+      }
+    } finally {
+      await rm(extra, { recursive: true, force: true });
+    }
+  });
+});
+
+test("GET /api/panes/:id/files uses the first extra root when the pane has no checkout", async () => {
+  const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+  await writeFile(join(extra, "mock.png"), pngBytes);
+
+  try {
+    const app = createFilesApp(null, { previewRoots: [extra] });
+    const response = await app.request("/api/panes/w1:p1/files?root=0&path=mock.png");
+
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(pngBytes);
+  } finally {
+    await rm(extra, { recursive: true, force: true });
+  }
 });
 
 test("GET /api/panes/:id/preview serves HTML that cannot reach the BFF origin", async () => {
