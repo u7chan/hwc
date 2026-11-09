@@ -6,11 +6,19 @@ import {
   activityPollDelay,
   activitySnippet,
   activityStep,
+  formatTokPerSecond,
   selectActivity,
 } from "./activity";
 import type { PaneActivity } from "../shared/activity";
 
-const base: PaneActivity = { phase: "thinking", text: "", tool: null, tools: 1, at: 0 };
+const base: PaneActivity = {
+  phase: "thinking",
+  text: "",
+  tool: null,
+  tools: 1,
+  tokPerSecond: null,
+  at: 0,
+};
 
 test("names each phase in one short line", () => {
   expect(activityLabel({ ...base, phase: "waiting" })).toBe("応答を待っています");
@@ -30,6 +38,15 @@ test("a running tool names the tool and the parallel count", () => {
   expect(activityLabel({ ...base, phase: "tool", tool: null, tools: 1 })).toBe(
     "ツールを実行しています",
   );
+});
+
+test("formats the live rate like the TUI footer", () => {
+  expect(formatTokPerSecond(4.64)).toBe("4.6");
+  expect(formatTokPerSecond(42.34)).toBe("42.3");
+  expect(formatTokPerSecond(100)).toBe("100");
+  expect(formatTokPerSecond(158.4)).toBe("158");
+  expect(formatTokPerSecond(0)).toBeNull();
+  expect(formatTokPerSecond(Number.NaN)).toBeNull();
 });
 
 test("the snippet keeps the newest two non-empty lines", () => {
