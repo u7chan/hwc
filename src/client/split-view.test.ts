@@ -160,6 +160,19 @@ test("the successor decided when the confirm opened is kept", () => {
   expect(next.slots).toEqual(["w1:p3"]);
 });
 
+test("a snapshot does not put a removed tab back", () => {
+  const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1", "w1:p2"]);
+  const removed = removeTab(shown, "w1:p1");
+  // 外したペインは Herdr 側に残る。実在するだけでタブへ戻してはいけない。
+  expect(syncSplitView(removed, existsAmong(["w1:p1", "w1:p2"]))).toEqual(removed);
+});
+
+test("restoring the saved view does not put a removed tab back", () => {
+  const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1", "w1:p2"]);
+  const removed = removeTab(shown, "w1:p2");
+  expect(normalizeSplitView(removed, existsAmong(["w1:p1", "w1:p2"]))).toEqual(removed);
+});
+
 test("closing an empty slot compacts the grid", () => {
   const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1", null, "w1:p2"]);
   const next = closeEmptySlot(shown, 1);
