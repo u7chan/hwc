@@ -2043,14 +2043,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 }
 
 /* outline は子の背景（出力欄・入力欄）の下に描かれ、左右と下辺が隠れる。セルの手前に
-   重ねた枠にして全周を見せる。セルは大きく、上辺がタブの下線と並ぶので、アクセントは
-   薄めて下線を主、セルの枠を従にする。 */
+   重ねた枠にして全周を見せる。 */
 .hwc-split-cell[data-current="true"]::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 1;
-  border: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+  border: 2px solid var(--color-accent);
   pointer-events: none;
 }
 
@@ -2236,11 +2235,24 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 }
 
 .hwc-tabbar {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: var(--space-2);
   padding: 0 var(--space-3);
-  border-bottom: 1px solid var(--color-line);
+  background: var(--color-bg);
+}
+
+/* 下辺の線はタブの下に引く。選択中タブの面が線を隠し、下の本文とつながって見える。 */
+.hwc-tabbar::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  height: 1px;
+  background: var(--color-line);
 }
 
 .hwc-tabbar > .hwc-back {
@@ -2408,6 +2420,8 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 }
 
 .hwc-tabs {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -2421,7 +2435,8 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   display: none;
 }
 
-/* タブは下線で示す。面を塗らないので一覧の状態色と競合しない。 */
+/* タブは選択中だけ面を塗る。Chrome のタブと同じく、上辺を丸め、下辺は本文へ
+   つなげる。面を塗らないタブは状態色と競合しない。 */
 .hwc-tab {
   flex: none;
   display: inline-flex;
@@ -2436,12 +2451,14 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   cursor: pointer;
 }
 
-/* タブと目玉を 1 つのまとまりとして扱い、下線はこのまとまりに引く。 */
+/* タブと目玉を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */
 .hwc-tab-item {
   position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  transition: background-color 120ms ease;
 }
 
 .hwc-tab-label {
@@ -2451,17 +2468,18 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   white-space: nowrap;
 }
 
-.hwc-tab-item::after {
-  content: "";
-  position: absolute;
-  right: var(--space-3);
-  bottom: 0;
-  left: var(--space-3);
-  height: 2px;
-  border-radius: 2px;
-  background: var(--color-accent);
-  opacity: 0;
-  transition: opacity 120ms ease;
+.hwc-tab-item:not([data-selected="true"]):hover {
+  background: var(--color-raised);
+}
+
+/* 選択中は本文と同じ面にして、上辺と左右に細い線を置く。下辺はタブバーの線を
+   面で隠すので、本文とつながって見える。 */
+.hwc-tab-item[data-selected="true"] {
+  background: var(--color-content);
+  box-shadow:
+    inset 0 1px 0 var(--color-line),
+    inset 1px 0 0 var(--color-line),
+    inset -1px 0 0 var(--color-line);
 }
 
 .hwc-tab:hover {
@@ -2471,10 +2489,6 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 .hwc-tab[aria-selected="true"] {
   color: var(--color-text);
   font-weight: 600;
-}
-
-.hwc-tab-item[data-selected="true"]::after {
-  opacity: 1;
 }
 
 /* 分割に出す / 出さないの切り替え。一覧のメニューと同じく、ホバーで浮かび上がらせる。 */
