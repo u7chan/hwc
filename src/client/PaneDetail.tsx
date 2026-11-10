@@ -1,4 +1,4 @@
-import { Fragment, type ComponentChildren, type Ref } from "preact";
+import { Fragment, createPortal, type ComponentChildren, type Ref } from "preact";
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type {
   ChatCompaction,
@@ -55,23 +55,25 @@ import {
   chipOnInput,
   type CommandId,
   commandAvailable,
-  commandBlockReason,
+  commandBlockReasonFor,
   commandCandidates,
   commandLabel,
   commandSendText,
   commandText,
+  COMMAND_BLOCK_NOTES,
   compactAlreadyDone,
   COMPACTED_NOTICE,
   isCompactCommand,
   isCommandPane,
   isNewSessionCommand,
-  type PaneCommandHandle,
+  type PaneOutputHandle,
 } from "./commands";
 import { ComposerAdd } from "./ComposerAdd";
 import { useCopy } from "./copy";
 import { readDraft, readReply, storage, writeDraft, writeReply } from "./drafts";
 import { useHint } from "./hint";
 import { insertProjectPath } from "./projects";
+import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
 import {
   AgentGlyphIcon,
@@ -786,10 +788,10 @@ type PaneDetailProps = {
   confirmationAttempts: ReadonlyMap<string, ConfirmationAttempt>;
   onConfirmFolderTrust: (id: string) => void;
   onDismissConfirmation: (id: string) => void;
-  // メニューはセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
-  // 中の fixed はセル基準になる。実行口は一覧から同じペインを操作するときにも使う。
+  // メニューはセルの外（App 直下）に 1 つだけ出す。クリア後の読み直しだけ、
+  // この詳細の実行口を一覧から使う。
   menuOpen: boolean;
-  commandRef: Ref<PaneCommandHandle>;
+  outputRef: Ref<PaneOutputHandle>;
   onOpenMenu: (paneId: string, trigger: HTMLElement) => void;
   onOpenWorkspaceMenu: (workspaceId: string, trigger: HTMLElement) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
@@ -855,6 +857,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const [sessionReset, setSessionReset] = useState<NewSessionReset | null>(null);
   // チップは id だけを持つ。表示名と送信文字列は定数から引く。
   const [chip, setChip] = useState<CommandId | null>(null);
+  // メニューからの /new だけ、送る前に確認する。
+  const [confirmNew, setConfirmNew] = useState(false);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
   // プロジェクトのダイアログは閉じるアニメーションの間も残す。caret は選んだ直後に
   // 入力欄へ戻す位置で、閉じただけ（キャンセル）のときは null のまま。
@@ -1473,76 +1477,56 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // メニューからはコマンド文字列だけを送る。書きかけの draft・添付・引用は次の
   // メッセージのために残す（チップのように draft を指示には使わない）。
-  // メニューを開いた後に状態が変わっても最新値で判定できるよう、送信直前の値は
-  // ref から読む。onSubmit も App の再描画で更新されるので、同じく ref を経由する。
-  const commandState = useRef({
-    pane,
-    readOnly,
-    sending,
-    replying,
-    compacting: compactionRun !== null,
-    snapshot,
-  });
-  commandState.current = {
-    pane,
-    readOnly,
-    sending,
-    replying,
-    compacting: compactionRun !== null,
-    snapshot,
-  };
-  const submitLatest = useRef(submitInput);
-  submitLatest.current = submitInput;
-  const sendMenuCommand = async (id: CommandId) => {
-    const state = commandState.current;
-    if (state.readOnly || state.sending || state.replying || state.compacting) return;
-    const baselineAt = state.snapshot?.compaction?.at ?? null;
+  const menuCommandAvailable = (id: CommandId): boolean =>
+    !readOnly && !sending && compactionRun === null && commandAvailable(id, pane, snapshot);
+
+  const runMenuCommand = async (id: CommandId) => {
+    if (!menuCommandAvailable(id)) return;
     const text = commandText(id);
+    const baselineAt = snapshot?.compaction?.at ?? null;
     input.current?.blur();
     setNotice(null);
-    if (await submitLatest.current(text, [])) {
+    if (await submitInput(text, [])) {
       setPinned(true);
       setChip(null);
       if (id === "compact") markCompaction(baselineAt, text);
     } else setNotice(SEND_FAILED_NOTICE);
   };
 
-  // 一覧の入口も、最新の送信中・圧縮中の状態で判定する。
-  // 開いた後に状態が変わっても ref から最新値を読む。
-  const menuCommands: PaneCommandHandle = {
-    available: (id, currentPane) => {
-      const state = commandState.current;
-      return (
-        !state.readOnly &&
-        !state.sending &&
-        !state.replying &&
-        !state.compacting &&
-        commandAvailable(id, currentPane, state.snapshot)
-      );
-    },
-    busy: () => {
-      const state = commandState.current;
-      return state.readOnly || state.sending || state.replying || state.compacting;
-    },
-    blockReason: () => commandBlockReason(commandState.current.snapshot),
-    run: (id) => {
-      const state = commandState.current;
-      if (
-        !state.readOnly &&
-        !state.sending &&
-        !state.replying &&
-        !state.compacting &&
-        commandAvailable(id, state.pane, state.snapshot)
-      ) {
-        void sendMenuCommand(id);
+  const menuCommandHint = (id: CommandId): string => {
+    if (sending) return "送信中は使えません";
+    if (compactionRun !== null) return "圧縮中は使えません";
+    if (pane.agentStatus === "working") return "実行中は使えません";
+    const reason = commandBlockReasonFor(id, snapshot);
+    if (reason !== null) return COMMAND_BLOCK_NOTES[reason];
+    return id === "new" ? "このペインで会話を始め直す" : "履歴を要約して縮める";
+  };
+
+  const composerCommands = isCommandPane(pane)
+    ? {
+        newSession: {
+          label: commandLabel("new"),
+          available: menuCommandAvailable("new"),
+          hint: menuCommandHint("new"),
+          run: () => {
+            if (menuCommandAvailable("new")) setConfirmNew(true);
+          },
+        },
+        compact: {
+          label: commandLabel("compact"),
+          available: menuCommandAvailable("compact"),
+          hint: menuCommandHint("compact"),
+          run: () => void runMenuCommand("compact"),
+        },
       }
-    },
+    : null;
+
+  useImperativeHandle(props.outputRef, () => ({
     refreshOutput: () => {
       setPinned(true);
       setOutputVersion((version) => version + 1);
     },
-  };
-  useImperativeHandle(props.commandRef, () => menuCommands);
+  }));
 
   const submit = () => {
     if (readOnly) return;
@@ -1978,6 +1962,7 @@ export function PaneDetail(props: PaneDetailProps) {
               {compact || !pane.chat ? null : (
                 <ComposerAdd
                   full={attachments.length >= MAX_ATTACHMENTS}
+                  commands={composerCommands}
                   onFiles={(files) => takeImages(dropActionFrom(files))}
                   onProjects={openProjects}
                 />
@@ -2024,6 +2009,20 @@ export function PaneDetail(props: PaneDetailProps) {
           onPick={pickProject}
         />
       )}
+      {confirmNew
+        ? createPortal(
+            <NewSessionConfirm
+              paneId={pane.id}
+              available={menuCommandAvailable("new")}
+              onConfirm={() => {
+                setConfirmNew(false);
+                void runMenuCommand("new");
+              }}
+              onCancel={() => setConfirmNew(false)}
+            />,
+            document.querySelector(".hwc-app") ?? document.body,
+          )
+        : null}
     </>
   );
 }
