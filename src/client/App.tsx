@@ -33,7 +33,15 @@ import { CreatePane } from "./CreatePane";
 import { applyFavicon, faviconStatus } from "./favicon";
 import { ImageViewer } from "./ImageViewer";
 import { Preview } from "./Preview";
-import { ChevronRightIcon, CloseIcon, HwcMark, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
+import {
+  ChevronRightIcon,
+  CloseIcon,
+  GitHubIcon,
+  HwcMark,
+  PlusIcon,
+  SettingsIcon,
+  TrashIcon,
+} from "./icons";
 import { Menu } from "./Menu";
 import { PaneMenu } from "./PaneMenu";
 import { usePaneProcesses } from "./process";
@@ -810,6 +818,7 @@ export function App() {
       : null;
   const menuPullRequest =
     menuWorkspace === null ? null : (pullRequests.get(menuWorkspace.id) ?? null);
+  const menuRepoUrl = menuWorkspace?.sync?.repoUrl ?? null;
   const menuGitBusy =
     menuWorkspace !== null &&
     gitAction !== null &&
@@ -1135,20 +1144,35 @@ export function App() {
                   </div>
                 );
               })}
-              {menuPullRequest === null ? null : (
+              {menuPullRequest === null && menuRepoUrl === null ? null : (
                 <>
                   <hr class="hwc-menu-separator" />
-                  <a
-                    class="hwc-menu-item"
-                    role="menuitem"
-                    href={menuPullRequest.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={closeMenu}
-                  >
-                    <ChevronRightIcon size={14} />
-                    PR #{menuPullRequest.number} を開く
-                  </a>
+                  {menuRepoUrl === null ? null : (
+                    <a
+                      class="hwc-menu-item"
+                      role="menuitem"
+                      href={menuRepoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={closeMenu}
+                    >
+                      <GitHubIcon size={14} />
+                      リポジトリを GitHub で開く
+                    </a>
+                  )}
+                  {menuPullRequest === null ? null : (
+                    <a
+                      class="hwc-menu-item"
+                      role="menuitem"
+                      href={menuPullRequest.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={closeMenu}
+                    >
+                      <ChevronRightIcon size={14} />
+                      PR #{menuPullRequest.number} を開く
+                    </a>
+                  )}
                 </>
               )}
               <WorkspaceGitActions

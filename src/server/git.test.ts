@@ -7,8 +7,16 @@ import {
   createGitClient,
   parseBranchHead,
   parseGitDirFile,
+  parseRemoteUrls,
+  pickGitHubRepoUrl,
   readBranch,
 } from "./git";
+
+const GITHUB_REMOTE = [
+  "origin\thttps://github.com/o/r.git (fetch)",
+  "origin\thttps://github.com/o/r.git (push)",
+  "",
+].join("\n");
 
 const made: string[] = [];
 
@@ -92,7 +100,7 @@ test("the sync reader parses the upstream and its divergence", async () => {
   const client = createGitClient({
     runRead: async (_path, args) => {
       calls.push(args);
-      if (args[0] === "remote") return "origin\n";
+      if (args[0] === "remote") return GITHUB_REMOTE;
       return "origin/main\t[ahead 1, behind 2]\n";
     },
   });
@@ -102,16 +110,17 @@ test("the sync reader parses the upstream and its divergence", async () => {
     ahead: 1,
     behind: 2,
     hasRemote: true,
+    repoUrl: "https://github.com/o/r",
   });
   expect(calls).toEqual([
-    ["remote"],
+    ["remote", "-v"],
     ["for-each-ref", "--format=%(upstream:short)\t%(upstream:track)", "refs/heads/main"],
   ]);
 });
 
 test("a branch without an upstream keeps the remote but has no counts", async () => {
   const client = createGitClient({
-    runRead: async (_path, args) => (args[0] === "remote" ? "origin\n" : ""),
+    runRead: async (_path, args) => (args[0] === "remote" ? GITHUB_REMOTE : ""),
   });
 
   expect(await client.read({ checkoutPath: "/repo", branch: "feat/new" })).toEqual({
@@ -119,6 +128,7 @@ test("a branch without an upstream keeps the remote but has no counts", async ()
     ahead: 0,
     behind: 0,
     hasRemote: true,
+    repoUrl: "https://github.com/o/r",
   });
 });
 
@@ -132,6 +142,22 @@ test("a repo without a remote is still readable", async () => {
     ahead: 0,
     behind: 0,
     hasRemote: false,
+    repoUrl: null,
+  });
+});
+
+test("a non-GitHub remote keeps the remote but has no repository URL", async () => {
+  const client = createGitClient({
+    runRead: async (_path, args) =>
+      args[0] === "remote" ? "origin\thttps://gitlab.com/o/r.git (fetch)\n" : "origin/main\t\n",
+  });
+
+  expect(await client.read({ checkoutPath: "/repo", branch: "main" })).toEqual({
+    upstream: "origin/main",
+    ahead: 0,
+    behind: 0,
+    hasRemote: true,
+    repoUrl: null,
   });
 });
 
@@ -143,7 +169,7 @@ test("the sync reader caches per checkout and branch", async () => {
     now: () => at,
     runRead: async (_path, args) => {
       reads += 1;
-      return args[0] === "remote" ? "origin\n" : "origin/main\t[ahead 1]\n";
+      return args[0] === "remote" ? GITHUB_REMOTE : "origin/main\t[ahead 1]\n";
     },
   });
 
@@ -168,7 +194,7 @@ test("invalidate drops the cached sync of a checkout", async () => {
   const client = createGitClient({
     runRead: async (_path, args) => {
       reads += 1;
-      return args[0] === "remote" ? "origin\n" : "origin/main\t\n";
+      return args[0] === "remote" ? GITHUB_REMOTE : "origin/main\t\n";
     },
   });
 
@@ -188,7 +214,7 @@ test("a read that overlaps an invalidate does not cache its stale result", async
   const client = createGitClient({
     runRead: async (_path, args) => {
       reads += 1;
-      if (args[0] === "remote") return "origin\n";
+      if (args[0] === "remote") return GITHUB_REMOTE;
       // 最初の for-each-ref だけを遅らせ、読み取り中に invalidate を割り込ませる。
       if (reads === 2) await gate;
       return reads <= 2 ? "origin/main\t[ahead 1, behind 2]\n" : "origin/main\t[ahead 1]\n";
@@ -206,12 +232,14 @@ test("a read that overlaps an invalidate does not cache its stale result", async
     ahead: 1,
     behind: 2,
     hasRemote: true,
+    repoUrl: "https://github.com/o/r",
   });
   expect(await client.read({ checkoutPath: "/repo", branch: "main" })).toEqual({
     upstream: "origin/main",
     ahead: 1,
     behind: 0,
     hasRemote: true,
+    repoUrl: "https://github.com/o/r",
   });
 });
 
@@ -236,6 +264,49 @@ test("a relative checkout is never read", async () => {
 
   expect(await client.read({ checkoutPath: "repo", branch: "main" })).toBeNull();
   expect(called).toBe(false);
+});
+
+test("remote URLs are read once per remote and prefer fetch", () => {
+  const remotes = parseRemoteUrls(
+    [
+      "origin\thttps://github.com/o/r.git (push)",
+      "origin\thttps://github.com/o/r.git (fetch)",
+      "upstream\tgit@github.com:o/r.git (fetch)",
+      "",
+    ].join("\n"),
+  );
+
+  expect([...remotes]).toEqual([
+    ["origin", "https://github.com/o/r.git"],
+    ["upstream", "git@github.com:o/r.git"],
+  ]);
+});
+
+test("origin wins, otherwise the first GitHub remote is used", () => {
+  expect(
+    pickGitHubRepoUrl(
+      new Map([
+        ["origin", "https://github.com/o/r.git"],
+        ["upstream", "https://github.com/upstream/r.git"],
+      ]),
+    ),
+  ).toBe("https://github.com/o/r");
+  expect(
+    pickGitHubRepoUrl(
+      new Map([
+        ["origin", "https://gitlab.com/o/r.git"],
+        ["upstream", "git@github.com:upstream/r.git"],
+      ]),
+    ),
+  ).toBe("https://github.com/upstream/r");
+  expect(
+    pickGitHubRepoUrl(
+      new Map([
+        ["origin", "https://gitlab.com/o/r.git"],
+        ["local", "/home/u7dev/r"],
+      ]),
+    ),
+  ).toBeNull();
 });
 
 test("fetch and pull use the expected git commands", async () => {

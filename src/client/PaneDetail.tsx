@@ -9,7 +9,7 @@ import type {
   ChatUsage,
 } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
-import type { GitSync } from "../shared/git";
+import { gitStatusLabel, type GitSync } from "../shared/git";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { messageFileLabel } from "../shared/message-files";
 import { activityLabel, activitySnippet, formatTokPerSecond, usePaneActivity } from "./activity";
@@ -76,6 +76,7 @@ import { ProjectDialog } from "./ProjectDialog";
 import {
   AgentGlyphIcon,
   ArrowDownIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   CloseIcon,
   CollapseIcon,
@@ -89,7 +90,7 @@ import {
   StopIcon,
   TerminalIcon,
 } from "./icons";
-import { GitStatus } from "./GitStatus";
+import { GitCount } from "./GitCount";
 import { Markdown } from "./Markdown";
 import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
@@ -836,6 +837,7 @@ export function PaneDetail(props: PaneDetailProps) {
     onOpenPreview,
     onHideInSplit,
   } = props;
+  const repoUrl = sync?.repoUrl ?? null;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expandedOpen, setExpandedOpen] = useState(false);
@@ -1576,16 +1578,44 @@ export function PaneDetail(props: PaneDetailProps) {
         </span>
         {labeled ? (
           <span class="hwc-pane-head-name">{paneName(pane)}</span>
-        ) : branch === null || !showBranch ? null : (
-          <span class="hwc-pane-head-branch" title={branch}>
-            {branch}
+        ) : showBranch ? (
+          branch === null ? null : (
+            <button
+              type="button"
+              class="hwc-pane-head-branch-menu"
+              aria-label={`${branch} のスペースメニュー${sync === null ? "" : `、${gitStatusLabel(sync)}`}`}
+              aria-haspopup="menu"
+              aria-expanded={workspaceMenuOpen}
+              aria-controls={MENU_ID}
+              data-open={workspaceMenuOpen}
+              onClick={(event) => onOpenWorkspaceMenu(context.workspaceId, event.currentTarget)}
+            >
+              <span class="hwc-pane-head-branch" title={branch}>
+                {branch}
+              </span>
+              <GitCount sync={sync} />
+              <span class="hwc-chevron-down">
+                <ChevronDownIcon size={12} />
+              </span>
+            </button>
+          )
+        ) : context.repoName === null ? null : repoUrl === null ? (
+          <span class="hwc-pane-head-repo" title={context.repoName}>
+            {context.repoName}
           </span>
+        ) : (
+          <a
+            class="hwc-pane-head-repo"
+            href={repoUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`${context.repoName} を GitHub で開く`}
+            title={context.repoName}
+          >
+            {context.repoName}
+          </a>
         )}
-        <GitStatus
-          sync={sync}
-          expanded={workspaceMenuOpen}
-          onOpen={(trigger) => onOpenWorkspaceMenu(context.workspaceId, trigger)}
-        />
+        {labeled || showBranch ? null : <GitCount sync={sync} />}
         {pullRequest === null || pullRequest.state !== "OPEN" ? null : (
           <a
             class="hwc-pane-head-pr"

@@ -648,6 +648,8 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 .hwc-group-row .hwc-group {
   flex: 1;
   min-width: 0;
+  /* 種類アイコンは行の外へ出し、ボタンのタップ領域にした。左の余白はアイコン側が持つ。 */
+  padding-left: 0;
 }
 
 .hwc-group-row[data-menu="true"] .hwc-group {
@@ -668,6 +670,73 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   height: var(--icon-frame);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-icon);
+  color: var(--color-secondary);
+}
+
+/* 先頭の種類アイコンはスペースメニューの入口。32px の枠を 44px のタップ領域に置く。
+   一覧では枠の位置を今までと同じにし、ボタンの余白ぶんをマージンで相殺する。 */
+.hwc-space-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.hwc-group-row .hwc-space-icon {
+  margin-left: calc(var(--space-4) + var(--indent, 0px) - 6px);
+  margin-right: 6px;
+}
+
+.hwc-active-band .hwc-space-icon {
+  position: relative;
+  z-index: 2;
+  margin-left: -6px;
+  margin-right: -6px;
+}
+
+.hwc-space-icon:hover,
+.hwc-space-icon[data-open="true"] {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-active-band .hwc-space-icon:hover,
+.hwc-active-band .hwc-space-icon[data-open="true"] {
+  background: var(--color-surface);
+}
+
+.hwc-space-icon:hover .hwc-group-icon,
+.hwc-space-icon[data-open="true"] .hwc-group-icon,
+.hwc-active-band .hwc-space-icon:hover .hwc-active-band-icon,
+.hwc-active-band .hwc-space-icon[data-open="true"] .hwc-active-band-icon {
+  color: var(--color-text);
+}
+
+.hwc-space-icon:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.hwc-space-icon--static {
+  cursor: default;
+}
+
+.hwc-space-icon--static:hover {
+  background: transparent;
+  color: var(--color-secondary);
+}
+
+.hwc-space-icon--static:hover .hwc-group-icon {
   color: var(--color-secondary);
 }
 
@@ -2127,7 +2196,7 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 }
 
 /* 1 枚のときだけ、ペインの代わりにスペースの文脈を置く。長い名前は切る。
-   切れた全文は長押しで選べるようにする（body は選択を止めている）。 */
+   狭い画面ではこのブランチがスペースメニューの入口になる。 */
 .hwc-pane-head-branch {
   min-width: 0;
   overflow: hidden;
@@ -2135,70 +2204,114 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   font-size: var(--text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
-  user-select: text;
-  -webkit-user-select: text;
-  -webkit-touch-callout: default;
 }
 
-/* 上流との差。0 は淡く、動きがある側だけを色付きにする。見た目は小さいが、
-   押せる範囲は上下に広げて 32px 確保する。 */
-.hwc-git-status {
-  position: relative;
-  z-index: 2;
-  flex: none;
+.hwc-pane-head-branch-menu {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  min-height: 20px;
+  height: 32px;
   padding: 0 var(--space-1);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
+  color: var(--color-secondary);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.hwc-pane-head-branch-menu:hover,
+.hwc-pane-head-branch-menu[data-open="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.hwc-pane-head-branch-menu:focus-visible {
+  outline-offset: -3px;
+}
+
+.hwc-pane-head-branch-menu .hwc-pane-head-branch {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.hwc-chevron-down {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--color-secondary);
+}
+
+/* PC の 1 枚表示では、ペイン名の代わりにリポジトリ名を出す。GitHub のリモートが
+   あるときだけリンクにし、無いときは文字のままにする。 */
+.hwc-pane-head-repo {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.hwc-pane-head-repo {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 var(--space-1);
+  margin: 0 calc(-1 * var(--space-1));
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+a.hwc-pane-head-repo:hover {
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
+a.hwc-pane-head-repo:active {
+  background: var(--color-line);
+}
+
+a.hwc-pane-head-repo:focus-visible {
+  outline-offset: -3px;
+}
+
+/* 上流との差。動きがある側だけをラベルで出す。メニューの入口ではないので、
+   ボタンの見た目やタップ領域を持たない。 */
+.hwc-git-count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
   color: var(--color-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-secondary);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 140ms ease;
 }
 
-.hwc-git-status::before {
-  content: "";
-  position: absolute;
-  inset: -6px 0;
+.hwc-active-band-line .hwc-git-count,
+.hwc-pane-head .hwc-git-count {
+  margin-left: 0;
 }
 
-/* 一覧では行の高さに余裕があるので、状態表示の操作領域を 44px まで広げる。
-   チャットの見出しは 32px なので、上の 32px のままにする。 */
-.hwc-group-row .hwc-git-status::before,
-.hwc-active-band .hwc-git-status::before {
-  inset: -12px -4px;
-}
-
-.hwc-git-status:hover {
-  background: var(--color-surface);
-}
-
-.hwc-git-status:active {
-  background: var(--color-line);
-}
-
-.hwc-git-status:focus-visible {
-  outline-offset: -3px;
-}
-
-.hwc-git-status-part[data-tone="ahead"] {
+.hwc-git-count-part[data-tone="ahead"] {
   color: var(--color-success);
 }
 
-.hwc-git-status-part[data-tone="behind"] {
+.hwc-git-count-part[data-tone="behind"] {
   color: var(--color-attention);
-}
-
-.hwc-git-status-part[data-tone="zero"] {
-  color: var(--color-secondary);
 }
 
 /* ブランチに PR が紐づいているときだけ出る。潰さないため、チップ以外が縮む

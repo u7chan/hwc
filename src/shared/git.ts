@@ -3,6 +3,8 @@ export type GitSync = {
   ahead: number;
   behind: number;
   hasRemote: boolean;
+  // GitHub のリポジトリトップ。GitHub 以外のリモートや、読めないときは null。
+  repoUrl: string | null;
 };
 
 export type UpstreamTrack = {
@@ -28,6 +30,28 @@ export function parseUpstreamTrack(text: string): UpstreamTrack {
     ahead: toCount(/ahead (\d+)/.exec(track)?.[1]),
     behind: toCount(/behind (\d+)/.exec(track)?.[1]),
   };
+}
+
+const GITHUB_OWNER = /^[A-Za-z0-9._-]+$/;
+const GITHUB_REPO = /^[A-Za-z0-9._-]+$/;
+
+// remote の URL は ssh / https / scp のどれでも書ける。href に入るのは github.com の
+// リポジトリトップだけなので、ここで https://github.com/<owner>/<repo> に正規化する。
+// 他のホスト、ローカルパス、サブパス付きの URL は受け付けない。
+export function parseGitHubRemote(value: string): string | null {
+  const text = value.trim();
+  const url =
+    /^(?:https?|git|ssh):\/\/(?:[^@/\s]+@)?github\.com(?::\d+)?\/([^/\s]+)\/([^/\s]+?)\/?$/i.exec(
+      text,
+    );
+  const scp = /^(?:[^@/\s]+@)?github\.com:([^/\s]+)\/([^/\s]+?)\/?$/i.exec(text);
+  const match = url ?? scp;
+  if (match === null) return null;
+  const owner = match[1];
+  const name = match[2].endsWith(".git") ? match[2].slice(0, -4) : match[2];
+  if (!GITHUB_OWNER.test(owner) || !GITHUB_REPO.test(name)) return null;
+  if (owner === "." || owner === ".." || name === "." || name === "..") return null;
+  return `https://github.com/${owner}/${name}`;
 }
 
 function toCount(value: string | undefined): number {
