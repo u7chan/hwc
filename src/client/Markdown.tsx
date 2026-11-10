@@ -372,20 +372,18 @@ function imageNode(node: MdImage, context: ImageContextValue) {
     return <code class="hwc-md-literal">{node.raw}</code>;
   }
   const alt = inlineText(node.children).trim();
+  // 読み上げ名は alt を優先する。img は装飾にし、ボタンの名前だけを読ませる
+  // （ADR 0042 / ADR 0055）。
+  const name = alt === "" ? image.label : alt;
   return (
     <button
       type="button"
       class="hwc-md-image"
-      aria-label={`${image.label} を拡大`}
+      aria-label={`${name} を拡大`}
       aria-haspopup="dialog"
       onClick={() => open(image.url, image.label)}
     >
-      <img
-        class="hwc-md-image-content"
-        src={image.url}
-        alt={alt === "" ? image.label : alt}
-        loading="lazy"
-      />
+      <img class="hwc-md-image-content" src={image.url} alt="" loading="lazy" />
     </button>
   );
 }

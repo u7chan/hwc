@@ -10,6 +10,7 @@ import type {
 import type { AgentStatus } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, chatFileUrl, readChat } from "./api";
+import { MARKDOWN_MAX_LENGTH, markdownImageHrefs } from "./markdown/parse";
 
 // 返答が届いている間は短く、動いていない間は長く。隠れている間に読んでも見る人はいない。
 export function chatPollDelay(
@@ -61,21 +62,32 @@ export function paneBody(props: {
 
 export type MessageImageSource = { url: string; label: string };
 
-// 本文の画像記法と一致した画像は、その位置に描く。裸のパスだけで拾った画像は
-// 本文に位置が無いので、メッセージ末尾の一覧に残す。
+// 本文の画像記法と一致した画像は、その位置に描く。裸のパスだけで拾った画像と、
+// 解析しても image ノードにならなかった画像（フェンスの中・解析上限の外）は、
+// 本文に位置が無いのでメッセージ末尾の一覧に残す。
 export function splitInlineImages(
   paneId: string,
+  text: string,
   files: readonly ChatFile[] | undefined,
 ): { images: Map<string, MessageImageSource>; rest: ChatFile[] } {
   const images = new Map<string, MessageImageSource>();
   const rest: ChatFile[] = [];
+  const hasRefs = (files ?? []).some(
+    (file) => file.kind === "image" && file.imageRefs !== undefined,
+  );
+  const drawn =
+    hasRefs && text.length <= MARKDOWN_MAX_LENGTH ? markdownImageHrefs(text) : undefined;
   for (const file of files ?? []) {
-    if (file.kind !== "image" || file.imageRefs === undefined) {
+    const refs =
+      file.kind === "image" && file.imageRefs !== undefined && drawn !== undefined
+        ? file.imageRefs.filter((ref) => drawn.has(ref))
+        : [];
+    if (refs.length === 0) {
       rest.push(file);
       continue;
     }
     const source = { url: chatFileUrl(paneId, file), label: messageFileLabel(file.name) };
-    for (const ref of file.imageRefs) images.set(ref, source);
+    for (const ref of refs) images.set(ref, source);
   }
   return { images, rest };
 }

@@ -282,7 +282,7 @@ function AgentMessage(props: {
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
 }) {
-  const { images, rest } = splitInlineImages(props.paneId, props.message.files);
+  const { images, rest } = splitInlineImages(props.paneId, props.message.text, props.message.files);
   return (
     <>
       <Markdown

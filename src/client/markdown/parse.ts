@@ -3,7 +3,8 @@
  * ブロック (見出し / 段落 / リスト / 引用 / 表 / コードフェンス) の行スキャナ。
  * 例外は投げず、解釈できない行は段落 (原文) として扱う。
  */
-import type { MdAlign, MdBlock, MdHeadingLevel, MdListItem } from "./types";
+import { parseInline } from "./inline";
+import type { MdAlign, MdBlock, MdHeadingLevel, MdInline, MdListItem } from "./types";
 
 /** これを超える本文は解析せずプレーン表示に落とす */
 export const MARKDOWN_MAX_LENGTH = 200 * 1024;
@@ -19,6 +20,54 @@ const DELIMITER_CELL = /^:?-+:?$/;
 export function parseMarkdown(text: string): MdBlock[] {
   // CRLF / CR のみの改行も行境界として扱う
   return parseLines(text.replace(/\r\n?/g, "\n").split("\n"));
+}
+
+// 描画側が実際に image ノードにした destination を集める。BFF の表記の照合だけで
+// 判定すると、フェンスの中や解析上限の外の記法まで「描いた」ことにしてしまう。
+export function markdownImageHrefs(text: string): Set<string> {
+  const hrefs = new Set<string>();
+  if (text.length > MARKDOWN_MAX_LENGTH) return hrefs;
+  collectImageHrefs(parseMarkdown(text), hrefs);
+  return hrefs;
+}
+
+function collectImageHrefs(blocks: readonly MdBlock[], hrefs: Set<string>): void {
+  for (const block of blocks) {
+    switch (block.kind) {
+      case "heading":
+      case "paragraph":
+        collectInlineImageHrefs(block.source, hrefs);
+        break;
+      case "quote":
+        // 引用とリスト項目は描画側と同じく、内側の本文をもう一度解析する。
+        collectImageHrefs(parseMarkdown(block.source), hrefs);
+        break;
+      case "list":
+        for (const item of block.items) collectImageHrefs(parseMarkdown(item.source), hrefs);
+        break;
+      case "table":
+        for (const cell of block.header) collectInlineImageHrefs(cell, hrefs);
+        for (const row of block.rows) for (const cell of row) collectInlineImageHrefs(cell, hrefs);
+        break;
+      case "code":
+      case "hr":
+        break;
+    }
+  }
+}
+
+function collectInlineImageHrefs(source: string, hrefs: Set<string>): void {
+  for (const node of parseInline(source)) collectInlineNode(node, hrefs);
+}
+
+function collectInlineNode(node: MdInline, hrefs: Set<string>): void {
+  if (node.kind === "image") {
+    hrefs.add(node.href);
+    return;
+  }
+  if (node.kind === "strong" || node.kind === "em" || node.kind === "del" || node.kind === "link") {
+    for (const child of node.children) collectInlineNode(child, hrefs);
+  }
 }
 
 function parseLines(lines: string[]): MdBlock[] {

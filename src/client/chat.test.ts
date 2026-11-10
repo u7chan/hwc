@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { ChatContext, ChatFile, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PendingMessage } from "./chat";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
+import { MARKDOWN_MAX_LENGTH } from "./markdown/parse";
 import {
   agentInfo,
   chatPollDelay,
@@ -74,23 +75,42 @@ test("a status change does not read while the page is hidden", () => {
   expect(pollOnStatusChange({ last: "idle", next: "working", visible: false })).toBe("ignore");
 });
 
-test("images drawn in the body leave the trailing list", () => {
+test("only images actually drawn in the body leave the trailing list", () => {
   const files: ChatFile[] = [
     { name: "docs/a.png", version: "1-2", kind: "image", root: 0, imageRefs: ["docs/a.png"] },
     { name: "docs/b.png", version: "1-2", kind: "image", root: 0 },
+    { name: "docs/c.png", version: "1-2", kind: "image", root: 0, imageRefs: ["docs/c.png"] },
     { name: "docs/preview/index.html", version: "1-2", kind: "html", root: 0 },
   ];
+  const text = "![A](docs/a.png)\n\n```\n![C](docs/c.png)\n```";
 
-  const { images, rest } = splitInlineImages("w1:p1", files);
+  const { images, rest } = splitInlineImages("w1:p1", text, files);
 
   // 本文の表記から配信 URL を引ける。押したときのダイアログが使う。
   expect(images.get("docs/a.png")).toEqual({
     url: `/api/panes/w1%3Ap1/files?root=0&path=${encodeURIComponent("docs/a.png")}&v=1-2`,
     label: "a.png",
   });
-  // 裸のパスだけの画像と HTML は本文に位置が無い。末尾に残す。
-  expect(rest.map((file) => file.name)).toEqual(["docs/b.png", "docs/preview/index.html"]);
-  expect(splitInlineImages("w1:p1", undefined)).toEqual({ images: new Map(), rest: [] });
+  // 裸のパスだけの画像、フェンスの中で描かれない画像、HTML は末尾に残す。
+  expect(rest.map((file) => file.name)).toEqual([
+    "docs/b.png",
+    "docs/c.png",
+    "docs/preview/index.html",
+  ]);
+  expect(splitInlineImages("w1:p1", "", undefined)).toEqual({ images: new Map(), rest: [] });
+});
+
+test("a body over the analysis limit keeps every image in the trailing list", () => {
+  const files: ChatFile[] = [
+    { name: "docs/a.png", version: "1-2", kind: "image", root: 0, imageRefs: ["docs/a.png"] },
+  ];
+  const text = `![A](docs/a.png)\n${"x".repeat(MARKDOWN_MAX_LENGTH)}`;
+
+  const { images, rest } = splitInlineImages("w1:p1", text, files);
+
+  // 解析しない本文では記法が原文のまま残るので、末尾の一覧からも外さない。
+  expect(images.size).toBe(0);
+  expect(rest.map((file) => file.name)).toEqual(["docs/a.png"]);
 });
 
 test("a cancellation is not a failure", () => {
