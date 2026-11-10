@@ -2460,7 +2460,9 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   display: inline-flex;
   align-items: center;
   border-radius: var(--radius-sm);
-  transition: background-color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease;
 }
 
 .hwc-tab-label {
@@ -2489,60 +2491,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   font-weight: 600;
 }
 
-/* 分割に出す / 出さないの切り替え。一覧のメニューと同じく、ホバーで浮かび上がらせる。 */
-.hwc-tab-eye {
-  position: absolute;
-  top: 50%;
-  right: var(--space-1);
-  display: grid;
-  place-items: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-secondary);
-  cursor: pointer;
-  transform: translateY(-50%);
-  transition:
-    opacity 140ms ease,
-    background-color 140ms ease,
-    color 140ms ease;
+/* 分割から外したペインはタブを淡くする。選ぶと分割に戻る。 */
+.hwc-tab-item[data-hidden="true"]:not([data-selected="true"]) {
+  opacity: 0.55;
 }
 
-/* マウスの画面ではタブに乗るまで隠す。触れる画面では常に出す。 */
-@media (hover: hover) {
-  .hwc-tab-eye {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  /* 隠している間は常に見せる。戻す操作が見つからないと分割に戻せない。 */
-  .hwc-tab-item[data-hidden="true"] .hwc-tab-eye,
-  .hwc-tab-item:hover .hwc-tab-eye,
-  .hwc-tab-item:focus-within .hwc-tab-eye {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
-.hwc-tab-eye:hover {
-  background: var(--color-raised);
-  color: var(--color-text);
-}
-
-.hwc-tab-eye:active {
-  background: var(--color-line);
-}
-
-.hwc-tab-eye:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
-
-/* 目玉のぶんだけ右を空ける。空けないと状態の記号と重なる。 */
-.hwc-tab[data-eye="true"] {
-  padding-right: calc(var(--space-1) + var(--space-8));
+.hwc-tab-item[data-hidden="true"]:not([data-selected="true"]):hover {
+  opacity: 1;
 }
 
 .hwc-detail-bar {

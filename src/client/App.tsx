@@ -453,6 +453,8 @@ export function App() {
     opened = false,
     nextExpanded: ReadonlySet<string> = expanded,
   ) => {
+    // 分割から隠したペインを選んだら、分割に戻す。タブを選ぶだけで表示へ戻せる。
+    if (paneId !== null && hidden.has(paneId)) toggleHidden(paneId);
     const pending = pendingRead.current;
     if (pending !== null) {
       const status = state === null ? null : (findPane(state, pending)?.agentStatus ?? null);
@@ -867,6 +869,7 @@ export function App() {
       onStop={() => stopPane(item.id)}
       onOpenImage={(url, name) => setViewer({ url, name })}
       onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
+      onHideInSplit={splitOn && item.id !== pane?.id ? () => toggleHidden(item.id) : null}
     />
   );
 
@@ -1018,7 +1021,6 @@ export function App() {
                 hidden={hidden}
                 status={detailStatus}
                 onSelectPane={select}
-                onToggleHidden={toggleHidden}
                 onSelectPreview={() =>
                   setPreview((current) => (current === null ? null : { ...current, shown: true }))
                 }

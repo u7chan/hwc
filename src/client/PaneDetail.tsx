@@ -798,6 +798,8 @@ type PaneDetailProps = {
   onOpenImage: (url: string, name: string) => void;
   // HTML のプレビューは、タブの 1 つとして会話の外に出す。
   onOpenPreview: (file: ChatFile) => void;
+  // 分割に出ている自分を隠す。選択中と 1 枚表示では渡さない。
+  onHideInSplit: (() => void) | null;
 };
 
 // 名前はアップロードが終わるまで無い。controller は取り外しと離脱で送信を止めるために持つ。
@@ -832,6 +834,7 @@ export function PaneDetail(props: PaneDetailProps) {
     onStop,
     onOpenImage,
     onOpenPreview,
+    onHideInSplit,
   } = props;
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
@@ -1605,6 +1608,18 @@ export function PaneDetail(props: PaneDetailProps) {
             <CopyGlyph copied={copied} />
           </button>
         </span>
+        {onHideInSplit === null ? null : (
+          <button
+            type="button"
+            class="hwc-pane-more"
+            aria-label={`${paneName(pane)} (${pane.id}) を分割で非表示にする`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onFocusIn={(event) => event.stopPropagation()}
+            onClick={onHideInSplit}
+          >
+            <EyeIcon />
+          </button>
+        )}
         {/* ID の外に置く。中に入れると、hover できる端末で ID と一緒に隠れる。 */}
         <button
           type="button"
