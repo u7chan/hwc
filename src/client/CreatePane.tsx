@@ -123,8 +123,9 @@ export function CreatePane(props: CreatePaneProps) {
     setBusy(false);
     setSettled(paneId !== null || !view.retry);
     setError(view.message);
-    // ペインができていれば、理由を見せたまま新しいペインへ移る。起動に失敗していれば
-    // シェルのペインなので、入力を閉じる必要はない。
+    // ペインができていれば、理由を見せたまま新しいペインへ移る。部分成功では入力を閉じない。
+    // 起動に失敗していればシェル、リネームだけ失敗していればエージェントの起動は済んでいる
+    // （両方失敗した場合は起動失敗を優先する）。
     if (paneId !== null) props.onCreated(paneId, false);
   };
 
