@@ -136,6 +136,36 @@ const unmanagedLinkedState: AppState = {
   ],
 };
 
+// 同じ場所を指す Herdr ネイティブのスペース。worktree 情報を持たないので、
+// リポジトリ束ではなくパスとラベルで重複を見つける。
+const duplicateState: AppState = {
+  ...state,
+  workspaces: ["w1", "w2"].map((id, index) => ({
+    ...state.workspaces[0]!,
+    id,
+    label: "mypi",
+    path: "/work/mypi",
+    focused: index === 0,
+    tabs: [],
+  })),
+};
+
+// Herdr がワークツリーとして登録していない git チェックアウトの重複。
+// BFF は表示用の worktree 情報を補うが、close はネイティブスペースとして扱う。
+const unmanagedDuplicateState: AppState = {
+  ...duplicateState,
+  workspaces: duplicateState.workspaces.map((workspace) => ({
+    ...workspace,
+    worktree: {
+      repoName: "mypi",
+      repoRoot: "/work",
+      checkoutPath: "/work/mypi",
+      isLinkedWorktree: false,
+      managed: false,
+    },
+  })),
+};
+
 const chatPane: PaneState = { ...pane, agent: "pi", chat: true };
 
 const chatState: AppState = {
@@ -276,6 +306,7 @@ function createFakeWorktrees(overrides: Partial<WorktreeClient> = {}): WorktreeC
 function createFakeWorkspaces(overrides: Partial<WorkspaceClient> = {}): WorkspaceClient {
   return {
     moveBlock: async () => {},
+    close: async () => {},
     ...overrides,
   };
 }
@@ -2088,6 +2119,154 @@ test.each([
     },
   });
   const response = await app.request("/api/workspaces/w1/remove-worktree", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(status);
+});
+
+test("POST /api/workspaces/:id/close closes a duplicate native space", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state: duplicateState,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w2/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual(["w2"]);
+});
+
+test("close accepts unmanaged checkout duplicates", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state: unmanagedDuplicateState,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w2/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual(["w2"]);
+});
+
+test("close refuses a native space without a duplicate", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_duplicate_space" });
+  expect(seen).toEqual([]);
+});
+
+test("close refuses the same path with a different label", async () => {
+  const seen: string[] = [];
+  const differentLabel: AppState = {
+    ...duplicateState,
+    workspaces: duplicateState.workspaces.map((workspace, index) => ({
+      ...workspace,
+      label: index === 0 ? "mypi" : "mypi review",
+    })),
+  };
+  const { app } = createTestApp({
+    state: differentLabel,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_duplicate_space" });
+  expect(seen).toEqual([]);
+});
+
+test("close refuses a linked worktree", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state: worktreeState,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_duplicate_space" });
+  expect(seen).toEqual([]);
+});
+
+test("close requires application/json", async () => {
+  const { app } = createTestApp({ state: duplicateState });
+  const response = await app.request("/api/workspaces/w1/close", { method: "POST" });
+
+  expect(response.status).toBe(415);
+});
+
+test("close reports a workspace that is no longer listed", async () => {
+  const { app } = createTestApp({ state: duplicateState });
+  const response = await app.request("/api/workspaces/w9/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "workspace_not_found" });
+});
+
+// 消えたスペースは目的の状態に達している。グループを閉じる要求は勝手に通さない。
+test.each([
+  ["workspace_not_found", 404],
+  ["workspace_group_close_required", 409],
+  ["invalid_params", 400],
+  ["workspace_close_failed", 502],
+] as const)("close maps %s", async (code, status) => {
+  const { app } = createTestApp({
+    state: duplicateState,
+    workspaces: {
+      close: async () => {
+        throw new HerdrError(code, "cannot close");
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w2/close", {
     method: "POST",
     headers: { "content-type": "application/json" },
   });

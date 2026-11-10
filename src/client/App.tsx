@@ -12,6 +12,7 @@ import {
   focusAgent,
   clearPaneOutput,
   closePane,
+  closeWorkspace,
   confirmFolderTrust,
   moveWorkspaceBlock,
   parseAppState,
@@ -29,6 +30,7 @@ import {
   type ConnectionStatus,
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
+import { CloseSpaceConfirm } from "./CloseSpaceConfirm";
 import { CreatePane } from "./CreatePane";
 import { applyFavicon, faviconStatus } from "./favicon";
 import { ImageViewer } from "./ImageViewer";
@@ -54,6 +56,7 @@ import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { type PaneCloseAction, paneCloseAction } from "../shared/pane-close";
 import {
+  canCloseDuplicateSpace,
   findPane,
   findPaneContext,
   findPaneRow,
@@ -209,6 +212,14 @@ type Removing = {
   phase: "confirm" | "busy" | "failed";
 };
 
+// 重複したネイティブスペースを閉じる確認。フォルダは残るが、実行中のエージェントは終わる。
+type ClosingSpace = {
+  workspaceId: string;
+  label: string;
+  path: string | null;
+  phase: "confirm" | "busy" | "failed";
+};
+
 // 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
 // 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
@@ -288,6 +299,7 @@ export function App() {
   const [, confirmationChanged] = useReducer((revision: number) => revision + 1, 0);
   const [closing, setClosing] = useState<Closing | null>(null);
   const [removing, setRemoving] = useState<Removing | null>(null);
+  const [closingSpace, setClosingSpace] = useState<ClosingSpace | null>(null);
   // 作成ダイアログ。ワークツリーを作る場合は、モデル一覧の取得元になる起点スペースの ID も持つ。
   const [creating, setCreating] = useState<{
     paneId: string;
@@ -304,6 +316,7 @@ export function App() {
   const [starting, setStarting] = useState<StartingPane | null>(null);
   const closeInFlight = useRef(false);
   const removeInFlight = useRef(false);
+  const closeSpaceInFlight = useRef(false);
   // 既読の保留。アクティブ一覧で開いたペインだけが入り、選択が離れた時点で判定する。
   const pendingRead = useRef<string | null>(null);
 
@@ -461,6 +474,15 @@ export function App() {
       : (state.workspaces.find((workspace) => workspace.id === removing.workspaceId) ?? null);
   const removingAvailable =
     removingWorkspace?.worktree?.managed === true && removingWorkspace.worktree.isLinkedWorktree;
+  const closingSpaceWorkspace =
+    state === null || closingSpace === null
+      ? null
+      : (state.workspaces.find((workspace) => workspace.id === closingSpace.workspaceId) ?? null);
+  const closingSpaceAvailable =
+    state !== null &&
+    closingSpace !== null &&
+    closingSpaceWorkspace !== null &&
+    canCloseDuplicateSpace(state, closingSpace.workspaceId);
 
   // 既読は Herdr の seen を進めて消す。失敗しても通知しない。次にその行を開いて離れたときに
   // もう一度送られるので、ここで知らせても利用者にできることが無い。
@@ -699,6 +721,40 @@ export function App() {
     });
   };
 
+  // 同じ場所のスペースが 2 つ以上あるときだけ、最後の 1 つを残して閉じられる。
+  const openCloseSpaceConfirm = () => {
+    if (menu === null || menu.target.kind !== "workspace" || state === null) return;
+    const workspace = state.workspaces.find((item) => item.id === menu.target.id);
+    if (workspace === undefined || !canCloseDuplicateSpace(state, workspace.id)) return;
+    closeMenu();
+    setClosingSpace({
+      workspaceId: workspace.id,
+      label: workspace.label,
+      path: workspace.path ?? null,
+      phase: "confirm",
+    });
+  };
+
+  const cancelCloseSpace = () => {
+    if (closingSpace?.phase === "busy") return;
+    setClosingSpace(null);
+  };
+
+  const confirmCloseSpace = () => {
+    if (closingSpace === null || closingSpace.phase === "busy" || !closingSpaceAvailable) return;
+    if (closeSpaceInFlight.current) return;
+    closeSpaceInFlight.current = true;
+    const target = closingSpace;
+    setClosingSpace({ ...target, phase: "busy" });
+    void closeWorkspace(target.workspaceId).then((outcome) => {
+      closeSpaceInFlight.current = false;
+      setClosingSpace((current) => {
+        if (current === null) return null;
+        return outcome === "done" ? null : { ...current, phase: "failed" };
+      });
+    });
+  };
+
   // 開閉は次に開いたときも同じにしたいので、既定からの差分として覚える。
   const rememberOpen = (groupIds: readonly string[], open: boolean) => {
     let remembered = openGroups.current ?? new Map<string, boolean>();
@@ -817,7 +873,7 @@ export function App() {
     if (nextExpanded === null) return;
     const target = defaultPaneOf(workspace);
     moveTo(wide && target !== null ? target.pane.id : null, false, nextExpanded);
-    rememberOpen(workspaceGroupIds(workspace), true);
+    rememberOpen(workspaceGroupIds(state, workspace), true);
     setReveal({ workspaceId, token: ++revealSeq.current });
   };
 
@@ -945,6 +1001,8 @@ export function App() {
   // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする（ADR 0038）。
   const menuWorktree = menuWorkspace?.worktree ?? null;
   const canCreateWorktree = menuWorktree?.managed === true && !menuWorktree.isLinkedWorktree;
+  const menuCanCloseSpace =
+    state !== null && menuWorkspace !== null && canCloseDuplicateSpace(state, menuWorkspace.id);
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
     <PaneDetail
@@ -1387,6 +1445,20 @@ export function App() {
                   </button>
                 </>
               ) : null}
+              {menuCanCloseSpace ? (
+                <>
+                  <hr class="hwc-menu-separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="hwc-menu-item hwc-menu-item--danger"
+                    onClick={openCloseSpaceConfirm}
+                  >
+                    <TrashIcon size={14} />
+                    スペースを閉じる
+                  </button>
+                </>
+              ) : null}
             </>
           )}
         </Menu>
@@ -1413,6 +1485,18 @@ export function App() {
           failed={removing.phase === "failed"}
           onConfirm={confirmRemoveWorktree}
           onCancel={cancelRemoveWorktree}
+        />
+      )}
+
+      {closingSpace === null ? null : (
+        <CloseSpaceConfirm
+          label={closingSpace.label}
+          path={closingSpace.path}
+          available={closingSpaceAvailable}
+          busy={closingSpace.phase === "busy"}
+          failed={closingSpace.phase === "failed"}
+          onConfirm={confirmCloseSpace}
+          onCancel={cancelCloseSpace}
         />
       )}
 

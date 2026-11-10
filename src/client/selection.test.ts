@@ -68,6 +68,29 @@ function pane(id: string) {
   };
 }
 
+const PLACE_KEY = "place:%2Fwork%2Fmypi:mypi";
+
+// 同じ場所を指す Herdr ネイティブのスペース。worktree を持たないので、パスと
+// ラベルで 1 つの場所に束ねる。
+const duplicateState: AppState = {
+  ...state,
+  workspaces: ["w3", "w4"].map((id, index) => ({
+    ...state.workspaces[0]!,
+    id,
+    label: "mypi",
+    path: "/work/mypi",
+    focused: index === 0,
+    tabs: [
+      {
+        ...state.workspaces[0]!.tabs[0]!,
+        id: `${id}:t1`,
+        focused: index === 0,
+        panes: [pane(`${id}:p1`)],
+      },
+    ],
+  })),
+};
+
 test("a pane selected from a tab, a cell or the list opens its place", () => {
   const open = revealPane(state, "w2:p1", new Set(["w1"]));
   expect([...open].sort()).toEqual(["repo:u7agent", "w1", "w2", "w2:t1"]);
@@ -120,6 +143,33 @@ test("the default pane is the first pane of the leftmost non-empty tab", () => {
 test("moving from a band opens the space, its tab and the repo group", () => {
   const open = expandForWorkspace(state, "w2", new Set(["w1"]));
   expect(open === null ? [] : [...open].sort()).toEqual(["repo:u7agent", "w1", "w2", "w2:t1"]);
-  expect(workspaceGroupIds(state.workspaces[1])).toEqual(["w2", "w2:t1", "repo:u7agent"]);
+  expect(workspaceGroupIds(state, state.workspaces[1])).toEqual(["w2", "w2:t1", "repo:u7agent"]);
   expect(expandForWorkspace(state, "w9", new Set(["w1"]))).toBeNull();
+});
+
+test("a native duplicate opens its place along with its own space", () => {
+  expect([...revealPane(duplicateState, "w4:p1", new Set())].sort()).toEqual([
+    PLACE_KEY,
+    "w4",
+    "w4:t1",
+  ]);
+  expect(revealPaneGroups(duplicateState, "w4:p1").sort()).toEqual([PLACE_KEY, "w4", "w4:t1"]);
+  const open = expandForWorkspace(duplicateState, "w4", new Set());
+  expect(open === null ? [] : [...open].sort()).toEqual([PLACE_KEY, "w4", "w4:t1"]);
+  expect(workspaceGroupIds(duplicateState, duplicateState.workspaces[1]!)).toEqual([
+    "w4",
+    "w4:t1",
+    PLACE_KEY,
+  ]);
+});
+
+test("a folded place stays folded on restore", () => {
+  expect([...expandForPane(duplicateState, "w4:p1", new Set(), new Map())].sort()).toEqual([
+    PLACE_KEY,
+    "w4",
+    "w4:t1",
+  ]);
+  expect(
+    [...expandForPane(duplicateState, "w4:p1", new Set(), new Map([[PLACE_KEY, false]]))].sort(),
+  ).toEqual(["w4", "w4:t1"]);
 });

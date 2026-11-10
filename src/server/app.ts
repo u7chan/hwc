@@ -52,6 +52,7 @@ import {
 } from "./message-files";
 import { isHtmlName } from "../shared/message-files";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
+import { placeOf } from "../shared/place";
 import { isAgentModel, supportsFolderTrust, supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
 import { HerdrError } from "./herdr/socket";
@@ -193,6 +194,23 @@ export function createApp(options: {
     if (error instanceof HerdrError) {
       if (error.code === "workspace_not_found") {
         return c.json({ error: "workspace_not_found" }, 404);
+      }
+      if (error.code === "invalid_params" || error.code === "invalid_request") {
+        return c.json({ error: "invalid_request" }, 400);
+      }
+    }
+    return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  // 重複スペースを閉じる操作は、フォルダを消さない。linked worktree の削除とは
+  // エラーコードも入口も分ける。グループを閉じる要求は勝手に通さない。
+  const closeSpaceFailure = (c: Context, error: unknown) => {
+    if (error instanceof HerdrError) {
+      if (error.code === "workspace_not_found") {
+        return c.json({ error: "workspace_not_found" }, 404);
+      }
+      if (error.code === "workspace_group_close_required") {
+        return c.json({ error: error.code }, 409);
       }
       if (error.code === "invalid_params" || error.code === "invalid_request") {
         return c.json({ error: "invalid_request" }, 400);
@@ -891,6 +909,29 @@ export function createApp(options: {
             }
           }
           return c.json({ error: "herdr_unavailable" }, 502);
+        }
+      })
+      .post("/api/workspaces/:id/close", requireJson, async (c) => {
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+        const workspaceId = c.req.param("id");
+        const workspace = state.workspaces.find((item) => item.id === workspaceId);
+        if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
+
+        // 閉じられるのは、同じ場所を指すネイティブスペースが他にもあるときだけ。
+        // worktree を持つスペースは対象外（linked は worktree.remove、本体は閉じない）。
+        const place = placeOf(workspace);
+        if (place === null) return c.json({ error: "not_duplicate_space" }, 409);
+        const duplicates = state.workspaces.filter((item) => placeOf(item)?.key === place.key);
+        if (duplicates.length < 2) return c.json({ error: "not_duplicate_space" }, 409);
+
+        try {
+          await workspaces.close(workspaceId);
+          // スペースが消えるのは Herdr のイベント（workspace.closed）に任せる。
+          return c.json({ ok: true });
+        } catch (error) {
+          return closeSpaceFailure(c, error);
         }
       })
   );

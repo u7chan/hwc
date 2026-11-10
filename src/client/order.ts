@@ -21,7 +21,11 @@ export function orderUnits(
     const ids = [...members]
       .sort((a, b) => (index.get(a.id) ?? 0) - (index.get(b.id) ?? 0))
       .map((workspace) => workspace.id);
-    return { key: group.key, label: group.repoName ?? members[0]?.label ?? group.key, ids };
+    return {
+      key: group.key,
+      label: group.place?.label ?? group.repoName ?? members[0]?.label ?? group.key,
+      ids,
+    };
   });
 }
 

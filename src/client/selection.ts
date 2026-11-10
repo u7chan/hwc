@@ -1,5 +1,6 @@
 import type { AppState, PaneState, TabState, WorkspaceState } from "../server/herdr/state";
 import { storage } from "./drafts";
+import { placeGroupKeyFor } from "./select";
 import { type SplitView, parseSplitView, serializeSplitView } from "./split-view";
 
 // 開いていたタブ・選択・4 スロットは端末ごとの好み。Herdr の状態ではないので BFF には
@@ -37,12 +38,15 @@ export function defaultPaneOf(workspace: WorkspaceState): WorkspacePane | null {
   return tab !== undefined && pane !== undefined ? { tab, pane } : null;
 }
 
-// ツリーでそのスペースを見せるために開く単位。代表タブと、同じリポジトリの束も含める。
-export function workspaceGroupIds(workspace: WorkspaceState): string[] {
+// ツリーでそのスペースを見せるために開く単位。代表タブと、同じリポジトリの束、
+// 同じ場所の束も含める。
+export function workspaceGroupIds(state: AppState, workspace: WorkspaceState): string[] {
   const target = defaultPaneOf(workspace);
   const groups = [workspace.id];
   if (target !== null) groups.push(target.tab.id);
   if (workspace.worktree !== null) groups.push(`repo:${workspace.worktree.repoName}`);
+  const place = placeGroupKeyFor(state.workspaces, workspace.id);
+  if (place !== null) groups.push(place);
   return groups;
 }
 
@@ -55,7 +59,7 @@ export function expandForWorkspace(
   const workspace = state.workspaces.find((candidate) => candidate.id === workspaceId);
   if (workspace === undefined) return null;
   const next = new Set(open);
-  for (const groupId of workspaceGroupIds(workspace)) next.add(groupId);
+  for (const groupId of workspaceGroupIds(state, workspace)) next.add(groupId);
   return next;
 }
 
@@ -85,6 +89,8 @@ export function revealPane(
   next.add(location.tab.id);
   if (location.workspace.worktree !== null)
     next.add(`repo:${location.workspace.worktree.repoName}`);
+  const place = placeGroupKeyFor(state.workspaces, location.workspace.id);
+  if (place !== null) next.add(place);
   return next;
 }
 
@@ -95,6 +101,8 @@ export function revealPaneGroups(state: AppState, paneId: string): string[] {
   const groups = [location.workspace.id, location.tab.id];
   if (location.workspace.worktree !== null)
     groups.push(`repo:${location.workspace.worktree.repoName}`);
+  const place = placeGroupKeyFor(state.workspaces, location.workspace.id);
+  if (place !== null) groups.push(place);
   return groups;
 }
 
@@ -118,6 +126,8 @@ export function expandForPane(
     if (!shut(tab.id)) next.add(tab.id);
     const repo = workspace.worktree ? `repo:${workspace.worktree.repoName}` : null;
     if (repo !== null && !shut(repo)) next.add(repo);
+    const place = placeGroupKeyFor(state.workspaces, workspace.id);
+    if (place !== null && !shut(place)) next.add(place);
   }
   return next;
 }

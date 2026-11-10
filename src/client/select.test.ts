@@ -8,6 +8,7 @@ import {
 import {
   activeRowName,
   agentGlyph,
+  canCloseDuplicateSpace,
   countPanes,
   countTabAgents,
   countWorkspaceAgents,
@@ -15,10 +16,13 @@ import {
   findPane,
   findPaneContext,
   findPaneRow,
+  groupIds,
+  groupMembers,
   groupWorkspaces,
   initialExpanded,
   isShellPane,
   markedParentPaneIds,
+  mostUrgentStatus,
   paneName,
   paneRowTitle,
   parentPaneOf,
@@ -262,6 +266,138 @@ test("a repo without a main checkout still forms one group", () => {
   expect(groups[0].host).toBeNull();
   expect(groups[0].linked.map((workspace) => workspace.id)).toEqual(["w2"]);
   expect([...initialExpanded({ ...state, workspaces: [linked] })]).toContain("repo:hwc");
+});
+
+const PLACE_KEY = "place:%2Fwork%2Fmypi:mypi";
+
+function duplicateState(): AppState {
+  return {
+    ...state,
+    workspaces: ["w4", "w5"].map((id, index) => ({
+      ...state.workspaces[1]!,
+      id,
+      label: "mypi",
+      path: "/work/mypi",
+      focused: index === 0,
+      tabs: [],
+    })),
+  };
+}
+
+function unmanagedDuplicateState(): AppState {
+  const duplicate = duplicateState();
+  return {
+    ...duplicate,
+    workspaces: duplicate.workspaces.map((workspace) => ({
+      ...workspace,
+      worktree: {
+        repoName: "mypi",
+        repoRoot: "/work",
+        checkoutPath: "/work/mypi",
+        isLinkedWorktree: false,
+        managed: false,
+      },
+    })),
+  };
+}
+
+test("native spaces with the same path and label are grouped as one place", () => {
+  const duplicate = duplicateState();
+  const groups = groupWorkspaces(duplicate.workspaces);
+
+  expect(groups).toHaveLength(1);
+  expect(groups[0].place).toEqual({
+    key: PLACE_KEY,
+    path: "/work/mypi",
+    label: "mypi",
+  });
+  expect(groups[0].host?.id).toBe("w4");
+  expect(groups[0].linked.map((workspace) => workspace.id)).toEqual(["w5"]);
+  expect(groupMembers(groups[0]).map((workspace) => workspace.id)).toEqual(["w4", "w5"]);
+});
+
+test("unmanaged git duplicates are grouped as a place, not a repo", () => {
+  const duplicate = unmanagedDuplicateState();
+  const groups = groupWorkspaces(duplicate.workspaces);
+
+  expect(groups).toHaveLength(1);
+  expect(groups[0].place?.key).toBe(PLACE_KEY);
+  expect(groups[0].repoName).toBeNull();
+});
+
+test("unmanaged git spaces at different places still group by repo", () => {
+  const duplicate = duplicateState();
+  const worktree = {
+    repoName: "mypi",
+    repoRoot: "/work",
+    checkoutPath: "/work/mypi",
+    isLinkedWorktree: false,
+    managed: false,
+  };
+  const first = { ...duplicate.workspaces[0]!, path: "/work/a", worktree };
+  const second = { ...duplicate.workspaces[1]!, id: "w5", path: "/work/b", worktree };
+  const groups = groupWorkspaces([first, second]);
+
+  expect(groups).toHaveLength(1);
+  expect(groups[0].repoName).toBe("mypi");
+  expect(groups[0].place).toBeNull();
+  expect(groupMembers(groups[0]).map((workspace) => workspace.id)).toEqual(["w4", "w5"]);
+});
+
+test("the same path with a different label stays separate", () => {
+  const duplicate = duplicateState();
+  const first = duplicate.workspaces[0]!;
+  const groups = groupWorkspaces([first, { ...duplicate.workspaces[1]!, label: "mypi review" }]);
+
+  expect(groups).toHaveLength(2);
+  expect(groups.every((group) => group.place === null)).toBe(true);
+});
+
+test("the same label at a different path stays separate", () => {
+  const duplicate = duplicateState();
+  const first = duplicate.workspaces[0]!;
+  const groups = groupWorkspaces([
+    first,
+    { ...duplicate.workspaces[1]!, path: "/work/other/mypi" },
+  ]);
+
+  expect(groups).toHaveLength(2);
+  expect(groups.every((group) => group.place === null)).toBe(true);
+});
+
+test("a single native space is not a place group", () => {
+  const groups = groupWorkspaces([duplicateState().workspaces[0]!]);
+
+  expect(groups).toHaveLength(1);
+  expect(groups[0].place).toBeNull();
+});
+
+test("only duplicate native spaces can be closed", () => {
+  const duplicate = duplicateState();
+  expect(canCloseDuplicateSpace(duplicate, "w4")).toBe(true);
+  expect(canCloseDuplicateSpace(duplicate, "w5")).toBe(true);
+  expect(canCloseDuplicateSpace(unmanagedDuplicateState(), "w4")).toBe(true);
+  expect(
+    canCloseDuplicateSpace({ ...duplicate, workspaces: [duplicate.workspaces[0]!] }, "w4"),
+  ).toBe(false);
+  expect(canCloseDuplicateSpace(state, "w1")).toBe(false);
+  expect(canCloseDuplicateSpace(state, "w9")).toBe(false);
+});
+
+test("a place group opens when a member is focused and is known to the tree", () => {
+  const duplicate = duplicateState();
+  expect(initialExpanded(duplicate).has(PLACE_KEY)).toBe(true);
+  expect(groupIds(duplicate).has(PLACE_KEY)).toBe(true);
+
+  const single = { ...duplicate, workspaces: [duplicate.workspaces[0]!] };
+  expect(groupIds(single).has(PLACE_KEY)).toBe(false);
+});
+
+test("the place status is the most urgent member status", () => {
+  expect(mostUrgentStatus(["idle", "working"])).toBe("working");
+  expect(mostUrgentStatus(["done", "blocked"])).toBe("blocked");
+  expect(mostUrgentStatus(["unknown", "idle"])).toBe("idle");
+  expect(mostUrgentStatus([])).toBe("unknown");
 });
 
 test("agentGlyph picks the icon for a known agent", () => {

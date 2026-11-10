@@ -74,6 +74,7 @@ export async function createScenario(root: string): Promise<Scenario> {
   const checks = join(root, "work", "acme-dashboard-checks");
   const scratch = join(root, "work", "scratch");
   const plain = join(root, "work", "plain-checkout");
+  const sandbox = join(root, "work", "sandbox");
   const agentDir = join(root, "agent");
   const sessionPath = join(agentDir, "sessions", "demo", "session.jsonl");
   const emptySessionPath = join(agentDir, "sessions", "empty", "session.jsonl");
@@ -84,6 +85,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeBranch(checks, "feat/checks"),
     writeBranch(plain, "feat/plain"),
     mkdir(scratch, { recursive: true }),
+    mkdir(sandbox, { recursive: true }),
     mkdir(join(agentDir, "sessions", "demo"), { recursive: true }),
     mkdir(join(agentDir, "sessions", "empty"), { recursive: true }),
     mkdir(join(root, "bin"), { recursive: true }),
@@ -245,6 +247,22 @@ export async function createScenario(root: string): Promise<Scenario> {
         focused: false,
         worktree: null,
       },
+      // 同じ場所を指す Herdr ネイティブのスペース。片方は誤って開いた重複として、
+      // 一覧では 1 つの場所に束ねる。
+      {
+        workspace_id: "w6",
+        label: "sandbox",
+        agent_status: "idle",
+        focused: false,
+        worktree: null,
+      },
+      {
+        workspace_id: "w7",
+        label: "sandbox",
+        agent_status: "idle",
+        focused: false,
+        worktree: null,
+      },
     ],
     tabs: [
       {
@@ -286,6 +304,20 @@ export async function createScenario(root: string): Promise<Scenario> {
         tab_id: "w5:t1",
         workspace_id: "w5",
         label: "main",
+        agent_status: "idle",
+        focused: false,
+      },
+      {
+        tab_id: "w6:t1",
+        workspace_id: "w6",
+        label: "1",
+        agent_status: "idle",
+        focused: false,
+      },
+      {
+        tab_id: "w7:t1",
+        workspace_id: "w7",
+        label: "1",
         agent_status: "idle",
         focused: false,
       },
@@ -446,6 +478,26 @@ export async function createScenario(root: string): Promise<Scenario> {
         focused: false,
         agent_session: null,
       },
+      {
+        pane_id: "w6:p1",
+        workspace_id: "w6",
+        tab_id: "w6:t1",
+        cwd: sandbox,
+        label: null,
+        agent_status: "unknown",
+        focused: false,
+        agent_session: null,
+      },
+      {
+        pane_id: "w7:p1",
+        workspace_id: "w7",
+        tab_id: "w7:t1",
+        cwd: sandbox,
+        label: null,
+        agent_status: "unknown",
+        focused: false,
+        agent_session: null,
+      },
     ],
     agents: [
       {
@@ -525,6 +577,8 @@ export async function createScenario(root: string): Promise<Scenario> {
       "w3:p4": "› Ask Codex to do anything\n",
       "w3:p5": PI_TRUST_SCREEN,
       "w5:p1": "$ git status\nOn branch feat/plain\nnothing to commit\n$",
+      "w6:p1": "$ ",
+      "w7:p1": "$ ",
     },
   };
 }

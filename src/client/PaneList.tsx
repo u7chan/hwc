@@ -23,13 +23,16 @@ import {
   countTabAgents,
   countWorkspaceAgents,
   countWorkspacePanes,
+  groupMembers,
   groupWorkspaces,
+  mostUrgentStatus,
   paneRowTitle,
   pullRequestLabel,
   pullRequestTone,
   soleTab,
   statusLabel,
   statusTone,
+  type WorkspaceGroup,
 } from "./select";
 import {
   activeGroups,
@@ -129,6 +132,18 @@ function GroupAgents(props: { agents: number }) {
     >
       <AgentIcon size={12} />
       <span aria-hidden="true">{countLabel(props.agents)}</span>
+    </span>
+  );
+}
+
+// 同じ場所を指すスペースを束ねていることを、名前の横の数で示す。畳んだ状態でも
+// 1 行の裏に複数の実体があることを見落とさないための札。
+function GroupSpaces(props: { spaces: number }) {
+  const label = `${props.spaces} スペース`;
+  return (
+    <span class="hwc-group-spaces" role="img" aria-label={label} title={label}>
+      <WorkspaceIcon size={12} />
+      <span aria-hidden="true">{countLabel(props.spaces)}</span>
     </span>
   );
 }
@@ -652,6 +667,8 @@ function TreePaneList(props: TreePaneListProps) {
     title?: string;
     status: PaneState["agentStatus"];
     agents: number;
+    // 場所の束だけが持つ。同じ場所を指すスペースの数。
+    spaces?: number;
     controlsId: string;
     workspaceId?: string;
     sync?: GitSync | null;
@@ -711,6 +728,9 @@ function TreePaneList(props: TreePaneListProps) {
           <span class="hwc-group-main">
             <span class="hwc-group-title">
               <span class="hwc-group-name">{props2.label}</span>
+              {props2.spaces === undefined || props2.spaces < 2 ? null : (
+                <GroupSpaces spaces={props2.spaces} />
+              )}
               {props2.agents === 0 ? null : <GroupAgents agents={props2.agents} />}
             </span>
             <span class="hwc-group-sub">{props2.sub}</span>
@@ -850,6 +870,7 @@ function TreePaneList(props: TreePaneListProps) {
     depth: number,
     withHeader: boolean,
     order?: OrderUnit,
+    header?: { label?: string; sub?: ComponentChildren },
   ) {
     const groupId = `hwc-group-${workspace.id}`;
     const open = expanded.has(workspace.id);
@@ -870,8 +891,8 @@ function TreePaneList(props: TreePaneListProps) {
               id: workspace.id,
               depth,
               icon: <WorkspaceGlyph worktree={workspace.worktree} />,
-              label: workspace.label,
-              sub: (
+              label: header?.label ?? workspace.label,
+              sub: header?.sub ?? (
                 <PullRequestSummary
                   pullRequest={pullRequest}
                   fallback={
@@ -883,7 +904,7 @@ function TreePaneList(props: TreePaneListProps) {
                   }
                 />
               ),
-              title: workspace.worktree?.checkoutPath ?? undefined,
+              title: workspace.worktree?.checkoutPath ?? workspace.path ?? undefined,
               status: workspace.agentStatus,
               agents,
               controlsId: groupId,
@@ -894,6 +915,63 @@ function TreePaneList(props: TreePaneListProps) {
           : null}
         <GroupChildren id={groupId} open={withHeader ? open : true}>
           {renderTabLevel(workspace, withHeader ? depth + 1 : depth, withHeader)}
+        </GroupChildren>
+      </section>
+    );
+  }
+
+  // 同じ場所を指す Herdr ネイティブのスペース。見出しは場所で 1 つにし、代表の
+  // 中身を直下に置く。余分なスペースは子の見出しにして、閉じる入口を残す。
+  function renderPlaceGroup(group: WorkspaceGroup, order: OrderUnit | undefined) {
+    const members = groupMembers(group);
+    const representative = members[0];
+    if (group.place === null || representative === undefined) return null;
+    const extras = members.slice(1);
+    const open = expanded.has(group.key);
+    const groupId = `hwc-group-${group.key}`;
+    const agents = members.reduce((total, workspace) => total + countWorkspaceAgents(workspace), 0);
+    const panes = members.reduce(
+      (total, workspace) => total + countWorkspacePanes(workspace.id, state),
+      0,
+    );
+    const pullRequest = props.pullRequests.get(representative.id) ?? null;
+    return (
+      <section
+        class="hwc-group-block"
+        data-depth={0}
+        key={group.key}
+        data-order-key={group.key}
+        data-dragging={dragged?.key === group.key ? "true" : undefined}
+      >
+        {renderHeader({
+          id: group.key,
+          depth: 0,
+          icon: <WorkspaceGlyph worktree={representative.worktree} />,
+          label: group.place.label,
+          sub: (
+            <PullRequestSummary
+              pullRequest={pullRequest}
+              fallback={agents === 0 ? agentPresence(agents) : `${panes} ペイン`}
+            />
+          ),
+          title: group.place.path,
+          status: mostUrgentStatus(members.map((workspace) => workspace.agentStatus)),
+          agents,
+          spaces: members.length,
+          controlsId: groupId,
+          workspaceId: representative.id,
+          sync: representative.sync ?? null,
+          domId: spaceId(representative.id),
+          order,
+        })}
+        <GroupChildren id={groupId} open={open}>
+          {renderTabLevel(representative, 1, true)}
+          {extras.map((workspace, index) =>
+            renderWorkspace(workspace, 1, true, undefined, {
+              label: `スペース ${index + 2}`,
+              sub: `${countWorkspacePanes(workspace.id, state)} ペイン`,
+            }),
+          )}
         </GroupChildren>
       </section>
     );
@@ -911,6 +989,7 @@ function TreePaneList(props: TreePaneListProps) {
       </p>
       {groups.map((group) => {
         const order = unitByKey.get(group.key);
+        if (group.place !== null) return renderPlaceGroup(group, order);
         // 同じリポジトリのワークツリーが複数あるときだけ、リポジトリで束ねる。
         if (group.repoName === null || group.linked.length === 0) {
           const only = group.host ?? group.linked[0];
