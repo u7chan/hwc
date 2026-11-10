@@ -789,6 +789,11 @@ export function App() {
   // 読んでいた位置が最下部に戻る。
   const splitOn = wide && split && shown.length > 0;
   const cells = splitOn ? shown : pane === null ? [] : [pane];
+  // 枠とタブのカレントは Herdr のフォーカスに合わせる。フォーカスが分割に見えていない
+  // ときは、開いているペインを current にして手掛かりを消さない。
+  const currentPaneId = cells.some((item) => item.id === state?.focusedPaneId)
+    ? (state?.focusedPaneId ?? null)
+    : (pane?.id ?? null);
   // 分割中は入力欄を 1 行に畳み、会話へ高さを回す。長文は 1 枚表示へ戻して書く（下書きは
   // ペインごとに残る）。幅や高さの閾値で切り替えると、境目の前後で見え方が変わり、なぜ
   // 畳まれないのかが画面から読み取れない。
@@ -1004,6 +1009,7 @@ export function App() {
               <TabBar
                 pane={pane}
                 panes={siblings}
+                currentPaneId={currentPaneId}
                 parentPaneIds={parentPaneIds}
                 processes={processes}
                 preview={
@@ -1038,7 +1044,7 @@ export function App() {
                     <section
                       class="hwc-split-cell"
                       data-compact={compact}
-                      data-current={cells.length > 1 && item.id === pane.id}
+                      data-current={cells.length > 1 && item.id === currentPaneId}
                       key={item.id}
                     >
                       {renderPane(item, context, compact)}
