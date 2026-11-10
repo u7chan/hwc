@@ -583,7 +583,13 @@ test("a readable upstream ends up on the workspace", async () => {
     git: {
       read: async (options) => {
         calls.push(options);
-        return { upstream: "origin/feat/row", ahead: 1, behind: 2, hasRemote: true };
+        return {
+          upstream: "origin/feat/row",
+          ahead: 1,
+          behind: 2,
+          hasRemote: true,
+          repoUrl: "https://github.com/o/r",
+        };
       },
       invalidate: () => {},
       fetch: async () => {},
@@ -598,6 +604,7 @@ test("a readable upstream ends up on the workspace", async () => {
     ahead: 1,
     behind: 2,
     hasRemote: true,
+    repoUrl: "https://github.com/o/r",
   });
   expect(calls).toEqual([{ checkoutPath: "/repo", branch: "feat/row" }]);
 });

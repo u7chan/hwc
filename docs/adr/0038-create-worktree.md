@@ -14,7 +14,7 @@ Herdr の TUI の Space メニューにはワークツリー作成があり、`w
 ## Decision
 
 - 一般のスペース作成・タブ作成は持たないままにする。例外は `worktree.create` に限り、hwc からは「リポジトリ本体のスペース」からだけ作る。linked worktree の中から別の linked worktree は作らない
-- 入口はスペース見出しの「…」に「新しいワークツリー」を足す。`worktree.isLinkedWorktree !== true` のときだけ出す。ペインのメニューとタブバーには置かない
+- 入口はスペース見出しの「…」に「新しいワークツリー」を足す。`worktree.isLinkedWorktree !== true` のときだけ出す。ペインのメニューとタブバーには置かない（2026-11-10 追記: スペース見出しのメニューの入口は [ADR 0057](0057-github-remote-link.md) で先頭アイコンに変わった）
 - Herdr の `worktree.create` に `{ workspace_id, focus: true }` だけを送る。`branch` / `path` / `base` は送らず、ブランチ名・保存先・base は Herdr の自動生成と設定に任せる。クライアントの期限は作成 60 秒・エージェント起動 30 秒・モデル検証を含めて、モデル指定なしは 120 秒、指定ありは 180 秒
 - 作成後の root pane を最初のペインとして、[ADR 0027](0027-new-pane-agent.md) のダイアログの入力をそのまま使う。分割はせず、`agent.start` と `pane.rename` だけを行う。ダイアログの見出しは「新しいワークツリー」、説明でブランチ名と保存先が Herdr 任せであることを伝える
 - 4 枚上限（ADR 0026）は判定しない。上限はタブ単位で、ワークツリー作成は新しいタブを Herdr が作るため、分割 API の上限判定を再利用すると 4 枚のタブから作れなくなる

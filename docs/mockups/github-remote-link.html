@@ -1,0 +1,1825 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GitHub リモートリンク — デザインモック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Nerd Symbols Mono";
+        src: url("../../src/client/assets/fonts/NerdSymbolsMono.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      :root {
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-content: #131619;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-accent: #94baff;
+        --color-selected: #23334e;
+        --color-line: #32373f;
+        --color-control-line: #606976;
+        --color-attention: #f6c57f;
+        --color-attention-bg: #352b1e;
+        --color-success: #8fdbb1;
+        --color-success-bg: #20392e;
+        --color-danger: #ff9ca4;
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+        --radius-sm: 8px;
+        --radius-icon: 10px;
+        --radius-control: 12px;
+        --radius-panel: 16px;
+        --text-body: 1.0625rem;
+        --text-secondary: 0.8125rem;
+        --line-tight: 1.2;
+        --line-body: 1.5;
+        --tap: 44px;
+        --row-head: 56px;
+        --icon-frame: 32px;
+      }
+
+      :root[data-theme="light"] {
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-content: #ffffff;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-accent: #255cd6;
+        --color-selected: #e9f0ff;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-attention: #a34c0a;
+        --color-attention-bg: #fff0da;
+        --color-success: #216549;
+        --color-success-bg: #e6f3ed;
+        --color-danger: #b3333c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: var(--text-body);
+        line-height: var(--line-body);
+      }
+
+      a {
+        color: var(--color-accent);
+      }
+
+      .page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 40px 32px 80px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+
+      .hero h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.25;
+      }
+
+      .hero p {
+        max-width: 760px;
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 15px;
+      }
+
+      .theme-toggle {
+        flex: none;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 40px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .toc a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--color-line);
+        border-radius: 999px;
+        color: var(--color-secondary);
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      .toc a:hover {
+        color: var(--color-text);
+        background: var(--color-surface);
+      }
+
+      .pattern {
+        margin-bottom: 56px;
+        scroll-margin-top: 24px;
+      }
+
+      .pattern-head {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .pattern-head h2 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.3;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--color-success-bg);
+        color: var(--color-success);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .badge.neutral {
+        background: var(--color-raised);
+        color: var(--color-secondary);
+      }
+
+      .pattern-note {
+        max-width: 880px;
+        margin: 0 0 20px;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .frames {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 24px;
+      }
+
+      .frame {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .caption {
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .desktop {
+        display: flex;
+        width: 1040px;
+        max-width: 100%;
+        height: 560px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      .sidebar {
+        flex: none;
+        width: 352px;
+        padding: 12px 0;
+        background: var(--color-bg);
+        border-right: 1px solid var(--color-line);
+        overflow: hidden;
+      }
+
+      .sidebar-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px 12px;
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .scope {
+        display: inline-flex;
+        padding: 2px;
+        border: 1px solid var(--color-line);
+        border-radius: 999px;
+        background: var(--color-surface);
+      }
+
+      .scope span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+
+      .scope span:first-child {
+        background: var(--color-raised);
+        color: var(--color-text);
+      }
+
+      .group-block {
+        margin: 0 8px 8px;
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+        overflow: hidden;
+      }
+
+      .group-block + .group-block {
+        margin-top: 8px;
+      }
+
+      .group-row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        padding-right: 8px;
+        transition: background-color 140ms ease;
+      }
+
+      .group-row:hover {
+        background: var(--color-raised);
+      }
+
+      .space-icon {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        margin-left: 10px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .space-icon:hover {
+        background: var(--color-raised);
+        color: var(--color-text);
+      }
+
+      .space-icon:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 2px;
+      }
+
+      .space-icon[data-open="true"] {
+        background: var(--color-raised);
+        box-shadow: inset 0 0 0 1px var(--color-line);
+        color: var(--color-text);
+      }
+
+      .active-band .space-icon:hover,
+      .active-band .space-icon[data-open="true"] {
+        background: var(--color-surface);
+        box-shadow: none;
+      }
+
+      .icon-frame {
+        display: grid;
+        place-items: center;
+        width: var(--icon-frame);
+        height: var(--icon-frame);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-icon);
+      }
+
+      .space-icon-static {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        margin-left: 10px;
+        color: var(--color-secondary);
+      }
+
+      .group-toggle {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .group-toggle:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: -3px;
+        border-radius: var(--radius-sm);
+      }
+
+      .group-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .group-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .group-name {
+        overflow: hidden;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .agent-badge {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 0 4px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.5;
+      }
+
+      .agent-badge svg {
+        color: var(--color-secondary);
+      }
+
+      .group-sub {
+        overflow: hidden;
+        margin-top: 4px;
+        color: var(--color-secondary);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .chevron {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--space-8);
+        height: var(--space-8);
+        color: var(--color-secondary);
+        transition: transform 180ms ease;
+      }
+
+      .chevron[data-open="true"] {
+        transform: rotate(90deg);
+      }
+
+      .git-count {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: 8px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .git-count .ahead {
+        color: var(--color-success);
+      }
+
+      .git-count .behind {
+        color: var(--color-attention);
+      }
+
+      .git-count .zero {
+        color: var(--color-secondary);
+      }
+
+      .menu-button {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        margin-left: 4px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .menu-button:hover,
+      .menu-button[data-open="true"] {
+        background: var(--color-surface);
+        color: var(--color-text);
+      }
+
+      .children {
+        padding: 0 0 8px;
+      }
+
+      .workspace-row {
+        display: flex;
+        align-items: center;
+        padding-right: 8px;
+      }
+
+      .workspace-row .group-toggle {
+        padding: 12px 0;
+      }
+
+      .workspace-row .group-name {
+        font-size: 15px;
+      }
+
+      .workspace-row .group-sub {
+        font-family: var(--font-mono);
+      }
+
+      .indent {
+        margin-left: 16px;
+      }
+
+      .pane-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 0 8px 4px 64px;
+        padding: 10px 12px;
+        border-radius: var(--radius-control);
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .pane-row:hover {
+        background: var(--color-raised);
+      }
+
+      .pane-row .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--color-success);
+      }
+
+      .pane-row .pane-name {
+        color: var(--color-text);
+        font-size: 14px;
+      }
+
+      .pane-row .branch {
+        font-family: var(--font-mono);
+      }
+
+      .chat {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-content);
+      }
+
+      .chat-header {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--color-line);
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .agent-icon {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+      }
+
+      .repo-link {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--color-text);
+        font-weight: 600;
+        text-decoration: none;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .repo-link:hover {
+        color: var(--color-accent);
+        text-decoration: underline;
+      }
+
+      .branch-menu {
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 32px;
+        padding: 0 4px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--color-secondary);
+        font: inherit;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .branch-menu:hover,
+      .branch-menu[data-open="true"] {
+        background: var(--color-surface);
+        color: var(--color-text);
+      }
+
+      .branch-menu .branch {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .branch-menu .chevron-down {
+        flex: none;
+        display: grid;
+        place-items: center;
+        color: var(--color-secondary);
+      }
+
+      .pr-chip {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 4px;
+        border-radius: var(--radius-sm);
+        color: var(--color-accent);
+        font-variant-numeric: tabular-nums;
+        text-decoration: none;
+      }
+
+      .pr-chip:hover {
+        background: var(--color-surface);
+      }
+
+      .pane-id {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+
+      .copy-button,
+      .more-button {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .copy-button:hover,
+      .more-button:hover {
+        background: var(--color-surface);
+        color: var(--color-text);
+      }
+
+      .chat-body {
+        flex: 1;
+        padding: 24px 32px;
+        overflow: hidden;
+      }
+
+      .message {
+        max-width: 560px;
+        margin-bottom: 16px;
+        padding: 12px 16px;
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .message.agent {
+        background: transparent;
+      }
+
+      .message .who {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .composer {
+        margin: 24px 32px 0;
+        padding: 12px 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .phone {
+        display: flex;
+        flex-direction: column;
+        width: 390px;
+        height: 600px;
+        border: 1px solid var(--color-line);
+        border-radius: 28px;
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      .phone .chat-header {
+        min-height: 44px;
+        padding: 0 12px;
+      }
+
+      .phone .pane-id {
+        display: none;
+      }
+
+      .phone .chat-body {
+        padding: 16px;
+      }
+
+      .phone .composer {
+        margin: 16px;
+      }
+
+      .active-band {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 352px;
+        padding: 8px 16px;
+        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        background: var(--color-raised);
+        box-shadow: inset 0 -1px 0 var(--color-line);
+      }
+
+      .active-band .space-icon {
+        margin-left: -6px;
+      }
+
+      .active-main {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .active-title {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .active-name {
+        overflow: hidden;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .active-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        margin-top: 2px;
+      }
+
+      .active-line .branch {
+        overflow: hidden;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .active-counts {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .active-counts .count {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .active-counts .count[data-tone="attention"] {
+        color: var(--color-attention);
+      }
+
+      .active-counts .count[data-tone="success"] {
+        color: var(--color-success);
+      }
+
+      .jump {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+        color: var(--color-secondary);
+      }
+
+      .menus {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+      }
+
+      .menu-panel {
+        width: 300px;
+        padding: 8px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-raised);
+        box-shadow: 0 16px 40px rgb(0 0 0 / 28%);
+      }
+
+      .menu-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 8px 12px;
+        border-bottom: 1px solid var(--color-line);
+        margin-bottom: 8px;
+      }
+
+      .menu-head-text {
+        min-width: 0;
+      }
+
+      .menu-name {
+        display: block;
+        overflow: hidden;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .menu-path {
+        display: block;
+        overflow: hidden;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .menu-copy {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .menu-copy:hover {
+        background: var(--color-surface);
+        color: var(--color-text);
+      }
+
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        min-height: 44px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: 15px;
+        text-align: left;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .menu-item:hover {
+        background: var(--color-surface);
+      }
+
+      .menu-item svg {
+        flex: none;
+        color: var(--color-secondary);
+      }
+
+      .menu-item .github {
+        color: var(--color-text);
+      }
+
+      .menu-item.danger {
+        color: var(--color-danger);
+      }
+
+      .menu-sep {
+        margin: 8px 0;
+        border: 0;
+        border-top: 1px solid var(--color-line);
+      }
+
+      .menu-note {
+        margin: 0;
+        padding: 4px 8px 0;
+        color: var(--color-secondary);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .legend {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 8px 16px;
+        margin: 0 0 40px;
+        padding: 16px 20px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+        font-size: 13px;
+      }
+
+      .legend dt {
+        color: var(--color-secondary);
+      }
+
+      .legend dd {
+        margin: 0;
+      }
+
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .small-note {
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .comparison {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 24px;
+      }
+
+      .comparison .frame {
+        min-width: 352px;
+      }
+
+      .hostless-row {
+        opacity: 0.92;
+      }
+
+      .hostless-row .space-icon-static {
+        cursor: default;
+      }
+
+      @media (max-width: 900px) {
+        .page {
+          padding: 24px 16px 64px;
+        }
+
+        .hero {
+          flex-direction: column;
+        }
+
+        .desktop {
+          width: 100%;
+          height: auto;
+          flex-direction: column;
+        }
+
+        .sidebar {
+          width: 100%;
+          border-right: 0;
+          border-bottom: 1px solid var(--color-line);
+        }
+
+        .chat {
+          min-height: 360px;
+        }
+
+        .active-band {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-repo" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="7" cy="6" r="2.4" />
+            <circle cx="7" cy="18" r="2.4" />
+            <circle cx="17" cy="9" r="2.4" />
+            <path d="M7 8.4v7.2" />
+            <path d="M17 11.4v.6a4 4 0 0 1-4 4H9.4" />
+          </g>
+        </symbol>
+        <symbol id="i-worktree" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="6" cy="6" r="2.2" />
+            <circle cx="6" cy="18" r="2.2" />
+            <path d="M6 8.2v7.6" />
+            <path d="M6 11h3.5a3 3 0 0 0 3-3V7.4" />
+            <circle cx="12.5" cy="5.2" r="1.8" />
+            <rect x="13.5" y="13" width="7" height="7" rx="1.8" />
+          </g>
+        </symbol>
+        <symbol id="i-workspace" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <path d="M3 9h18" />
+          </g>
+        </symbol>
+        <symbol id="i-more" viewBox="0 0 24 24">
+          <g fill="currentColor">
+            <circle cx="12" cy="5.5" r="1.6" />
+            <circle cx="12" cy="12" r="1.6" />
+            <circle cx="12" cy="18.5" r="1.6" />
+          </g>
+        </symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24">
+          <path
+            d="M9 5l7 7-7 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24">
+          <path
+            d="M5 9l7 7 7-7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M5 12h13" />
+            <path d="M12.5 6.5L19 12l-6.5 5.5" />
+          </g>
+        </symbol>
+        <symbol id="i-agent" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M11 3.5l1.9 4.9 4.9 1.9-4.9 1.9L11 17l-1.9-4.8L4.2 10.3l4.9-1.9z" />
+            <path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+          </g>
+        </symbol>
+        <symbol id="i-pane" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <path d="M7.5 10l2.5 2-2.5 2" />
+            <path d="M13 14h3.5" />
+          </g>
+        </symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="8" y="8" width="11" height="12" rx="2" />
+            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
+          </g>
+        </symbol>
+        <symbol id="i-external" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M13.5 4H20v6.5" />
+            <path d="M20 4l-8.5 8.5" />
+            <path d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5" />
+          </g>
+        </symbol>
+        <symbol id="i-fetch" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M7 17a4 4 0 0 1-.7-7.9A5.5 5.5 0 0 1 17 9.5a3.5 3.5 0 0 1 .5 7" />
+            <path d="M12 12v8" />
+            <path d="M8.5 16.5L12 20l3.5-3.5" />
+          </g>
+        </symbol>
+        <symbol id="i-pull" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 4v10" />
+            <path d="M8 10l4 4 4-4" />
+            <path d="M5 20h14" />
+          </g>
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </g>
+        </symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24">
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 7h16" />
+            <path d="M9 7V5h6v2" />
+            <path d="M6 7l1 13h10l1-13" />
+            <path d="M10 11v5M14 11v5" />
+          </g>
+        </symbol>
+        <symbol id="i-github" viewBox="0 0 16 16">
+          <path
+            fill="currentColor"
+            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <main class="page">
+      <header class="hero">
+        <div>
+          <h1>GitHub リモートリンク — デザインモック</h1>
+          <p>
+            左サイドバー・アクティブ帯・チャット見出しから、GitHub
+            のリポジトリトップへ行けるようにする案です。 先頭アイコンは種類の記号のまま残し、Git
+            アイコン自体をスペースメニューの入口にする案を軸に、 ↑↓
+            ラベルの位置と「…」ボタンを残す案を比較します。
+          </p>
+          <p class="small-note">
+            静的モックです。データは架空（acme-dashboard /
+            rapid-harbor）。メニューは比較用に単体で並べています。 右上のボタンでライト /
+            ダークを切り替えられます。
+          </p>
+        </div>
+        <button class="theme-toggle" type="button" id="theme-toggle">ライト / ダーク</button>
+      </header>
+
+      <ul class="toc">
+        <li><a href="#pattern-a">A: Git アイコン＝メニュー（推奨）</a></li>
+        <li><a href="#pattern-b">B: Git アイコン＋↑↓を左に</a></li>
+        <li><a href="#pattern-c">C: 「…」ボタンを常設</a></li>
+        <li><a href="#group">束ね見出し</a></li>
+        <li><a href="#menus">メニューの中身</a></li>
+      </ul>
+
+      <dl class="legend">
+        <dt>Git アイコン</dt>
+        <dd>押すとスペースメニュー。worktree でも常にあるので、upstream が無くても開ける。</dd>
+        <dt>↑N ↓N</dt>
+        <dd>0 でない側だけ出すラベル。押せない。ahead は success、behind は attention。</dd>
+        <dt>…（右端）</dt>
+        <dd>ペインメニュー。ペインの操作だけ。Git 関連は出さない。</dd>
+        <dt>…（左側）</dt>
+        <dd>C 案だけ。スペースメニューを開く明示的なボタン。</dd>
+        <dt>#123</dt>
+        <dd>PR リンク。既存のまま。</dd>
+      </dl>
+
+      <section class="pattern" id="pattern-a">
+        <div class="pattern-head">
+          <h2>A: Git アイコン＝スペースメニュー</h2>
+          <span class="badge">推奨</span>
+        </div>
+        <p class="pattern-note">
+          先頭の Git アイコンを押すとスペースメニューが開きます。↑↓ は右端のラベルにし、0
+          でないときだけ出します。 右端の「…」はペインメニューのままなので、Git
+          関連はそちらに出しません。 worktree でも Git アイコンは常にあるため、upstream
+          が無くてもメニューからリポジトリへ行けます。 GitHub リモートが無い場合や GitHub
+          以外のリモートの場合は、リポジトリ名は文字だけにし、メニューの項目も出しません。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="desktop">
+              <aside class="sidebar">
+                <div class="sidebar-head">
+                  <span>一覧</span>
+                  <span class="scope"><span>すべて</span><span>アクティブ</span></span>
+                </div>
+
+                <div class="group-block" id="tree-main">
+                  <div class="group-row">
+                    <button
+                      class="space-icon"
+                      type="button"
+                      aria-label="acme-dashboard のメニュー"
+                      data-open="true"
+                    >
+                      <span class="icon-frame"
+                        ><svg width="16" height="16"><use href="#i-repo" /></svg
+                      ></span>
+                    </button>
+                    <button class="group-toggle" type="button" aria-expanded="true">
+                      <span class="group-main">
+                        <span class="group-title">
+                          <span class="group-name">acme-dashboard</span>
+                          <span class="agent-badge"
+                            ><svg width="12" height="12"><use href="#i-agent" /></svg>4</span
+                          >
+                        </span>
+                        <span class="group-sub">3 ワークツリー</span>
+                      </span>
+                      <span class="chevron" data-open="true"
+                        ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                      ></span>
+                    </button>
+                  </div>
+
+                  <div class="children">
+                    <div class="workspace-row indent">
+                      <button class="space-icon" type="button" aria-label="rapid-harbor のメニュー">
+                        <span class="icon-frame"
+                          ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                        ></span>
+                      </button>
+                      <button class="group-toggle" type="button" aria-expanded="true">
+                        <span class="group-main">
+                          <span class="group-title">
+                            <span class="group-name">rapid-harbor</span>
+                            <span class="agent-badge"
+                              ><svg width="12" height="12"><use href="#i-agent" /></svg>2</span
+                            >
+                          </span>
+                          <span class="group-sub">feat/github-link</span>
+                        </span>
+                        <span class="chevron" data-open="true"
+                          ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                        ></span>
+                      </button>
+                      <span
+                        class="git-count"
+                        title="origin/feat/github-link より 1 コミット進み、2 コミット遅れています"
+                      >
+                        <span class="ahead">↑1</span><span class="behind">↓2</span>
+                      </span>
+                    </div>
+                    <div class="pane-row">
+                      <span class="dot"></span><span class="pane-name">Add GitHub remote link</span
+                      ><span class="branch">wBE:p1</span>
+                    </div>
+
+                    <div class="workspace-row indent">
+                      <button class="space-icon" type="button" aria-label="quiet-forest のメニュー">
+                        <span class="icon-frame"
+                          ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                        ></span>
+                      </button>
+                      <button class="group-toggle" type="button" aria-expanded="false">
+                        <span class="group-main">
+                          <span class="group-title">
+                            <span class="group-name">quiet-forest</span>
+                          </span>
+                          <span class="group-sub">feat/new-branch（upstream なし）</span>
+                        </span>
+                        <span class="chevron"
+                          ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                        ></span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="group-block">
+                  <div class="group-row">
+                    <button class="space-icon" type="button" aria-label="notes のメニュー">
+                      <span class="icon-frame"
+                        ><svg width="16" height="16"><use href="#i-workspace" /></svg
+                      ></span>
+                    </button>
+                    <button class="group-toggle" type="button" aria-expanded="false">
+                      <span class="group-main">
+                        <span class="group-title"><span class="group-name">notes</span></span>
+                        <span class="group-sub">git 管理外</span>
+                      </span>
+                      <span class="chevron"
+                        ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+              </aside>
+
+              <div class="chat">
+                <div class="chat-header">
+                  <span class="agent-icon"
+                    ><svg width="14" height="14"><use href="#i-agent" /></svg
+                  ></span>
+                  <a class="repo-link" href="#" aria-label="acme-dashboard を GitHub で開く"
+                    >acme-dashboard</a
+                  >
+                  <span class="git-count"
+                    ><span class="ahead">↑1</span><span class="behind">↓2</span></span
+                  >
+                  <a class="pr-chip" href="#">#123</a>
+                  <span class="pane-id">wBE:p1</span>
+                  <button class="copy-button" type="button" aria-label="ペイン ID をコピー">
+                    <svg width="14" height="14"><use href="#i-copy" /></svg>
+                  </button>
+                  <button class="more-button" type="button" aria-label="ペインメニュー">
+                    <svg width="16" height="16"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+                <div class="chat-body">
+                  <div class="message agent">
+                    <span class="who">Assistant</span>左サイドバーの Git アイコンから、リポジトリを
+                    GitHub で開けるようにしました。
+                  </div>
+                  <div class="message">
+                    <span class="who">You</span>worktree でも upstream
+                    が無いとメニューが出ないのを直して。
+                  </div>
+                  <div class="message agent">
+                    <span class="who">Assistant</span>Git アイコンをスペースメニューの入口にして、↑↓
+                    は 0 以外のときだけラベルで出します。
+                  </div>
+                </div>
+                <div class="composer">メッセージを入力…</div>
+              </div>
+            </div>
+            <span class="caption"
+              >PC: ツリー見出しの Git アイコンがメニュー。↑↓ は右端のラベル。upstream
+              が無い行はラベルなし。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="chat-header">
+                <span class="agent-icon"
+                  ><svg width="14" height="14"><use href="#i-agent" /></svg
+                ></span>
+                <button
+                  class="branch-menu"
+                  type="button"
+                  aria-label="feat/github-link のスペースメニュー"
+                  data-open="true"
+                >
+                  <span class="branch">feat/github-link</span>
+                  <span class="git-count"
+                    ><span class="ahead">↑1</span><span class="behind">↓2</span></span
+                  >
+                  <span class="chevron-down"
+                    ><svg width="12" height="12"><use href="#i-chevron-down" /></svg
+                  ></span>
+                </button>
+                <a class="pr-chip" href="#">#123</a>
+                <span class="pane-id">wBE:p1</span>
+                <button class="copy-button" type="button" aria-label="ペイン ID をコピー">
+                  <svg width="14" height="14"><use href="#i-copy" /></svg>
+                </button>
+                <button class="more-button" type="button" aria-label="ペインメニュー">
+                  <svg width="16" height="16"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="chat-body">
+                <div class="message agent">
+                  <span class="who">Assistant</span
+                  >モバイルでは、ブランチを押すとスペースメニューが開きます。
+                </div>
+                <div class="message">
+                  <span class="who">You</span>右の3点には Git 関連を出さないで。
+                </div>
+              </div>
+              <div class="composer">メッセージを入力…</div>
+            </div>
+            <span class="caption"
+              >モバイル: ブランチ＋↑↓がスペースメニュー。upstream が無いときはブランチ＋▾
+              だけ。右の「…」はペインメニュー。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="active-band">
+              <button class="space-icon" type="button" aria-label="rapid-harbor のメニュー">
+                <span class="icon-frame"
+                  ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                ></span>
+              </button>
+              <div class="active-main">
+                <div class="active-title">
+                  <span class="active-name">Add GitHub remote link</span>
+                  <a class="pr-chip" href="#">#123</a>
+                </div>
+                <div class="active-line">
+                  <span class="branch">feat/github-link</span>
+                  <span class="git-count"
+                    ><span class="ahead">↑1</span><span class="behind">↓2</span></span
+                  >
+                  <span class="active-counts">
+                    <span class="count" data-tone="attention">● 1</span>
+                    <span class="count" data-tone="success">● 2</span>
+                  </span>
+                </div>
+              </div>
+              <span class="jump"
+                ><svg width="16" height="16"><use href="#i-arrow-right" /></svg
+              ></span>
+            </div>
+            <span class="caption"
+              >アクティブ帯: 同じく Git アイコンがメニュー。↑↓ はブランチ行のラベル。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="pattern-b">
+        <div class="pattern-head">
+          <h2>B: Git アイコン＋↑↓を左にまとめる</h2>
+          <span class="badge neutral">比較</span>
+        </div>
+        <p class="pattern-note">
+          A の変形で、↑↓ を Git アイコンのすぐ右に置きます。Git 関連の情報と入口が 1
+          か所にまとまりますが、 名前の開始位置が右へずれ、狭い画面では名前が削られやすくなります。
+        </p>
+
+        <div class="comparison">
+          <div class="frame">
+            <div
+              class="sidebar"
+              style="
+                width: 352px;
+                height: auto;
+                border: 1px solid var(--color-line);
+                border-radius: 16px;
+                border-right: 1px solid var(--color-line);
+              "
+            >
+              <div class="group-block">
+                <div class="group-row">
+                  <button class="space-icon" type="button" aria-label="rapid-harbor のメニュー">
+                    <span class="icon-frame"
+                      ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                    ></span>
+                  </button>
+                  <span class="git-count" style="margin-left: 0">
+                    <span class="ahead">↑1</span><span class="behind">↓2</span>
+                  </span>
+                  <button class="group-toggle" type="button" aria-expanded="true">
+                    <span class="group-main">
+                      <span class="group-title">
+                        <span class="group-name">rapid-harbor</span>
+                        <span class="agent-badge"
+                          ><svg width="12" height="12"><use href="#i-agent" /></svg>2</span
+                        >
+                      </span>
+                      <span class="group-sub">feat/github-link</span>
+                    </span>
+                    <span class="chevron" data-open="true"
+                      ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                    ></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <span class="caption">↑↓ を左に寄せた場合。名前の幅がその分だけ狭くなる。</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="pattern-c">
+        <div class="pattern-head">
+          <h2>C: 「…」ボタンを常設する</h2>
+          <span class="badge neutral">比較</span>
+        </div>
+        <p class="pattern-note">
+          Git アイコンは押さず、右端に「…」ボタンを常に出します。メニューの入口が明示的で、 upstream
+          が無い worktree でも必ず開けます。その代わり、行の右側にボタンが 1 つ増えます。
+        </p>
+
+        <div class="comparison">
+          <div class="frame">
+            <div
+              class="sidebar"
+              style="
+                width: 352px;
+                height: auto;
+                border: 1px solid var(--color-line);
+                border-radius: 16px;
+                border-right: 1px solid var(--color-line);
+              "
+            >
+              <div class="group-block">
+                <div class="group-row">
+                  <span class="space-icon-static" aria-hidden="true">
+                    <span class="icon-frame"
+                      ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                    ></span>
+                  </span>
+                  <button class="group-toggle" type="button" aria-expanded="true">
+                    <span class="group-main">
+                      <span class="group-title">
+                        <span class="group-name">rapid-harbor</span>
+                        <span class="agent-badge"
+                          ><svg width="12" height="12"><use href="#i-agent" /></svg>2</span
+                        >
+                      </span>
+                      <span class="group-sub">feat/github-link</span>
+                    </span>
+                    <span class="chevron" data-open="true"
+                      ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                    ></span>
+                  </button>
+                  <span class="git-count"
+                    ><span class="ahead">↑1</span><span class="behind">↓2</span></span
+                  >
+                  <button class="menu-button" type="button" aria-label="rapid-harbor のメニュー">
+                    <svg width="16" height="16"><use href="#i-more" /></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <span class="caption">C: Git アイコンは静的。右端の「…」が常設のメニュー入口。</span>
+          </div>
+
+          <div class="frame">
+            <div class="active-band">
+              <span class="space-icon-static" aria-hidden="true">
+                <span class="icon-frame"
+                  ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                ></span>
+              </span>
+              <div class="active-main">
+                <div class="active-title">
+                  <span class="active-name">Add GitHub remote link</span>
+                  <a class="pr-chip" href="#">#123</a>
+                </div>
+                <div class="active-line">
+                  <span class="branch">feat/github-link</span>
+                  <span class="git-count"
+                    ><span class="ahead">↑1</span><span class="behind">↓2</span></span
+                  >
+                  <span class="active-counts">
+                    <span class="count" data-tone="attention">● 1</span>
+                    <span class="count" data-tone="success">● 2</span>
+                  </span>
+                </div>
+              </div>
+              <button class="menu-button" type="button" aria-label="rapid-harbor のメニュー">
+                <svg width="16" height="16"><use href="#i-more" /></svg>
+              </button>
+              <span class="jump"
+                ><svg width="16" height="16"><use href="#i-arrow-right" /></svg
+              ></span>
+            </div>
+            <span class="caption">C: アクティブ帯にも「…」を常設。</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="group">
+        <div class="pattern-head">
+          <h2>束ね見出しのバリエーション</h2>
+          <span class="badge neutral">確認点</span>
+        </div>
+        <p class="pattern-note">
+          同じリポジトリの worktree が複数あるときの束ね見出しです。本体（host）があるときは host
+          のメニューを開き、 本体が無いときは束ね見出しにメニューを持たせず、各 worktree 見出しの
+          Git アイコンから開く案です。
+        </p>
+
+        <div class="comparison">
+          <div class="frame">
+            <div
+              class="sidebar"
+              style="
+                width: 352px;
+                height: auto;
+                border: 1px solid var(--color-line);
+                border-radius: 16px;
+                border-right: 1px solid var(--color-line);
+              "
+            >
+              <div class="group-block">
+                <div class="group-row">
+                  <button class="space-icon" type="button" aria-label="acme-dashboard のメニュー">
+                    <span class="icon-frame"
+                      ><svg width="16" height="16"><use href="#i-repo" /></svg
+                    ></span>
+                  </button>
+                  <button class="group-toggle" type="button" aria-expanded="true">
+                    <span class="group-main">
+                      <span class="group-title">
+                        <span class="group-name">acme-dashboard</span>
+                        <span class="agent-badge"
+                          ><svg width="12" height="12"><use href="#i-agent" /></svg>4</span
+                        >
+                      </span>
+                      <span class="group-sub">3 ワークツリー</span>
+                    </span>
+                    <span class="chevron" data-open="true"
+                      ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                    ></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              >A: 本体あり。束ね見出しの Git アイコンは host のスペースメニューを開く。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div
+              class="sidebar"
+              style="
+                width: 352px;
+                height: auto;
+                border: 1px solid var(--color-line);
+                border-radius: 16px;
+                border-right: 1px solid var(--color-line);
+              "
+            >
+              <div class="group-block">
+                <div class="group-row hostless-row">
+                  <span class="space-icon-static" aria-hidden="true">
+                    <span class="icon-frame"
+                      ><svg width="16" height="16"><use href="#i-repo" /></svg
+                    ></span>
+                  </span>
+                  <button class="group-toggle" type="button" aria-expanded="true">
+                    <span class="group-main">
+                      <span class="group-title"
+                        ><span class="group-name">acme-dashboard</span></span
+                      >
+                      <span class="group-sub">3 ワークツリー</span>
+                    </span>
+                    <span class="chevron" data-open="true"
+                      ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                    ></span>
+                  </button>
+                </div>
+                <div class="children">
+                  <div class="workspace-row indent">
+                    <button class="space-icon" type="button" aria-label="rapid-harbor のメニュー">
+                      <span class="icon-frame"
+                        ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                      ></span>
+                    </button>
+                    <button class="group-toggle" type="button" aria-expanded="false">
+                      <span class="group-main">
+                        <span class="group-title"
+                          ><span class="group-name">rapid-harbor</span></span
+                        >
+                        <span class="group-sub">feat/github-link</span>
+                      </span>
+                      <span class="chevron"
+                        ><svg width="16" height="16"><use href="#i-chevron-right" /></svg
+                      ></span>
+                    </button>
+                    <span class="git-count"
+                      ><span class="ahead">↑1</span><span class="behind">↓2</span></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              >B: 本体なし。束ね見出しは静的で、各 worktree 見出しの Git アイコンから開く。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="menus">
+        <div class="pattern-head">
+          <h2>メニューの中身</h2>
+          <span class="badge">分離</span>
+        </div>
+        <p class="pattern-note">
+          左がスペースメニュー、右がペインメニューです。Git 関連はスペースメニューにだけ置き、
+          右の3点（ペインメニュー）には出しません。
+        </p>
+
+        <div class="menus">
+          <div class="menu-panel" aria-label="スペースメニュー">
+            <div class="menu-head">
+              <span class="menu-head-text">
+                <span class="menu-name">rapid-harbor</span>
+                <span class="menu-path">~/src/acme-dashboard</span>
+              </span>
+              <button class="menu-copy" type="button" aria-label="スペースのパスをコピー">
+                <svg width="16" height="16"><use href="#i-copy" /></svg>
+              </button>
+            </div>
+            <button class="menu-item" type="button">
+              <svg width="14" height="14"><use href="#i-plus" /></svg>新しいペイン
+            </button>
+            <hr class="menu-sep" />
+            <a class="menu-item" href="#"
+              ><svg class="github" width="14" height="14"><use href="#i-github" /></svg>リポジトリを
+              GitHub で開く</a
+            >
+            <a class="menu-item" href="#"
+              ><svg width="14" height="14"><use href="#i-chevron-right" /></svg>PR #123 を開く</a
+            >
+            <hr class="menu-sep" />
+            <button class="menu-item" type="button">
+              <svg width="14" height="14"><use href="#i-fetch" /></svg>フェッチ
+            </button>
+            <button class="menu-item" type="button">
+              <svg width="14" height="14"><use href="#i-pull" /></svg>プル
+            </button>
+            <hr class="menu-sep" />
+            <button class="menu-item danger" type="button">
+              <svg width="14" height="14"><use href="#i-trash" /></svg>ワークツリーを削除
+            </button>
+          </div>
+
+          <div class="menu-panel" aria-label="ペインメニュー">
+            <div class="menu-head">
+              <span class="menu-head-text">
+                <span class="menu-name">wBE:p1</span>
+              </span>
+              <button class="menu-copy" type="button" aria-label="ペイン ID をコピー">
+                <svg width="16" height="16"><use href="#i-copy" /></svg>
+              </button>
+            </div>
+            <button class="menu-item" type="button">
+              <svg width="14" height="14"><use href="#i-copy" /></svg>スペースのパスをコピー
+            </button>
+            <button class="menu-item" type="button">
+              <svg width="14" height="14"><use href="#i-pane" /></svg>出力をクリア
+            </button>
+            <hr class="menu-sep" />
+            <button class="menu-item" type="button">
+              <svg width="14" height="14"><use href="#i-plus" /></svg>新しいペイン
+            </button>
+            <hr class="menu-sep" />
+            <button class="menu-item danger" type="button">ペインを閉じる</button>
+            <p class="menu-note">Git 関連（リポジトリ、フェッチ、プル、PR）は出さない。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const root = document.documentElement;
+      const toggle = document.getElementById("theme-toggle");
+      toggle.addEventListener("click", () => {
+        root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      });
+    </script>
+  </body>
+</html>

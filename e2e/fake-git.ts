@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-// 実リポジトリ・実リモートには触れない。BFF が読む `remote` / `for-each-ref` と、
+// 実リポジトリ・実リモートには触れない。BFF が読む `remote -v` / `for-each-ref` と、
 // メニューから呼ぶ `fetch` / `pull --ff-only`、プロジェクト候補の `ls-files` だけを、
 // fixture の状態に対して返す。
 type Entry = {
@@ -9,6 +9,8 @@ type Entry = {
   ahead: number;
   behind: number;
   hasRemote: boolean;
+  // GitHub 以外のリモートを試すときは GitLab などの URL を入れる。
+  remoteUrl?: string | null;
 };
 
 type State = Record<string, Entry>;
@@ -46,7 +48,13 @@ const projectFiles: Record<string, string[]> = {
 
 switch (args[0]) {
   case "remote":
-    if (entry?.hasRemote === true) process.stdout.write("origin\n");
+    if (entry?.hasRemote === true) {
+      const url =
+        entry.remoteUrl === undefined
+          ? "https://github.com/example/acme-dashboard.git"
+          : entry.remoteUrl;
+      if (url !== null) process.stdout.write(`origin\t${url} (fetch)\norigin\t${url} (push)\n`);
+    }
     process.exit(0);
   case "for-each-ref":
     if (entry?.upstream != null) {

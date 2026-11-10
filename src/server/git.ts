@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
-import { parseUpstreamTrack, type GitSync } from "../shared/git";
+import { parseGitHubRemote, parseUpstreamTrack, type GitSync } from "../shared/git";
 
 // HEAD は "ref: refs/heads/<branch>"、detached なら sha。detached はブランチではないので出さない。
 export function parseBranchHead(text: string): string | null {
@@ -68,6 +68,32 @@ export function createBranchReader(
   };
 }
 
+// `git remote -v` の "<name>\t<url> (fetch|push)" を読む。同じリモートに fetch と push が
+// あるので、fetch を優先して 1 つに畳む。URL が読めない行は無視する。
+export function parseRemoteUrls(text: string): Map<string, string> {
+  const remotes = new Map<string, string>();
+  for (const line of text.split("\n")) {
+    const match = /^(\S+)\t(.+) \((fetch|push)\)$/.exec(line.trim());
+    if (match === null) continue;
+    const [, name, url, kind] = match;
+    if (kind === "fetch" || !remotes.has(name)) remotes.set(name, url);
+  }
+  return remotes;
+}
+
+// 複数のリモートがあるときは origin を優先する。origin が GitHub でなければ、
+// 他のリモートに GitHub のものがあればそれを使う。どれも GitHub でなければ null。
+export function pickGitHubRepoUrl(remotes: ReadonlyMap<string, string>): string | null {
+  const origin = remotes.get("origin");
+  const originUrl = origin === undefined ? null : parseGitHubRemote(origin);
+  if (originUrl !== null) return originUrl;
+  for (const url of remotes.values()) {
+    const parsed = parseGitHubRemote(url);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+}
+
 export type GitClient = {
   read: (options: { checkoutPath: string; branch: string }) => Promise<GitSync | null>;
   invalidate: (checkoutPath: string) => void;
@@ -107,14 +133,19 @@ export function createGitClient(
     let sync: GitSync | null = null;
     try {
       const [remotes, refs] = await Promise.all([
-        runRead(checkoutPath, ["remote"]),
+        runRead(checkoutPath, ["remote", "-v"]),
         runRead(checkoutPath, [
           "for-each-ref",
           "--format=%(upstream:short)\t%(upstream:track)",
           `refs/heads/${branch}`,
         ]),
       ]);
-      sync = { ...parseUpstreamTrack(refs), hasRemote: remotes.trim() !== "" };
+      const byName = parseRemoteUrls(remotes);
+      sync = {
+        ...parseUpstreamTrack(refs),
+        hasRemote: byName.size > 0,
+        repoUrl: pickGitHubRepoUrl(byName),
+      };
     } catch {
       // git が無い・リポジトリが壊れている・期限切れでは、同期状態だけを出さない。
       // ブランチの表示は .git/HEAD から読めているので残す。

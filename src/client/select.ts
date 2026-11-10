@@ -132,6 +132,8 @@ export type PaneContext = {
   // ブランチはスペースの属性。同じスペースのペインは同じ値になる。
   branch: string | null;
   sync: GitSync | null;
+  // チャット見出しに出すリポジトリ名。git 管理外のスペースでは null。
+  repoName: string | null;
 };
 
 // 画面上部に出す、いま見ている対象の要約。選択が無いときは null。
@@ -144,6 +146,7 @@ export function findPaneContext(state: AppState, paneId: string | null): PaneCon
     tabLabel: row.tab.label,
     branch: row.workspace.branch ?? null,
     sync: row.workspace.sync ?? null,
+    repoName: row.workspace.worktree?.repoName ?? null,
   };
 }
 
