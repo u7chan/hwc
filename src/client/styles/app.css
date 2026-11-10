@@ -1751,9 +1751,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   background: var(--color-raised);
 }
 
-/* ツリーの行と同じく、開いている行は内側の実線の枠で示す。 */
 .hwc-active-open[data-current="true"] {
   background: var(--color-selected);
+}
+
+/* 行自身がボタンなので、フォーカス中は枠を外して外側の :focus-visible の輪郭に
+   譲る。内側の枠を残すと同じ outline を上書きし、フォーカス位置が見えなくなる。 */
+.hwc-active-open[data-current="true"]:not(:focus-visible) {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
