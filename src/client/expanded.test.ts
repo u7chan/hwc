@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AppState } from "../server/herdr/state";
+import { type AppState, NO_TIMES } from "../server/herdr/state";
 import { applyOpenGroups, parseOpenGroups, rememberGroup } from "./expanded";
 import { groupIds } from "./select";
 
@@ -52,6 +52,7 @@ const state: AppState = {
   focusedWorkspaceId: "w1",
   focusedTabId: "w1:t1",
   focusedPaneId: "w1:p1",
+  times: NO_TIMES,
   workspaces: [
     {
       id: "w1",

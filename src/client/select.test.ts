@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AppState, PaneState } from "../server/herdr/state";
+import { type AppState, NO_TIMES, type PaneState } from "../server/herdr/state";
 import {
   activeRowName,
   agentGlyph,
@@ -29,6 +29,7 @@ const state: AppState = {
   focusedWorkspaceId: "w1",
   focusedTabId: "w1:t1",
   focusedPaneId: "w1:p1",
+  times: NO_TIMES,
   workspaces: [
     {
       id: "w1",

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AppState, PaneState } from "../server/herdr/state";
+import { type AppState, NO_TIMES, type PaneState } from "../server/herdr/state";
 import { AGENT_KINDS } from "./agents";
 import { paneCloseAction } from "./pane-close";
 
@@ -18,6 +18,7 @@ function stateFor(tabs: PaneState[][]): AppState {
     focusedWorkspaceId: null,
     focusedTabId: null,
     focusedPaneId: null,
+    times: NO_TIMES,
     workspaces: [
       {
         id: "w1",

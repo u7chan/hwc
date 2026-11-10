@@ -9,6 +9,8 @@ import { createWorkspaceClient } from "./server/herdr/workspaces";
 import { createWorktreeClient } from "./server/herdr/worktrees";
 import { createBranchReader, createGitClient } from "./server/git";
 import { createStateStore } from "./server/herdr/state";
+import { createPaneTimesFile } from "./server/herdr/pane-times";
+import { defaultStateRoot } from "./server/attachments";
 import { loadSnapshot, startStateSync } from "./server/herdr/sync";
 import { createApp } from "./server/app";
 import { createAgentModelsClient } from "./server/agent-models";
@@ -20,6 +22,8 @@ const store = createStateStore({
   load: () => loadSnapshot(),
   branch: createBranchReader(),
   git,
+  // 添付と同じ状態ディレクトリ。実ホームを汚さないよう E2E では HWC_STATE_DIR で振り向ける。
+  times: createPaneTimesFile(defaultStateRoot()),
 });
 
 startStateSync({

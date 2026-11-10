@@ -239,9 +239,22 @@ export function toAppState(value: unknown): AppState | null {
   return state as AppState;
 }
 
-export function parseAppState(data: string): AppState | null {
+// 状態と、送信時のサーバー時刻。クライアントは now で時計を合わせる。
+export type StateMessage = { state: AppState; now: number | null };
+
+export function toStateMessage(value: unknown): StateMessage | null {
+  if (typeof value !== "object" || value === null) return null;
+  const message = value as { state?: unknown; now?: unknown };
+  const state = toAppState(message.state);
+  if (state === null) return null;
+  // 読めない now では時計を合わせ直さない。前回の差をそのまま使う。
+  const now = typeof message.now === "number" && Number.isFinite(message.now) ? message.now : null;
+  return { state, now };
+}
+
+export function parseAppState(data: string): StateMessage | null {
   try {
-    return toAppState(JSON.parse(data));
+    return toStateMessage(JSON.parse(data));
   } catch {
     return null;
   }
@@ -294,12 +307,12 @@ export async function fetchRevision(signal?: AbortSignal): Promise<string | null
   return typeof body.revision === "string" ? body.revision : null;
 }
 
-export async function fetchState(signal?: AbortSignal): Promise<AppState> {
+export async function fetchState(signal?: AbortSignal): Promise<StateMessage> {
   const response = await client.api.state.$get({}, { init: { signal } });
   if (!response.ok) throw new Error(`state: ${response.status}`);
-  const state = toAppState(await response.json());
-  if (state === null) throw new Error("state: unexpected body");
-  return state;
+  const message = toStateMessage(await response.json());
+  if (message === null) throw new Error("state: unexpected body");
+  return message;
 }
 
 export function outputQuery(lines: number = OUTPUT_LINES) {

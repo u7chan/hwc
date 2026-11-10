@@ -216,7 +216,9 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
     timers.add(timer);
   };
 
-  const setAgentStatus = (paneId: string, status: "working" | "idle") => {
+  // done は観測側の既読でだけ idle になる状態。hwc からは作れないので、E2E の
+  // フィクスチャだけが直接作れるようにする（終了時刻の表示を確かめるため）。
+  const setAgentStatus = (paneId: string, status: "working" | "idle" | "done") => {
     const pane = findPane(paneId);
     if (pane === null) return;
     pane.agent_status = status;
@@ -698,6 +700,13 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         const text = typeof params.text === "string" ? params.text : "";
         outputs.set(paneId, `${outputs.get(paneId) ?? ""}${text}\n`);
         revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
+        // フィクスチャ専用の入力。実 Herdr には無い。既読を進めない限り idle にならない
+        // done を E2E から作れるようにして、終了時刻の表示と端末間の一致を確かめる。
+        if (text.trim() === "/done") {
+          send(socket, { id, result: { type: "ok" } });
+          setAgentStatus(paneId, "done");
+          return;
+        }
         const compact =
           !text.includes(ATTACHED_FILES_OPEN) && /^\/compact(?: |$)/.test(text.trim());
         if (compact) {

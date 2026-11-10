@@ -19,7 +19,8 @@ BFF は Herdr / pi と同じユーザー・同じホストで動き、pi のセ�
 
 ## Decision
 
-- 画像は `$HWC_STATE_DIR`（既定は `${XDG_STATE_HOME:-~/.local/state}/hwc`）配下の `attachments/<pane-id>/` に保存する。絶対パスでない `HWC_STATE_DIR` は採らず、既定へ落とす。保存先は `createApp` のオプションで受け取り、テストは一時ディレクトリを使う
+- hwc が書き出すものはすべて状態ディレクトリ `$HWC_STATE_DIR`（既定は `${XDG_STATE_HOME:-~/.local/state}/hwc`）の下に置く。絶対パスでない `HWC_STATE_DIR` は採らず、既定へ落とす。この規則の正はここで、他の文書はこれを参照する。根の解決は `defaultStateRoot` に共通化する
+- 画像は状態ディレクトリ配下の `attachments/<pane-id>/` に保存する。保存先は `createApp` のオプションで受け取り、テストは一時ディレクトリを使う
 - キーはペイン id。ペインを作り直すと旧添付は参照されないまま残る。自動削除はしない
 - ペイン id はディレクトリ名になるため、`..`・`/`・`\`・制御文字を含む id をパスへ連結する前に弾く。名前も固定書式（`pasted-<YYYYMMDD>-<HHmmss>[-n].(png|jpg|webp)`）を通してから連結する
 - 保存名はサーバが決める。`image/jpeg` は `jpg`。同名は上書きせず `-1`、`-2` と連番にする（`wx` で作成し、既存があれば次を試す）。時刻はローカル時刻

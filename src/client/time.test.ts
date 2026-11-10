@@ -1,15 +1,11 @@
 import { expect, test } from "bun:test";
-import type { AgentStatus, AppState } from "../server/herdr/state";
 import {
+  clockSkew,
   finishedClock,
   formatClock,
   formatElapsed,
-  parseFinishedAt,
-  parseWorkingSince,
-  trackFinished,
-  trackWorking,
+  serverClockNow,
   workingMs,
-  workingSinceForSave,
 } from "./time";
 
 test("elapsed reads as seconds, minutes and hours", () => {
@@ -37,267 +33,24 @@ test("the wait for a reply counts from the moment the pane started working", () 
   expect(workingMs(since, "w1:p1", 0)).toBe(0);
 });
 
-const state: AppState = {
-  focusedWorkspaceId: "w1",
-  focusedTabId: "w1:t1",
-  focusedPaneId: "w1:p1",
-  workspaces: [
-    {
-      id: "w1",
-      label: "hwc",
-      agentStatus: "working",
-      focused: true,
-      worktree: null,
-      tabs: [
-        {
-          id: "w1:t1",
-          label: "main",
-          agentStatus: "working",
-          focused: true,
-          panes: [
-            {
-              id: "w1:p1",
-              title: null,
-              label: null,
-              agent: "pi",
-              agentStatus: "working",
-              focused: true,
-              chat: false,
-            },
-            {
-              id: "w1:p2",
-              title: null,
-              label: null,
-              agent: "bash",
-              agentStatus: "idle",
-              focused: false,
-              chat: false,
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
-
-test("a pane that starts working gets the time it started", () => {
-  const first = trackWorking(new Map(), state, 1_000);
-  expect([...first]).toEqual([["w1:p1", 1_000]]);
-
-  const later = trackWorking(first, state, 90_000);
-  expect([...later]).toEqual([["w1:p1", 1_000]]);
-  expect(later).toBe(first);
-});
-
-test("a pane that leaves the working state loses its start time", () => {
-  const started = trackWorking(new Map(), state, 1_000);
-  const paused: AppState = {
-    ...state,
-    workspaces: [
-      {
-        ...state.workspaces[0],
-        tabs: [
-          {
-            ...state.workspaces[0].tabs[0],
-            panes: [{ ...state.workspaces[0].tabs[0].panes[0], agentStatus: "idle" }],
-          },
-        ],
-      },
-    ],
-  };
-
-  expect(trackWorking(started, paused, 5_000).size).toBe(0);
-  // 再び働き始めたら、その時点から数え直す。
-  expect([...trackWorking(new Map(), state, 9_000)]).toEqual([["w1:p1", 9_000]]);
-});
-
-const workingState: AppState = {
-  focusedWorkspaceId: "w1",
-  focusedTabId: "w1:t1",
-  focusedPaneId: null,
-  workspaces: [
-    {
-      id: "w1",
-      label: "hwc",
-      agentStatus: "unknown",
-      focused: false,
-      worktree: null,
-      tabs: [
-        {
-          id: "w1:t1",
-          label: "1",
-          agentStatus: "unknown",
-          focused: false,
-          panes: [
-            {
-              id: "w1:p1",
-              title: null,
-              label: null,
-              agent: "pi",
-              agentStatus: "working",
-              focused: false,
-              chat: false,
-            },
-            {
-              id: "w1:p2",
-              title: null,
-              label: null,
-              agent: "pi",
-              agentStatus: "idle",
-              focused: false,
-              chat: false,
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
-
-test("a saved start time is read back from the device", () => {
-  const since = parseWorkingSince('{"w1:p1":1000,"w1:p2":2000}', 5_000);
-
-  expect([...since]).toEqual([
-    ["w1:p1", 1_000],
-    ["w1:p2", 2_000],
-  ]);
-});
-
-test("a saved start time that cannot be a number is dropped", () => {
-  const raw = JSON.stringify({ "w1:p1": "1000", "w1:p2": null, "w1:p3": 1_000.5 });
-
-  // 文字列と null は捨て、数だけを受ける。
-  expect([...parseWorkingSince(raw, 5_000)]).toEqual([["w1:p3", 1_000.5]]);
-  expect([...parseWorkingSince('{"w1:p1":1e999}', 5_000)]).toEqual([]);
-  expect([...parseWorkingSince("not json", 5_000)]).toEqual([]);
-  expect([...parseWorkingSince("[1000]", 5_000)]).toEqual([]);
-  expect([...parseWorkingSince(null, 5_000)]).toEqual([]);
-});
-
-test("a saved start time in the future is dropped", () => {
-  const since = parseWorkingSince('{"w1:p1":9000,"w1:p2":1000}', 5_000);
-
-  // 端末の時計が戻っても、負の経過を出さない。
-  expect([...since]).toEqual([["w1:p2", 1_000]]);
-});
-
-test("a restored start time survives only while the pane is working", () => {
-  const restored = parseWorkingSince('{"w1:p1":1000,"w1:p2":2000}', 5_000);
-  const kept = trackWorking(restored, workingState, 9_000);
-
-  // w1:p1 は働き続けているので起点を引き継ぐ。w1:p2 は止まったので捨てる。
-  expect([...kept]).toEqual([["w1:p1", 1_000]]);
-});
-
-test("only the working panes are written back to the device", () => {
-  const since = new Map([
-    ["w1:p1", 1_000],
-    ["w1:p2", 2_000],
-    ["w9:p1", 3_000],
-  ]);
-
-  // 止まったペインと、もう居ないペインは保存しない。
-  expect(workingSinceForSave(workingState, since)).toEqual({ "w1:p1": 1_000 });
-});
-
-function statuses(...list: AgentStatus[]): AppState {
-  return {
-    focusedWorkspaceId: null,
-    focusedTabId: null,
-    focusedPaneId: null,
-    workspaces: [
-      {
-        id: "w1",
-        label: "hwc",
-        agentStatus: "unknown",
-        focused: false,
-        worktree: null,
-        tabs: [
-          {
-            id: "w1:t1",
-            label: "1",
-            agentStatus: "unknown",
-            focused: false,
-            panes: list.map((agentStatus, index) => ({
-              id: `w1:p${index + 1}`,
-              title: null,
-              label: null,
-              agent: "pi",
-              agentStatus,
-              focused: false,
-              chat: false,
-            })),
-          },
-        ],
-      },
-    ],
-  };
-}
-
-test("a pane that leaves working for done or idle remembers when it finished", () => {
-  const working = new Map([["w1:p1", 1_000]]);
-
-  expect([...trackFinished(new Map(), working, statuses("done"), 9_000, true)]).toEqual([
-    ["w1:p1", 9_000],
-  ]);
-  expect([...trackFinished(new Map(), working, statuses("idle"), 9_000, true)]).toEqual([
-    ["w1:p1", 9_000],
-  ]);
-
-  // 元から止まっているペインは、いつ終わったかを知らない。
-  expect([...trackFinished(new Map(), new Map(), statuses("done"), 9_000, true)]).toEqual([]);
-});
-
-test("going back to work or needing attention drops the finished time", () => {
-  const finished = new Map([["w1:p1", 1_000]]);
-
-  expect([...trackFinished(finished, new Map(), statuses("working"), 9_000, true)]).toEqual([]);
-  // 要対応は待ち時間ではなく、こちらが動く番。
-  expect([...trackFinished(finished, new Map(), statuses("blocked"), 9_000, true)]).toEqual([]);
-});
-
-test("only a transition seen on this connection is written down", () => {
-  const working = new Map([["w1:p1", 1_000]]);
-
-  // マウント直後と再接続後の最初のスナップショットでは、前回の観測を引き継がない。
-  expect([...trackFinished(new Map(), working, statuses("done"), 9_000, false)]).toEqual([]);
-  // 接続中に記録した完了時刻は、新しい観測の最初でも残す。
-  const finished = new Map([["w1:p1", 5_000]]);
-  expect([...trackFinished(finished, new Map(), statuses("done"), 9_000, false)]).toEqual([
-    ["w1:p1", 5_000],
-  ]);
-});
-
-test("a finished time is kept only while the pane is resting", () => {
-  const finished = new Map([
-    ["w1:p1", 1_000],
-    ["w1:p2", 2_000],
-    ["w9:p1", 3_000],
-  ]);
-
-  // 居ないペインの時刻は捨てる。
-  expect([...trackFinished(finished, new Map(), statuses("idle", "done"), 9_000, true)]).toEqual([
-    ["w1:p1", 1_000],
-    ["w1:p2", 2_000],
-  ]);
-});
-
-test("a saved finished time is read back from the device", () => {
-  expect([...parseFinishedAt('{"w1:p1":1000,"w1:p2":2000}', 5_000)]).toEqual([
-    ["w1:p1", 1_000],
-    ["w1:p2", 2_000],
-  ]);
-  // 未来の値と壊れた JSON は捨てる。
-  expect([...parseFinishedAt('{"w1:p1":9000,"w1:p2":1000}', 5_000)]).toEqual([["w1:p2", 1_000]]);
-  expect([...parseFinishedAt("not json", 5_000)]).toEqual([]);
-  expect([...parseFinishedAt("[1000]", 5_000)]).toEqual([]);
-  expect([...parseFinishedAt(null, 5_000)]).toEqual([]);
-});
-
 test("a pane that finished shows when it finished, not how long ago", () => {
   const finished = new Map([["w1:p1", new Date(2026, 10, 2, 9, 5).getTime()]]);
 
   expect(finishedClock(finished, "w1:p1")).toBe("09:05");
   // 覚えていないペインには時刻を出さない。
   expect(finishedClock(finished, "w1:p2")).toBeNull();
+});
+
+test("the device clock is corrected by the server time it received", () => {
+  // 端末の時計が 5 分進んでいる。
+  const skew = clockSkew(1_000_000, 1_300_000, 0);
+
+  expect(skew).toBe(300_000);
+  // 表示用の「今」はサーバーの時計で進む。
+  expect(serverClockNow(1_400_000, skew)).toBe(1_100_000);
+});
+
+test("a message without a readable server time keeps the previous skew", () => {
+  expect(clockSkew(null, 1_300_000, 42)).toBe(42);
+  expect(clockSkew(Number.NaN, 1_300_000, 42)).toBe(42);
 });
