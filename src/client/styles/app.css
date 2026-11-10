@@ -2043,13 +2043,14 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 }
 
 /* outline は子の背景（出力欄・入力欄）の下に描かれ、左右と下辺が隠れる。セルの手前に
-   重ねた枠にして全周を見せる。 */
+   重ねた枠にして全周を見せる。セルは大きく、上辺がタブの下線と並ぶので、アクセントは
+   薄めて下線を主、セルの枠を従にする。 */
 .hwc-split-cell[data-current="true"]::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 1;
-  border: 2px solid var(--color-accent);
+  border: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
   pointer-events: none;
 }
 
