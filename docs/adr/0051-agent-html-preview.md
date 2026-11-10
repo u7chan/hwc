@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-09
 - Revises: 2026-11-11 に分割トグルの記述を削除（[ADR 0058](0058-split-view-tab-history.md)）
-- Revises: 2026-11-11 にプレビューのタブの × と中クリックを閉じる入口に追加（[ADR 0059](0059-tab-close-detaches.md)）
+- Revises: 2026-11-11 にプレビューのタブの × と中クリックを閉じる入口として追加（[ADR 0059](0059-tab-close-detaches.md)）
 - Extends: [ADR 0041](0041-agent-message-images.md) の対象を画像から HTML へ広げる
 
 ## Context
