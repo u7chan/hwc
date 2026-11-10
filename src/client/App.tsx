@@ -1160,7 +1160,7 @@ export function App() {
                 </div>
               ) : gridOn ? (
                 <div class="hwc-detail-grid">
-                  <div class="hwc-split" data-count={split.slots.length}>
+                  <div class="hwc-split" data-count={split.slots.length} data-filled={cells.length}>
                     {split.slots.map((slot, index) => {
                       const item = slot === null || state === null ? null : findPane(state, slot);
                       if (item === null) {
