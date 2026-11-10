@@ -2239,7 +2239,9 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   display: flex;
   align-items: stretch;
   gap: var(--space-2);
-  padding: 0 var(--space-3);
+  /* 上に余白を置き、角丸のタブが上端に貼り付かないようにする。タブの高さを
+     その分だけ縮め、バー全体の高さは --row-head のまま保つ。 */
+  padding: var(--space-2) var(--space-3) 0;
   background: var(--color-bg);
 }
 
@@ -2442,7 +2444,7 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: var(--row-head);
+  height: calc(var(--row-head) - var(--space-2));
   padding: 0 var(--space-3);
   border: 0;
   background: transparent;
@@ -5130,7 +5132,7 @@ p.hwc-compaction,
 
   /* カードの外側の余白を外したので、タブバーの左端を本文と揃える。 */
   .hwc-tabbar {
-    padding: 0 var(--space-6);
+    padding: var(--space-2) var(--space-6) 0;
   }
 
   .hwc-output-wrap {
