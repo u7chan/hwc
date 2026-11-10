@@ -177,6 +177,13 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 3. `すべて` に切り替えて、シェルだけのペインと待機のペインがツリーに出ることを確かめる。Herdr に worktree として登録されていない `plain-checkout` も、git 管理下ならシェルではなくリポジトリのアイコンで出る。
 4. `acme-dashboard (checks)` の帯は `review`（待機）1 行になり、`acme-dashboard` の帯とは別に並ぶ。`acme-dashboard (docs)` の `writer` と同じく、スペースごとに 1 つの帯になる。
 
+### 帯からすべてへ移る
+
+1. `すべて` で `acme-dashboard` のリポジトリ束を畳む。
+2. `アクティブ` に切り替え、`acme-dashboard (docs)` の帯を押す。
+3. `すべて` に切り替わり、リポジトリ束・`acme-dashboard (docs)` のスペース・代表タブが開き、`docs` の見出しが見える。見出し行には `accent` の枠が付く。
+4. 別の行を選ぶ、見出しを開閉する、`アクティブ` に切り替えると、枠が消える。
+
 ### 経過時間と終了時刻
 
 時刻は BFF が持つ（[ADR 0017](adr/0017-active-agents-view.md)）。一覧の右端は、実行中が経過、完了と待機が終了時刻（時:分）になる。

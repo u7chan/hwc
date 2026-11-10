@@ -421,6 +421,7 @@ export function App() {
 
   // 一覧をどこまで出すかは端末ごとの見え方。Herdr 側には持たせない。
   const changeScope = (next: ListScope) => {
+    setReveal(null);
     setScope(next);
     if (typeof localStorage !== "undefined") {
       try {
@@ -563,6 +564,8 @@ export function App() {
     opened = false,
     explicitExpanded?: ReadonlySet<string>,
   ) => {
+    // 帯から移った目印は、次の選択で消す。帯の移動自身は、この後に新しい目印を置く。
+    if (explicitExpanded === undefined) setReveal(null);
     const pending = pendingRead.current;
     if (pending !== null) {
       const status = state === null ? null : (findPane(state, pending)?.agentStatus ?? null);
@@ -575,7 +578,7 @@ export function App() {
       current === null || !current.shown ? current : { ...current, shown: false },
     );
     if (paneId === null) {
-      setView({ split: clearCurrent(split), expanded });
+      setView({ split: clearCurrent(split), expanded: explicitExpanded ?? expanded });
       setSettingsOpen(false);
       return;
     }
@@ -840,6 +843,7 @@ export function App() {
   };
 
   const toggle = (groupId: string) => {
+    setReveal(null);
     const next = new Set(expanded);
     if (next.has(groupId)) next.delete(groupId);
     else next.add(groupId);

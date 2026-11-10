@@ -696,7 +696,16 @@ function TreePaneList(props: TreePaneListProps) {
             "aria-keyshortcuts": "ArrowUp ArrowDown",
           };
     return (
-      <div class="hwc-group-row" data-menu={workspaceId !== undefined} id={props2.domId}>
+      <div
+        class="hwc-group-row"
+        data-menu={workspaceId !== undefined}
+        data-reveal={
+          workspaceId !== undefined && props.reveal?.workspaceId === workspaceId
+            ? "true"
+            : undefined
+        }
+        id={props2.domId}
+      >
         {workspaceId === undefined ? (
           <span class="hwc-space-icon hwc-space-icon--static" aria-hidden="true">
             <span class="hwc-group-icon">{props2.icon}</span>
