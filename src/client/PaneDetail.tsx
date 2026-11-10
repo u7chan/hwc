@@ -101,7 +101,14 @@ import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
 import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
-import { agentGlyph, isShellPane, paneName, pullRequestLabel, type PaneContext } from "./select";
+import {
+  agentGlyph,
+  isShellPane,
+  paneName,
+  pullRequestLabel,
+  shortenPaneName,
+  type PaneContext,
+} from "./select";
 import { Spinner } from "./Spinner";
 import { formatClock, formatElapsed } from "./time";
 
@@ -852,6 +859,11 @@ export function PaneDetail(props: PaneDetailProps) {
     onOpenPreview,
   } = props;
   const repoUrl = sync?.repoUrl ?? null;
+  const shownPaneName = shortenPaneName(
+    paneName(pane),
+    context.workspaceLabel,
+    context.workspaceName,
+  );
   // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
   const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expandedOpen, setExpandedOpen] = useState(false);
@@ -1555,7 +1567,7 @@ export function PaneDetail(props: PaneDetailProps) {
           {pane.agent ? <AgentGlyphIcon agent={pane.agent} size={14} /> : <PaneIcon size={14} />}
         </span>
         {labeled ? (
-          <span class="hwc-pane-head-name">{paneName(pane)}</span>
+          <span class="hwc-pane-head-name">{shownPaneName}</span>
         ) : showBranch ? (
           branch === null ? null : (
             <button
@@ -1593,12 +1605,12 @@ export function PaneDetail(props: PaneDetailProps) {
             {context.repoName}
           </a>
         )}
-        {labeled && showSpace ? (
+        {labeled && showSpace && shownPaneName !== context.workspaceName ? (
           <span
             class="hwc-pane-head-space"
             title={`${context.workspaceLabel} / ${context.tabLabel}`}
           >
-            {context.workspaceLabel}
+            {context.workspaceName}
           </span>
         ) : null}
         {labeled || showBranch ? null : <GitCount sync={sync} />}

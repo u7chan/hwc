@@ -496,13 +496,16 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         ),
       ) + 1;
     const id = `w${number}`;
-    const branch = `worktree/acme-dashboard-${worktreeCount}`;
+    const callsign = `silver-cloud-${worktreeCount}`;
+    const branch = `worktree/${callsign}`;
     const checkoutPath = join(root, "worktrees", branch.replace("/", "-"));
     await mkdir(join(checkoutPath, ".git"), { recursive: true });
     await writeFile(join(checkoutPath, ".git", "HEAD"), `ref: refs/heads/${branch}\n`);
+    // 実 Herdr は worktree のフォルダ名（worktree-<呼び名>）をスペース名にする。表示の
+    // 省略規則を E2E でも通すため、同じ形にする。
     const workspace: HerdrWorkspace = {
       workspace_id: id,
-      label: `${sourceWorktree.repo_name} worktree-${worktreeCount}`,
+      label: `worktree-${callsign}`,
       agent_status: "idle",
       focused: false,
       worktree: {

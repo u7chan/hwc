@@ -4,7 +4,7 @@ import type { PaneProcess } from "../shared/panes";
 import { ChevronLeftIcon, CloseIcon, EyeIcon } from "./icons";
 import { ParentMark } from "./ParentMark";
 import { paneTabName } from "./process";
-import { statusLabel, type PaneRow } from "./select";
+import { shortenSpaceName, statusLabel, tabDisplayName, type PaneRow } from "./select";
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
@@ -13,7 +13,8 @@ type TabBarProps = {
   // 4 スロットの並び。タブの左端のバーをスロット色にするためにだけ使う。
   slots: readonly (string | null)[];
   currentPaneId: string | null;
-  // 複数スペースのペインが開いているときだけ、2 段目にスペース名を出す。
+  // 複数スペースのペインが開いているとき、ペインに固有の名前があるときだけ
+  // 2 段目にスペース名を出す。
   multiSpace: boolean;
   parentPaneIds: ReadonlySet<string>;
   // シェルで動いているコマンド。タブ名をコマンドに差し替えるためだけに使う。
@@ -24,10 +25,20 @@ type TabBarProps = {
   onSelectPane: (paneId: string) => void;
   onRemoveTab: (paneId: string) => void;
   onSelectPreview: () => void;
+  onClosePreview: () => void;
   onBack: () => void;
   // タブからのドラッグ。移動量で開始を判定するので、押した時点で位置だけ渡す。
   onDragStart: (event: PointerEvent, paneId: string) => void;
 };
+
+// 中クリックはブラウザのタブと同じく、その画面から外す操作にする。
+const removeOnAuxClick =
+  (remove: () => void) =>
+  (event: MouseEvent): void => {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    remove();
+  };
 
 // 詳細の上端。開いたペインの履歴を並べ、タブから外す入口を添える。
 export function TabBar(props: TabBarProps) {
@@ -65,9 +76,13 @@ export function TabBar(props: TabBarProps) {
           const parent = props.parentPaneIds.has(item.pane.id);
           const process = props.processes.get(item.pane.id) ?? null;
           const name = paneTabName(item.pane, process);
+          // 名前の無いペインの端末タイトルはワークツリー名そのものになる。狭いタブでは
+          // 前置きを落として 2 段目のスペース名と同じ表記に揃える。
+          const shownSpace = shortenSpaceName(item.workspace);
+          const shownName = tabDisplayName(name, item.workspace);
           // タブにはプログラム名だけを出す。何を動かしているかは、ホバーと読み上げで補う。
           const command = process?.running === true ? process.command : null;
-          const detail = command === null ? name : `${name} (${command})`;
+          const detail = command === null ? shownName : `${shownName} (${command})`;
           const space = `${item.workspace.label} · ${item.tab.label || item.tab.id}`;
           const description = `${space}、${item.pane.id}、${statusLabel(item.pane.agentStatus)}`;
           const slot = props.slots.indexOf(item.pane.id);
@@ -87,19 +102,15 @@ export function TabBar(props: TabBarProps) {
                 title={`${detail} (${description})`}
                 data-pane-id={item.pane.id}
                 onPointerDown={(event) => props.onDragStart(event, item.pane.id)}
-                onAuxClick={(event) => {
-                  if (event.button !== 1) return;
-                  event.preventDefault();
-                  props.onRemoveTab(item.pane.id);
-                }}
+                onAuxClick={removeOnAuxClick(() => props.onRemoveTab(item.pane.id))}
                 onClick={() => props.onSelectPane(item.pane.id)}
               >
                 {parent ? <ParentMark /> : null}
                 <span class="hwc-tab-lines">
-                  <span class="hwc-tab-label">{name}</span>
-                  {props.multiSpace ? (
+                  <span class="hwc-tab-label">{shownName}</span>
+                  {props.multiSpace && shownName !== shownSpace ? (
                     <span class="hwc-tab-space" title={space}>
-                      {item.workspace.label}
+                      {shownSpace}
                     </span>
                   ) : null}
                 </span>
@@ -108,7 +119,7 @@ export function TabBar(props: TabBarProps) {
               <button
                 type="button"
                 class="hwc-tab-close"
-                aria-label={`${name} をタブから外す`}
+                aria-label={`${shownName} をタブから外す`}
                 title="タブから外す"
                 onClick={() => props.onRemoveTab(item.pane.id)}
               >
@@ -127,9 +138,19 @@ export function TabBar(props: TabBarProps) {
               aria-label={`${props.preview.name} のプレビュー`}
               title={`${props.preview.name} のプレビュー`}
               onClick={props.onSelectPreview}
+              onAuxClick={removeOnAuxClick(props.onClosePreview)}
             >
               <EyeIcon size={14} />
               <span class="hwc-tab-label">{props.preview.name}</span>
+            </button>
+            <button
+              type="button"
+              class="hwc-tab-close"
+              aria-label="プレビューを閉じる"
+              title="プレビューを閉じる"
+              onClick={props.onClosePreview}
+            >
+              <CloseIcon size={12} />
             </button>
           </div>
         )}

@@ -694,6 +694,10 @@ export function App() {
     setView({ split: removeTab(split, paneId), expanded });
   };
 
+  // プレビューのタブとヘッダーの × は同じ入口にする。どちらも画面から外すだけで、
+  // チップはメッセージに残る（ADR 0051）。
+  const closePreview = () => setPreview(null);
+
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。SSE が
   // 閉じたペインを落とした後では、後継を引けない。
   const requestClose = (paneId: string) => {
@@ -1359,6 +1363,7 @@ export function App() {
                 onSelectPreview={() =>
                   setPreview((current) => (current === null ? null : { ...current, shown: true }))
                 }
+                onClosePreview={closePreview}
                 onBack={back}
                 onDragStart={startPaneDrag}
               />
@@ -1367,7 +1372,7 @@ export function App() {
                   key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
                   paneId={preview.paneId}
                   file={preview.file}
-                  onClose={() => setPreview(null)}
+                  onClose={closePreview}
                 />
               ) : pane === null || context === null ? (
                 <div class="hwc-empty hwc-empty--detail">
