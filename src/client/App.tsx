@@ -45,7 +45,6 @@ import type { PaneOutputHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { type PaneCloseAction, paneCloseAction } from "../shared/pane-close";
-import { HIDDEN_STORAGE_KEY, parseHiddenPanes, toggleHiddenPanes } from "./hidden";
 import {
   findPane,
   findPaneContext,
@@ -53,8 +52,6 @@ import {
   groupIds,
   initialExpanded,
   markedParentPaneIds,
-  nextPaneInTab,
-  splitPanes,
   type PaneContext,
 } from "./select";
 import {
@@ -67,13 +64,29 @@ import {
   defaultPaneOf,
   expandForPane,
   expandForWorkspace,
-  readListOpen,
-  readSelectedPane,
-  restorePane,
+  readSplitView,
+  revealPane,
+  revealPaneGroups,
   workspaceGroupIds,
-  writeListOpen,
-  writeSelectedPane,
+  writeSplitView,
 } from "./selection";
+import {
+  EMPTY_SPLIT_VIEW,
+  MAX_SLOTS,
+  addToSlots,
+  clearCurrent,
+  closeEmptySlot,
+  closeTab,
+  currentSlotIndex,
+  dropOnSlot,
+  multiSpace,
+  nextOpenPane,
+  normalizeSplitView,
+  openPane,
+  startSplitView,
+  syncSplitView,
+  type SplitView,
+} from "./split-view";
 import {
   LIST_SCOPE_STORAGE_KEY,
   parseListScope,
@@ -100,7 +113,6 @@ import {
   type ThemePreference,
 } from "./theme";
 
-const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
 const NO_TIMES: ReadonlyMap<string, number> = new Map();
 
@@ -124,7 +136,7 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
+type View = { split: SplitView; expanded: ReadonlySet<string> };
 
 const NO_PARENT_PANE_IDS: ReadonlySet<string> = new Set();
 
@@ -147,6 +159,22 @@ type OperationMenu = {
   fromList: boolean;
   open: boolean;
 };
+
+// ドラッグの落とし先。追加帯はスロットではないので、別の種類として持つ。
+type DropTarget = { kind: "slot"; index: number } | { kind: "add" };
+
+// クリックと区別する移動量。これ未満では掴んだだけで、選択も並べ替えも始めない。
+const DRAG_THRESHOLD = 6;
+
+function dropTargetAt(x: number, y: number): DropTarget | null {
+  const element = document.elementFromPoint(x, y);
+  const slot = element?.closest("[data-drop-slot]");
+  if (slot instanceof HTMLElement) {
+    const index = Number(slot.dataset.dropSlot);
+    return Number.isInteger(index) ? { kind: "slot", index } : null;
+  }
+  return element?.closest("[data-drop-add]") === null ? null : { kind: "add" };
+}
 
 // メニューを閉じても続く操作。busy はメニューの外に置き、開き直しても実行中を出す。
 type GitAction =
@@ -171,13 +199,16 @@ type Removing = {
 // 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
 // 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
 function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean> | null): View {
-  const selectedPaneId = restorePane(state, readSelectedPane(), readListOpen());
+  const stored = readSplitView();
+  const split =
+    stored === null
+      ? startSplitView(findPane(state, state.focusedPaneId) === null ? null : state.focusedPaneId)
+      : normalizeSplitView(stored, (paneId) => findPane(state, paneId) !== null);
   const remembered = openGroups ?? new Map();
   const base = applyOpenGroups(initialExpanded(state), remembered, groupIds(state));
   return {
-    selectedPaneId,
-    expanded:
-      selectedPaneId === null ? base : expandForPane(state, selectedPaneId, base, remembered),
+    split,
+    expanded: split.current === null ? base : expandForPane(state, split.current, base, remembered),
   };
 }
 
@@ -204,19 +235,15 @@ export function App() {
   const systemPrefersDark = useMediaQuery("(prefers-color-scheme: dark)");
   const resolvedTheme = resolveTheme(theme, systemPrefersDark);
   const scheme = themeScheme(resolvedTheme);
-  const [split, setSplit] = useState(() => {
-    if (typeof localStorage === "undefined") return false;
-    try {
-      return localStorage.getItem(SPLIT_STORAGE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
-  const [hidden, setHidden] = useState<ReadonlySet<string>>(() =>
-    parseHiddenPanes(
-      typeof localStorage === "undefined" ? null : localStorage.getItem(HIDDEN_STORAGE_KEY),
-    ),
-  );
+  // 分割のドラッグ。PC のポインタだけが起点で、押した時点の位置だけを控える。
+  const paneDrag = useRef<{ paneId: string; x: number; y: number; active: boolean } | null>(null);
+  const dropTargetRef = useRef<DropTarget | null>(null);
+  const [dragging, setDragging] = useState<{
+    paneId: string;
+    target: DropTarget | null;
+  } | null>(null);
+  // ドラッグ後の pointerup で click が成立しても、タブの選択を動かさない。
+  const draggedSincePress = useRef(false);
   // 開閉の記憶は初期表示と切り替えのときだけ読む。描き直しには使わない。
   const openGroups = useRef<ReadonlyMap<string, boolean> | null>(null);
   openGroups.current ??= parseOpenGroups(
@@ -339,32 +366,6 @@ export function App() {
     if (typeof localStorage !== "undefined") saveThemePreference(localStorage, next);
   };
 
-  const toggleSplit = () => {
-    setSplit((current) => {
-      if (typeof localStorage !== "undefined") {
-        try {
-          localStorage.setItem(SPLIT_STORAGE_KEY, String(!current));
-        } catch {
-          // 保存できなくてもその場の表示は変える。
-        }
-      }
-      return !current;
-    });
-  };
-
-  // 隠すのは分割の並びからだけ。Herdr の状態は変えない。
-  const toggleHidden = (paneId: string) => {
-    const next = toggleHiddenPanes(hidden, paneId);
-    setHidden(next);
-    if (typeof localStorage !== "undefined") {
-      try {
-        localStorage.setItem(HIDDEN_STORAGE_KEY, JSON.stringify([...next]));
-      } catch {
-        // 保存できなくてもその場の表示は変える。
-      }
-    }
-  };
-
   // 一覧をどこまで出すかは端末ごとの見え方。Herdr 側には持たせない。
   const changeScope = (next: ListScope) => {
     setScope(next);
@@ -387,38 +388,44 @@ export function App() {
   const parentPaneIds = state === null ? NO_PARENT_PANE_IDS : markedParentPaneIds(state);
   useEffect(() => applyFavicon(favicon), [favicon]);
 
-  // 選んだペインがスナップショットから消えても id は残す。findPane が null を返すので
-  // 表示は一覧に戻り、戻ってきたときは同じペインを開ける。
-  const selectedPaneId = view
-    ? view.selectedPaneId
-    : state
-      ? (initialView.current ??= defaultView(state, openGroups.current)).selectedPaneId
-      : null;
-  const expanded = view
-    ? view.expanded
-    : state
-      ? (initialView.current ??= defaultView(state, openGroups.current)).expanded
-      : NO_GROUPS;
+  // 選んだペインがスナップショットから消えても id は残す（ADR 0021）。findPane が null を
+  // 返すので表示は一覧に戻り、戻ってきたときは同じペインを開ける。タブとスロットは
+  // スナップショットに合わせて落とす。
+  const rememberedView =
+    view ??
+    (state === null ? null : (initialView.current ??= defaultView(state, openGroups.current)));
+  const exists = (paneId: string) => state !== null && findPane(state, paneId) !== null;
+  const split: SplitView =
+    state === null || rememberedView === null
+      ? (rememberedView?.split ?? EMPTY_SPLIT_VIEW)
+      : syncSplitView(rememberedView.split, exists);
+  const expanded = rememberedView === null ? NO_GROUPS : rememberedView.expanded;
+  const selectedPaneId = split.current;
 
   const pane = state ? findPane(state, selectedPaneId) : null;
 
-  // 画面に出ている選択をそのまま覚える（表示と保存を二重に持たない）。
-  // 一覧に戻しているかは「一覧が出ているか」で決める。id を消すだけだと「まだ何も選んで
-  // いない」と区別できず、開いていたペインが消えたときも再読み込みで別のチャットへ飛ぶ。
+  // タブ・スロット・選択は 1 つのキーに保存する。同じ内容を書き直さない。
+  const splitKey = `${split.openTabs.join(" ")}\n${split.current ?? ""}\n${split.slots.join(" ")}`;
   useEffect(() => {
     if (state === null) return;
-    writeSelectedPane(selectedPaneId);
-    writeListOpen(pane === null);
-  }, [state, selectedPaneId, pane]);
-  const context = state ? findPaneContext(state, selectedPaneId) : null;
+    writeSplitView(split);
+  }, [splitKey]);
 
-  // プレビューは、対象ペインと同じタブを開いている間だけ出す。別のタブへ移っても
-  // 閉じはせず、戻ればまた選べるようにする。
-  const activeTabId =
-    state === null || pane === null ? null : (findPaneRow(state, pane.id)?.tab.id ?? null);
-  const previewRow = state === null || preview === null ? null : findPaneRow(state, preview.paneId);
-  const previewInTab =
-    previewRow !== null && activeTabId !== null && previewRow.tab.id === activeTabId;
+  // セルごとに文脈を引く。1 つの context を共有すると、別スペースを並べたときに
+  // PR のチップや Git のメニューが別スペースの値になる。
+  const context = state ? findPaneContext(state, selectedPaneId) : null;
+  const openTabs =
+    state === null
+      ? []
+      : split.openTabs.flatMap((paneId) => {
+          const row = findPaneRow(state, paneId);
+          return row === null ? [] : [row];
+        });
+  const multiSpaceTabs = multiSpace(openTabs.map((row) => row.workspace.id));
+
+  // プレビューは一時タブのまま。開いた履歴にもスロットにも入れず、対象ペインが開いている
+  // 間だけタブに出せる。ペインを選ぶと隠れる。
+  const previewInTab = preview !== null && split.openTabs.includes(preview.paneId);
   const previewing = preview?.shown === true && previewInTab;
 
   // 閉じたペインのプレビューは残さない。配信の根が消えて、iframe は 404 になるだけ。
@@ -451,10 +458,8 @@ export function App() {
   const moveTo = (
     paneId: string | null,
     opened = false,
-    nextExpanded: ReadonlySet<string> = expanded,
+    explicitExpanded?: ReadonlySet<string>,
   ) => {
-    // 分割から隠したペインを選んだら、分割に戻す。タブを選ぶだけで表示へ戻せる。
-    if (paneId !== null && hidden.has(paneId)) toggleHidden(paneId);
     const pending = pendingRead.current;
     if (pending !== null) {
       const status = state === null ? null : (findPane(state, pending)?.agentStatus ?? null);
@@ -466,7 +471,21 @@ export function App() {
     setPreview((current) =>
       current === null || !current.shown ? current : { ...current, shown: false },
     );
-    setView({ selectedPaneId: paneId, expanded: nextExpanded });
+    if (paneId === null) {
+      setView({ split: clearCurrent(split), expanded });
+      setSettingsOpen(false);
+      return;
+    }
+    // 明示的な移動。畳んでいた記憶より優先して場所を開き、次に開いたときも開いておく。
+    let nextExpanded = explicitExpanded;
+    if (nextExpanded === undefined && state !== null) {
+      const revealed = revealPane(state, paneId, expanded);
+      if (revealed.size !== expanded.size) {
+        nextExpanded = revealed;
+        rememberOpen(revealPaneGroups(state, paneId), true);
+      }
+    }
+    setView({ split: openPane(split, paneId), expanded: nextExpanded ?? expanded });
     setSettingsOpen(false);
   };
 
@@ -474,6 +493,15 @@ export function App() {
   const openActivePane = (paneId: string) => moveTo(paneId, true);
 
   const select = (paneId: string) => moveTo(paneId);
+
+  // タブをドラッグした後の click で選択を動かさない。次の押下で解除する。
+  const selectFromTab = (paneId: string) => {
+    if (draggedSincePress.current) {
+      draggedSincePress.current = false;
+      return;
+    }
+    select(paneId);
+  };
 
   const back = () => moveTo(null);
 
@@ -558,20 +586,25 @@ export function App() {
     setCreating({ paneId, worktreeWorkspaceId: workspace.id });
   };
 
-  // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。
-  const openCloseConfirm = () => {
-    if (menu === null || menu.target.kind !== "pane" || state === null) return;
-    const paneId = menu.target.id;
+  // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。SSE が
+  // 閉じたペインを落とした後では、後継を引けない。タブの × と中クリックもここを通す。
+  const requestClose = (paneId: string) => {
+    if (state === null) return;
     const action = paneCloseAction(state, paneId);
     if (action === null || action === "keep") return;
-    const row = findPaneRow(state, paneId);
-    closeMenu();
     setClosing({
       paneId,
       action,
-      next: row === null ? null : nextPaneInTab(row.tab.panes, paneId, hidden),
+      next: nextOpenPane(split.openTabs, paneId),
       phase: "confirm",
     });
+  };
+
+  const openCloseConfirm = () => {
+    if (menu === null || menu.target.kind !== "pane") return;
+    const paneId = menu.target.id;
+    closeMenu();
+    requestClose(paneId);
   };
 
   // 送信中は閉じる手段を受け付けない。結果の反映を 1 回に保つ。
@@ -593,9 +626,10 @@ export function App() {
         setClosing((current) => (current === null ? null : { ...current, phase: "failed" }));
         return;
       }
-      // 選んでいないペインを閉じても、読んでいるペインを動かさない。
-      if (target.action === "close" && target.next !== null && selectedPaneId === target.paneId) {
-        moveTo(target.next);
+      // 選んでいないペインを閉じても、読んでいるペインを動かさない。exit は終了要求で
+      // ペインが残るので、履歴は動かさない（消えたらスナップショットで落とす）。
+      if (target.action === "close") {
+        setView({ split: closeTab(split, target.paneId, target.next), expanded });
       }
       setClosing(null);
     });
@@ -657,7 +691,7 @@ export function App() {
     const next = new Set(expanded);
     if (next.has(groupId)) next.delete(groupId);
     else next.add(groupId);
-    setView({ selectedPaneId, expanded: next });
+    setView({ split, expanded: next });
     rememberOpen([groupId], next.has(groupId));
   };
 
@@ -707,20 +741,18 @@ export function App() {
     }
   };
 
-  // 詳細のタブバーは、選択中ペインが属するタブのペインだけを出す。
-  const siblings = (() => {
-    if (!state || !pane) return [];
-    for (const workspace of state.workspaces) {
-      for (const tab of workspace.tabs) {
-        if (tab.panes.some((candidate) => candidate.id === pane.id)) return tab.panes;
-      }
-    }
-    return [];
-  })();
-
-  // シェルの前景プロセスは Herdr のイベントに載らない。見えているタブのシェルだけを読む。
-  const shellPanes = siblings.filter((item) => item.agent === null);
-  const processes = usePaneProcesses(shellPanes.map((item) => item.id));
+  // シェルの前景プロセスは Herdr のイベントに載らない。グリッドに入っているペインと
+  // current のシェルだけを読む。開いた履歴の全部を読むと、3 秒ごとの要求が増える。
+  const polledIds =
+    state === null
+      ? []
+      : [
+          ...new Set([
+            ...split.slots.filter((id): id is string => id !== null),
+            ...(selectedPaneId === null ? [] : [selectedPaneId]),
+          ]),
+        ].filter((id) => findPane(state, id)?.agent === null);
+  const processes = usePaneProcesses(polledIds);
 
   // 画面が狭くなったら一覧も詰める。詳細が読めない幅にはしない。
   useEffect(() => {
@@ -785,15 +817,66 @@ export function App() {
   // 異常のときだけ出す。正常な間は何も出さず、タブの幅を空けておく。
   const detailStatus = wide || connection === "live" ? null : connChip;
 
-  // 分割は広い画面だけ。狭い画面では 1 枚ずつ見る。
-  const shown = splitPanes(siblings, pane?.id ?? "", hidden);
-  // 隠して 1 枚になってもグリッドを外さない。外すとペインの作り直しで
-  // 読んでいた位置が最下部に戻る。
-  const splitOn = wide && split && shown.length > 0;
-  const cells = splitOn ? shown : pane === null ? [] : [pane];
-  // 分割中は入力欄を 1 行に畳み、会話へ高さを回す。長文は 1 枚表示へ戻して書く（下書きは
-  // ペインごとに残る）。幅や高さの閾値で切り替えると、境目の前後で見え方が変わり、なぜ
-  // 畳まれないのかが画面から読み取れない。
+  // ドラッグの適用先。タブとセルの両方から掴むので、最新の状態を持つ関数を ref に置く。
+  const applyDrop = (paneId: string, target: DropTarget) => {
+    const next =
+      target.kind === "add" ? addToSlots(split, paneId) : dropOnSlot(split, paneId, target.index);
+    if (next !== split) setView({ split: next, expanded });
+  };
+  const applyDropLatest = useRef(applyDrop);
+  applyDropLatest.current = applyDrop;
+
+  // タブ・セルの押下だけを控え、動き始めてからドラッグにする。クリックとの競合を
+  // 移動量で分ける（一覧の並べ替えと同じ判定）。
+  const startPaneDrag = (event: PointerEvent, paneId: string) => {
+    if (!wide || event.button !== 0) return;
+    paneDrag.current = { paneId, x: event.clientX, y: event.clientY, active: false };
+    draggedSincePress.current = false;
+  };
+
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      const dragState = paneDrag.current;
+      if (dragState === null) return;
+      if (!dragState.active) {
+        const dx = event.clientX - dragState.x;
+        const dy = event.clientY - dragState.y;
+        if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+        dragState.active = true;
+        draggedSincePress.current = true;
+      }
+      event.preventDefault();
+      dropTargetRef.current = dropTargetAt(event.clientX, event.clientY);
+      setDragging({ paneId: dragState.paneId, target: dropTargetRef.current });
+    };
+    const onEnd = () => {
+      const dragState = paneDrag.current;
+      paneDrag.current = null;
+      if (dragState === null || !dragState.active) return;
+      const target = dropTargetRef.current;
+      dropTargetRef.current = null;
+      setDragging(null);
+      if (target !== null) applyDropLatest.current(dragState.paneId, target);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+    };
+  }, []);
+
+  // グリッドはスロットの並び。空きもセルとして置き、レイアウトはスロットの長さで決まる。
+  const slotPanes =
+    state === null ? [] : split.slots.map((id) => (id === null ? null : findPane(state, id)));
+  const cells = slotPanes.flatMap((item) => (item === null ? [] : [item]));
+  // グリッドと追加帯は広い画面で、current が実在するときだけ出す（ADR 0058）。
+  const gridOn = wide && pane !== null && split.slots.length > 0;
+  const addBandOn = gridOn && split.slots.length < MAX_SLOTS;
+  // 畳むかどうかは、セル数ではなく実際に並んでいるペイン数で決める。空きスロットが
+  // 増えても、読む相手が 1 枚なら入力欄は広く取る。
   const compact = cells.length > 1;
 
   // 4 枚の判定は BFF と同じタブの枚数で行う。
@@ -837,10 +920,12 @@ export function App() {
       scheme={scheme}
       // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
       labeled={cells.length > 1}
+      // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
+      showSpace={cells.length > 1 && multiSpaceTabs}
       // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
       // 値そのものは常に渡す。
       branch={where.branch}
-      // 上流との差はワークスペースの属性。分割セルでは同じ値が並ぶので出さない。
+      // 上流との差はワークスペースの属性。セルが並ぶときは同じ値が並ぶので出さない。
       sync={cells.length > 1 ? null : where.sync}
       workspaceMenuOpen={
         menu?.open === true &&
@@ -869,7 +954,6 @@ export function App() {
       onStop={() => stopPane(item.id)}
       onOpenImage={(url, name) => setViewer({ url, name })}
       onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
-      onHideInSplit={splitOn && item.id !== pane?.id ? () => toggleHidden(item.id) : null}
     />
   );
 
@@ -919,6 +1003,7 @@ export function App() {
             <PaneList
               state={state}
               selectedPaneId={selectedPaneId}
+              currentSlot={currentSlotIndex(split) < 0 ? null : currentSlotIndex(split) + 1}
               parentPaneIds={parentPaneIds}
               scope={scope}
               onScope={changeScope}
@@ -1002,12 +1087,15 @@ export function App() {
             />
           ) : state === null ? (
             placeholder
-          ) : pane && context ? (
+          ) : (wide && openTabs.length > 0) || pane !== null ? (
             <div class="hwc-detail-inner">
               <TabBar
-                pane={pane}
-                panes={siblings}
+                openTabs={openTabs}
+                slots={split.slots}
+                currentPaneId={selectedPaneId}
+                multiSpace={multiSpaceTabs}
                 parentPaneIds={parentPaneIds}
+                closeActionOf={(paneId) => paneCloseAction(state, paneId)}
                 processes={processes}
                 preview={
                   preview !== null && previewInTab
@@ -1017,15 +1105,14 @@ export function App() {
                       }
                     : null
                 }
-                split={wide && split}
-                hidden={hidden}
                 status={detailStatus}
-                onSelectPane={select}
+                onSelectPane={selectFromTab}
+                onClosePane={requestClose}
                 onSelectPreview={() =>
                   setPreview((current) => (current === null ? null : { ...current, shown: true }))
                 }
                 onBack={back}
-                onToggleSplit={toggleSplit}
+                onDragStart={startPaneDrag}
               />
               {previewing && preview !== null ? (
                 <Preview
@@ -1034,41 +1121,107 @@ export function App() {
                   file={preview.file}
                   onClose={() => setPreview(null)}
                 />
-              ) : wide ? (
-                <div class="hwc-split" data-count={cells.length}>
-                  {cells.map((item) => {
-                    // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
-                    // HWC から動かせないセルが current のままになる。
-                    const activate = () => {
-                      if (item.id !== pane.id) select(item.id);
-                    };
-                    // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
-                    // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
-                    const activateFromFocus = (event: FocusEvent) => {
-                      const target = event.target;
-                      if (!(target instanceof Element)) return;
-                      if (
-                        target.closest(
-                          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-                        ) === null
-                      ) {
-                        return;
+              ) : pane === null || context === null ? (
+                <div class="hwc-empty hwc-empty--detail">
+                  <div class="hwc-empty-mark hwc-empty-mark--app">
+                    <HwcMark size={40} />
+                  </div>
+                  <h2 class="hwc-empty-title">ペインを選んでください</h2>
+                  <p class="hwc-empty-text">タブか一覧からペインを選ぶと、出力と入力欄が出ます。</p>
+                </div>
+              ) : gridOn ? (
+                <div class="hwc-detail-grid">
+                  <div class="hwc-split" data-count={split.slots.length}>
+                    {split.slots.map((slot, index) => {
+                      const item = slot === null || state === null ? null : findPane(state, slot);
+                      if (item === null) {
+                        return (
+                          <div
+                            class="hwc-split-cell hwc-split-cell--empty"
+                            data-slot={index + 1}
+                            data-drop-slot={index}
+                            data-drop-target={
+                              dragging?.target?.kind === "slot" && dragging.target.index === index
+                            }
+                            key={`empty:${index}`}
+                          >
+                            <button
+                              type="button"
+                              class="hwc-slot-close"
+                              aria-label={`${index + 1} 番目の空きスロットを閉じる`}
+                              onClick={() =>
+                                setView({ split: closeEmptySlot(split, index), expanded })
+                              }
+                            >
+                              <CloseIcon size={12} />
+                            </button>
+                          </div>
+                        );
                       }
-                      activate();
-                    };
-                    return (
-                      <section
-                        class="hwc-split-cell"
-                        data-compact={compact}
-                        data-current={cells.length > 1 && item.id === pane.id}
-                        key={item.id}
-                        onPointerDown={activate}
-                        onFocusIn={activateFromFocus}
-                      >
-                        {renderPane(item, context, compact)}
-                      </section>
-                    );
-                  })}
+                      const where = findPaneContext(state, item.id);
+                      // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
+                      // HWC から動かせないセルが current のままになる。
+                      const activate = () => {
+                        if (item.id !== pane.id) select(item.id);
+                      };
+                      // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
+                      // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
+                      const activateFromFocus = (event: FocusEvent) => {
+                        const target = event.target;
+                        if (!(target instanceof Element)) return;
+                        if (
+                          target.closest(
+                            "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
+                          ) === null
+                        ) {
+                          return;
+                        }
+                        activate();
+                      };
+                      // ドラッグはセルの見出しからだけ始める。出力と入力の選択・操作を奪わない。
+                      const dragFromHead = (event: PointerEvent) => {
+                        const target = event.target;
+                        if (!(target instanceof Element)) return;
+                        if (target.closest(".hwc-pane-head") === null) return;
+                        if (
+                          target.closest(
+                            "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
+                          ) !== null
+                        ) {
+                          return;
+                        }
+                        startPaneDrag(event, item.id);
+                      };
+                      return (
+                        <section
+                          class="hwc-split-cell"
+                          data-slot={index + 1}
+                          data-compact={compact}
+                          data-current={item.id === pane.id}
+                          data-drop-slot={index}
+                          data-drop-target={
+                            dragging?.target?.kind === "slot" && dragging.target.index === index
+                          }
+                          key={item.id}
+                          onPointerDown={(event) => {
+                            activate();
+                            dragFromHead(event);
+                          }}
+                          onFocusIn={activateFromFocus}
+                        >
+                          {where === null ? null : renderPane(item, where, compact)}
+                        </section>
+                      );
+                    })}
+                  </div>
+                  {addBandOn ? (
+                    <div
+                      class="hwc-add-band"
+                      data-drop-add="true"
+                      data-drop-target={dragging?.target?.kind === "add"}
+                      aria-hidden="true"
+                    />
+                  ) : null}
                 </div>
               ) : (
                 renderPane(pane, context, false)

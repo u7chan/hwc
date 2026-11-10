@@ -47,12 +47,25 @@ function sameProcess(left: PaneProcess, right: PaneProcess): boolean {
 
 // 取れなかったペインは前回の値を残す。毎回同じ Map を作り直すと、変化が無いのに
 // 詳細全体が再描画されるので、変わったときだけ差し替える。ポートはコマンドの起動後に
-// 現れることがあるので、比較に含める。
+// 現れることがあるので、比較に含める。ポーリング対象から外れた ID は落とす。残すと
+// 履歴のシェルのタブ名が、止んだコマンドのまま固定される。
 export function mergeProcesses(
   previous: ReadonlyMap<string, PaneProcess>,
   results: readonly Entry[],
+  keep: readonly string[],
 ): ReadonlyMap<string, PaneProcess> {
+  const targets = new Set(keep);
   let next: Map<string, PaneProcess> | null = null;
+  for (const paneId of previous.keys()) {
+    if (targets.has(paneId)) continue;
+    next = new Map(previous);
+    break;
+  }
+  if (next !== null) {
+    for (const paneId of next.keys()) {
+      if (!targets.has(paneId)) next.delete(paneId);
+    }
+  }
   for (const [paneId, process] of results) {
     if (process === null) continue;
     const before = previous.get(paneId);
@@ -91,7 +104,7 @@ export function usePaneProcesses(paneIds: readonly string[]): ReadonlyMap<string
             }
           }),
         );
-        if (!stopped) setEntries((previous) => mergeProcesses(previous, results));
+        if (!stopped) setEntries((previous) => mergeProcesses(previous, results, ids));
       } finally {
         inFlight = false;
       }

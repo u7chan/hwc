@@ -334,19 +334,7 @@ export function StopIcon({ size = 20 }: IconProps) {
   );
 }
 
-// 2x2 の分割表示。押している間はアクセント色で表す。
-export function SplitIcon({ size = 20 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <rect x="4" y="4" width="7" height="7" rx="1.5" />
-      <rect x="13" y="4" width="7" height="7" rx="1.5" />
-      <rect x="4" y="13" width="7" height="7" rx="1.5" />
-      <rect x="13" y="13" width="7" height="7" rx="1.5" />
-    </Svg>
-  );
-}
-
-// 分割に出す / 出さないの切り替え。
+// プレビューのタブ。
 export function EyeIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

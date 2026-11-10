@@ -915,6 +915,52 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   color: var(--color-accent);
 }
 
+/* 現在行はグリッドのスロット位置の色で示す。ツリーとアクティブの両方に同じ色を置き、
+   タブのバー・セルの枠と同じスロットを指す（ADR 0058）。 */
+.hwc-pane[data-current="true"][data-slot="1"],
+.hwc-active-open[data-current="true"][data-slot="1"] {
+  --slot-color: var(--color-slot-1);
+}
+
+.hwc-pane[data-current="true"][data-slot="2"],
+.hwc-active-open[data-current="true"][data-slot="2"] {
+  --slot-color: var(--color-slot-2);
+}
+
+.hwc-pane[data-current="true"][data-slot="3"],
+.hwc-active-open[data-current="true"][data-slot="3"] {
+  --slot-color: var(--color-slot-3);
+}
+
+.hwc-pane[data-current="true"][data-slot="4"],
+.hwc-active-open[data-current="true"][data-slot="4"] {
+  --slot-color: var(--color-slot-4);
+}
+
+.hwc-pane[data-current="true"][data-slot] {
+  outline-color: var(--slot-color);
+}
+
+.hwc-pane[data-current="true"][data-slot] .hwc-pane-name,
+.hwc-active-open[data-current="true"][data-slot] .hwc-active-name {
+  color: var(--slot-color);
+}
+
+.hwc-active-open[data-current="true"][data-slot]:not(:focus-visible) {
+  outline-color: var(--slot-color);
+}
+
+/* セル見出しのスペース名。複数スペースのペインが並ぶときだけ出す。 */
+.hwc-pane-head-space {
+  flex: none;
+  max-width: 10em;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hwc-pane-more {
   flex: none;
   display: grid;
@@ -2036,21 +2082,101 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   container: hwc-cell / size;
 }
 
-/* 分割では、タブの下線だけでは選択中のペインがどのセルか結び付かない。一覧の開いている
-   行と揃えて、内側にアクセントの実線を引く。1 枚のときは選び分ける相手が無いので出さない。 */
-.hwc-split-cell[data-current="true"] {
+/* セルの枠はスロット位置の色。current は濃く、他のスロットは控えめにして、タブと
+   一覧の現在行と同じ色で結び付ける（ADR 0058）。 */
+.hwc-split-cell {
   position: relative;
+}
+
+.hwc-split-cell[data-slot="1"] {
+  --slot-color: var(--color-slot-1);
+}
+
+.hwc-split-cell[data-slot="2"] {
+  --slot-color: var(--color-slot-2);
+}
+
+.hwc-split-cell[data-slot="3"] {
+  --slot-color: var(--color-slot-3);
+}
+
+.hwc-split-cell[data-slot="4"] {
+  --slot-color: var(--color-slot-4);
 }
 
 /* outline は子の背景（出力欄・入力欄）の下に描かれ、左右と下辺が隠れる。セルの手前に
    重ねた枠にして全周を見せる。 */
-.hwc-split-cell[data-current="true"]::after {
+.hwc-split-cell::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 1;
-  border: 2px solid var(--color-accent);
+  z-index: 2;
+  border: 1px solid color-mix(in oklab, var(--slot-color, var(--color-line)) 35%, transparent);
   pointer-events: none;
+}
+
+.hwc-split-cell[data-current="true"]::after {
+  border-width: 2px;
+  border-color: var(--slot-color, var(--color-accent));
+}
+
+/* 空きスロットは同じ位置の色の薄い破線。中央に文言は置かない。 */
+.hwc-split-cell--empty::after {
+  inset: var(--space-2);
+  border: 1px dashed color-mix(in oklab, var(--slot-color, var(--color-line)) 45%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.hwc-slot-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-slot-close:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+/* ドロップ先のガイド。落とせない場所では何も出さない。 */
+.hwc-split-cell[data-drop-target="true"]::after {
+  border: 2px dashed var(--slot-color, var(--color-accent));
+}
+
+/* 追加帯はスロットではない。4 色も × も持たず、破線の neutral だけにする。 */
+.hwc-detail-grid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.hwc-detail-grid > .hwc-split {
+  flex: 1;
+  min-width: 0;
+}
+
+.hwc-add-band {
+  flex: none;
+  width: calc(var(--space-8) + var(--space-2));
+  margin-left: 1px;
+  border-left: 1px dashed var(--color-control-line);
+  background: var(--color-content);
+}
+
+.hwc-add-band[data-drop-target="true"] {
+  border-left: 2px dashed var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 10%, var(--color-content));
 }
 
 /* プレビューはタブの 1 つ。分割は止め、detail の残りをそのまま iframe に渡す。 */
@@ -2391,36 +2517,6 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   outline-offset: -3px;
 }
 
-/* 分割表示は広い画面だけ。狭い画面では 1 枚ずつ見る。 */
-.hwc-split-toggle {
-  flex: none;
-  display: none;
-  align-self: center;
-  place-items: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-secondary);
-}
-
-.hwc-split-toggle:disabled {
-  color: var(--color-neutral);
-  cursor: default;
-}
-
-.hwc-split-toggle:not(:disabled):hover {
-  background: var(--color-raised);
-  color: var(--color-text);
-}
-
-.hwc-split-toggle[aria-pressed="true"] {
-  background: var(--color-raised);
-  color: var(--color-accent);
-}
-
 .hwc-tabs {
   position: relative;
   z-index: 1;
@@ -2445,7 +2541,7 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   align-items: center;
   gap: var(--space-2);
   height: calc(var(--row-head) - var(--space-2) - var(--space-1));
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2) 0 var(--space-3);
   border: 0;
   background: transparent;
   color: var(--color-secondary);
@@ -2453,7 +2549,7 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   cursor: pointer;
 }
 
-/* 切り替えと目玉を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */
+/* 切り替えと × を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */
 .hwc-tab-item {
   position: relative;
   flex: none;
@@ -2465,11 +2561,93 @@ html[data-order-ghost="below"] .hwc-order-ghost {
     opacity 120ms ease;
 }
 
+/* 1 段目はペイン名、2 段目はスペース名。高さは 17px × 1.2 + 13px × 1.2 + 2px = 38px で、
+   タブの 44px に収まる。文字を小さくして詰めるのではなく、行を分けて収める。 */
+.hwc-tab-lines {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+  line-height: var(--line-tight);
+}
+
 .hwc-tab-label {
   max-width: 9em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.hwc-tab-space {
+  max-width: 9em;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* グリッドに入っているタブは、スロット位置の色を左端の 3px バーで示す。選択面と
+   色を競わせないため、背景は塗らない。 */
+.hwc-tab-item[data-slot="1"] {
+  --slot-color: var(--color-slot-1);
+}
+
+.hwc-tab-item[data-slot="2"] {
+  --slot-color: var(--color-slot-2);
+}
+
+.hwc-tab-item[data-slot="3"] {
+  --slot-color: var(--color-slot-3);
+}
+
+.hwc-tab-item[data-slot="4"] {
+  --slot-color: var(--color-slot-4);
+}
+
+.hwc-tab-item[data-slot]::before {
+  content: "";
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--slot-color);
+}
+
+.hwc-tab-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  margin-right: var(--space-1);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-tab-close:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+/* ポインタの画面では、× はタブに乗ったときとフォーカスしたときだけ出す。狭い画面は
+   タップで閉じるので常に出す。 */
+@media (hover: hover) {
+  .hwc-tab-close {
+    opacity: 0;
+  }
+
+  .hwc-tab-item:hover .hwc-tab-close,
+  .hwc-tab-item:focus-within .hwc-tab-close {
+    opacity: 1;
+  }
 }
 
 .hwc-tab-item:not([data-selected="true"]):hover {
@@ -2489,15 +2667,6 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 .hwc-tab[aria-selected="true"] {
   color: var(--color-text);
   font-weight: 600;
-}
-
-/* 分割から外したペインはタブを淡くする。選ぶと分割に戻る。 */
-.hwc-tab-item[data-hidden="true"]:not([data-selected="true"]) {
-  opacity: 0.55;
-}
-
-.hwc-tab-item[data-hidden="true"]:not([data-selected="true"]):hover {
-  opacity: 1;
 }
 
 .hwc-detail-bar {
@@ -5057,10 +5226,6 @@ p.hwc-compaction,
 
   .hwc-back {
     display: none;
-  }
-
-  .hwc-split-toggle {
-    display: grid;
   }
 
   /* 詳細はカードにしない。一覧の右をそのまま使う。 */

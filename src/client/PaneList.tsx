@@ -57,6 +57,8 @@ import { finishedClock, formatElapsed, workingMs } from "./time";
 type PaneListProps = {
   state: AppState;
   selectedPaneId: string | null;
+  // 現在ペインが入っているスロット（1 始まり）。ツリーとアクティブの現在行を slot 色にする。
+  currentSlot: number | null;
   parentPaneIds: ReadonlySet<string>;
   scope: ListScope;
   onScope: (scope: ListScope) => void;
@@ -352,6 +354,7 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
                     type="button"
                     class="hwc-active-open"
                     data-current={current}
+                    data-slot={current ? (props.currentSlot ?? undefined) : undefined}
                     aria-current={current ? "true" : undefined}
                     onClick={() => props.onOpen(pane.id)}
                   >
@@ -766,6 +769,9 @@ function TreePaneList(props: TreePaneListProps) {
                 class="hwc-pane"
                 data-pane-id={pane.id}
                 data-current={pane.id === selectedPaneId}
+                data-slot={
+                  pane.id === selectedPaneId ? (props.currentSlot ?? undefined) : undefined
+                }
               >
                 <button
                   type="button"
