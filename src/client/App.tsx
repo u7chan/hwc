@@ -1049,7 +1049,7 @@ export function App() {
                       if (!(target instanceof Element)) return;
                       if (
                         target.closest(
-                          "button, input, textarea, select, [contenteditable]:not([contenteditable='false'])",
+                          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
                         ) === null
                       ) {
                         return;
