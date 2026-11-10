@@ -122,7 +122,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を裸のパスで、`docs/preview/empty-state.png` と `docs/preview/empty-state-light.png` を画像記法で指す。どれも実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもの。連続した画像記法は本文のその位置に 1 行で並び、押すとダイアログで拡大でき、背景・`Esc`・閉じるボタンで閉じる（[ADR 0055](adr/0055-inline-message-images.md) / [ADR 0042](adr/0042-image-preview-dialog.md)）。裸のパスのほうは位置が無いので、今までどおりメッセージの末尾にサムネイルの行が出る（[ADR 0041](adr/0041-agent-message-images.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
 
-送信前の添付チップも同じように拡大できる。入力欄に画像を貼り付けるかドロップし、アップロードが終わってサムネイルが出てから押すとダイアログが開く。`Esc` で閉じるとサムネイルへフォーカスが戻り、チップは残ったままになる。
+送信前の添付チップも同じように拡大できる。入力欄に画像を貼り付けるかドロップし、アップロードが終わってサムネイルが出てから押すとダイアログが開く。`Esc` で閉じるとサムネイルへフォーカスが戻り、チップは残ったままになる。チップは送信するまで残り、別のペインを開いて戻っても同じチップが出る（[ADR 0018](adr/0018-pasted-image-attachments.md)）。
 
 入力欄の + からは、同じ経路で画像を選べる。ファイル入力の `accept` は `image/*` で、`dropActionFrom` と `takeImages` を通る。Playwright では画像のメニュー項目を押した後の File chooser に `upload` でファイルを渡す。
 
