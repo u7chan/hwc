@@ -12,12 +12,17 @@ import {
 const MAX_NAME_ATTEMPTS = 1000;
 
 // 保存先の根。作業ディレクトリに依存させないため、相対値は採らずに既定へ落とす。
-export function defaultAttachmentsRoot(env: NodeJS.ProcessEnv = process.env): string {
+// hwc が書き出すもの（添付・ペイン時刻）はすべてこの下に置く（ADR 0018）。
+export function defaultStateRoot(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env.HWC_STATE_DIR;
-  if (explicit !== undefined && isAbsolute(explicit)) return join(explicit, "attachments");
+  if (explicit !== undefined && isAbsolute(explicit)) return explicit;
   const xdg = env.XDG_STATE_HOME;
   const base = xdg !== undefined && isAbsolute(xdg) ? xdg : join(homedir(), ".local", "state");
-  return join(base, "hwc", "attachments");
+  return join(base, "hwc");
+}
+
+export function defaultAttachmentsRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return join(defaultStateRoot(env), "attachments");
 }
 
 function paneDir(root: string, paneId: string): string | null {

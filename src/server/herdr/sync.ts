@@ -63,6 +63,14 @@ export function startStateSync(options: SyncOptions): () => void {
     store.refresh().catch(report);
   };
 
+  // 購読が切れた後と張り直しの後の取得は、落ちた遷移を観測していない。切れ目を立てて
+  // 終了時刻を記録させない。フラグは reload の直前で立てる（status 購読の onStarted は
+  // 初回に reload しないため、フックの先頭で立てると次のイベント由来の取得まで未観測になる）。
+  const reloadAfterBreak = () => {
+    store.breakObservation();
+    reload();
+  };
+
   // エージェントの状態変化は pane_id 指定でしか購読できない。存在しないペインが 1 つでも混じると
   // 購読リクエスト全体が拒否されるため、ライフサイクル購読とは別の接続に分ける。
   const connectStatus = (panes: readonly string[]) => {
@@ -87,14 +95,14 @@ export function startStateSync(options: SyncOptions): () => void {
           connected = true;
           return;
         }
-        reload();
+        reloadAfterBreak();
       },
       onError: (error) => {
         // ペインが消えた可能性がある。状態を取り直し、新しいペイン集合で張り直す。
         rejectedPanes = subscribedPanes;
         subscribedPanes = "";
         report(error);
-        reload();
+        reloadAfterBreak();
       },
     });
   };
@@ -106,7 +114,7 @@ export function startStateSync(options: SyncOptions): () => void {
     onEvent: reload,
     // 購読が切れるとイベントを取りこぼす。再接続できたら丸ごと取り直して追いつく。
     onLost: () => {},
-    onStarted: reload,
+    onStarted: reloadAfterBreak,
     onError: report,
   });
 

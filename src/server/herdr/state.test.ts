@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import type { HerdrSnapshot } from "./contract";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { AgentStatus, HerdrSnapshot } from "./contract";
+import { type PaneTimesFile, createPaneTimesFile, paneTimesPath } from "./pane-times";
 import { type AppState, checkoutPaths, createStateStore, toAppState } from "./state";
 
 const snapshot: HerdrSnapshot = {
@@ -633,4 +637,154 @@ test("invalidateGit clears the checkout of the workspace", async () => {
   store.invalidateGit("w1");
 
   expect(invalidated).toEqual(["/repo"]);
+});
+
+// ペインは w1:p1 から順に振る。状態だけを変えて publish を重ねる。
+function paneSnapshot(...list: AgentStatus[]): HerdrSnapshot {
+  return {
+    workspaces: [{ workspace_id: "w1", label: "hwc" }],
+    tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
+    panes: list.map((agent_status, index) => ({
+      pane_id: `w1:p${index + 1}`,
+      workspace_id: "w1",
+      tab_id: "w1:t1",
+      agent_status,
+    })),
+  };
+}
+
+function memoryTimes(): PaneTimesFile & { saved: () => string | null } {
+  let raw: string | null = null;
+  return {
+    read: () => raw,
+    write: (next) => {
+      raw = next;
+    },
+    saved: () => raw,
+  };
+}
+
+test("the published state carries the times the store tracked", async () => {
+  const store = createStateStore({ load: async () => paneSnapshot("working") });
+
+  const before = Date.now();
+  const state = await store.refresh();
+  const after = Date.now();
+
+  const since = state.times.workingSince["w1:p1"];
+  expect(since).toBeGreaterThanOrEqual(before);
+  expect(since).toBeLessThanOrEqual(after);
+  expect(state.times.finishedAt).toEqual({});
+});
+
+test("a finished pane keeps the time it was first seen done", async () => {
+  let status: AgentStatus = "working";
+  const store = createStateStore({ load: async () => paneSnapshot(status) });
+
+  await store.refresh();
+  status = "done";
+  const first = await store.refresh();
+  await Bun.sleep(5);
+  const later = await store.refresh();
+
+  expect(first.times.finishedAt["w1:p1"]).toBeDefined();
+  expect(later.times.finishedAt).toEqual(first.times.finishedAt);
+  expect(later.times.workingSince).toEqual({});
+});
+
+test("the times are saved and restored by the next store", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hwc-times-"));
+  try {
+    let status: AgentStatus = "working";
+    const first = createStateStore({
+      load: async () => paneSnapshot(status),
+      times: createPaneTimesFile(root),
+    });
+    const started = (await first.refresh()).times.workingSince["w1:p1"];
+    expect(started).toBeDefined();
+    expect(await readFile(paneTimesPath(root), "utf8")).toContain('"status":"working"');
+
+    // 再起動相当。同じ状態なら起点を引き継ぐ。
+    const restarted = createStateStore({
+      load: async () => paneSnapshot(status),
+      times: createPaneTimesFile(root),
+    });
+    expect((await restarted.refresh()).times.workingSince["w1:p1"]).toBe(started);
+
+    // 状態が変わっていれば引き継がない。最初の観測から数え直す。
+    status = "done";
+    const moved = createStateStore({
+      load: async () => paneSnapshot(status),
+      times: createPaneTimesFile(root),
+    });
+    const after = await moved.refresh();
+    expect(after.times.workingSince).toEqual({});
+    expect(after.times.finishedAt).toEqual({});
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a broken times file is dropped instead of stopping the store", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hwc-times-"));
+  try {
+    await writeFile(paneTimesPath(root), "not json");
+    const store = createStateStore({
+      load: async () => paneSnapshot("working"),
+      times: createPaneTimesFile(root),
+    });
+
+    const state = await store.refresh();
+    expect(state.times.workingSince["w1:p1"]).toBeDefined();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the first publish after a failed load records no transition", async () => {
+  let fail = false;
+  let status: AgentStatus = "working";
+  const store = createStateStore({
+    load: async () => {
+      if (fail) throw new Error("socket closed");
+      return paneSnapshot(status);
+    },
+    times: memoryTimes(),
+  });
+
+  await store.refresh();
+  fail = true;
+  status = "done";
+  await expect(store.refresh()).rejects.toThrow("socket closed");
+
+  fail = false;
+  // 失敗の間に起きた遷移は観測していない。終了時刻を捏造しない。
+  const state = await store.refresh();
+  expect(state.times.finishedAt).toEqual({});
+  expect(state.times.workingSince).toEqual({});
+});
+
+test("a break marked while a load runs still applies to the reload that follows", async () => {
+  const { store, loads } = createControlledStore();
+
+  const first = store.refresh();
+  loads[0]?.resolve(paneSnapshot("working"));
+  await first;
+  const started = store.get()?.times.workingSince["w1:p1"];
+  expect(started).toBeDefined();
+
+  // 取得中に購読が切れた。合流した再取得まで切れ目が残る。
+  const reload = store.refresh();
+  store.breakObservation();
+  void store.refresh();
+
+  loads[1]?.resolve(paneSnapshot("working", "idle"));
+  await waitFor(() => loads.length === 3);
+  loads[2]?.resolve(paneSnapshot("done", "done"));
+  await reload;
+
+  const times = store.get()?.times;
+  // 切れ目の前の観測は残る。
+  expect(times?.workingSince).toEqual({});
+  expect(times?.finishedAt).toEqual({});
 });

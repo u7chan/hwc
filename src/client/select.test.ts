@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import type { AppState, PaneState, WorkspaceState } from "../server/herdr/state";
+import {
+  type AppState,
+  NO_TIMES,
+  type PaneState,
+  type WorkspaceState,
+} from "../server/herdr/state";
 import {
   activeRowName,
   agentGlyph,
@@ -31,6 +36,7 @@ const state: AppState = {
   focusedWorkspaceId: "w1",
   focusedTabId: "w1:t1",
   focusedPaneId: "w1:p1",
+  times: NO_TIMES,
   workspaces: [
     {
       id: "w1",
@@ -576,6 +582,7 @@ test("the parent mark is only needed when the space has more than one agent", ()
     focusedWorkspaceId: null,
     focusedTabId: null,
     focusedPaneId: null,
+    times: NO_TIMES,
     workspaces: [
       parentWorkspace("w1", [
         [parentPane("w1:p1", "pi", "done"), parentPane("w1:p2", "codex", "working")],

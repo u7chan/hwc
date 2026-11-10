@@ -123,6 +123,7 @@ const state = {
   focusedWorkspaceId: null,
   focusedTabId: null,
   focusedPaneId: null,
+  times: { workingSince: {}, finishedAt: {} },
   workspaces: [],
 };
 
@@ -170,10 +171,19 @@ test("a state body needs a workspaces array", () => {
   expect(toAppState(null)).toBeNull();
 });
 
+test("a message carries the state and the server clock it was sent with", () => {
+  expect(parseAppState(JSON.stringify({ state, now: 1_000 }))).toEqual({ state, now: 1_000 });
+  // 読めない now でも状態は適用し、時計だけ据え置く。
+  expect(parseAppState(JSON.stringify({ state }))).toEqual({ state, now: null });
+  expect(parseAppState(JSON.stringify({ state, now: "1000" }))).toEqual({ state, now: null });
+});
+
 test("a broken event body is dropped instead of thrown", () => {
-  expect(parseAppState(JSON.stringify(state))).toEqual(state);
   expect(parseAppState("{")).toBeNull();
   expect(parseAppState('"state"')).toBeNull();
+  // 封筒の外側が壊れていれば状態も無い。
+  expect(parseAppState(JSON.stringify(state))).toBeNull();
+  expect(parseAppState(JSON.stringify({ now: 1_000 }))).toBeNull();
 });
 
 test("an output body is accepted only for the pane that was requested", () => {

@@ -137,6 +137,10 @@ export function createApp(options: {
     previewRoots = defaultPreviewRoots(),
   } = options;
 
+  // 「今」は状態ではなく送信時に決める。状態に持たせると、キャッシュされた状態に古い時刻が
+  // 残り、状態が動かない間は経過が止まって見える。クライアントはこの now で時計を合わせる。
+  const stateMessage = (state: AppState) => ({ state, now: Date.now() });
+
   const current = async (): Promise<AppState | null> =>
     store.get() ??
     store.refresh().catch(() => {
@@ -332,7 +336,7 @@ export function createApp(options: {
       .get("/api/state", async (c) => {
         const state = await current();
         if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-        return c.json(state);
+        return c.json(stateMessage(state));
       })
       .get("/api/events", (c) =>
         streamSSE(c, async (stream) => {
@@ -340,7 +344,7 @@ export function createApp(options: {
             stream.writeSSE(event ? { event, data } : { data }).catch(() => {
               // 切断済みのクライアントへの書き込みは失敗する。購読解除は切断の検出側で行う。
             });
-          const send = (state: AppState) => write(null, JSON.stringify(state));
+          const send = (state: AppState) => write(null, JSON.stringify(stateMessage(state)));
 
           // 初期状態の送信中に届いた更新を取りこぼさないよう、購読を先に張って溜めておく。
           let ready = false;

@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import type { AppState, PaneState, WorkspaceState } from "../server/herdr/state";
+import {
+  type AppState,
+  NO_TIMES,
+  type PaneState,
+  type WorkspaceState,
+} from "../server/herdr/state";
 import { faviconHref, faviconStatus, faviconSvg } from "./favicon";
 
 function pane(id: string, agent: string | null, agentStatus: PaneState["agentStatus"]): PaneState {
@@ -34,7 +39,13 @@ function workspace(id: string, panes: readonly PaneState[]): WorkspaceState {
 }
 
 function app(...workspaces: WorkspaceState[]): AppState {
-  return { focusedWorkspaceId: null, focusedTabId: null, focusedPaneId: null, workspaces };
+  return {
+    focusedWorkspaceId: null,
+    focusedTabId: null,
+    focusedPaneId: null,
+    workspaces,
+    times: NO_TIMES,
+  };
 }
 
 test("a question anywhere wins over work and completion", () => {

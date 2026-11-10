@@ -14,19 +14,19 @@ bun run e2e:serve
 
 ## 実環境との分離
 
-| 対象                    | 実環境                                              | E2E                                                                                                                |
-| ----------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Herdr ソケット          | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                     |
-| pi セッション           | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                |
-| pi モデルカタログ       | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                   |
-| pi モデル・effort・上限 | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                     |
-| GitHub の PR            | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                       |
-| Codex App Server        | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない |
-| OpenCode サービス       | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                  |
-| ブランチ                | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                     |
-| git のリモートと差      | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の upstream / ahead / behind を返す  |
-| 添付の保存先            | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                         |
-| ポート                  | 30000                                               | 31000                                                                                                              |
+| 対象                                 | 実環境                                              | E2E                                                                                                                |
+| ------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Herdr ソケット                       | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                     |
+| pi セッション                        | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                |
+| pi モデルカタログ                    | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                   |
+| pi モデル・effort・上限              | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                     |
+| GitHub の PR                         | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                       |
+| Codex App Server                     | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない |
+| OpenCode サービス                    | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                  |
+| ブランチ                             | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                     |
+| git のリモートと差                   | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の upstream / ahead / behind を返す  |
+| 状態ディレクトリ（添付・ペイン時刻） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                         |
+| ポート                               | 30000                                               | 31000                                                                                                              |
 
 `e2e/serve.ts` が架空 Herdr を起動してから `src/server.ts` を読み込む。BFF とクライアントは本番コードのままで、ソケット経路・状態同期・チャット読み取りを通る。実 Herdr のソケットには接続しない。
 
@@ -119,6 +119,8 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 pi のペインでは、あわせてセッションの隣に live の sidecar（`<session>.jsonl.thinking.json`）を書く。まず `waiting` で `working` にし、1.2 秒後に折り返す長さの `thinking` と `tokPerSecond: 42.3` を上書きし、6 秒後に消して `idle` に戻す。実物の pi 拡張はターン中に phase・thinking の末尾・生成速度を上書きし続ける（[ADR 0035](adr/0035-live-pi-activity.md)）。E2E ではこの 2 段階で、段階の行が会話のスクロール領域の外（入力欄の直上）に出て、スクロールしても残ること、生成速度が経過時間の左に出て右端の時間が動かないこと、末尾 2 行だけが出てターン終了で消えることを確かめる。入力欄を 1 行に畳むセルでは thinking と生成速度を出さず、段階と経過時間だけになる。停止ボタン（`esc`）でも sidecar を消す。
 
+`/done`（添付注記なし）はフィクスチャ専用の入力で、実 Herdr には無い。受け取ったペインを `done` にする。実 Herdr の `done` は既読でしか `idle` に戻らず、hwc からは作れないため、一覧の終了時刻と端末間の一致を確かめる入口として置く。
+
 `/compact`（添付注記なし）を受け取ると、実 Herdr の pi 拡張と同じく `agent_status` は `working` にせず、1.2 秒後に架空の compaction をセッションへ追記して `idle` のままにする。hwc 側のローカルな「会話を圧縮しています」と、完了ログの位置・所要時間を E2E で確かめるため、最後の user メッセージを kept の先頭にする。
 
 追記しない条件:
@@ -135,6 +137,16 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 1. `アクティブ` を開く。エージェントのいるペインが、待機中も含めて帯ごとに状態順（要対応 → 完了 → 実行中 → 待機 → 不明）で並ぶ。`scratch` では `notes`（エージェントなし）が出ず、`folder-trust-saved` などの待機が帯に並ぶ。
 2. `acme-dashboard` の帯で `api`（完了）を開き、`一覧へ戻る` で戻る。`api` は `待機` になって帯の最後へ移り、帯の件数から完了が消える（[ADR 0050](adr/0050-active-lists-every-agent.md)）。
 3. `すべて` に切り替えて、シェルだけのペインと待機のペインがツリーに出ることを確かめる。
+
+### 経過時間と終了時刻
+
+時刻は BFF が持つ（[ADR 0017](adr/0017-active-agents-view.md)）。一覧の右端は、実行中が経過、完了と待機が終了時刻（時:分）になる。
+
+1. `アクティブ` を開く。`acme-dashboard` の `frontend`（実行中）の右端が、開いた時点から増える経過（`3s`、`1m 4s` など）になる。
+2. `frontend` の終了時刻を作る。終了時刻は `working` から `done` へ移ったときにだけ記録し、フィクスチャで `done` を作る入力は `/done` だけ。`frontend` を開いて入力欄に `/done` と入れると、停止ボタンではなく送信ボタンになる（停止は入力が空のときだけで、文字・添付・引用があれば実行中への追加指示の送信になる）。そのまま送って一覧に戻ると、`frontend` が `完了` になり、右端が経過から終了時刻（時:分）に変わる。入力欄を使わない場合は `POST /api/panes/w1:p1/input` に `{"text":"/done","submit":true}` を直接送っても同じになる。
+3. 再読み込みしても同じ終了時刻が残る。起点と終了時刻は状態ディレクトリの `pane-times.json` にあり、BFF の再起動でも状態が一致する間は引き継がれる。
+4. localStorage を共有しない別のブラウザ（シークレットウィンドウなど）で `アクティブ` を開くと、同じ終了時刻になる。経過は 1 秒の位相で揺れるので、比べるのは固定値の終了時刻にする。
+5. `frontend` の行は比べ終わるまで開かない。開いて離れると既読が進んで `待機` に戻り、行の状態が変わる。
 
 ## ファビコンと親マーク
 

@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import type { AgentStatus, AppState, PaneState, WorkspaceState } from "../server/herdr/state";
+import {
+  type AgentStatus,
+  type AppState,
+  NO_TIMES,
+  type PaneState,
+  type WorkspaceState,
+} from "../server/herdr/state";
 import {
   activeGroups,
   activePanes,
@@ -49,7 +55,13 @@ function tabsWorkspace(id: string, tabPanes: readonly (readonly PaneState[])[]):
 }
 
 function app(...workspaces: WorkspaceState[]): AppState {
-  return { focusedWorkspaceId: null, focusedTabId: null, focusedPaneId: null, workspaces };
+  return {
+    focusedWorkspaceId: null,
+    focusedTabId: null,
+    focusedPaneId: null,
+    times: NO_TIMES,
+    workspaces,
+  };
 }
 
 test("the list opens on every space", () => {

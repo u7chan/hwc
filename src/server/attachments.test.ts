@@ -6,6 +6,7 @@ import {
   attachmentExists,
   attachmentFilePath,
   defaultAttachmentsRoot,
+  defaultStateRoot,
   readAttachment,
   saveAttachment,
 } from "./attachments";
@@ -62,6 +63,7 @@ test("a file that is gone or not a saved name has no bytes", async () => {
 });
 
 test("the root comes from the state dir and ignores a relative path", () => {
+  expect(defaultStateRoot({ HWC_STATE_DIR: "/srv/hwc-state" })).toBe("/srv/hwc-state");
   expect(defaultAttachmentsRoot({ HWC_STATE_DIR: "/srv/hwc-state" })).toBe(
     "/srv/hwc-state/attachments",
   );

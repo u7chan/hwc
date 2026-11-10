@@ -20,6 +20,7 @@ import {
   stopAgent,
   syncWorkspace,
   type GitSyncFailure,
+  type StateMessage,
 } from "./api";
 import {
   INITIAL_CONNECTION,
@@ -80,17 +81,8 @@ import {
   shouldFocusOnLeave,
   type ListScope,
 } from "./scope";
-import { gateSnapshot, nextObservation, type SnapshotOrigin } from "./snapshot";
-import {
-  FINISHED_AT_STORAGE_KEY,
-  WORKING_SINCE_STORAGE_KEY,
-  parseFinishedAt,
-  parseWorkingSince,
-  trackFinished,
-  trackWorking,
-  workingMs,
-  workingSinceForSave,
-} from "./time";
+import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
+import { clockSkew, serverClockNow, workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -112,76 +104,9 @@ const SPLIT_STORAGE_KEY = "hwc-split";
 const NO_GROUPS: ReadonlySet<string> = new Set();
 const NO_TIMES: ReadonlyMap<string, number> = new Map();
 
-// 保存に失敗しても表示は続ける。プライベートモードなどでは localStorage が使えない。
-function readStored(key: string): string | null {
-  if (typeof localStorage === "undefined") return null;
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeStored(key: string, value: string) {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // 保存できなくても、その場の表示は続ける。
-  }
-}
-
-function writePaneTimes(key: string, times: Record<string, number>) {
-  writeStored(key, JSON.stringify(times));
-}
-
-// 壁時計との同期。1 秒ごとに数え直し、稼働に入った時刻と完了した時刻は手元で覚える。
-// 起点は端末にも残す。Herdr は変化の順序しか返さないので、こちらが唯一の持ち主になる。
-// 復元は 1 回だけ。毎秒 localStorage を読む必要は無い。
-function usePaneTimes(state: AppState | null, connection: ConnectionStatus) {
-  const [now, setNow] = useState(() => Date.now());
-  const restored = useRef(false);
-  const workingSince = useRef<ReadonlyMap<string, number>>(NO_TIMES);
-  const finishedAt = useRef<ReadonlyMap<string, number>>(NO_TIMES);
-  // 観測済みのスナップショット。描き直しのたびに遷移を数えないよう、同じものは見ない。
-  const observed = useRef<AppState | null>(null);
-  // 次のスナップショットを新しい観測の最初として扱うか。判定は nextObservation が持つ。
-  const fresh = useRef(true);
-
-  if (!restored.current) {
-    restored.current = true;
-    workingSince.current = parseWorkingSince(readStored(WORKING_SINCE_STORAGE_KEY), now);
-    finishedAt.current = parseFinishedAt(readStored(FINISHED_AT_STORAGE_KEY), now);
-  }
-
-  const newObservation = nextObservation(fresh.current, connection);
-  fresh.current = newObservation;
-
-  if (state !== null && observed.current !== state) {
-    observed.current = state;
-    const observing = !newObservation;
-    fresh.current = false;
-
-    // 完了時刻は、直前の観測で working だったペインが done / idle に移ったときだけ。
-    const finished = trackFinished(finishedAt.current, workingSince.current, state, now, observing);
-    if (finished !== finishedAt.current) {
-      finishedAt.current = finished;
-      writePaneTimes(FINISHED_AT_STORAGE_KEY, Object.fromEntries(finished));
-    }
-
-    const working = trackWorking(workingSince.current, state, now);
-    if (working !== workingSince.current) {
-      workingSince.current = working;
-      writePaneTimes(WORKING_SINCE_STORAGE_KEY, workingSinceForSave(state, working));
-    }
-  }
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return { workingSince: workingSince.current, finishedAt: finishedAt.current, now };
+// 時刻は BFF が持つ。端末は受け取った時刻を並べるだけで、サーバーの時計に合わせた「今」で刻む。
+function toTimes(record: Record<string, number> | undefined): ReadonlyMap<string, number> {
+  return record === undefined ? NO_TIMES : new Map(Object.entries(record));
 }
 
 // 端末の幅は React の外にある。購読して、変わったときだけ描き直す。
@@ -341,14 +266,30 @@ export function App() {
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
   const snapshotWriter = useRef<SnapshotOrigin>("initial-fetch");
+  // サーバーの時計と端末の時計の差。スナップショットを受けた場所で固定し、以後の描画では
+  // ここに入れた値だけを使う。
+  const skew = useRef(0);
+  // 画面の「今」はサーバーの時計で刻む。状態が動かない間も経過が進むよう 1 秒ごとに描き直す。
+  const [now, setNow] = useState(() => Date.now());
+  const receive = (message: StateMessage) => {
+    skew.current = clockSkew(message.now, Date.now(), skew.current);
+    // 補正は次の刻みを待たない。待つと、状態が届いてから最初の刻みまで端末時計のずれだけ
+    // 経過がずれて見える（非表示タブでは可視化後の最初の刻みまで残る）。
+    setNow(serverClockNow(Date.now(), skew.current));
+  };
+  useEffect(() => {
+    const timer = setInterval(() => setNow(serverClockNow(Date.now(), skew.current)), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     fetchState(controller.signal).then(
-      (next) => {
+      (message) => {
+        receive(message);
         const decision = gateSnapshot(snapshotWriter.current, "initial-fetch");
         snapshotWriter.current = decision.writer;
-        if (decision.apply) setState(next);
+        if (decision.apply) setState(message.state);
       },
       () => undefined,
     );
@@ -359,12 +300,13 @@ export function App() {
   useEffect(() => {
     const events = new EventSource("/api/events");
     events.onmessage = (event) => {
-      const next = parseAppState(event.data);
-      if (next === null) return;
+      const message = parseAppState(event.data);
+      if (message === null) return;
+      receive(message);
       const decision = gateSnapshot(snapshotWriter.current, "stream");
       snapshotWriter.current = decision.writer;
       if (!decision.apply) return;
-      setState(next);
+      setState(message.state);
       setConnection(connectionAfter("snapshot"));
     };
     events.addEventListener("unavailable", () => setConnection(connectionAfter("unavailable")));
@@ -435,7 +377,9 @@ export function App() {
     }
   };
 
-  const { workingSince, finishedAt, now } = usePaneTimes(state, connection);
+  // 時刻は BFF が持つ。描画のたびに一度だけ Map へ引き直し、表示側の型は変えない。
+  const workingSince = toTimes(state?.times.workingSince);
+  const finishedAt = toTimes(state?.times.finishedAt);
 
   // タブのアイコンは、開いているペインではなく全スペースの親を見る。別タブにいても
   // 終わった親や質問に気付けるようにする。タイトルは変えない。

@@ -12,7 +12,13 @@ import type { WorkspaceClient } from "./herdr/workspaces";
 import type { WorktreeClient } from "./herdr/worktrees";
 import { HerdrError } from "./herdr/socket";
 import type { GitClient } from "./git";
-import type { AppState, ChatSource, PaneState, StateStore } from "./herdr/state";
+import {
+  type AppState,
+  type ChatSource,
+  NO_TIMES,
+  type PaneState,
+  type StateStore,
+} from "./herdr/state";
 import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
 import { FOLDER_TRUST_SCREEN, PI_TRUST_SCREEN } from "../../e2e/fixtures/folder-trust";
 
@@ -30,6 +36,7 @@ const state: AppState = {
   focusedWorkspaceId: "w1",
   focusedTabId: "w1:t1",
   focusedPaneId: "w1:p1",
+  times: NO_TIMES,
   workspaces: [
     {
       id: "w1",
@@ -165,6 +172,7 @@ function createFakeStore(
       current ??= state;
       return current;
     },
+    breakObservation: () => {},
     chatSource: (paneId) => sources.get(paneId) ?? null,
     workspaceRoot: () => null,
     workspacePath: () => workspacePath,
@@ -337,8 +345,12 @@ function createSseReader(body: ReadableStream<Uint8Array>) {
         buffer += decoder.decode(value, { stream: true });
       }
     },
+    async nextMessage(): Promise<{ state: AppState; now: number }> {
+      return JSON.parse((await this.nextEvent()).data) as { state: AppState; now: number };
+    },
+    // 封筒の外側（now）は各テストの関心ではないので、状態だけを返す。
     async next(): Promise<AppState> {
-      return JSON.parse((await this.nextEvent()).data) as AppState;
+      return (await this.nextMessage()).state;
     },
     cancel: () => reader.cancel(),
   };
@@ -359,12 +371,18 @@ test("GET /api/health reports the revision it was built from", async () => {
   expect(await response.json()).toEqual({ ok: true, service: "hwc", revision: "abc1234" });
 });
 
-test("GET /api/state returns the current state", async () => {
+test("GET /api/state returns the current state and the clock it was sent with", async () => {
   const { app } = createTestApp();
+  const before = Date.now();
   const response = await app.request("/api/state");
+  const after = Date.now();
 
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual(state);
+  const body = await response.json();
+  expect(body.state).toEqual(state);
+  // 状態はキャッシュされても、時刻は送信時に決まる。
+  expect(body.now).toBeGreaterThanOrEqual(before);
+  expect(body.now).toBeLessThanOrEqual(after);
 });
 
 test("GET /api/state loads the state when the store is still empty", async () => {
@@ -372,7 +390,7 @@ test("GET /api/state loads the state when the store is still empty", async () =>
   const response = await app.request("/api/state");
 
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual(state);
+  expect((await response.json()).state).toEqual(state);
 });
 
 test("GET /api/state returns 502 when Herdr cannot be read", async () => {
@@ -821,13 +839,20 @@ test("GET /api/events streams the current state first, then every update", async
   const store = createFakeStore(state);
   const { app } = createTestApp({ store });
   const controller = new AbortController();
+  // 送信時刻は要求を受けた時点で決まる。要求の前に測る。
+  const before = Date.now();
   const response = await app.request("/api/events", { signal: controller.signal });
 
   expect(response.headers.get("content-type")).toContain("text/event-stream");
   if (!response.body) throw new Error("response has no body");
   const events = createSseReader(response.body);
 
-  expect(await events.next()).toEqual(state);
+  const first = await events.nextMessage();
+  const after = Date.now();
+  expect(first.state).toEqual(state);
+  // 状態が動かない間も時刻が進むよう、now は送信時刻になる。
+  expect(first.now).toBeGreaterThanOrEqual(before);
+  expect(first.now).toBeLessThanOrEqual(after);
 
   const next: AppState = { ...state, focusedPaneId: null };
   store.push(next);
