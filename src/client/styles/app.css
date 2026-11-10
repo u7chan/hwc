@@ -661,9 +661,9 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   background: var(--color-raised);
 }
 
-/* 帯から移った直後の目印。現在のペイン行と同じ accent の枠で、どのワークツリーへ
-   来たかを示す。背景は塗らず、選択中のペイン行と役割を分ける。次のペイン選択・
-   スコープ切り替え・開閉で消える。 */
+/* 帯から移った直後の目印。現在のペイン行と同じ太さ・内側の枠を accent で引き、
+   どのワークツリーへ来たかを示す。スロット色は使わない。背景は塗らず、選択中の
+   ペイン行と役割を分ける。次のペイン選択・スコープ切り替え・開閉で消える。 */
 .hwc-group-row[data-reveal="true"] {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
