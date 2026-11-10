@@ -42,6 +42,7 @@ import {
 } from "./scope";
 import { GitStatus } from "./GitStatus";
 import { MENU_ID } from "./Menu";
+import { ParentMark } from "./ParentMark";
 import {
   adjacentBeforeKey,
   dropBeforeId,
@@ -56,6 +57,7 @@ import { finishedClock, formatElapsed, workingMs } from "./time";
 type PaneListProps = {
   state: AppState;
   selectedPaneId: string | null;
+  parentPaneIds: ReadonlySet<string>;
   scope: ListScope;
   onScope: (scope: ListScope) => void;
   expanded: ReadonlySet<string>;
@@ -355,8 +357,11 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
                   >
                     <StatusIcon status={pane.agentStatus} />
                     <span class="hwc-active-main">
-                      <span class="hwc-active-name" title={name}>
-                        {activeRowName(group.workspace.label, name)}
+                      <span class="hwc-active-title">
+                        <span class="hwc-active-name" title={name}>
+                          {activeRowName(group.workspace.label, name)}
+                        </span>
+                        {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
                       </span>
                       {showsTabName(group.workspace) ? (
                         <span class="hwc-active-tab">· {tab.label}</span>
@@ -779,6 +784,7 @@ function TreePaneList(props: TreePaneListProps) {
                         </span>
                       )}
                       <span class="hwc-pane-name">{paneRowTitle(pane)}</span>
+                      {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
                     </span>
                     {branch === null ? null : (
                       <span class="hwc-pane-sub" title={branch}>

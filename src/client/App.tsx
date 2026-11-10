@@ -29,6 +29,7 @@ import {
 } from "./connection";
 import { CloseConfirm } from "./CloseConfirm";
 import { CreatePane } from "./CreatePane";
+import { applyFavicon, faviconStatus } from "./favicon";
 import { ImageViewer } from "./ImageViewer";
 import { Preview } from "./Preview";
 import { ChevronRightIcon, CloseIcon, HwcMark, PlusIcon, SettingsIcon, TrashIcon } from "./icons";
@@ -50,6 +51,7 @@ import {
   findPaneRow,
   groupIds,
   initialExpanded,
+  markedParentPaneIds,
   nextPaneInTab,
   splitPanes,
   type PaneContext,
@@ -198,6 +200,8 @@ function useMediaQuery(query: string) {
 }
 
 type View = { selectedPaneId: string | null; expanded: ReadonlySet<string> };
+
+const NO_PARENT_PANE_IDS: ReadonlySet<string> = new Set();
 
 // 開いているプレビュー。Herdr のペインではないので、状態には載せない。shown は
 // タブの選択と同じで、ペインのタブを選ぶと false に戻る（ADR 0051）。
@@ -432,6 +436,12 @@ export function App() {
   };
 
   const { workingSince, finishedAt, now } = usePaneTimes(state, connection);
+
+  // タブのアイコンは、開いているペインではなく全スペースの親を見る。別タブにいても
+  // 終わった親や質問に気付けるようにする。タイトルは変えない。
+  const favicon = state === null ? null : faviconStatus(state);
+  const parentPaneIds = state === null ? NO_PARENT_PANE_IDS : markedParentPaneIds(state);
+  useEffect(() => applyFavicon(favicon), [favicon]);
 
   // 選んだペインがスナップショットから消えても id は残す。findPane が null を返すので
   // 表示は一覧に戻り、戻ってきたときは同じペインを開ける。
@@ -962,6 +972,7 @@ export function App() {
             <PaneList
               state={state}
               selectedPaneId={selectedPaneId}
+              parentPaneIds={parentPaneIds}
               scope={scope}
               onScope={changeScope}
               expanded={expanded}
@@ -1049,6 +1060,7 @@ export function App() {
               <TabBar
                 pane={pane}
                 panes={siblings}
+                parentPaneIds={parentPaneIds}
                 processes={processes}
                 preview={
                   preview !== null && previewInTab

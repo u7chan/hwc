@@ -208,6 +208,16 @@ export function TabIcon({ size = 16 }: IconProps) {
   );
 }
 
+// スペースの親ペイン。左端にいる作業の起点を、状態記号とは別の形で示す。
+export function ParentIcon({ size = 14 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M4 17.5l-1.2-9 5.2 3.6L12 5.5l4 6.6 5.2-3.6-1.2 9z" />
+      <path d="M5.5 20.5h13" />
+    </Svg>
+  );
+}
+
 // エージェントの見分けは、公式マークの形で付ける（色は行の色に合わせる）。
 export function PiIcon({ size = 18 }: IconProps) {
   return (
