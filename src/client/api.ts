@@ -602,6 +602,20 @@ export async function removeWorktree(workspaceId: string): Promise<CloseOutcome>
   }
 }
 
+// 重複したネイティブスペースを閉じる。ファイルは消さないので、削除より短い期限で足りる。
+// 消えたスペースは目的の状態に達しているため、close と同じく 404 は成功として扱う。
+export async function closeWorkspace(workspaceId: string): Promise<CloseOutcome> {
+  try {
+    const response = await client.api.workspaces[":id"].close.$post(workspaceParam(workspaceId), {
+      headers: { "content-type": "application/json" },
+      init: { signal: AbortSignal.timeout(CLOSE_TIMEOUT_MS) },
+    });
+    return closeOutcome(response.status);
+  } catch {
+    return "failed";
+  }
+}
+
 // 並びは Herdr の状態そのもの。ソケットの期限（8 秒）と取り直しの分を少し上乗せする。
 export const MOVE_WORKSPACES_TIMEOUT_MS = 10_000;
 

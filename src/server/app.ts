@@ -52,6 +52,7 @@ import {
 } from "./message-files";
 import { isHtmlName } from "../shared/message-files";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
+import { placeOf } from "../shared/place";
 import { isAgentModel, supportsFolderTrust, supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
 import { HerdrError } from "./herdr/socket";
@@ -153,6 +154,29 @@ export function createApp(options: {
       return null;
     });
 
+  // 同じ場所の close 要求が同時に来ると、両方が重複チェックを通って最後の 1 つまで
+  // 閉じ得る。BFF は 1 プロセスなので、閉じている間と、閉じた直後の状態が届くまでの
+  // workspace id を覚えておき、後続の要求を 409 にする。
+  const closingSpaces = new Map<string, Set<string>>();
+
+  const releaseClosingSpace = (placeKey: string, workspaceId: string) => {
+    const ids = closingSpaces.get(placeKey);
+    if (ids === undefined) return;
+    ids.delete(workspaceId);
+    if (ids.size === 0) closingSpaces.delete(placeKey);
+  };
+
+  // 状態から消えた id はもう閉じている。次の close 要求でガードを外す。
+  const pruneClosingSpaces = (state: AppState) => {
+    const live = new Set(state.workspaces.map((workspace) => workspace.id));
+    for (const [placeKey, ids] of closingSpaces) {
+      for (const id of ids) {
+        if (!live.has(id)) ids.delete(id);
+      }
+      if (ids.size === 0) closingSpaces.delete(placeKey);
+    }
+  };
+
   // 根の番号は /files と /preview で共通。片方だけ順を変えると、チップと配信が
   // 別の実体を指す。番号は 0 がチェックアウト、1 以上が追加根（無い場合は 0 から）。
   const rootsFor = (workspaceRoot: string | null): string[] =>
@@ -193,6 +217,23 @@ export function createApp(options: {
     if (error instanceof HerdrError) {
       if (error.code === "workspace_not_found") {
         return c.json({ error: "workspace_not_found" }, 404);
+      }
+      if (error.code === "invalid_params" || error.code === "invalid_request") {
+        return c.json({ error: "invalid_request" }, 400);
+      }
+    }
+    return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  // 重複スペースを閉じる操作は、フォルダを消さない。linked worktree の削除とは
+  // エラーコードも入口も分ける。グループを閉じる要求は勝手に通さない。
+  const closeSpaceFailure = (c: Context, error: unknown) => {
+    if (error instanceof HerdrError) {
+      if (error.code === "workspace_not_found") {
+        return c.json({ error: "workspace_not_found" }, 404);
+      }
+      if (error.code === "workspace_group_close_required") {
+        return c.json({ error: error.code }, 409);
       }
       if (error.code === "invalid_params" || error.code === "invalid_request") {
         return c.json({ error: "invalid_request" }, 400);
@@ -891,6 +932,44 @@ export function createApp(options: {
             }
           }
           return c.json({ error: "herdr_unavailable" }, 502);
+        }
+      })
+      .post("/api/workspaces/:id/close", requireJson, async (c) => {
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+        pruneClosingSpaces(state);
+
+        const workspaceId = c.req.param("id");
+        const workspace = state.workspaces.find((item) => item.id === workspaceId);
+        if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
+
+        // 閉じられるのは、同じ場所を指す Herdr が管理しないスペースが他にもあるときだけ。
+        // managed: true のワークツリーは対象外（linked は worktree.remove、本体は閉じない）。
+        const place = placeOf(workspace);
+        if (place === null) return c.json({ error: "not_duplicate_space" }, 409);
+        const closing = closingSpaces.get(place.key) ?? new Set<string>();
+        const duplicates = state.workspaces.filter(
+          (item) => !closing.has(item.id) && placeOf(item)?.key === place.key,
+        );
+        if (duplicates.length < 2) return c.json({ error: "not_duplicate_space" }, 409);
+
+        // close が返る前に次の要求が重複チェックを通らないよう、呼ぶ前に印を付ける。
+        closing.add(workspaceId);
+        closingSpaces.set(place.key, closing);
+        try {
+          await workspaces.close(workspaceId);
+          // 応答は待たせない。状態が届くまでの間は closing に残し、後続の close を
+          // 409 にする。届いた id は次の要求の prune で外れる。
+          void store.refresh().catch(() => {});
+          return c.json({ ok: true });
+        } catch (error) {
+          if (error instanceof HerdrError && error.code === "workspace_not_found") {
+            // 既に閉じている。状態が届くまでは、同じ場所の別スペースを閉じさせない。
+            void store.refresh().catch(() => {});
+          } else {
+            releaseClosingSpace(place.key, workspaceId);
+          }
+          return closeSpaceFailure(c, error);
         }
       })
   );

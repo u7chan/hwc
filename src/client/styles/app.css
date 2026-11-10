@@ -814,8 +814,10 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   flex: 0 1 auto;
 }
 
-/* エージェントの数の札。状態の記号とは別に、居るかどうかを名前の横で示す。 */
-.hwc-group-agents {
+/* エージェントの数の札。状態の記号とは別に、居るかどうかを名前の横で示す。
+   場所の束のスペース数も同じ形にして、名前の横で実体の数を読めるようにする。 */
+.hwc-group-agents,
+.hwc-group-spaces {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -831,7 +833,8 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   line-height: 1.5;
 }
 
-.hwc-group-agents svg {
+.hwc-group-agents svg,
+.hwc-group-spaces svg {
   color: var(--color-secondary);
 }
 

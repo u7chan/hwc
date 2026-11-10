@@ -10,11 +10,15 @@ import {
 } from "./order";
 import { groupWorkspaces } from "./select";
 
-function workspace(id: string, options: { repo?: string; linked?: boolean } = {}): WorkspaceState {
+function workspace(
+  id: string,
+  options: { repo?: string; linked?: boolean; path?: string; label?: string } = {},
+): WorkspaceState {
   const repo = options.repo;
   return {
     id,
-    label: id,
+    label: options.label ?? id,
+    path: options.path ?? null,
     agentStatus: "idle",
     focused: false,
     worktree:
@@ -55,6 +59,19 @@ test("the block keeps the native workspace order even when a linked worktree com
   ];
 
   expect(unitsOf(workspaces)).toEqual([{ key: "repo:acme", label: "acme", ids: ["w2", "w1"] }]);
+});
+
+test("native duplicates at the same place move as one unit", () => {
+  const workspaces = [
+    workspace("w1", { path: "/work/mypi", label: "mypi" }),
+    workspace("w2", { path: "/work/mypi", label: "mypi" }),
+    workspace("w3", { path: "/work/scratch", label: "scratch" }),
+  ];
+
+  expect(unitsOf(workspaces)).toEqual([
+    { key: "place:%2Fwork%2Fmypi:mypi", label: "mypi", ids: ["w1", "w2"] },
+    { key: "w3", label: "scratch", ids: ["w3"] },
+  ]);
 });
 
 test("dropAnchor picks the first remaining block whose middle is below the pointer", () => {

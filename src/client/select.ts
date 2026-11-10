@@ -6,6 +6,8 @@ import type {
   WorkspaceState,
 } from "../server/herdr/state";
 import type { GitSync } from "../shared/git";
+import type { Place } from "../shared/place";
+import { placeOf } from "../shared/place";
 import type { PullRequest, PullRequestState } from "../shared/pull-request";
 
 export type PaneRow = {
@@ -42,19 +44,55 @@ export type WorkspaceGroup = {
   key: string;
   // git 管理外のワークスペースは単独で 1 グループ。repoName があれば同じリポジトリの束。
   repoName: string | null;
+  // 同じ場所を指す Herdr ネイティブのスペースを束ねているときだけ入る。
+  place: Place | null;
   host: AppState["workspaces"][number] | null;
   linked: AppState["workspaces"];
 };
 
 // 同じリポジトリのワークスペースは 1 つに束ねる。本体（linked でないもの）を親に置く。
+// Herdr が管理しないスペースは、同じパス・同じラベルの重複だけ場所で束ねる。それ以外は
+// git から補った worktree 情報を含めて、今までどおりリポジトリ束に任せる。
 export function groupWorkspaces(workspaces: readonly WorkspaceState[]): WorkspaceGroup[] {
   const groups: WorkspaceGroup[] = [];
   const byRepo = new Map<string, WorkspaceGroup>();
+  const byPlace = new Map<string, WorkspaceGroup>();
+  const placeCounts = new Map<string, number>();
 
   for (const workspace of workspaces) {
+    const place = placeOf(workspace);
+    if (place !== null) placeCounts.set(place.key, (placeCounts.get(place.key) ?? 0) + 1);
+  }
+
+  for (const workspace of workspaces) {
+    const place = placeOf(workspace);
+    if (place !== null && (placeCounts.get(place.key) ?? 0) >= 2) {
+      const existing = byPlace.get(place.key);
+      if (existing === undefined) {
+        const group: WorkspaceGroup = {
+          key: place.key,
+          repoName: null,
+          place,
+          host: workspace,
+          linked: [],
+        };
+        byPlace.set(place.key, group);
+        groups.push(group);
+      } else {
+        existing.linked = [...existing.linked, workspace];
+      }
+      continue;
+    }
+
     const worktree = workspace.worktree;
     if (!worktree) {
-      groups.push({ key: workspace.id, repoName: null, host: workspace, linked: [] });
+      groups.push({
+        key: workspace.id,
+        repoName: null,
+        place: null,
+        host: workspace,
+        linked: [],
+      });
       continue;
     }
 
@@ -63,6 +101,7 @@ export function groupWorkspaces(workspaces: readonly WorkspaceState[]): Workspac
       const group: WorkspaceGroup = {
         key: `repo:${worktree.repoName}`,
         repoName: worktree.repoName,
+        place: null,
         host: worktree.isLinkedWorktree ? null : workspace,
         linked: worktree.isLinkedWorktree ? [workspace] : [],
       };
@@ -79,6 +118,33 @@ export function groupWorkspaces(workspaces: readonly WorkspaceState[]): Workspac
   }
 
   return groups;
+}
+
+// 束のメンバーを Herdr の並びで返す。場所の束では先頭が代表になる。
+export function groupMembers(group: WorkspaceGroup): WorkspaceState[] {
+  return group.host === null ? group.linked : [group.host, ...group.linked];
+}
+
+// そのスペースが場所の束に入っているときだけ、束の key を返す。
+export function placeGroupKeyFor(
+  workspaces: readonly WorkspaceState[],
+  workspaceId: string,
+): string | null {
+  for (const group of groupWorkspaces(workspaces)) {
+    if (group.place === null) continue;
+    if (groupMembers(group).some((workspace) => workspace.id === workspaceId)) return group.key;
+  }
+  return null;
+}
+
+// 重複したネイティブスペースだけを閉じられる。最後の 1 つは残す。
+// ファイルは消さないので、linked worktree の削除とは入り口を分ける。
+export function canCloseDuplicateSpace(state: AppState, workspaceId: string): boolean {
+  const workspace = state.workspaces.find((item) => item.id === workspaceId);
+  if (workspace === undefined) return false;
+  const place = placeOf(workspace);
+  if (place === null) return false;
+  return state.workspaces.filter((item) => placeOf(item)?.key === place.key).length >= 2;
 }
 
 export function countWorkspacePanes(workspaceId: string, state: AppState): number {
@@ -261,6 +327,17 @@ export function statusLabel(status: AgentStatus): string {
   }
 }
 
+// 畳んだ場所の束では、代表 1 つの状態だけを出すと、もう片方の要対応や実行中が
+// 見えなくなる。行動が必要な順に最も強い状態を 1 つ選ぶ。
+const URGENT_STATUSES: readonly AgentStatus[] = ["blocked", "working", "done", "idle", "unknown"];
+
+export function mostUrgentStatus(statuses: readonly AgentStatus[]): AgentStatus {
+  for (const status of URGENT_STATUSES) {
+    if (statuses.includes(status)) return status;
+  }
+  return "unknown";
+}
+
 // フォーカス中の workspace だけを開いた状態で始める。
 // 開いた状態はワークスペースとタブの id を同じ集合で持つ。id は階層をまたいで重ならない。
 export function initialExpanded(state: AppState): Set<string> {
@@ -274,16 +351,25 @@ export function initialExpanded(state: AppState): Set<string> {
       if (tab.focused) open.add(tab.id);
     }
   }
+  // 場所の束は既定で畳む。重複を 1 行にまとめることが目的なので、フォーカスが
+  // 中にあるときだけ開く。自分で開閉した記憶は applyOpenGroups が上書きする。
+  for (const group of groupWorkspaces(state.workspaces)) {
+    if (group.place === null) continue;
+    if (groupMembers(group).some((workspace) => workspace.focused)) open.add(group.key);
+  }
   return open;
 }
 
-// 一覧に出ている開閉できる単位（ワークスペース・タブ・リポジトリの束）。
+// 一覧に出ている開閉できる単位（ワークスペース・タブ・リポジトリ束・場所の束）。
 export function groupIds(state: AppState): Set<string> {
   const ids = new Set<string>();
   for (const workspace of state.workspaces) {
     ids.add(workspace.id);
     if (workspace.worktree) ids.add(`repo:${workspace.worktree.repoName}`);
     for (const tab of workspace.tabs) ids.add(tab.id);
+  }
+  for (const group of groupWorkspaces(state.workspaces)) {
+    if (group.place !== null) ids.add(group.key);
   }
   return ids;
 }

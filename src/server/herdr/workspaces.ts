@@ -53,6 +53,7 @@ export function parseMoveWorkspacesBody(body: unknown): ParsedMoveWorkspaces {
 
 export type WorkspaceClient = {
   moveBlock: (options: MoveWorkspacesRequest) => Promise<void>;
+  close: (workspaceId: string) => Promise<void>;
 };
 
 export function createWorkspaceClient(
@@ -68,6 +69,11 @@ export function createWorkspaceClient(
         { workspace_ids: workspaceIds, before_workspace_id: beforeWorkspaceId },
         { path },
       );
+    },
+
+    // フォルダは残す。linked worktree の削除（worktree.remove）とは別の操作。
+    async close(workspaceId) {
+      await call("workspace.close", { workspace_id: workspaceId }, { path });
     },
   };
 }

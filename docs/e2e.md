@@ -51,6 +51,7 @@ bun run e2e:serve
 - `pane.close`
 - `worktree.create`
 - `worktree.remove`
+- `workspace.close`
 - `workspace.move_block`
 
 `pane.clear` は架空の端末出力を最後の 1 行だけにして、実 Herdr の画面・スクロールバックのクリアを模す。`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`worktree.remove` は
@@ -70,6 +71,8 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 `pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
 `workspace.move_block` は `workspaces` を並べ替えて `workspace.reordered` を流す。実 Herdr と同じく、
 渡された id の列を 1 ブロックとしてアンカーの前へ置く。
+`workspace.close` はスペース・タブ・ペインをスナップショットから取り除き、`workspace.closed` を流す。
+実際のチェックアウトのフォルダには触らない。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 `<root>/bin/git` は `e2e/fake-git.ts` を起動する。`remote -v` と `for-each-ref` は
@@ -198,13 +201,26 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 
 `すべて` の束の並びは Herdr のワークスペース順で、ネイティブ Herdr と同じ（[ADR 0052](adr/0052-workspace-order-drag.md)）。
 
-1. `すべて` を開く。`acme-dashboard`（リポジトリ束）と `scratch` が並ぶ。
+1. `すべて` を開く。`acme-dashboard`（リポジトリ束）、`scratch`、`sandbox`（重複した 2 スペースの束）が並ぶ。
 2. `scratch` の見出しを長押しする（PC は見出しを少しドラッグする）。掴んだ束のカードが破線の青い枠で囲まれ、見出しは読める濃さのまま中身が淡くなり、指の近くに束の名前が出る。落とし先の境界に「ここに移動」の線が出る。破線はカードの角丸に沿う。ラベルは指の反対側に出て、追従するガイドと重なっても手前に残る。
 3. `acme-dashboard` の上へ落とす。`scratch` が新しい位置へ動くアニメーションが見え、先頭へ移る。架空 Herdr の並びも変わる。
 4. `acme-dashboard` の見出しにフォーカスし、`↓` を押すと 1 つ下がる。`↑` で戻る。
 5. 同じ位置へ落としても通信しない。`アクティブ` に切り替えても並びは状態順のまま。
 6. 失敗時は `/api/workspaces/move` に 502 を返して確かめる。一覧は Herdr の順のままで、上部に「並べ替えを保存できませんでした。」が出る。
 7. 動きを減らす設定（`prefers-reduced-motion: reduce`）では、落とした後のアニメーションが出ないことを確かめる。
+
+## 重複したスペース
+
+Herdr ネイティブの `workspace.create` は同じディレクトリでも新しいスペースを作る。hwc は同じ
+パス・同じラベルのスペースを 1 つの場所に束ね、余分なスペースを閉じる入口を出す（[ADR 0060](adr/0060-duplicate-native-spaces.md)）。
+fixture の `sandbox` は同じ場所を指す 2 スペースで、どちらもシェルだけ。
+
+1. `すべて` を開く。`sandbox` が 1 行にまとまり、名前の横に `2` の札、副題が `シェルのみ`、右端にシェルの記号が出る。
+2. `sandbox` の見出しを開く。代表スペースのシェルペインと、`スペース 2` の見出しが出る。
+3. `スペース 2` の見出しの先頭アイコンからメニューを開く。「スペースを閉じる」を選び、確認で「実行中のエージェントも終了するが、チェックアウトのファイルは残る」ことを確かめる。
+4. 閉じると `sandbox` の束が 1 スペースに解け、`2` の札と「スペースを閉じる」が消える。残ったスペースは通常の 1 スペースとして見える。
+5. 代表スペースを閉じた場合も、残ったスペースが代表になる。最後の 1 つは閉じられない。
+6. `アクティブ` にはシェルだけなので `sandbox` は出ない。重複の整理は `すべて` で行う。
 
 ## ワークツリー作成
 

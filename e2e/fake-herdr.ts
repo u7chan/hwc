@@ -440,9 +440,9 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
 
   // 実 Herdr の worktree.remove は git worktree remove を実行し、スペースも閉じる。
   // E2E では実際のディレクトリを触らず、スナップショットからスペースを取り除く。
-  const removeWorktree = (workspaceId: string): boolean => {
+  const removeWorkspace = (workspaceId: string): boolean => {
     const workspace = (snapshot.workspaces ?? []).find((item) => item.workspace_id === workspaceId);
-    if (workspace === undefined || workspace.worktree?.is_linked_worktree !== true) return false;
+    if (workspace === undefined) return false;
     const paneIds = new Set(
       (snapshot.panes ?? [])
         .filter((pane) => pane.workspace_id === workspaceId)
@@ -469,6 +469,12 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
       }
     }
     return true;
+  };
+
+  const removeWorktree = (workspaceId: string): boolean => {
+    const workspace = (snapshot.workspaces ?? []).find((item) => item.workspace_id === workspaceId);
+    if (workspace === undefined || workspace.worktree?.is_linked_worktree !== true) return false;
+    return removeWorkspace(workspaceId);
   };
 
   // 実 Herdr の worktree.create は git worktree add を実行し、リンクされたスペースを開く。
@@ -965,6 +971,20 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
           },
         });
         broadcast("pane.updated", { pane_id: paneId });
+        return;
+      }
+      case "workspace.close": {
+        const workspaceId = typeof params.workspace_id === "string" ? params.workspace_id : "";
+        if (!removeWorkspace(workspaceId)) {
+          send(socket, { id, error: { code: "workspace_not_found", message: workspaceId } });
+          return;
+        }
+        // ファイルは消さず、スペースだけを閉じる。実 Herdr と同じくグループは閉じない。
+        send(socket, {
+          id,
+          result: { type: "workspace_closed", workspace_id: workspaceId },
+        });
+        broadcast("workspace.closed", { workspace_id: workspaceId });
         return;
       }
       case "workspace.move_block": {

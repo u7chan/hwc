@@ -67,3 +67,18 @@ test("moveBlock sends the whole block and the anchor to Herdr", async () => {
     },
   ]);
 });
+
+test("close asks Herdr to close the workspace without closing its group", async () => {
+  const { calls, call } = recordingCaller();
+  const client = createWorkspaceClient({ path: "/tmp/test.sock", call });
+
+  await client.close("w2");
+
+  expect(calls).toEqual([
+    {
+      method: "workspace.close",
+      params: { workspace_id: "w2" },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});
