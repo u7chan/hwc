@@ -69,6 +69,17 @@ export type SnapshotState = {
 // 経過時間と終了時刻はスナップショットから作れない。store が足す。
 export type AppState = SnapshotState & { times: PaneTimes };
 
+// BFF の複数のモジュールから引くので、状態の型の隣に置く。
+export function findPane(state: AppState | null, paneId: string): PaneState | null {
+  for (const workspace of state?.workspaces ?? []) {
+    for (const tab of workspace.tabs) {
+      const pane = tab.panes.find((item) => item.id === paneId);
+      if (pane !== undefined) return pane;
+    }
+  }
+  return null;
+}
+
 // セッションの在り処は AppState に載せず、BFF 内だけで解決する。
 export type ChatSource =
   | { agent: "pi"; path: string }
