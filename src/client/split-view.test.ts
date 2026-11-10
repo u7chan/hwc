@@ -5,7 +5,6 @@ import {
   addToSlots,
   clearCurrent,
   closeEmptySlot,
-  closeTab,
   currentSlotIndex,
   dropOnSlot,
   multiSpace,
@@ -14,6 +13,7 @@ import {
   openPane,
   parseSplitView,
   placeInSlots,
+  removeTab,
   serializeSplitView,
   slotIndexOf,
   startSplitView,
@@ -55,10 +55,10 @@ test("opening a pane that is already open only moves the selection", () => {
   expect(again.slots).toEqual(["w1:p1", "w1:p2"]);
 });
 
-test("reopening a closed pane stacks it at the right end", () => {
+test("reopening a removed pane stacks it at the right end", () => {
   const shown = view(["w1:p1", "w1:p2", "w1:p3"], "w1:p1", ["w1:p1", "w1:p2"]);
-  const closed = closeTab(shown, "w1:p1");
-  const reopened = openPane(closed, "w1:p1");
+  const removed = removeTab(shown, "w1:p1");
+  const reopened = openPane(removed, "w1:p1");
   expect(reopened.openTabs).toEqual(["w1:p2", "w1:p3", "w1:p1"]);
 });
 
@@ -116,48 +116,61 @@ test("the successor is the next tab, or the one before when there is no next", (
   expect(nextOpenPane(["w1:p1", "w1:p2"], "w9:p9")).toBeNull();
 });
 
-test("closing the current tab moves the selection into the empty slot", () => {
+test("removing the current tab moves the selection into the empty slot", () => {
   const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1", null]);
-  const next = closeTab(shown, "w1:p1");
+  const next = removeTab(shown, "w1:p1");
   expect(next.openTabs).toEqual(["w1:p2"]);
   expect(next.current).toBe("w1:p2");
-  // 後継はグリッド外だったので、閉じたペインのスロットへ入る。
+  // 後継はグリッド外だったので、外したペインのスロットへ入る。
   expect(next.slots).toEqual(["w1:p2", null]);
 });
 
-test("closing the current tab picks a successor already in the grid without moving it", () => {
+test("removing the current tab picks a successor already in the grid without moving it", () => {
   const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1", "w1:p2"]);
-  const next = closeTab(shown, "w1:p1");
+  const next = removeTab(shown, "w1:p1");
   expect(next.current).toBe("w1:p2");
   expect(next.slots).toEqual([null, "w1:p2"]);
 });
 
-test("closing the current tab with no successor goes back to the list", () => {
+test("removing the current tab with no successor goes back to the list", () => {
   const shown = view(["w1:p1"], "w1:p1", ["w1:p1"]);
-  expect(closeTab(shown, "w1:p1")).toEqual(view([], null, [null]));
+  expect(removeTab(shown, "w1:p1")).toEqual(view([], null, [null]));
 });
 
-test("closing a tab that is not current leaves the selection alone", () => {
+test("removing a tab that is not current leaves the selection alone", () => {
   const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1", "w1:p2"]);
-  const next = closeTab(shown, "w1:p2");
+  const next = removeTab(shown, "w1:p2");
   expect(next.current).toBe("w1:p1");
-  // 閉じたタブのスロットは空きとして残る（空きスロットの × でだけ詰める）。
+  // 外したタブのスロットは空きとして残る（空きスロットの × でだけ詰める）。
   expect(next.slots).toEqual(["w1:p1", null]);
   expect(next.openTabs).toEqual(["w1:p1"]);
 });
 
-test("closing a tab outside the grid does not change the grid", () => {
+test("removing a tab outside the grid does not change the grid", () => {
   const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1"]);
-  const next = closeTab(shown, "w1:p2");
+  const next = removeTab(shown, "w1:p2");
   expect(next.slots).toEqual(["w1:p1"]);
   expect(next.current).toBe("w1:p1");
 });
 
 test("the successor decided when the confirm opened is kept", () => {
   const shown = view(["w1:p1", "w1:p2", "w1:p3"], "w1:p1", ["w1:p1"]);
-  const next = closeTab(shown, "w1:p1", "w1:p3");
+  const next = removeTab(shown, "w1:p1", "w1:p3");
   expect(next.current).toBe("w1:p3");
   expect(next.slots).toEqual(["w1:p3"]);
+});
+
+test("a snapshot does not put a removed tab back", () => {
+  const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1", "w1:p2"]);
+  const removed = removeTab(shown, "w1:p1");
+  // 外したペインは Herdr 側に残る。実在するだけでタブへ戻してはいけない。
+  expect(syncSplitView(removed, existsAmong(["w1:p1", "w1:p2"]))).toEqual(removed);
+});
+
+test("restoring the saved view does not put a removed tab back", () => {
+  const shown = view(["w1:p1", "w1:p2"], "w1:p1", ["w1:p1", "w1:p2"]);
+  const removed = removeTab(shown, "w1:p2");
+  expect(normalizeSplitView(removed, existsAmong(["w1:p1", "w1:p2"]))).toEqual(removed);
 });
 
 test("closing an empty slot compacts the grid", () => {

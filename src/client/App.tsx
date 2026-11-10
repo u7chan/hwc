@@ -84,13 +84,13 @@ import {
   addToSlots,
   clearCurrent,
   closeEmptySlot,
-  closeTab,
   currentSlotIndex,
   dropOnSlot,
   multiSpace,
   nextOpenPane,
   normalizeSplitView,
   openPane,
+  removeTab,
   startSplitView,
   syncSplitView,
   type SplitView,
@@ -603,8 +603,13 @@ export function App() {
     setCreating({ paneId, worktreeWorkspaceId: workspace.id });
   };
 
+  // タブの × はタブから外すだけ。ペインは閉じず、Herdr 側で動き続ける（ADR 0059）。
+  const removeFromTabs = (paneId: string) => {
+    setView({ split: removeTab(split, paneId), expanded });
+  };
+
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。SSE が
-  // 閉じたペインを落とした後では、後継を引けない。タブの × と中クリックもここを通す。
+  // 閉じたペインを落とした後では、後継を引けない。
   const requestClose = (paneId: string) => {
     if (state === null) return;
     const action = paneCloseAction(state, paneId);
@@ -646,7 +651,7 @@ export function App() {
       // 選んでいないペインを閉じても、読んでいるペインを動かさない。exit は終了要求で
       // ペインが残るので、履歴は動かさない（消えたらスナップショットで落とす）。
       if (target.action === "close") {
-        setView({ split: closeTab(split, target.paneId, target.next), expanded });
+        setView({ split: removeTab(split, target.paneId, target.next), expanded });
       }
       setClosing(null);
     });
@@ -1120,7 +1125,6 @@ export function App() {
                 currentPaneId={selectedPaneId}
                 multiSpace={multiSpaceTabs}
                 parentPaneIds={parentPaneIds}
-                closeActionOf={(paneId) => paneCloseAction(state, paneId)}
                 processes={processes}
                 preview={
                   preview !== null && previewInTab
@@ -1132,7 +1136,7 @@ export function App() {
                 }
                 status={detailStatus}
                 onSelectPane={selectFromTab}
-                onClosePane={requestClose}
+                onRemoveTab={removeFromTabs}
                 onSelectPreview={() =>
                   setPreview((current) => (current === null ? null : { ...current, shown: true }))
                 }
