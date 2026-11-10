@@ -47,6 +47,7 @@ import {
   paneBody,
   type PendingMessage,
   PENDING_TURN_GRACE_MS,
+  splitInlineImages,
   usePaneChat,
 } from "./chat";
 import { enterInsertsNewline } from "./input";
@@ -267,6 +268,41 @@ function MessageFiles(props: {
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+// 画像記法の位置に描いた画像は、末尾の一覧から外す。裸パスだけの画像と HTML は
+// 本文に位置が無いので、今までどおりメッセージの後ろに並べる。
+function AgentMessage(props: {
+  paneId: string;
+  message: ChatMessage;
+  taskScope: string;
+  copyButton: ComponentChildren;
+  onOpenImage: (url: string, name: string) => void;
+  onOpenPreview: (file: ChatFile) => void;
+}) {
+  const { images, rest } = splitInlineImages(props.paneId, props.message.files);
+  return (
+    <>
+      <Markdown
+        text={props.message.text}
+        taskScope={props.taskScope}
+        images={images}
+        onOpenImage={props.onOpenImage}
+      />
+      {rest.length === 0 ? null : (
+        <MessageFiles
+          paneId={props.paneId}
+          files={rest}
+          onOpen={props.onOpenImage}
+          onPreview={props.onOpenPreview}
+        />
+      )}
+      <div class="hwc-msg-meta">
+        <span class="hwc-msg-time">{formatClock(props.message.at)}</span>
+        {props.copyButton}
+      </div>
     </>
   );
 }
@@ -526,21 +562,14 @@ function ChatLog(props: {
               data-pending={row.echo === "pending" ? "true" : undefined}
             >
               {row.message.role === "agent" ? (
-                <>
-                  <Markdown text={row.message.text} taskScope={`${index + 1}番目のメッセージ`} />
-                  {row.message.files === undefined ? null : (
-                    <MessageFiles
-                      paneId={props.paneId}
-                      files={row.message.files}
-                      onOpen={props.onOpenImage}
-                      onPreview={props.onOpenPreview}
-                    />
-                  )}
-                  <div class="hwc-msg-meta">
-                    <span class="hwc-msg-time">{formatClock(row.message.at)}</span>
-                    {copyButton(row.message)}
-                  </div>
-                </>
+                <AgentMessage
+                  paneId={props.paneId}
+                  message={row.message}
+                  taskScope={`${index + 1}番目のメッセージ`}
+                  copyButton={copyButton(row.message)}
+                  onOpenImage={props.onOpenImage}
+                  onOpenPreview={props.onOpenPreview}
+                />
               ) : row.message.role === "error" ? (
                 <ErrorMessage message={row.message} copyButton={copyButton(row.message)} />
               ) : (

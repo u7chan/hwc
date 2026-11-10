@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type {
   ChatCompaction,
   ChatContext,
+  ChatFile,
   ChatMessage,
   ChatSnapshot,
   ChatUsage,
 } from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
-import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, readChat } from "./api";
+import { messageFileLabel } from "../shared/message-files";
+import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, chatFileUrl, readChat } from "./api";
 
 // 返答が届いている間は短く、動いていない間は長く。隠れている間に読んでも見る人はいない。
 export function chatPollDelay(
@@ -55,6 +57,27 @@ export function paneBody(props: {
   if (!props.chat || props.blocked || props.failed) return { kind: "output" };
   if (props.snapshot === null) return { kind: "skeleton" };
   return { kind: "chat", snapshot: props.snapshot };
+}
+
+export type MessageImageSource = { url: string; label: string };
+
+// 本文の画像記法と一致した画像は、その位置に描く。裸のパスだけで拾った画像は
+// 本文に位置が無いので、メッセージ末尾の一覧に残す。
+export function splitInlineImages(
+  paneId: string,
+  files: readonly ChatFile[] | undefined,
+): { images: Map<string, MessageImageSource>; rest: ChatFile[] } {
+  const images = new Map<string, MessageImageSource>();
+  const rest: ChatFile[] = [];
+  for (const file of files ?? []) {
+    if (file.kind !== "image" || file.imageRefs === undefined) {
+      rest.push(file);
+      continue;
+    }
+    const source = { url: chatFileUrl(paneId, file), label: messageFileLabel(file.name) };
+    for (const ref of file.imageRefs) images.set(ref, source);
+  }
+  return { images, rest };
 }
 
 export type PendingMessage = ChatMessage & {

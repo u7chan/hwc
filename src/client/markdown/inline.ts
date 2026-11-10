@@ -40,6 +40,7 @@ export function inlineText(nodes: MdInline[]): string {
         case "em":
         case "del":
         case "link":
+        case "image":
           return inlineText(node.children);
         case "break":
           return " ";
@@ -318,8 +319,20 @@ function readLink(
   const destination = parseDestination(text.slice(labelEnd + 2, end));
   if (destination === null) return null;
   const raw = text.slice(start, end + 1);
-  // 画像は表示しない。記法ごと原文を見せ、`!` を落としてリンクに化けさせない
-  if (image) return { node: { kind: "literal", text: raw }, end: end + 1 };
+  // 画像は描画先が決まったときだけ絵にする。決まらなければ原文を出し、`!` を落として
+  // リンクに化けさせない。href は配信 URL ではなく、本文の表記との照合にだけ使う。
+  if (image) {
+    return {
+      node: {
+        kind: "image",
+        href: destination.url,
+        title: destination.title,
+        children: scanInline(text.slice(labelStart, labelEnd), state, depth + 1, false),
+        raw,
+      },
+      end: end + 1,
+    };
+  }
   const href = safeUrl(destination.url);
   if (href === null) return { node: { kind: "literal", text: raw }, end: end + 1 };
   const label = text.slice(labelStart, labelEnd);

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ChatContext, ChatMessage, ChatSnapshot } from "../server/chat/contract";
+import type { ChatContext, ChatFile, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PendingMessage } from "./chat";
 import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
 import {
@@ -26,6 +26,7 @@ import {
   paneBody,
   PENDING_TURN_GRACE_MS,
   pollOnStatusChange,
+  splitInlineImages,
 } from "./chat";
 
 const snapshot: ChatSnapshot = {
@@ -71,6 +72,25 @@ test("the first load is not asked for twice", () => {
 
 test("a status change does not read while the page is hidden", () => {
   expect(pollOnStatusChange({ last: "idle", next: "working", visible: false })).toBe("ignore");
+});
+
+test("images drawn in the body leave the trailing list", () => {
+  const files: ChatFile[] = [
+    { name: "docs/a.png", version: "1-2", kind: "image", root: 0, imageRefs: ["docs/a.png"] },
+    { name: "docs/b.png", version: "1-2", kind: "image", root: 0 },
+    { name: "docs/preview/index.html", version: "1-2", kind: "html", root: 0 },
+  ];
+
+  const { images, rest } = splitInlineImages("w1:p1", files);
+
+  // 本文の表記から配信 URL を引ける。押したときのダイアログが使う。
+  expect(images.get("docs/a.png")).toEqual({
+    url: `/api/panes/w1%3Ap1/files?root=0&path=${encodeURIComponent("docs/a.png")}&v=1-2`,
+    label: "a.png",
+  });
+  // 裸のパスだけの画像と HTML は本文に位置が無い。末尾に残す。
+  expect(rest.map((file) => file.name)).toEqual(["docs/b.png", "docs/preview/index.html"]);
+  expect(splitInlineImages("w1:p1", undefined)).toEqual({ images: new Map(), rest: [] });
 });
 
 test("a cancellation is not a failure", () => {

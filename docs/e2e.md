@@ -113,7 +113,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 `frontend` の架空セッションは、最後のターンが失敗した状態（`stopReason: "error"` と `errorMessage`、本文は空）で終わる。同じ失敗をリトライの回数だけ並べてあり、Web では 1 行に畳まれて「3 回」と出る。その行が圧縮後の usage を変えないことも確かめる（[ADR 0039](adr/0039-chat-error-rows.md)）。
 
-その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を本文で指す。この画像は実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもので、会話にはパスとサムネイルの行が出る（[ADR 0041](adr/0041-agent-message-images.md)）。サムネイルを押すとダイアログで拡大でき、背景・`Esc`・閉じるボタンで閉じる（[ADR 0042](adr/0042-image-preview-dialog.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
+その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を裸のパスで、`docs/preview/empty-state.png` を画像記法で指す。どちらも実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもの。画像記法は本文のその位置にサムネイルとして出て、押すとダイアログで拡大でき、背景・`Esc`・閉じるボタンで閉じる（[ADR 0055](adr/0055-inline-message-images.md) / [ADR 0042](adr/0042-image-preview-dialog.md)）。裸のパスのほうは位置が無いので、今までどおりメッセージの末尾にサムネイルの行が出る（[ADR 0041](adr/0041-agent-message-images.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
 
 送信前の添付チップも同じように拡大できる。入力欄に画像を貼り付けるかドロップし、アップロードが終わってサムネイルが出てから押すとダイアログが開く。`Esc` で閉じるとサムネイルへフォーカスが戻り、チップは残ったままになる。
 

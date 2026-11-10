@@ -89,22 +89,46 @@ function trimToken(token: string): string | null {
   return trimToMessageFileName(trimmed);
 }
 
+export type MessagePathCandidate = {
+  path: string;
+  // 画像記法の destination として現れた表記。本文のその位置に描くための照合キーになる。
+  imageRefs: string[];
+};
+
 // 本文に書かれたファイルパスの候補。実在するかはここでは見ない。
-export function messagePathCandidates(text: string): string[] {
-  const candidates: string[] = [];
-  const seen = new Set<string>();
-  const body = withoutFencedCode(text)
+export function messagePathCandidates(text: string): MessagePathCandidate[] {
+  const candidates = new Map<string, MessagePathCandidate>();
+  const source = withoutFencedCode(text);
+  // 描画位置は、本文を解析する側と同じくコードスパンの中を見ない。中身を同じ長さの
+  // 空白に置き換えて、候補の抽出と同じ本文を行ごと使えるようにする。
+  const imageRefs = new Set<string>();
+  const masked = source.replace(INLINE_CODE, (match) => " ".repeat(match.length));
+  for (const match of masked.matchAll(MARKDOWN_LINK)) {
+    const destination = match[1];
+    if (destination === undefined || !(match[0] ?? "").startsWith("!")) continue;
+    // `\![x](a.png)` は画像ではなく文字列として読まれる。描画位置にしない。
+    if (masked.charAt((match.index ?? 0) - 1) === "\\") continue;
+    // 本文の表記とそのまま一致するものだけを照合キーにする。
+    if (trimToken(destination) === destination) imageRefs.add(destination);
+  }
+  const body = source
     .replace(INLINE_CODE, (_match, code: string) => ` ${code} `)
     .replace(MARKDOWN_LINK, (_match, destination: string) => ` ${destination} `)
     .replace(HARD_SEPARATORS, " ");
   for (const token of body.split(/\s+/u)) {
-    const candidate = trimToken(token);
-    if (candidate === null || seen.has(candidate)) continue;
-    seen.add(candidate);
-    candidates.push(candidate);
-    if (candidates.length >= MAX_CANDIDATES) break;
+    const path = trimToken(token);
+    if (path === null) continue;
+    const refs = imageRefs.has(path) ? [path] : [];
+    const current = candidates.get(path);
+    if (current !== undefined) {
+      // 裸パスと画像記法の両方に出ても、画像記法の位置で描けるように印を残す。
+      for (const ref of refs) if (!current.imageRefs.includes(ref)) current.imageRefs.push(ref);
+      continue;
+    }
+    if (candidates.size >= MAX_CANDIDATES) break;
+    candidates.set(path, { path, imageRefs: refs });
   }
-  return candidates;
+  return [...candidates.values()];
 }
 
 type ResolvedFile = { name: string; version: string; path: string; root: number };
@@ -179,7 +203,7 @@ async function collectAgainstRoots(
   if (candidates.length === 0) return [];
 
   const files: MessageFile[] = [];
-  const seen = new Set<string>();
+  const byKey = new Map<string, MessageFile>();
   for (const candidate of candidates) {
     if (files.length >= MAX_ATTACHMENTS) break;
     let resolved: ResolvedFile | null = null;
@@ -188,19 +212,35 @@ async function collectAgainstRoots(
       if (rootReal === null) continue;
       resolved = await resolveAgainstRoot(
         rootReal,
-        candidate,
+        candidate.path,
         (name) => messageFileKindFromName(name) !== null,
         root,
       );
       if (resolved !== null) break;
     }
     if (resolved === null) continue;
-    const key = `${resolved.root}:${resolved.name}`;
-    if (seen.has(key)) continue;
     const kind = messageFileKindFromName(resolved.name);
     if (kind === null) continue;
-    seen.add(key);
-    files.push({ name: resolved.name, version: resolved.version, kind, root: resolved.root });
+    const key = `${resolved.root}:${resolved.name}`;
+    const existing = byKey.get(key);
+    if (existing !== undefined) {
+      // 同じ実体を別の表記が指すことがある。描画位置の照合キーを落とさない。
+      if (kind === "image" && candidate.imageRefs.length > 0) {
+        existing.imageRefs = [...new Set([...(existing.imageRefs ?? []), ...candidate.imageRefs])];
+      }
+      continue;
+    }
+    const file: MessageFile = {
+      name: resolved.name,
+      version: resolved.version,
+      kind,
+      root: resolved.root,
+      ...(kind === "image" && candidate.imageRefs.length > 0
+        ? { imageRefs: candidate.imageRefs }
+        : {}),
+    };
+    byKey.set(key, file);
+    files.push(file);
   }
   return files;
 }

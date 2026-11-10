@@ -193,12 +193,29 @@ test("全角の閉じ括弧は URL に含めない", () => {
   }
 });
 
-test("画像記法は表示せず原文のまま残す", () => {
+test("画像記法は描画先の照合キーとして保持する", () => {
   assert.deepEqual(parseInline("![図](/assets/diagram.png)"), [
-    { kind: "literal", text: "![図](/assets/diagram.png)" },
+    {
+      kind: "image",
+      href: "/assets/diagram.png",
+      title: null,
+      children: [text("図")],
+      raw: "![図](/assets/diagram.png)",
+    },
   ]);
   assert.deepEqual(parseInline("![図](https://example.com/x.png)"), [
-    { kind: "literal", text: "![図](https://example.com/x.png)" },
+    {
+      kind: "image",
+      href: "https://example.com/x.png",
+      title: null,
+      children: [text("図")],
+      raw: "![図](https://example.com/x.png)",
+    },
+  ]);
+  // 説明文はインライン記法として読む。読み上げ名に使う。
+  const labeled = parseInline("![**太字**](a.png)")[0];
+  assert.deepEqual(labeled?.kind === "image" ? labeled.children : null, [
+    { kind: "strong", children: [text("太字")] },
   ]);
 });
 

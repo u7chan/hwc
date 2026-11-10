@@ -136,6 +136,13 @@ function toAttachmentNames(value: unknown): string[] | undefined {
   return names.length === 0 ? undefined : names;
 }
 
+function toImageRefs(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  // 本文の表記と突き合わせるだけの値。配信 URL には使わないが、壊れた値は描画に使わない。
+  const refs = value.filter((item): item is string => typeof item === "string" && item !== "");
+  return refs.length === 0 ? undefined : refs;
+}
+
 function toChatFiles(value: unknown): ChatFile[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const files: ChatFile[] = [];
@@ -150,7 +157,14 @@ function toChatFiles(value: unknown): ChatFile[] | undefined {
     // 配信 URL になる。根の外を指す名前は捨て、リンクも画像も作らない。
     if (file.name === "" || file.name.startsWith("/")) continue;
     if (file.name.split("/").includes("..")) continue;
-    files.push({ name: file.name, version: file.version, kind: file.kind, root: file.root });
+    const imageRefs = toImageRefs(file.imageRefs);
+    files.push({
+      name: file.name,
+      version: file.version,
+      kind: file.kind,
+      root: file.root,
+      ...(imageRefs === undefined ? {} : { imageRefs }),
+    });
   }
   return files.length === 0 ? undefined : files;
 }

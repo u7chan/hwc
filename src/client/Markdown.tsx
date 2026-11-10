@@ -1,5 +1,6 @@
-import type { ComponentChildren } from "preact";
-import { useMemo, useState } from "preact/hooks";
+import { createContext, type ComponentChildren } from "preact";
+import { useContext, useMemo, useState } from "preact/hooks";
+import type { MessageImageSource } from "./chat";
 import { useCopy } from "./copy";
 import { CopyGlyph } from "./icons";
 import { inlineText, parseInline } from "./markdown/inline";
@@ -8,11 +9,30 @@ import type { MdBlock, MdInline, MdListItem } from "./markdown/types";
 
 const HEADING_TAGS = ["h3", "h4", "h5", "h6"] as const;
 
+type ImageContextValue = {
+  images?: ReadonlyMap<string, MessageImageSource>;
+  onOpenImage?: (url: string, name: string) => void;
+};
+
+// 本文の深さをそのまま関数の引数で渡すと、絵を使わない入れ子のすべてに同じ値を配る
+// ことになる。画像記法の描画にだけ要る値なので、本文の解析結果を受ける側でまとめて配る。
+const ImageContext = createContext<ImageContextValue>({});
+
 type TaskCounter = { value: number };
 
 // 本文が上限を超えたら、解析せず原文をそのまま出す。解析してから捨てると固まる。
 // ルートの data-quote-scope は、本文の選択から返信を始める範囲を示す。
-export function Markdown({ text, taskScope }: { text: string; taskScope?: string }) {
+export function Markdown({
+  text,
+  taskScope,
+  images,
+  onOpenImage,
+}: {
+  text: string;
+  taskScope?: string;
+  images?: ReadonlyMap<string, MessageImageSource>;
+  onOpenImage?: (url: string, name: string) => void;
+}) {
   if (text.length > MARKDOWN_MAX_LENGTH) {
     return (
       <div class="hwc-md" data-plain data-quote-scope="true">
@@ -23,9 +43,11 @@ export function Markdown({ text, taskScope }: { text: string; taskScope?: string
   // タスクの通し番号は Markdown の描画ごとに 0 から数える。メッセージをまたぐ一意性は taskScope が担う。
   const taskCounter = { value: 0 };
   return (
-    <div class="hwc-md" data-quote-scope="true">
-      <MarkdownBlocks text={text} taskScope={taskScope} taskCounter={taskCounter} />
-    </div>
+    <ImageContext.Provider value={{ images, onOpenImage }}>
+      <div class="hwc-md" data-quote-scope="true">
+        <MarkdownBlocks text={text} taskScope={taskScope} taskCounter={taskCounter} />
+      </div>
+    </ImageContext.Provider>
   );
 }
 
@@ -264,10 +286,11 @@ function CodeBlock({ lang, text }: { lang: string | null; text: string }) {
 
 function InlineSource({ source }: { source: string }) {
   const nodes = useMemo(() => parseInline(source), [source]);
-  return <>{inlineChildren(nodes)}</>;
+  const images = useContext(ImageContext);
+  return <>{inlineChildren(nodes, images)}</>;
 }
 
-function inlineChildren(nodes: MdInline[]): ComponentChildren[] {
+function inlineChildren(nodes: MdInline[], context: ImageContextValue): ComponentChildren[] {
   return nodes.map((node) => {
     switch (node.kind) {
       case "text":
@@ -275,11 +298,11 @@ function inlineChildren(nodes: MdInline[]): ComponentChildren[] {
       case "literal":
         return <code class="hwc-md-literal">{node.text}</code>;
       case "strong":
-        return <strong>{inlineChildren(node.children)}</strong>;
+        return <strong>{inlineChildren(node.children, context)}</strong>;
       case "em":
-        return <em>{inlineChildren(node.children)}</em>;
+        return <em>{inlineChildren(node.children, context)}</em>;
       case "del":
-        return <del>{inlineChildren(node.children)}</del>;
+        return <del>{inlineChildren(node.children, context)}</del>;
       case "code":
         return <code>{node.text}</code>;
       case "link":
@@ -290,9 +313,34 @@ function inlineChildren(nodes: MdInline[]): ComponentChildren[] {
             target="_blank"
             rel="noopener noreferrer"
           >
-            {inlineChildren(node.children)}
+            {inlineChildren(node.children, context)}
           </a>
         );
+      case "image": {
+        const image = context.images?.get(node.href);
+        const open = context.onOpenImage;
+        // 実在を確認したファイルだけを絵にする。決まらない記法は原文のまま残す。
+        if (image === undefined || open === undefined) {
+          return <code class="hwc-md-literal">{node.raw}</code>;
+        }
+        const alt = inlineText(node.children).trim();
+        return (
+          <button
+            type="button"
+            class="hwc-md-image"
+            aria-label={`${image.label} を拡大`}
+            aria-haspopup="dialog"
+            onClick={() => open(image.url, image.label)}
+          >
+            <img
+              class="hwc-md-image-content"
+              src={image.url}
+              alt={alt === "" ? image.label : alt}
+              loading="lazy"
+            />
+          </button>
+        );
+      }
       case "break":
         return <br />;
     }
