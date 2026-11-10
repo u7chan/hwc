@@ -76,6 +76,13 @@ type PaneListProps = {
   openWorkspaceMenuId: string | null;
   onPaneMenu: (paneId: string, trigger: HTMLElement) => void;
   onWorkspaceMenu: (workspaceId: string, trigger: HTMLElement) => void;
+  // 削除の対象。leave になったら一覧から行を消すアニメーションを見せ、終わったら
+  // onRemovalFinished を呼ぶ。スナップショットは App がその間だけ保留している。
+  removal: {
+    workspaceId: string;
+    phase: "confirm" | "busy" | "failed" | "leave";
+  } | null;
+  onRemovalFinished: () => void;
   // 一覧の束を Herdr のワークスペース順で動かす。成功したら true。
   onMoveWorkspaces: (
     workspaceIds: readonly string[],
@@ -359,6 +366,9 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
           key={group.workspace.id}
           class="hwc-active-group"
           aria-labelledby={bandId(group.workspace.id)}
+          data-removal={
+            props.removal?.workspaceId === group.workspace.id ? props.removal.phase : undefined
+          }
         >
           <ActiveBand
             group={group}
@@ -426,6 +436,49 @@ export function PaneList(props: PaneListProps) {
     const node = scroll.current;
     if (node) node.scrollTop = positions.current.get(props.scope) ?? 0;
   }, [props.scope]);
+
+  // 削除が確定した行は、高さを詰めながら淡く消す。行が途中で切り落とされないよう、
+  // スナップショットの適用はアニメーションの完了を待ってから行う（App）。
+  const removalFinished = useRef(props.onRemovalFinished);
+  removalFinished.current = props.onRemovalFinished;
+  const removalPhase = props.removal?.phase ?? null;
+  const removalId = props.removal?.workspaceId ?? null;
+  useLayoutEffect(() => {
+    if (removalPhase !== "leave") return;
+    const node = document.querySelector<HTMLElement>('[data-removal="leave"]');
+    const finish = () => removalFinished.current();
+    if (
+      node === null ||
+      typeof node.animate !== "function" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      finish();
+      return;
+    }
+
+    const style = getComputedStyle(node);
+    node.style.overflow = "hidden";
+    const animation = node.animate(
+      [
+        {
+          height: `${node.offsetHeight}px`,
+          marginTop: style.marginTop,
+          marginBottom: style.marginBottom,
+          opacity: 1,
+        },
+        { height: "0px", marginTop: "0px", marginBottom: "0px", opacity: 0 },
+      ],
+      { duration: 220, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" },
+    );
+    let active = true;
+    const settle = () => {
+      if (active) finish();
+    };
+    void animation.finished.then(settle, settle);
+    return () => {
+      active = false;
+    };
+  }, [removalId, removalPhase]);
 
   // 帯から移ったときは、そのスペースの見出しまで送る。スコープの復元より後に置き、
   // 復元した位置を上書きする。同じ要求で二度動かないよう、token で 1 回だけ処理する。
@@ -894,6 +947,7 @@ function TreePaneList(props: TreePaneListProps) {
         key={workspace.id}
         data-order-key={order?.key}
         data-dragging={order !== undefined && dragged?.key === order.key ? "true" : undefined}
+        data-removal={props.removal?.workspaceId === workspace.id ? props.removal.phase : undefined}
       >
         {withHeader
           ? renderHeader({
@@ -951,6 +1005,9 @@ function TreePaneList(props: TreePaneListProps) {
         key={group.key}
         data-order-key={group.key}
         data-dragging={dragged?.key === group.key ? "true" : undefined}
+        data-removal={
+          props.removal?.workspaceId === representative.id ? props.removal.phase : undefined
+        }
       >
         {renderHeader({
           id: group.key,

@@ -491,6 +491,19 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   outline-offset: -2px;
 }
 
+/* 削除の対象は、確認中から消えるまでの間だけ危険色で囲む。一覧のどこが消えるのを
+   見分けるための印で、色だけに意味は持たせない（対象は確認ダイアログにも出る）。
+   消えていく行は押しても意味が無いので、アニメーション中は入力を受けない。 */
+.hwc-group-block[data-removal],
+.hwc-active-group[data-removal] {
+  outline: 2px solid var(--color-danger);
+  outline-offset: -2px;
+}
+
+[data-removal="leave"] {
+  pointer-events: none;
+}
+
 .hwc-group-block[data-dragging="true"] > * {
   opacity: 0.55;
 }
