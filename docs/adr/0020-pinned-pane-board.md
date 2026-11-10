@@ -1,7 +1,12 @@
 # ADR 0020: スペースを跨ぐペインはピン留めしたボードに並べる
 
-- Status: Proposed
+- Status: Superseded by [ADR 0058](0058-split-view-tab-history.md)
 - Date: 2026-11-04
+
+> 2026-11-11: [ADR 0058](0058-split-view-tab-history.md) が、開いたペインの履歴（`openTabs`）と
+> 4 スロットのグリッド（`slots`）としてこのボードの考え方を実装した。ピン留めの操作と
+> 「一覧選択がセルを置き換えるか移動か」は、履歴とスロットの遷移として決まった。
+> この ADR は判断の記録として残し、実装は 0058 に従う。
 
 ## Context
 
