@@ -3,7 +3,7 @@
  * インライン記法 (強調 / コードスパン / リンク / 自動リンク) の解析。
  * 解析できない記法は消さずに literal (原文) へ落とし、例外は投げない。
  */
-import type { MdInline } from "./types";
+import type { MdImage, MdInline } from "./types";
 
 /** エスケープで文字に戻す記号 */
 const ESCAPABLE = "\\`*_{}[]()#+-.!~|<>$";
@@ -47,6 +47,21 @@ export function inlineText(nodes: MdInline[]): string {
       }
     })
     .join("");
+}
+
+/**
+ * 画像記法だけでできた並びなら画像ノードを返す。改行と空白は無視する。
+ * 段落を丸ごと横に並べるかどうかの判定に使う。
+ */
+export function imageOnlyNodes(nodes: MdInline[]): MdImage[] | null {
+  const images: MdImage[] = [];
+  for (const node of nodes) {
+    if (node.kind === "image") images.push(node);
+    else if (node.kind === "break") continue;
+    else if (node.kind === "text" && node.text.trim() === "") continue;
+    else return null;
+  }
+  return images.length === 0 ? null : images;
 }
 
 /** allowLinks=false はリンクのラベル内 (リンクの入れ子を作らない) */

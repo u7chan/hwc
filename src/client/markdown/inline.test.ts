@@ -2,7 +2,7 @@
 // 解釈できない記法は削除せず literal (原文) として残すことも固定する。
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { inlineText, parseInline } from "./inline";
+import { imageOnlyNodes, inlineText, parseInline } from "./inline";
 
 const text = (value: string) => ({ kind: "text" as const, text: value });
 
@@ -217,6 +217,25 @@ test("画像記法は描画先の照合キーとして保持する", () => {
   assert.deepEqual(labeled?.kind === "image" ? labeled.children : null, [
     { kind: "strong", children: [text("太字")] },
   ]);
+});
+
+test("an image-only paragraph is collected for a horizontal row", () => {
+  const one = parseInline("![A](a.png)");
+  assert.deepEqual(
+    imageOnlyNodes(one)?.map((node) => node.href),
+    ["a.png"],
+  );
+  // 改行で区切られた複数の絵も 1 行にまとめる。
+  const two = parseInline("![A](a.png)\n![B](b.png)");
+  assert.deepEqual(
+    imageOnlyNodes(two)?.map((node) => node.href),
+    ["a.png", "b.png"],
+  );
+  // 文章や他の記法が混じっていたら、段落全体を絵の行にはしない。
+  assert.equal(imageOnlyNodes(parseInline("前 ![A](a.png)")), null);
+  assert.equal(imageOnlyNodes(parseInline("![A](a.png) 後")), null);
+  assert.equal(imageOnlyNodes(parseInline("`a.png`")), null);
+  assert.equal(imageOnlyNodes(parseInline("")), null);
 });
 
 test("生 HTML はタグを解釈せず文字として扱う", () => {
