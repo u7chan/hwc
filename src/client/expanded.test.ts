@@ -64,6 +64,7 @@ const state: AppState = {
         repoRoot: "/home/dev/workspace/hwc",
         checkoutPath: "/home/dev/workspace/hwc",
         isLinkedWorktree: false,
+        managed: true,
       },
       tabs: [{ id: "w1:t1", label: "1", agentStatus: "idle", focused: true, panes: [] }],
     },

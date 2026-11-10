@@ -1,5 +1,5 @@
-import { readFile, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join } from "node:path";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { parseGitHubRemote, parseUpstreamTrack, type GitSync } from "../shared/git";
 
 // HEAD は "ref: refs/heads/<branch>"、detached なら sha。detached はブランチではないので出さない。
@@ -50,6 +50,31 @@ export async function readBranch(checkoutPath: string): Promise<string | null> {
 
 export type BranchReader = (checkoutPath: string) => Promise<string | null>;
 
+export type GitRepo = {
+  repoName: string;
+  repoRoot: string;
+  isLinkedWorktree: boolean;
+};
+
+// `git rev-parse --show-toplevel --absolute-git-dir --git-common-dir` の 3 行を読む。
+// git-dir と common-dir が違えば linked worktree。サブモジュールは同じなので linked にしない。
+export function parseGitRepo(output: string, checkoutPath: string): GitRepo | null {
+  const [topRaw, gitDirRaw, commonDirRaw] = output.trim().split("\n");
+  if (topRaw === undefined || gitDirRaw === undefined || commonDirRaw === undefined) return null;
+  const top = resolve(checkoutPath, topRaw.trim());
+  const gitDir = resolve(checkoutPath, gitDirRaw.trim());
+  const commonDir = resolve(checkoutPath, commonDirRaw.trim());
+  const isLinkedWorktree = gitDir !== commonDir;
+  // linked worktree の repoName はワークツリー名ではなく、共通のリポジトリ名を使う。
+  const repoRoot = isLinkedWorktree
+    ? basename(commonDir) === ".git"
+      ? dirname(commonDir)
+      : commonDir
+    : top;
+  const repoName = basename(repoRoot);
+  return repoName === "" ? null : { repoName, repoRoot, isLinkedWorktree };
+}
+
 // ブランチを切り替えても Herdr からイベントは来ない。毎回読むと重いので少しだけ覚える。
 export function createBranchReader(
   options: { ttlMs?: number; now?: () => number } = {},
@@ -96,6 +121,8 @@ export function pickGitHubRepoUrl(remotes: ReadonlyMap<string, string>): string 
 
 export type GitClient = {
   read: (options: { checkoutPath: string; branch: string }) => Promise<GitSync | null>;
+  // Herdr が worktree を持たないスペースでも、チェックアウトが git 管理下かを読む。
+  readRepo: (checkoutPath: string) => Promise<GitRepo | null>;
   invalidate: (checkoutPath: string) => void;
   fetch: (checkoutPath: string) => Promise<void>;
   pull: (checkoutPath: string) => Promise<void>;
@@ -119,6 +146,7 @@ export function createGitClient(
   const runRead = options.runRead ?? readGit;
   const runAction = options.runAction ?? runGitAction;
   const cache = new Map<string, { sync: GitSync | null; at: number }>();
+  const repoCache = new Map<string, { repo: GitRepo | null; at: number }>();
   // 読み取りの途中で invalidate された結果をキャッシュへ戻さないための世代。
   let generation = 0;
 
@@ -156,8 +184,37 @@ export function createGitClient(
     return sync;
   };
 
+  const readRepo: GitClient["readRepo"] = async (checkoutPath) => {
+    if (!isAbsolute(checkoutPath)) return null;
+    const at = now();
+    const hit = repoCache.get(checkoutPath);
+    if (hit !== undefined && at - hit.at < ttlMs) return hit.repo;
+
+    let repo: GitRepo | null = null;
+    try {
+      // --git-common-dir は cwd からの相対パスを返す。symlink 側の cwd で解決すると
+      // git-dir と食い違うので、実体パスを基準にする。--path-format=absolute は
+      // git 2.31 以降が必要なため、古い git でも動くこの形にする。
+      const base = await realpath(checkoutPath).catch(() => checkoutPath);
+      repo = parseGitRepo(
+        await runRead(checkoutPath, [
+          "rev-parse",
+          "--show-toplevel",
+          "--absolute-git-dir",
+          "--git-common-dir",
+        ]),
+        base,
+      );
+    } catch {
+      // git が無い・リポジトリでない・期限切れでは、git 管理外として扱う。
+    }
+    repoCache.set(checkoutPath, { repo, at });
+    return repo;
+  };
+
   const invalidate = (checkoutPath: string) => {
     generation += 1;
+    repoCache.delete(checkoutPath);
     const prefix = `${checkoutPath}\n`;
     for (const key of cache.keys()) {
       if (key.startsWith(prefix)) cache.delete(key);
@@ -166,6 +223,7 @@ export function createGitClient(
 
   return {
     read,
+    readRepo,
     invalidate,
     fetch: (checkoutPath) => runAction(checkoutPath, ["fetch"]),
     pull: (checkoutPath) => runAction(checkoutPath, ["pull", "--ff-only"]),

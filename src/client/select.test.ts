@@ -221,6 +221,7 @@ test("workspaces of the same repo are grouped under the repo", () => {
       repoRoot: "/repo",
       checkoutPath: "/repo",
       isLinkedWorktree: false,
+      managed: true,
     },
   };
   const linked = {
@@ -230,6 +231,7 @@ test("workspaces of the same repo are grouped under the repo", () => {
       repoRoot: "/repo",
       checkoutPath: "/repo-wt",
       isLinkedWorktree: true,
+      managed: true,
     },
   };
   const flat = { ...state, workspaces: [root, linked, state.workspaces[1]] };
@@ -251,6 +253,7 @@ test("a repo without a main checkout still forms one group", () => {
       repoRoot: "/repo",
       checkoutPath: "/repo-wt",
       isLinkedWorktree: true,
+      managed: true,
     },
   };
   const groups = groupWorkspaces([linked]);

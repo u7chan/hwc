@@ -92,6 +92,7 @@ const worktreeState: AppState = {
         repoRoot: "/project",
         checkoutPath: "/project-worktree",
         isLinkedWorktree: true,
+        managed: true,
       },
     },
   ],
@@ -108,7 +109,29 @@ const hostWorktreeState: AppState = {
         repoRoot: "/project",
         checkoutPath: "/project",
         isLinkedWorktree: false,
+        managed: true,
       },
+    },
+  ],
+};
+
+// git でリポジトリと分かっただけのスペース。Herdr のワークツリー操作は受け付けない。
+const unmanagedHostState: AppState = {
+  ...hostWorktreeState,
+  workspaces: [
+    {
+      ...hostWorktreeState.workspaces[0]!,
+      worktree: { ...hostWorktreeState.workspaces[0]!.worktree!, managed: false },
+    },
+  ],
+};
+
+const unmanagedLinkedState: AppState = {
+  ...worktreeState,
+  workspaces: [
+    {
+      ...worktreeState.workspaces[0]!,
+      worktree: { ...worktreeState.workspaces[0]!.worktree!, managed: false },
     },
   ],
 };
@@ -519,6 +542,7 @@ const syncState: AppState = {
 function createFakeGit(overrides: Partial<GitClient> = {}): GitClient {
   return {
     read: async () => null,
+    readRepo: async () => null,
     invalidate: () => {},
     fetch: async () => {},
     pull: async () => {},
@@ -2010,6 +2034,26 @@ test("remove-worktree refuses a workspace that is not a linked checkout", async 
   expect(seen).toEqual([]);
 });
 
+test("remove-worktree refuses a linked checkout that herdr does not manage", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state: unmanagedLinkedState,
+    worktrees: {
+      remove: async () => {
+        seen.push("remove");
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w1/remove-worktree", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_linked_worktree" });
+  expect(seen).toEqual([]);
+});
+
 test("remove-worktree requires application/json", async () => {
   const { app } = createTestApp({ state: worktreeState });
   const response = await app.request("/api/workspaces/w1/remove-worktree", { method: "POST" });
@@ -2075,6 +2119,7 @@ function createWorktreeApp(options: { panes?: Partial<PaneClient> } = {}) {
           repoRoot: "/project",
           checkoutPath: "/project",
           isLinkedWorktree: false,
+          managed: true,
         },
       },
     ],
@@ -2143,6 +2188,7 @@ test("create-worktree does not apply the split tab limit", async () => {
             repoRoot: "/project",
             checkoutPath: "/project",
             isLinkedWorktree: false,
+            managed: true,
           },
         },
       ],
@@ -2196,6 +2242,24 @@ test("create-worktree refuses a workspace that is not in git", async () => {
   const seen: string[] = [];
   const { app } = createTestApp({
     state,
+    worktrees: {
+      create: async () => {
+        seen.push("create");
+        return { workspaceId: "w2", paneId: "w2:p1" };
+      },
+    },
+  });
+  const response = await postCreateWorktree(app, "w1");
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_git_worktree" });
+  expect(seen).toEqual([]);
+});
+
+test("create-worktree refuses a git checkout that herdr does not manage", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state: unmanagedHostState,
     worktrees: {
       create: async () => {
         seen.push("create");

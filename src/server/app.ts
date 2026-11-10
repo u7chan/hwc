@@ -840,8 +840,8 @@ export function createApp(options: {
         const workspaceId = c.req.param("id");
         const workspace = state.workspaces.find((item) => item.id === workspaceId);
         if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
-        // 起点はリポジトリ本体に限る。worktree 情報が無いスペースも Herdr が拒否する。
-        if (workspace.worktree === null) return c.json({ error: "not_git_worktree" }, 409);
+        // 起点はリポジトリ本体に限る。Herdr が管理していないスペースも worktree.create を拒否する。
+        if (workspace.worktree?.managed !== true) return c.json({ error: "not_git_worktree" }, 409);
         if (workspace.worktree.isLinkedWorktree) {
           return c.json({ error: "linked_worktree_source" }, 409);
         }
@@ -872,8 +872,8 @@ export function createApp(options: {
         const workspaceId = c.req.param("id");
         const workspace = state.workspaces.find((item) => item.id === workspaceId);
         if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
-        // worktree.remove は linked worktree 専用。本体（linked でない）は Herdr も拒否する。
-        if (workspace.worktree?.isLinkedWorktree !== true) {
+        // worktree.remove は Herdr が管理する linked worktree 専用。本体（linked でない）も拒否する。
+        if (workspace.worktree?.managed !== true || !workspace.worktree.isLinkedWorktree) {
           return c.json({ error: "not_linked_worktree" }, 409);
         }
 

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentStatus, HerdrSnapshot } from "./contract";
+import type { GitClient } from "../git";
 import { type PaneTimesFile, createPaneTimesFile, paneTimesPath } from "./pane-times";
 import { type AppState, checkoutPaths, createStateStore, toAppState } from "./state";
 
@@ -490,6 +491,88 @@ test("the published state carries the path used for git", async () => {
   expect(store.workspacePath("w1")).toBe("/runner");
 });
 
+function plainRepoSnapshot(): HerdrSnapshot {
+  return {
+    workspaces: [{ workspace_id: "w1", label: "pi-lab" }],
+    tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
+    panes: [{ pane_id: "w1:p1", workspace_id: "w1", tab_id: "w1:t1", cwd: "/work/pi-lab" }],
+  };
+}
+
+function fakeGit(overrides: Partial<GitClient> = {}): GitClient {
+  return {
+    read: async () => null,
+    readRepo: async () => null,
+    invalidate: () => {},
+    fetch: async () => {},
+    pull: async () => {},
+    ...overrides,
+  };
+}
+
+test("a workspace without a herdr worktree gets the git repo facts", async () => {
+  const seen: string[] = [];
+  const store = createStateStore({
+    load: async () => plainRepoSnapshot(),
+    git: fakeGit({
+      readRepo: async (path) => {
+        seen.push(path);
+        return { repoName: "pi-lab", repoRoot: "/work/pi-lab", isLinkedWorktree: false };
+      },
+    }),
+  });
+
+  const state = await store.refresh();
+
+  expect(seen).toEqual(["/work/pi-lab"]);
+  expect(state.workspaces[0]?.worktree).toEqual({
+    repoName: "pi-lab",
+    repoRoot: "/work/pi-lab",
+    checkoutPath: "/work/pi-lab",
+    isLinkedWorktree: false,
+    managed: false,
+  });
+});
+
+test("a herdr worktree is not replaced by git detection", async () => {
+  let called = false;
+  const store = createStateStore({
+    load: async () => repoSnapshot(),
+    git: fakeGit({
+      readRepo: async () => {
+        called = true;
+        return { repoName: "other", repoRoot: "/other", isLinkedWorktree: true };
+      },
+    }),
+  });
+
+  const state = await store.refresh();
+
+  expect(called).toBe(false);
+  expect(state.workspaces[0]?.worktree).toEqual({
+    repoName: "hwc",
+    repoRoot: "/repo",
+    checkoutPath: "/repo",
+    isLinkedWorktree: false,
+    managed: true,
+  });
+});
+
+test("an unreadable repo leaves the workspace without a worktree", async () => {
+  const store = createStateStore({
+    load: async () => plainRepoSnapshot(),
+    git: fakeGit({
+      readRepo: async () => {
+        throw new Error("not a repository");
+      },
+    }),
+  });
+
+  const state = await store.refresh();
+
+  expect(state.workspaces[0]?.worktree).toBeNull();
+});
+
 test("a branch that cannot be read still publishes the state", async () => {
   const store = createStateStore({
     load: async () =>
@@ -592,6 +675,7 @@ test("a readable upstream ends up on the workspace", async () => {
         };
       },
       invalidate: () => {},
+      readRepo: async () => null,
       fetch: async () => {},
       pull: async () => {},
     },
@@ -618,6 +702,7 @@ test("a git failure leaves the sync empty without stopping the state", async () 
         throw new Error("git is not installed");
       },
       invalidate: () => {},
+      readRepo: async () => null,
       fetch: async () => {},
       pull: async () => {},
     },
@@ -634,6 +719,7 @@ test("invalidateGit clears the checkout of the workspace", async () => {
     branch: async () => "feat/row",
     git: {
       read: async () => null,
+      readRepo: async () => null,
       invalidate: (path) => invalidated.push(path),
       fetch: async () => {},
       pull: async () => {},

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -7,6 +7,7 @@ import {
   createGitClient,
   parseBranchHead,
   parseGitDirFile,
+  parseGitRepo,
   parseRemoteUrls,
   pickGitHubRepoUrl,
   readBranch,
@@ -80,6 +81,44 @@ test("a place without git has no branch", async () => {
   expect(await readBranch(root)).toBeNull();
 });
 
+test("repo facts come from the checkout root and common git dir", () => {
+  expect(parseGitRepo("/repo\n/repo/.git\n.git\n", "/repo")).toEqual({
+    repoName: "repo",
+    repoRoot: "/repo",
+    isLinkedWorktree: false,
+  });
+  expect(parseGitRepo("/repo\n/repo/.git\n../.git\n", "/repo/src")).toEqual({
+    repoName: "repo",
+    repoRoot: "/repo",
+    isLinkedWorktree: false,
+  });
+});
+
+test("a linked worktree takes the name of its main repository", () => {
+  expect(parseGitRepo("/work/wt\n/repo/.git/worktrees/wt\n/repo/.git\n", "/work/wt")).toEqual({
+    repoName: "repo",
+    repoRoot: "/repo",
+    isLinkedWorktree: true,
+  });
+});
+
+test("a submodule keeps its own root instead of looking like a linked worktree", () => {
+  expect(
+    parseGitRepo("/repo/sub\n/repo/.git/modules/sub\n/repo/.git/modules/sub\n", "/repo/sub"),
+  ).toEqual({
+    repoName: "sub",
+    repoRoot: "/repo/sub",
+    isLinkedWorktree: false,
+  });
+});
+
+test("incomplete repo facts are ignored", () => {
+  expect(parseGitRepo("", "/repo")).toBeNull();
+  expect(parseGitRepo("/repo\n/repo/.git\n", "/repo")).toBeNull();
+  // ルートにリポジトリ名が無い場合は使わない。
+  expect(parseGitRepo("/\n/.git\n/.git\n", "/")).toBeNull();
+});
+
 test("the reader keeps the branch for a moment instead of reading every time", async () => {
   const root = await dir();
   await mkdir(join(root, ".git"));
@@ -93,6 +132,79 @@ test("the reader keeps the branch for a moment instead of reading every time", a
   expect(await read(root)).toBe("main");
   at = 1_500;
   expect(await read(root)).toBe("other");
+});
+
+test("the repo reader fills the checkout from git and caches it", async () => {
+  let at = 0;
+  const calls: string[][] = [];
+  const client = createGitClient({
+    ttlMs: 1_000,
+    now: () => at,
+    runRead: async (_path, args) => {
+      calls.push(args);
+      return "/repo\n/repo/.git\n.git\n";
+    },
+  });
+
+  expect(await client.readRepo("/repo")).toEqual({
+    repoName: "repo",
+    repoRoot: "/repo",
+    isLinkedWorktree: false,
+  });
+  expect(calls).toEqual([
+    ["rev-parse", "--show-toplevel", "--absolute-git-dir", "--git-common-dir"],
+  ]);
+
+  at = 500;
+  expect(await client.readRepo("/repo")).not.toBeNull();
+  expect(calls).toHaveLength(1);
+
+  at = 1_500;
+  await client.readRepo("/repo");
+  expect(calls).toHaveLength(2);
+});
+
+test("a symlinked checkout is not mistaken for a linked worktree", async () => {
+  const root = await dir();
+  const app = join(root, "app");
+  await mkdir(app);
+  const link = join(root, "link");
+  await symlink(app, link);
+  const client = createGitClient({
+    runRead: async () => `${app}\n${join(app, ".git")}\n.git\n`,
+  });
+
+  expect(await client.readRepo(link)).toEqual({
+    repoName: "app",
+    repoRoot: app,
+    isLinkedWorktree: false,
+  });
+});
+
+test("a git failure leaves the repo empty and does not throw", async () => {
+  const client = createGitClient({
+    runRead: async () => {
+      throw new Error("not a repository");
+    },
+  });
+
+  expect(await client.readRepo("/not-a-repo")).toBeNull();
+});
+
+test("invalidate drops the cached repo facts", async () => {
+  let reads = 0;
+  const client = createGitClient({
+    runRead: async () => {
+      reads += 1;
+      return "/repo\n/repo/.git\n.git\n";
+    },
+  });
+
+  await client.readRepo("/repo");
+  client.invalidate("/repo");
+  await client.readRepo("/repo");
+
+  expect(reads).toBe(2);
 });
 
 test("the sync reader parses the upstream and its divergence", async () => {

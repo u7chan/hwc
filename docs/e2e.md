@@ -74,6 +74,8 @@ BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
 `<root>/bin/git` は `e2e/fake-git.ts` を起動する。`remote -v` と `for-each-ref` は
 `<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返し、`fetch` は何も変えない。
+`rev-parse` は fixture に登録した cwd をリポジトリとして返す。Herdr が worktree を持たない
+`plain-checkout` の git 種別を BFF が補うために使う。
 remote URL は GitHub の予約済みでない架空のパス（`example/acme-dashboard`）にする。
 `pull --ff-only` は behind を 0 にして状態ファイルを書き換えるので、BFF が状態を取り直すと
 見出しの `↓N` が消える。実リポジトリ・実リモート・認証には触れない。
@@ -169,7 +171,7 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 
 1. `アクティブ` を開く。エージェントのいるペインが、待機中も含めて帯ごとに並ぶ。各帯の先頭は親ペインで、状態が変わっても動かない（王冠はそのスペースにエージェントが 2 枚以上いるときだけ出る）。残りは状態順（要対応 → 完了 → 実行中 → 待機 → 不明）。`acme-dashboard` では `frontend`（親・実行中）が `api`（完了）より上に来る。`scratch` では `notes`（エージェントなし）が出ず、`folder-trust-saved` などの待機が帯に並ぶ。
 2. `acme-dashboard` の帯で `api`（完了）を開き、`一覧へ戻る` で戻る。`api` は `待機` になって帯の最後へ移り、帯の件数から完了が消える。親の `frontend` は先頭のまま（[ADR 0050](adr/0050-active-lists-every-agent.md)）。
-3. `すべて` に切り替えて、シェルだけのペインと待機のペインがツリーに出ることを確かめる。
+3. `すべて` に切り替えて、シェルだけのペインと待機のペインがツリーに出ることを確かめる。Herdr に worktree として登録されていない `plain-checkout` も、git 管理下ならシェルではなくリポジトリのアイコンで出る。
 4. `acme-dashboard (checks)` の帯は `review`（待機）1 行になり、`acme-dashboard` の帯とは別に並ぶ。`acme-dashboard (docs)` の `writer` と同じく、スペースごとに 1 つの帯になる。
 
 ### 経過時間と終了時刻

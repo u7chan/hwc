@@ -25,6 +25,7 @@ function workspace(id: string, options: { repo?: string; linked?: boolean } = {}
             repoRoot: `/work/${repo}`,
             checkoutPath: `/work/${id}`,
             isLinkedWorktree: options.linked === true,
+            managed: true,
           },
     tabs: [],
   };
