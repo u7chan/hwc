@@ -5,7 +5,7 @@ import {
   AGENT_COMMANDS,
   chipOnInput,
   commandAvailable,
-  commandBlockReason,
+  commandBlockReasonFor,
   commandCandidates,
   commandLabel,
   commandSendText,
@@ -156,12 +156,16 @@ test("compact is unavailable while the history is too small to compact", () => {
   expect(commandAvailable("new", pane("pi"), chat(0))).toBe(true);
 });
 
-test("the menu note reports one reason at a time", () => {
-  expect(commandBlockReason(null)).toBeNull();
-  expect(commandBlockReason(chat(50000))).toBeNull();
-  expect(commandBlockReason(snapshot(0, null))).toBe("empty");
-  expect(commandBlockReason(chat(19999))).toBe("history");
-  expect(commandBlockReason(snapshot(0, 0))).toBe("compacted");
+test("each menu item reports its own block reason", () => {
+  expect(commandBlockReasonFor("new", null)).toBeNull();
+  expect(commandBlockReasonFor("new", chat(50000))).toBeNull();
+  expect(commandBlockReasonFor("new", snapshot(0, null))).toBe("empty");
+  // 履歴が小さくても、新しい会話は始められる。
+  expect(commandBlockReasonFor("new", chat(19999))).toBeNull();
+  expect(commandBlockReasonFor("new", snapshot(0, 0))).toBeNull();
+  expect(commandBlockReasonFor("compact", chat(19999))).toBe("history");
+  expect(commandBlockReasonFor("compact", snapshot(0, 0))).toBe("compacted");
+  expect(commandBlockReasonFor("compact", snapshot(0, null))).toBe("empty");
 });
 
 test("a slash without whitespace narrows the candidates", () => {

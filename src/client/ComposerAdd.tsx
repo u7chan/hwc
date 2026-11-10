@@ -1,18 +1,28 @@
+import type { ComponentChild } from "preact";
 import { useRef, useState } from "preact/hooks";
 import { attachmentTypeLabels, MAX_ATTACHMENTS } from "../shared/attachments";
-import { ImageIcon, PlusIcon, RepoIcon } from "./icons";
+import { CollapseIcon, ImageIcon, NewSessionIcon, PlusIcon, RepoIcon } from "./icons";
 import { Menu } from "./Menu";
 
 export const ADD_MENU_ID = "hwc-add-menu";
 
+export type ComposerCommand = {
+  available: boolean;
+  hint: string;
+  run: () => void;
+};
+
 type ComposerAddProps = {
   full: boolean;
+  // コマンドを持たない agent では null。画像とプロジェクトだけの + メニューになる。
+  commands: { newSession: ComposerCommand; compact: ComposerCommand } | null;
   onFiles: (files: File[]) => void;
   onProjects: () => void;
 };
 
-// 入力欄の下から、本文に足すものを選ぶ。画像は既存のアップロード経路へ流し、
-// プロジェクトは選んだディレクトリを本文へ入れるだけ。どちらも送信契約は変えない。
+// 入力欄の下から、本文に足すものと会話への操作を選ぶ。画像は既存のアップロード経路へ流し、
+// プロジェクトは選んだディレクトリを本文へ入れる。会話コマンドは実行だけを親へ渡し、
+// 下書き・添付・引用は残す。
 export function ComposerAdd(props: ComposerAddProps) {
   const [open, setOpen] = useState(false);
   const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
@@ -20,13 +30,32 @@ export function ComposerAdd(props: ComposerAddProps) {
 
   const close = () => setOpen(false);
 
+  const command = (item: ComposerCommand, icon: ComponentChild, label: string) => (
+    <button
+      type="button"
+      role="menuitem"
+      class="hwc-menu-item hwc-add-item"
+      disabled={!item.available}
+      onClick={() => {
+        close();
+        item.run();
+      }}
+    >
+      {icon}
+      <span class="hwc-add-item-text">
+        <span>{label}</span>
+        <span class="hwc-add-item-hint">{item.hint}</span>
+      </span>
+    </button>
+  );
+
   return (
     <>
       <button
         ref={setTrigger}
         type="button"
         class="hwc-add"
-        aria-label="入力を追加"
+        aria-label="入力欄の操作"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={ADD_MENU_ID}
@@ -52,12 +81,19 @@ export function ComposerAdd(props: ComposerAddProps) {
       {trigger === null ? null : (
         <Menu
           id={ADD_MENU_ID}
-          label="入力を追加"
+          label="入力欄の操作"
           trigger={trigger}
           side="above"
           open={open}
           onClose={close}
         >
+          {props.commands === null ? null : (
+            <>
+              {command(props.commands.newSession, <NewSessionIcon size={18} />, "新しい会話")}
+              {command(props.commands.compact, <CollapseIcon size={18} />, "会話を圧縮")}
+              <hr class="hwc-menu-separator" />
+            </>
+          )}
           <button
             type="button"
             role="menuitem"

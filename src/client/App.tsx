@@ -41,7 +41,7 @@ import { useWorkspacePullRequests } from "./pull-request";
 import { RemoveWorktreeConfirm } from "./RemoveWorktreeConfirm";
 import { WorkspaceGitActions } from "./WorkspaceGitActions";
 import { WorkspaceMenuHead } from "./WorkspaceMenuHead";
-import type { PaneCommandHandle } from "./commands";
+import type { PaneOutputHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { type PaneCloseAction, paneCloseAction } from "../shared/pane-close";
@@ -236,8 +236,8 @@ export function App() {
   const [menu, setMenu] = useState<OperationMenu | null>(null);
   const [gitAction, setGitAction] = useState<GitAction | null>(null);
   const gitActionInFlight = useRef(false);
-  // 会話と圧縮の状態は各詳細が持つ。一覧も同じ実行口を使う。
-  const commandHandles = useRef(new Map<string, PaneCommandHandle>());
+  // クリア後の読み直しのために、表示中の詳細への実行口を預かる。
+  const outputHandles = useRef(new Map<string, PaneOutputHandle>());
   // メニューや詳細の寿命でロックを失わず、次の描画より前の連打も抑える。
   // 正はこの集合だけにし、描画には変更通知を使う。
   const inputsInFlight = useRef(new Set<string>());
@@ -499,7 +499,7 @@ export function App() {
   // 一覧でクリアを押し、通信待ち中に対象のペインを開く経路があるため。
   const clearOutputForMenu = async (paneId: string): Promise<boolean> => {
     const cleared = await clearPaneOutput(paneId);
-    if (cleared) commandHandles.current.get(paneId)?.refreshOutput();
+    if (cleared) outputHandles.current.get(paneId)?.refreshOutput();
     return cleared;
   };
 
@@ -859,9 +859,9 @@ export function App() {
         setDismissedConfirmations((current) => ({ ...current, [item.id]: id }))
       }
       menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
-      commandRef={(handle) => {
-        if (handle === null) commandHandles.current.delete(item.id);
-        else commandHandles.current.set(item.id, handle);
+      outputRef={(handle) => {
+        if (handle === null) outputHandles.current.delete(item.id);
+        else outputHandles.current.set(item.id, handle);
       }}
       onOpenMenu={openPaneMenu}
       onOpenWorkspaceMenu={openWorkspaceMenu}
@@ -1102,13 +1102,10 @@ export function App() {
               workspacePath={menuRow?.workspace.path ?? null}
               full={menuFull}
               closeAction={menuCloseAction}
-              commands={commandHandles.current.get(menuPane.id) ?? null}
-              sending={inputsInFlight.current.has(menuPane.id)}
               onCreate={() => openCreateDialog(menuPane.id)}
               onClearOutput={() => clearOutputForMenu(menuPane.id)}
               onClosePane={openCloseConfirm}
               onDismiss={closeMenu}
-              onSubmit={(text) => sendToPane(menuPane.id, text, [])}
             />
           )}
           {menuWorkspace === null ? null : (
