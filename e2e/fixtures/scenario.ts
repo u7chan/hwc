@@ -73,6 +73,7 @@ export async function createScenario(root: string): Promise<Scenario> {
   // 別スペースの同名ペイン（review / shell）を並べるためのワークツリー。w2 とは別に置く。
   const checks = join(root, "work", "acme-dashboard-checks");
   const scratch = join(root, "work", "scratch");
+  const plain = join(root, "work", "plain-checkout");
   const agentDir = join(root, "agent");
   const sessionPath = join(agentDir, "sessions", "demo", "session.jsonl");
   const emptySessionPath = join(agentDir, "sessions", "empty", "session.jsonl");
@@ -81,6 +82,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeBranch(dashboard, "feat/empty-state"),
     writeBranch(docs, "docs/quickstart"),
     writeBranch(checks, "feat/checks"),
+    writeBranch(plain, "feat/plain"),
     mkdir(scratch, { recursive: true }),
     mkdir(join(agentDir, "sessions", "demo"), { recursive: true }),
     mkdir(join(agentDir, "sessions", "empty"), { recursive: true }),
@@ -174,6 +176,12 @@ export async function createScenario(root: string): Promise<Scenario> {
           hasRemote: true,
           remoteUrl: "https://github.com/example/acme-dashboard.git",
         },
+        [plain]: {
+          upstream: null,
+          ahead: 0,
+          behind: 0,
+          hasRemote: false,
+        },
       }),
     ),
   ]);
@@ -228,6 +236,15 @@ export async function createScenario(root: string): Promise<Scenario> {
         focused: false,
         worktree: null,
       },
+      // Herdr には worktree として登録されていないが、チェックアウトは git 管理下。
+      // BFF が git から種別を補い、リポジトリのアイコンになることを確かめる。
+      {
+        workspace_id: "w5",
+        label: "plain-checkout",
+        agent_status: "idle",
+        focused: false,
+        worktree: null,
+      },
     ],
     tabs: [
       {
@@ -262,6 +279,13 @@ export async function createScenario(root: string): Promise<Scenario> {
         tab_id: "w3:t1",
         workspace_id: "w3",
         label: "notes",
+        agent_status: "idle",
+        focused: false,
+      },
+      {
+        tab_id: "w5:t1",
+        workspace_id: "w5",
+        label: "main",
         agent_status: "idle",
         focused: false,
       },
@@ -412,6 +436,16 @@ export async function createScenario(root: string): Promise<Scenario> {
         focused: false,
         agent_session: null,
       },
+      {
+        pane_id: "w5:p1",
+        workspace_id: "w5",
+        tab_id: "w5:t1",
+        cwd: plain,
+        label: "shell",
+        agent_status: "unknown",
+        focused: false,
+        agent_session: null,
+      },
     ],
     agents: [
       {
@@ -490,6 +524,7 @@ export async function createScenario(root: string): Promise<Scenario> {
       "w3:p3": FOLDER_TRUST_SCREEN,
       "w3:p4": "› Ask Codex to do anything\n",
       "w3:p5": PI_TRUST_SCREEN,
+      "w5:p1": "$ git status\nOn branch feat/plain\nnothing to commit\n$",
     },
   };
 }

@@ -47,6 +47,15 @@ const projectFiles: Record<string, string[]> = {
 };
 
 switch (args[0]) {
+  case "rev-parse":
+    // Herdr が worktree を持たないスペースの git 種別を、BFF が読む。
+    // fixture に登録したパスだけをリポジトリとして返す。
+    if (entry === undefined || !args.includes("--show-toplevel")) process.exit(2);
+    if (!args.includes("--absolute-git-dir") || !args.includes("--git-common-dir")) {
+      process.exit(2);
+    }
+    process.stdout.write(`${cwd}\n${join(cwd, ".git")}\n${join(cwd, ".git")}\n`);
+    process.exit(0);
   case "remote":
     if (entry?.hasRemote === true) {
       const url =

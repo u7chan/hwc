@@ -455,7 +455,8 @@ export function App() {
     state === null || removing === null
       ? null
       : (state.workspaces.find((workspace) => workspace.id === removing.workspaceId) ?? null);
-  const removingAvailable = removingWorkspace?.worktree?.isLinkedWorktree === true;
+  const removingAvailable =
+    removingWorkspace?.worktree?.managed === true && removingWorkspace.worktree.isLinkedWorktree;
 
   // 既読は Herdr の seen を進めて消す。失敗しても通知しない。次にその行を開いて離れたときに
   // もう一度送られるので、ここで知らせても利用者にできることが無い。
@@ -591,7 +592,7 @@ export function App() {
   const openCreateWorktreeDialog = () => {
     if (menu === null || menu.target.kind !== "workspace" || state === null) return;
     const workspace = state.workspaces.find((item) => item.id === menu.target.id);
-    if (workspace === undefined || workspace.worktree === null) return;
+    if (workspace === undefined || workspace.worktree?.managed !== true) return;
     if (workspace.worktree.isLinkedWorktree) return;
     const paneId = workspace.tabs.flatMap((tab) => tab.panes)[0]?.id;
     if (paneId === undefined) return;
@@ -652,7 +653,13 @@ export function App() {
   const openRemoveWorktreeConfirm = () => {
     if (menu === null || menu.target.kind !== "workspace" || state === null) return;
     const workspace = state.workspaces.find((item) => item.id === menu.target.id);
-    if (workspace === undefined || workspace.worktree?.isLinkedWorktree !== true) return;
+    if (
+      workspace === undefined ||
+      workspace.worktree?.managed !== true ||
+      !workspace.worktree.isLinkedWorktree
+    ) {
+      return;
+    }
     closeMenu();
     setRemoving({
       workspaceId: workspace.id,
@@ -928,7 +935,7 @@ export function App() {
       : null;
   // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする（ADR 0038）。
   const menuWorktree = menuWorkspace?.worktree ?? null;
-  const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
+  const canCreateWorktree = menuWorktree?.managed === true && !menuWorktree.isLinkedWorktree;
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
     <PaneDetail
@@ -1356,7 +1363,8 @@ export function App() {
                   </button>
                 </>
               ) : null}
-              {menuWorkspace.worktree?.isLinkedWorktree === true ? (
+              {menuWorkspace.worktree?.managed === true &&
+              menuWorkspace.worktree.isLinkedWorktree ? (
                 <>
                   <hr class="hwc-menu-separator" />
                   <button

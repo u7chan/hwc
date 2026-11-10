@@ -40,6 +40,8 @@ export type WorktreeState = {
   repoRoot: string | null;
   checkoutPath: string | null;
   isLinkedWorktree: boolean;
+  // Herdr がワークツリーとして登録しているか。作成・削除は登録済みのスペースでしか行えない。
+  managed: boolean;
 };
 
 export type WorkspaceState = {
@@ -140,6 +142,7 @@ export function toAppState(
             repoRoot: workspace.worktree.repo_root ?? null,
             checkoutPath: workspace.worktree.checkout_path ?? null,
             isLinkedWorktree: workspace.worktree.is_linked_worktree,
+            managed: true,
           }
         : null,
       path: paths.get(workspace.workspace_id) ?? null,
@@ -211,6 +214,36 @@ function toPaneRoots(snapshot: HerdrSnapshot, roots: Map<string, string>): Map<s
     if (root !== undefined) paneRoots.set(pane.pane_id, root);
   }
   return paneRoots;
+}
+
+// Herdr が worktree を持たないスペースでも、チェックアウトが git 管理下なら
+// 表示用のリポジトリ情報を補う。Herdr の値があるスペースは上書きしない。
+async function withRepo(
+  state: SnapshotState,
+  read: GitClient | undefined,
+  paths: Map<string, string>,
+): Promise<SnapshotState> {
+  if (read === undefined) return state;
+  const workspaces = await Promise.all(
+    state.workspaces.map(async (workspace) => {
+      if (workspace.worktree !== null) return workspace;
+      const path = paths.get(workspace.id);
+      if (path === undefined) return workspace;
+      const repo = await read.readRepo(path).catch(() => null);
+      if (repo === null) return workspace;
+      return {
+        ...workspace,
+        worktree: {
+          repoName: repo.repoName,
+          repoRoot: repo.repoRoot,
+          checkoutPath: path,
+          isLinkedWorktree: repo.isLinkedWorktree,
+          managed: false,
+        },
+      };
+    }),
+  );
+  return { ...state, workspaces };
 }
 
 // ブランチは Herdr が返さないので、ワークツリーの置き場所から読んで足す。
@@ -324,7 +357,8 @@ export function createStateStore(options: {
     }
     times = trackPaneTimes(snapshotState, times, next, observedAt, observing);
     saveTimes(next);
-    const branched = await withBranches(next, options.branch, roots);
+    const repo = await withRepo(next, options.git, roots);
+    const branched = await withBranches(repo, options.branch, roots);
     const state: AppState = { ...(await withSync(branched, options.git, roots)), times };
     if (retryTimer) {
       clearTimeout(retryTimer);

@@ -41,6 +41,7 @@ const state: AppState = {
         repoRoot: null,
         checkoutPath: null,
         isLinkedWorktree: true,
+        managed: true,
       },
       tabs: [
         {
