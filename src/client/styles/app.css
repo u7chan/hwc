@@ -2239,13 +2239,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   display: flex;
   align-items: stretch;
   gap: var(--space-2);
-  /* 上に余白を置き、角丸のタブが上端に貼り付かないようにする。タブの高さを
+  /* 上に余白を置き、選択中の面が上端に貼り付かないようにする。切り替えの高さを
      その分だけ縮め、バー全体の高さは --row-head のまま保つ。 */
-  padding: var(--space-2) var(--space-3) 0;
+  padding: var(--space-2) var(--space-3) var(--space-1);
   background: var(--color-bg);
 }
 
-/* 下辺の線はタブの下に引く。選択中タブの面が線を隠し、下の本文とつながって見える。 */
+/* バーの下辺。選択中は面を塗るだけのチップなので、線は隠さず下まで通す。 */
 .hwc-tabbar::after {
   content: "";
   position: absolute;
@@ -2437,14 +2437,14 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   display: none;
 }
 
-/* タブは選択中だけ面を塗る。Chrome のタブと同じく、上辺を丸め、下辺は本文へ
-   つなげる。面を塗らないタブは状態色と競合しない。 */
+/* ペインの切り替えは、選択中だけ面を塗ったチップにする。本文と同じ面でつなげると
+   タブに見えるが、ここはペインの切り替えなので、下辺の線から離して置く。 */
 .hwc-tab {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: calc(var(--row-head) - var(--space-2));
+  height: calc(var(--row-head) - var(--space-2) - var(--space-1));
   padding: 0 var(--space-3);
   border: 0;
   background: transparent;
@@ -2453,13 +2453,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   cursor: pointer;
 }
 
-/* タブと目玉を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */
+/* 切り替えと目玉を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */
 .hwc-tab-item {
   position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: var(--radius-sm);
   transition: background-color 120ms ease;
 }
 
@@ -2474,14 +2474,10 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   background: var(--color-raised);
 }
 
-/* 選択中は本文と同じ面にして、上辺と左右に細い線を置く。下辺はタブバーの線を
-   面で隠すので、本文とつながって見える。 */
+/* 選択中は一覧の開いている行と同じ面で塗る。線から離してあるので、本文とは
+   つながらず、切り替えとして読める。 */
 .hwc-tab-item[data-selected="true"] {
-  background: var(--color-content);
-  box-shadow:
-    inset 0 1px 0 var(--color-line),
-    inset 1px 0 0 var(--color-line),
-    inset -1px 0 0 var(--color-line);
+  background: var(--color-selected);
 }
 
 .hwc-tab:hover {
@@ -5132,7 +5128,7 @@ p.hwc-compaction,
 
   /* カードの外側の余白を外したので、タブバーの左端を本文と揃える。 */
   .hwc-tabbar {
-    padding: var(--space-2) var(--space-6) 0;
+    padding: var(--space-2) var(--space-6) var(--space-1);
   }
 
   .hwc-output-wrap {
