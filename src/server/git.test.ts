@@ -269,7 +269,7 @@ test("a relative checkout is never read", async () => {
 test("remote URLs are read once per remote and prefer fetch", () => {
   const remotes = parseRemoteUrls(
     [
-      "origin\thttps://github.com/o/r.git (push)",
+      "origin\thttps://github.com/o/r-fork.git (push)",
       "origin\thttps://github.com/o/r.git (fetch)",
       "upstream\tgit@github.com:o/r.git (fetch)",
       "",
