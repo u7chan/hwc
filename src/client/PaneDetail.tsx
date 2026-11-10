@@ -787,6 +787,8 @@ type PaneDetailProps = {
   // シェルの前景プロセスが動いているか。停止ボタンの出し分けにだけ使う。
   running: boolean;
   sending: boolean;
+  // 作ったばかりで、まだエージェントが端末を引き継いでいない。入力欄を閉じる。
+  starting: boolean;
   dismissedConfirmation: string | null;
   confirmationAttempts: ReadonlyMap<string, ConfirmationAttempt>;
   onConfirmFolderTrust: (id: string) => void;
@@ -827,6 +829,7 @@ export function PaneDetail(props: PaneDetailProps) {
     waitingMs,
     running,
     sending,
+    starting,
     dismissedConfirmation,
     confirmationAttempts,
     onConfirmFolderTrust,
@@ -1745,7 +1748,7 @@ export function PaneDetail(props: PaneDetailProps) {
             <ArrowDownIcon />
           </button>
         )}
-        {readOnly || quoteAnchor === null ? null : (
+        {readOnly || starting || quoteAnchor === null ? null : (
           <button
             type="button"
             class="hwc-quote-action"
@@ -1794,6 +1797,15 @@ export function PaneDetail(props: PaneDetailProps) {
             この画面は閲覧のみです。操作は Herdr のターミナルで行ってください。
           </p>
         ) : null
+      ) : starting ? (
+        // 起動が終わるまで入力欄を出さない。相手がまだシェルだと、書いた文字が
+        // そのまま端末へ届く。Spinner はこの行に 1 つだけ置く。
+        <p class="hwc-starting" role="status">
+          <span class="hwc-starting-mark">
+            <Spinner size={14} />
+          </span>
+          エージェントを起動しています。準備ができるまでメッセージは送れません。
+        </p>
       ) : (
         <form
           class="hwc-input"
