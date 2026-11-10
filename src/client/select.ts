@@ -257,10 +257,18 @@ export function shortenSpaceName(workspace: WorkspaceState): string {
   return rest === "" ? label : rest;
 }
 
-// 名前の無いペインの端末タイトルはワークツリー名そのものになる。狭いタブでは 2 段目の
-// スペース名と同じ文字列になるので、同じ省略形に揃える。別名のペインはそのまま。
+// 名前の無いペインの端末タイトルはワークツリー名そのものになる。狭いタブやセルでは 2 段目や
+// チップのスペース名と同じ文字列になるので、同じ省略形に揃える。別名のペインはそのまま。
+export function shortenPaneName(
+  name: string,
+  workspaceLabel: string,
+  workspaceName: string,
+): string {
+  return name === workspaceLabel ? workspaceName : name;
+}
+
 export function tabDisplayName(name: string, workspace: WorkspaceState): string {
-  return name === workspace.label ? shortenSpaceName(workspace) : name;
+  return shortenPaneName(name, workspace.label, shortenSpaceName(workspace));
 }
 
 // 名前の区切り。帯が場所を言うので、行の名前からは場所の部分と一緒に落とす。

@@ -30,6 +30,7 @@ import {
   pullRequestLabel,
   pullRequestTone,
   shortenPath,
+  shortenPaneName,
   shortenSpaceName,
   soleTab,
   statusLabel,
@@ -545,8 +546,18 @@ test("a linked worktree drops the generated prefix where the name is short", () 
   expect(tabDisplayName("worktree-silver-cloud-c4cf", linked("worktree-silver-cloud-c4cf"))).toBe(
     "silver-cloud-c4cf",
   );
+  expect(
+    shortenPaneName(
+      "worktree-silver-cloud-c4cf",
+      "worktree-silver-cloud-c4cf",
+      "silver-cloud-c4cf",
+    ),
+  ).toBe("silver-cloud-c4cf");
   // ペインに付いた別名はそのまま。
   expect(tabDisplayName("pr-review", linked("worktree-silver-cloud-c4cf"))).toBe("pr-review");
+  expect(shortenPaneName("pr-review", "worktree-silver-cloud-c4cf", "silver-cloud-c4cf")).toBe(
+    "pr-review",
+  );
   // ユーザーが付けた名前、Herdr の生成規則に合わない名前はそのまま。
   expect(shortenSpaceName(linked("review"))).toBe("review");
   expect(shortenSpaceName(linked("worktree-"))).toBe("worktree-");
