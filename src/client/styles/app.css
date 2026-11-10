@@ -2039,8 +2039,18 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 /* 分割では、タブの下線だけでは選択中のペインがどのセルか結び付かない。一覧の開いている
    行と揃えて、内側にアクセントの実線を引く。1 枚のときは選び分ける相手が無いので出さない。 */
 .hwc-split-cell[data-current="true"] {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
+  position: relative;
+}
+
+/* outline は子の背景（出力欄・入力欄）の下に描かれ、左右と下辺が隠れる。セルの手前に
+   重ねた枠にして全周を見せる。 */
+.hwc-split-cell[data-current="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 2px solid var(--color-accent);
+  pointer-events: none;
 }
 
 /* プレビューはタブの 1 つ。分割は止め、detail の残りをそのまま iframe に渡す。 */
