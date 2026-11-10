@@ -70,6 +70,8 @@ export const STARTUP_MODELS = [
 export async function createScenario(root: string): Promise<Scenario> {
   const dashboard = join(root, "work", "acme-dashboard");
   const docs = join(root, "work", "acme-dashboard-docs");
+  // 別スペースの同名ペイン（review / shell）を並べるためのワークツリー。w2 とは別に置く。
+  const checks = join(root, "work", "acme-dashboard-checks");
   const scratch = join(root, "work", "scratch");
   const agentDir = join(root, "agent");
   const sessionPath = join(agentDir, "sessions", "demo", "session.jsonl");
@@ -78,6 +80,7 @@ export async function createScenario(root: string): Promise<Scenario> {
   await Promise.all([
     writeBranch(dashboard, "feat/empty-state"),
     writeBranch(docs, "docs/quickstart"),
+    writeBranch(checks, "feat/checks"),
     mkdir(scratch, { recursive: true }),
     mkdir(join(agentDir, "sessions", "demo"), { recursive: true }),
     mkdir(join(agentDir, "sessions", "empty"), { recursive: true }),
@@ -162,6 +165,12 @@ export async function createScenario(root: string): Promise<Scenario> {
           behind: 1,
           hasRemote: true,
         },
+        [checks]: {
+          upstream: "origin/feat/checks",
+          ahead: 2,
+          behind: 0,
+          hasRemote: true,
+        },
       }),
     ),
   ]);
@@ -195,6 +204,20 @@ export async function createScenario(root: string): Promise<Scenario> {
           is_linked_worktree: true,
         },
       },
+      // 別スペースの同名ペイン。同一スペース内の同名（w1 の review / shell）と並べても、
+      // タブの 2 段目とセル見出しのスペース名で区別できることを確かめる。
+      {
+        workspace_id: "w4",
+        label: "acme-dashboard (checks)",
+        agent_status: "idle",
+        focused: false,
+        worktree: {
+          repo_name: "acme-dashboard",
+          repo_root: dashboard,
+          checkout_path: checks,
+          is_linked_worktree: true,
+        },
+      },
       {
         workspace_id: "w3",
         label: "scratch",
@@ -223,6 +246,13 @@ export async function createScenario(root: string): Promise<Scenario> {
         workspace_id: "w2",
         label: "docs",
         agent_status: "blocked",
+        focused: false,
+      },
+      {
+        tab_id: "w4:t1",
+        workspace_id: "w4",
+        label: "review",
+        agent_status: "idle",
         focused: false,
       },
       {
@@ -303,6 +333,27 @@ export async function createScenario(root: string): Promise<Scenario> {
         cwd: docs,
         label: "writer",
         agent_status: "blocked",
+        focused: false,
+        agent_session: null,
+      },
+      // 別スペースの review と shell。w1 の review / shell と同じ名前で、スペースが違う。
+      {
+        pane_id: "w4:p1",
+        workspace_id: "w4",
+        tab_id: "w4:t1",
+        cwd: checks,
+        label: "review",
+        agent_status: "idle",
+        focused: false,
+        agent_session: { agent: "codex", source: "herdr:codex", kind: "id", value: "thread_demo" },
+      },
+      {
+        pane_id: "w4:p2",
+        workspace_id: "w4",
+        tab_id: "w4:t1",
+        cwd: checks,
+        label: "shell",
+        agent_status: "unknown",
         focused: false,
         agent_session: null,
       },
@@ -402,6 +453,13 @@ export async function createScenario(root: string): Promise<Scenario> {
         agent: "codex",
         terminal_title_stripped: "scratch",
       })),
+      {
+        pane_id: "w4:p1",
+        workspace_id: "w4",
+        cwd: checks,
+        agent: "codex",
+        terminal_title_stripped: "checks",
+      },
       {
         pane_id: "w3:p5",
         workspace_id: "w3",
@@ -679,6 +737,14 @@ const outputs: Record<string, string> = {
     "続けてよいか確認してください。",
     "",
   ].join("\n"),
+  "w4:p1": [
+    "codex · review",
+    "",
+    "- チェックアウトの別スペースでも空状態は同じです",
+    "- 余白とテストは feat/empty-state の変更と揃っています",
+    "",
+  ].join("\n"),
+  "w4:p2": ["dev@example ~/work/acme-dashboard-checks  feat/checks ❯", ""].join("\n"),
   "w3:p1": [
     "dev@example ~/work/scratch ❯ ls",
     "notes.md  todo.md",
