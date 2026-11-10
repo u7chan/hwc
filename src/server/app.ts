@@ -40,6 +40,7 @@ import { parseMoveWorkspacesBody, type WorkspaceClient } from "./herdr/workspace
 import type { WorktreeClient } from "./herdr/worktrees";
 import type { PullRequestReader } from "./pull-request";
 import type { GitClient } from "./git";
+import { createProjectLister, type ProjectLister } from "./projects";
 import {
   attachMessageFiles,
   defaultPreviewRoots,
@@ -113,6 +114,8 @@ export function createApp(options: {
   pullRequests?: PullRequestReader;
   // fetch / pull は状態を変えるので、状態の取得とは別の口から呼ぶ。
   git?: GitClient;
+  // プロジェクト候補はペインの cwd を走査する。テストでは走査結果を差し替える。
+  projects?: ProjectLister;
   revision?: string;
   sseHeartbeatMs?: number;
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
@@ -131,6 +134,7 @@ export function createApp(options: {
     models,
     pullRequests,
     git,
+    projects = createProjectLister(),
     revision = "dev",
     sseHeartbeatMs = SSE_HEARTBEAT_MS,
     attachmentsRoot = defaultAttachmentsRoot(),
@@ -528,6 +532,32 @@ export function createApp(options: {
           return c.json({ activity: null });
         }
         return c.json({ activity: await readActivity(source.path) });
+      })
+      // マニフェストがあるディレクトリを、ペインの cwd から下だけ列挙する。
+      // 兄弟プロジェクトは、このペインから相対パスで届く範囲に無いものとして扱う。
+      .get("/api/panes/:id/projects", async (c) => {
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+        const paneId = c.req.param("id");
+        const pane = findPane(state, paneId);
+        if (!pane) return c.json({ error: "pane_not_found" }, 404);
+        if (!pane.chat) return c.json({ error: "no_chat" }, 404);
+
+        let cwd: string;
+        try {
+          cwd = await panes.directory({ paneId });
+        } catch (error) {
+          return paneFailure(c, error);
+        }
+
+        // マニフェストの追加を 30 秒まで待たせないよう、ブラウザ側にも残さない。
+        c.header("cache-control", "no-store");
+        try {
+          return c.json(await projects.list({ cwd }));
+        } catch {
+          return c.json({ error: "projects_unavailable" }, 502);
+        }
       })
       .post("/api/panes/:id/attachments", uploadAttachment)
       .get("/api/panes/:id/attachments/:name", serveAttachment)

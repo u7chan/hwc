@@ -66,9 +66,12 @@ import {
   isNewSessionCommand,
   type PaneCommandHandle,
 } from "./commands";
+import { ComposerAdd } from "./ComposerAdd";
 import { useCopy } from "./copy";
 import { readDraft, readReply, storage, writeDraft, writeReply } from "./drafts";
 import { useHint } from "./hint";
+import { insertProjectPath } from "./projects";
+import { ProjectDialog } from "./ProjectDialog";
 import {
   AgentGlyphIcon,
   ArrowDownIcon,
@@ -821,6 +824,12 @@ export function PaneDetail(props: PaneDetailProps) {
   // チップは id だけを持つ。表示名と送信文字列は定数から引く。
   const [chip, setChip] = useState<CommandId | null>(null);
   const [attachments, setAttachments] = useState<AttachedImage[]>([]);
+  // プロジェクトのダイアログは閉じるアニメーションの間も残す。caret は選んだ直後に
+  // 入力欄へ戻す位置で、閉じただけ（キャンセル）のときは null のまま。
+  const [projectDialog, setProjectDialog] = useState<{
+    open: boolean;
+    caret: number | null;
+  } | null>(null);
   const nextAttachmentKey = useRef(0);
   // ファイルをドラッグしている間だけ composer を光らせる。dragenter / dragleave は
   // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
@@ -1210,6 +1219,36 @@ export function PaneDetail(props: PaneDetailProps) {
   const clearReply = () => {
     setReply(null);
     input.current?.focus();
+  };
+
+  const openProjects = () => setProjectDialog({ open: true, caret: null });
+
+  const closeProjects = () =>
+    setProjectDialog((current) => (current === null ? null : { ...current, open: false }));
+
+  // 選んだプロジェクトは本文のカーソル位置へ入れる。チップは文字を打ったときと同じ規則で、
+  // new は解除し、compact の指示は残す。
+  const pickProject = (path: string) => {
+    const field = input.current;
+    const start = field?.selectionStart ?? draft.length;
+    const end = field?.selectionEnd ?? start;
+    const next = insertProjectPath(draft, start, end, path);
+    setDraft(next.text);
+    setChip(chipOnInput(chip));
+    setProjectDialog({ open: false, caret: next.caret });
+  };
+
+  // キャンセル時は DialogShell が開く前の要素（+ ボタン）へ戻す。選んだときだけ、
+  // 閉じるアニメーションの後に本文へフォーカスを移す。
+  const projectsExited = () => {
+    const caret = projectDialog?.caret ?? null;
+    setProjectDialog(null);
+    if (caret === null) return;
+    const field = input.current;
+    if (field === null) return;
+    field.focus();
+    field.setSelectionRange(caret, caret);
+    fit(field, expanded);
   };
 
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
@@ -1892,6 +1931,13 @@ export function PaneDetail(props: PaneDetailProps) {
               />
             </span>
             <div class="hwc-input-actions">
+              {compact || !pane.chat ? null : (
+                <ComposerAdd
+                  full={attachments.length >= MAX_ATTACHMENTS}
+                  onFiles={(files) => takeImages(dropActionFrom(files))}
+                  onProjects={openProjects}
+                />
+              )}
               <span class="hwc-input-tail">
                 {info === null && meter === null ? null : (
                   <span class="hwc-input-info">
@@ -1924,6 +1970,15 @@ export function PaneDetail(props: PaneDetailProps) {
             </div>
           </div>
         </form>
+      )}
+      {projectDialog === null ? null : (
+        <ProjectDialog
+          paneId={pane.id}
+          open={projectDialog.open}
+          onClose={closeProjects}
+          onExited={projectsExited}
+          onPick={pickProject}
+        />
       )}
     </>
   );
