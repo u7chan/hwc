@@ -2036,6 +2036,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   container: hwc-cell / size;
 }
 
+/* 分割では、タブの下線だけでは選択中のペインがどのセルか結び付かない。一覧の開いている
+   行と揃えて、内側にアクセントの実線を引く。1 枚のときは選び分ける相手が無いので出さない。 */
+.hwc-split-cell[data-current="true"] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 /* プレビューはタブの 1 つ。分割は止め、detail の残りをそのまま iframe に渡す。 */
 .hwc-preview {
   flex: 1;

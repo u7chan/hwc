@@ -1035,7 +1035,12 @@ export function App() {
               ) : wide ? (
                 <div class="hwc-split" data-count={cells.length}>
                   {cells.map((item) => (
-                    <section class="hwc-split-cell" data-compact={compact} key={item.id}>
+                    <section
+                      class="hwc-split-cell"
+                      data-compact={compact}
+                      data-current={cells.length > 1 && item.id === pane.id}
+                      key={item.id}
+                    >
                       {renderPane(item, context, compact)}
                     </section>
                   ))}
