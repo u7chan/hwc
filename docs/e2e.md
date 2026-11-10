@@ -14,19 +14,19 @@ bun run e2e:serve
 
 ## 実環境との分離
 
-| 対象                                 | 実環境                                              | E2E                                                                                                                |
-| ------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Herdr ソケット                       | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                     |
-| pi セッション                        | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                |
-| pi モデルカタログ                    | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                   |
-| pi モデル・effort・上限              | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                     |
-| GitHub の PR                         | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                       |
-| Codex App Server                     | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない |
-| OpenCode サービス                    | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                  |
-| ブランチ                             | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                     |
-| git のリモートと差                   | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の upstream / ahead / behind を返す  |
-| 状態ディレクトリ（添付・ペイン時刻） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                         |
-| ポート                               | 30000                                               | 31000                                                                                                              |
+| 対象                                 | 実環境                                              | E2E                                                                                                                            |
+| ------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Herdr ソケット                       | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                                 |
+| pi セッション                        | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                            |
+| pi モデルカタログ                    | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                               |
+| pi モデル・effort・上限              | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                                 |
+| GitHub の PR                         | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                                   |
+| Codex App Server                     | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない             |
+| OpenCode サービス                    | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                              |
+| ブランチ                             | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                 |
+| git のリモートと差                   | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す |
+| 状態ディレクトリ（添付・ペイン時刻） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                     |
+| ポート                               | 30000                                               | 31000                                                                                                                          |
 
 `e2e/serve.ts` が架空 Herdr を起動してから `src/server.ts` を読み込む。BFF とクライアントは本番コードのままで、ソケット経路・状態同期・チャット読み取りを通る。実 Herdr のソケットには接続しない。
 
@@ -72,8 +72,9 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 渡された id の列を 1 ブロックとしてアンカーの前へ置く。
 BFF は実 Herdr と同じようにイベントで状態を取り直す。
 
-`<root>/bin/git` は `e2e/fake-git.ts` を起動する。`remote` と `for-each-ref` は
-`<root>/git-state.json` の架空の upstream / ahead / behind を返し、`fetch` は何も変えない。
+`<root>/bin/git` は `e2e/fake-git.ts` を起動する。`remote -v` と `for-each-ref` は
+`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返し、`fetch` は何も変えない。
+remote URL は GitHub の予約済みでない架空のパス（`example/acme-dashboard`）にする。
 `pull --ff-only` は behind を 0 にして状態ファイルを書き換えるので、BFF が状態を取り直すと
 見出しの `↓N` が消える。実リポジトリ・実リモート・認証には触れない。
 
@@ -189,9 +190,9 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 
 ## ワークツリー作成
 
-スペース見出しの「…」から作るワークツリーは、次の手順で確かめる。
+スペース見出しの先頭アイコンから開くメニューで作るワークツリーは、次の手順で確かめる。
 
-1. `acme-dashboard`（リポジトリ本体）の見出しの「…」を開き、「新しいワークツリー」を選ぶ。
+1. `acme-dashboard`（リポジトリ本体）の見出しの先頭アイコンを押してメニューを開き、「新しいワークツリー」を選ぶ。
    ダイアログの見出しが「新しいワークツリー」で、ブランチ名と保存先が Herdr 任せである旨が出る。
 2. そのまま「作成して起動」を押すと、架空 Herdr にリンクされたスペースが 1 つ増え、hwc が
    その root pane を開く。入力欄のモデル表示は起動時の指定で補われる（ADR 0033）。

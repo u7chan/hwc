@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { gitStatusLabel, parseUpstreamTrack } from "./git";
+import { gitStatusLabel, parseGitHubRemote, parseUpstreamTrack } from "./git";
 
 test("an upstream with no divergence has zero counts", () => {
   expect(parseUpstreamTrack("origin/main\t")).toEqual({
@@ -41,19 +41,79 @@ test("a deleted upstream is treated as no upstream", () => {
 });
 
 test("the status label explains each direction", () => {
-  expect(gitStatusLabel({ upstream: "origin/main", ahead: 0, behind: 0, hasRemote: true })).toBe(
-    "origin/main と同期しています",
+  expect(
+    gitStatusLabel({
+      upstream: "origin/main",
+      ahead: 0,
+      behind: 0,
+      hasRemote: true,
+      repoUrl: null,
+    }),
+  ).toBe("origin/main と同期しています");
+  expect(
+    gitStatusLabel({
+      upstream: "origin/main",
+      ahead: 2,
+      behind: 0,
+      hasRemote: true,
+      repoUrl: null,
+    }),
+  ).toBe("origin/main より 2 コミット進んでいます");
+  expect(
+    gitStatusLabel({
+      upstream: "origin/main",
+      ahead: 0,
+      behind: 3,
+      hasRemote: true,
+      repoUrl: null,
+    }),
+  ).toBe("origin/main より 3 コミット遅れています");
+  expect(
+    gitStatusLabel({
+      upstream: "origin/main",
+      ahead: 2,
+      behind: 3,
+      hasRemote: true,
+      repoUrl: null,
+    }),
+  ).toBe("origin/main より 2 コミット進み、3 コミット遅れています");
+  expect(
+    gitStatusLabel({
+      upstream: null,
+      ahead: 0,
+      behind: 0,
+      hasRemote: true,
+      repoUrl: null,
+    }),
+  ).toBe("上流ブランチがありません");
+});
+
+test("a GitHub remote is normalized to the repository top", () => {
+  expect(parseGitHubRemote("https://github.com/u7chan/hwc.git")).toBe(
+    "https://github.com/u7chan/hwc",
   );
-  expect(gitStatusLabel({ upstream: "origin/main", ahead: 2, behind: 0, hasRemote: true })).toBe(
-    "origin/main より 2 コミット進んでいます",
+  expect(parseGitHubRemote("https://github.com/u7chan/hwc")).toBe("https://github.com/u7chan/hwc");
+  expect(parseGitHubRemote("https://github.com/u7chan/hwc/")).toBe("https://github.com/u7chan/hwc");
+  expect(parseGitHubRemote("http://github.com/u7chan/hwc.git")).toBe(
+    "https://github.com/u7chan/hwc",
   );
-  expect(gitStatusLabel({ upstream: "origin/main", ahead: 0, behind: 3, hasRemote: true })).toBe(
-    "origin/main より 3 コミット遅れています",
+  expect(parseGitHubRemote("git@github.com:u7chan/hwc.git")).toBe("https://github.com/u7chan/hwc");
+  expect(parseGitHubRemote("github.com:u7chan/hwc")).toBe("https://github.com/u7chan/hwc");
+  expect(parseGitHubRemote("ssh://git@github.com/u7chan/hwc.git")).toBe(
+    "https://github.com/u7chan/hwc",
   );
-  expect(gitStatusLabel({ upstream: "origin/main", ahead: 2, behind: 3, hasRemote: true })).toBe(
-    "origin/main より 2 コミット進み、3 コミット遅れています",
+  expect(parseGitHubRemote("ssh://git@github.com:22/u7chan/hwc.git")).toBe(
+    "https://github.com/u7chan/hwc",
   );
-  expect(gitStatusLabel({ upstream: null, ahead: 0, behind: 0, hasRemote: true })).toBe(
-    "上流ブランチがありません",
-  );
+});
+
+test("anything that is not a GitHub repository top is rejected", () => {
+  expect(parseGitHubRemote("https://gitlab.com/u7chan/hwc.git")).toBeNull();
+  expect(parseGitHubRemote("https://github.com.evil.com/u7chan/hwc.git")).toBeNull();
+  expect(parseGitHubRemote("git@github.com.evil.com:u7chan/hwc.git")).toBeNull();
+  expect(parseGitHubRemote("https://github.com/u7chan/hwc/tree/main")).toBeNull();
+  expect(parseGitHubRemote("https://github.com/u7chan/hwc?tab=readme")).toBeNull();
+  expect(parseGitHubRemote("/home/u7dev/hwc")).toBeNull();
+  expect(parseGitHubRemote("file:///home/u7dev/hwc")).toBeNull();
+  expect(parseGitHubRemote("https://github.com/owner/.git")).toBeNull();
 });

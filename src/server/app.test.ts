@@ -510,6 +510,7 @@ const syncState: AppState = {
         ahead: 1,
         behind: 2,
         hasRemote: true,
+        repoUrl: "https://github.com/o/r",
       },
     },
   ],
@@ -588,7 +589,13 @@ test("POST /api/workspaces/:id/git refuses a fetch without a remote", async () =
     workspaces: [
       {
         ...syncState.workspaces[0]!,
-        sync: { upstream: null, ahead: 0, behind: 0, hasRemote: false },
+        sync: {
+          upstream: null,
+          ahead: 0,
+          behind: 0,
+          hasRemote: false,
+          repoUrl: null,
+        },
       },
     ],
   };
@@ -615,7 +622,13 @@ test("POST /api/workspaces/:id/git refuses a pull without an upstream", async ()
     workspaces: [
       {
         ...syncState.workspaces[0]!,
-        sync: { upstream: null, ahead: 0, behind: 0, hasRemote: true },
+        sync: {
+          upstream: null,
+          ahead: 0,
+          behind: 0,
+          hasRemote: true,
+          repoUrl: "https://github.com/o/r",
+        },
       },
     ],
   };

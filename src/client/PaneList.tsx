@@ -40,7 +40,7 @@ import {
   type ActiveStatus,
   type ListScope,
 } from "./scope";
-import { GitStatus } from "./GitStatus";
+import { GitCount } from "./GitCount";
 import { MENU_ID } from "./Menu";
 import { ParentMark } from "./ParentMark";
 import {
@@ -240,7 +240,6 @@ function ActiveBand(props: {
   const branch = workspace.branch ?? null;
   const pullRequest = props.pullRequest;
   const sync = workspace.sync ?? null;
-  const showsSync = sync !== null && sync.upstream !== null;
   // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば
   // タイトルを先頭に置き、名前は帯全体のボタンの読み上げとツリーに残す。
   const heading = pullRequest?.title ?? workspace.label;
@@ -255,9 +254,20 @@ function ActiveBand(props: {
   );
   return (
     <div class="hwc-active-band">
-      <span class="hwc-active-band-icon">
-        <WorkspaceGlyph worktree={workspace.worktree} />
-      </span>
+      <button
+        type="button"
+        class="hwc-space-icon"
+        aria-label={`${workspace.label} のメニュー`}
+        aria-haspopup="menu"
+        aria-expanded={props.menuOpen}
+        aria-controls={MENU_ID}
+        data-open={props.menuOpen}
+        onClick={(event) => props.onWorkspaceMenu(event.currentTarget)}
+      >
+        <span class="hwc-active-band-icon">
+          <WorkspaceGlyph worktree={workspace.worktree} />
+        </span>
+      </button>
       <div class="hwc-active-band-main">
         <div class="hwc-active-band-title">
           <h2 class="hwc-active-band-name" id={bandId(workspace.id)} title={heading}>
@@ -276,19 +286,17 @@ function ActiveBand(props: {
             </a>
           )}
         </div>
-        {branch === null && !showsSync ? null : (
+        {branch === null ? null : (
           <p class="hwc-active-band-line">
-            {branch === null ? null : (
-              <span class="hwc-active-band-branch" title={branch}>
-                {branch}
-              </span>
-            )}
-            <GitStatus sync={sync} expanded={props.menuOpen} onOpen={props.onWorkspaceMenu} />
+            <span class="hwc-active-band-branch" title={branch}>
+              {branch}
+            </span>
+            <GitCount sync={sync} />
             {countsNode}
           </p>
         )}
       </div>
-      {branch === null && !showsSync ? countsNode : null}
+      {branch === null ? countsNode : null}
       <span class="hwc-active-band-jump" aria-hidden="true">
         <ArrowRightIcon />
       </span>
@@ -652,7 +660,6 @@ function TreePaneList(props: TreePaneListProps) {
     const open = expanded.has(props2.id);
     const workspaceId = props2.workspaceId;
     const sync = props2.sync ?? null;
-    const showsSync = sync !== null && sync.upstream !== null;
     const order = props2.order;
     const orderProps =
       order === undefined
@@ -670,6 +677,24 @@ function TreePaneList(props: TreePaneListProps) {
           };
     return (
       <div class="hwc-group-row" data-menu={workspaceId !== undefined} id={props2.domId}>
+        {workspaceId === undefined ? (
+          <span class="hwc-space-icon hwc-space-icon--static" aria-hidden="true">
+            <span class="hwc-group-icon">{props2.icon}</span>
+          </span>
+        ) : (
+          <button
+            type="button"
+            class="hwc-space-icon"
+            aria-label={`${props2.label} のメニュー`}
+            aria-haspopup="menu"
+            aria-expanded={props.openWorkspaceMenuId === workspaceId}
+            aria-controls={MENU_ID}
+            data-open={props.openWorkspaceMenuId === workspaceId}
+            onClick={(event) => props.onWorkspaceMenu(workspaceId, event.currentTarget)}
+          >
+            <span class="hwc-group-icon">{props2.icon}</span>
+          </button>
+        )}
         <button
           type="button"
           class="hwc-group"
@@ -680,7 +705,6 @@ function TreePaneList(props: TreePaneListProps) {
           onClick={toggle(props2.id)}
           {...orderProps}
         >
-          <span class="hwc-group-icon">{props2.icon}</span>
           <span class="hwc-group-main">
             <span class="hwc-group-title">
               <span class="hwc-group-name">{props2.label}</span>
@@ -693,27 +717,7 @@ function TreePaneList(props: TreePaneListProps) {
             <ChevronRightIcon />
           </span>
         </button>
-        {workspaceId === undefined ? null : showsSync ? (
-          // 上流がある間は状態表示がメニューの入口を兼ねる。名前の幅を空けるため、
-          // 同じメニューを開く「…」は重ねて出さない。
-          <GitStatus
-            sync={sync}
-            expanded={props.openWorkspaceMenuId === workspaceId}
-            onOpen={(trigger) => props.onWorkspaceMenu(workspaceId, trigger)}
-          />
-        ) : (
-          <button
-            type="button"
-            class="hwc-pane-more"
-            aria-label={`${props2.label} のメニュー`}
-            aria-haspopup="menu"
-            aria-expanded={props.openWorkspaceMenuId === workspaceId}
-            aria-controls={MENU_ID}
-            onClick={(event) => props.onWorkspaceMenu(workspaceId, event.currentTarget)}
-          >
-            <MoreIcon />
-          </button>
-        )}
+        <GitCount sync={sync} />
       </div>
     );
   }

@@ -15,7 +15,7 @@ Herdr には `workspace.close` と `worktree.remove` がある。`workspace.clos
 - `force: true` を送る。TUI と同じく、未コミット・未追跡のファイルも消える前提で確認を 1 回だけ出す。force を送らないと dirty なチェックアウトを Herdr が `dirty_worktree_requires_force` で拒否し、GUI から片付けられなくなる
 - `workspace.close` は使わない。閉じるだけではフォルダが残り、「ワークツリーを削除」の目的を満たさない
 - 確認ダイアログで、チェックアウトのパス・ブランチが残ること・スペースと実行中のエージェントが終わること・未コミットのファイルが失われることを伝える。取り消せないので確認は省かない
-- 入口は一覧のスペース見出しの「…」だけに置く。ペインのメニューには出さない
+- 入口は一覧のスペース見出しの「…」だけに置く。ペインのメニューには出さない（2026-11-10 追記: スペース見出しのメニューの入口は [ADR 0057](0057-github-remote-link.md) で先頭アイコンに変わった）
 - `POST /api/workspaces/:id/remove-worktree` を足す。`application/json` 以外は 415、状態が無ければ 502、BFF の状態に無ければ 404、linked worktree でなければ 409 `not_linked_worktree`、Herdr の失敗は 502
 - Herdr の `workspace_not_found` / `worktree_not_found` は 404 とし、クライアントは成功として扱う。チェックアウトが既に無いという目的の状態には達している
 - 削除後に状態を取り直さない。スペースが消えるのは Herdr のイベント（`workspace.closed`）に任せる
