@@ -206,17 +206,20 @@ test("the parent stays at the top and the rest follow the state order", () => {
       pane("w1:p3", "pi", "blocked"),
       pane("w1:p4", "claude", "done"),
       pane("w1:p5", "pi", "unknown"),
+      pane("w1:p6", "claude", "idle"),
     ]),
   );
 
   const [group] = activeGroups(state);
 
   // 親 (p1) は待機でも先頭。残りは要対応 → 完了 → 実行中 → 待機 → 不明の順。
+  // p6 は親以外の待機。p5 (不明) より前に残ることで、待機の順位も確かめる。
   expect(group?.rows.map((row) => row.pane.id)).toEqual([
     "w1:p1",
     "w1:p3",
     "w1:p4",
     "w1:p2",
+    "w1:p6",
     "w1:p5",
   ]);
 });
