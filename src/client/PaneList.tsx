@@ -8,7 +8,6 @@ import {
   AgentIcon,
   ArrowRightIcon,
   ChevronRightIcon,
-  GripIcon,
   MergeIcon,
   MoreIcon,
   PaneIcon,
@@ -43,6 +42,7 @@ import {
   type ActiveStatus,
   type ListScope,
 } from "./scope";
+import { DragGhost } from "./DragGhost";
 import { GitCount } from "./GitCount";
 import { MENU_ID } from "./Menu";
 import { ParentMark } from "./ParentMark";
@@ -1120,14 +1120,7 @@ function TreePaneList(props: TreePaneListProps) {
           </span>
         </>
       )}
-      {dragged === null ? null : (
-        <div class="hwc-order-ghost" aria-hidden="true">
-          <span class="hwc-order-ghost-grip">
-            <GripIcon size={16} />
-          </span>
-          <span class="hwc-order-ghost-name">{dragged.label}</span>
-        </div>
-      )}
+      {dragged === null ? null : <DragGhost label={dragged.label} />}
     </>
   );
 }

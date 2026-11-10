@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
 import { dropAnchor, type UnitRect } from "./order";
 
 // タッチは長押しで掴む。マウスは少し動かした時点で掴む。どちらも見出しの開閉と同じ
@@ -8,8 +9,6 @@ const MOUSE_THRESHOLD = 5;
 const TOUCH_THRESHOLD = 10;
 const AUTO_SCROLL_EDGE = 56;
 const AUTO_SCROLL_STEP = 12;
-// 画面上端に近いときは、ガイドを指の上ではなく下に出す。上に出すと画面外へ切れる。
-const GHOST_BELOW_Y = 96;
 
 export type OrderDrag = {
   key: string;
@@ -49,28 +48,18 @@ function clearTimer(pending: Pending) {
   pending.timer = null;
 }
 
-// 固定配置のガイドは、毎回の再描画を避けて CSS 変数だけで動かす。値は viewport 座標。
 // 「ここに移動」のラベルは、掴んでいる指の反対側へ置いて重ならないようにする。
 function setGhostPoint(x: number, y: number, scroll: HTMLElement | null) {
-  const root = document.documentElement;
-  // ガイドは最大 280px。中心を viewport 内へ収め、画面端でも名前とグリップを切らない。
-  const margin = Math.min(140, window.innerWidth / 2);
-  const clampedX = Math.max(margin, Math.min(window.innerWidth - margin, x));
-  root.style.setProperty("--hwc-order-ghost-x", `${clampedX}px`);
-  root.style.setProperty("--hwc-order-ghost-y", `${y}px`);
-  root.dataset.orderGhost = y < GHOST_BELOW_Y ? "below" : "above";
+  setDragGhostPoint(x, y);
   if (scroll !== null) {
     const rect = scroll.getBoundingClientRect();
-    root.dataset.orderGuide = x < rect.left + rect.width / 2 ? "right" : "left";
+    document.documentElement.dataset.orderGuide = x < rect.left + rect.width / 2 ? "right" : "left";
   }
 }
 
 function clearGhostPoint() {
-  const root = document.documentElement;
-  root.style.removeProperty("--hwc-order-ghost-x");
-  root.style.removeProperty("--hwc-order-ghost-y");
-  delete root.dataset.orderGhost;
-  delete root.dataset.orderGuide;
+  clearDragGhostPoint();
+  delete document.documentElement.dataset.orderGuide;
 }
 
 // 見出しの offsetTop はスクロール位置に依存しない。落とした後に、この位置から
