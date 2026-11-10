@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { AppState, PaneState } from "../server/herdr/state";
+import type { AppState, PaneState, WorkspaceState } from "../server/herdr/state";
 import {
   activeRowName,
   agentGlyph,
@@ -13,9 +13,11 @@ import {
   groupWorkspaces,
   initialExpanded,
   isShellPane,
+  markedParentPaneIds,
   nextPaneInTab,
   paneName,
   paneRowTitle,
+  parentPaneOf,
   pullRequestLabel,
   pullRequestTone,
   shortenPath,
@@ -507,4 +509,86 @@ test("the merged chip says the state when read aloud", () => {
   expect(pullRequestLabel({ ...pullRequest, state: "MERGED" })).toBe(
     "PR #481（マージ済み）を GitHub で開く",
   );
+});
+
+function parentPane(
+  id: string,
+  agent: string | null,
+  agentStatus: PaneState["agentStatus"] = "idle",
+): PaneState {
+  return {
+    id,
+    title: null,
+    label: null,
+    agent,
+    agentStatus,
+    focused: false,
+    chat: false,
+  };
+}
+
+function parentWorkspace(id: string, tabs: readonly (readonly PaneState[])[]): WorkspaceState {
+  return {
+    id,
+    label: id,
+    agentStatus: "unknown",
+    focused: false,
+    worktree: null,
+    tabs: tabs.map((panes, index) => ({
+      id: `${id}:t${index + 1}`,
+      label: String(index + 1),
+      agentStatus: "unknown" as const,
+      focused: false,
+      panes: [...panes],
+    })),
+  };
+}
+
+test("the parent is the first agent pane from the left", () => {
+  const workspace = parentWorkspace("w1", [
+    [
+      parentPane("w1:p1", null, "idle"),
+      parentPane("w1:p2", "pi", "done"),
+      parentPane("w1:p3", "codex", "idle"),
+    ],
+    [parentPane("w1:p4", "pi", "working")],
+  ]);
+
+  // シェルは飛ばし、左端のタブの先頭から見る。別タブの先頭エージェントは親にしない。
+  expect(parentPaneOf(workspace)?.id).toBe("w1:p2");
+});
+
+test("a workspace without agents has no parent", () => {
+  const workspace = parentWorkspace("w1", [[parentPane("w1:p1", null, "idle")]]);
+  expect(parentPaneOf(workspace)).toBeNull();
+});
+
+test("the parent search skips a tab with no agents", () => {
+  const workspace = parentWorkspace("w1", [
+    [parentPane("w1:p1", null, "idle")],
+    [parentPane("w1:p2", "pi", "done")],
+  ]);
+  expect(parentPaneOf(workspace)?.id).toBe("w1:p2");
+});
+
+test("the parent mark is only needed when the space has more than one agent", () => {
+  const state: AppState = {
+    focusedWorkspaceId: null,
+    focusedTabId: null,
+    focusedPaneId: null,
+    workspaces: [
+      parentWorkspace("w1", [
+        [parentPane("w1:p1", "pi", "done"), parentPane("w1:p2", "codex", "working")],
+      ]),
+      parentWorkspace("w2", [[parentPane("w2:p1", "pi", "working")]]),
+      parentWorkspace("w3", [
+        [parentPane("w3:p1", null, "idle"), parentPane("w3:p2", "pi", "done")],
+        [parentPane("w3:p3", "codex", "idle")],
+      ]),
+      parentWorkspace("w4", [[parentPane("w4:p1", null, "idle")]]),
+    ],
+  };
+
+  // 1 枚だけのスペースは親が自明なので出さない。シェルは親にならない。
+  expect([...markedParentPaneIds(state)]).toEqual(["w1:p1", "w3:p2"]);
 });

@@ -97,6 +97,28 @@ export function countTabAgents(tab: TabState): number {
   return tab.panes.filter((pane) => pane.agent !== null).length;
 }
 
+// スペースの親。左端のタブから順に、最初のエージェントのペイン。Herdr の snapshot には
+// 作成順が無いので、一覧の並び（左端）で代用する。最初のペインがシェルなら次を見る。
+export function parentPaneOf(workspace: WorkspaceState): PaneState | null {
+  for (const tab of workspace.tabs) {
+    for (const pane of tab.panes) {
+      if (pane.agent !== null) return pane;
+    }
+  }
+  return null;
+}
+
+// 親マークを出すペイン。エージェントが 1 枚だけのスペースは親が自明なので出さない。
+export function markedParentPaneIds(state: AppState): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const workspace of state.workspaces) {
+    if (countWorkspaceAgents(workspace) < 2) continue;
+    const parent = parentPaneOf(workspace);
+    if (parent !== null) ids.add(parent.id);
+  }
+  return ids;
+}
+
 // タブが 1 つだけのワークスペースでは、タブは何も束ねていない。タブ行を出さず、
 // ペインを親の直下に並べるために、そのタブを返す。
 export function soleTab(workspace: WorkspaceState): TabState | null {
