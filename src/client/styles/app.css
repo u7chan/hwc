@@ -3979,6 +3979,51 @@ p.hwc-compaction,
   text-overflow: ellipsis;
 }
 
+/* 実行中であることを文字自体でも示す。段階の文字だけを光が通り、点・経過時間・速度は
+   止めたままにする。loading-ui の既定は地の色を currentColor の 55% まで薄めるが、
+   明るいテーマでは secondary が読めないほど薄くなるため、地は currentColor のまま、
+   帯だけ --color-text へ寄せる（暗いテーマでは明るく、明るいテーマでは濃く抜ける）。 */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .hwc-live-phase {
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-image:
+      linear-gradient(
+        90deg,
+        transparent calc(50% - 1.4em),
+        color-mix(in oklab, currentColor 35%, var(--color-text)),
+        transparent calc(50% + 1.4em)
+      ),
+      linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-size:
+      250% 100%,
+      auto;
+    background-position: 100% center;
+    animation: hwc-live-shimmer 2s linear infinite;
+  }
+
+  @keyframes hwc-live-shimmer {
+    from {
+      background-position: 100% center;
+    }
+
+    to {
+      background-position: 0% center;
+    }
+  }
+
+  /* 意味は文字が担う。動きを減らす設定では静止したラベルに戻す。 */
+  @media (prefers-reduced-motion: reduce), (forced-colors: active) {
+    .hwc-live-phase {
+      -webkit-text-fill-color: currentColor;
+      background-image: none;
+      animation: none;
+    }
+  }
+}
+
 /* 経過時間は常に右端に置く。文言の長さや秒数の桁が変わっても右端が動かないので、
    時間の位置が揺れない。中断ボタンは時間の左に並べ、ラベルが伸びても
    （「中断」→「中断中」）時間を押し出さない。 */
