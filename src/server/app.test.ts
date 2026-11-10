@@ -2274,6 +2274,70 @@ test.each([
   expect(response.status).toBe(status);
 });
 
+test("close serializes concurrent requests for the same place", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state: duplicateState,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+        await gate;
+      },
+    },
+  });
+
+  const first = app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  const second = app.request("/api/workspaces/w2/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  await waitFor(() => seen.length === 1);
+  await Bun.sleep(10);
+  release();
+  const [a, b] = await Promise.all([first, second]);
+
+  expect([a.status, b.status].sort()).toEqual([200, 409]);
+  expect(seen).toHaveLength(1);
+  const rejected = a.status === 409 ? a : b;
+  expect(await rejected.json()).toEqual({ error: "not_duplicate_space" });
+});
+
+test("close keeps the guard while the state still shows the closed space", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state: duplicateState,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+      },
+    },
+  });
+
+  const first = await app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  expect(first.status).toBe(200);
+
+  // fake store の refresh は同じ重複状態を返す。状態が追いつくまで、残りを閉じさせない。
+  const second = await app.request("/api/workspaces/w2/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(second.status).toBe(409);
+  expect(await second.json()).toEqual({ error: "not_duplicate_space" });
+  expect(seen).toEqual(["w1"]);
+});
+
 function postCreateWorktree(
   app: ReturnType<typeof createApp>,
   workspaceId: string,
