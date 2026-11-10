@@ -11,8 +11,6 @@ import { StatusIcon } from "./StatusLabel";
 type TabBarProps = {
   pane: PaneState;
   panes: readonly PaneState[];
-  // 分割のセルと揃える current。Herdr のフォーカスを優先し、見えていなければ開いているペイン。
-  currentPaneId: string | null;
   parentPaneIds: ReadonlySet<string>;
   // シェルで動いているコマンド。タブ名をコマンドに差し替えるためだけに使う。
   processes: ReadonlyMap<string, PaneProcess>;
@@ -46,7 +44,7 @@ export function TabBar(props: TabBarProps) {
     else if (right > list.scrollLeft + list.clientWidth) {
       list.scrollLeft = right - list.clientWidth + 8;
     }
-  }, [props.currentPaneId, previewing]);
+  }, [props.pane.id, previewing]);
 
   return (
     <div class="hwc-tabbar">
@@ -60,8 +58,7 @@ export function TabBar(props: TabBarProps) {
       </button>
       <div class="hwc-tabs" role="tablist" aria-label="ペイン" ref={tabList}>
         {props.panes.map((item) => {
-          const current = !previewing && item.id === props.currentPaneId;
-          const open = item.id === props.pane.id;
+          const selected = !previewing && item.id === props.pane.id;
           const hidden = props.hidden.has(item.id);
           const parent = props.parentPaneIds.has(item.id);
           const process = props.processes.get(item.id) ?? null;
@@ -71,14 +68,14 @@ export function TabBar(props: TabBarProps) {
           const detail = command === null ? name : `${name} (${command})`;
           // 開いているペインは分割に必ず出るので、隠す操作を持たせない。プレビュー中は
           // 分割が見えていないので、目玉も出さない。
-          const eye = props.split && !open && !previewing;
+          const eye = props.split && !selected && !previewing;
           return (
-            <div class="hwc-tab-item" key={item.id} data-selected={current} data-hidden={hidden}>
+            <div class="hwc-tab-item" key={item.id} data-selected={selected} data-hidden={hidden}>
               <button
                 type="button"
                 role="tab"
                 class="hwc-tab"
-                aria-selected={current}
+                aria-selected={selected}
                 aria-label={`${parent ? "親ペイン、" : ""}${detail} (${item.id}, ${statusLabel(item.agentStatus)}${hidden ? ", 分割で非表示" : ""})`}
                 title={detail}
                 data-pane-id={item.id}
