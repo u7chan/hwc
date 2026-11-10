@@ -236,6 +236,13 @@ type Removing = {
 // 待っている間も他の表示は止まるので、アニメーションより少し長い程度に留める。
 const REMOVAL_LEAVE_FALLBACK_MS = 800;
 
+// タブから外すアニメーション（TabBar）の対象。完了してから openTabs へ反映する。
+// successor は閉じる確認で決めた後継。× では省略し、removeTab の既定に任せる。
+type LeavingTab = { paneId: string; successor?: string | null };
+
+// タブのアニメーションの完了が届かない場合の保険。SSE の適用もこの間だけ遅らせる。
+const TAB_LEAVE_FALLBACK_MS = 400;
+
 // 重複したネイティブスペースを閉じる確認。フォルダは残るが、実行中のエージェントは終わる。
 type ClosingSpace = {
   workspaceId: string;
@@ -293,6 +300,9 @@ export function App() {
   } | null>(null);
   // 最新の木をイベントから引く。ドラッグの購読は 1 度しか張らない。
   const splitRef = useRef<SplitView>(EMPTY_SPLIT_VIEW);
+  // SSE の購読は 1 度しか張らないので、タブを外したあとの反映に使う一覧の
+  // 開閉状態も ref から読む。
+  const expandedRef = useRef<ReadonlySet<string>>(NO_GROUPS);
   // ドロップの前後で位置を比べるための控え（ADR 0061）。
   const flipRects = useRef<Map<string, DOMRect> | null>(null);
   // ドラッグ後の pointerup で click が成立しても、タブの選択を動かさない。
@@ -326,6 +336,9 @@ export function App() {
   const confirmationAttempts = useRef(new Map<string, ConfirmationAttempt>());
   const [, confirmationChanged] = useReducer((revision: number) => revision + 1, 0);
   const [closing, setClosing] = useState<Closing | null>(null);
+  const closingRef = useRef<Closing | null>(null);
+  closingRef.current = closing;
+  const [leavingTab, setLeavingTab] = useState<LeavingTab | null>(null);
   const [removing, setRemoving] = useState<Removing | null>(null);
   const [closingSpace, setClosingSpace] = useState<ClosingSpace | null>(null);
   // 作成ダイアログ。ワークツリーを作る場合は、モデル一覧の取得元になる起点スペースの ID も持つ。
@@ -351,6 +364,10 @@ export function App() {
   // 1 回だけ保留する。正は BFF のままで、描画のタイミングだけをずらす。
   const removingRef = useRef<Removing | null>(null);
   removingRef.current = removing;
+  // 外すタブのアニメーション中も、スナップショットの適用を 1 回だけ保留する。
+  const leavingTabRef = useRef<LeavingTab | null>(null);
+  leavingTabRef.current = leavingTab;
+  const leaveTabTimer = useRef<number | null>(null);
   const heldSnapshot = useRef<AppState | null>(null);
   const heldSnapshotTimer = useRef<number | null>(null);
 
@@ -375,10 +392,7 @@ export function App() {
       window.clearTimeout(heldSnapshotTimer.current);
       heldSnapshotTimer.current = null;
     }
-    const held = heldSnapshot.current;
-    heldSnapshot.current = null;
     setRemoving((current) => (current?.phase === "leave" ? null : current));
-    if (held !== null) setState(held);
   };
 
   // 削除が確定したらダイアログを閉じ、一覧の対象を消えるアニメーションへ渡す。
@@ -387,11 +401,11 @@ export function App() {
     heldSnapshotTimer.current ??= window.setTimeout(finishRemoval, REMOVAL_LEAVE_FALLBACK_MS);
   };
 
-  // 受信したスナップショットで丸ごと置き換える（ADR 0005）。削除の行が消える間だけは、
-  // アニメーションが途中で切り落とされないよう適用を保留する。
+  // 受信したスナップショットで丸ごと置き換える（ADR 0005）。画面から消える対象の
+  // アニメーションが途中で切り落とされないよう、その間だけ適用を保留する。
   const applyState = (next: AppState) => {
     const target = removingRef.current;
-    if (target?.phase === "leave") {
+    if (target?.phase === "leave" || leavingTabRef.current !== null) {
       heldSnapshot.current = next;
       return;
     }
@@ -405,8 +419,34 @@ export function App() {
       beginRemovalLeave();
       return;
     }
+    // ペインを閉じる要求の応答より先に、ペインが消えたスナップショットが届くことが
+    // ある。消えるタブを先に見せてから適用する。ペインが無い以上 close の目的は
+    // 達しているので、確認は閉じ、遅れて返る応答は捨てる（ADR 0021）。
+    const closeTarget = closingRef.current;
+    if (
+      closeTarget?.phase === "busy" &&
+      closeTarget.action === "close" &&
+      findPane(next, closeTarget.paneId) === null
+    ) {
+      heldSnapshot.current = next;
+      beginTabLeave(closeTarget.paneId, closeTarget.next);
+      setClosing(null);
+      return;
+    }
     setState(next);
   };
+
+  // タブのアニメーションと削除のアニメーションがどちらも終わったら、保留した
+  // スナップショットを 1 回だけ適用する。待つのは描画だけで、状態の正は BFF のまま。
+  useEffect(() => {
+    if (leavingTab !== null || removing?.phase === "leave") return;
+    const held = heldSnapshot.current;
+    if (held === null) return;
+    heldSnapshot.current = null;
+    // 保留中に別の対象が消えていれば、そのアニメーションへもう一度渡す。
+    applyState(held);
+  }, [leavingTab, removing?.phase]);
+
   useEffect(() => {
     const timer = setInterval(() => setNow(serverClockNow(Date.now(), skew.current)), 1000);
     return () => clearInterval(timer);
@@ -504,6 +544,7 @@ export function App() {
       ? (rememberedView?.split ?? EMPTY_SPLIT_VIEW)
       : syncSplitView(rememberedView.split, exists);
   const expanded = rememberedView === null ? NO_GROUPS : rememberedView.expanded;
+  expandedRef.current = expanded;
   const selectedPaneId = split.current;
   splitRef.current = split;
 
@@ -742,10 +783,38 @@ export function App() {
     setCreating({ paneId, worktreeWorkspaceId: workspace.id });
   };
 
-  // タブの × はタブから外すだけ。ペインは閉じず、Herdr 側で動き続ける（ADR 0059）。
-  const removeFromTabs = (paneId: string) => {
-    setView({ split: removeTab(split, paneId), expanded });
+  // タブから外す操作は、対象のタブが縮むアニメーションを見せてから履歴に反映する。
+  // 先に別のタブを外したときは、前の対象をすぐ反映して 1 つだけ動かす。
+  const finishTabLeave = (paneId: string) => {
+    const target = leavingTabRef.current;
+    if (target === null || target.paneId !== paneId) return;
+    if (leaveTabTimer.current !== null) {
+      window.clearTimeout(leaveTabTimer.current);
+      leaveTabTimer.current = null;
+    }
+    leavingTabRef.current = null;
+    setLeavingTab(null);
+    setView({
+      split: removeTab(splitRef.current, target.paneId, target.successor),
+      expanded: expandedRef.current,
+    });
   };
+
+  const beginTabLeave = (paneId: string, successor?: string | null) => {
+    const pending = leavingTabRef.current;
+    if (pending !== null) {
+      if (pending.paneId === paneId) return;
+      finishTabLeave(pending.paneId);
+    }
+    if (!splitRef.current.openTabs.includes(paneId)) return;
+    const target = { paneId, successor };
+    leavingTabRef.current = target;
+    setLeavingTab(target);
+    leaveTabTimer.current = window.setTimeout(() => finishTabLeave(paneId), TAB_LEAVE_FALLBACK_MS);
+  };
+
+  // タブの × はタブから外すだけ。ペインは閉じず、Herdr 側で動き続ける（ADR 0059）。
+  const removeFromTabs = (paneId: string) => beginTabLeave(paneId);
 
   // プレビューのタブとヘッダーの × は同じ入口にする。どちらも画面から外すだけで、
   // チップはメッセージに残る（ADR 0051）。
@@ -787,6 +856,9 @@ export function App() {
     setClosing({ ...target, phase: "busy" });
     void closePane(target.paneId, target.action).then((outcome) => {
       closeInFlight.current = false;
+      // スナップショットが先にペインを落とした場合は、既にタブを外すアニメーションへ
+      // 渡している。遅れて届いた応答で確認や表示を戻さない。
+      if (leavingTabRef.current?.paneId === target.paneId) return;
       if (outcome !== "done") {
         setClosing((current) => (current === null ? null : { ...current, phase: "failed" }));
         return;
@@ -794,7 +866,7 @@ export function App() {
       // 選んでいないペインを閉じても、読んでいるペインを動かさない。exit は終了要求で
       // ペインが残るので、履歴は動かさない（消えたらスナップショットで落とす）。
       if (target.action === "close") {
-        setView({ split: removeTab(split, target.paneId, target.next), expanded });
+        beginTabLeave(target.paneId, target.next);
       }
       setClosing(null);
     });
@@ -1111,6 +1183,13 @@ export function App() {
   // グリッドは広い画面で、current が実在するときだけ出す。
   const gridOn = wide && pane !== null && split.layout !== null;
   const compact = splitCells;
+  // 消えるペインが画面に出ているとき、本文側でも同じ時間だけ淡く消す。セルが並ぶ
+  // ときはそのセルだけを対象にし、1 枚表示のときは本文全体を対象にする。
+  const leavingPaneId = leavingTab?.paneId ?? null;
+  const leavingInCell =
+    leavingPaneId !== null && !previewing && gridOn && layoutPanes.includes(leavingPaneId);
+  const detailLeaving =
+    leavingPaneId !== null && leavingPaneId === selectedPaneId && !leavingInCell;
 
   // 4 枚の判定は BFF と同じタブの枚数で行う。
   const menuPaneId = menu?.target.kind === "pane" ? menu.target.id : null;
@@ -1250,6 +1329,7 @@ export function App() {
         data-current={item.id === pane?.id}
         data-drop-pane={item.id}
         data-drop-parent={parentDir ?? undefined}
+        data-leaving={leavingTab?.paneId === item.id ? "true" : undefined}
         key={item.id}
         onPointerDown={(event) => {
           activate();
@@ -1432,8 +1512,10 @@ export function App() {
                     : null
                 }
                 status={detailStatus}
+                leavingPaneId={leavingPaneId}
                 onSelectPane={selectFromTab}
                 onRemoveTab={removeFromTabs}
+                onLeaveFinished={finishTabLeave}
                 onSelectPreview={() =>
                   setPreview((current) => (current === null ? null : { ...current, shown: true }))
                 }
@@ -1441,28 +1523,32 @@ export function App() {
                 onBack={back}
                 onDragStart={startPaneDrag}
               />
-              {previewing && preview !== null ? (
-                <Preview
-                  key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
-                  paneId={preview.paneId}
-                  file={preview.file}
-                  onClose={closePreview}
-                />
-              ) : pane === null || context === null ? (
-                <div class="hwc-empty hwc-empty--detail">
-                  <div class="hwc-empty-mark hwc-empty-mark--app">
-                    <HwcMark size={40} />
+              <div class="hwc-detail-body" data-leaving={detailLeaving ? "true" : undefined}>
+                {previewing && preview !== null ? (
+                  <Preview
+                    key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
+                    paneId={preview.paneId}
+                    file={preview.file}
+                    onClose={closePreview}
+                  />
+                ) : pane === null || context === null ? (
+                  <div class="hwc-empty hwc-empty--detail">
+                    <div class="hwc-empty-mark hwc-empty-mark--app">
+                      <HwcMark size={40} />
+                    </div>
+                    <h2 class="hwc-empty-title">ペインを選んでください</h2>
+                    <p class="hwc-empty-text">
+                      タブか一覧からペインを選ぶと、出力と入力欄が出ます。
+                    </p>
                   </div>
-                  <h2 class="hwc-empty-title">ペインを選んでください</h2>
-                  <p class="hwc-empty-text">タブか一覧からペインを選ぶと、出力と入力欄が出ます。</p>
-                </div>
-              ) : gridOn && split.layout !== null ? (
-                <div class="hwc-detail-grid" data-single={layoutPanes.length === 1}>
-                  {renderSplit(split.layout, null)}
-                </div>
-              ) : (
-                renderPane(pane, context, false)
-              )}
+                ) : gridOn && split.layout !== null ? (
+                  <div class="hwc-detail-grid" data-single={layoutPanes.length === 1}>
+                    {renderSplit(split.layout, null)}
+                  </div>
+                ) : (
+                  renderPane(pane, context, false)
+                )}
+              </div>
             </div>
           ) : (
             <div class="hwc-empty hwc-empty--detail">
