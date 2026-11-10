@@ -274,6 +274,7 @@ type TestAppOptions = {
     | "codex"
     | "pullRequests"
     | "git"
+    | "projects"
     | "revision"
     | "sseHeartbeatMs"
     | "attachmentsRoot"
@@ -2660,6 +2661,76 @@ test("GET /api/panes/:id/chat returns 200 for a catalog-only window change and 3
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("the project list is read from the pane cwd", async () => {
+  const directories: string[] = [];
+  const cwds: string[] = [];
+  const { app } = createTestApp({
+    state: chatState,
+    panes: {
+      directory: async ({ paneId }) => {
+        directories.push(paneId);
+        return "/project/packages/app";
+      },
+    },
+    projects: {
+      list: async ({ cwd }) => {
+        cwds.push(cwd);
+        return { projects: [{ name: "api", path: "api" }], truncated: false };
+      },
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/projects");
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    projects: [{ name: "api", path: "api" }],
+    truncated: false,
+  });
+  expect(directories).toEqual(["w1:p1"]);
+  expect(cwds).toEqual(["/project/packages/app"]);
+});
+
+test("a shell pane has no project list", async () => {
+  const { app } = createTestApp({ state });
+  const response = await app.request("/api/panes/w1:p1/projects");
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "no_chat" });
+});
+
+test("a failed project scan is reported separately from an empty list", async () => {
+  const { app } = createTestApp({
+    state: chatState,
+    projects: {
+      list: async () => {
+        throw new Error("git failed");
+      },
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/projects");
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "projects_unavailable" });
+});
+
+test("a pane that disappeared while reading its cwd keeps the pane error", async () => {
+  const { app } = createTestApp({
+    state: chatState,
+    panes: {
+      directory: async () => {
+        throw new HerdrError("pane_not_found", "pane w1:p1 not found");
+      },
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/projects");
+
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "pane_not_found" });
 });
 
 const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);

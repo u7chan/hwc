@@ -23,6 +23,7 @@ import { isAttachmentName } from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
 import { parsePaneProcess, type PaneProcess } from "../shared/panes";
 import type { FolderTrustInteraction, PaneInteraction } from "../shared/confirmation";
+import { parseProjectList, type ProjectList } from "../shared/projects";
 import { parsePullRequest, type PullRequest } from "../shared/pull-request";
 
 export type OutputRead = PaneRead & { interaction: PaneInteraction | null };
@@ -372,6 +373,23 @@ export async function readActivity(
   if (!response.ok) throw new Error(`activity: ${response.status}`);
   const body = (await response.json()) as { activity?: unknown };
   return parsePaneActivity(body.activity);
+}
+
+// プロジェクト候補は、入力欄から選ぶときにだけ読む。失敗は候補なしではなく
+// ダイアログの再試行に回すため、null に畳んで返す。
+export async function readProjects(
+  paneId: string,
+  signal?: AbortSignal,
+): Promise<ProjectList | null> {
+  try {
+    const response = await client.api.panes[":id"].projects.$get(paneParam(paneId), {
+      init: { signal },
+    });
+    if (!response.ok) return null;
+    return parseProjectList(await response.json());
+  } catch {
+    return null;
+  }
 }
 
 // シェルの前景プロセス。Herdr のイベントで降ってこないので、見えている間だけ読む。

@@ -7,17 +7,17 @@ export const MENU_MARGIN = 8;
 export const MENU_MIN_WIDTH = 220;
 
 export type MenuPlacement = { top: number; right: number };
+export type MenuSide = "below" | "above";
 
 export function menuPlacement(
-  rect: { bottom: number; right: number },
+  rect: { top: number; bottom: number; right: number },
   viewport: { width: number; height: number },
   height: number,
   width = MENU_MIN_WIDTH,
+  side: MenuSide = "below",
 ): MenuPlacement {
-  const top = Math.max(
-    MENU_MARGIN,
-    Math.min(rect.bottom + MENU_GAP, viewport.height - height - MENU_MARGIN),
-  );
+  const requested = side === "above" ? rect.top - MENU_GAP - height : rect.bottom + MENU_GAP;
+  const top = Math.max(MENU_MARGIN, Math.min(requested, viewport.height - height - MENU_MARGIN));
   const right = Math.max(
     MENU_MARGIN,
     Math.min(viewport.width - rect.right, viewport.width - width - MENU_MARGIN),
@@ -30,13 +30,17 @@ type MenuProps = {
   trigger: HTMLElement;
   open: boolean;
   onClose: () => void;
-  onExited: () => void;
+  onExited?: () => void;
   closeOnScroll?: boolean;
+  // 入力欄の下に置くメニューは上へ開く。同じ id を複数のメニューが持たないよう、
+  // 呼び出し側が id を指定できるようにする。
+  side?: MenuSide;
+  id?: string;
   children: ComponentChildren;
 };
 
 export function Menu(props: MenuProps) {
-  const { trigger, open, onClose, onExited, closeOnScroll = false } = props;
+  const { trigger, open, onClose, onExited, closeOnScroll = false, side = "below" } = props;
   const card = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<MenuPlacement>({
     top: MENU_MARGIN,
@@ -53,6 +57,7 @@ export function Menu(props: MenuProps) {
         { width: window.innerWidth, height: window.innerHeight },
         node.offsetHeight,
         node.offsetWidth,
+        side,
       );
       setPlacement((current) =>
         current.top === next.top && current.right === next.right ? current : next,
@@ -62,7 +67,7 @@ export function Menu(props: MenuProps) {
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [trigger]);
+  }, [trigger, side]);
 
   useLayoutEffect(() => {
     const node = card.current;
@@ -81,7 +86,7 @@ export function Menu(props: MenuProps) {
     let active = true;
     const animations = card.current?.getAnimations() ?? [];
     void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
-      if (active) onExited();
+      if (active) onExited?.();
     });
     return () => {
       active = false;
@@ -112,10 +117,11 @@ export function Menu(props: MenuProps) {
     <>
       {open ? <div class="hwc-menu-backdrop" onPointerDown={onClose} /> : null}
       <div
-        id={MENU_ID}
+        id={props.id ?? MENU_ID}
         ref={card}
         class="hwc-menu"
         data-open={open}
+        data-side={side}
         role="menu"
         aria-label={props.label}
         aria-hidden={!open}

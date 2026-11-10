@@ -1150,6 +1150,31 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   background: var(--color-raised);
 }
 
+/* 入力の下から開く追加メニュー。補助説明を 2 行目に置くぶん、通常の項目より縦に広い。 */
+.hwc-add-item {
+  align-items: flex-start;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+
+.hwc-add-item > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.hwc-add-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hwc-add-item-hint {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .hwc-menu-item:disabled {
   color: var(--color-secondary);
   opacity: 0.45;
@@ -4006,14 +4031,18 @@ p.hwc-compaction,
 }
 
 .hwc-input-tail {
-  flex: none;
+  /* 追加ボタンが入っても送信を押し出さないよう、残り幅を取って右端に寄せる。 */
+  flex: 1 1 auto;
+  /* 幅の判定は画面ではなく、情報と送信が入る行の幅で行う。+ メニューは tail の
+     外側にあり、container-type の子孫にならないので fixed の基準を奪わない。 */
+  container: hwc-input-tail / inline-size;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   /* 札と送信ボタンが近いと息苦しいので、間を空ける。 */
   gap: var(--space-3);
   margin-left: auto;
   min-width: 0;
-  /* 幅は中身なり。狭いときだけモデル名が省略される。 */
   max-width: 100%;
 }
 
@@ -4230,7 +4259,7 @@ p.hwc-compaction,
   display: none;
 }
 
-@container hwc-input-actions (max-width: 360px) {
+@container hwc-input-tail (max-width: 340px) {
   .hwc-context-wide {
     display: none;
   }
@@ -4295,14 +4324,29 @@ p.hwc-compaction,
   white-space: nowrap;
 }
 
+/* 入力に足す操作。送信の主操作と競合しないよう、控えめな面にする。 */
+.hwc-add {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.hwc-add:hover {
+  background: var(--color-selected);
+}
+
 .hwc-input-actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: 0 0 var(--space-1) var(--space-2);
-  /* 幅の判定は画面ではなく入力行で行う。分割表示では viewport と一致しない。
-     flex: none の .hwc-input-tail に置くと主軸サイズが内容から決まらず幅 0 になる。 */
-  container: hwc-input-actions / inline-size;
 }
 
 /* 分割中は入力欄を 1 行に畳み、会話へ高さを回す。開閉ボタンと placeholder は出さない。 */
@@ -4351,13 +4395,13 @@ p.hwc-compaction,
   flex: 0 1 auto;
   min-width: 0;
   padding: 0;
-  /* 簡略時は入力行ではなくセルを基準に meter の表記を決める。 */
-  container: normal;
 }
 
 .hwc-split-cell[data-compact="true"] .hwc-input-tail {
   flex: 0 1 auto;
   gap: var(--space-2);
+  /* 簡略時は container query を使わず、下の固定規則で narrow にする。 */
+  container: normal;
 }
 
 /* 簡略時は narrow 表記に固定する。セル基準の 360px 判定では wide 表記（106k/1.0M (10.6%)）が
@@ -4734,9 +4778,116 @@ p.hwc-compaction,
   margin-top: var(--space-4);
 }
 
+.hwc-project-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+  max-height: min(560px, calc(100dvh - var(--space-4) * 2));
+  overflow: hidden;
+}
+
+.hwc-project-dialog .hwc-dialog-title,
+.hwc-project-dialog .hwc-dialog-text {
+  flex: none;
+}
+
+.hwc-project-dialog .hwc-dialog-text {
+  margin-bottom: var(--space-3);
+}
+
+.hwc-project-search {
+  display: block;
+  flex: none;
+  margin-bottom: var(--space-2);
+}
+
+.hwc-project-list {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  margin: 0 calc(var(--space-1) * -1);
+  padding: 0 var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hwc-project-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-project-row:hover {
+  background: var(--color-raised);
+}
+
+.hwc-project-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hwc-project-path {
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.hwc-project-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.hwc-project-retry {
+  min-height: var(--tap);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hwc-project-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.hwc-project-footer {
+  display: flex;
+  flex: none;
+  margin-top: var(--space-3);
+}
+
+.hwc-project-footer .hwc-dialog-button {
+  flex: 1;
+}
+
 /* 広い画面はフォームに幅を使える。狭い画面の縦積みとタップ領域の寸法は変えない。 */
 @media (min-width: 900px) {
-  .hwc-dialog.hwc-create-dialog {
+  .hwc-create-dialog {
     max-width: 480px;
     padding: var(--space-6);
   }

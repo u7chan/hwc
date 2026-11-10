@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 // 実リポジトリ・実リモートには触れない。BFF が読む `remote` / `for-each-ref` と、
-// メニューから呼ぶ `fetch` / `pull --ff-only` だけを、fixture の状態に対して返す。
+// メニューから呼ぶ `fetch` / `pull --ff-only`、プロジェクト候補の `ls-files` だけを、
+// fixture の状態に対して返す。
 type Entry = {
   upstream: string | null;
   ahead: number;
@@ -31,6 +33,17 @@ function track(entry: Entry): string {
 const state = readState();
 const entry = state[cwd];
 
+// プロジェクト候補の走査結果。実ファイルを作らず、モノレポの形だけを返す。
+const dashboard = join(dirname(statePath), "work", "acme-dashboard");
+const projectFiles: Record<string, string[]> = {
+  [dashboard]: [
+    "package.json",
+    "packages/api/package.json",
+    "packages/web/pyproject.toml",
+    "apps/desktop/Cargo.toml",
+  ],
+};
+
 switch (args[0]) {
   case "remote":
     if (entry?.hasRemote === true) process.stdout.write("origin\n");
@@ -47,6 +60,9 @@ switch (args[0]) {
     // fast-forward したことにする。次の状態公開で behind が 0 になる。
     entry.behind = 0;
     writeFileSync(statePath!, JSON.stringify(state, null, 2));
+    process.exit(0);
+  case "ls-files":
+    process.stdout.write((projectFiles[cwd] ?? []).join("\0"));
     process.exit(0);
   default:
     process.exit(2);

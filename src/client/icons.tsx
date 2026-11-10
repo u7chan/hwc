@@ -152,6 +152,16 @@ export function PlusIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function ImageIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="M21 15l-5-5L7 20" />
+    </Svg>
+  );
+}
+
 // 新しい会話。同じペインで会話だけを作り直すが、円を描き直す矢印は更新に見えるので、会話の吹き出しに + を添える。
 export function NewSessionIcon({ size = 16 }: IconProps) {
   return (
