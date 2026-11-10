@@ -87,9 +87,10 @@ export function nextOpenPane(openTabs: readonly string[], paneId: string): strin
   return before ?? null;
 }
 
-// タブを閉じる。current を閉じたときだけ選択を後継へ動かす。後継がグリッド内ならその
-// スロットを current にし、グリッド外なら閉じたペインのスロットへ入れる。
-export function closeTab(view: SplitView, paneId: string, successor?: string | null): SplitView {
+// タブから外す。ペインは閉じない（Herdr 側では動き続ける）。current を外したときだけ
+// 選択を後継へ動かす。後継がグリッド内ならそのスロットを current にし、グリッド外なら
+// 外したペインのスロットへ入れる。close の確認後も同じ遷移を使う。
+export function removeTab(view: SplitView, paneId: string, successor?: string | null): SplitView {
   if (!view.openTabs.includes(paneId)) return view;
   const openTabs = view.openTabs.filter((id) => id !== paneId);
   const at = view.slots.indexOf(paneId);

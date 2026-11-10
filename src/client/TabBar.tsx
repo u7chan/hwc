@@ -1,6 +1,5 @@
 import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
-import type { PaneCloseAction } from "../shared/pane-close";
 import type { PaneProcess } from "../shared/panes";
 import { ChevronLeftIcon, CloseIcon, EyeIcon } from "./icons";
 import { ParentMark } from "./ParentMark";
@@ -17,21 +16,20 @@ type TabBarProps = {
   // 複数スペースのペインが開いているときだけ、2 段目にスペース名を出す。
   multiSpace: boolean;
   parentPaneIds: ReadonlySet<string>;
-  closeActionOf: (paneId: string) => PaneCloseAction | "keep" | null;
   // シェルで動いているコマンド。タブ名をコマンドに差し替えるためだけに使う。
   processes: ReadonlyMap<string, PaneProcess>;
   // 開いているプレビュー。ペインではないので、選択と表示だけを別に持つ。
   preview: { name: string; selected: boolean } | null;
   status: ComponentChildren;
   onSelectPane: (paneId: string) => void;
-  onClosePane: (paneId: string) => void;
+  onRemoveTab: (paneId: string) => void;
   onSelectPreview: () => void;
   onBack: () => void;
   // タブからのドラッグ。移動量で開始を判定するので、押した時点で位置だけ渡す。
   onDragStart: (event: PointerEvent, paneId: string) => void;
 };
 
-// 詳細の上端。開いたペインの履歴を並べ、閉じる入口を添える。
+// 詳細の上端。開いたペインの履歴を並べ、タブから外す入口を添える。
 export function TabBar(props: TabBarProps) {
   const tabList = useRef<HTMLDivElement>(null);
 
@@ -70,12 +68,8 @@ export function TabBar(props: TabBarProps) {
           // タブにはプログラム名だけを出す。何を動かしているかは、ホバーと読み上げで補う。
           const command = process?.running === true ? process.command : null;
           const detail = command === null ? name : `${name} (${command})`;
-          const action = props.closeActionOf(item.pane.id);
-          // keep はスペース最後のシェル。閉じる入口を出さず、理由を title に添える。
-          const closable = action === "close" || action === "exit";
           const space = `${item.workspace.label} · ${item.tab.label || item.tab.id}`;
           const description = `${space}、${item.pane.id}、${statusLabel(item.pane.agentStatus)}`;
-          const note = action === "keep" ? "、最後のペインのため閉じられません" : "";
           const slot = props.slots.indexOf(item.pane.id);
           return (
             <div
@@ -89,14 +83,14 @@ export function TabBar(props: TabBarProps) {
                 role="tab"
                 class="hwc-tab"
                 aria-selected={selected}
-                aria-label={`${parent ? "親ペイン、" : ""}${detail} (${description}${note})`}
-                title={`${detail} (${description}${note})`}
+                aria-label={`${parent ? "親ペイン、" : ""}${detail} (${description})`}
+                title={`${detail} (${description})`}
                 data-pane-id={item.pane.id}
                 onPointerDown={(event) => props.onDragStart(event, item.pane.id)}
                 onAuxClick={(event) => {
-                  if (event.button !== 1 || !closable) return;
+                  if (event.button !== 1) return;
                   event.preventDefault();
-                  props.onClosePane(item.pane.id);
+                  props.onRemoveTab(item.pane.id);
                 }}
                 onClick={() => props.onSelectPane(item.pane.id)}
               >
@@ -111,19 +105,15 @@ export function TabBar(props: TabBarProps) {
                 </span>
                 <StatusIcon status={item.pane.agentStatus} />
               </button>
-              {!closable ? null : (
-                <button
-                  type="button"
-                  class="hwc-tab-close"
-                  aria-label={
-                    action === "exit" ? `${name} のエージェントを終了` : `${name} のペインを閉じる`
-                  }
-                  title={action === "exit" ? "エージェントを終了" : "ペインを閉じる"}
-                  onClick={() => props.onClosePane(item.pane.id)}
-                >
-                  <CloseIcon size={12} />
-                </button>
-              )}
+              <button
+                type="button"
+                class="hwc-tab-close"
+                aria-label={`${name} をタブから外す`}
+                title="タブから外す"
+                onClick={() => props.onRemoveTab(item.pane.id)}
+              >
+                <CloseIcon size={12} />
+              </button>
             </div>
           );
         })}

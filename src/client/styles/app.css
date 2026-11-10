@@ -2751,7 +2751,7 @@ a.hwc-pane-head-repo:focus-visible {
 }
 
 /* ポインタの画面では、× はタブに乗ったときとフォーカスしたときだけ出す。狭い画面は
-   タップで閉じるので常に出す。 */
+   タップで外すので常に出す。 */
 @media (hover: hover) {
   .hwc-tab-close {
     opacity: 0;
