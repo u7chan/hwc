@@ -4,6 +4,7 @@ import {
   NO_TIMES,
   type PaneState,
   type WorkspaceState,
+  type WorktreeState,
 } from "../server/herdr/state";
 import {
   activeRowName,
@@ -29,9 +30,11 @@ import {
   pullRequestLabel,
   pullRequestTone,
   shortenPath,
+  shortenSpaceName,
   soleTab,
   statusLabel,
   statusTone,
+  tabDisplayName,
 } from "./select";
 
 const state: AppState = {
@@ -153,6 +156,7 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
   expect(findPaneContext(state, "w1:p1")).toEqual({
     workspaceId: "w1",
     workspaceLabel: "hwc",
+    workspaceName: "hwc",
     tabLabel: "main",
     branch: "feat/board",
     sync: {
@@ -168,6 +172,7 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
   expect(findPaneContext(state, "w2:p1")).toEqual({
     workspaceId: "w2",
     workspaceLabel: "hwc-verify",
+    workspaceName: "hwc-verify",
     tabLabel: "main",
     branch: null,
     sync: null,
@@ -519,6 +524,36 @@ test("a long path keeps the tail that identifies the place", () => {
   );
   expect(shortenPath("/home/example/work/acme-dashboard/worktrees/feature-empty-state")).toBe(
     "…/worktrees/feature-empty-state",
+  );
+});
+
+test("a linked worktree drops the generated prefix where the name is short", () => {
+  const worktree: WorktreeState = {
+    repoName: "hwc",
+    repoRoot: "/srv/hwc",
+    checkoutPath: "/srv/worktrees/hwc/x",
+    isLinkedWorktree: true,
+    managed: true,
+  };
+  const linked = (label: string, value: WorktreeState | null = worktree): WorkspaceState => ({
+    ...state.workspaces[0],
+    label,
+    worktree: value,
+  });
+
+  expect(shortenSpaceName(linked("worktree-silver-cloud-c4cf"))).toBe("silver-cloud-c4cf");
+  expect(tabDisplayName("worktree-silver-cloud-c4cf", linked("worktree-silver-cloud-c4cf"))).toBe(
+    "silver-cloud-c4cf",
+  );
+  // ペインに付いた別名はそのまま。
+  expect(tabDisplayName("pr-review", linked("worktree-silver-cloud-c4cf"))).toBe("pr-review");
+  // ユーザーが付けた名前、Herdr の生成規則に合わない名前はそのまま。
+  expect(shortenSpaceName(linked("review"))).toBe("review");
+  expect(shortenSpaceName(linked("worktree-"))).toBe("worktree-");
+  // リポジトリ本体と、worktree を持たないスペースは対象外。
+  expect(shortenSpaceName(linked("worktree-x", null))).toBe("worktree-x");
+  expect(shortenSpaceName(linked("worktree-x", { ...worktree, isLinkedWorktree: false }))).toBe(
+    "worktree-x",
   );
 });
 

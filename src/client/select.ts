@@ -194,6 +194,8 @@ export function soleTab(workspace: WorkspaceState): TabState | null {
 export type PaneContext = {
   workspaceId: string;
   workspaceLabel: string;
+  // 狭い見出しに出すスペース名。前置きを落とした表示用で、フルは workspaceLabel に残す。
+  workspaceName: string;
   tabLabel: string;
   // ブランチはスペースの属性。同じスペースのペインは同じ値になる。
   branch: string | null;
@@ -209,6 +211,7 @@ export function findPaneContext(state: AppState, paneId: string | null): PaneCon
   return {
     workspaceId: row.workspace.id,
     workspaceLabel: row.workspace.label,
+    workspaceName: shortenSpaceName(row.workspace),
     tabLabel: row.tab.label,
     branch: row.workspace.branch ?? null,
     sync: row.workspace.sync ?? null,
@@ -238,6 +241,26 @@ export function paneName(pane: PaneState): string {
 // 名前が無いペインだけエージェント種別、それも無ければタイトルに倒す。
 export function paneRowTitle(pane: PaneState): string {
   return pane.label ?? pane.agent ?? paneName(pane);
+}
+
+// Herdr が linked worktree に付ける `worktree-` は、ワークツリーであることを示すだけで、
+// その役目は一覧の記号とリポジトリの束が持つ。狭いタブやセルでは前置きに幅を食われて
+// 呼び名が隠れるので、表示だけ落とす。TUI と照合するフルは title と aria に残す。
+const WORKTREE_PREFIX = "worktree-";
+
+export function shortenSpaceName(workspace: WorkspaceState): string {
+  const label = workspace.label;
+  if (workspace.worktree?.isLinkedWorktree !== true || !label.startsWith(WORKTREE_PREFIX)) {
+    return label;
+  }
+  const rest = label.slice(WORKTREE_PREFIX.length);
+  return rest === "" ? label : rest;
+}
+
+// 名前の無いペインの端末タイトルはワークツリー名そのものになる。狭いタブでは 2 段目の
+// スペース名と同じ文字列になるので、同じ省略形に揃える。別名のペインはそのまま。
+export function tabDisplayName(name: string, workspace: WorkspaceState): string {
+  return name === workspace.label ? shortenSpaceName(workspace) : name;
 }
 
 // 名前の区切り。帯が場所を言うので、行の名前からは場所の部分と一緒に落とす。

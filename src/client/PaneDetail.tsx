@@ -1607,7 +1607,7 @@ export function PaneDetail(props: PaneDetailProps) {
             class="hwc-pane-head-space"
             title={`${context.workspaceLabel} / ${context.tabLabel}`}
           >
-            {context.workspaceLabel}
+            {context.workspaceName}
           </span>
         ) : null}
         {labeled || showBranch ? null : <GitCount sync={sync} />}
