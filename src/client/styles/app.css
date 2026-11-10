@@ -883,18 +883,29 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   vertical-align: -0.15em;
 }
 
+/* 行のホバーは raised で行全体を塗るため、上に乗っただけでは開閉の入口が分からない。
+   左の種類アイコンと同じ 44px の枠で surface に落とし、押せる範囲を示す。 */
 .hwc-chevron {
   flex: none;
   display: grid;
   place-items: center;
-  width: var(--space-8);
-  height: var(--space-8);
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--radius-control);
   color: var(--color-secondary);
-  transition: transform 180ms ease;
+  transition:
+    transform 180ms ease,
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
 .hwc-chevron[data-open="true"] {
   transform: rotate(90deg);
+}
+
+.hwc-chevron:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 /* タブの行。ワークスペースの下に 1 段下げて置く。 */
