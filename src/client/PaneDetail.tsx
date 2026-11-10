@@ -1505,6 +1505,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const composerCommands = isCommandPane(pane)
     ? {
         newSession: {
+          label: commandLabel("new"),
           available: menuCommandAvailable("new"),
           hint: menuCommandHint("new"),
           run: () => {
@@ -1512,6 +1513,7 @@ export function PaneDetail(props: PaneDetailProps) {
           },
         },
         compact: {
+          label: commandLabel("compact"),
           available: menuCommandAvailable("compact"),
           hint: menuCommandHint("compact"),
           run: () => void runMenuCommand("compact"),

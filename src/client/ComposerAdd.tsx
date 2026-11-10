@@ -7,6 +7,7 @@ import { Menu } from "./Menu";
 export const ADD_MENU_ID = "hwc-add-menu";
 
 export type ComposerCommand = {
+  label: string;
   available: boolean;
   hint: string;
   run: () => void;
@@ -30,7 +31,7 @@ export function ComposerAdd(props: ComposerAddProps) {
 
   const close = () => setOpen(false);
 
-  const command = (item: ComposerCommand, icon: ComponentChild, label: string) => (
+  const command = (item: ComposerCommand, icon: ComponentChild) => (
     <button
       type="button"
       role="menuitem"
@@ -43,7 +44,7 @@ export function ComposerAdd(props: ComposerAddProps) {
     >
       {icon}
       <span class="hwc-add-item-text">
-        <span>{label}</span>
+        <span>{item.label}</span>
         <span class="hwc-add-item-hint">{item.hint}</span>
       </span>
     </button>
@@ -89,8 +90,8 @@ export function ComposerAdd(props: ComposerAddProps) {
         >
           {props.commands === null ? null : (
             <>
-              {command(props.commands.newSession, <NewSessionIcon size={18} />, "新しい会話")}
-              {command(props.commands.compact, <CollapseIcon size={18} />, "会話を圧縮")}
+              {command(props.commands.newSession, <NewSessionIcon size={18} />)}
+              {command(props.commands.compact, <CollapseIcon size={18} />)}
               <hr class="hwc-menu-separator" />
             </>
           )}
