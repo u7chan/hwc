@@ -128,7 +128,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 `+` の「プロジェクトを選ぶ」は、`<root>/bin/git` の `ls-files` が返すマニフェストから候補を作る。架空 Herdr の `pane.get` は `…/work/acme-dashboard` を cwd として返し、偽 git はその cwd に対して `package.json`、`packages/api/package.json`、`packages/web/pyproject.toml`、`apps/desktop/Cargo.toml` を返す。cwd 自身の `package.json` は候補から外れるので、`desktop`、`api`、`web` の 3 件になる。実ファイルは作らない。
 
-pi のペインでは、あわせてセッションの隣に live の sidecar（`<session>.jsonl.thinking.json`）を書く。まず `waiting` で `working` にし、1.2 秒後に折り返す長さの `thinking` と `tokPerSecond: 42.3` を上書きし、6 秒後に消して `idle` に戻す。実物の pi 拡張はターン中に phase・thinking の末尾・生成速度を上書きし続ける（[ADR 0035](adr/0035-live-pi-activity.md)）。E2E ではこの 2 段階で、段階の行が会話のスクロール領域の外（入力欄の直上）に出て、スクロールしても残ること、生成速度が経過時間の左に出て右端の時間が動かないこと、末尾 2 行だけが出てターン終了で消えることを確かめる。入力欄を 1 行に畳むセルでは thinking と生成速度を出さず、段階と経過時間だけになる。停止ボタン（`esc`）でも sidecar を消す。
+pi のペインでは、あわせてセッションの隣に live の sidecar（`<session>.jsonl.thinking.json`）を書く。まず `waiting` で `working` にし、1.2 秒後に折り返す長さの `thinking` と `tokPerSecond: 42.3` を上書きし、6 秒後に消して `idle` に戻す。実物の pi 拡張はターン中に phase・thinking の末尾・生成速度を上書きし続ける（[ADR 0035](adr/0035-live-pi-activity.md)）。E2E ではこの 2 段階で、段階の行が会話のスクロール領域の外（入力欄の直上）に出て、スクロールしても残ること、生成速度が経過時間の左に出て右端の時間が動かないこと、thinking がまだ無い待機中も帯の高さが変わらず、末尾 2 行だけが出てターン終了で消えることを確かめる。入力欄を 1 行に畳むセルでは thinking と生成速度を出さず、段階と経過時間だけになる。停止ボタン（`esc`）でも sidecar を消す。
 
 `/done`（添付注記なし）はフィクスチャ専用の入力で、実 Herdr には無い。受け取ったペインを `done` にする。実 Herdr の `done` は既読でしか `idle` に戻らず、hwc からは作れないため、一覧の終了時刻と端末間の一致を確かめる入口として置く。
 
