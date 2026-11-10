@@ -1200,7 +1200,7 @@ export function App() {
     node.kind === "leaf" ? (
       renderCell(node.pane, parentDir)
     ) : (
-      <div class="hwc-split" data-dir={node.dir} key={`split:${leafPanes(node).join("|")}`}>
+      <div class="hwc-split" data-dir={node.dir}>
         {node.children.map((child) => renderSplit(child, node.dir))}
       </div>
     );

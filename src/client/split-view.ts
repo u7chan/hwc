@@ -47,11 +47,54 @@ export function multiSpace(workspaceIds: readonly string[]): boolean {
   return new Set(workspaceIds).size > 1;
 }
 
+// 同じ軸に並ぶ葉を、子 2 つの木へ組み直す。3 枚は T 字、4 枚は 2x2。
+// 保存値の正規化と、葉を除去したときの畳みで使う（ADR 0061）。
+function buildSupported(dir: SplitDir, panes: readonly string[]): SplitNode | null {
+  const leaves: SplitNode[] = panes.slice(0, MAX_LEAVES).map((pane) => ({ kind: "leaf", pane }));
+  const [a, b, c, d] = leaves;
+  if (a === undefined) return null;
+  if (b === undefined) return a;
+  const cross: SplitDir = dir === "row" ? "col" : "row";
+  if (c === undefined) return { kind: "split", dir, children: [a, b] };
+  if (d === undefined) {
+    return {
+      kind: "split",
+      dir,
+      children: [{ kind: "split", dir: cross, children: [a, b] }, c],
+    };
+  }
+  return {
+    kind: "split",
+    dir,
+    children: [
+      { kind: "split", dir: cross, children: [a, b] },
+      { kind: "split", dir: cross, children: [c, d] },
+    ],
+  };
+}
+
+// 子が 1 つになった split を畳み、同じ向きの入れ子は 2 つずつに組み直す。
+function compactLayout(node: SplitNode | null): SplitNode | null {
+  if (node === null || node.kind === "leaf") return node;
+  const children = node.children
+    .map(compactLayout)
+    .filter((child): child is SplitNode => child !== null);
+  if (children.length === 0) return null;
+  if (children.length === 1) return children[0] ?? null;
+  const nested = children.some((child) => child.kind === "split" && child.dir === node.dir);
+  if (children.length === 2 && !nested) return { kind: "split", dir: node.dir, children };
+  return buildSupported(node.dir, children.flatMap(leafPanes));
+}
+
 function withoutLeaf(node: SplitNode | null, paneId: string): SplitNode | null {
+  return compactLayout(removeNode(node, paneId));
+}
+
+function removeNode(node: SplitNode | null, paneId: string): SplitNode | null {
   if (node === null) return null;
   if (node.kind === "leaf") return node.pane === paneId ? null : node;
   const children = node.children
-    .map((child) => withoutLeaf(child, paneId))
+    .map((child) => removeNode(child, paneId))
     .filter((child): child is SplitNode => child !== null);
   if (children.length === 0) return null;
   if (children.length === 1) return children[0] ?? null;
@@ -130,9 +173,10 @@ export function canDrop(view: SplitView, source: string, target: string, zone: D
   const inLayout = leafPanes(view.layout).includes(source);
   const base = inLayout ? withoutLeaf(view.layout, source) : view.layout;
   if (base === null) return false;
-  if (zone === "center") return leafPanes(base).includes(target);
-  const count = leafPanes(base).length + 1;
-  if (count > MAX_LEAVES) return false;
+  const leaves = leafPanes(base);
+  if (!leaves.includes(target)) return false;
+  if (zone === "center") return true;
+  if (leaves.length + 1 > MAX_LEAVES) return false;
   return parentDirOf(base, target) !== zoneDir(zone);
 }
 
@@ -225,10 +269,14 @@ function pruneLayout(
   node: SplitNode | null,
   exists: (paneId: string) => boolean,
 ): SplitNode | null {
+  return compactLayout(pruneNode(node, exists));
+}
+
+function pruneNode(node: SplitNode | null, exists: (paneId: string) => boolean): SplitNode | null {
   if (node === null) return null;
   if (node.kind === "leaf") return exists(node.pane) ? node : null;
   const children = node.children
-    .map((child) => pruneLayout(child, exists))
+    .map((child) => pruneNode(child, exists))
     .filter((child): child is SplitNode => child !== null);
   if (children.length === 0) return null;
   if (children.length === 1) return children[0] ?? null;
@@ -257,7 +305,14 @@ export function normalizeSplitView(
 function normalizeLayout(
   node: SplitNode | null,
   exists: (paneId: string) => boolean,
-  seen: Set<string> = new Set(),
+): SplitNode | null {
+  return compactLayout(normalizeNode(node, exists, new Set()));
+}
+
+function normalizeNode(
+  node: SplitNode | null,
+  exists: (paneId: string) => boolean,
+  seen: Set<string>,
 ): SplitNode | null {
   if (node === null) return null;
   if (node.kind === "leaf") {
@@ -266,7 +321,7 @@ function normalizeLayout(
     return node;
   }
   const children = node.children
-    .map((child) => normalizeLayout(child, exists, seen))
+    .map((child) => normalizeNode(child, exists, seen))
     .filter((child): child is SplitNode => child !== null);
   if (children.length === 0) return null;
   if (children.length === 1) return children[0] ?? null;
@@ -301,7 +356,7 @@ function parseNode(value: unknown): SplitNode | null {
     .filter((child): child is SplitNode => child !== null);
   if (children.length === 0) return null;
   if (children.length === 1) return children[0] ?? null;
-  return { kind: "split", dir, children };
+  return compactLayout({ kind: "split", dir, children });
 }
 
 export function parseSplitView(value: string | null): SplitView {

@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-11
 - Revises: [ADR 0021](0021-pane-close.md) のタブの ×、[ADR 0029](0029-preserve-last-pane.md) の × の出し分け、[ADR 0058](0058-split-view-tab-history.md) の「閉じる」
+- Revises: 2026-11-11 に空きスロットを廃止し、タブを外したら葉を畳んで組み直す（[ADR 0061](0061-split-view-directional-tree.md)）
 
 ## Context
 

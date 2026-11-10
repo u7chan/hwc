@@ -128,6 +128,41 @@ test("removing a nested leaf collapses only its split", () => {
   expect(next.layout).toEqual(row(leaf("w1:p1"), leaf("w1:p3")));
 });
 
+test("removing a leaf rebuilds instead of nesting the same axis", () => {
+  // a の親 col が row[c,d] に畳まれると row の下に row が並ぶ。2 つずつに組み直す。
+  const shown = view(
+    ["a", "b", "c", "d"],
+    "a",
+    row(col(leaf("a"), row(leaf("c"), leaf("d"))), leaf("b")),
+  );
+  const next = removeTab(shown, "a");
+  expect(next.layout).toEqual(row(col(leaf("c"), leaf("d")), leaf("b")));
+});
+
+test("a pane disappearing rebuilds instead of nesting the same axis", () => {
+  const shown = view(
+    ["a", "b", "c", "d"],
+    "c",
+    row(col(leaf("a"), row(leaf("c"), leaf("d"))), leaf("b")),
+  );
+  const next = syncSplitView(shown, existsAmong(["b", "c", "d"]));
+  expect(next.layout).toEqual(row(col(leaf("c"), leaf("d")), leaf("b")));
+  expect(next.current).toBe("c");
+});
+
+test("restoring rebuilds a split with three children", () => {
+  const restored = parseSplitView(
+    '{"openTabs":["a","b","c"],"current":"a","layout":{"kind":"split","dir":"row","children":[{"kind":"leaf","pane":"a"},{"kind":"leaf","pane":"b"},{"kind":"leaf","pane":"c"}]}}',
+  );
+  expect(restored.layout).toEqual(row(col(leaf("a"), leaf("b")), leaf("c")));
+});
+
+test("an edge drop requires the target to be a leaf", () => {
+  const shown = view(["a", "b"], "a", row(leaf("a"), leaf("b")));
+  expect(canDrop(shown, "x", "nope", "right")).toBe(false);
+  expect(dropOnPane(shown, "x", "nope", "right")).toBe(shown);
+});
+
 test("removing the last leaf returns to the list", () => {
   const shown = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
   expect(removeTab(shown, "w1:p1")).toEqual(view([], null, null));
