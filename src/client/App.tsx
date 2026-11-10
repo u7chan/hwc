@@ -1042,6 +1042,20 @@ export function App() {
                     const activate = () => {
                       if (item.id !== pane.id) select(item.id);
                     };
+                    // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
+                    // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
+                    const activateFromFocus = (event: FocusEvent) => {
+                      const target = event.target;
+                      if (!(target instanceof Element)) return;
+                      if (
+                        target.closest(
+                          "button, input, textarea, select, [contenteditable]:not([contenteditable='false'])",
+                        ) === null
+                      ) {
+                        return;
+                      }
+                      activate();
+                    };
                     return (
                       <section
                         class="hwc-split-cell"
@@ -1049,7 +1063,7 @@ export function App() {
                         data-current={cells.length > 1 && item.id === pane.id}
                         key={item.id}
                         onPointerDown={activate}
-                        onFocusIn={activate}
+                        onFocusIn={activateFromFocus}
                       >
                         {renderPane(item, context, compact)}
                       </section>
