@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { parseGitHubRemote, parseUpstreamTrack, type GitSync } from "../shared/git";
 
@@ -192,6 +192,10 @@ export function createGitClient(
 
     let repo: GitRepo | null = null;
     try {
+      // --git-common-dir は cwd からの相対パスを返す。symlink 側の cwd で解決すると
+      // git-dir と食い違うので、実体パスを基準にする。--path-format=absolute は
+      // git 2.31 以降が必要なため、古い git でも動くこの形にする。
+      const base = await realpath(checkoutPath).catch(() => checkoutPath);
       repo = parseGitRepo(
         await runRead(checkoutPath, [
           "rev-parse",
@@ -199,7 +203,7 @@ export function createGitClient(
           "--absolute-git-dir",
           "--git-common-dir",
         ]),
-        checkoutPath,
+        base,
       );
     } catch {
       // git が無い・リポジトリでない・期限切れでは、git 管理外として扱う。

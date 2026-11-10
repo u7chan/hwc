@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -162,6 +162,23 @@ test("the repo reader fills the checkout from git and caches it", async () => {
   at = 1_500;
   await client.readRepo("/repo");
   expect(calls).toHaveLength(2);
+});
+
+test("a symlinked checkout is not mistaken for a linked worktree", async () => {
+  const root = await dir();
+  const app = join(root, "app");
+  await mkdir(app);
+  const link = join(root, "link");
+  await symlink(app, link);
+  const client = createGitClient({
+    runRead: async () => `${app}\n${join(app, ".git")}\n.git\n`,
+  });
+
+  expect(await client.readRepo(link)).toEqual({
+    repoName: "app",
+    repoRoot: app,
+    isLinkedWorktree: false,
+  });
 });
 
 test("a git failure leaves the repo empty and does not throw", async () => {
