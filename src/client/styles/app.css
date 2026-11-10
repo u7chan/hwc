@@ -2199,6 +2199,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   border-color: var(--slot-color, var(--color-accent));
 }
 
+/* 枠は複数セルのどれが current かを示す。実ペインが 1 枚なら対象がないので出さない。
+   ドロップ先のガイドは落とせる場所を示す別の情報なので、対象から除いて残す（ADR 0058）。 */
+.hwc-split[data-filled="1"]
+  > .hwc-split-cell:not(.hwc-split-cell--empty):not([data-drop-target="true"])::after {
+  border: 0;
+}
+
 /* 空きスロットは同じ位置の色の薄い破線。中央に文言は置かない。 */
 .hwc-split-cell--empty::after {
   inset: var(--space-2);
