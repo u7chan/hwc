@@ -2,7 +2,7 @@
 // 解析は例外を投げず、解釈できない行は段落 (原文) として残すことも固定する。
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { MARKDOWN_MAX_LENGTH, parseMarkdown } from "./parse";
+import { MARKDOWN_MAX_LENGTH, markdownImageHrefs, parseMarkdown } from "./parse";
 
 test("見出しはレベルと本文を持つ", () => {
   assert.deepEqual(parseMarkdown("## 実装方針\n###### 小見出し"), [
@@ -181,6 +181,29 @@ test("未終端フェンスは closed=false で残りを本文にする", () => 
 
 test("本文の上限は 200KB で描画側と共有する", () => {
   assert.equal(MARKDOWN_MAX_LENGTH, 200 * 1024);
+});
+
+test("画像として描ける記法の destination だけを集める", () => {
+  const hrefs = markdownImageHrefs(
+    [
+      "![A](docs/a.png)",
+      "",
+      "- ![B](docs/b.png)",
+      "> ![C](docs/c.png)",
+      "",
+      "| 画面 |\n| --- |\n| ![D](docs/d.png) |",
+      "",
+      "```md\n![E](docs/e.png)\n```",
+      "",
+      "> ```\n> ![F](docs/f.png)\n> ```",
+    ].join("\n"),
+  );
+  assert.deepEqual([...hrefs].sort(), ["docs/a.png", "docs/b.png", "docs/c.png", "docs/d.png"]);
+});
+
+test("解析上限を超える本文からは画像を集めない", () => {
+  const text = `![A](docs/a.png)\n${"x".repeat(MARKDOWN_MAX_LENGTH)}`;
+  assert.equal(markdownImageHrefs(text).size, 0);
 });
 
 test("壊れた入力でも例外を投げない", () => {

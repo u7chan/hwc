@@ -85,10 +85,15 @@ export async function createScenario(root: string): Promise<Scenario> {
   ]);
 
   // エージェントが書いた画像のプレビュー。チェックアウトの内側に置いた実在の PNG だけが出る。
+  // 裸パスは末尾の一覧、画像記法は本文の位置に出る。隣り合う画像記法は 1 行に並ぶ。
   await mkdir(join(dashboard, "docs", "preview"), { recursive: true });
-  await copyFile(
-    fileURLToPath(new URL("../../src/client/assets/apple-touch-icon.png", import.meta.url)),
-    join(dashboard, "docs", "preview", "app-icon.png"),
+  await Promise.all(
+    ["app-icon.png", "empty-state.png", "empty-state-light.png"].map((name) =>
+      copyFile(
+        fileURLToPath(new URL("../../src/client/assets/apple-touch-icon.png", import.meta.url)),
+        join(dashboard, "docs", "preview", name),
+      ),
+    ),
   );
   // HTML のプレビュー。css と js を相対参照しているので、配信の根とパス形式も通る。
   await Promise.all(
@@ -574,7 +579,7 @@ const sessionEntries = [
       content: [
         {
           type: "text",
-          text: "空状態の確認に使った画面です。`docs/preview/app-icon.png` に置きました。",
+          text: "空状態の確認に使った画面です。`docs/preview/app-icon.png` に置きました。\n\n![空状態のモック](docs/preview/empty-state.png)\n\n![空状態のモック（ライト）](docs/preview/empty-state-light.png)",
         },
       ],
       model: "claude-sonnet-4-5",

@@ -437,6 +437,46 @@ test("an image url carries the root, relative path and version", () => {
   );
 });
 
+test("an image keeps only the inline refs the client can draw", () => {
+  const message = {
+    id: "m1",
+    role: "agent" as const,
+    text: "![モック](docs/mock.png)",
+    at: 1_000,
+    files: [
+      {
+        name: "docs/mock.png",
+        version: "1-2",
+        kind: "image" as const,
+        root: 0,
+        imageRefs: ["docs/mock.png", "docs/other.png", 3, "", null],
+      },
+    ],
+  };
+  expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([
+    {
+      ...message,
+      files: [
+        {
+          name: "docs/mock.png",
+          version: "1-2",
+          kind: "image",
+          root: 0,
+          imageRefs: ["docs/mock.png", "docs/other.png"],
+        },
+      ],
+    },
+  ]);
+
+  // 使える表記が 1 つも無ければ持たない。末尾の一覧に戻る。
+  expect(
+    toChatSnapshot({
+      ...chatBody,
+      messages: [{ ...message, files: [{ ...message.files[0], imageRefs: [""] }] }],
+    })?.messages[0]?.files,
+  ).toEqual([{ name: "docs/mock.png", version: "1-2", kind: "image", root: 0 }]);
+});
+
 test("an agent message keeps the files the server found", () => {
   const message = {
     id: "m1",
@@ -444,7 +484,13 @@ test("an agent message keeps the files the server found", () => {
     text: "`docs/mock.png` に置きました。",
     at: 1_000,
     files: [
-      { name: "docs/mock.png", version: "1767225600000-12", kind: "image" as const, root: 0 },
+      {
+        name: "docs/mock.png",
+        version: "1767225600000-12",
+        kind: "image" as const,
+        root: 0,
+        imageRefs: ["docs/mock.png"],
+      },
       {
         name: "docs/preview/index.html",
         version: "1767225600000-20",

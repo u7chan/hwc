@@ -3449,6 +3449,40 @@ p.hwc-compaction,
   background: var(--color-raised);
 }
 
+/* 本文の画像記法だけの段落は横に並べる。入りきらない分は折り返す。 */
+.hwc-md-image-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+/* 本文の画像記法。押すとダイアログで原寸を開く。 */
+.hwc-md-image {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  overflow: hidden;
+  cursor: zoom-in;
+  vertical-align: middle;
+}
+
+.hwc-md-image:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.hwc-md-image-content {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 180px;
+}
+
 .hwc-md-figure {
   display: flex;
   flex-direction: column;

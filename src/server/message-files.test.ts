@@ -32,6 +32,11 @@ async function write(name: string, bytes: Uint8Array): Promise<string> {
   return path;
 }
 
+// 候補は描画位置の照合キーも持つ。パスだけを見たいテストはここで落とす。
+function paths(text: string): string[] {
+  return messagePathCandidates(text).map((candidate) => candidate.path);
+}
+
 test("collects paths from prose, inline code, links and images", () => {
   const text = [
     "モックは `.artifacts/mock.png` に置きました。",
@@ -40,7 +45,7 @@ test("collects paths from prose, inline code, links and images", () => {
     "詳細は [こちら](docs/preview.jpeg) を見てください。",
   ].join("\n");
 
-  expect(messagePathCandidates(text)).toEqual([
+  expect(paths(text)).toEqual([
     ".artifacts/mock.png",
     "docs/before.jpg",
     "docs/after.webp",
@@ -49,44 +54,66 @@ test("collects paths from prose, inline code, links and images", () => {
 });
 
 test("finds a path in inline code with no spaces around it", () => {
-  expect(
-    messagePathCandidates(
-      "空状態の確認に使った画面です。`docs/preview/app-icon.png` に置きました。",
-    ),
-  ).toEqual(["docs/preview/app-icon.png"]);
+  expect(paths("空状態の確認に使った画面です。`docs/preview/app-icon.png` に置きました。")).toEqual(
+    ["docs/preview/app-icon.png"],
+  );
+});
+
+test("marks only image notation as a drawing position", () => {
+  expect(messagePathCandidates("![モック](docs/mock.png)")).toEqual([
+    { path: "docs/mock.png", imageRefs: ["docs/mock.png"] },
+  ]);
+  // インラインコード、リンク、裸のパスは末尾の一覧に残す。
+  expect(messagePathCandidates("`docs/mock.png` [x](docs/mock.png) docs/other.png")).toEqual([
+    { path: "docs/mock.png", imageRefs: [] },
+    { path: "docs/other.png", imageRefs: [] },
+  ]);
+  // 裸のパスと画像記法の両方に出ても、描画位置は残す。
+  expect(messagePathCandidates("docs/mock.png\n\n![モック](docs/mock.png)")).toEqual([
+    { path: "docs/mock.png", imageRefs: ["docs/mock.png"] },
+  ]);
+  // エスケープした `!` は画像記法として読まれない。
+  expect(messagePathCandidates("\\![モック](docs/mock.png)")).toEqual([
+    { path: "docs/mock.png", imageRefs: [] },
+  ]);
+  // フェンスとインラインコードの中は描画位置にしない。
+  expect(messagePathCandidates("```\n![モック](docs/mock.png)\n```")).toEqual([]);
+  expect(messagePathCandidates("`![モック](docs/mock.png)`")).toEqual([
+    { path: "docs/mock.png", imageRefs: [] },
+  ]);
 });
 
 test("drops a sentence period or a Japanese particle after the extension", () => {
-  expect(messagePathCandidates("The mock is at docs/mock.png.")).toEqual(["docs/mock.png"]);
-  expect(messagePathCandidates("スクショはdocs/mock.pngに置きました。")).toEqual(["docs/mock.png"]);
+  expect(paths("The mock is at docs/mock.png.")).toEqual(["docs/mock.png"]);
+  expect(paths("スクショはdocs/mock.pngに置きました。")).toEqual(["docs/mock.png"]);
   // 全角コロンの後ろでも拾う。
-  expect(messagePathCandidates("モック：docs/mock.png")).toEqual(["docs/mock.png"]);
+  expect(paths("モック：docs/mock.png")).toEqual(["docs/mock.png"]);
   // 別の拡張子が続く名前は画像として扱わない。
-  expect(messagePathCandidates("docs/mock.png.bak")).toEqual([]);
+  expect(paths("docs/mock.png.bak")).toEqual([]);
   // 日本語のファイル名はそのまま残す。
-  expect(messagePathCandidates("モック.png")).toEqual(["モック.png"]);
+  expect(paths("モック.png")).toEqual(["モック.png"]);
 });
 
 test("splits paths joined by punctuation in one token", () => {
   // 全角の区切りで並んだ 2 枚を別々に拾う。区切りの分割が効かないと 1 件にもならない。
-  expect(messagePathCandidates("docs/a.png、docs/b.png")).toEqual(["docs/a.png", "docs/b.png"]);
-  expect(messagePathCandidates("（docs/a.png）")).toEqual(["docs/a.png"]);
+  expect(paths("docs/a.png、docs/b.png")).toEqual(["docs/a.png", "docs/b.png"]);
+  expect(paths("（docs/a.png）")).toEqual(["docs/a.png"]);
 });
 
 test("does not look inside fenced code", () => {
-  expect(messagePathCandidates("```sh\nopen docs/mock.png\n```\n")).toEqual([]);
-  expect(messagePathCandidates("~~~\n![x](a.png)\n~~~\n`b.png`")).toEqual(["b.png"]);
+  expect(paths("```sh\nopen docs/mock.png\n```\n")).toEqual([]);
+  expect(paths("~~~\n![x](a.png)\n~~~\n`b.png`")).toEqual(["b.png"]);
 });
 
 test("ignores paths that are not local images", () => {
-  expect(messagePathCandidates("https://example.com/a.png")).toEqual([]);
-  expect(messagePathCandidates("[remote](https://example.com/a.png)")).toEqual([]);
-  expect(messagePathCandidates("data:image/png;base64,AAAA")).toEqual([]);
-  expect(messagePathCandidates("docs/README.md と src/app.ts")).toEqual([]);
+  expect(paths("https://example.com/a.png")).toEqual([]);
+  expect(paths("[remote](https://example.com/a.png)")).toEqual([]);
+  expect(paths("data:image/png;base64,AAAA")).toEqual([]);
+  expect(paths("docs/README.md と src/app.ts")).toEqual([]);
 });
 
 test("keeps each path once and stops at the candidate limit", () => {
-  expect(messagePathCandidates("a.png `a.png` [x](a.png)")).toEqual(["a.png"]);
+  expect(paths("a.png `a.png` [x](a.png)")).toEqual(["a.png"]);
 
   const many = Array.from({ length: 30 }, (_, index) => `f${index}.png`).join(" ");
   expect(messagePathCandidates(many)).toHaveLength(20);
@@ -100,7 +127,31 @@ test("finds an existing image below the root", async () => {
   expect(files.map((file) => ({ name: file.name, kind: file.kind }))).toEqual([
     { name: "docs/mock.png", kind: "image" },
   ]);
+  // 画像記法の destination は照合キーとして残る。本文のその位置に描くために使う。
+  expect(files[0]?.imageRefs).toEqual(["docs/mock.png"]);
   expect(files[0]?.version).toMatch(/^\d+-\d+$/);
+});
+
+test("keeps every image notation that points at the same file", async () => {
+  await write("docs/mock.png", png);
+
+  const files = await collectMessageFiles(
+    "![A](./docs/mock.png)\n\n![B](docs/mock.png)\n\n`docs/mock.png`",
+    root,
+  );
+
+  // 同じ実体は 1 件にまとめ、描画位置だけを全部持つ。
+  expect(files).toHaveLength(1);
+  expect(files[0]?.imageRefs).toEqual(["./docs/mock.png", "docs/mock.png"]);
+});
+
+test("does not attach image refs to HTML", async () => {
+  await write("docs/preview/index.html", new TextEncoder().encode("<!doctype html>"));
+
+  const files = await collectMessageFiles("![モック](docs/preview/index.html)", root);
+
+  expect(files[0]?.kind).toBe("html");
+  expect(files[0]?.imageRefs).toBeUndefined();
 });
 
 test("finds an HTML file below the root and marks it for preview", async () => {

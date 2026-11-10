@@ -1,18 +1,63 @@
-import type { ComponentChildren } from "preact";
-import { useMemo, useState } from "preact/hooks";
+import { createContext, Fragment, type ComponentChildren } from "preact";
+import { useContext, useMemo, useState } from "preact/hooks";
+import type { MessageImageSource } from "./chat";
 import { useCopy } from "./copy";
 import { CopyGlyph } from "./icons";
-import { inlineText, parseInline } from "./markdown/inline";
+import { imageOnlyNodes, inlineText, parseInline } from "./markdown/inline";
 import { MARKDOWN_MAX_LENGTH, parseMarkdown } from "./markdown/parse";
-import type { MdBlock, MdInline, MdListItem } from "./markdown/types";
+import type { MdBlock, MdImage, MdInline, MdListItem } from "./markdown/types";
 
 const HEADING_TAGS = ["h3", "h4", "h5", "h6"] as const;
+
+type ImageContextValue = {
+  images?: ReadonlyMap<string, MessageImageSource>;
+  onOpenImage?: (url: string, name: string) => void;
+};
+
+// 本文の深さをそのまま関数の引数で渡すと、絵を使わない入れ子のすべてに同じ値を配る
+// ことになる。画像記法の描画にだけ要る値なので、本文の解析結果を受ける側でまとめて配る。
+const ImageContext = createContext<ImageContextValue>({});
+
+type MdGroup =
+  | { kind: "block"; block: MdBlock }
+  // 画像記法だけでできた段落は、縦に積まずに横へ並べる（ADR 0055）。
+  | { kind: "images"; images: MdImage[] };
+
+// 画像の段落が連続しているときは 1 つの行にまとめる。改行で区切られていても、
+// 段落が分かれていても、読み手には同じ「並んだ絵」に見える。
+function groupBlocks(blocks: readonly MdBlock[]): MdGroup[] {
+  const groups: MdGroup[] = [];
+  for (const block of blocks) {
+    const images =
+      block.kind === "paragraph" && block.source.includes("![")
+        ? imageOnlyNodes(parseInline(block.source))
+        : null;
+    if (images === null) {
+      groups.push({ kind: "block", block });
+      continue;
+    }
+    const last = groups.at(-1);
+    if (last?.kind === "images") last.images.push(...images);
+    else groups.push({ kind: "images", images: [...images] });
+  }
+  return groups;
+}
 
 type TaskCounter = { value: number };
 
 // 本文が上限を超えたら、解析せず原文をそのまま出す。解析してから捨てると固まる。
 // ルートの data-quote-scope は、本文の選択から返信を始める範囲を示す。
-export function Markdown({ text, taskScope }: { text: string; taskScope?: string }) {
+export function Markdown({
+  text,
+  taskScope,
+  images,
+  onOpenImage,
+}: {
+  text: string;
+  taskScope?: string;
+  images?: ReadonlyMap<string, MessageImageSource>;
+  onOpenImage?: (url: string, name: string) => void;
+}) {
   if (text.length > MARKDOWN_MAX_LENGTH) {
     return (
       <div class="hwc-md" data-plain data-quote-scope="true">
@@ -23,9 +68,11 @@ export function Markdown({ text, taskScope }: { text: string; taskScope?: string
   // タスクの通し番号は Markdown の描画ごとに 0 から数える。メッセージをまたぐ一意性は taskScope が担う。
   const taskCounter = { value: 0 };
   return (
-    <div class="hwc-md" data-quote-scope="true">
-      <MarkdownBlocks text={text} taskScope={taskScope} taskCounter={taskCounter} />
-    </div>
+    <ImageContext.Provider value={{ images, onOpenImage }}>
+      <div class="hwc-md" data-quote-scope="true">
+        <MarkdownBlocks text={text} taskScope={taskScope} taskCounter={taskCounter} />
+      </div>
+    </ImageContext.Provider>
   );
 }
 
@@ -40,19 +87,34 @@ function MarkdownBlocks({
   taskScope?: string;
   taskCounter: TaskCounter;
 }) {
-  const blocks = useMemo(() => parseMarkdown(text), [text]);
+  const groups = useMemo(() => groupBlocks(parseMarkdown(text)), [text]);
   return (
     <>
-      {blocks.map((block, index) => (
-        <Block
-          block={block}
-          depth={depth}
-          taskScope={taskScope}
-          taskCounter={taskCounter}
-          key={index}
-        />
-      ))}
+      {groups.map((group, index) =>
+        group.kind === "images" ? (
+          <ImageRow nodes={group.images} key={index} />
+        ) : (
+          <Block
+            block={group.block}
+            depth={depth}
+            taskScope={taskScope}
+            taskCounter={taskCounter}
+            key={index}
+          />
+        ),
+      )}
     </>
+  );
+}
+
+function ImageRow({ nodes }: { nodes: MdImage[] }) {
+  const context = useContext(ImageContext);
+  return (
+    <div class="hwc-md-image-row">
+      {nodes.map((node, index) => (
+        <Fragment key={index}>{imageNode(node, context)}</Fragment>
+      ))}
+    </div>
   );
 }
 
@@ -264,10 +326,11 @@ function CodeBlock({ lang, text }: { lang: string | null; text: string }) {
 
 function InlineSource({ source }: { source: string }) {
   const nodes = useMemo(() => parseInline(source), [source]);
-  return <>{inlineChildren(nodes)}</>;
+  const images = useContext(ImageContext);
+  return <>{inlineChildren(nodes, images)}</>;
 }
 
-function inlineChildren(nodes: MdInline[]): ComponentChildren[] {
+function inlineChildren(nodes: MdInline[], context: ImageContextValue): ComponentChildren[] {
   return nodes.map((node) => {
     switch (node.kind) {
       case "text":
@@ -275,11 +338,11 @@ function inlineChildren(nodes: MdInline[]): ComponentChildren[] {
       case "literal":
         return <code class="hwc-md-literal">{node.text}</code>;
       case "strong":
-        return <strong>{inlineChildren(node.children)}</strong>;
+        return <strong>{inlineChildren(node.children, context)}</strong>;
       case "em":
-        return <em>{inlineChildren(node.children)}</em>;
+        return <em>{inlineChildren(node.children, context)}</em>;
       case "del":
-        return <del>{inlineChildren(node.children)}</del>;
+        return <del>{inlineChildren(node.children, context)}</del>;
       case "code":
         return <code>{node.text}</code>;
       case "link":
@@ -290,11 +353,37 @@ function inlineChildren(nodes: MdInline[]): ComponentChildren[] {
             target="_blank"
             rel="noopener noreferrer"
           >
-            {inlineChildren(node.children)}
+            {inlineChildren(node.children, context)}
           </a>
         );
+      case "image":
+        return imageNode(node, context);
       case "break":
         return <br />;
     }
   });
+}
+
+// 実在を確認したファイルだけを絵にする。決まらない記法は原文のまま残す。
+function imageNode(node: MdImage, context: ImageContextValue) {
+  const image = context.images?.get(node.href);
+  const open = context.onOpenImage;
+  if (image === undefined || open === undefined) {
+    return <code class="hwc-md-literal">{node.raw}</code>;
+  }
+  const alt = inlineText(node.children).trim();
+  // 読み上げ名は alt を優先する。img は装飾にし、ボタンの名前だけを読ませる
+  // （ADR 0042 / ADR 0055）。
+  const name = alt === "" ? image.label : alt;
+  return (
+    <button
+      type="button"
+      class="hwc-md-image"
+      aria-label={`${name} を拡大`}
+      aria-haspopup="dialog"
+      onClick={() => open(image.url, image.label)}
+    >
+      <img class="hwc-md-image-content" src={image.url} alt="" loading="lazy" />
+    </button>
+  );
 }

@@ -3,7 +3,7 @@
  * インライン記法 (強調 / コードスパン / リンク / 自動リンク) の解析。
  * 解析できない記法は消さずに literal (原文) へ落とし、例外は投げない。
  */
-import type { MdInline } from "./types";
+import type { MdImage, MdInline } from "./types";
 
 /** エスケープで文字に戻す記号 */
 const ESCAPABLE = "\\`*_{}[]()#+-.!~|<>$";
@@ -40,12 +40,28 @@ export function inlineText(nodes: MdInline[]): string {
         case "em":
         case "del":
         case "link":
+        case "image":
           return inlineText(node.children);
         case "break":
           return " ";
       }
     })
     .join("");
+}
+
+/**
+ * 画像記法だけでできた並びなら画像ノードを返す。改行と空白は無視する。
+ * 段落を丸ごと横に並べるかどうかの判定に使う。
+ */
+export function imageOnlyNodes(nodes: MdInline[]): MdImage[] | null {
+  const images: MdImage[] = [];
+  for (const node of nodes) {
+    if (node.kind === "image") images.push(node);
+    else if (node.kind === "break") continue;
+    else if (node.kind === "text" && node.text.trim() === "") continue;
+    else return null;
+  }
+  return images.length === 0 ? null : images;
 }
 
 /** allowLinks=false はリンクのラベル内 (リンクの入れ子を作らない) */
@@ -318,8 +334,20 @@ function readLink(
   const destination = parseDestination(text.slice(labelEnd + 2, end));
   if (destination === null) return null;
   const raw = text.slice(start, end + 1);
-  // 画像は表示しない。記法ごと原文を見せ、`!` を落としてリンクに化けさせない
-  if (image) return { node: { kind: "literal", text: raw }, end: end + 1 };
+  // 画像は描画先が決まったときだけ絵にする。決まらなければ原文を出し、`!` を落として
+  // リンクに化けさせない。href は配信 URL ではなく、本文の表記との照合にだけ使う。
+  if (image) {
+    return {
+      node: {
+        kind: "image",
+        href: destination.url,
+        title: destination.title,
+        children: scanInline(text.slice(labelStart, labelEnd), state, depth + 1, false),
+        raw,
+      },
+      end: end + 1,
+    };
+  }
   const href = safeUrl(destination.url);
   if (href === null) return { node: { kind: "literal", text: raw }, end: end + 1 };
   const label = text.slice(labelStart, labelEnd);
