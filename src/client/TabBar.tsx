@@ -2,7 +2,7 @@ import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import type { PaneProcess } from "../shared/panes";
-import { ChevronLeftIcon, EyeIcon, EyeOffIcon, SplitIcon } from "./icons";
+import { ChevronLeftIcon, EyeIcon, SplitIcon } from "./icons";
 import { ParentMark } from "./ParentMark";
 import { paneTabName } from "./process";
 import { statusLabel } from "./select";
@@ -20,7 +20,6 @@ type TabBarProps = {
   hidden: ReadonlySet<string>;
   status: ComponentChildren;
   onSelectPane: (paneId: string) => void;
-  onToggleHidden: (paneId: string) => void;
   onSelectPreview: () => void;
   onBack: () => void;
   onToggleSplit: () => void;
@@ -66,9 +65,6 @@ export function TabBar(props: TabBarProps) {
           // タブにはプログラム名だけを出す。何を動かしているかは、ホバーと読み上げで補う。
           const command = process?.running === true ? process.command : null;
           const detail = command === null ? name : `${name} (${command})`;
-          // 開いているペインは分割に必ず出るので、隠す操作を持たせない。プレビュー中は
-          // 分割が見えていないので、目玉も出さない。
-          const eye = props.split && !selected && !previewing;
           return (
             <div class="hwc-tab-item" key={item.id} data-selected={selected} data-hidden={hidden}>
               <button
@@ -79,25 +75,12 @@ export function TabBar(props: TabBarProps) {
                 aria-label={`${parent ? "親ペイン、" : ""}${detail} (${item.id}, ${statusLabel(item.agentStatus)}${hidden ? ", 分割で非表示" : ""})`}
                 title={detail}
                 data-pane-id={item.id}
-                data-eye={eye}
                 onClick={() => props.onSelectPane(item.id)}
               >
                 {parent ? <ParentMark /> : null}
                 <span class="hwc-tab-label">{name}</span>
                 <StatusIcon status={item.agentStatus} />
               </button>
-              {eye ? (
-                <button
-                  type="button"
-                  class="hwc-tab-eye"
-                  aria-pressed={!hidden}
-                  aria-label={`${name} (${item.id}) を分割に表示`}
-                  data-pane-id={item.id}
-                  onClick={() => props.onToggleHidden(item.id)}
-                >
-                  {hidden ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              ) : null}
             </div>
           );
         })}

@@ -453,6 +453,8 @@ export function App() {
     opened = false,
     nextExpanded: ReadonlySet<string> = expanded,
   ) => {
+    // 分割から隠したペインを選んだら、分割に戻す。タブを選ぶだけで表示へ戻せる。
+    if (paneId !== null && hidden.has(paneId)) toggleHidden(paneId);
     const pending = pendingRead.current;
     if (pending !== null) {
       const status = state === null ? null : (findPane(state, pending)?.agentStatus ?? null);
@@ -867,6 +869,7 @@ export function App() {
       onStop={() => stopPane(item.id)}
       onOpenImage={(url, name) => setViewer({ url, name })}
       onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
+      onHideInSplit={splitOn && item.id !== pane?.id ? () => toggleHidden(item.id) : null}
     />
   );
 
@@ -1018,7 +1021,6 @@ export function App() {
                 hidden={hidden}
                 status={detailStatus}
                 onSelectPane={select}
-                onToggleHidden={toggleHidden}
                 onSelectPreview={() =>
                   setPreview((current) => (current === null ? null : { ...current, shown: true }))
                 }
@@ -1034,11 +1036,39 @@ export function App() {
                 />
               ) : wide ? (
                 <div class="hwc-split" data-count={cells.length}>
-                  {cells.map((item) => (
-                    <section class="hwc-split-cell" data-compact={compact} key={item.id}>
-                      {renderPane(item, context, compact)}
-                    </section>
-                  ))}
+                  {cells.map((item) => {
+                    // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
+                    // HWC から動かせないセルが current のままになる。
+                    const activate = () => {
+                      if (item.id !== pane.id) select(item.id);
+                    };
+                    // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
+                    // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
+                    const activateFromFocus = (event: FocusEvent) => {
+                      const target = event.target;
+                      if (!(target instanceof Element)) return;
+                      if (
+                        target.closest(
+                          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
+                        ) === null
+                      ) {
+                        return;
+                      }
+                      activate();
+                    };
+                    return (
+                      <section
+                        class="hwc-split-cell"
+                        data-compact={compact}
+                        data-current={cells.length > 1 && item.id === pane.id}
+                        key={item.id}
+                        onPointerDown={activate}
+                        onFocusIn={activateFromFocus}
+                      >
+                        {renderPane(item, context, compact)}
+                      </section>
+                    );
+                  })}
                 </div>
               ) : (
                 renderPane(pane, context, false)

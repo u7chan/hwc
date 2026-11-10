@@ -356,17 +356,6 @@ export function EyeIcon({ size = 16 }: IconProps) {
   );
 }
 
-// 分割から外れていることを示す。形だけで状態が分かるように線を添える。
-export function EyeOffIcon({ size = 16 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M4 20L20 4" />
-    </Svg>
-  );
-}
-
 export function ArrowDownIcon({ size = 20 }: IconProps) {
   return (
     <Svg size={size}>

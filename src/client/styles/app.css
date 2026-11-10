@@ -2036,6 +2036,23 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   container: hwc-cell / size;
 }
 
+/* 分割では、タブの下線だけでは選択中のペインがどのセルか結び付かない。一覧の開いている
+   行と揃えて、内側にアクセントの実線を引く。1 枚のときは選び分ける相手が無いので出さない。 */
+.hwc-split-cell[data-current="true"] {
+  position: relative;
+}
+
+/* outline は子の背景（出力欄・入力欄）の下に描かれ、左右と下辺が隠れる。セルの手前に
+   重ねた枠にして全周を見せる。 */
+.hwc-split-cell[data-current="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 2px solid var(--color-accent);
+  pointer-events: none;
+}
+
 /* プレビューはタブの 1 つ。分割は止め、detail の残りをそのまま iframe に渡す。 */
 .hwc-preview {
   flex: 1;
@@ -2218,11 +2235,26 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 }
 
 .hwc-tabbar {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: var(--space-2);
-  padding: 0 var(--space-3);
-  border-bottom: 1px solid var(--color-line);
+  /* 上に余白を置き、選択中の面が上端に貼り付かないようにする。切り替えの高さを
+     その分だけ縮め、バー全体の高さは --row-head のまま保つ。 */
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  background: var(--color-bg);
+}
+
+/* バーの下辺。選択中は面を塗るだけのチップなので、線は隠さず下まで通す。 */
+.hwc-tabbar::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  height: 1px;
+  background: var(--color-line);
 }
 
 .hwc-tabbar > .hwc-back {
@@ -2390,6 +2422,8 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 }
 
 .hwc-tabs {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -2403,13 +2437,14 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   display: none;
 }
 
-/* タブは下線で示す。面を塗らないので一覧の状態色と競合しない。 */
+/* ペインの切り替えは、選択中だけ面を塗ったチップにする。本文と同じ面でつなげると
+   タブに見えるが、ここはペインの切り替えなので、下辺の線から離して置く。 */
 .hwc-tab {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: var(--row-head);
+  height: calc(var(--row-head) - var(--space-2) - var(--space-1));
   padding: 0 var(--space-3);
   border: 0;
   background: transparent;
@@ -2418,12 +2453,16 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   cursor: pointer;
 }
 
-/* タブと目玉を 1 つのまとまりとして扱い、下線はこのまとまりに引く。 */
+/* 切り替えと目玉を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */
 .hwc-tab-item {
   position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
+  border-radius: var(--radius-sm);
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease;
 }
 
 .hwc-tab-label {
@@ -2433,17 +2472,14 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   white-space: nowrap;
 }
 
-.hwc-tab-item::after {
-  content: "";
-  position: absolute;
-  right: var(--space-3);
-  bottom: 0;
-  left: var(--space-3);
-  height: 2px;
-  border-radius: 2px;
-  background: var(--color-accent);
-  opacity: 0;
-  transition: opacity 120ms ease;
+.hwc-tab-item:not([data-selected="true"]):hover {
+  background: var(--color-raised);
+}
+
+/* 選択中は一覧の開いている行と同じ面で塗る。線から離してあるので、本文とは
+   つながらず、切り替えとして読める。 */
+.hwc-tab-item[data-selected="true"] {
+  background: var(--color-selected);
 }
 
 .hwc-tab:hover {
@@ -2455,64 +2491,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   font-weight: 600;
 }
 
-.hwc-tab-item[data-selected="true"]::after {
+/* 分割から外したペインはタブを淡くする。選ぶと分割に戻る。 */
+.hwc-tab-item[data-hidden="true"]:not([data-selected="true"]) {
+  opacity: 0.55;
+}
+
+.hwc-tab-item[data-hidden="true"]:not([data-selected="true"]):hover {
   opacity: 1;
-}
-
-/* 分割に出す / 出さないの切り替え。一覧のメニューと同じく、ホバーで浮かび上がらせる。 */
-.hwc-tab-eye {
-  position: absolute;
-  top: 50%;
-  right: var(--space-1);
-  display: grid;
-  place-items: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-secondary);
-  cursor: pointer;
-  transform: translateY(-50%);
-  transition:
-    opacity 140ms ease,
-    background-color 140ms ease,
-    color 140ms ease;
-}
-
-/* マウスの画面ではタブに乗るまで隠す。触れる画面では常に出す。 */
-@media (hover: hover) {
-  .hwc-tab-eye {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  /* 隠している間は常に見せる。戻す操作が見つからないと分割に戻せない。 */
-  .hwc-tab-item[data-hidden="true"] .hwc-tab-eye,
-  .hwc-tab-item:hover .hwc-tab-eye,
-  .hwc-tab-item:focus-within .hwc-tab-eye {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
-.hwc-tab-eye:hover {
-  background: var(--color-raised);
-  color: var(--color-text);
-}
-
-.hwc-tab-eye:active {
-  background: var(--color-line);
-}
-
-.hwc-tab-eye:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
-}
-
-/* 目玉のぶんだけ右を空ける。空けないと状態の記号と重なる。 */
-.hwc-tab[data-eye="true"] {
-  padding-right: calc(var(--space-1) + var(--space-8));
 }
 
 .hwc-detail-bar {
@@ -5098,7 +5083,7 @@ p.hwc-compaction,
 
   /* カードの外側の余白を外したので、タブバーの左端を本文と揃える。 */
   .hwc-tabbar {
-    padding: 0 var(--space-6);
+    padding: var(--space-2) var(--space-6) var(--space-1);
   }
 
   .hwc-output-wrap {
