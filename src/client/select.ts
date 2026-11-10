@@ -290,8 +290,6 @@ export function groupIds(state: AppState): Set<string> {
 
 export type AgentGlyph = "pi" | "claude" | "codex" | "opencode" | "generic";
 
-const NO_HIDDEN: ReadonlySet<string> = new Set();
-
 // Herdr は端末だけのペインにエージェントを割り当てない。入力の形を選ぶのに使う。
 export function isShellPane(pane: PaneState): boolean {
   return pane.agent === null;
@@ -312,36 +310,4 @@ export function agentGlyph(agent: string | null): AgentGlyph {
     return "pi";
   }
   return "generic";
-}
-
-// 分割表示は最大 2x2。5 枚目からはタブで切り替えて見る。
-// 隠したペインは並べないが、いま開いているペインは必ず出す（消えたように見せない）。
-export function splitPanes(
-  panes: readonly PaneState[],
-  selectedId: string,
-  hidden: ReadonlySet<string> = NO_HIDDEN,
-): readonly PaneState[] {
-  const visible = panes.filter((pane) => pane.id === selectedId || !hidden.has(pane.id));
-  if (visible.length <= 4) return visible;
-  const shown = visible.slice(0, 4);
-  if (shown.some((pane) => pane.id === selectedId)) return shown;
-  const selected = visible.find((pane) => pane.id === selectedId);
-  if (selected === undefined) return shown;
-  return [...shown.slice(0, 3), selected];
-}
-
-// 閉じたペインの代わりに選ぶもの。続きの並びを先に探し、無ければ手前へ戻る。
-// 隠しているペインは候補にしない（閉じた直後に見えないセルへ移らないように）。
-export function nextPaneInTab(
-  panes: readonly PaneState[],
-  paneId: string,
-  hidden: ReadonlySet<string> = NO_HIDDEN,
-): string | null {
-  const at = panes.findIndex((pane) => pane.id === paneId);
-  if (at === -1) return null;
-  const visible = (pane: PaneState) => pane.id !== paneId && !hidden.has(pane.id);
-  const after = panes.slice(at + 1).find(visible);
-  if (after !== undefined) return after.id;
-  const before = panes.slice(0, at).reverse().find(visible);
-  return before?.id ?? null;
 }

@@ -10,6 +10,13 @@ const PULL_REQUESTS: Record<
     title: "Add an empty state to the dashboard",
     state: "OPEN",
   },
+  // 別スペースのセルには、そのスペースの PR が出る（ADR 0043）。
+  "feat/checks": {
+    number: 483,
+    url: "https://github.com/example/acme-dashboard/pull/483",
+    title: "Check the empty state on mobile",
+    state: "OPEN",
+  },
   // merge 後も概要とチップは残り、チップのマージ記号で区別できることを確かめる。
   "docs/quickstart": {
     number: 482,

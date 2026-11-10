@@ -53,14 +53,14 @@ test("a hidden document does not poll", () => {
 
 test("the previous map is reused when nothing changed", () => {
   const before = new Map([[shell.id, { running: false, command: null, ports: [] }]]);
-  expect(mergeProcesses(before, [[shell.id, { running: false, command: null, ports: [] }]])).toBe(
-    before,
-  );
+  expect(
+    mergeProcesses(before, [[shell.id, { running: false, command: null, ports: [] }]], [shell.id]),
+  ).toBe(before);
 });
 
 test("a pane that could not be read keeps its last value", () => {
   const before = new Map([[shell.id, running]]);
-  expect(mergeProcesses(before, [[shell.id, null]])).toBe(before);
+  expect(mergeProcesses(before, [[shell.id, null]], [shell.id])).toBe(before);
 });
 
 // コマンドが動いたまま bind する（python3 -m http.server など）と、running と command は
@@ -68,16 +68,34 @@ test("a pane that could not be read keeps its last value", () => {
 test("a port that appears while the command keeps running replaces the entry", () => {
   const before = new Map([[shell.id, running]]);
   const withPort = { ...running, ports: [8000] };
-  const next = mergeProcesses(before, [[shell.id, withPort]]);
+  const next = mergeProcesses(before, [[shell.id, withPort]], [shell.id]);
   expect(next).not.toBe(before);
   expect(next.get(shell.id)).toEqual(withPort);
-  expect(mergeProcesses(next, [[shell.id, withPort]])).toBe(next);
-  expect(mergeProcesses(next, [[shell.id, { ...withPort, ports: [8001] }]])).not.toBe(next);
+  expect(mergeProcesses(next, [[shell.id, withPort]], [shell.id])).toBe(next);
+  expect(mergeProcesses(next, [[shell.id, { ...withPort, ports: [8001] }]], [shell.id])).not.toBe(
+    next,
+  );
 });
 
 test("a changed command replaces the entry", () => {
   const before = new Map([[shell.id, { running: false, command: null, ports: [] }]]);
-  const next = mergeProcesses(before, [[shell.id, running]]);
+  const next = mergeProcesses(before, [[shell.id, running]], [shell.id]);
   expect(next).not.toBe(before);
   expect(next.get(shell.id)).toEqual(running);
+});
+
+// ポーリング対象から外れたペインを残すと、履歴のシェルのタブ名が止んだコマンドのまま固定される。
+test("panes no longer polled are dropped from the map", () => {
+  const other = "w1:p3";
+  const before = new Map([
+    [shell.id, running],
+    [other, { running: true, command: "npm run dev", ports: [] }],
+  ]);
+
+  const next = mergeProcesses(before, [[shell.id, null]], [shell.id]);
+  expect([...next.keys()]).toEqual([shell.id]);
+
+  // 対象が変わっていなければ、同じ Map を使い回す。
+  const same = mergeProcesses(before, [], [shell.id, other]);
+  expect(same).toBe(before);
 });

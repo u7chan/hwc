@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-08
+- Revises: 2026-11-11 に読む対象をスロットと current へ変更（[ADR 0058](0058-split-view-tab-history.md)）
 
 ## Context
 
@@ -14,7 +15,9 @@ Herdr は `pane.send_keys` で `C-c` を受け付ける。実機では `sleep 10
 ## Decision
 
 - BFF に `GET /api/panes/:id/process` を足し、`pane.process_info` を `{ running, command, ports }` に畳んで返す。`running` は前景プロセスグループがシェルと別かどうか、`command` は前景プロセス群の最も深い（最後の）`cmdline`、`ports` はそのプロセスが待ち受けている TCP ポート（昇順）とする
-- クライアントは、開いているタブのシェルペインだけを 3 秒間隔で読む。`document.visibilityState` が `hidden` の間は読まず、可視に戻った時点で 1 回読む
+- クライアントは、画面に出ているシェルペインだけを 3 秒間隔で読む。`document.visibilityState` が `hidden` の間は読まず、可視に戻った時点で 1 回読む（2026-11-11 改訂、[ADR 0058](0058-split-view-tab-history.md)）
+  - 対象は 4 スロットに入っているペインと current。開いた履歴（`openTabs`）の全部は読まない。3 秒ごとの要求が履歴の長さに比例して増えるため
+  - ポーリング対象から外れた ID は結果の Map から落とす。残すと、履歴のシェルのタブ名が止んだコマンドのまま固定される
 - 停止はペインの種類で分ける。シェルは前景プロセスが動いているときだけ `C-c` を送る。プロンプトへの `C-c` は入力中の行を消すだけなので送らず、成功として返す。エージェントは ADR 0025 の Esc のまま
 - 入力欄のボタンは、入力が空で前景プロセスが動いているときに停止にする。文字・添付・引用・チップがあれば送信のまま（REPL への入力や、実行中への追加指示を残す）
 - 待ち受けポートは `/proc/net/tcp{,6}` の LISTEN と、前景プロセスの `/proc/<pid>/fd` のソケット inode を突き合わせて引く。Web のサーバーかどうかは、このポートが出ているかで見分ける

@@ -4,8 +4,8 @@ import {
   defaultPaneOf,
   expandForPane,
   expandForWorkspace,
-  parseSelectedPane,
-  restorePane,
+  revealPane,
+  revealPaneGroups,
   workspaceGroupIds,
 } from "./selection";
 
@@ -67,28 +67,23 @@ function pane(id: string) {
   };
 }
 
-test("a stored pane reopens where it was", () => {
-  expect(restorePane(state, "w2:p1")).toBe("w2:p1");
+test("a pane selected from a tab, a cell or the list opens its place", () => {
+  const open = revealPane(state, "w2:p1", new Set(["w1"]));
+  expect([...open].sort()).toEqual(["repo:u7agent", "w1", "w2", "w2:t1"]);
+  expect(revealPaneGroups(state, "w2:p1").sort()).toEqual(["repo:u7agent", "w2", "w2:t1"]);
 });
 
-test("going back to the list is remembered across a reload", () => {
-  // 一覧に戻していたなら、ペインが残っていても開き直さない。
-  expect(restorePane(state, "w2:p1", true)).toBeNull();
-  expect(restorePane(state, null, true)).toBeNull();
-});
-
-test("a pane that is gone opens the list instead of another chat", () => {
-  expect(restorePane(state, "w2:p9")).toBeNull();
-});
-
-test("the first visit opens what herdr focuses", () => {
-  expect(restorePane(state, null)).toBe("w1:p1");
-});
-
-test("a broken value means nothing was selected", () => {
-  expect(parseSelectedPane(null)).toBeNull();
-  expect(parseSelectedPane("")).toBeNull();
-  expect(parseSelectedPane("w1:p1")).toBe("w1:p1");
+// タブ・セル・一覧からの移動は「いまこのペインを見たい」という指示。自分で畳んでいた
+// 記憶より優先する（expandForPane は初期表示の復元だけが使う）。
+test("an explicit move opens a folded group", () => {
+  const folded = new Set(["w1"]);
+  expect([...revealPane(state, "w2:p1", folded)].sort()).toEqual([
+    "repo:u7agent",
+    "w1",
+    "w2",
+    "w2:t1",
+  ]);
+  expect(revealPaneGroups(state, "w9:p1")).toEqual([]);
 });
 
 test("the reopened pane has its workspace and tab open", () => {

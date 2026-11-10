@@ -19,7 +19,6 @@ import {
   initialExpanded,
   isShellPane,
   markedParentPaneIds,
-  nextPaneInTab,
   paneName,
   paneRowTitle,
   parentPaneOf,
@@ -27,7 +26,6 @@ import {
   pullRequestTone,
   shortenPath,
   soleTab,
-  splitPanes,
   statusLabel,
   statusTone,
 } from "./select";
@@ -300,102 +298,6 @@ test("a pane without an agent is a shell", () => {
       chat: true,
     }),
   ).toBe(false);
-});
-
-test("the split view shows at most four panes of the tab", () => {
-  const panes = [1, 2, 3, 4, 5].map((index) => ({
-    id: `w1:p${index}`,
-    title: `p${index}`,
-    label: null,
-    agent: "pi",
-    agentStatus: "idle" as const,
-    focused: false,
-    chat: false,
-  }));
-
-  expect(splitPanes(panes, "w1:p2").map((pane) => pane.id)).toEqual([
-    "w1:p1",
-    "w1:p2",
-    "w1:p3",
-    "w1:p4",
-  ]);
-  // 画面に入らないペインを選んだら、最後の枠と入れ替えてでも見せる。
-  expect(splitPanes(panes, "w1:p5").map((pane) => pane.id)).toEqual([
-    "w1:p1",
-    "w1:p2",
-    "w1:p3",
-    "w1:p5",
-  ]);
-  expect(splitPanes(panes.slice(0, 3), "w1:p9")).toHaveLength(3);
-});
-
-test("hidden panes stay out of the split until they are opened", () => {
-  const panes = [1, 2, 3].map((index) => ({
-    id: `w1:p${index}`,
-    title: `p${index}`,
-    label: null,
-    agent: "pi",
-    agentStatus: "idle" as const,
-    focused: false,
-    chat: false,
-  }));
-  const hidden = new Set(["w1:p2"]);
-
-  expect(splitPanes(panes, "w1:p1", hidden).map((pane) => pane.id)).toEqual(["w1:p1", "w1:p3"]);
-  // 隠したペインを開いている間は出す。読んでいるものが消えるほうが困る。
-  expect(splitPanes(panes, "w1:p2", hidden).map((pane) => pane.id)).toEqual([
-    "w1:p1",
-    "w1:p2",
-    "w1:p3",
-  ]);
-  // 隠れて 1 枚だけ残っても、その 1 枚は返す。
-  expect(splitPanes(panes, "w1:p1", new Set(["w1:p2", "w1:p3"])).map((pane) => pane.id)).toEqual([
-    "w1:p1",
-  ]);
-  expect(splitPanes(panes, "w1:p1", new Set())).toHaveLength(3);
-});
-
-const plainPane = (id: string): PaneState => ({
-  id,
-  title: id,
-  label: null,
-  agent: "pi",
-  agentStatus: "idle",
-  focused: false,
-  chat: false,
-});
-
-test("closing a pane moves the selection to the next pane in the tab", () => {
-  const panes = ["w1:p1", "w1:p2", "w1:p3"].map(plainPane);
-
-  expect(nextPaneInTab(panes, "w1:p1")).toBe("w1:p2");
-  expect(nextPaneInTab(panes, "w1:p2")).toBe("w1:p3");
-});
-
-test("closing the last pane of a tab moves the selection back to the one before", () => {
-  const panes = ["w1:p1", "w1:p2", "w1:p3"].map(plainPane);
-
-  expect(nextPaneInTab(panes, "w1:p3")).toBe("w1:p2");
-});
-
-test("there is no successor when the closed pane is the only one in the tab", () => {
-  expect(nextPaneInTab([plainPane("w1:p1")], "w1:p1")).toBeNull();
-});
-
-test("a hidden pane is never picked as the successor", () => {
-  const panes = ["w1:p1", "w1:p2", "w1:p3", "w1:p4"].map(plainPane);
-  const hidden = new Set(["w1:p2", "w1:p3"]);
-
-  expect(nextPaneInTab(panes, "w1:p1", hidden)).toBe("w1:p4");
-  // 後ろに見えるものが無ければ手前へ戻り、手前も隠れていれば移る先は無い。
-  expect(nextPaneInTab(panes, "w1:p4", hidden)).toBe("w1:p1");
-  expect(nextPaneInTab(panes, "w1:p2", new Set(["w1:p1", "w1:p3", "w1:p4"]))).toBeNull();
-});
-
-test("there is no successor when every other pane is hidden", () => {
-  const panes = ["w1:p1", "w1:p2"].map(plainPane);
-
-  expect(nextPaneInTab(panes, "w1:p1", new Set(["w1:p2"]))).toBeNull();
 });
 
 test("the pane name uses the Herdr label, then the title without the agent mark", () => {
