@@ -715,6 +715,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   background: var(--color-surface);
 }
 
+/* 見出しの行はホバーで raised に塗る。アイコンも raised だと行と境目が消え、
+   別のボタンだと分からない。帯と同じ surface に落として押せる範囲を示す。
+   メニューを開いている間は背景が行を覆い、行のホバーは起きない。 */
+.hwc-group-row .hwc-space-icon:not(.hwc-space-icon--static):hover {
+  background: var(--color-surface);
+}
+
 .hwc-space-icon:hover .hwc-group-icon,
 .hwc-space-icon[data-open="true"] .hwc-group-icon,
 .hwc-active-band .hwc-space-icon:hover .hwc-active-band-icon,
