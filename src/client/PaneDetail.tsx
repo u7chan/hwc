@@ -14,6 +14,7 @@ import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { messageFileLabel } from "../shared/message-files";
 import { activityLabel, activitySnippet, formatTokPerSecond, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
+import { attachmentStore, type AttachedImage } from "./attachment-store";
 import { OutputText } from "./OutputText";
 import { isLayoutShift, isNearBottom } from "./scroll";
 import {
@@ -807,12 +808,18 @@ type PaneDetailProps = {
   onOpenPreview: (file: ChatFile) => void;
 };
 
-// 名前はアップロードが終わるまで無い。controller は取り外しと離脱で送信を止めるために持つ。
-type AttachedImage = {
-  key: string;
-  name: string | null;
-  controller: AbortController;
-};
+// ペインごとの添付を購読する。ペインが変わったら、その時点の一覧へ差し替える。
+function useAttachments(paneId: string): readonly AttachedImage[] {
+  const [items, setItems] = useState(() => attachmentStore.items(paneId));
+  useEffect(() => {
+    const update = () => setItems(attachmentStore.items(paneId));
+    // 購読の前に完了した分を取りこぼさないよう、購読してから読み直す。
+    const unsubscribe = attachmentStore.subscribe(paneId, update);
+    update();
+    return unsubscribe;
+  }, [paneId]);
+  return items;
+}
 
 export function PaneDetail(props: PaneDetailProps) {
   const {
@@ -864,14 +871,13 @@ export function PaneDetail(props: PaneDetailProps) {
   const [chip, setChip] = useState<CommandId | null>(null);
   // メニューからの /new だけ、送る前に確認する。
   const [confirmNew, setConfirmNew] = useState(false);
-  const [attachments, setAttachments] = useState<AttachedImage[]>([]);
+  const attachments = useAttachments(pane.id);
   // プロジェクトのダイアログは閉じるアニメーションの間も残す。caret は選んだ直後に
   // 入力欄へ戻す位置で、閉じただけ（キャンセル）のときは null のまま。
   const [projectDialog, setProjectDialog] = useState<{
     open: boolean;
     caret: number | null;
   } | null>(null);
-  const nextAttachmentKey = useRef(0);
   // ファイルをドラッグしている間だけ composer を光らせる。dragenter / dragleave は
   // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
   const [dropping, setDropping] = useState(false);
@@ -1293,27 +1299,20 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
-  const removeAttachment = (key: string) => {
-    attachments.find((item) => item.key === key)?.controller.abort();
-    setAttachments((items) => items.filter((item) => item.key !== key));
-  };
+  const removeAttachment = (key: string) => attachmentStore.remove(pane.id, key);
 
+  // ペインを切り替えても止めない。送り先が消えたときだけ App が中断する。
   const uploadImage = async (file: File) => {
-    const controller = new AbortController();
-    const key = `attachment-${nextAttachmentKey.current}`;
-    nextAttachmentKey.current += 1;
-    setAttachments((items) => [...items, { key, name: null, controller }]);
+    const { key, controller } = attachmentStore.begin(pane.id);
 
     const result = await uploadAttachment(pane.id, file, controller.signal);
     if (result.ok) {
-      setAttachments((items) =>
-        items.map((item) => (item.key === key ? { ...item, name: result.name } : item)),
-      );
+      attachmentStore.settle(pane.id, key, result.name);
       return;
     }
     // 外された添付は一覧から既に消えている。その失敗は知らせない。
     if (controller.signal.aborted) return;
-    setAttachments((items) => items.filter((item) => item.key !== key));
+    attachmentStore.remove(pane.id, key);
     setNotice(uploadFailureNotice(result.status));
   };
 
@@ -1347,16 +1346,6 @@ export function PaneDetail(props: PaneDetailProps) {
     if (action.kind === "unsupported") setNotice(unsupportedImageNotice());
     return false;
   };
-
-  // ペインを離れたら、終わっていないアップロードを止める。送り先が消えている。
-  const attached = useRef(attachments);
-  attached.current = attachments;
-  useEffect(
-    () => () => {
-      for (const item of attached.current) item.controller.abort();
-    },
-    [],
-  );
 
   const startsNewSession = (text: string, names: readonly string[]) =>
     (pane.chat || serverSnapshot !== null) &&
@@ -1412,7 +1401,7 @@ export function PaneDetail(props: PaneDetailProps) {
       writeReply(storage(), pane.id, "");
       setDraft("");
       setReply(null);
-      setAttachments([]);
+      attachmentStore.clear(pane.id);
       // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
       // 代わりに圧縮中の行を出す。
       if (compactCommand) {

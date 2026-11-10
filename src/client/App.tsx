@@ -3,6 +3,7 @@ import type { ChatFile } from "../server/chat/contract";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
 import { PaneDetail } from "./PaneDetail";
+import { attachmentStore } from "./attachment-store";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
@@ -463,6 +464,13 @@ export function App() {
     if (preview === null || state === null) return;
     if (findPane(state, preview.paneId) === null) setPreview(null);
   }, [state, preview]);
+
+  // ペインがスナップショットから消えたら、その添付と進行中のアップロードを捨てる。
+  // ペインを切り替えただけでは捨てない（戻ってから送れるようにする）。
+  useEffect(() => {
+    if (state === null) return;
+    attachmentStore.prune((paneId) => findPane(state, paneId) !== null);
+  }, [state]);
   // 確認の文言は状態を開いた時点で固定しない。ダイアログ中に変わればその値で読む。
   // スナップショットから消えたペインはもう無いので、確認は出さない。
   const closingPane = state === null || closing === null ? null : findPane(state, closing.paneId);
