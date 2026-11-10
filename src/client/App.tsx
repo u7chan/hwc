@@ -205,13 +205,18 @@ type GitAction =
     };
 
 // 削除の確認。対象の名前とパスは開いた時点のスナップショットから取る。SSE が
-// スペースを落とした後では、何を消すのかを引けない。
+// スペースを落とした後では、何を消すのかを引けない。leave は削除が確定し、一覧から
+// 対象が消えるアニメーションを見せている間。確認ダイアログは閉じる。
 type Removing = {
   workspaceId: string;
   label: string;
   checkoutPath: string | null;
-  phase: "confirm" | "busy" | "failed";
+  phase: "confirm" | "busy" | "leave" | "failed";
 };
+
+// 一覧の行が消えるアニメーション（PaneList）の完了が届かない場合の保険。
+// 待っている間も他の表示は止まるので、アニメーションより少し長い程度に留める。
+const REMOVAL_LEAVE_FALLBACK_MS = 800;
 
 // 重複したネイティブスペースを閉じる確認。フォルダは残るが、実行中のエージェントは終わる。
 type ClosingSpace = {
@@ -320,6 +325,12 @@ export function App() {
   const closeSpaceInFlight = useRef(false);
   // 既読の保留。アクティブ一覧で開いたペインだけが入り、選択が離れた時点で判定する。
   const pendingRead = useRef<string | null>(null);
+  // 削除対象が消えたスナップショットは、一覧の行が消えるアニメーションが終わるまで
+  // 1 回だけ保留する。正は BFF のままで、描画のタイミングだけをずらす。
+  const removingRef = useRef<Removing | null>(null);
+  removingRef.current = removing;
+  const heldSnapshot = useRef<AppState | null>(null);
+  const heldSnapshotTimer = useRef<number | null>(null);
 
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
@@ -335,6 +346,45 @@ export function App() {
     // 経過がずれて見える（非表示タブでは可視化後の最初の刻みまで残る）。
     setNow(serverClockNow(Date.now(), skew.current));
   };
+
+  // 消える行のアニメーションが終わったら、保留したスナップショットを適用する。
+  const finishRemoval = () => {
+    if (heldSnapshotTimer.current !== null) {
+      window.clearTimeout(heldSnapshotTimer.current);
+      heldSnapshotTimer.current = null;
+    }
+    const held = heldSnapshot.current;
+    heldSnapshot.current = null;
+    setRemoving((current) => (current?.phase === "leave" ? null : current));
+    if (held !== null) setState(held);
+  };
+
+  // 削除が確定したらダイアログを閉じ、一覧の対象を消えるアニメーションへ渡す。
+  const beginRemovalLeave = () => {
+    setRemoving((current) => (current === null ? null : { ...current, phase: "leave" }));
+    heldSnapshotTimer.current ??= window.setTimeout(finishRemoval, REMOVAL_LEAVE_FALLBACK_MS);
+  };
+
+  // 受信したスナップショットで丸ごと置き換える（ADR 0005）。削除の行が消える間だけは、
+  // アニメーションが途中で切り落とされないよう適用を保留する。
+  const applyState = (next: AppState) => {
+    const target = removingRef.current;
+    if (target?.phase === "leave") {
+      heldSnapshot.current = next;
+      return;
+    }
+    // 応答より先にスペースが消えたスナップショットが届くことがある。対象を消して
+    // 見せてから適用する。
+    if (
+      target?.phase === "busy" &&
+      !next.workspaces.some((workspace) => workspace.id === target.workspaceId)
+    ) {
+      heldSnapshot.current = next;
+      beginRemovalLeave();
+      return;
+    }
+    setState(next);
+  };
   useEffect(() => {
     const timer = setInterval(() => setNow(serverClockNow(Date.now(), skew.current)), 1000);
     return () => clearInterval(timer);
@@ -347,7 +397,7 @@ export function App() {
         receive(message);
         const decision = gateSnapshot(snapshotWriter.current, "initial-fetch");
         snapshotWriter.current = decision.writer;
-        if (decision.apply) setState(message.state);
+        if (decision.apply) applyState(message.state);
       },
       () => undefined,
     );
@@ -364,7 +414,7 @@ export function App() {
       const decision = gateSnapshot(snapshotWriter.current, "stream");
       snapshotWriter.current = decision.writer;
       if (!decision.apply) return;
-      setState(message.state);
+      applyState(message.state);
       setConnection(connectionAfter("snapshot"));
     };
     events.addEventListener("unavailable", () => setConnection(connectionAfter("unavailable")));
@@ -718,18 +768,32 @@ export function App() {
   };
 
   // 消えたスペースはローカルで消さない。一覧の置き換えは SSE のスナップショットに任せる。
+  // 成功時は確認を閉じ、一覧の対象が消えるアニメーションを先に見せる。
   const confirmRemoveWorktree = () => {
-    if (removing === null || removing.phase === "busy" || !removingAvailable) return;
+    if (
+      removing === null ||
+      removing.phase === "busy" ||
+      removing.phase === "leave" ||
+      !removingAvailable
+    ) {
+      return;
+    }
     if (removeInFlight.current) return;
     removeInFlight.current = true;
     const target = removing;
     setRemoving({ ...target, phase: "busy" });
     void removeWorktree(target.workspaceId).then((outcome) => {
       removeInFlight.current = false;
-      setRemoving((current) => {
-        if (current === null) return null;
-        return outcome === "done" ? null : { ...current, phase: "failed" };
-      });
+      if (outcome === "done") {
+        beginRemovalLeave();
+        return;
+      }
+      // 応答より先に対象が消えていた場合は、削除済みとして扱う（ADR 0034）。
+      if (removingRef.current?.phase === "leave") {
+        finishRemoval();
+        return;
+      }
+      setRemoving((current) => (current === null ? null : { ...current, phase: "failed" }));
     });
   };
 
@@ -1129,6 +1193,12 @@ export function App() {
               onMoveWorkspaces={(workspaceIds, beforeWorkspaceId) =>
                 moveWorkspaceBlock(workspaceIds, beforeWorkspaceId)
               }
+              removal={
+                removing === null
+                  ? null
+                  : { workspaceId: removing.workspaceId, phase: removing.phase }
+              }
+              onRemovalFinished={finishRemoval}
               workingSince={workingSince}
               finishedAt={finishedAt}
               pullRequests={pullRequests}
@@ -1489,7 +1559,7 @@ export function App() {
         />
       )}
 
-      {removing === null || removingWorkspace === null ? null : (
+      {removing === null || removing.phase === "leave" || removingWorkspace === null ? null : (
         <RemoveWorktreeConfirm
           label={removing.label}
           checkoutPath={removing.checkoutPath}
