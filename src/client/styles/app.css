@@ -715,6 +715,14 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   color: var(--color-secondary);
 }
 
+/* 親ペインの印。状態の記号でも操作でもないので、文字と同じ補助色に置く。 */
+.hwc-parent-mark {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  color: var(--color-secondary);
+}
+
 .hwc-pane-agent[data-agent="claude"] {
   color: var(--color-agent-claude);
 }
@@ -1755,6 +1763,14 @@ html[data-order-ghost="below"] .hwc-order-ghost {
 .hwc-active-name {
   flex: 0 1 auto;
   font-weight: 400;
+}
+
+.hwc-active-title {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .hwc-active-open[data-current="true"] .hwc-active-name {

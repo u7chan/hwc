@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import type { PaneProcess } from "../shared/panes";
 import { ChevronLeftIcon, EyeIcon, EyeOffIcon, SplitIcon } from "./icons";
+import { ParentMark } from "./ParentMark";
 import { paneTabName } from "./process";
 import { statusLabel } from "./select";
 import { StatusIcon } from "./StatusLabel";
@@ -10,6 +11,7 @@ import { StatusIcon } from "./StatusLabel";
 type TabBarProps = {
   pane: PaneState;
   panes: readonly PaneState[];
+  parentPaneIds: ReadonlySet<string>;
   // シェルで動いているコマンド。タブ名をコマンドに差し替えるためだけに使う。
   processes: ReadonlyMap<string, PaneProcess>;
   // 開いているプレビュー。ペインではないので、選択と表示だけを別に持つ。
@@ -58,6 +60,7 @@ export function TabBar(props: TabBarProps) {
         {props.panes.map((item) => {
           const selected = !previewing && item.id === props.pane.id;
           const hidden = props.hidden.has(item.id);
+          const parent = props.parentPaneIds.has(item.id);
           const process = props.processes.get(item.id) ?? null;
           const name = paneTabName(item, process);
           // タブにはプログラム名だけを出す。何を動かしているかは、ホバーと読み上げで補う。
@@ -73,12 +76,13 @@ export function TabBar(props: TabBarProps) {
                 role="tab"
                 class="hwc-tab"
                 aria-selected={selected}
-                aria-label={`${detail} (${item.id}, ${statusLabel(item.agentStatus)}${hidden ? ", 分割で非表示" : ""})`}
+                aria-label={`${parent ? "親ペイン、" : ""}${detail} (${item.id}, ${statusLabel(item.agentStatus)}${hidden ? ", 分割で非表示" : ""})`}
                 title={detail}
                 data-pane-id={item.id}
                 data-eye={eye}
                 onClick={() => props.onSelectPane(item.id)}
               >
+                {parent ? <ParentMark /> : null}
                 <span class="hwc-tab-label">{name}</span>
                 <StatusIcon status={item.agentStatus} />
               </button>

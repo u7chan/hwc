@@ -148,6 +148,16 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 4. localStorage を共有しない別のブラウザ（シークレットウィンドウなど）で `アクティブ` を開くと、同じ終了時刻になる。経過は 1 秒の位相で揺れるので、比べるのは固定値の終了時刻にする。
 5. `frontend` の行は比べ終わるまで開かない。開いて離れると既読が進んで `待機` に戻り、行の状態が変わる。
 
+## ファビコンと親マーク
+
+ファビコンは、スペースの左端にいる最初のエージェント（親）の完了と、全エージェントの要対応・作業中を見る（[ADR 0054](adr/0054-favicon-parent-status.md)）。タイトルは `HWC` のまま変えない。
+
+1. `アクティブ` を開く。`acme-dashboard` の `frontend` と、`scratch` の `folder-trust` に王冠の親マークが付く。`acme-dashboard (docs)` はエージェントが 1 枚だけなので付かない。
+2. `すべて` に切り替え、同じ王冠がツリーのペイン名の横に出ることを確かめる。
+3. `frontend` を開く。詳細のペインタブの `frontend` に王冠が出る。同じタブの `shell` には出ない。`checks` タブの `review` にも出ない。
+4. `link[rel="icon"]` を調べる。PNG のリンクが消え、SVG の `href` が `data:image/svg+xml,` で始まる。fixture では `writer` と `folder-trust` が `blocked` なので、点は赤になる。
+5. `document.title` が `HWC` のままであることを確かめる。
+
 ## 一覧の並べ替え
 
 `すべて` の束の並びは Herdr のワークスペース順で、ネイティブ Herdr と同じ（[ADR 0052](adr/0052-workspace-order-drag.md)）。
