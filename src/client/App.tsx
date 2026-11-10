@@ -887,12 +887,15 @@ export function App() {
   const cells = slotPanes.flatMap((item) => (item === null ? [] : [item]));
   // 現在ペインが入っているスロット（1 始まり）。一覧の現在行とタブの色に使う。
   const currentSlot = currentSlotIndex(split);
+  // セルが並ぶのは広い画面だけ。狭い画面は slots が 2 枚以上でも 1 枚表示なので、
+  // 分割セル向けの見出し・入力欄の畳み・スペース名・同期の表示をまとめて切り替える。
+  const splitCells = wide && cells.length > 1;
   // グリッドと追加帯は広い画面で、current が実在するときだけ出す（ADR 0058）。
   const gridOn = wide && pane !== null && split.slots.length > 0;
   const addBandOn = gridOn && split.slots.length < MAX_SLOTS;
   // 畳むかどうかは、セル数ではなく実際に並んでいるペイン数で決める。空きスロットが
   // 増えても、読む相手が 1 枚なら入力欄は広く取る。
-  const compact = cells.length > 1;
+  const compact = splitCells;
 
   // 4 枚の判定は BFF と同じタブの枚数で行う。
   const menuPaneId = menu?.target.kind === "pane" ? menu.target.id : null;
@@ -935,14 +938,14 @@ export function App() {
       compact={compact}
       scheme={scheme}
       // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
-      labeled={cells.length > 1}
+      labeled={splitCells}
       // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
-      showSpace={cells.length > 1 && multiSpaceTabs}
+      showSpace={splitCells && multiSpaceTabs}
       // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
       // 値そのものは常に渡す。
       branch={where.branch}
       // 上流との差はワークスペースの属性。セルが並ぶときは同じ値が並ぶので出さない。
-      sync={cells.length > 1 ? null : where.sync}
+      sync={splitCells ? null : where.sync}
       workspaceMenuOpen={
         menu?.open === true &&
         menu.target.kind === "workspace" &&
