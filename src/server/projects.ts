@@ -91,10 +91,25 @@ export type ProjectLister = {
   list: (options: { cwd: string }) => Promise<ProjectList>;
 };
 
-type ProjectRunner = (cwd: string) => Promise<string>;
+export type ProjectCommand = {
+  stdout: string;
+  stderr: string;
+  code: number;
+};
+
+type ProjectRunner = (cwd: string) => Promise<ProjectCommand>;
 
 export const PROJECTS_TTL_MS = 30_000;
 const GIT_TIMEOUT_MS = 5_000;
+// 非 git のディレクトリでもペインは作れる。このメッセージのときだけ空の一覧に畳み、
+// 壊れた index や dubious ownership など、git はあるが読めない失敗は 502 に回す。
+const NOT_A_REPOSITORY = /not a git repository/i;
+
+export function projectCommandOutput(result: ProjectCommand): string {
+  if (result.code === 0) return result.stdout;
+  if (result.code === 128 && NOT_A_REPOSITORY.test(result.stderr)) return "";
+  throw new Error("git ls-files failed");
+}
 
 // マニフェストの追加はコミット単位でしか起きないが、BFF にファイル監視は無い。
 // 短い TTL で読み直し、ペインを切り替えても同じ cwd の結果を共有する。
@@ -116,31 +131,34 @@ export function createProjectLister(
       const hit = cache.get(cwd);
       if (hit !== undefined && at - hit.at < ttlMs) return hit.value;
 
-      const value = projectEntries(splitGitPaths(await run(cwd)));
+      const value = projectEntries(splitGitPaths(projectCommandOutput(await run(cwd))));
       cache.set(cwd, { at, value });
       return value;
     },
   };
 }
 
-async function readProjectFiles(cwd: string): Promise<string> {
+async function readProjectFiles(cwd: string): Promise<ProjectCommand> {
   if (!isAbsolute(cwd)) throw new Error("cwd must be absolute");
   // 調査用プロセスが呼び出し元のペインを自分のものとして報告しないようにする。
   // env を明示しないと、Bun は起動時の PATH で実行ファイルを探し、E2E の偽 git を通らない。
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
   );
+  // git のエラー文言で非 git を見分けるため、ロケールを固定する。
+  env.LC_ALL = "C";
   const child = Bun.spawn(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
     cwd,
     env,
     stdin: "ignore",
     stdout: "pipe",
-    stderr: "ignore",
+    stderr: "pipe",
     timeout: GIT_TIMEOUT_MS,
   });
-  const [text, code] = await Promise.all([new Response(child.stdout).text(), child.exited]);
-  // 非 git のディレクトリでもペインは作れる。候補なしとして扱い、エラーにはしない。
-  if (code === 0) return text;
-  if (code === 128) return "";
-  throw new Error("git ls-files failed");
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  return { stdout, stderr, code };
 }

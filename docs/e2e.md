@@ -119,7 +119,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 入力欄の + からは、同じ経路で画像を選べる。ファイル入力の `accept` は `image/*` で、`dropActionFrom` と `takeImages` を通る。Playwright では画像のメニュー項目を押した後の File chooser に `upload` でファイルを渡す。
 
-- の「プロジェクトを選ぶ」は、`<root>/bin/git` の `ls-files` が返すマニフェストから候補を作る。架空 Herdr の `pane.get` は `…/work/acme-dashboard` を cwd として返し、偽 git はその cwd に対して `package.json`、`packages/api/package.json`、`packages/web/pyproject.toml`、`apps/desktop/Cargo.toml` を返す。cwd 自身の `package.json` は候補から外れるので、`api`、`web`、`desktop` の 3 件になる。実ファイルは作らない。
+`+` の「プロジェクトを選ぶ」は、`<root>/bin/git` の `ls-files` が返すマニフェストから候補を作る。架空 Herdr の `pane.get` は `…/work/acme-dashboard` を cwd として返し、偽 git はその cwd に対して `package.json`、`packages/api/package.json`、`packages/web/pyproject.toml`、`apps/desktop/Cargo.toml` を返す。cwd 自身の `package.json` は候補から外れるので、`desktop`、`api`、`web` の 3 件になる。実ファイルは作らない。
 
 pi のペインでは、あわせてセッションの隣に live の sidecar（`<session>.jsonl.thinking.json`）を書く。まず `waiting` で `working` にし、1.2 秒後に折り返す長さの `thinking` と `tokPerSecond: 42.3` を上書きし、6 秒後に消して `idle` に戻す。実物の pi 拡張はターン中に phase・thinking の末尾・生成速度を上書きし続ける（[ADR 0035](adr/0035-live-pi-activity.md)）。E2E ではこの 2 段階で、段階の行が会話のスクロール領域の外（入力欄の直上）に出て、スクロールしても残ること、生成速度が経過時間の左に出て右端の時間が動かないこと、末尾 2 行だけが出てターン終了で消えることを確かめる。入力欄を 1 行に畳むセルでは thinking と生成速度を出さず、段階と経過時間だけになる。停止ボタン（`esc`）でも sidecar を消す。
 
@@ -142,7 +142,7 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 
 1. `frontend` を開き、+ を押す。+ の上に「画像を追加」と「プロジェクトを選ぶ」が開き、`Escape` か外側のタップで閉じる。
 2. 「画像を追加」を選び、`src/client/assets/apple-touch-icon.png` をアップロードする。入力欄の上に添付チップが出て、書きかけの本文は残る。4 枚添付すると「画像を追加」が無効になり、理由が補助文に出る。
-3. 「プロジェクトを選ぶ」を選ぶ。`api`、`web`、`desktop` が名前と相対パスで並ぶ。検索欄に `web` と入れると `web` だけに絞り込まれる。
+3. 「プロジェクトを選ぶ」を選ぶ。`desktop`、`api`、`web` が名前と相対パスで並ぶ。検索欄に `web` と入れると `web` だけに絞り込まれる。
 4. `web` を選ぶとダイアログが閉じ、本文に `./packages/web/` が入り、入力欄にフォーカスが戻る。`Escape` で閉じた場合は + にフォーカスが戻り、本文は変わらない。
 5. 会話を持つペインを選び、分割セルで入力欄が 1 行に畳まれる幅にすると + は出ない。狭い画面でも送信ボタンは右端に残り、モデル名だけが省略される。
 6. 空表示と取得失敗は、ブラウザのリクエスト差し替えで確かめる。`frontend` の `/api/panes/w1:p1/projects` を `{"projects":[],"truncated":false}` にすると「このディレクトリ配下に他のプロジェクトはありません。」、502 にすると再試行が出る。

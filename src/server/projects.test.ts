@@ -152,7 +152,7 @@ describe("project lister", () => {
     const lister = createProjectLister({
       run: async () => {
         runs += 1;
-        return "server/package.json";
+        return { stdout: "server/package.json", stderr: "", code: 0 };
       },
       now: () => now,
       ttlMs: 100,
@@ -173,9 +173,45 @@ describe("project lister", () => {
     expect(runs).toBe(2);
   });
 
+  test("treats a directory outside a git repository as an empty list", async () => {
+    const lister = createProjectLister({
+      run: async () => ({
+        stdout: "",
+        stderr: "fatal: not a git repository (or any of the parent directories): .git\n",
+        code: 128,
+      }),
+    });
+
+    expect(await lister.list({ cwd: "/workspace" })).toEqual({ projects: [], truncated: false });
+  });
+
+  test("does not hide a broken repository behind an empty list", async () => {
+    const lister = createProjectLister({
+      run: async () => ({
+        stdout: "",
+        stderr: "fatal: index file smaller than expected\n",
+        code: 128,
+      }),
+    });
+
+    await expect(lister.list({ cwd: "/workspace" })).rejects.toThrow("git ls-files failed");
+  });
+
+  test("does not hide a timeout behind an empty list", async () => {
+    const lister = createProjectLister({
+      run: async () => ({ stdout: "", stderr: "", code: 143 }),
+    });
+
+    await expect(lister.list({ cwd: "/workspace" })).rejects.toThrow("git ls-files failed");
+  });
+
   test("keeps separate cache entries for different cwds", async () => {
     const lister = createProjectLister({
-      run: async (cwd) => (cwd === "/a" ? "one/package.json" : "two/pyproject.toml"),
+      run: async (cwd) => ({
+        stdout: cwd === "/a" ? "one/package.json" : "two/pyproject.toml",
+        stderr: "",
+        code: 0,
+      }),
     });
 
     expect((await lister.list({ cwd: "/a" })).projects).toEqual([{ name: "one", path: "one" }]);

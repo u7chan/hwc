@@ -4022,6 +4022,9 @@ p.hwc-compaction,
 .hwc-input-tail {
   /* 追加ボタンが入っても送信を押し出さないよう、残り幅を取って右端に寄せる。 */
   flex: 1 1 auto;
+  /* 幅の判定は画面ではなく、情報と送信が入る行の幅で行う。+ メニューは tail の
+     外側にあり、container-type の子孫にならないので fixed の基準を奪わない。 */
+  container: hwc-input-tail / inline-size;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -4245,7 +4248,7 @@ p.hwc-compaction,
   display: none;
 }
 
-@container hwc-input-actions (max-width: 360px) {
+@container hwc-input-tail (max-width: 340px) {
   .hwc-context-wide {
     display: none;
   }
@@ -4333,9 +4336,6 @@ p.hwc-compaction,
   align-items: center;
   gap: var(--space-2);
   padding: 0 0 var(--space-1) var(--space-2);
-  /* 幅の判定は画面ではなく入力行で行う。分割表示では viewport と一致しない。
-     flex: none の .hwc-input-tail に置くと主軸サイズが内容から決まらず幅 0 になる。 */
-  container: hwc-input-actions / inline-size;
 }
 
 /* 分割中は入力欄を 1 行に畳み、会話へ高さを回す。開閉ボタンと placeholder は出さない。 */
@@ -4384,13 +4384,13 @@ p.hwc-compaction,
   flex: 0 1 auto;
   min-width: 0;
   padding: 0;
-  /* 簡略時は入力行ではなくセルを基準に meter の表記を決める。 */
-  container: normal;
 }
 
 .hwc-split-cell[data-compact="true"] .hwc-input-tail {
   flex: 0 1 auto;
   gap: var(--space-2);
+  /* 簡略時は container query を使わず、下の固定規則で narrow にする。 */
+  container: normal;
 }
 
 /* 簡略時は narrow 表記に固定する。セル基準の 360px 判定では wide 表記（106k/1.0M (10.6%)）が
