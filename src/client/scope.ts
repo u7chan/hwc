@@ -1,5 +1,5 @@
 import type { AgentStatus, AppState, WorkspaceState } from "../server/herdr/state";
-import type { PaneRow } from "./select";
+import { parentPaneOf, type PaneRow } from "./select";
 
 export type ListScope = "active" | "all";
 
@@ -51,15 +51,16 @@ const RANKS: Readonly<Record<AgentStatus, number>> = {
 
 export type ActiveGroup = {
   workspace: WorkspaceState;
-  // 並びは表示順。束の中は RANKS の昇順、同順位は state の並び。
+  // 並びは表示順。束の中は親ペインが先頭、残りは RANKS の昇順。同順位は state の並び。
   rows: readonly PaneRow[];
   // 帯に出す件数。表示している行を状態で数える。待機と不明は 0 のまま。
   counts: Readonly<Record<ActiveStatus, number>>;
 };
 
 // アクティブの行をワークスペース単位で束ねる。同じワークツリーの行が状態順で散らばると、
-// どれが同じ場所かを目で追えないため。束の順は、束の中で最も上位の行の順位。
-// 同順位は state の並び。
+// どれが同じ場所かを目で追えないため。束の中は親ペイン（ADR 0054）を状態に関わらず
+// 先頭に固定する。王冠は状態ではなく役割の印で、位置が状態で動くと戻り先を探すコストと
+// 押し間違いにつながる。束の順は、親を含めた最も緊急な行の順位。同順位は state の並び。
 export function activeGroups(state: AppState): readonly ActiveGroup[] {
   const order = new Map(state.workspaces.map((workspace, index) => [workspace.id, index]));
   const buckets = new Map<string, { workspace: WorkspaceState; rows: PaneRow[] }>();
@@ -74,9 +75,13 @@ export function activeGroups(state: AppState): readonly ActiveGroup[] {
 
   return [...buckets.values()]
     .map((bucket) => {
+      const parentId = parentPaneOf(bucket.workspace)?.id ?? null;
       const rows = [...bucket.rows].sort(
-        (a, b) => RANKS[a.pane.agentStatus] - RANKS[b.pane.agentStatus],
+        (a, b) =>
+          Number(b.pane.id === parentId) - Number(a.pane.id === parentId) ||
+          RANKS[a.pane.agentStatus] - RANKS[b.pane.agentStatus],
       );
+      // 先頭は親なので、束の順位は先頭行ではなく全行の最小値で決める。
       const rank = Math.min(...rows.map((row) => RANKS[row.pane.agentStatus]));
       return { workspace: bucket.workspace, rows, counts: countRows(rows), rank };
     })
