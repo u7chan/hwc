@@ -76,10 +76,19 @@ test("a tab outside the grid replaces the current slot", () => {
 });
 
 test("a tab selected while nothing is current fills the first empty slot", () => {
-  const shown = view(["w1:p1", "w1:p2"], null, ["w1:p1", null, "w1:p2"]);
-  expect(openPane(shown, "w1:p2").slots).toEqual(["w1:p1", null, "w1:p2"]);
-  const elsewhere = view(["w1:p1", "w1:p2"], null, ["w1:p1", null, "w1:p2"]);
-  expect(openPane(elsewhere, "w1:p2").current).toBe("w1:p2");
+  const shown = view(["w1:p1", "w1:p9"], null, ["w1:p1", null, "w1:p2"]);
+  const next = openPane(shown, "w1:p9");
+  // 空きがあればレイアウトを変えずに埋める。末尾にも 0 番にも足さない。
+  expect(next.slots).toEqual(["w1:p1", "w1:p9", "w1:p2"]);
+  expect(next.current).toBe("w1:p9");
+});
+
+test("a tab selected while nothing is current replaces slot 1 before growing the grid", () => {
+  const shown = view(["w1:p1", "w1:p3", "w1:p9"], null, ["w1:p1", "w1:p3"]);
+  const next = openPane(shown, "w1:p9");
+  // 空きが無ければ 4 未満でも末尾に足さない。スロット 1 を置き換える（ADR 0058 の遷移表）。
+  expect(next.slots).toEqual(["w1:p9", "w1:p3"]);
+  expect(next.current).toBe("w1:p9");
 });
 
 test("a tab selected while nothing is current replaces slot 1 when the grid is full", () => {
@@ -88,6 +97,11 @@ test("a tab selected while nothing is current replaces slot 1 when the grid is f
   expect(next.slots).toEqual(["w1:p1", "w1:p2", "w1:p3", "w1:p4"]);
   const fresh = view(["w1:p1", "w1:p9"], null, ["w1:p1", "w1:p2", "w1:p3", "w1:p4"]);
   expect(openPane(fresh, "w1:p9").slots).toEqual(["w1:p9", "w1:p2", "w1:p3", "w1:p4"]);
+});
+
+test("a tab selected while nothing is current starts the grid from one slot", () => {
+  const next = openPane(view(["w1:p1"], null, []), "w1:p1");
+  expect(next.slots).toEqual(["w1:p1"]);
 });
 
 test("going back to the list keeps the history and the grid", () => {

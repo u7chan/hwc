@@ -58,13 +58,15 @@ export function placeInSlots(slots: readonly (string | null)[], paneId: string):
 }
 
 // 一覧・タブからペインを開く。開いていなければタブの右端に積み、グリッドは current の
-// スロットを置き換える（グリッド外のタブを選んだときの規則）。
+// スロットを置き換える（グリッド外のタブを選んだときの規則）。current が無い / 消えて
+// いれば空き先頭へ。空きが無ければスロット 1 を置き換え、レイアウトは変えない。
 export function openPane(view: SplitView, paneId: string): SplitView {
   const openTabs = view.openTabs.includes(paneId) ? view.openTabs : [...view.openTabs, paneId];
   if (view.slots.includes(paneId)) return { openTabs, current: paneId, slots: view.slots };
   const at = view.current === null ? -1 : view.slots.indexOf(view.current);
-  const slots = at >= 0 ? replaceAt(view.slots, at, paneId) : placeInSlots(view.slots, paneId);
-  return { openTabs, current: paneId, slots };
+  const empty = firstEmptySlot(view.slots);
+  const target = at >= 0 ? at : empty >= 0 ? empty : 0;
+  return { openTabs, current: paneId, slots: replaceAt(view.slots, target, paneId) };
 }
 
 // 一覧へ戻す。開いたタブとスロットは残す。
