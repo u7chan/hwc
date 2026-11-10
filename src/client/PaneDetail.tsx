@@ -607,7 +607,9 @@ function LiveStatus(props: {
   elapsedMs: number | null;
   compacting: boolean;
   stopping: boolean;
-  // 低いセルでは会話の高さを優先する。thinking を出さず、段階と経過だけにする。
+  // 低いセルでは会話の高さを優先する。thinking の枠を出さず、段階と経過だけにする。
+  // 出すときは thinking が無い間も 2 行分を空けたままにする。段階の切り替わりで
+  // 高さが変わると、上に載る会話の見える範囲が動くため。
   showThought: boolean;
   // 生成中だけ入る。低いセルでは親が null にする。
   tokPerSecond: number | null;
@@ -647,9 +649,9 @@ function LiveStatus(props: {
           )}
         </span>
       </div>
-      {props.showThought && props.thought !== "" ? (
+      {props.showThought ? (
         <div class="hwc-live-thought">
-          <p class="hwc-live-thought-text">{props.thought}</p>
+          {props.thought === "" ? null : <p class="hwc-live-thought-text">{props.thought}</p>}
         </div>
       ) : null}
     </div>
@@ -1765,7 +1767,7 @@ export function PaneDetail(props: PaneDetailProps) {
           elapsedMs={compacting ? compactionElapsedMs : waitingMs}
           compacting={compacting}
           stopping={stopping}
-          showThought={!compact}
+          showThought={!compact && activity !== null}
           tokPerSecond={liveTokPerSecond}
           onCancelCompaction={() => void cancelCompaction()}
         />
