@@ -27,7 +27,8 @@ type CreatePaneProps = {
   paneId: string;
   // 値があればワークツリーを作り、その root pane でエージェントを起動する。
   worktreeWorkspaceId: string | null;
-  onCreated: (paneId: string) => void;
+  // エージェントの起動を頼んだか。起動が終わるまで入力を閉じる側で使う。
+  onCreated: (paneId: string, agent: boolean) => void;
   onClose: () => void;
 };
 
@@ -101,7 +102,7 @@ export function CreatePane(props: CreatePaneProps) {
     };
 
     const created = (paneId: string) => {
-      props.onCreated(paneId);
+      props.onCreated(paneId, mode === "agent");
       setOpen(false);
     };
 
@@ -122,8 +123,9 @@ export function CreatePane(props: CreatePaneProps) {
     setBusy(false);
     setSettled(paneId !== null || !view.retry);
     setError(view.message);
-    // ペインができていれば、理由を見せたまま新しいペインへ移る。
-    if (paneId !== null) props.onCreated(paneId);
+    // ペインができていれば、理由を見せたまま新しいペインへ移る。起動に失敗していれば
+    // シェルのペインなので、入力を閉じる必要はない。
+    if (paneId !== null) props.onCreated(paneId, false);
   };
 
   return (

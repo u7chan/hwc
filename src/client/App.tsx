@@ -103,6 +103,7 @@ import {
   type ListScope,
 } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
+import { type StartingPane, paneStarting } from "./starting";
 import { clockSkew, serverClockNow, workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
@@ -298,6 +299,9 @@ export function App() {
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
+  // 作ったばかりのペイン。エージェントが画面を引き継ぐまで、hwc からの入力を閉じる。
+  // 開いているペインを切り替えても残す（選び直しでガードを外させない）。
+  const [starting, setStarting] = useState<StartingPane | null>(null);
   const closeInFlight = useRef(false);
   const removeInFlight = useRef(false);
   // 既読の保留。アクティブ一覧で開いたペインだけが入り、選択が離れた時点で判定する。
@@ -956,6 +960,7 @@ export function App() {
       waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
       running={processes.get(item.id)?.running === true}
       sending={inputsInFlight.current.has(item.id)}
+      starting={paneStarting(starting, item, now)}
       dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
       confirmationAttempts={confirmationAttempts.current}
       onConfirmFolderTrust={(id) => void confirmPaneFolderTrust(item.id, id)}
@@ -1403,7 +1408,11 @@ export function App() {
         <CreatePane
           paneId={creating.paneId}
           worktreeWorkspaceId={creating.worktreeWorkspaceId}
-          onCreated={setPendingSelect}
+          onCreated={(paneId, agent) => {
+            setPendingSelect(paneId);
+            // エージェントを起動しなかった（シェル・起動失敗）ペインは、すぐに入力できる。
+            setStarting(agent ? { paneId, at: serverClockNow(Date.now(), skew.current) } : null);
+          }}
           onClose={() => setCreating(null)}
         />
       )}
