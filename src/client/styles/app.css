@@ -896,8 +896,12 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   cursor: pointer;
 }
 
+/* 開いている行は面の色だけだと他の行に紛れる。並べ替え中の破線（掴んでいる束）と
+   取り違えないよう、内側に実線の枠を引いて形でも示す。 */
 .hwc-pane[data-current="true"] {
   background: var(--color-selected);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
 }
 
 .hwc-pane[data-current="true"] .hwc-pane-name {
@@ -905,7 +909,7 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   font-weight: 600;
 }
 
-/* 枠を残すのはシェルだけ。選んだ行の枠はアクセントで示す。 */
+/* アイコンの枠を残すのはシェルだけ。選択中の行ではアイコンの枠もアクセントで示す。 */
 .hwc-pane[data-current="true"] .hwc-pane-icon {
   border-color: var(--color-accent);
   color: var(--color-accent);
@@ -1747,8 +1751,11 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   background: var(--color-raised);
 }
 
+/* ツリーの行と同じく、開いている行は内側の実線の枠で示す。 */
 .hwc-active-open[data-current="true"] {
   background: var(--color-selected);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
 }
 
 /* 場所は帯が持つ。名前は並べるときの主役なので、選択中の行だけ太くする。 */
