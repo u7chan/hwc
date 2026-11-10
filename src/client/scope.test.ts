@@ -198,7 +198,7 @@ test("the group summary tells whether there is an agent", () => {
   expect(agentPresence(0)).toBe("シェルのみ");
 });
 
-test("a group holds attention, the finished, the running and the waiting in that order", () => {
+test("the parent stays at the top and the rest follow the state order", () => {
   const state = app(
     workspace("w1", [
       pane("w1:p1", "pi", "idle"),
@@ -206,22 +206,53 @@ test("a group holds attention, the finished, the running and the waiting in that
       pane("w1:p3", "pi", "blocked"),
       pane("w1:p4", "claude", "done"),
       pane("w1:p5", "pi", "unknown"),
+      pane("w1:p6", "claude", "idle"),
     ]),
   );
 
   const [group] = activeGroups(state);
 
-  // 待機と不明は並びの最後にまとめ、動いている行や未読の完了を押し下げない。
+  // 親 (p1) は待機でも先頭。残りは要対応 → 完了 → 実行中 → 待機 → 不明の順。
+  // p6 は親以外の待機。p5 (不明) より前に残ることで、待機の順位も確かめる。
   expect(group?.rows.map((row) => row.pane.id)).toEqual([
+    "w1:p1",
     "w1:p3",
     "w1:p4",
     "w1:p2",
-    "w1:p1",
+    "w1:p6",
     "w1:p5",
   ]);
 });
 
-test("groups come in the rank of their top row, then the state order", () => {
+test("the parent skips a shell, so the first agent leads the group", () => {
+  const state = app(
+    workspace("w1", [
+      pane("w1:p1", null),
+      pane("w1:p2", "pi", "idle"),
+      pane("w1:p3", "pi", "blocked"),
+    ]),
+  );
+
+  const [group] = activeGroups(state);
+
+  // 親の定義は ADR 0054 と同じく「左端のタブから最初のエージェント」。
+  expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p2", "w1:p3"]);
+});
+
+test("pinning the parent does not hide the urgency of the group", () => {
+  const state = app(
+    // 親が待機でも、子の要対応で束は先頭に来る。
+    workspace("w1", [pane("w1:p1", "pi", "idle"), pane("w1:p2", "pi", "blocked")]),
+    // 親が完了、子が実行中なら、束は完了の順位。
+    workspace("w2", [pane("w2:p1", "pi", "done"), pane("w2:p2", "pi", "working")]),
+    workspace("w3", [pane("w3:p1", "pi", "working"), pane("w3:p2", "pi", "idle")]),
+  );
+
+  // 束の順位は親を含めた最も緊急な行。先頭に固定した親の状態では決めない。
+  expect(activeGroups(state).map((group) => group.workspace.id)).toEqual(["w1", "w2", "w3"]);
+});
+
+test("groups come in the rank of their most urgent row, then the state order", () => {
   const state = app(
     workspace("w1", [pane("w1:p1", "pi", "working")]),
     workspace("w2", [pane("w2:p1", "pi", "done")]),
