@@ -2122,47 +2122,38 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   animation: hwc-view-in 200ms ease-out;
 }
 
-/* 2x2 までの分割。区切り線はセルの隙間から見せる。 */
+/* 分割は方向つきの木。区切り線はセルの隙間から見せる（ADR 0061）。 */
 .hwc-split {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  display: grid;
+  display: flex;
   gap: 1px;
   background: var(--color-line);
 }
 
-.hwc-split[data-count="2"] {
-  grid-template-columns: 1fr 1fr;
+.hwc-split[data-dir="row"] {
+  flex-direction: row;
 }
 
-.hwc-split[data-count="3"] {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-}
-
-/* 3 枚のときは、1 枚目を左に縦いっぱい、残りを右に積む。 */
-.hwc-split[data-count="3"] > .hwc-split-cell:first-child {
-  grid-row: span 2;
-}
-
-.hwc-split[data-count="4"] {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
+.hwc-split[data-dir="col"] {
+  flex-direction: column;
 }
 
 .hwc-split-cell {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   background: var(--color-content);
-  /* 高さはグリッドの 1fr で確定するので containment は安全。中の 55cqh と
-     バーの有無の判定をセル基準にするために置く。 */
+  /* 高さは親の flex で確定するので containment は安全。中の 55cqh とバーの有無の
+     判定をセル基準にするために置く。 */
   container: hwc-cell / size;
 }
 
 /* セルの枠はスロット位置の色。current は濃く、他のスロットは控えめにして、タブと
-   一覧の現在行と同じ色で結び付ける（ADR 0058）。 */
+   一覧の現在行と同じ色で結び付ける（ADR 0058 / 0061）。 */
 .hwc-split-cell {
   position: relative;
 }
@@ -2199,70 +2190,81 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   border-color: var(--slot-color, var(--color-accent));
 }
 
-/* 枠は複数セルのどれが current かを示す。実ペインが 1 枚なら対象がないので出さない。
-   ドロップ先のガイドは落とせる場所を示す別の情報なので、対象から除いて残す（ADR 0058）。 */
-.hwc-split[data-filled="1"]
-  > .hwc-split-cell:not(.hwc-split-cell--empty):not([data-drop-target="true"])::after {
+/* 枠は複数セルのどれが current かを示す。実ペインが 1 枚なら対象がないので出さない。 */
+.hwc-detail-grid[data-single="true"] .hwc-split-cell::after {
   border: 0;
 }
 
-/* 空きスロットは同じ位置の色の薄い破線。中央に文言は置かない。 */
-.hwc-split-cell--empty::after {
-  inset: var(--space-2);
-  border: 1px dashed color-mix(in oklab, var(--slot-color, var(--color-line)) 45%, transparent);
-  border-radius: var(--radius-sm);
-}
-
-.hwc-slot-close {
+/* ドラッグ中だけ出るプレビュー。落としたあとの形の半分を塗り、向きは文字でも示す。 */
+.hwc-drop {
   position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  z-index: 3;
+  z-index: 4;
   display: grid;
   place-items: center;
-  width: var(--space-6);
-  height: var(--space-6);
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--color-secondary);
-  cursor: pointer;
+  pointer-events: none;
+  background: color-mix(in oklab, var(--slot-color) 14%, transparent);
+  border: 1px dashed var(--slot-color);
+  animation: hwc-drop-in 120ms ease-out;
 }
 
-.hwc-slot-close:hover {
-  background: var(--color-raised);
+.hwc-drop[data-zone="top"] {
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 50%;
+}
+
+.hwc-drop[data-zone="bottom"] {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 50%;
+}
+
+.hwc-drop[data-zone="left"] {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 50%;
+}
+
+.hwc-drop[data-zone="right"] {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50%;
+}
+
+/* 中央はセル全体を囲む。入れ替えは分割ではないので、半面を塗らない。 */
+.hwc-drop[data-zone="center"] {
+  inset: var(--space-1);
+  align-content: start;
+  padding-top: var(--space-4);
+  background: color-mix(in oklab, var(--slot-color) 8%, transparent);
+  border: 1px solid var(--slot-color);
+}
+
+.hwc-drop > span {
+  padding: 2px var(--space-3);
+  border: 1px solid color-mix(in oklab, var(--slot-color) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-content) 84%, transparent);
   color: var(--color-text);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
 }
 
-/* ドロップ先のガイド。落とせない場所では何も出さない。 */
-.hwc-split-cell[data-drop-target="true"]::after {
-  border: 2px dashed var(--slot-color, var(--color-accent));
+@keyframes hwc-drop-in {
+  from {
+    opacity: 0;
+  }
 }
 
-/* 追加帯はスロットではない。4 色も × も持たず、破線の neutral だけにする。 */
+/* 追加帯は廃止した（ADR 0061）。グリッドは detail の残りをそのまま使う。 */
 .hwc-detail-grid {
   flex: 1;
   min-height: 0;
   display: flex;
-}
-
-.hwc-detail-grid > .hwc-split {
-  flex: 1;
-  min-width: 0;
-}
-
-.hwc-add-band {
-  flex: none;
-  width: calc(var(--space-8) + var(--space-2));
-  margin-left: 1px;
-  border-left: 1px dashed var(--color-control-line);
-  background: var(--color-content);
-}
-
-.hwc-add-band[data-drop-target="true"] {
-  border-left: 2px dashed var(--color-accent);
-  background: color-mix(in oklab, var(--color-accent) 10%, var(--color-content));
 }
 
 /* プレビューはタブの 1 つ。分割は止め、detail の残りをそのまま iframe に渡す。 */
