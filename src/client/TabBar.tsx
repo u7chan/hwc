@@ -25,10 +25,20 @@ type TabBarProps = {
   onSelectPane: (paneId: string) => void;
   onRemoveTab: (paneId: string) => void;
   onSelectPreview: () => void;
+  onClosePreview: () => void;
   onBack: () => void;
   // タブからのドラッグ。移動量で開始を判定するので、押した時点で位置だけ渡す。
   onDragStart: (event: PointerEvent, paneId: string) => void;
 };
+
+// 中クリックはブラウザのタブと同じく、その画面から外す操作にする。
+const removeOnAuxClick =
+  (remove: () => void) =>
+  (event: MouseEvent): void => {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    remove();
+  };
 
 // 詳細の上端。開いたペインの履歴を並べ、タブから外す入口を添える。
 export function TabBar(props: TabBarProps) {
@@ -92,11 +102,7 @@ export function TabBar(props: TabBarProps) {
                 title={`${detail} (${description})`}
                 data-pane-id={item.pane.id}
                 onPointerDown={(event) => props.onDragStart(event, item.pane.id)}
-                onAuxClick={(event) => {
-                  if (event.button !== 1) return;
-                  event.preventDefault();
-                  props.onRemoveTab(item.pane.id);
-                }}
+                onAuxClick={removeOnAuxClick(() => props.onRemoveTab(item.pane.id))}
                 onClick={() => props.onSelectPane(item.pane.id)}
               >
                 {parent ? <ParentMark /> : null}
@@ -132,9 +138,19 @@ export function TabBar(props: TabBarProps) {
               aria-label={`${props.preview.name} のプレビュー`}
               title={`${props.preview.name} のプレビュー`}
               onClick={props.onSelectPreview}
+              onAuxClick={removeOnAuxClick(props.onClosePreview)}
             >
               <EyeIcon size={14} />
               <span class="hwc-tab-label">{props.preview.name}</span>
+            </button>
+            <button
+              type="button"
+              class="hwc-tab-close"
+              aria-label="プレビューを閉じる"
+              title="プレビューを閉じる"
+              onClick={props.onClosePreview}
+            >
+              <CloseIcon size={12} />
             </button>
           </div>
         )}
