@@ -1,0 +1,1632 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>分割ビュー — 操作モック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Nerd Symbols Mono";
+        src: url("../../src/client/assets/fonts/NerdSymbolsMono.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      :root {
+        color-scheme: dark;
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-content: #131619;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-accent: #94baff;
+        --color-on-accent: #101215;
+        --color-selected: #23334e;
+        --color-line: #32373f;
+        --color-control-line: #606976;
+        --color-attention: #f6c57f;
+        --color-attention-bg: #352b1e;
+        --color-success: #8fdbb1;
+        --color-success-bg: #20392e;
+        --color-neutral: #b6becb;
+        --color-neutral-bg: #2b2f36;
+        --color-danger: #ff9ca4;
+        --color-slot-1: #7aa7ff;
+        --color-slot-2: #b79bff;
+        --color-slot-3: #6fcbd6;
+        --color-slot-4: #f38fbe;
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+        --radius-sm: 8px;
+        --radius-icon: 10px;
+        --radius-control: 12px;
+        --text-body: 1.0625rem;
+        --text-secondary: 0.8125rem;
+        --line-tight: 1.2;
+        --line-body: 1.5;
+        --row-head: 56px;
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-content: #ffffff;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-accent: #255cd6;
+        --color-on-accent: #ffffff;
+        --color-selected: #e9f0ff;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-attention: #a34c0a;
+        --color-attention-bg: #fff0da;
+        --color-success: #216549;
+        --color-success-bg: #e6f3ed;
+        --color-neutral: #5d6878;
+        --color-neutral-bg: #eef0f3;
+        --color-danger: #b3333c;
+        --color-slot-1: #2f62c8;
+        --color-slot-2: #7a4fd0;
+        --color-slot-3: #0f6f7d;
+        --color-slot-4: #b4457f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: var(--text-body);
+        line-height: var(--line-body);
+      }
+
+      button {
+        font: inherit;
+        color: inherit;
+      }
+
+      /* モック全体の見出し。アプリの外側なので、アプリの面とは分けて置く。 */
+      .mock-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        height: 68px;
+        padding: 0 var(--space-5);
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-surface);
+      }
+
+      .mock-title {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-3);
+        min-width: 0;
+      }
+
+      .mock-title h1 {
+        flex: none;
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+
+      .mock-title p {
+        margin: 0;
+        overflow: hidden;
+        color: var(--color-secondary);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mock-tools {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .mock-tools .group {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-bg);
+      }
+
+      .mock-tools button {
+        height: 30px;
+        padding: 0 10px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-size: 12px;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .mock-tools .group button {
+        border: 0;
+        background: transparent;
+      }
+
+      .mock-tools button:hover {
+        background: var(--color-raised);
+      }
+
+      .mock-tools button[aria-pressed="true"] {
+        background: var(--color-selected);
+        color: var(--color-text);
+      }
+
+      .mock-tools .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+      }
+
+      .mock-tools .toggle::before {
+        content: "";
+        width: 12px;
+        height: 12px;
+        border: 1px solid var(--color-control-line);
+        border-radius: 4px;
+      }
+
+      .mock-tools .toggle[aria-pressed="true"]::before {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+        box-shadow: inset 0 0 0 2px var(--color-surface);
+      }
+
+      .frame {
+        display: flex;
+        height: calc(100vh - 68px);
+        min-height: 0;
+        background: var(--color-bg);
+      }
+
+      /* 一覧 */
+
+      .list {
+        flex: none;
+        width: 336px;
+        min-height: 0;
+        padding: var(--space-2) 0;
+        border-right: 1px solid var(--color-line);
+        overflow: auto;
+      }
+
+      .scope {
+        display: flex;
+        margin: 0 var(--space-3) var(--space-2);
+        padding: 2px;
+        border-radius: var(--radius-control);
+        background: var(--color-raised);
+      }
+
+      .scope button {
+        flex: 1;
+        height: 30px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--color-secondary);
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .scope button[aria-pressed="true"] {
+        background: var(--color-surface);
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      .scope .count {
+        margin-left: 4px;
+        color: var(--color-secondary);
+        font-weight: 400;
+      }
+
+      .space {
+        padding: 0 0 var(--space-3);
+      }
+
+      .space + .space {
+        margin-top: var(--space-1);
+        border-top: 1px solid var(--color-line);
+        padding-top: var(--space-3);
+      }
+
+      .space-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        height: 44px;
+        padding: 0 var(--space-4) 0 var(--space-4);
+        color: var(--color-text);
+      }
+
+      .space-head .glyph {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--color-line);
+        border-radius: 6px;
+        color: var(--color-secondary);
+        font-size: 11px;
+      }
+
+      .space-head .name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        font-size: 14px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .space-head .count {
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .tab-group {
+        padding-left: var(--space-5);
+      }
+
+      .group-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        height: 32px;
+        padding: 0 var(--space-4) 0 var(--space-2);
+        color: var(--color-text);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .group-head .count {
+        color: var(--color-secondary);
+        font-weight: 400;
+      }
+
+      .pane-row {
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        align-items: center;
+        column-gap: var(--space-2);
+        margin: 2px var(--space-2);
+        padding: 8px var(--space-2);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+      }
+
+      .pane-row .line {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-width: 0;
+      }
+
+      .pane-row:hover {
+        background: var(--color-raised);
+      }
+
+      .pane-row[data-selected="true"] {
+        background: var(--color-selected);
+      }
+
+      .pane-row .status {
+        grid-row: span 2;
+        align-self: center;
+      }
+
+      .pane-row .name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pane-row .sub {
+        overflow: hidden;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pane-row .tag {
+        flex: none;
+        padding: 0 6px;
+        border: 1px solid var(--color-line);
+        border-radius: 6px;
+        color: var(--color-secondary);
+        font-size: 10px;
+        line-height: 18px;
+        white-space: nowrap;
+      }
+
+      /* 状態の記号。色だけに意味を持たせず、形でも区別する。 */
+      .status {
+        position: relative;
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+        color: var(--color-neutral);
+      }
+
+      .status[data-status="working"] {
+        color: var(--color-accent);
+      }
+
+      .status[data-status="done"] {
+        color: var(--color-success);
+      }
+
+      .status[data-status="error"] {
+        color: var(--color-danger);
+      }
+
+      .status svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .status[data-status="working"] svg {
+        animation: turn 0.9s linear infinite;
+      }
+
+      @keyframes turn {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .status[data-status="working"] svg {
+          animation-duration: 3s;
+        }
+      }
+
+      /* 詳細 */
+
+      .detail {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .tabbar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        height: 52px;
+        padding: var(--space-2) var(--space-3) var(--space-1);
+        border-bottom: 1px solid var(--color-line);
+        overflow: hidden;
+      }
+
+      .icon-button {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-icon);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .icon-button:hover {
+        background: var(--color-raised);
+      }
+
+      .tabs {
+        display: flex;
+        gap: 2px;
+        min-width: 0;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .tabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      .tab-item {
+        position: relative;
+        display: flex;
+        flex: none;
+        align-items: center;
+        border-radius: var(--radius-icon);
+      }
+
+      .tab-item:hover {
+        background: var(--color-raised);
+      }
+
+      .tab-item[data-selected="true"] {
+        background: var(--color-surface);
+        box-shadow: inset 0 0 0 1px var(--color-line);
+      }
+
+      .tab {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        height: 36px;
+        padding: 0 var(--space-2) 0 var(--space-3);
+        border: 0;
+        background: transparent;
+        color: var(--color-secondary);
+        font-size: 13px;
+        white-space: nowrap;
+        cursor: grab;
+        touch-action: none;
+      }
+
+      .tab-item[data-selected="true"] .tab {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      /* スロット色はタブとセルで共有する。グリッド外のタブは無色。 */
+      .tab-item[data-slot]::before {
+        content: "";
+        position: absolute;
+        top: 10px;
+        bottom: 10px;
+        left: 4px;
+        width: 3px;
+        border-radius: 2px;
+        background: var(--slot);
+      }
+
+      .tab-item[data-slot] .tab {
+        padding-left: var(--space-4);
+      }
+
+      .tab-close {
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        margin-right: 6px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--color-secondary);
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .tab-item:hover .tab-close,
+      .tab-item:focus-within .tab-close {
+        opacity: 1;
+      }
+
+      .tab-close:hover {
+        background: var(--color-raised);
+        color: var(--color-text);
+      }
+
+      .stage {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        background: var(--color-line);
+      }
+
+      .split {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        gap: 1px;
+        background: var(--color-line);
+      }
+
+      .split[data-dir="row"] {
+        flex-direction: row;
+      }
+
+      .split[data-dir="col"] {
+        flex-direction: column;
+      }
+
+      .cell {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-content);
+        container: cell / inline-size;
+      }
+
+      /* 複数セルのときだけ枠を出す。current は 2px、他は 1px。 */
+      .cell::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        border: 1px solid color-mix(in oklab, var(--slot) 35%, transparent);
+        pointer-events: none;
+      }
+
+      .cell[data-current="true"]::after {
+        border-width: 2px;
+        border-color: var(--slot);
+      }
+
+      .stage[data-single="true"] .cell::after {
+        border: 0;
+      }
+
+      .pane-head {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 40px;
+        padding: 0 var(--space-4);
+        color: var(--color-secondary);
+        font-size: 12px;
+        overflow: hidden;
+      }
+
+      .pane-head .agent {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 16px;
+        height: 16px;
+        color: var(--color-agent, var(--color-secondary));
+      }
+
+      .pane-head .name {
+        overflow: hidden;
+        color: var(--color-text);
+        font-size: 13px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pane-head .branch {
+        overflow: hidden;
+        font-family: var(--font-mono);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pane-head .spacer {
+        flex: 1;
+      }
+
+      .pane-head .pane-id {
+        flex: none;
+        font-family: var(--font-mono);
+      }
+
+      .pane-head .pane-menu {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        margin-right: -4px;
+        padding: 0;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .pane-head .pane-menu:hover {
+        background: var(--color-raised);
+        color: var(--color-text);
+      }
+
+      .pane-output {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: var(--space-2) var(--space-4) var(--space-4);
+        scrollbar-width: thin;
+      }
+
+      .msg {
+        max-width: 46rem;
+        margin: 0 auto;
+        font-size: 14px;
+        line-height: 1.75;
+      }
+
+      .msg + .msg {
+        margin-top: var(--space-4);
+        padding-top: var(--space-3);
+        border-top: 1px solid color-mix(in oklab, var(--color-line) 60%, transparent);
+      }
+
+      .msg p {
+        margin: 0;
+      }
+
+      .msg p + p {
+        margin-top: var(--space-2);
+      }
+
+      .msg-meta {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin-top: var(--space-1);
+        color: var(--color-secondary);
+        font-size: 11px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: var(--space-2);
+        padding: 3px 10px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-sm);
+        color: var(--color-text);
+        font-size: 12px;
+      }
+
+      .terminal {
+        margin: 0;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.7;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .terminal b {
+        color: var(--color-text);
+        font-weight: 400;
+      }
+
+      .terminal .ok {
+        color: var(--color-success);
+      }
+
+      .composer {
+        flex: none;
+        padding: var(--space-2) var(--space-4) var(--space-3);
+        border-top: 1px solid var(--color-line);
+      }
+
+      .composer-line {
+        display: flex;
+        align-items: flex-end;
+        gap: var(--space-2);
+        max-width: 46rem;
+        margin: 0 auto;
+      }
+
+      .composer-add {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-icon);
+        background: transparent;
+        color: var(--color-text);
+        font-size: 18px;
+        cursor: pointer;
+      }
+
+      .composer-field {
+        flex: 1;
+        min-width: 0;
+        height: 34px;
+        padding: 6px 0;
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 1.5;
+        outline: none;
+      }
+
+      .composer-field::placeholder {
+        color: var(--color-secondary);
+      }
+
+      .composer-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+        max-width: 46rem;
+        margin: var(--space-2) auto 0;
+      }
+
+      .composer-actions .spacer {
+        flex: 1;
+      }
+
+      .meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 10px;
+        border: 1px solid var(--color-line);
+        border-radius: 999px;
+        color: var(--color-secondary);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .meta b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      .send {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-icon);
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+        cursor: pointer;
+      }
+
+      .send[data-mode="stop"] {
+        background: color-mix(in oklab, var(--color-accent) 22%, var(--color-content));
+        color: var(--color-accent);
+      }
+
+      /* セルが狭いときは補助チップを落とす。本文の幅を優先する。 */
+      @container cell (max-width: 430px) {
+        .meta--model,
+        .pane-head .branch {
+          display: none;
+        }
+
+        .msg {
+          font-size: 13px;
+        }
+      }
+
+      /* ドラッグ中のプレビュー。ドラッグ中だけ出る。 */
+      .drop {
+        position: absolute;
+        z-index: 4;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        background: color-mix(in oklab, var(--slot) 14%, transparent);
+        border: 1px dashed var(--slot);
+        animation: drop-in 120ms ease-out;
+      }
+
+      .drop span {
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--color-content) 84%, transparent);
+        border: 1px solid color-mix(in oklab, var(--slot) 45%, transparent);
+        color: var(--color-text);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .drop[data-zone="top"] {
+        top: 0;
+        right: 0;
+        left: 0;
+        height: 50%;
+      }
+
+      .drop[data-zone="bottom"] {
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 50%;
+      }
+
+      .drop[data-zone="left"] {
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 50%;
+      }
+
+      .drop[data-zone="right"] {
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 50%;
+      }
+
+      .drop[data-zone="center"] {
+        inset: 4px;
+        padding-top: 16px;
+        align-content: start;
+        background: color-mix(in oklab, var(--slot) 8%, transparent);
+        border: 1px solid var(--slot);
+      }
+
+      @keyframes drop-in {
+        from {
+          opacity: 0;
+        }
+      }
+
+      /* 現状の追加帯。比較用に残す。 */
+      .add-band {
+        flex: none;
+        width: 40px;
+        margin-left: 1px;
+        border-left: 1px dashed var(--color-control-line);
+        background: var(--color-content);
+      }
+
+      .drag-ghost {
+        position: fixed;
+        z-index: 20;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border: 1px solid var(--color-accent);
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        box-shadow: 0 6px 20px rgb(0 0 0 / 35%);
+        color: var(--color-text);
+        font-size: 12px;
+        pointer-events: none;
+        transform: translate(14px, 14px);
+      }
+
+      .drag-ghost::before {
+        content: "";
+        width: 3px;
+        height: 12px;
+        border-radius: 2px;
+        background: var(--slot);
+      }
+
+      body[data-dragging="true"] {
+        cursor: grabbing;
+        user-select: none;
+      }
+
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        z-index: 30;
+        padding: 8px 14px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+        box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+        font-size: 12px;
+        transform: translateX(-50%);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="mock-head">
+      <div class="mock-title">
+        <h1>分割ビュー — 操作モック</h1>
+        <p>
+          タブをセルの端へドラッグするとその方向に分割、中央へ落とすと入れ替え。常設の追加帯は出ません。
+        </p>
+      </div>
+      <div class="mock-tools">
+        <div class="group" role="group" aria-label="レイアウトの例">
+          <button type="button" data-preset="row">2 枚</button>
+          <button type="button" data-preset="col">上下</button>
+          <button type="button" data-preset="t">3 枚</button>
+          <button type="button" data-preset="grid">4 枚</button>
+        </div>
+        <button
+          type="button"
+          class="toggle"
+          id="band-toggle"
+          aria-pressed="false"
+          title="比較用に、現行の常設追加帯を出します"
+        >
+          追加帯（現状）
+        </button>
+        <button type="button" id="theme-toggle">ライト</button>
+        <button type="button" id="reset">リセット</button>
+      </div>
+    </header>
+
+    <div class="frame">
+      <aside class="list" aria-label="ペイン一覧">
+        <div class="scope" role="group" aria-label="一覧の絞り込み">
+          <button type="button" aria-pressed="true">すべて</button>
+          <button type="button" aria-pressed="false">アクティブ<span class="count">4</span></button>
+        </div>
+
+        <section class="space">
+          <div class="space-head">
+            <span class="glyph" aria-hidden="true">▦</span>
+            <span class="name">acme-dashboard</span>
+            <span class="count">4</span>
+          </div>
+          <div class="tab-group">
+            <div class="group-head">web <span class="count">2</span></div>
+            <div class="pane-row" data-selected="true">
+              <span class="status" data-status="working" aria-hidden="true"></span>
+              <span class="line"
+                ><span class="name">frontend</span><span class="tag">親</span></span
+              >
+              <span class="sub">feat/empty-state</span>
+            </div>
+            <div class="pane-row">
+              <span class="status" data-status="idle" aria-hidden="true"></span>
+              <span class="line"><span class="name">shell</span></span>
+              <span class="sub">feat/empty-state</span>
+            </div>
+
+            <div class="group-head">checks <span class="count">2</span></div>
+            <div class="pane-row">
+              <span class="status" data-status="idle" aria-hidden="true"></span>
+              <span class="line"><span class="name">review</span></span>
+              <span class="sub">feat/empty-state</span>
+            </div>
+            <div class="pane-row">
+              <span class="status" data-status="done" aria-hidden="true"></span>
+              <span class="line"><span class="name">verify</span></span>
+              <span class="sub">feat/empty-state</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="space">
+          <div class="space-head">
+            <span class="glyph" aria-hidden="true">▦</span>
+            <span class="name">docs-v2</span>
+            <span class="count">1</span>
+          </div>
+          <div class="tab-group">
+            <div class="group-head">docs <span class="count">1</span></div>
+            <div class="pane-row">
+              <span class="status" data-status="done" aria-hidden="true"></span>
+              <span class="line"><span class="name">README</span></span>
+              <span class="sub">docs/rewrite</span>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <main class="detail">
+        <div class="tabbar">
+          <button type="button" class="icon-button" aria-label="一覧へ戻る">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </button>
+          <div class="tabs" id="tabs" role="tablist" aria-label="開いているペイン"></div>
+        </div>
+        <div class="stage" id="stage"></div>
+      </main>
+    </div>
+
+    <script>
+      const PANES = {
+        frontend: {
+          name: "frontend",
+          space: "acme-dashboard · web",
+          id: "w1:p1",
+          agent: "pi",
+          status: "working",
+          branch: "feat/empty-state",
+          model: "claude-sonnet-4-5",
+          context: "14k/200k (7.0%)",
+        },
+        review: {
+          name: "review",
+          space: "acme-dashboard · checks",
+          id: "w1:p3",
+          agent: "claude",
+          status: "idle",
+          branch: "feat/empty-state",
+          model: "claude-opus-4-1",
+          context: "32k/200k (16%)",
+        },
+        shell: {
+          name: "shell",
+          space: "acme-dashboard · web",
+          id: "w1:p2",
+          agent: "shell",
+          status: "idle",
+          branch: "feat/empty-state",
+        },
+        docs: {
+          name: "README",
+          space: "docs-v2 · docs",
+          id: "w2:p1",
+          agent: "pi",
+          status: "done",
+          branch: "docs/rewrite",
+          model: "gpt-5.1-codex",
+          context: "8k/400k (2.0%)",
+        },
+      };
+
+      const BODY = {
+        frontend: `
+          <div class="msg">
+            <p>空状態のモックを作りました。README の「はじめに」に置く想定です。</p>
+            <span class="chip">mock.html HTML</span>
+            <div class="msg-meta"><span>18:00</span></div>
+          </div>
+          <div class="msg">
+            <p>確認したい点が 3 つあります。</p>
+            <p>1. 説明文の長さは今の半分くらいで足りるか<br />2. スクリーンショットは暗い画面だけか<br />3. 導線は右上の設定からで良いか</p>
+            <div class="msg-meta"><span>18:02</span><span>3 分前</span></div>
+          </div>`,
+        review: `
+          <div class="msg">
+            <p>この差分を見てください。分割の境界が 1px で、セルごとに余白が揃っているかが主な確認点です。</p>
+            <div class="msg-meta"><span>17:48</span></div>
+          </div>
+          <div class="msg">
+            <p>境界は <code>gap: 1px</code> で揃っています。左のセルだけ見出しの左余白が 4px 広いので、そこだけ直すと揃います。</p>
+            <div class="msg-meta"><span>17:52</span></div>
+          </div>`,
+        shell: `
+          <pre class="terminal"><b>$</b> bun run typecheck
+<span class="ok">✓</span> tsc --noEmit
+<b>$</b> bun run test
+ 412 pass
+ 0 fail
+<b>$</b> <span class="cursor">▌</span></pre>`,
+        docs: `
+          <div class="msg">
+            <p>README の構成を、導入・使い方・設計メモの 3 つに絞りました。設計メモは <code>docs/</code> へのリンクだけにしています。</p>
+            <div class="msg-meta"><span>16:20</span></div>
+          </div>`,
+      };
+
+      const AGENT_COLOR = {
+        pi: "#8ab4ff",
+        claude: "#e08a68",
+        shell: "var(--color-secondary)",
+      };
+
+      const STATUS_ICON = {
+        working: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9" stroke-linecap="round"/></svg>`,
+        idle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/></svg>`,
+        done: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12.5l4.5 4.5L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+        error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 7v6" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="9"/></svg>`,
+      };
+
+      const stage = document.querySelector("#stage");
+      const tabsEl = document.querySelector("#tabs");
+      const bandToggle = document.querySelector("#band-toggle");
+      const themeToggle = document.querySelector("#theme-toggle");
+
+      const leaf = (pane) => ({ kind: "leaf", pane });
+      const split = (dir, a, b) => ({ kind: "split", dir, children: [a, b] });
+
+      let layout = split("row", leaf("frontend"), leaf("review"));
+      let tabs = ["frontend", "review", "shell", "docs"];
+      let current = "frontend";
+      let showBand = false;
+
+      function leafPanes(node) {
+        if (node === null) return [];
+        if (node.kind === "leaf") return [node.pane];
+        return node.children.flatMap(leafPanes);
+      }
+
+      function paneCount() {
+        return leafPanes(layout).length;
+      }
+
+      function slotOf(pane) {
+        return leafPanes(layout).indexOf(pane) + 1;
+      }
+
+      function inLayout(pane) {
+        return leafPanes(layout).includes(pane);
+      }
+
+      function paneHTML(pane) {
+        const p = PANES[pane];
+        const agentIcon =
+          p.agent === "shell"
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7l6 5-6 5M13 17h6" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 8l5 4-5 4M13 16h4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        const send =
+          p.status === "working"
+            ? `<button type="button" class="send" data-mode="stop" aria-label="停止"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>`
+            : `<button type="button" class="send" aria-label="送信"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
+        return `
+          <header class="pane-head">
+            <span class="agent" style="--color-agent: ${AGENT_COLOR[p.agent]}" aria-hidden="true">${agentIcon}</span>
+            <span class="name">${p.name}</span>
+            <span class="branch">${p.branch}</span>
+            <span class="spacer"></span>
+            <span class="pane-id">${p.id}</span>
+            <button type="button" class="pane-menu" aria-label="操作メニュー">⋮</button>
+          </header>
+          <div class="pane-output">${BODY[pane]}</div>
+          <form class="composer" onsubmit="return false">
+            <div class="composer-line">
+              <button type="button" class="composer-add" aria-label="入力欄の操作">+</button>
+              <input class="composer-field" type="text" placeholder="メッセージを入力" aria-label="${p.name} のペインへ送る" />
+              ${send}
+            </div>
+            <div class="composer-actions">
+              <span class="spacer"></span>
+              ${
+                p.model
+                  ? `<span class="meta meta--model"><b>${p.model}</b>${p.model.includes("claude") ? " high" : ""}</span>`
+                  : ""
+              }
+              <span class="meta">${p.context ?? ""}</span>
+            </div>
+          </form>`;
+      }
+
+      function renderCell(pane, parentDir) {
+        const cell = document.createElement("section");
+        cell.className = "cell";
+        cell.dataset.pane = pane;
+        cell.dataset.slot = String(slotOf(pane));
+        cell.dataset.current = String(pane === current);
+        cell.style.setProperty("--slot", `var(--color-slot-${slotOf(pane)})`);
+        if (parentDir) cell.dataset.parentDir = parentDir;
+        cell.innerHTML = paneHTML(pane);
+        return cell;
+      }
+
+      function renderNode(node, parentDir) {
+        if (node.kind === "leaf") return renderCell(node.pane, parentDir);
+        const el = document.createElement("div");
+        el.className = "split";
+        el.dataset.dir = node.dir;
+        for (const child of node.children) el.append(renderNode(child, node.dir));
+        return el;
+      }
+
+      function renderTabs() {
+        tabsEl.replaceChildren(
+          ...tabs.map((pane) => {
+            const p = PANES[pane];
+            const item = document.createElement("div");
+            item.className = "tab-item";
+            item.dataset.selected = String(pane === current);
+            const slot = slotOf(pane);
+            if (slot > 0) {
+              item.dataset.slot = String(slot);
+              item.style.setProperty("--slot", `var(--color-slot-${slot})`);
+            }
+            item.innerHTML = `
+              <button type="button" role="tab" class="tab" data-pane="${pane}" aria-selected="${pane === current}" title="${p.space}">
+                <span>${p.name}</span>
+                <span class="status" data-status="${p.status}" aria-hidden="true">${STATUS_ICON[p.status]}</span>
+              </button>
+              <button type="button" class="tab-close" data-close="${pane}" aria-label="${p.name} をタブから外す">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
+              </button>`;
+            return item;
+          }),
+        );
+      }
+
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+      // 入れ替えと移動は、前の位置から新しい位置へ滑らせる（FLIP）。
+      // 分割で大きさが変わるときは寸法まで補間すると文字が伸びるので、位置だけ動かし、
+      // 新しく増えたセルはフェードで入れる。
+      function animateCells(previous) {
+        for (const cell of stage.querySelectorAll(".cell")) {
+          const before = previous.get(cell.dataset.pane);
+          if (before === undefined) {
+            cell.animate(
+              [
+                { opacity: 0, transform: "scale(0.985)" },
+                { opacity: 1, transform: "none" },
+              ],
+              { duration: 160, easing: "cubic-bezier(.2, 0, 0, 1)" },
+            );
+            continue;
+          }
+          const now = cell.getBoundingClientRect();
+          const dx = before.left - now.left;
+          const dy = before.top - now.top;
+          if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+          cell.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
+            duration: 200,
+            easing: "cubic-bezier(.2, 0, 0, 1)",
+          });
+        }
+      }
+
+      function render(animate = false) {
+        const previous = new Map();
+        if (animate && !reduceMotion.matches) {
+          for (const cell of stage.querySelectorAll(".cell")) {
+            previous.set(cell.dataset.pane, cell.getBoundingClientRect());
+          }
+        }
+        stage.dataset.single = String(paneCount() === 1);
+        stage.replaceChildren(renderNode(layout, null));
+        if (showBand && paneCount() < 4) {
+          const band = document.createElement("div");
+          band.className = "add-band";
+          stage.append(band);
+        }
+        renderTabs();
+        if (previous.size > 0) animateCells(previous);
+      }
+
+      /* レイアウト木の操作 */
+
+      function mapLeaves(node, fn) {
+        if (node === null) return null;
+        if (node.kind === "leaf") return fn(node);
+        const children = node.children.map((child) => mapLeaves(child, fn));
+        return { kind: "split", dir: node.dir, children };
+      }
+
+      function swapLeaves(a, b) {
+        layout = mapLeaves(layout, (node) =>
+          node.pane === a ? leaf(b) : node.pane === b ? leaf(a) : node,
+        );
+      }
+
+      function replaceLeaf(target, pane) {
+        layout = mapLeaves(layout, (node) => (node.pane === target ? leaf(pane) : node));
+      }
+
+      function removeLeaf(pane) {
+        layout = withoutLeaf(layout, pane);
+      }
+
+      // 入れ替え・移動のあとに残る木。同じペインを分割先にするときの向き判定に使う。
+      function withoutLeaf(node, pane) {
+        if (node === null) return null;
+        if (node.kind === "leaf") return node.pane === pane ? null : node;
+        const children = node.children
+          .map((child) => withoutLeaf(child, pane))
+          .filter((child) => child !== null);
+        if (children.length === 0) return null;
+        if (children.length === 1) return children[0];
+        return { kind: "split", dir: node.dir, children };
+      }
+
+      function parentDirOf(node, pane, dir = null) {
+        if (node === null) return null;
+        if (node.kind === "leaf") return node.pane === pane ? dir : null;
+        for (const child of node.children) {
+          const found = parentDirOf(child, pane, node.dir);
+          if (found !== null || (child.kind === "leaf" && child.pane === pane)) return found;
+        }
+        return null;
+      }
+
+      function splitLeaf(target, dir, before, pane) {
+        layout = mapLeaves(layout, (node) => {
+          if (node.pane !== target) return node;
+          return before ? split(dir, leaf(pane), node) : split(dir, node, leaf(pane));
+        });
+      }
+
+      /* ドラッグ */
+
+      let drag = null;
+      let overlayCell = null;
+
+      function statusChip(pane) {
+        const p = PANES[pane];
+        return `${p.name}`;
+      }
+
+      function startDrag(event, pane) {
+        if (event.button !== 0) return;
+        drag = { pane, x: event.clientX, y: event.clientY, active: false, ghost: null };
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp, { once: true });
+        window.addEventListener("pointercancel", cancelDrag, { once: true });
+        window.addEventListener("keydown", onKeyDown);
+      }
+
+      function activateDrag() {
+        drag.active = true;
+        document.body.dataset.dragging = "true";
+        const ghost = document.createElement("div");
+        ghost.className = "drag-ghost";
+        ghost.style.setProperty("--slot", `var(--color-slot-${Math.min(paneCount() + 1, 4)})`);
+        ghost.textContent = statusChip(drag.pane);
+        document.body.append(ghost);
+        drag.ghost = ghost;
+      }
+
+      function onPointerMove(event) {
+        if (!drag) return;
+        if (!drag.active) {
+          const moved = Math.hypot(event.clientX - drag.x, event.clientY - drag.y);
+          if (moved < 6) return;
+          activateDrag();
+        }
+        drag.ghost.style.left = `${event.clientX}px`;
+        drag.ghost.style.top = `${event.clientY}px`;
+        updateHover(event.clientX, event.clientY);
+      }
+
+      function zoneFor(cell, x, y) {
+        const rect = cell.getBoundingClientRect();
+        const u = (x - rect.left) / rect.width;
+        const v = (y - rect.top) / rect.height;
+        const parent = cell.dataset.parentDir;
+        if (parent === "row") return v < 0.32 ? "top" : v > 0.68 ? "bottom" : "center";
+        if (parent === "col") return u < 0.32 ? "left" : u > 0.68 ? "right" : "center";
+        const edge = [
+          ["left", u],
+          ["right", 1 - u],
+          ["top", v],
+          ["bottom", 1 - v],
+        ].sort((a, b) => a[1] - b[1])[0];
+        return edge[1] < 0.3 ? edge[0] : "center";
+      }
+
+      function zoneDirection(zone) {
+        if (zone === "top" || zone === "bottom") return { dir: "col", before: zone === "top" };
+        return { dir: "row", before: zone === "left" };
+      }
+
+      function canDrop(source, target, zone) {
+        if (source === target) return false;
+        const base = inLayout(source) ? withoutLeaf(layout, source) : layout;
+        if (zone === "center") return leafPanes(base).includes(target);
+        // 移動なら枚数は変わらず、外からの追加なら 1 枚増える。
+        if (leafPanes(base).length + 1 > 4) return false;
+        // 同じ向きのネストを作らない。3 列・3 段を避ける。
+        return parentDirOf(base, target) !== zoneDirection(zone).dir;
+      }
+
+      function clearOverlay() {
+        overlayCell?.querySelector(".drop")?.remove();
+        overlayCell = null;
+        if (drag) {
+          drag.cell = null;
+          drag.zone = null;
+        }
+      }
+
+      function updateHover(x, y) {
+        const element = document.elementFromPoint(x, y);
+        const cell = element?.closest(".cell") ?? null;
+        const zone = cell === null ? null : zoneFor(cell, x, y);
+        const target = cell?.dataset.pane ?? null;
+        const valid = cell !== null && canDrop(drag.pane, target, zone);
+        if (!valid) {
+          if (overlayCell !== null) clearOverlay();
+          return;
+        }
+        // 同じセル・同じ分割位置なら作り直さない。ドラッグ中に毎回作り直すと
+        // フェードがやり直されてちらつく。
+        if (cell === overlayCell && zone === drag.zone) return;
+        clearOverlay();
+        const drop = document.createElement("div");
+        drop.className = "drop";
+        drop.dataset.zone = zone;
+        drop.style.setProperty("--slot", cell.style.getPropertyValue("--slot"));
+        const label =
+          zone === "center"
+            ? inLayout(drag.pane)
+              ? "ここで入れ替え"
+              : "この位置に表示"
+            : { top: "上に追加", bottom: "下に追加", left: "左に追加", right: "右に追加" }[zone];
+        drop.innerHTML = `<span>${label}</span>`;
+        cell.append(drop);
+        overlayCell = cell;
+        drag.cell = cell;
+        drag.zone = zone;
+      }
+
+      function applyDrop() {
+        const { pane, cell, zone } = drag;
+        if (!cell || !zone) return;
+        const target = cell.dataset.pane;
+        if (!canDrop(pane, target, zone)) return;
+        if (zone === "center") {
+          if (inLayout(pane)) swapLeaves(pane, target);
+          else replaceLeaf(target, pane);
+        } else {
+          const { dir, before } = zoneDirection(zone);
+          if (inLayout(pane)) {
+            if (paneCount() === 1) return;
+            removeLeaf(pane);
+          }
+          splitLeaf(target, dir, before, pane);
+        }
+        if (!tabs.includes(pane)) tabs.push(pane);
+        current = pane;
+        render(true);
+      }
+
+      function endDrag() {
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("keydown", onKeyDown);
+        clearOverlay();
+        drag?.ghost?.remove();
+        drag = null;
+        delete document.body.dataset.dragging;
+      }
+
+      function onPointerUp() {
+        if (!drag) return;
+        if (drag.active) applyDrop();
+        endDrag();
+      }
+
+      function cancelDrag() {
+        endDrag();
+      }
+
+      function onKeyDown(event) {
+        if (event.key === "Escape") cancelDrag();
+      }
+
+      tabsEl.addEventListener("pointerdown", (event) => {
+        const close = event.target.closest(".tab-close");
+        if (close) {
+          event.preventDefault();
+          removeTab(close.dataset.close);
+          return;
+        }
+        const tab = event.target.closest(".tab");
+        if (!tab) return;
+        event.preventDefault();
+        startDrag(event, tab.dataset.pane);
+      });
+
+      tabsEl.addEventListener("click", (event) => {
+        if (event.target.closest(".tab-close")) return;
+        const tab = event.target.closest(".tab");
+        if (!tab) return;
+        selectTab(tab.dataset.pane);
+      });
+
+      function selectTab(pane) {
+        if (!inLayout(pane)) {
+          if (current !== null && inLayout(current)) replaceLeaf(current, pane);
+          else if (paneCount() < 4) splitLeaf(leafPanes(layout)[0], "row", false, pane);
+        }
+        current = pane;
+        render(true);
+      }
+
+      function removeTab(pane) {
+        tabs = tabs.filter((id) => id !== pane);
+        if (inLayout(pane)) removeLeaf(pane);
+        if (current === pane) current = leafPanes(layout)[0] ?? null;
+        if (tabs.length === 0) tabs = [...leafPanes(layout)];
+        render(true);
+      }
+
+      /* 見本のレイアウトと操作 */
+
+      const PRESETS = {
+        row: () => split("row", leaf("frontend"), leaf("review")),
+        col: () => split("col", leaf("frontend"), leaf("review")),
+        t: () => split("col", split("row", leaf("frontend"), leaf("review")), leaf("shell")),
+        grid: () =>
+          split(
+            "row",
+            split("col", leaf("frontend"), leaf("shell")),
+            split("col", leaf("review"), leaf("docs")),
+          ),
+      };
+
+      document.querySelectorAll("[data-preset]").forEach((button) => {
+        button.addEventListener("click", () => {
+          layout = PRESETS[button.dataset.preset]();
+          current = leafPanes(layout)[0];
+          render(true);
+        });
+      });
+
+      bandToggle.addEventListener("click", () => {
+        showBand = !showBand;
+        bandToggle.setAttribute("aria-pressed", String(showBand));
+        render();
+      });
+
+      themeToggle.addEventListener("click", () => {
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        themeToggle.textContent = next === "dark" ? "ライト" : "ダーク";
+      });
+
+      document.querySelector("#reset").addEventListener("click", () => {
+        layout = split("row", leaf("frontend"), leaf("review"));
+        tabs = ["frontend", "review", "shell", "docs"];
+        current = "frontend";
+        render(true);
+      });
+
+      render();
+    </script>
+  </body>
+</html>

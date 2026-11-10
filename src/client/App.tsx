@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { ChatFile } from "../server/chat/contract";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
@@ -84,12 +84,11 @@ import {
 } from "./selection";
 import {
   EMPTY_SPLIT_VIEW,
-  MAX_SLOTS,
-  addToSlots,
+  canDrop,
   clearCurrent,
-  closeEmptySlot,
   currentSlotIndex,
-  dropOnSlot,
+  dropOnPane,
+  leafPanes,
   multiSpace,
   nextOpenPane,
   normalizeSplitView,
@@ -97,6 +96,8 @@ import {
   removeTab,
   startSplitView,
   syncSplitView,
+  type DropZone,
+  type SplitNode,
   type SplitView,
 } from "./split-view";
 import {
@@ -175,23 +176,40 @@ type OperationMenu = {
   open: boolean;
 };
 
-// ドラッグの落とし先。追加帯はスロットではないので、別の種類として持つ。
-type DropTarget = { kind: "slot"; index: number } | { kind: "add" };
+// ドラッグの落とし先。中央は入れ替え、端はその方向への分割（ADR 0061）。
+type DropTarget = { pane: string; zone: DropZone };
 
 // クリックと区別する移動量。これ未満では掴んだだけで、選択も並べ替えも始めない。
 const DRAG_THRESHOLD = 6;
 
-function dropTargetAt(x: number, y: number): DropTarget | null {
-  // ビューポートの外では何も返らない。追加帯のドロップとして扱うと、掴んだまま
-  // 画面外で離しただけでスロットが増える。
+// ポインタがセルのどこにあるか。親の分割軸と直交する向きだけを返す。
+function dropZoneAt(cell: HTMLElement, x: number, y: number): DropZone {
+  const rect = cell.getBoundingClientRect();
+  const u = (x - rect.left) / rect.width;
+  const v = (y - rect.top) / rect.height;
+  const parent = cell.dataset.dropParent;
+  if (parent === "row") return v < 0.32 ? "top" : v > 0.68 ? "bottom" : "center";
+  if (parent === "col") return u < 0.32 ? "left" : u > 0.68 ? "right" : "center";
+  // 親が無い単独セルは 4 方向。最も近い辺を選ぶ。
+  const edges: readonly (readonly [DropZone, number])[] = [
+    ["left", u],
+    ["right", 1 - u],
+    ["top", v],
+    ["bottom", 1 - v],
+  ];
+  const nearest = edges.reduce((a, b) => (b[1] < a[1] ? b : a));
+  return nearest[1] < 0.3 ? nearest[0] : "center";
+}
+
+function dropTargetAt(x: number, y: number, source: string, view: SplitView): DropTarget | null {
+  // ビューポートの外では何も返らない。掴んだまま画面外で離しただけで分割しない。
   const element = document.elementFromPoint(x, y);
-  if (element === null) return null;
-  const slot = element.closest("[data-drop-slot]");
-  if (slot instanceof HTMLElement) {
-    const index = Number(slot.dataset.dropSlot);
-    return Number.isInteger(index) ? { kind: "slot", index } : null;
-  }
-  return element.closest("[data-drop-add]") === null ? null : { kind: "add" };
+  const cell = element?.closest("[data-drop-pane]");
+  if (!(cell instanceof HTMLElement)) return null;
+  const pane = cell.dataset.dropPane;
+  if (pane === undefined) return null;
+  const zone = dropZoneAt(cell, x, y);
+  return canDrop(view, source, pane, zone) ? { pane, zone } : null;
 }
 
 // メニューを閉じても続く操作。busy はメニューの外に置き、開き直しても実行中を出す。
@@ -268,6 +286,10 @@ export function App() {
     paneId: string;
     target: DropTarget | null;
   } | null>(null);
+  // 最新の木をイベントから引く。ドラッグの購読は 1 度しか張らない。
+  const splitRef = useRef<SplitView>(EMPTY_SPLIT_VIEW);
+  // ドロップの前後で位置を比べるための控え（ADR 0061）。
+  const flipRects = useRef<Map<string, DOMRect> | null>(null);
   // ドラッグ後の pointerup で click が成立しても、タブの選択を動かさない。
   const draggedSincePress = useRef(false);
   // 開閉の記憶は初期表示と切り替えのときだけ読む。描き直しには使わない。
@@ -432,14 +454,47 @@ export function App() {
       : syncSplitView(rememberedView.split, exists);
   const expanded = rememberedView === null ? NO_GROUPS : rememberedView.expanded;
   const selectedPaneId = split.current;
+  splitRef.current = split;
 
   const pane = state ? findPane(state, selectedPaneId) : null;
 
-  // タブ・スロット・選択は 1 つのキーに保存する。同じ内容を書き直さない。
-  const splitKey = `${split.openTabs.join(" ")}\n${split.current ?? ""}\n${split.slots.join(" ")}`;
+  // タブ・木・選択は 1 つのキーに保存する。同じ内容を書き直さない。
+  const splitKey = `${split.openTabs.join(" ")}\n${split.current ?? ""}\n${JSON.stringify(split.layout)}`;
   useEffect(() => {
     if (state === null) return;
     writeSplitView(split);
+  }, [splitKey]);
+
+  // ドロップで位置が変わったセルを、前の位置から滑らせる。分割で増えたセルは
+  // フェードで入れる。初回表示とウィンドウのリサイズでは動かさない（ADR 0061）。
+  useLayoutEffect(() => {
+    const before = flipRects.current;
+    flipRects.current = null;
+    if (before === null || before.size === 0) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (const cell of document.querySelectorAll<HTMLElement>("[data-drop-pane]")) {
+      const paneId = cell.dataset.dropPane;
+      if (paneId === undefined) continue;
+      const previous = before.get(paneId);
+      if (previous === undefined) {
+        cell.animate(
+          [
+            { opacity: 0, transform: "scale(0.985)" },
+            { opacity: 1, transform: "none" },
+          ],
+          { duration: 160, easing: "cubic-bezier(.2, 0, 0, 1)" },
+        );
+        continue;
+      }
+      const now = cell.getBoundingClientRect();
+      const dx = previous.left - now.left;
+      const dy = previous.top - now.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      cell.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
+        duration: 200,
+        easing: "cubic-bezier(.2, 0, 0, 1)",
+      });
+    }
   }, [splitKey]);
 
   // セルごとに文脈を引く。1 つの context を共有すると、別スペースを並べたときに
@@ -841,7 +896,7 @@ export function App() {
       ? []
       : [
           ...new Set([
-            ...split.slots.filter((id): id is string => id !== null),
+            ...leafPanes(split.layout),
             ...(selectedPaneId === null ? [] : [selectedPaneId]),
           ]),
         ].filter((id) => findPane(state, id)?.agent === null);
@@ -911,10 +966,19 @@ export function App() {
   const detailStatus = wide || connection === "live" ? null : connChip;
 
   // ドラッグの適用先。タブとセルの両方から掴むので、最新の状態を持つ関数を ref に置く。
+  const captureFlip = () => {
+    const rects = new Map<string, DOMRect>();
+    for (const cell of document.querySelectorAll<HTMLElement>("[data-drop-pane]")) {
+      const paneId = cell.dataset.dropPane;
+      if (paneId !== undefined) rects.set(paneId, cell.getBoundingClientRect());
+    }
+    flipRects.current = rects;
+  };
   const applyDrop = (paneId: string, target: DropTarget) => {
-    const next =
-      target.kind === "add" ? addToSlots(split, paneId) : dropOnSlot(split, paneId, target.index);
-    if (next !== split) setView({ split: next, expanded });
+    const next = dropOnPane(split, paneId, target.pane, target.zone);
+    if (next === split) return;
+    captureFlip();
+    setView({ split: next, expanded });
   };
   const applyDropLatest = useRef(applyDrop);
   applyDropLatest.current = applyDrop;
@@ -939,7 +1003,12 @@ export function App() {
         draggedSincePress.current = true;
       }
       event.preventDefault();
-      dropTargetRef.current = dropTargetAt(event.clientX, event.clientY);
+      dropTargetRef.current = dropTargetAt(
+        event.clientX,
+        event.clientY,
+        dragState.paneId,
+        splitRef.current,
+      );
       setDragging({ paneId: dragState.paneId, target: dropTargetRef.current });
     };
     const onEnd = () => {
@@ -961,20 +1030,14 @@ export function App() {
     };
   }, []);
 
-  // グリッドはスロットの並び。空きもセルとして置き、レイアウトはスロットの長さで決まる。
-  const slotPanes =
-    state === null ? [] : split.slots.map((id) => (id === null ? null : findPane(state, id)));
-  const cells = slotPanes.flatMap((item) => (item === null ? [] : [item]));
+  // グリッドは木の葉。空きは持たない（ADR 0061）。
+  const layoutPanes = leafPanes(split.layout);
   // 現在ペインが入っているスロット（1 始まり）。一覧の現在行とタブの色に使う。
   const currentSlot = currentSlotIndex(split);
-  // セルが並ぶのは広い画面だけ。狭い画面は slots が 2 枚以上でも 1 枚表示なので、
-  // 分割セル向けの見出し・入力欄の畳み・スペース名・同期の表示をまとめて切り替える。
-  const splitCells = wide && cells.length > 1;
-  // グリッドと追加帯は広い画面で、current が実在するときだけ出す（ADR 0058）。
-  const gridOn = wide && pane !== null && split.slots.length > 0;
-  const addBandOn = gridOn && split.slots.length < MAX_SLOTS;
-  // 畳むかどうかは、セル数ではなく実際に並んでいるペイン数で決める。空きスロットが
-  // 増えても、読む相手が 1 枚なら入力欄は広く取る。
+  // セルが並ぶのは広い画面だけ。狭い画面は 1 枚表示なので、分割セル向けの表示を切り替える。
+  const splitCells = wide && layoutPanes.length > 1;
+  // グリッドは広い画面で、current が実在するときだけ出す。
+  const gridOn = wide && pane !== null && split.layout !== null;
   const compact = splitCells;
 
   // 4 枚の判定は BFF と同じタブの枚数で行う。
@@ -1058,6 +1121,89 @@ export function App() {
       onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
     />
   );
+
+  // ドラッグ中のプレビューの文言。中央は木の中なら入れ替え、外のタブなら置換。
+  const dropLabel = (zone: DropZone, moving: string | null): string => {
+    if (zone !== "center") {
+      return { top: "上に追加", bottom: "下に追加", left: "左に追加", right: "右に追加" }[zone];
+    }
+    return moving !== null && layoutPanes.includes(moving) ? "ここで入れ替え" : "この位置に表示";
+  };
+
+  // セルは木の葉。親の分割軸を data 属性に置き、ドラッグ中の向き判定に使う（ADR 0061）。
+  const renderCell = (paneId: string, parentDir: "row" | "col" | null) => {
+    if (state === null) return null;
+    const item = findPane(state, paneId);
+    if (item === null) return null;
+    const where = findPaneContext(state, paneId);
+    // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
+    // HWC から動かせないセルが current のままになる。
+    const activate = () => {
+      if (item.id !== pane?.id) select(item.id);
+    };
+    // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
+    // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
+    const activateFromFocus = (event: FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (
+        target.closest(
+          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
+        ) === null
+      ) {
+        return;
+      }
+      activate();
+    };
+    // ドラッグはセルの見出しからだけ始める。出力と入力の選択・操作を奪わない。
+    const dragFromHead = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest(".hwc-pane-head") === null) return;
+      if (
+        target.closest(
+          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
+        ) !== null
+      ) {
+        return;
+      }
+      startPaneDrag(event, item.id);
+    };
+    const target = dragging?.target?.pane === item.id ? dragging.target : null;
+    return (
+      <section
+        class="hwc-split-cell"
+        data-slot={layoutPanes.indexOf(item.id) + 1}
+        data-compact={compact}
+        data-current={item.id === pane?.id}
+        data-drop-pane={item.id}
+        data-drop-parent={parentDir ?? undefined}
+        key={item.id}
+        onPointerDown={(event) => {
+          activate();
+          dragFromHead(event);
+        }}
+        onFocusIn={activateFromFocus}
+      >
+        {where === null ? null : renderPane(item, where, compact)}
+        {target === null ? null : (
+          <div class="hwc-drop" data-zone={target.zone} aria-hidden="true">
+            <span>{dropLabel(target.zone, dragging?.paneId ?? null)}</span>
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  // 分割は再帰。子の親方向をそのまま渡し、端の向きを決める。
+  const renderSplit = (node: SplitNode, parentDir: "row" | "col" | null) =>
+    node.kind === "leaf" ? (
+      renderCell(node.pane, parentDir)
+    ) : (
+      <div class="hwc-split" data-dir={node.dir} key={`split:${leafPanes(node).join("|")}`}>
+        {node.children.map((child) => renderSplit(child, node.dir))}
+      </div>
+    );
 
   const listPlaceholder = (
     <div class="hwc-empty">
@@ -1194,7 +1340,7 @@ export function App() {
             <div class="hwc-detail-inner">
               <TabBar
                 openTabs={openTabs}
-                slots={wide ? split.slots : NO_SLOTS}
+                slots={wide ? layoutPanes : NO_SLOTS}
                 currentPaneId={selectedPaneId}
                 multiSpace={multiSpaceTabs}
                 parentPaneIds={parentPaneIds}
@@ -1231,99 +1377,9 @@ export function App() {
                   <h2 class="hwc-empty-title">ペインを選んでください</h2>
                   <p class="hwc-empty-text">タブか一覧からペインを選ぶと、出力と入力欄が出ます。</p>
                 </div>
-              ) : gridOn ? (
-                <div class="hwc-detail-grid">
-                  <div class="hwc-split" data-count={split.slots.length} data-filled={cells.length}>
-                    {split.slots.map((slot, index) => {
-                      const item = slot === null || state === null ? null : findPane(state, slot);
-                      if (item === null) {
-                        return (
-                          <div
-                            class="hwc-split-cell hwc-split-cell--empty"
-                            data-slot={index + 1}
-                            data-drop-slot={index}
-                            data-drop-target={
-                              dragging?.target?.kind === "slot" && dragging.target.index === index
-                            }
-                            key={`empty:${index}`}
-                          >
-                            <button
-                              type="button"
-                              class="hwc-slot-close"
-                              aria-label={`${index + 1} 番目の空きスロットを閉じる`}
-                              onClick={() =>
-                                setView({ split: closeEmptySlot(split, index), expanded })
-                              }
-                            >
-                              <CloseIcon size={12} />
-                            </button>
-                          </div>
-                        );
-                      }
-                      const where = findPaneContext(state, item.id);
-                      // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
-                      // HWC から動かせないセルが current のままになる。
-                      const activate = () => {
-                        if (item.id !== pane.id) select(item.id);
-                      };
-                      // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
-                      // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
-                      const activateFromFocus = (event: FocusEvent) => {
-                        const target = event.target;
-                        if (!(target instanceof Element)) return;
-                        if (
-                          target.closest(
-                            "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-                          ) === null
-                        ) {
-                          return;
-                        }
-                        activate();
-                      };
-                      // ドラッグはセルの見出しからだけ始める。出力と入力の選択・操作を奪わない。
-                      const dragFromHead = (event: PointerEvent) => {
-                        const target = event.target;
-                        if (!(target instanceof Element)) return;
-                        if (target.closest(".hwc-pane-head") === null) return;
-                        if (
-                          target.closest(
-                            "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-                          ) !== null
-                        ) {
-                          return;
-                        }
-                        startPaneDrag(event, item.id);
-                      };
-                      return (
-                        <section
-                          class="hwc-split-cell"
-                          data-slot={index + 1}
-                          data-compact={compact}
-                          data-current={item.id === pane.id}
-                          data-drop-slot={index}
-                          data-drop-target={
-                            dragging?.target?.kind === "slot" && dragging.target.index === index
-                          }
-                          key={item.id}
-                          onPointerDown={(event) => {
-                            activate();
-                            dragFromHead(event);
-                          }}
-                          onFocusIn={activateFromFocus}
-                        >
-                          {where === null ? null : renderPane(item, where, compact)}
-                        </section>
-                      );
-                    })}
-                  </div>
-                  {addBandOn ? (
-                    <div
-                      class="hwc-add-band"
-                      data-drop-add="true"
-                      data-drop-target={dragging?.target?.kind === "add"}
-                      aria-hidden="true"
-                    />
-                  ) : null}
+              ) : gridOn && split.layout !== null ? (
+                <div class="hwc-detail-grid" data-single={layoutPanes.length === 1}>
+                  {renderSplit(split.layout, null)}
                 </div>
               ) : (
                 renderPane(pane, context, false)
