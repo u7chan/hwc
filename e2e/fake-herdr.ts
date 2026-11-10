@@ -685,7 +685,13 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         pane.agent_status = "unknown";
         pane.agent_session = null;
         snapshot.agents = (snapshot.agents ?? []).filter((item) => item.pane_id !== paneId);
-        outputs.set(paneId, "$ ");
+        // 実 Herdr と同じく、終了したエージェントの画面は消さずにシェルのプロンプトを足す。
+        // hwc が終了を観測して pane.clear を送るので、E2E では消えた後の表示も確かめられる。
+        const screen = outputs.get(paneId) ?? "";
+        outputs.set(
+          paneId,
+          screen === "" || screen.endsWith("\n") ? `${screen}$ ` : `${screen}\n$ `,
+        );
         revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
         send(socket, { id, result: { type: "ok" } });
         broadcast("pane.updated", { pane_id: paneId });

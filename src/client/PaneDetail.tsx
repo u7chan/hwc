@@ -896,7 +896,7 @@ export function PaneDetail(props: PaneDetailProps) {
     snapshot: serverSnapshot,
     failed: chatFailed,
     refresh: refreshChat,
-  } = usePaneChat(pane.id, pane.chat && !blocked, pane.agentStatus);
+  } = usePaneChat(pane.id, pane.chat, pane.chat && !blocked, pane.agentStatus);
   // 実行中の段階は pi 拡張の sidecar からだけ取る（ADR 0035）。
   const activity = usePaneActivity(
     pane.id,

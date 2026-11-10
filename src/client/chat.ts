@@ -349,12 +349,21 @@ type ChatEntry = { paneId: string; snapshot: ChatSnapshot };
 
 export function usePaneChat(
   paneId: string,
+  chat: boolean,
   enabled: boolean,
   status: AgentStatus,
 ): { snapshot: ChatSnapshot | null; failed: boolean; refresh: () => void } {
   const [latest, setLatest] = useState<ChatEntry | null>(null);
   // 失敗したペインを覚える。切り替えた直後に前のペインの失敗を出さない。
   const [failedPane, setFailedPane] = useState<string | null>(null);
+
+  // エージェントが終了したペインは会話を持たない。最後に読んだスナップショットを残すと、
+  // シェルに戻ったペインの入力欄へモデル名とコンテキストが残る。
+  useEffect(() => {
+    if (chat) return;
+    setLatest(null);
+    setFailedPane(null);
+  }, [chat]);
 
   // 間隔や nudge の判断だけを描画のたびに更新する。effect の依存に入れると、状態が変わる
   // たびに張り直して etag を失い、同じ本文を取り直すことになる。

@@ -1887,6 +1887,42 @@ test("exit requests agent shutdown while leaving the last pane and selection int
   expect(store.get()).toEqual(chatState);
 });
 
+test("exit clears the old agent screen after the pane is back to a shell", async () => {
+  const store = createFakeStore(chatState);
+  const cleared: string[] = [];
+  const { app } = createTestApp({
+    store,
+    panes: {
+      exit: async () => {},
+      clear: async ({ paneId }) => {
+        cleared.push(paneId);
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/exit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  expect(response.status).toBe(200);
+  expect(cleared).toEqual([]);
+
+  store.push({
+    ...chatState,
+    workspaces: [
+      {
+        ...chatState.workspaces[0]!,
+        tabs: [
+          {
+            ...chatState.workspaces[0]!.tabs[0]!,
+            panes: [{ ...chatPane, agent: null, chat: false }],
+          },
+        ],
+      },
+    ],
+  });
+  expect(cleared).toEqual(["w1:p1"]);
+});
+
 test.each([state, twoChatPanesState])(
   "exit rejects a shell or an action that no longer matches the space",
   async (initial) => {

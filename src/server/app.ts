@@ -21,6 +21,7 @@ import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import { createPane } from "./create-pane";
 import { createWorktree } from "./create-worktree";
 import { createPaneCloser } from "./close-pane";
+import { createExitCleanup } from "./exit-cleanup";
 import { createFolderTrust } from "./folder-trust";
 import { createLaunchModels } from "./launch-models";
 import type { PaneCloseAction } from "../shared/pane-close";
@@ -35,7 +36,7 @@ import {
   TEXT_TOO_LONG,
   TEXT_WITH_ATTACHMENTS_TOO_LONG,
 } from "./herdr/panes";
-import type { AppState, PaneState, StateStore, TabState } from "./herdr/state";
+import { type AppState, findPane, type StateStore, type TabState } from "./herdr/state";
 import { parseMoveWorkspacesBody, type WorkspaceClient } from "./herdr/workspaces";
 import type { WorktreeClient } from "./herdr/worktrees";
 import type { PullRequestReader } from "./pull-request";
@@ -201,6 +202,7 @@ export function createApp(options: {
   };
 
   const closePane = createPaneCloser(store, panes);
+  const exitCleanup = createExitCleanup(store, panes);
   const requestClose = async (c: Context, action: PaneCloseAction) => {
     const paneId = c.req.param("id") ?? "";
     try {
@@ -208,6 +210,8 @@ export function createApp(options: {
       if (result === "missing") return c.json({ error: "pane_not_found" }, 404);
       if (result === "changed") return c.json({ error: "pane_action_changed" }, 409);
       launchModels.forget(paneId);
+      // シェルに戻ったのを観測してから、終了したエージェントの画面を消す（ADR 0059）。
+      if (action === "exit") exitCleanup(paneId);
       return c.json({ ok: true });
     } catch (error) {
       if (error instanceof HerdrError && error.code === "agent_exit_unsafe") {
@@ -225,9 +229,6 @@ export function createApp(options: {
     }
     return null;
   };
-
-  const findPane = (state: AppState, paneId: string): PaneState | null =>
-    findPaneTab(state, paneId)?.panes.find((pane) => pane.id === paneId) ?? null;
 
   // If-None-Match は弱比較。W/ と引用符を落として比べ、複数値と * も受ける。
   const matchesEtag = (header: string | undefined, etag: string): boolean => {
