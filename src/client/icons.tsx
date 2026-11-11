@@ -183,6 +183,15 @@ export function NewSessionIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function ReplyIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M9 17l-5-5 5-5" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </Svg>
+  );
+}
+
 export function CopyIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
