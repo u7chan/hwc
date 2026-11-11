@@ -40,6 +40,8 @@
   --color-neutral-bg: #eef0f3;
   --color-danger: #b3333c;
   --color-agent-claude: #c15f3c;
+  /* Discord のブランド色。マークだけに使い、地の色や文字色には使わない。 */
+  --color-discord: #5865f2;
 
   /* 端末出力の ANSI 8/16 色。明るい地では、暗い地を前提にした端末の値をそのまま
      使うと読めないため、地色に合わせた値にする。並びは SGR 30-37 / 90-97。 */

@@ -356,6 +356,29 @@ test("refresh publishes the converted state to subscribers", async () => {
   expect(seen).toEqual([["w1", "w2"]]);
 });
 
+test("a publish tells subscribers whether the transition was observed", async () => {
+  const { store, loads } = createControlledStore();
+  const seen: boolean[] = [];
+  store.onChange((_state, observed) => seen.push(observed));
+
+  // 起動直後の取得は基準を作るだけで、落ちた遷移を観測したことにしない。
+  const first = store.refresh();
+  loads[0]?.resolve(snapshot);
+  await first;
+
+  const second = store.refresh();
+  loads[1]?.resolve(snapshot);
+  await second;
+
+  // 再接続直後の取得も観測の切れ目になる。
+  store.breakObservation();
+  const third = store.refresh();
+  loads[2]?.resolve(snapshot);
+  await third;
+
+  expect(seen).toEqual([false, true, false]);
+});
+
 test("refresh during a running load coalesces into one extra load", async () => {
   const { store, loads } = createControlledStore();
 
