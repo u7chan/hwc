@@ -3594,15 +3594,6 @@ p.hwc-compaction,
   font-size: var(--text-secondary);
 }
 
-/* 送信後の引用。吹き出しの中で本文と区別できるよう、左に線を置く。 */
-.hwc-msg-quote {
-  display: block;
-  margin-bottom: var(--space-1);
-  padding-left: var(--space-2);
-  border-left: 2px solid currentColor;
-  opacity: 0.82;
-}
-
 /* 折り畳みの … は吹き出しの面の色で隠す。 */
 .hwc-msg[data-pending="true"] .hwc-msg-more {
   background: linear-gradient(90deg, transparent, var(--color-active-bg) 60%);
