@@ -8,7 +8,7 @@ export type ChatFile = {
   version: string;
   // 見せ方。image はサムネイル、html はプレビュー。
   kind: MessageFileKind;
-  // 配信の根の番号。0 はチェックアウト、1 以上は HWC_PREVIEW_ROOTS の順。
+  // 配信の根の番号。0 はチェックアウト、1 は /tmp、2 以上は HWC_PREVIEW_ROOTS の順。
   root: number;
   // 本文の画像記法の destination として一致した表記。この位置に描くための照合キーで、
   // 配信 URL には使わない。裸のパスだけで拾った画像は持たない。

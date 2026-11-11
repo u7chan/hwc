@@ -3625,7 +3625,7 @@ p.hwc-compaction,
 
 /* 根の外にあって配れないファイル。チップを出せない代わりに、理由を 1 行で置く。 */
 .hwc-msg-outside {
-  margin-top: var(--space-1);
+  margin: var(--space-1) 0 0;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   line-height: var(--line-body);
