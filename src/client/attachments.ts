@@ -69,6 +69,8 @@ export const SEND_FAILED_NOTICE = "送信できませんでした";
 export const STOP_FAILED_NOTICE = "停止できませんでした";
 // シェルは 1 行ずつしか渡せない（端末は改行を入力として扱えない）。
 export const SHELL_NEWLINE_NOTICE = "シェルでは改行できません（1 行ずつ送ってください）";
+// エージェントはシェルの前景プロセスを引き継がない。先に止めてもらう。
+export const SHELL_BUSY_NOTICE = "コマンドが動いています。停止してから起動できます";
 
 export const ATTACHMENT_LIMIT_NOTICE = `画像は ${MAX_ATTACHMENTS} 枚まで添付できます`;
 

@@ -18,7 +18,7 @@ import {
 import type { SessionChatClient } from "./chat/contract";
 import { readActivity } from "./chat/activity";
 import { OpencodeServiceNotRunningError } from "./chat/opencode";
-import { createPane } from "./create-pane";
+import { createPane, startAgentInPane } from "./create-pane";
 import { createWorktree } from "./create-worktree";
 import { createPaneCloser } from "./close-pane";
 import { createExitCleanup } from "./exit-cleanup";
@@ -33,6 +33,7 @@ import {
   parseInputBody,
   parseOutputQuery,
   parseSplitBody,
+  parseStartBody,
   TEXT_TOO_LONG,
   TEXT_WITH_ATTACHMENTS_TOO_LONG,
 } from "./herdr/panes";
@@ -944,6 +945,38 @@ export function createApp(options: {
           // focus / close と同じく、状態の取り直しは Herdr のイベント（pane.created）に任せる。
           return c.json({ paneId: result.paneId });
         } catch (error) {
+          return paneFailure(c, error);
+        }
+      })
+      .post("/api/panes/:id/agent", requireJson, async (c) => {
+        // 既存のシェルペインで起動する。名前は付け直さないので body に含めない。
+        const body = await c.req.json().catch(() => null);
+        const request = parseStartBody(body);
+        if (!request.ok) return c.json({ error: request.error }, request.status);
+
+        const state = await current();
+        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+        const paneId = c.req.param("id");
+        const pane = findPane(state, paneId);
+        if (pane === null) return c.json({ error: "pane_not_found" }, 404);
+        // 画面が古い・TUI から先に起動された場合の取りこぼしを、Herdr を呼ぶ前に止める。
+        if (pane.agent !== null) return c.json({ error: "pane_not_shell" }, 409);
+
+        try {
+          const failure = await startAgentInPane(panes, paneId, request.value, models);
+          if (failure !== null) return c.json({ error: failure }, 502);
+          // 分割 API と同じく、最初のメッセージを送るまでのモデル表示に使う。
+          if (request.value.model != null) {
+            launchModels.remember(paneId, request.value.model, request.value.effort ?? null);
+          }
+          // 状態の取り直しは Herdr のイベント（pane.updated）に任せる。
+          return c.json({ ok: true });
+        } catch (error) {
+          // 前景でコマンドが動いている。クライアントの 3 秒ポーリングが古い場合に届く。
+          if (error instanceof HerdrError && error.code === "agent_pane_busy") {
+            return c.json({ error: "pane_busy" }, 409);
+          }
           return paneFailure(c, error);
         }
       })

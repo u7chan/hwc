@@ -10,6 +10,8 @@ import {
   parseOutputQuery,
   parseProcessInfo,
   parseSplitBody,
+  parseStartBody,
+  restartAgentName,
 } from "./panes";
 
 type Call = { method: string; params: unknown; options: unknown };
@@ -806,4 +808,63 @@ test("a long command line is cut before it reaches the tab", () => {
   );
 
   expect(parsed.process.command).toHaveLength(200);
+});
+
+test("parseStartBody keeps the agent and its model selection without a name", () => {
+  expect(parseStartBody({ agent: "pi" })).toEqual({
+    ok: true,
+    value: { agent: "pi", model: null, effort: null },
+  });
+  const model = { provider: "example", id: "beam" };
+  expect(parseStartBody({ agent: "codex", model, effort: "low" })).toEqual({
+    ok: true,
+    value: { agent: "codex", model, effort: "low" },
+  });
+});
+
+test.each([
+  { body: {} },
+  { body: { agent: null } },
+  { body: { agent: "gemini" } },
+  { body: { name: "実装" } },
+  { body: null },
+  { body: [] },
+  { body: "pi" },
+])("parseStartBody requires a known agent and no shell choice: %j", ({ body }) => {
+  expect(parseStartBody(body).ok).toBe(false);
+});
+
+test.each([
+  { agent: "claude", model: { provider: "example", id: "beam" } },
+  { agent: "pi", effort: "high" },
+  { agent: "pi", model: { provider: "example", id: "beam" }, effort: "" },
+])("parseStartBody reuses the model and effort rules: %j", (body) => {
+  expect(parseStartBody(body).ok).toBe(false);
+});
+
+test("restartAgentName stays within the 32 characters Herdr accepts", () => {
+  const name = restartAgentName("w80:p50", 0);
+  expect(name).toMatch(/^[a-z0-9_-]{1,32}$/);
+  expect(name.length).toBeLessThanOrEqual(32);
+  // 同じペインで起動し直しても、前回と同じ名前にならない。
+  expect(restartAgentName("w80:p50", 1)).not.toBe(name);
+});
+
+test("startAgent does not wait for a shell that is running a foreground command", async () => {
+  let attempts = 0;
+  const call = async <T>(): Promise<T> => {
+    attempts += 1;
+    throw new HerdrError("agent_pane_busy", "foreground command is running");
+  };
+  const client = createPaneClient({ call });
+
+  await expect(
+    client.startAgent({
+      paneId: "w1:p1",
+      kind: "pi",
+      name: "hwc-w1-p1-0000",
+      waitForShell: false,
+    }),
+  ).rejects.toThrow("agent_pane_busy");
+  expect(attempts).toBe(1);
 });

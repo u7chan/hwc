@@ -4220,6 +4220,209 @@ test("closing a pane drops the model chosen at startup", async () => {
   expect(await response.json()).toEqual(emptyChat);
 });
 
+function postAgent(
+  app: ReturnType<typeof createApp>,
+  paneId: string,
+  body: unknown = { agent: "pi" },
+) {
+  return app.request(`/api/panes/${paneId}/agent`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+test("POST /api/panes/:id/agent starts in the existing shell pane without splitting or renaming", async () => {
+  const seen: unknown[] = [];
+  const { app, store } = createTestApp({
+    panes: {
+      split: async () => {
+        throw new Error("Must not split");
+      },
+      rename: async () => {
+        throw new Error("Must not rename");
+      },
+      startAgent: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+
+  const response = await postAgent(app, "w1:p1");
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual([
+    {
+      paneId: "w1:p1",
+      kind: "pi",
+      name: expect.stringMatching(/^hwc-w1-p1-[0-9a-z]{4}$/),
+      waitForShell: false,
+    },
+  ]);
+  // 起動したかは Herdr の pane.updated で状態が動く。ここで取り直さない。
+  expect(store.refreshCount()).toBe(0);
+});
+
+test("POST /api/panes/:id/agent refuses a pane that already has an agent", async () => {
+  const calls: string[] = [];
+  const { app } = createTestApp({
+    state: workingState,
+    panes: {
+      startAgent: async () => {
+        calls.push("start");
+      },
+    },
+  });
+
+  const response = await postAgent(app, "w1:p1");
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "pane_not_shell" });
+  expect(calls).toEqual([]);
+});
+
+test.each([
+  {},
+  { agent: null },
+  { agent: "gemini" },
+  { agent: "claude", model: { provider: "example", id: "beam" } },
+  { agent: "pi", effort: "high" },
+])("POST /api/panes/:id/agent rejects an invalid body: %j", async (body) => {
+  const { app } = createTestApp({
+    panes: {
+      startAgent: async () => {
+        throw new Error("Must not start");
+      },
+    },
+  });
+
+  expect((await postAgent(app, "w1:p1", body)).status).toBe(400);
+});
+
+test("POST /api/panes/:id/agent requires an existing pane and a readable snapshot", async () => {
+  const missing = createTestApp().app;
+  expect((await postAgent(missing, "w1:p9")).status).toBe(404);
+
+  const unavailable = createTestApp({ state: null, storeFailure: new Error("unavailable") }).app;
+  expect((await postAgent(unavailable, "w1:p1")).status).toBe(502);
+});
+
+test("POST /api/panes/:id/agent reports a running foreground command as busy", async () => {
+  const { app } = createTestApp({
+    panes: {
+      startAgent: async () => {
+        throw new HerdrError("agent_pane_busy", "foreground command is running");
+      },
+    },
+  });
+
+  const response = await postAgent(app, "w1:p1");
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "pane_busy" });
+});
+
+test("POST /api/panes/:id/agent keeps the pane and reports a failed startup", async () => {
+  const { app } = createTestApp({
+    panes: {
+      startAgent: async () => {
+        throw new HerdrError("agent_spawn_failed", "pi is not installed");
+      },
+    },
+  });
+
+  const response = await postAgent(app, "w1:p1");
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "agent_start_failed" });
+});
+
+test("POST /api/panes/:id/agent passes the chosen model to startup preparation", async () => {
+  const seen: unknown[] = [];
+  const model = { provider: "example", id: "beam" };
+  const { app } = createTestApp({
+    panes: {
+      startAgent: async (options) => {
+        seen.push(options);
+      },
+    },
+    models: {
+      list: async () => [model],
+      efforts: async () => [],
+      startArgs: async (agent, selected, directory, effort) => {
+        expect({ agent, selected, directory, effort }).toEqual({
+          agent: "codex",
+          selected: model,
+          directory: "/project",
+          effort: "low",
+        });
+        return ["--model", "beam"];
+      },
+    },
+  });
+
+  const response = await postAgent(app, "w1:p1", { agent: "codex", model, effort: "low" });
+
+  expect(response.status).toBe(200);
+  expect(seen).toEqual([
+    {
+      paneId: "w1:p1",
+      kind: "codex",
+      name: expect.stringMatching(/^hwc-w1-p1-[0-9a-z]{4}$/),
+      waitForShell: false,
+      args: ["--no-daemon", "--model", "beam"],
+    },
+  ]);
+});
+
+test("POST /api/panes/:id/agent shows the chosen model until the session records one", async () => {
+  const store = createFakeStore(state);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
+  const app = createApp({
+    store,
+    chat: createFakeChat(),
+    worktrees: createFakeWorktrees(),
+    workspaces: createFakeWorkspaces(),
+    panes: createFakePanes(),
+    models: {
+      list: async () => [],
+      efforts: async () => [],
+      startArgs: async () => ["--model", "example/beam"],
+    },
+  });
+  const response = await postAgent(app, "w1:p1", {
+    agent: "pi",
+    model: { provider: "example", id: "beam" },
+    effort: "low",
+  });
+  expect(response.status).toBe(200);
+
+  // 起動が終わると Herdr の pane.updated で、そのペインは会話を持つ。
+  const [workspace] = state.workspaces;
+  const [tab] = workspace!.tabs;
+  store.push(
+    {
+      ...state,
+      workspaces: [
+        {
+          ...workspace!,
+          tabs: [{ ...tab!, panes: [{ ...pane, agent: "pi", chat: true }] }],
+        },
+      ],
+    },
+    true,
+  );
+
+  const chat = await app.request("/api/panes/w1:p1/chat");
+  expect(await chat.json()).toEqual({
+    ...emptyChat,
+    etag: "etag-1+launch",
+    model: "beam",
+    effort: "low",
+  });
+});
+
 test("POST /api/panes/:id/split rejects a Claude model override before creating anything", async () => {
   const { app } = createTestApp({
     panes: {

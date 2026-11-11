@@ -646,6 +646,40 @@ export type CreatePaneRequest = {
   effort: string | null;
 };
 
+// 既存のシェルペインで起動する要求。ペインは作らず名前も変えない。
+export type StartAgentRequest = {
+  agent: AgentKind;
+  model: AgentModel | null;
+  effort: string | null;
+};
+
+export type StartAgentFailure =
+  | "agent_start_failed"
+  | "pane_busy"
+  | "pane_not_shell"
+  | "pane_not_found"
+  | "invalid_request"
+  | "timeout"
+  | "failed";
+
+export type StartAgentOutcome = { ok: true } | { ok: false; error: StartAgentFailure };
+
+const START_FAILURES: readonly StartAgentFailure[] = [
+  "agent_start_failed",
+  "pane_busy",
+  "pane_not_shell",
+  "pane_not_found",
+  "invalid_request",
+];
+
+export function toStartError(value: unknown): StartAgentFailure {
+  if (typeof value !== "object" || value === null) return "failed";
+  const error = (value as { error?: unknown }).error;
+  return typeof error === "string" && START_FAILURES.includes(error as StartAgentFailure)
+    ? (error as StartAgentFailure)
+    : "failed";
+}
+
 export function toAgentModels(value: unknown): AgentModel[] | null {
   if (typeof value !== "object" || value === null) return null;
   const models = (value as { models?: unknown }).models;
@@ -789,6 +823,27 @@ export async function createPane(
     // 返す。reject の名前ではなく signal 自体を見て、ペインができているか確認できない
     // 期限切れを通常の失敗と分ける。
     return { ok: false, error: signal.aborted ? "timeout" : "failed", paneId: null };
+  }
+}
+
+// 既存のシェルペインでエージェントを起動する。分割は無いが、起動の待ち（Herdr 側で最大 30 秒）
+// とモデル指定時の再検証を含むので、作成と同じ期限で待つ。
+export async function startAgent(
+  paneId: string,
+  request: StartAgentRequest,
+): Promise<StartAgentOutcome> {
+  const signal = AbortSignal.timeout(
+    request.model === null ? CREATE_TIMEOUT_MS : MODEL_CREATE_TIMEOUT_MS,
+  );
+  try {
+    const input = { ...paneParam(paneId), json: request };
+    const response = await client.api.panes[":id"].agent.$post(input, { init: { signal } });
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) return { ok: false, error: toStartError(body) };
+    return { ok: true };
+  } catch {
+    // 起動したか確認できない。ペインは残るので、状態を見てからやり直してもらう。
+    return { ok: false, error: signal.aborted ? "timeout" : "failed" };
   }
 }
 

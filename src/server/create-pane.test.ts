@@ -1,5 +1,5 @@
 import { expect, mock, test } from "bun:test";
-import { createPane } from "./create-pane";
+import { createPane, startAgentInPane } from "./create-pane";
 import type { AgentStartOptions, LayoutOptions, RenameOptions, SplitOptions } from "./herdr/panes";
 import { HerdrError } from "./herdr/socket";
 
@@ -233,4 +233,63 @@ test("a failed rename does not hide the agent startup failure", async () => {
     paneId: "w1:p3",
   });
   expect(panes.rename).toHaveBeenCalledTimes(1);
+});
+
+test("starts an agent in an existing shell pane without splitting or renaming", async () => {
+  const { panes, calls } = createFakePanes();
+
+  expect(
+    await startAgentInPane(panes, "w1:p1", { agent: "pi", model: null, effort: null }),
+  ).toBeNull();
+  expect(calls).toEqual(["start"]);
+  // 名前は同じペインで起動し直しても重ならないよう、起動のたびに接尾辞が変わる。
+  expect(panes.startAgent).toHaveBeenCalledWith({
+    paneId: "w1:p1",
+    kind: "pi",
+    name: expect.stringMatching(/^hwc-w1-p1-[0-9a-z]{4}$/),
+    waitForShell: false,
+  });
+  expect(panes.rename).not.toHaveBeenCalled();
+});
+
+test("an existing shell takes the selected model arguments for the pane's directory", async () => {
+  const { panes } = createFakePanes();
+  const model = { provider: "example", id: "beam" };
+  const models = {
+    list: mock(async () => [model]),
+    efforts: mock(async () => []),
+    startArgs: mock(async () => ["--model", "beam"]),
+  };
+
+  expect(
+    await startAgentInPane(panes, "w1:p1", { agent: "codex", model, effort: "low" }, models),
+  ).toBeNull();
+  expect(panes.directory).toHaveBeenCalledWith({ paneId: "w1:p1" });
+  expect(models.startArgs).toHaveBeenCalledWith("codex", model, "/project", "low");
+  expect(panes.startAgent).toHaveBeenCalledWith({
+    paneId: "w1:p1",
+    kind: "codex",
+    name: expect.stringMatching(/^hwc-w1-p1-[0-9a-z]{4}$/),
+    waitForShell: false,
+    args: ["--no-daemon", "--model", "beam"],
+  });
+});
+
+test("an existing shell keeps the pane when the agent waits at its startup prompt", async () => {
+  const { panes } = createFakePanes();
+  panes.startAgent.mockRejectedValue(new HerdrError("agent_not_ready", "waiting for trust"));
+
+  expect(
+    await startAgentInPane(panes, "w1:p1", { agent: "claude", model: null, effort: null }),
+  ).toBeNull();
+});
+
+test("a failed start on an existing shell reports the failure without retrying", async () => {
+  const { panes } = createFakePanes();
+  panes.startAgent.mockRejectedValue(new HerdrError("agent_spawn_failed", "cannot start"));
+
+  expect(await startAgentInPane(panes, "w1:p1", { agent: "pi", model: null, effort: null })).toBe(
+    "agent_start_failed",
+  );
+  expect(panes.startAgent).toHaveBeenCalledTimes(1);
 });
