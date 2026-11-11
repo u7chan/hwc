@@ -137,6 +137,7 @@ export function createApp(options: {
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
   attachmentsRoot?: string;
   // エージェントが示したファイルを配信してよい追加の根（チェックアウトの外）。
+  // 既定は /tmp と HWC_PREVIEW_ROOTS（ADR 0066）。
   previewRoots?: string[];
   // 通知設定の保存先と Webhook 送信器。テストでは実ファイル・実ネットワークを避けて差し替える。
   notificationSettings?: NotificationSettingsStore;

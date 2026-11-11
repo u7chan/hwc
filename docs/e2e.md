@@ -315,16 +315,15 @@ PR のチップは、1 枚表示と分割セルのペイン見出し、アクテ
 4. プレビューのタブの ×（PC は hover / focus、モバイルは常時）と中クリックでも閉じられる。ヘッダーの `閉じる` と同じく、タブが消えてペインのタブが選ばれた状態に戻る。
 5. モバイル幅でも同じ手順で全画面になり、ダイアログは出ない。
 
-`HWC_PREVIEW_ROOTS` はチェックアウトの外の HTML と画像を配信するための設定で、fixture では使わない。追加根の検出と配信は BFF の unit / API テストで確認する。
+`/tmp` は追加根の既定なので、fixture に置いてもチップとプレビューになる（[ADR 0066](adr/0066-tmp-preview-root.md)）。`HWC_PREVIEW_ROOTS` はさらに別の場所を足す設定で、fixture では使わない。追加根の検出と配信は BFF の unit / API テストで確認する。
 
 ### 根の外にあるファイルの案内
 
-チェックアウトの外に書かれた HTML と画像はチップにならず、メッセージの下に 1 行の案内と `移動を依頼` が出る（[ADR 0065](adr/0065-outside-preview-root.md)）。既定の fixture には置いていないので、確かめるときだけ足す。
+チェックアウトと `/tmp` の外に書かれた HTML と画像はチップにならず、メッセージの下に 1 行の案内が出る（[ADR 0065](adr/0065-outside-preview-root.md)）。既定の fixture には置いていないので、確かめるときだけ足す。
 
-1. `e2e/fixtures/scenario.ts` の `createScenario` で、チェックアウトの外（例: `/tmp/hwc-demo/outside/shell-agent.html`）にファイルを作る。
+1. `e2e/fixtures/scenario.ts` の `createScenario` で、チェックアウトと `/tmp` の外（例: `/var/tmp/hwc-demo/outside/shell-agent.html`）にファイルを作る。
 2. fixture のセッションに、その絶対パスを本文に書いた `assistant` のメッセージを 1 通足す。
-3. `bun run e2e:serve` で起動し、`frontend` ペインで案内の行とボタンを確認する。
-4. `移動を依頼` を押すと、入力欄を通さずに user 発言が 1 通送られ、控えが会話に出る。架空 Herdr の `pane.send_input` に依頼文が渡る。
+3. `bun run e2e:serve` で起動し、`frontend` ペインで案内の行を確認する。
 
 確認したら fixture の変更は戻す。案内の行は全メッセージに出る振る舞いなので、既定の fixture に入れると他のスクリーンショットにも写る。
 

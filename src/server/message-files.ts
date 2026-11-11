@@ -305,15 +305,31 @@ export async function resolvePreviewFile(options: {
   return { name: file.name, path: file.path, contentType };
 }
 
-// 追加の根は利用者が明示する。既定ではチェックアウトの外を見ない（ADR 0051）。
+// エージェントは使い捨てのモックを /tmp に書く。TMPDIR ではなく literal を見る。
+// 本文に書かれるのは `/tmp/...` なので、プロセスの環境で変えても一致しない（ADR 0066）。
+const DEFAULT_PREVIEW_ROOT = "/tmp";
+
+// 追加の根は既定で /tmp。HWC_PREVIEW_ROOTS はその後ろに足す（ADR 0051, 0066）。
 // 区切りは POSIX の `:`。Windows は対象外。
 export function defaultPreviewRoots(env: NodeJS.ProcessEnv = process.env): string[] {
   const raw = env.HWC_PREVIEW_ROOTS;
-  if (raw === undefined) return [];
-  return raw
-    .split(":")
-    .map((root) => root.trim())
-    .filter((root) => root !== "" && isAbsolute(root));
+  const explicit =
+    raw === undefined
+      ? []
+      : raw
+          .split(":")
+          .map((root) => root.trim())
+          .filter((root) => root !== "" && isAbsolute(root));
+  // 表記違いの同じ実体を 2 回試さない。根の番号は先に来たものを保つ。
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  for (const root of [DEFAULT_PREVIEW_ROOT, ...explicit]) {
+    const key = resolve(root);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    roots.push(root);
+  }
+  return roots;
 }
 
 // 画像を作り直すと本文は変わらない。版を etag に混ぜないと、304 で古い画像の URL が残る。
