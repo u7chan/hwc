@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { CopyGlyph } from "./icons";
+import { CopyGlyph, ReplyIcon } from "./icons";
 import { useCopy } from "./copy";
 import type { SelectionAnchor } from "./selection-toolbar";
 
@@ -83,7 +83,8 @@ export function SelectionToolbar(props: {
           onMouseDown={(event) => event.preventDefault()}
           onClick={props.onQuote}
         >
-          返信
+          <ReplyIcon size={14} />
+          <span>返信</span>
         </button>
       ) : null}
       <button
