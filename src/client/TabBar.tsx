@@ -22,8 +22,11 @@ type TabBarProps = {
   // 開いているプレビュー。ペインではないので、選択と表示だけを別に持つ。
   preview: { name: string; selected: boolean } | null;
   status: ComponentChildren;
+  // 外すアニメーションを見せているタブ。縮み終わったら onLeaveFinished を呼ぶ。
+  leavingPaneId: string | null;
   onSelectPane: (paneId: string) => void;
   onRemoveTab: (paneId: string) => void;
+  onLeaveFinished: (paneId: string) => void;
   onSelectPreview: () => void;
   onClosePreview: () => void;
   onBack: () => void;
@@ -60,6 +63,46 @@ export function TabBar(props: TabBarProps) {
     }
   }, [props.currentPaneId, previewing]);
 
+  // 外すタブは幅を詰めながら淡く消す。state への反映は App が完了後に 1 回だけ行う。
+  const leaveFinished = useRef(props.onLeaveFinished);
+  leaveFinished.current = props.onLeaveFinished;
+  const leavingPaneId = props.leavingPaneId;
+  useLayoutEffect(() => {
+    if (leavingPaneId === null) return;
+    const node = tabList.current?.querySelector<HTMLElement>('[data-leaving="true"]');
+    let active = true;
+    const finish = () => {
+      if (!active) return;
+      active = false;
+      leaveFinished.current(leavingPaneId);
+    };
+    if (
+      node == null ||
+      typeof node.animate !== "function" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      finish();
+      return;
+    }
+
+    // タブの間隔も一緒に詰める。幅だけを 0 にすると、消えたあとに残る間隔のぶん
+    // 隣のタブが飛ぶ。
+    const list = tabList.current;
+    const gap = list === null ? 0 : parseFloat(getComputedStyle(list).columnGap) || 0;
+    node.style.overflow = "hidden";
+    const animation = node.animate(
+      [
+        { width: `${node.offsetWidth}px`, marginLeft: "0px", opacity: 1 },
+        { width: "0px", marginLeft: `${-gap}px`, opacity: 0 },
+      ],
+      { duration: 180, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "forwards" },
+    );
+    void animation.finished.then(finish, finish);
+    return () => {
+      active = false;
+    };
+  }, [leavingPaneId]);
+
   return (
     <div class="hwc-tabbar" data-multi-space={props.multiSpace}>
       <button
@@ -73,6 +116,7 @@ export function TabBar(props: TabBarProps) {
       <div class="hwc-tabs" role="tablist" aria-label="開いているペイン" ref={tabList}>
         {props.openTabs.map((item) => {
           const selected = !previewing && item.pane.id === props.currentPaneId;
+          const leaving = item.pane.id === props.leavingPaneId;
           const parent = props.parentPaneIds.has(item.pane.id);
           const process = props.processes.get(item.pane.id) ?? null;
           const name = paneTabName(item.pane, process);
@@ -92,6 +136,8 @@ export function TabBar(props: TabBarProps) {
               key={item.pane.id}
               data-selected={selected}
               data-slot={slot >= 0 ? slot + 1 : undefined}
+              data-leaving={leaving ? "true" : undefined}
+              inert={leaving}
             >
               <button
                 type="button"

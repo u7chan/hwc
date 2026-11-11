@@ -2147,6 +2147,21 @@ html[data-order-ghost="below"] .hwc-order-ghost {
   animation: hwc-view-in 200ms ease-out;
 }
 
+/* タブの下の中身。タブを外す間だけ、どのペインが消えるかを本文側でも見せる。 */
+.hwc-detail-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 180ms ease-out;
+}
+
+.hwc-detail-body[data-leaving="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* 分割は方向つきの木。区切り線はセルの隙間から見せる（ADR 0061）。 */
 .hwc-split {
   flex: 1;
@@ -2181,6 +2196,13 @@ html[data-order-ghost="below"] .hwc-order-ghost {
    一覧の現在行と同じ色で結び付ける（ADR 0058 / 0061）。 */
 .hwc-split-cell {
   position: relative;
+  transition: opacity 180ms ease-out;
+}
+
+/* 外すペインのセルは、タブが縮む間に淡く消す。消えたあとは残りのセルが広がる。 */
+.hwc-split-cell[data-leaving="true"] {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .hwc-split-cell[data-slot="1"] {
@@ -2716,6 +2738,18 @@ a.hwc-pane-head-repo:focus-visible {
   transition:
     background-color 120ms ease,
     opacity 120ms ease;
+}
+
+/* 外すタブは縮む間に押せなくする。読み上げと Tab 移動は inert で外す。 */
+.hwc-tab-item[data-leaving="true"] {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-detail-body,
+  .hwc-split-cell {
+    transition: none;
+  }
 }
 
 /* 1 段目はペイン名、2 段目はスペース名。高さは 17px × 1.2 + 13px × 1.2 + 2px = 38px で、
