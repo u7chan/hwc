@@ -1492,7 +1492,11 @@ export function App() {
           )}
           <div class="hwc-sidebar-foot">
             <span class="hwc-foot-brand">
-              {/* 文字とマークのインクに合わせた実測の viewBox。高さは .hwc-foot-logo が決める。 */}
+              {/*
+                文字とマークのインクに合わせた実測の viewBox。高さは .hwc-foot-logo が決める。
+                マークの比率は favicon（favicon.ts / favicon.svg）と HwcMark に揃える。
+                辺・隙間・角丸・4 象限目の不透明度を直すときは 4 か所そろえる。
+              */}
               <svg class="hwc-foot-logo" viewBox="0 24 329.4 77" role="img" aria-label="HWC">
                 <g fill="currentColor">
                   <rect x="0" y="24" width="33.8" height="33.8" rx="10.6" />
