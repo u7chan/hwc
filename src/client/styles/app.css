@@ -3988,6 +3988,16 @@ p.hwc-compaction,
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
+    /* color-mix 非対応では次の宣言ごと無効になる。透明な文字だけが残らないよう、
+       同じ色の帯で先に塗っておく（掃引はしないが、ラベルは読める）。 */
+    background-image:
+      linear-gradient(
+        90deg,
+        transparent calc(50% - 1.4em),
+        currentColor,
+        transparent calc(50% + 1.4em)
+      ),
+      linear-gradient(currentColor, currentColor);
     background-image:
       linear-gradient(
         90deg,
