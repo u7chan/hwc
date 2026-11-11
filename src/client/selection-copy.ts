@@ -186,14 +186,15 @@ function serializeQuote(node: Element, range: Range, depth: number): string {
 function serializeList(node: Element, range: Range, depth: number): string {
   const ordered = node.tagName === "OL";
   const start = ordered ? Number(node.getAttribute("start") ?? "1") : 1;
-  const items = [...node.children].filter(
-    (child) => child.tagName === "LI" && intersects(child, range),
-  );
+  // 番号は選択に含まれる項目だけで数え直さない。先頭の項目を選ばなくても、
+  // 画面に出ている番号（start + 元の並び順）をそのまま使う。
+  const items = [...node.children].filter((child) => child.tagName === "LI");
   const lines: string[] = [];
   const indent = "  ".repeat(depth);
   const continuation = "  ".repeat(depth + 1);
 
   for (const [index, item] of items.entries()) {
+    if (!intersects(item, range)) continue;
     const taskButton = item.querySelector(
       ":scope > .hwc-md-task, :scope > .hwc-md-marker .hwc-md-task",
     );
@@ -270,17 +271,42 @@ function intersects(node: Node, range: Range): boolean {
   }
 }
 
+// ブロックの文字がすべて選ばれているかを見る。要素の境界ではなく、中身の
+// 非空白文字で比べる。ドラッグは要素の先頭・末尾ちょうどではなく、最初と最後の
+// 文字で始まる・終わることが多く、境界だけで比べると全体選択を取りこぼす。
+// 項目の印・コードの言語名・コピーボタンはブロックの中身ではないので除く。
 function coversContents(range: Range, element: Element): boolean {
-  const inner = document.createRange();
-  inner.selectNodeContents(element);
-  try {
-    return (
-      range.compareBoundaryPoints(Range.START_TO_START, inner) <= 0 &&
-      range.compareBoundaryPoints(Range.END_TO_END, inner) >= 0
-    );
-  } catch {
-    return false;
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let found = false;
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    if (!(node instanceof Text) || insideSkipped(node, element)) continue;
+    const text = node.data;
+    let start = 0;
+    while (start < text.length && /\s/.test(text[start]!)) start += 1;
+    let end = text.length;
+    while (end > start && /\s/.test(text[end - 1]!)) end -= 1;
+    if (start === end) continue;
+    found = true;
+    const content = document.createRange();
+    content.setStart(node, start);
+    content.setEnd(node, end);
+    try {
+      if (
+        range.compareBoundaryPoints(Range.START_TO_START, content) > 0 ||
+        range.compareBoundaryPoints(Range.END_TO_END, content) < 0
+      ) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
   }
+  return found;
+}
+
+function insideSkipped(node: Text, root: Element): boolean {
+  const skipped = node.parentElement?.closest(SKIP_SELECTOR) ?? null;
+  return skipped !== null && root.contains(skipped);
 }
 
 // ルートの外へはみ出した選択を、そのルートの中だけに切り詰める。
