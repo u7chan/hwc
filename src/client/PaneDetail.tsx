@@ -1085,11 +1085,30 @@ export function PaneDetail(props: PaneDetailProps) {
   const copyId = () => copy("pane", pane.id);
 
   // 入力量に合わせて高さを伸ばす。広げている間は CSS の高さに任せる。
+  // 簡略表示では入力欄と情報・送信を同じ行に置くが、折り返して 2 行以上になったら
+  // 入力欄を読み幅いっぱいに広げたい。広い幅で 1 行に戻ると狭い幅で再び折り返し、
+  // 行の往復が起きるので、空にするまで広い側を保つ。
   const fit = (field: HTMLTextAreaElement | null, open: boolean) => {
     if (!field) return;
+    const form = field.closest(".hwc-input");
     field.style.height = "";
-    if (open) return;
+    if (open) {
+      form?.removeAttribute("data-wrapped");
+      return;
+    }
     field.style.height = "auto";
+    const style = getComputedStyle(field);
+    const line = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2;
+    const oneLine = Math.max(
+      line + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom),
+      Number.parseFloat(style.minHeight) || 0,
+    );
+    if (compact && field.value !== "" && field.scrollHeight > oneLine + 1) {
+      form?.setAttribute("data-wrapped", "");
+    } else if (!compact || field.value === "") {
+      form?.removeAttribute("data-wrapped");
+    }
+    // 属性を変えると入力欄の幅も変わるので、その後の高さで合わせる。
     field.style.height = `${field.scrollHeight}px`;
   };
 

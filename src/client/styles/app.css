@@ -4906,6 +4906,16 @@ p.hwc-compaction,
   display: inline;
 }
 
+/* 折り返して複数行になった入力欄は読み幅いっぱいに使う。情報と送信は次の行へ回し、
+   狭い列に文字を押し込めない。1 行のときは同じ行に残して会話へ高さを回す。 */
+.hwc-split-cell[data-compact="true"] .hwc-input[data-wrapped] .hwc-input-line {
+  flex-basis: 100%;
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-input[data-wrapped] .hwc-input-actions {
+  flex: 1 1 100%;
+}
+
 /* 540px を切ると、バーの 48px が入力欄を圧迫する。バーを隠して数値を優先する。 */
 @container hwc-cell (max-width: 540px) {
   .hwc-context-bar {
