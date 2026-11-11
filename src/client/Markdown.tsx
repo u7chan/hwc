@@ -46,7 +46,6 @@ function groupBlocks(blocks: readonly MdBlock[]): MdGroup[] {
 type TaskCounter = { value: number };
 
 // 本文が上限を超えたら、解析せず原文をそのまま出す。解析してから捨てると固まる。
-// ルートの data-quote-scope は、本文の選択から返信を始める範囲を示す。
 export function Markdown({
   text,
   taskScope,
@@ -60,7 +59,7 @@ export function Markdown({
 }) {
   if (text.length > MARKDOWN_MAX_LENGTH) {
     return (
-      <div class="hwc-md" data-plain data-quote-scope="true">
+      <div class="hwc-md" data-plain>
         {text}
       </div>
     );
@@ -69,7 +68,7 @@ export function Markdown({
   const taskCounter = { value: 0 };
   return (
     <ImageContext.Provider value={{ images, onOpenImage }}>
-      <div class="hwc-md" data-quote-scope="true">
+      <div class="hwc-md">
         <MarkdownBlocks text={text} taskScope={taskScope} taskCounter={taskCounter} />
       </div>
     </ImageContext.Provider>
@@ -379,6 +378,7 @@ function imageNode(node: MdImage, context: ImageContextValue) {
     <button
       type="button"
       class="hwc-md-image"
+      data-md-raw={node.raw}
       aria-label={`${name} を拡大`}
       aria-haspopup="dialog"
       onClick={() => open(image.url, image.label)}

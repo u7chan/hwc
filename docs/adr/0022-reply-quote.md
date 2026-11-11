@@ -1,7 +1,11 @@
 # ADR 0022: 選択した本文の引用は先頭の blockquote として送り、引用カードで見せる
 
-- Status: Accepted
+- Status: Superseded by [ADR 0062](0062-selection-toolbar.md)
 - Date: 2026-11-04
+
+> 2026-11-11: [ADR 0062](0062-selection-toolbar.md) が、引用を入力欄の下書きへ追記する形に変え、
+> 選択ツールバーにコピーを足した。送信後に先頭の blockquote を引用カードにする表示は 0062 に
+> 引き継いでいる。この ADR は判断の記録として残し、実装は 0062 に従う。
 
 ## Context
 

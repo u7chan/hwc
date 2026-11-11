@@ -3056,36 +3056,60 @@ a.hwc-pane-head-repo:focus-visible {
   opacity: 0.72;
 }
 
-/* 選択した本文に返信するボタン。fixed は分割セルの container-type でセル基準になるので、
-   出力欄（position: relative）を基準に absolute で置く。 */
-.hwc-quote-action {
+/* 選択した本文に返信・コピーするメニュー。fixed は分割セルの container-type でセル基準に
+   なるので、出力欄（position: relative）を基準に absolute で置く。 */
+.hwc-selection-toolbar {
   position: absolute;
-  z-index: 1;
-  transform: translateX(-50%);
-  display: inline-flex;
+  z-index: 2;
+  transform: translate(-50%, 4px);
+  display: flex;
   align-items: center;
-  justify-content: center;
-  min-height: var(--space-8);
-  padding: 0 var(--space-3);
+  gap: 2px;
+  padding: 2px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-control);
   background: var(--color-surface);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+
+.hwc-selection-toolbar[data-open="true"] {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hwc-selection-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--color-text);
+  font: inherit;
   font-size: var(--text-secondary);
   cursor: pointer;
 }
 
-/* 下端に寄っているときは選択の上に出す。 */
-.hwc-quote-action[data-above="true"] {
-  transform: translate(-50%, -100%);
-}
-
-.hwc-quote-action:hover {
+.hwc-selection-button:hover {
   background: var(--color-raised);
 }
 
-.hwc-quote-action:active {
+.hwc-selection-button:active {
   opacity: 0.72;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-selection-toolbar {
+    transition: none;
+  }
 }
 
 .hwc-output-scroll[data-empty="true"] {
@@ -4281,50 +4305,6 @@ p.hwc-compaction,
   }
 }
 
-/* 引用。添付やチップと同じ行にせず、入力欄の上に独立した行として置く。 */
-.hwc-reply {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-1);
-  padding-left: var(--space-2);
-  border-left: 2px solid var(--color-control-line);
-  /* 右は開閉ボタンの分だけ空ける。重ねると押せなくなる。 */
-  margin-right: calc(var(--tap) + var(--space-2));
-}
-
-/* 長い引用はスクロールさせず 5 行で切る。全文は title で見せる。 */
-.hwc-reply-text {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  padding: var(--space-1) 0;
-  color: var(--color-secondary);
-  font-size: var(--text-secondary);
-  line-height: var(--line-body);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.hwc-reply-clear {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: var(--tap);
-  height: var(--tap);
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--color-secondary);
-  cursor: pointer;
-}
-
-.hwc-reply-clear:hover {
-  background: var(--color-raised);
-}
-
 /* コマンドの候補とチップ。入力欄の中で行を占める。浮かせるとキーボードに隠れる。 */
 .hwc-commands {
   display: flex;
@@ -4868,13 +4848,6 @@ p.hwc-compaction,
   order: 1;
   flex-basis: 100%;
   padding: 0;
-}
-
-/* 引用は入力欄の上に全幅で置く。横に並べると入力欄が潰れる。 */
-.hwc-split-cell[data-compact="true"] .hwc-reply {
-  order: -1;
-  flex-basis: 100%;
-  margin-right: 0;
 }
 
 /* 入力欄を包む行も横に伸ばす（包みが伸びないと入力欄が中身の幅で止まる）。 */

@@ -71,7 +71,7 @@ import {
 } from "./commands";
 import { ComposerAdd } from "./ComposerAdd";
 import { useCopy } from "./copy";
-import { readDraft, readReply, storage, writeDraft, writeReply } from "./drafts";
+import { readDraft, storage, writeDraft } from "./drafts";
 import { useHint } from "./hint";
 import { insertProjectPath } from "./projects";
 import { NewSessionConfirm } from "./NewSessionConfirm";
@@ -100,7 +100,7 @@ import { usePaneOutput } from "./output";
 import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
-import { canSend, canStop, composeReply, normaliseQuote, splitQuote } from "./reply";
+import { appendQuote, canSend, canStop, splitQuote } from "./reply";
 import {
   agentGlyph,
   isShellPane,
@@ -109,6 +109,9 @@ import {
   shortenPaneName,
   type PaneContext,
 } from "./select";
+import { SelectionToolbar, type SelectionToolbarState } from "./SelectionToolbar";
+import { readSelectionAnchor } from "./selection-toolbar";
+import { selectionCopyText } from "./selection-copy";
 import { Spinner } from "./Spinner";
 import { formatClock, formatElapsed } from "./time";
 
@@ -153,57 +156,13 @@ const USER_MESSAGE_CLAMP_FALLBACK = 128;
 const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
 
-// 選択した本文の上に出す返信ボタン。位置は .hwc-output-wrap を基準にした px。
-type QuoteAnchor = { text: string; left: number; top: number; above: boolean };
-
-const QUOTE_SCOPE = "data-quote-scope";
-const QUOTE_BUTTON_GAP = 8;
-const QUOTE_BUTTON_HEIGHT = 32;
-const QUOTE_BUTTON_HALF_WIDTH = 32;
-
-// スマホは選択メニューを差し替えられない。返信の入り口はポインタを持つ画面だけに出す。
+// スマホは選択メニューを差し替えられない。選択ツールバーはポインタを持つ画面だけに出す。
 // 端末の性質は途中で変わらないので、最初の判定を使い回す。
 let touchOnly: boolean | null = null;
 function touchFirst(): boolean {
   touchOnly ??=
     window.matchMedia("(hover: none)").matches || window.matchMedia("(pointer: coarse)").matches;
   return touchOnly;
-}
-
-function quoteScopeOf(node: Node | null, root: Element): Element | null {
-  if (node === null) return null;
-  const element = node instanceof Element ? node : node.parentElement;
-  const scope = element?.closest(`[${QUOTE_SCOPE}]`) ?? null;
-  return scope !== null && root.contains(scope) ? scope : null;
-}
-
-// 選択が 1 つの本文の中にあるときだけ、その本文と位置を返す。
-// 入力欄・ヘッダ・メタ行・複数メッセージにまたがる選択は対象外。
-function readQuoteAnchor(scroller: HTMLElement, frame: HTMLElement): QuoteAnchor | null {
-  const selection = document.getSelection();
-  if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return null;
-  const text = normaliseQuote(selection.toString());
-  if (text === "") return null;
-  const range = selection.getRangeAt(0);
-  const scope = quoteScopeOf(range.startContainer, scroller);
-  if (scope === null || scope !== quoteScopeOf(range.endContainer, scroller)) return null;
-  const rect = range.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return null;
-
-  const box = frame.getBoundingClientRect();
-  const below = rect.bottom - box.top + QUOTE_BUTTON_GAP;
-  // 下端に寄っているときは選択の上に出す。入力欄に重ねない。
-  const above = below + QUOTE_BUTTON_HEIGHT > box.height;
-  const left = Math.min(
-    Math.max(rect.left + rect.width / 2 - box.left, QUOTE_BUTTON_HALF_WIDTH),
-    Math.max(box.width - QUOTE_BUTTON_HALF_WIDTH, QUOTE_BUTTON_HALF_WIDTH),
-  );
-  return {
-    text,
-    left,
-    top: above ? rect.top - box.top - QUOTE_BUTTON_GAP : below,
-    above,
-  };
 }
 
 // サムネイルは会話の高さに合わせて小さく出す。押したら同じ配信 URL を拡大する。
@@ -350,7 +309,7 @@ function UserMessage(props: {
   const clampHeight =
     lineHeight > 0 ? lineHeight * USER_MESSAGE_CLAMP_LINES : USER_MESSAGE_CLAMP_FALLBACK;
   const overflowing = contentHeight > clampHeight + 1;
-  // 送信後の引用は、先頭の blockquote だけをカードにする（ADR 0022）。
+  // 送信後の引用は、先頭の blockquote だけをカードにする（ADR 0062）。
   const { quote, body } = splitQuote(props.message.text);
 
   return (
@@ -361,7 +320,6 @@ function UserMessage(props: {
             class="hwc-msg-body"
             id={textId}
             ref={content}
-            data-quote-scope="true"
             style={{ maxHeight: `${expanded ? contentHeight : clampHeight}px` }}
           >
             {quote === null ? null : <span class="hwc-msg-quote">{quote}</span>}
@@ -942,14 +900,10 @@ export function PaneDetail(props: PaneDetailProps) {
   // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
   const [dropping, setDropping] = useState(false);
   const dragDepth = useRef(0);
-  // 引用は trim 済みの生テキスト。`>` は送信のときに付ける（ADR 0022）。
-  // 返信 UI を持たない端末では、残っていても使わない。見えない引用を付けて送らないため。
-  const [reply, setReply] = useState<string | null>(() => {
-    if (touchFirst()) return null;
-    const stored = readReply(storage(), pane.id);
-    return stored === "" ? null : stored;
-  });
-  const [quoteAnchor, setQuoteAnchor] = useState<QuoteAnchor | null>(null);
+  // 選択ツールバーは閉じたあとも短い遷移の間だけ state に残す。dismissed は Esc や
+  // 外側の押下で閉じたあと、選択が変わるまで出し直さないための印。
+  const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbarState | null>(null);
+  const dismissed = useRef(false);
 
   const setPinned = (next: boolean) => {
     pinned.current = next;
@@ -1093,16 +1047,18 @@ export function PaneDetail(props: PaneDetailProps) {
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
-  // 返信ボタンを出している間は自動追従を止める。購読を張り直さずに読むため ref に写す。
+  // 引用を足した直後、再描画後の入力欄へカーソルを移す位置。
+  const pendingCaret = useRef<number | null>(null);
+  // 選択ツールバーを出している間は自動追従を止める。購読を張り直さずに読むため ref に写す。
   const quoting = useRef(false);
-  quoting.current = quoteAnchor !== null;
+  quoting.current = selectionToolbar !== null;
 
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
-  // 書きかけの指示が別々のメッセージに分かれてしまう。引用中も同じ理由で出さない。
-  // 空の会話（新規セッション）と圧縮済みは commandAvailable が候補から外す。
+  // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
+  // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
   const compactDone = snapshot !== null && compactAlreadyDone(snapshot);
   const candidates =
-    attachments.length === 0 && reply === null && compactionRun === null
+    attachments.length === 0 && compactionRun === null
       ? commandCandidates(pane, draft, snapshot)
       : [];
   const uploading = attachments.some((item) => item.name === null);
@@ -1112,7 +1068,6 @@ export function PaneDetail(props: PaneDetailProps) {
     replying,
     draft,
     attachments: attachments.length,
-    reply,
   });
   // 停止は入力が空のときだけ出す。文字・添付・引用があれば、送信は実行中への追加指示になる。
   const stop = canStop({
@@ -1121,7 +1076,6 @@ export function PaneDetail(props: PaneDetailProps) {
     running,
     draft,
     attachments: attachments.length,
-    reply,
     chip,
   });
   const busy = sending || stopping;
@@ -1151,58 +1105,84 @@ export function PaneDetail(props: PaneDetailProps) {
     return () => clearTimeout(timer);
   }, [draft, pane.id, chip]);
 
-  // 引用も同じ debounce で残す。再読み込みやペイン切替で戻せるようにする。
-  useEffect(() => {
-    if (touchFirst()) return;
-    const text = reply ?? "";
-    const timer = setTimeout(() => writeReply(storage(), pane.id, text), 250);
-    return () => clearTimeout(timer);
-  }, [reply, pane.id]);
-
-  // 選択が 1 つの本文の中で終わったときだけ返信ボタンを出す。位置は選択の下（入らなければ上）。
-  // マウスのドラッグ中は selectionchange が動くたびに発火するので評価せず、ボタンを離した
-  // pointerup で確定した選択を見る。キーボードの選択変更はそのまま selectionchange で拾う。
-  // 選択変更・スクロール・リサイズでは隠す。ペインの切替は PaneDetail の作り直しで消える。
+  // 選択ツールバーは、選択の始まりと終わりがスクロール領域の中にあるときだけ出す。
+  // マウスのドラッグ中は selectionchange が動くたびに発火するので評価せず、ボタンを
+  // 離した pointerup で確定した選択を見る。キーボードの選択変更はそのまま拾う。
+  // スクロール・リサイズでは位置を追い、選択が領域の外へ出たら閉じる。
   useEffect(() => {
     const scrollerElement = scroller.current;
     const frameElement = frame.current;
     if (scrollerElement === null || frameElement === null) return;
-    if (touchFirst()) return;
+    if (touchFirst()) {
+      setSelectionToolbar(null);
+      return;
+    }
 
+    dismissed.current = false;
+    setSelectionToolbar(null);
     let dragging = false;
-    const refresh = () => {
-      if (dragging) return;
-      setQuoteAnchor(readQuoteAnchor(scrollerElement, frameElement));
+    let frameRequest = 0;
+
+    const close = () => {
+      setSelectionToolbar((current) => (current === null ? null : { ...current, open: false }));
     };
-    const clear = () => setQuoteAnchor(null);
+    const refresh = () => {
+      if (dragging || dismissed.current) return;
+      const anchor = readSelectionAnchor(scrollerElement, frameElement);
+      if (anchor === null) close();
+      else setSelectionToolbar({ anchor, open: true });
+    };
+    const scheduleRefresh = () => {
+      if (frameRequest !== 0) return;
+      frameRequest = requestAnimationFrame(() => {
+        frameRequest = 0;
+        refresh();
+      });
+    };
+    const onSelectionChange = () => {
+      dismissed.current = false;
+      refresh();
+    };
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-selection-toolbar]") !== null) {
+        return;
+      }
       dragging = true;
-      // 押した時点で前の選択に紐づくボタンは隠す。ボタン自身の押下は startReply が
-      // 先に処理するので、ここで消しても操作は失われない。
-      clear();
+      dismissed.current = true;
+      close();
     };
     const stopDragging = () => {
       if (!dragging) return;
       dragging = false;
       refresh();
     };
-    document.addEventListener("selectionchange", refresh);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      dismissed.current = true;
+      close();
+    };
+
+    document.addEventListener("selectionchange", onSelectionChange);
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("pointerup", stopDragging);
     document.addEventListener("pointercancel", stopDragging);
+    document.addEventListener("keydown", onKeyDown);
     // 窓の外で離すと pointerup が来ない。次のキーボード選択までドラッグ中のままにしない。
     window.addEventListener("blur", stopDragging);
-    scrollerElement.addEventListener("scroll", clear);
-    window.addEventListener("resize", clear);
+    scrollerElement.addEventListener("scroll", scheduleRefresh);
+    window.addEventListener("resize", scheduleRefresh);
     return () => {
-      document.removeEventListener("selectionchange", refresh);
+      if (frameRequest !== 0) cancelAnimationFrame(frameRequest);
+      document.removeEventListener("selectionchange", onSelectionChange);
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("pointerup", stopDragging);
       document.removeEventListener("pointercancel", stopDragging);
+      document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("blur", stopDragging);
-      scrollerElement.removeEventListener("scroll", clear);
-      window.removeEventListener("resize", clear);
+      scrollerElement.removeEventListener("scroll", scheduleRefresh);
+      window.removeEventListener("resize", scheduleRefresh);
     };
   }, [pane.id]);
 
@@ -1213,6 +1193,18 @@ export function PaneDetail(props: PaneDetailProps) {
   useLayoutEffect(() => {
     fit(input.current, expanded);
   }, [draft, expanded, compact, readOnly]);
+
+  // 引用を足したあと、再描画された入力欄の末尾（引用の後の空行）へカーソルを移す。
+  useLayoutEffect(() => {
+    const caret = pendingCaret.current;
+    if (caret === null) return;
+    pendingCaret.current = null;
+    const field = input.current;
+    if (field === null) return;
+    field.focus();
+    field.setSelectionRange(caret, caret);
+    fit(field, expanded);
+  }, [draft, expanded]);
 
   useLayoutEffect(() => {
     if (confirmation !== null && scroller.current) scroller.current.scrollTop = 0;
@@ -1334,25 +1326,20 @@ export function PaneDetail(props: PaneDetailProps) {
     input.current?.focus();
   };
 
-  // 選択を引用として固定し、返信を始める。compact のチップは外すが、指示の下書きは残す
-  // （返信本文として送り、/compact には戻さない。ADR 0016 / 0022）。
-  const startReply = (text: string) => {
-    // 送信中に引用を変えると、成功時のクリアで新しい引用まで消える。送っている間は受け付けない。
-    if (sending || text === "") return;
-    setQuoteAnchor(null);
-    setReply(text);
+  // 選択を引用として下書きの末尾へ足す。compact のチップは外すが、指示の下書きは残す
+  // （引用に続く本文として送り、/compact には戻さない。ADR 0016 / 0062）。
+  const quoteSelection = () => {
+    // 送信中に足すと、成功時のクリアで新しい引用まで消える。送っている間は受け付けない。
+    if (sending) return;
+    const text = selectionToolbar?.anchor.text ?? "";
+    if (text === "") return;
+    const next = appendQuote(draft, text);
+    setDraft(next.text);
     setChip(null);
-    // 選択の折りたたみは pointerdown で止めているが、押された後にブラウザが流す分は捨てる。
+    pendingCaret.current = next.caret;
+    dismissed.current = true;
     document.getSelection()?.removeAllRanges();
-    const field = input.current;
-    if (field === null) return;
-    field.focus();
-    field.setSelectionRange(field.value.length, field.value.length);
-  };
-
-  const clearReply = () => {
-    setReply(null);
-    input.current?.focus();
+    setSelectionToolbar((current) => (current === null ? null : { ...current, open: false }));
   };
 
   const openProjects = () => setProjectDialog({ open: true, caret: null });
@@ -1461,7 +1448,7 @@ export function PaneDetail(props: PaneDetailProps) {
     const names = attachments
       .map((item) => item.name)
       .filter((name): name is string => name !== null);
-    const text = reply === null ? draft : composeReply(reply, draft);
+    const text = draft;
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
     const compactCommand = attachments.length === 0 && isCompactCommand(text);
     const newCommand = startsNewSession(text, names);
@@ -1485,9 +1472,7 @@ export function PaneDetail(props: PaneDetailProps) {
       setPinned(true);
       // 250ms の debounce を待たずに消す。先にペインを切り替えると古い値が戻る。
       writeDraft(storage(), pane.id, "");
-      writeReply(storage(), pane.id, "");
       setDraft("");
-      setReply(null);
       attachmentStore.clear(pane.id);
       // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
       // 代わりに圧縮中の行を出す。
@@ -1556,7 +1541,7 @@ export function PaneDetail(props: PaneDetailProps) {
     } else setNotice(SEND_FAILED_NOTICE);
   };
 
-  // メニューからはコマンド文字列だけを送る。書きかけの draft・添付・引用は次の
+  // メニューからはコマンド文字列だけを送る。書きかけの draft・添付は次の
   // メッセージのために残す（チップのように draft を指示には使わない）。
   const menuCommandAvailable = (id: CommandId): boolean =>
     !readOnly && !sending && compactionRun === null && commandAvailable(id, pane, snapshot);
@@ -1824,25 +1809,18 @@ export function PaneDetail(props: PaneDetailProps) {
             <ArrowDownIcon />
           </button>
         )}
-        {readOnly || starting || quoteAnchor === null ? null : (
-          <button
-            type="button"
-            class="hwc-quote-action"
-            aria-label="選択した箇所に返信"
-            data-above={quoteAnchor.above}
-            style={{ left: `${quoteAnchor.left}px`, top: `${quoteAnchor.top}px` }}
-            // 押下で選択が折りたたまれると、ボタン自身が消えて click が届かない。
-            onPointerDown={(event) => {
-              event.preventDefault();
-              startReply(quoteAnchor.text);
-            }}
-            onMouseDown={(event) => event.preventDefault()}
-            // キーボードで選んだ選択でも押せるようにする。
-            onClick={() => startReply(quoteAnchor.text)}
-          >
-            返信
-          </button>
-        )}
+        <SelectionToolbar
+          state={selectionToolbar}
+          canQuote={!readOnly && !starting && pane.chat}
+          onQuote={quoteSelection}
+          onCopy={() => {
+            const selection = document.getSelection();
+            const element = scroller.current;
+            if (selection === null || selection.rangeCount === 0 || element === null) return "";
+            return selectionCopyText(element, selection.getRangeAt(0));
+          }}
+          onExited={() => setSelectionToolbar(null)}
+        />
       </div>
 
       {body.kind === "chat" ? (
@@ -1936,21 +1914,6 @@ export function PaneDetail(props: PaneDetailProps) {
               >
                 {expanded ? <CollapseIcon /> : <ExpandIcon />}
               </button>
-            )}
-            {reply === null ? null : (
-              <div class="hwc-reply" role="group" aria-label="引用">
-                <span class="hwc-reply-text" title={reply}>
-                  {reply}
-                </span>
-                <button
-                  type="button"
-                  class="hwc-reply-clear"
-                  aria-label="引用を外す"
-                  onClick={clearReply}
-                >
-                  <CloseIcon size={14} />
-                </button>
-              </div>
             )}
             {attachments.length > 0 ? (
               <div class="hwc-commands" role="group" aria-label="添付画像">
