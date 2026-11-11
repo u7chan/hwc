@@ -5178,6 +5178,7 @@ p.hwc-compaction,
 
 .hwc-choice:hover {
   border-color: var(--color-control-line);
+  color: var(--color-text);
 }
 
 .hwc-choice:disabled {
@@ -5185,11 +5186,10 @@ p.hwc-compaction,
   opacity: 0.45;
 }
 
-/* 選択の印は枠と面だけで付ける。文字色も変えると、カードの名前だけが黒く残り、
-   未選択の名前より強く見える。 */
 .hwc-choice[data-selected="true"] {
   border-color: var(--color-accent);
   background: var(--color-raised);
+  color: var(--color-text);
 }
 
 .hwc-theme-swatch {
