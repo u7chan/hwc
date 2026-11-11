@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { appendQuote, canSend, canStop, normaliseQuote, quoteLines, splitQuote } from "./reply";
+import { appendQuote, canSend, canStop, normaliseQuote, quoteLines } from "./reply";
 
 test("a one line selection keeps the line as it is", () => {
   expect(normaliseQuote("余白が残ります")).toBe("余白が残ります");
@@ -58,35 +58,6 @@ test("a comment between quotes keeps both quotes", () => {
   const second = appendQuote(`${first.text}コメント`, "引用2");
   expect(second.text).toBe("> 引用1\n\nコメント\n\n> 引用2\n\n");
   expect(second.caret).toBe(second.text.length);
-});
-
-test("a quote followed by a blank line splits into a quote and a body", () => {
-  expect(splitQuote("> 引用\n\n本文")).toEqual({ quote: "引用", body: "本文" });
-});
-
-test("a quote alone splits into a quote without a body", () => {
-  expect(splitQuote("> 引用")).toEqual({ quote: "引用", body: "" });
-});
-
-test("a quote without the blank line still splits", () => {
-  expect(splitQuote("> 引用\n本文")).toEqual({ quote: "引用", body: "本文" });
-});
-
-test("blank markers and marker spacing both split", () => {
-  expect(splitQuote("> 前\n>\n> 後\n\n本文")).toEqual({ quote: "前\n\n後", body: "本文" });
-});
-
-test("a marker inside the body is left alone", () => {
-  expect(splitQuote("本文\n> 引用")).toEqual({ quote: null, body: "本文\n> 引用" });
-  expect(splitQuote("> 引用\n\n本文\n> 残り")).toEqual({ quote: "引用", body: "本文\n> 残り" });
-});
-
-test("a body that does not start with a marker is not a quote", () => {
-  expect(splitQuote("本文だけ")).toEqual({ quote: null, body: "本文だけ" });
-});
-
-test("a marker only message stays a body", () => {
-  expect(splitQuote(">\n> ")).toEqual({ quote: null, body: ">\n> " });
 });
 
 const idle = {

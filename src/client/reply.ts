@@ -32,26 +32,6 @@ export function appendQuote(draft: string, quote: string): QuoteAppend {
   return { text, caret: text.length };
 }
 
-export type ReplySplit = { quote: string | null; body: string };
-
-// 送信後の本文から、先頭の blockquote だけを引用カードとして取り出す。
-// 手書きの blockquote も同じ形なので引用として扱い、本文中の `>` には触れない。
-export function splitQuote(text: string): ReplySplit {
-  const lines = text.split("\n");
-  const quoted: string[] = [];
-  let index = 0;
-  while (index < lines.length && lines[index].startsWith(">")) {
-    quoted.push(lines[index].replace(/^> ?/, ""));
-    index += 1;
-  }
-  if (quoted.length === 0) return { quote: null, body: text };
-  const quote = normaliseQuote(quoted.join("\n"));
-  // `>` だけの本文は引用の中身が無い。引用カードにせず、そのまま本文として出す。
-  if (quote === "") return { quote: null, body: text };
-  while (index < lines.length && lines[index].trim() === "") index += 1;
-  return { quote, body: lines.slice(index).join("\n").trimEnd() };
-}
-
 export type ComposeState = {
   uploading: boolean;
   chip: CommandId | null;

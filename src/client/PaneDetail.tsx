@@ -100,7 +100,7 @@ import { usePaneOutput } from "./output";
 import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
-import { appendQuote, canSend, canStop, splitQuote } from "./reply";
+import { appendQuote, canSend, canStop } from "./reply";
 import {
   agentGlyph,
   isShellPane,
@@ -309,8 +309,6 @@ function UserMessage(props: {
   const clampHeight =
     lineHeight > 0 ? lineHeight * USER_MESSAGE_CLAMP_LINES : USER_MESSAGE_CLAMP_FALLBACK;
   const overflowing = contentHeight > clampHeight + 1;
-  // 送信後の引用は、先頭の blockquote だけをカードにする（ADR 0062）。
-  const { quote, body } = splitQuote(props.message.text);
 
   return (
     <>
@@ -322,8 +320,7 @@ function UserMessage(props: {
             ref={content}
             style={{ maxHeight: `${expanded ? contentHeight : clampHeight}px` }}
           >
-            {quote === null ? null : <span class="hwc-msg-quote">{quote}</span>}
-            {body}
+            {props.message.text}
             {overflowing && !expanded ? (
               <span class="hwc-msg-more" aria-hidden="true">
                 …
