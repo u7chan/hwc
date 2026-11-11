@@ -420,6 +420,24 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
   );
 }
 
+// 一覧の上端は行の途中で止めない。位置を決め直したときに行が半分だけ見えると、
+// 見出しのアイコンや案内線が切れて、壊れて見える。指で動かしている間は触らない。
+// アクティブの行は対象にしない。帯が上端に貼り付いて行を覆うので、切れて見えない。
+const LIST_ROWS = ".hwc-group-row, .hwc-tabrow, .hwc-pane";
+
+function snapListTop(node: HTMLDivElement) {
+  const top = node.getBoundingClientRect().top;
+  for (const row of node.querySelectorAll<HTMLElement>(LIST_ROWS)) {
+    // 閉じた束の中の行は高さ 0 の箱に切り取られて見えない。位置だけが残る。
+    if (row.closest('[data-open="false"]') !== null) continue;
+    const rect = row.getBoundingClientRect();
+    if (rect.top < top && rect.bottom > top) {
+      node.scrollTop += rect.top - top;
+      return;
+    }
+  }
+}
+
 export function PaneList(props: PaneListProps) {
   // スコープごとの位置を控える。中身が総入れ替えになるので、ブラウザに任せると
   // 先頭や途中の位置へ飛ぶ。
@@ -434,7 +452,9 @@ export function PaneList(props: PaneListProps) {
 
   useLayoutEffect(() => {
     const node = scroll.current;
-    if (node) node.scrollTop = positions.current.get(props.scope) ?? 0;
+    if (node === null) return;
+    node.scrollTop = positions.current.get(props.scope) ?? 0;
+    snapListTop(node);
   }, [props.scope]);
 
   // 削除が確定した行は、高さを詰めながら淡く消す。行が途中で切り落とされないよう、
@@ -497,6 +517,8 @@ export function PaneList(props: PaneListProps) {
     const top =
       target.getBoundingClientRect().top - node.getBoundingClientRect().top + node.scrollTop;
     node.scrollTop = Math.max(0, top - padding);
+    // 一覧の終わりが近いと、見出しを上端まで送れず上の行が切れる。切れた行の頭まで戻す。
+    snapListTop(node);
     // キーボードでも続けられるよう、移動先の見出しへフォーカスを送る。次の Tab がメニュー。
     target.querySelector<HTMLElement>(".hwc-group")?.focus({ preventScroll: true });
   }, [props.scope, props.reveal]);
