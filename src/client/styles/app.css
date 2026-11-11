@@ -689,8 +689,12 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 
 /* 帯から移った直後の目印。現在のペイン行と同じ太さ・内側の枠を accent で引き、
    どのワークツリーへ来たかを示す。スロット色は使わない。背景は塗らず、選択中の
-   ペイン行と役割を分ける。次のペイン選択・スコープ切り替え・開閉で消える。 */
+   ペイン行と役割を分ける。次のペイン選択・スコープ切り替え・開閉で消える。
+   見出し行はカードの先頭にあるので、上辺の角をカードの角丸に合わせる。丸めないと
+   カードの overflow で枠の角が切り取られ、枠が途中で途切れて見える。下辺は子の行が
+   続くので丸めない。 */
 .hwc-group-row[data-reveal="true"] {
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
@@ -5885,6 +5889,11 @@ p.hwc-compaction,
   .hwc-group-block {
     margin: 0 var(--space-4) var(--space-2);
     background: transparent;
+    border-radius: 0;
+  }
+
+  /* カードの角丸を外したので、見出しの枠も角を丸めない。 */
+  .hwc-group-row[data-reveal="true"] {
     border-radius: 0;
   }
 
