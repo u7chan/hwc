@@ -285,10 +285,11 @@ type Caller = <T>(
   options?: { path?: string; timeoutMs?: number },
 ) => Promise<T>;
 
-// Herdr の managed launch は、agent.get で照会したときにだけ完了へ進む。hwc は起動後に
-// 問い合わせないため、idle のまま画面が動かないペインでは launch が pending に残り、
-// 数分後でも agent.prompt が agent_not_ready で拒否され続ける。Herdr CLI も agent.get を
-// 繰り返して待つ。送信可否の判定は agent.prompt が持つので、照会の失敗では止めない。
+// Herdr の managed launch は、状態変化か agent.get の照会でしか完了判定が進まない。
+// hwc は起動後に問い合わせないため、idle のまま画面が動かないペインでは launch が
+// pending に残り、数分後でも agent.prompt が agent_not_ready で拒否され続ける。
+// Herdr CLI も agent.get を繰り返して待つ。送信可否の判定は agent.prompt が持つので、
+// 照会の失敗では止めない。
 // 追加の照会で終了の期限を削らないよう、この 1 回だけ短く切る。
 const LAUNCH_RECONCILE_TIMEOUT_MS = 2_000;
 

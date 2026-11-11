@@ -11,7 +11,7 @@ Herdr は最後のタブの最後のペインを閉じると、スペース自�
 
 Pi は `/exit` ではなく `/quit` を持つ。Claude Code / Codex / OpenCode も `/quit` を受け付ける。GUI の `agent.start` はシェル上で起動するため、エージェントが終了してもシェルを残せる。一方、`exec pi` など PTY 直下のプロセスを置き換えた場合は、エージェント終了でもペインとスペースが消える。
 
-Herdr の `agent.start` は managed launch を pending として記録し、`agent.get` で照会したときにだけ完了へ進める。hwc は起動後に照会しないため、起動後すぐ idle になり画面が動かないペインでは pending が残る。その状態の `agent.prompt` は `agent_not_ready` で拒否されるので、エージェントが入力待ちでも終了要求が通らない。
+Herdr の `agent.start` は managed launch を pending として記録し、状態変化か `agent.get` の照会で完了判定を進める。hwc は起動後に照会しないため、idle のまま画面が動かないペインでは、後から状態変化も起きず pending が残る。その状態の `agent.prompt` は `agent_not_ready` で拒否されるので、エージェントが入力待ちでも終了要求が通らない。
 
 ## Decision
 
@@ -23,7 +23,7 @@ Herdr の `agent.start` は managed launch を pending として記録し、`age
 - `POST /api/panes/:id/close` は最後のペインを拒否する。`POST /api/panes/:id/exit` は最後の既知エージェントだけを受け付ける。異なる操作への自動切り替えはせず、現在の構成と要求が一致しなければ 409 `pane_action_changed`
 - close / exit は BFF 内で直列化し、操作前にスナップショットを再取得する。GUI から同時に 2 枚閉じる要求が届いても、同じ古い枚数を見て両方削除しない。再取得に失敗したら 502 とし、キャッシュの状態で続行しない。送信後は再取得せず、Herdr のイベントと SSE に任せる
 - exit は `pane.process_info` で PTY 直下の PID とフォアグラウンドのプロセスグループを確認する。同一、欠落、不正な応答なら 409 `agent_exit_unsafe` とし、入力しない。シェルが別のフォアグラウンドジョブを待っている場合だけ、`agent.prompt` に `/quit` を送る。同 API の実プロセス検査で、シェルに戻った対象への送信を拒否する
-- 送る前に `agent.get` で 1 回照会し、Herdr に managed launch の完了判定を進めさせる。照会の失敗では終了を止めない。送信可否は `agent.prompt` が改めて判定する
+- 送る前に `agent.get` で 1 回照会し、Herdr に managed launch の完了判定を進めさせる。照会は 2 秒で切り、失敗しても終了を止めない。送信可否は `agent.prompt` が改めて判定する
 - `Ctrl+D` は送らない。Pi では入力が空のときだけ終了し、シェルへ届くとシェル自体が終了するため。失敗時に `pane.close`、シグナル、別のキーへフォールバックしない
 - 確認中に構成が変わっても、確認した close / exit の意図は切り替えない。現在の状態と一致しなくなったら確認ボタンを無効にし、閉じて操作し直すよう案内する
 - exit 後も選択とペインをローカルで変更しない。成功応答は終了要求の送信成功であり、プロセス終了の保証ではない。8 秒のクライアント期限と二重送信防止は close と共通にする
