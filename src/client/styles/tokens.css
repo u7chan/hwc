@@ -27,8 +27,6 @@
   --color-secondary: #5d6878;
   --color-accent: #255cd6;
   --color-on-accent: #ffffff;
-  /* アクセント面のアイコン専用。明るいテーマは白、暗いテーマは on-accent。 */
-  --color-on-accent-icon: #ffffff;
   --color-selected: #e9f0ff;
   --color-line: #dce0e7;
   --color-control-line: #8490a1;
@@ -495,12 +493,13 @@
   --color-content: #fffaf3;
   --color-text: #575279;
   --color-secondary: #797593;
-  --color-accent: #907aa9;
-  --color-on-accent: #191724;
+  /* 白の on-accent で 4.5:1 を満たす濃さ。 */
+  --color-accent: #7a6890;
+  --color-on-accent: #ffffff;
   --color-selected: #efe6f2;
   --color-line: #e8ded5;
   --color-control-line: #9893a5;
-  --color-active: #907aa9;
+  --color-active: #746389;
   --color-active-bg: #f0e8f3;
   --color-attention: #ea9d34;
   --color-attention-bg: #f9ead1;
@@ -528,12 +527,13 @@
   --color-content: #ffffff;
   --color-text: #383a42;
   --color-secondary: #696c77;
-  --color-accent: #4078f2;
-  --color-on-accent: #0e1116;
+  /* 白の on-accent で 4.5:1 を満たす濃さ。 */
+  --color-accent: #3a6ddc;
+  --color-on-accent: #ffffff;
   --color-selected: #e6edfd;
   --color-line: #e5e5e6;
   --color-control-line: #a0a1a7;
-  --color-active: #4078f2;
+  --color-active: #3766cf;
   --color-active-bg: #e8eefc;
   --color-attention: #c18401;
   --color-attention-bg: #fbf0d6;
@@ -561,12 +561,13 @@
   --color-content: #fdf6e3;
   --color-text: #586e75;
   --color-secondary: #657b83;
-  --color-accent: #268bd2;
-  --color-on-accent: #001f27;
+  /* 白の on-accent で 4.5:1 を満たす濃さ。 */
+  --color-accent: #2076b2;
+  --color-on-accent: #ffffff;
   --color-selected: #dde9f2;
   --color-line: #ded8c4;
   --color-control-line: #93a1a1;
-  --color-active: #268bd2;
+  --color-active: #1d6ba2;
   --color-active-bg: #dbe9f4;
   --color-attention: #b58900;
   --color-attention-bg: #f4e6bd;
@@ -697,7 +698,7 @@
   --color-text: #3c3836;
   --color-secondary: #6f6256;
   --color-accent: #af3a03;
-  --color-on-accent: #fbf1c7;
+  --color-on-accent: #ffffff;
   --color-selected: #f6e7c4;
   --color-line: #ebdbb2;
   --color-control-line: #9a8b76;
@@ -754,8 +755,6 @@
 }
 
 :root[data-scheme="dark"] {
-  --color-on-accent-icon: var(--color-on-accent);
-
   --ansi-0: #5c6370;
   --ansi-1: #ff7b86;
   --ansi-2: #98c379;
