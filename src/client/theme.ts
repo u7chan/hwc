@@ -52,7 +52,7 @@ export const THEMES: readonly ThemeMeta[] = [
     id: "catppuccin-mocha",
     label: "Catppuccin Mocha",
     scheme: "dark",
-    swatch: { bg: "#11111b", surface: "#1e1e2e", accent: "#89b4fa" },
+    swatch: { bg: "#11111b", surface: "#1e1e2e", accent: "#fab387" },
   },
   {
     id: "catppuccin-frappe",
@@ -82,13 +82,13 @@ export const THEMES: readonly ThemeMeta[] = [
     id: "kanagawa",
     label: "Kanagawa",
     scheme: "dark",
-    swatch: { bg: "#1f1f28", surface: "#2a2a37", accent: "#7e9cd8" },
+    swatch: { bg: "#1f1f28", surface: "#2a2a37", accent: "#e6c384" },
   },
   {
     id: "gruvbox",
     label: "Gruvbox",
     scheme: "dark",
-    swatch: { bg: "#282828", surface: "#32302f", accent: "#83a598" },
+    swatch: { bg: "#282828", surface: "#32302f", accent: "#fe8019" },
   },
   {
     id: "everforest",

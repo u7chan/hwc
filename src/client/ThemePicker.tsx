@@ -1,5 +1,7 @@
 import { ChoiceCard } from "./ChoiceCard";
-import { themeGroups, type ThemeMeta, type ThemePreference } from "./theme";
+import { SendIcon, StatusMark } from "./icons";
+import { StatusIcon } from "./StatusLabel";
+import { THEMES, themeGroups, type ThemeMeta, type ThemePreference } from "./theme";
 
 type ThemePickerProps = {
   value: ThemePreference;
@@ -13,6 +15,51 @@ function Swatch(props: { bg: string; surface: string; accent: string }) {
       <span class="hwc-theme-swatch-bar" style={{ background: props.surface }} />
       <span class="hwc-theme-swatch-dot" style={{ background: props.accent }} />
     </span>
+  );
+}
+
+function selectedThemeLabel(value: ThemePreference): string {
+  if (value === "system") return "System（端末に追従）";
+  return THEMES.find((theme) => theme.id === value)?.label ?? "";
+}
+
+// 設定画面には出ない状態色とアクセント面を、いまのテーマで見せる。テーマを選ぶと
+// 画面全体が切り替わり、このプレビューも同じトークンで描き直される。
+function ThemePreview(props: { label: string }) {
+  return (
+    <div class="hwc-theme-preview">
+      <p class="hwc-theme-preview-caption">選択中: {props.label}</p>
+      <div class="hwc-theme-preview-inner" aria-hidden="true">
+        <div class="hwc-theme-preview-row">
+          <span class="hwc-theme-preview-status">
+            <StatusIcon status="working" />
+            実行中
+          </span>
+          <span class="hwc-theme-preview-status">
+            <span class="hwc-status hwc-status--attention">
+              <StatusMark tone="attention" size={18} />
+            </span>
+            要対応
+          </span>
+          <span class="hwc-theme-preview-status">
+            <span class="hwc-status hwc-status--success">
+              <StatusMark tone="success" size={18} />
+            </span>
+            完了
+          </span>
+        </div>
+        <div class="hwc-theme-preview-row">
+          <span class="hwc-theme-preview-link">リンク</span>
+          <span class="hwc-theme-preview-focus">フォーカス</span>
+        </div>
+        <div class="hwc-theme-preview-row">
+          <span class="hwc-send hwc-theme-preview-send">
+            <SendIcon />
+          </span>
+          <span class="hwc-theme-preview-note">送信</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -37,6 +84,8 @@ export function ThemePicker(props: ThemePickerProps) {
 
   return (
     <div class="hwc-choice-block">
+      <ThemePreview label={selectedThemeLabel(props.value)} />
+
       <div class="hwc-choice-grid hwc-choice-grid--modes" role="radiogroup" aria-label="明るさ">
         <ThemeButton
           theme={null}
