@@ -68,6 +68,8 @@ type PaneListProps = {
   expanded: ReadonlySet<string>;
   onSelect: (paneId: string) => void;
   onOpen: (paneId: string) => void;
+  // 一覧の行からのドラッグ。押した時点の位置だけを渡し、移動量で開始を判定する。
+  onDragStart: (event: PointerEvent, paneId: string) => void;
   // 帯から「すべて」のその場所へ移る。スコープの切り替えは PaneList が先に行う。
   onRevealWorkspace: (workspaceId: string) => void;
   reveal: { workspaceId: string; token: number } | null;
@@ -389,6 +391,7 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
                     data-current={current}
                     data-slot={current ? (props.currentSlot ?? undefined) : undefined}
                     aria-current={current ? "true" : undefined}
+                    onPointerDown={(event) => props.onDragStart(event, pane.id)}
                     onClick={() => props.onOpen(pane.id)}
                   >
                     <StatusIcon status={pane.agentStatus} />
@@ -885,6 +888,7 @@ function TreePaneList(props: TreePaneListProps) {
                   type="button"
                   class="hwc-pane-open"
                   aria-current={pane.id === selectedPaneId ? "true" : undefined}
+                  onPointerDown={(event) => props.onDragStart(event, pane.id)}
                   onClick={() => onSelect(pane.id)}
                 >
                   <span class={pane.agent === null ? "hwc-pane-icon" : "hwc-pane-state"}>

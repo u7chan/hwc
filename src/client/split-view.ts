@@ -193,6 +193,23 @@ function selfSplitLayout(view: SplitView, paneId: string, zone: DropZone): Split
   return splitLeaf(host, replacement, dir, zone === "top" || zone === "left", paneId);
 }
 
+// 掴んでからドラッグを始める移動量。クリックとの競合を移動量で分ける。
+export const PANE_DRAG_THRESHOLD = 6;
+
+// 掴んだ位置からの移動がドラッグの開始に足るか。一覧の行は縦にスクロールするので、
+// 触れる画面ではセルの方（右）へ向かう横の動きだけを開始とみなす。マウスは向きを
+// 問わない。一覧以外（タブ・セルの見出し）は縦の移動でも開始できる。
+export function startsPaneDrag(
+  pointerType: string,
+  fromList: boolean,
+  dx: number,
+  dy: number,
+): boolean {
+  if (Math.abs(dx) < PANE_DRAG_THRESHOLD && Math.abs(dy) < PANE_DRAG_THRESHOLD) return false;
+  if (!fromList || pointerType === "mouse") return true;
+  return dx > 0 && Math.abs(dx) > Math.abs(dy);
+}
+
 // そのドロップを受け付けられるか。プレビューを出すかどうかもこれで決める。
 // 同じ向きのネスト（3 列・3 段）と 4 枚超えは受け付けない。
 export function canDrop(view: SplitView, source: string, target: string, zone: DropZone): boolean {

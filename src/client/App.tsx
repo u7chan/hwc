@@ -97,6 +97,7 @@ import {
   openPane,
   removeTab,
   startSplitView,
+  startsPaneDrag,
   syncSplitView,
   type DropZone,
   type SplitNode,
@@ -180,9 +181,6 @@ type OperationMenu = {
 
 // ドラッグの落とし先。中央は入れ替え、端はその方向への分割（ADR 0061）。
 type DropTarget = { pane: string; zone: DropZone };
-
-// クリックと区別する移動量。これ未満では掴んだだけで、選択も並べ替えも始めない。
-const DRAG_THRESHOLD = 6;
 
 // ポインタがセルのどこにあるか。親の分割軸と直交する向きだけを返す。
 function dropZoneAt(cell: HTMLElement, x: number, y: number): DropZone {
@@ -294,7 +292,14 @@ export function App() {
   const resolvedTheme = resolveTheme(theme, systemPrefersDark);
   const scheme = themeScheme(resolvedTheme);
   // 分割のドラッグ。PC のポインタだけが起点で、押した時点の位置だけを控える。
-  const paneDrag = useRef<{ paneId: string; x: number; y: number; active: boolean } | null>(null);
+  // listStart は一覧の行から始めたドラッグ。触れる画面では縦の動きをスクロールに譲る。
+  const paneDrag = useRef<{
+    paneId: string;
+    x: number;
+    y: number;
+    active: boolean;
+    listStart: boolean;
+  } | null>(null);
   const dropTargetRef = useRef<DropTarget | null>(null);
   const [dragging, setDragging] = useState<{
     paneId: string;
@@ -696,17 +701,29 @@ export function App() {
     setSettingsOpen(false);
   };
 
+  // ドラッグが成立した後の click で選択を動かさない。次の押下で解除する。
+  const consumeDraggedClick = (): boolean => {
+    if (!draggedSincePress.current) return false;
+    draggedSincePress.current = false;
+    return true;
+  };
+
   // 保留を作るのはアクティブ一覧の行だけ。ツリー・詳細のタブバー・復元では作らない。
-  const openActivePane = (paneId: string) => moveTo(paneId, true);
+  const openActivePane = (paneId: string) => {
+    if (consumeDraggedClick()) return;
+    moveTo(paneId, true);
+  };
 
   const select = (paneId: string) => moveTo(paneId);
 
-  // タブをドラッグした後の click で選択を動かさない。次の押下で解除する。
+  // 一覧のツリーの行。タップは開くだけで、ドラッグの後は開かない。
+  const selectFromList = (paneId: string) => {
+    if (consumeDraggedClick()) return;
+    select(paneId);
+  };
+
   const selectFromTab = (paneId: string) => {
-    if (draggedSincePress.current) {
-      draggedSincePress.current = false;
-      return;
-    }
+    if (consumeDraggedClick()) return;
     select(paneId);
   };
 
@@ -1139,6 +1156,9 @@ export function App() {
     }
     flipRects.current = rects;
   };
+
+  // 落としたときの選択はレイアウト操作。一覧の行を開いたわけではないので、既読の
+  // 保留は作らない（タブからのドラッグと同じ。ADR 0017 / 0061）。
   const applyDrop = (paneId: string, target: DropTarget) => {
     const next = dropOnPane(split, paneId, target.pane, target.zone);
     if (next === split) return;
@@ -1148,12 +1168,22 @@ export function App() {
   const applyDropLatest = useRef(applyDrop);
   applyDropLatest.current = applyDrop;
 
-  // タブ・セルの押下だけを控え、動き始めてからドラッグにする。クリックとの競合を
-  // 移動量で分ける（一覧の並べ替えと同じ判定）。
-  const startPaneDrag = (event: PointerEvent, paneId: string) => {
+  // タブ・セル・一覧の行の押下だけを控え、動き始めてからドラッグにする。クリックとの
+  // 競合を移動量で分ける（一覧の並べ替えと同じ判定）。
+  const startPaneDrag = (event: PointerEvent, paneId: string, listStart = false) => {
     if (!wide || event.button !== 0) return;
-    paneDrag.current = { paneId, x: event.clientX, y: event.clientY, active: false };
+    paneDrag.current = {
+      paneId,
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      listStart,
+    };
     draggedSincePress.current = false;
+  };
+
+  const startListPaneDrag = (event: PointerEvent, paneId: string) => {
+    startPaneDrag(event, paneId, true);
   };
 
   useEffect(() => {
@@ -1163,7 +1193,7 @@ export function App() {
       if (!dragState.active) {
         const dx = event.clientX - dragState.x;
         const dy = event.clientY - dragState.y;
-        if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+        if (!startsPaneDrag(event.pointerType, dragState.listStart, dx, dy)) return;
         dragState.active = true;
         draggedSincePress.current = true;
       }
@@ -1433,8 +1463,9 @@ export function App() {
               scope={scope}
               onScope={changeScope}
               expanded={expanded}
-              onSelect={select}
+              onSelect={selectFromList}
               onOpen={openActivePane}
+              onDragStart={startListPaneDrag}
               onRevealWorkspace={revealWorkspace}
               reveal={reveal}
               onToggle={toggle}
