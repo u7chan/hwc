@@ -3,6 +3,7 @@ import {
   EMPTY_SPLIT_VIEW,
   MAX_LEAVES,
   canDrop,
+  canSwapTabs,
   clearCurrent,
   currentSlotIndex,
   dropOnPane,
@@ -234,6 +235,21 @@ test("dropping on the center swaps the two leaves and selects the moved pane", (
   const next = dropOnPane(shown, "w1:p1", "w1:p2", "center");
   expect(next.layout).toEqual(row(leaf("w1:p2"), leaf("w1:p1")));
   expect(next.current).toBe("w1:p1");
+  expect(next.recent[0]).toBe("w1:p1");
+});
+
+test("dropping on a fixed tab swaps the leaves like the cell center", () => {
+  // 固定タブへのドロップは、セルの中央へのドロップと同じに入替えとして適用する。
+  // 掴んだペインは recent の先頭に移る（ADR 0064）。
+  const shown = view(["w1:p1", "w1:p2"], "w1:p2", row(leaf("w1:p1"), leaf("w1:p2")), [
+    "w1:p2",
+    "w1:p1",
+  ]);
+  const next = dropOnPane(shown, "w1:p1", "w1:p2", "center", true);
+  expect(next.layout).toEqual(row(leaf("w1:p2"), leaf("w1:p1")));
+  expect(next.current).toBe("w1:p1");
+  expect(next.recent).toEqual(["w1:p1", "w1:p2"]);
+  expect(next.openTabs).toEqual(["w1:p1", "w1:p2"]);
 });
 
 test("dropping a tab outside the layout on the center replaces the target", () => {
@@ -303,6 +319,20 @@ test("a split along the parent axis is rejected", () => {
   expect(canDrop(shown, "w1:p1", "w1:p2", "right")).toBe(false);
   expect(canDrop(shown, "w1:p1", "w1:p2", "top")).toBe(true);
   expect(dropOnPane(shown, "w1:p1", "w1:p2", "right")).toBe(shown);
+});
+
+test("swapping tabs only accepts two panes in the fixed zone", () => {
+  const shown = view(["w1:p1", "w1:p2", "w1:p9"], "w1:p1", row(leaf("w1:p1"), leaf("w1:p2")));
+  expect(canSwapTabs(shown, "w1:p1", "w1:p2", true)).toBe(true);
+  // 木の外のタブは、固定タブとしても、掴む側としても受け付けない。
+  expect(canSwapTabs(shown, "w1:p1", "w1:p9", true)).toBe(false);
+  expect(canSwapTabs(shown, "w1:p9", "w1:p2", true)).toBe(false);
+  // 自身と、広くない画面も対象にしない。
+  expect(canSwapTabs(shown, "w1:p1", "w1:p1", true)).toBe(false);
+  expect(canSwapTabs(shown, "w1:p1", "w1:p2", false)).toBe(false);
+  // 1 枚表示でも wide なら data-slot は付くが、固定ゾーンのタブは 1 枚なので落ちる。
+  const single = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
+  expect(canSwapTabs(single, "w1:p1", "w1:p1", true)).toBe(false);
 });
 
 test("the layout stops at four panes", () => {

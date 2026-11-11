@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-11
 - Revises: [ADR 0058](0058-split-view-tab-history.md) のタブ順、[ADR 0059](0059-tab-close-detaches.md) の後継、[ADR 0061](0061-split-view-directional-tree.md) の色の割り当て
+- Revises: 2026-11-11 に固定ゾーンのタブをドロップの落とし先にし、タブバーから入れ替えられるようにした（[ADR 0064](0064-tab-strip-swap.md)）
 
 ## Context
 

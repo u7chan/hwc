@@ -2841,6 +2841,12 @@ a.hwc-pane-head-repo:focus-visible {
   background: var(--slot-color);
 }
 
+/* ドラッグの落とし先になった固定タブを枠で示す（ADR 0064）。border だと幅が内容依存の
+   タブ列が対象のたびに 1px ずれ、外側の outline は .hwc-tabs の overflow-x で上下が切れる。 */
+.hwc-tab-item[data-drop-target="true"] {
+  box-shadow: inset 0 0 0 1px var(--slot-color);
+}
+
 .hwc-tab-close {
   flex: none;
   display: grid;

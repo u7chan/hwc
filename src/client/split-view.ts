@@ -313,6 +313,23 @@ export function canDrop(
   return parentDirOf(base, target) !== zoneDir(zone);
 }
 
+// 固定ゾーンのタブへ落とせるか。意味はセルの中央へ落とすのと同じ入れ替えで、
+// 起点がタブ・セル見出し・一覧の行のどれでも結果を変えない（ADR 0064）。
+// 固定ゾーンの外のタブは落とせない。並びを手で変えると recent の意味が壊れる。
+// 固定ゾーンは wide かつ葉が 2 枚以上のときだけ出る（tabPanes）。
+// 1 枚表示でも data-slot は付くので、葉の数でも対象を絞る。
+export function canSwapTabs(
+  view: SplitView,
+  source: string,
+  target: string,
+  wide: boolean,
+): boolean {
+  if (!wide || source === target) return false;
+  const fixed = readingOrder(view.layout);
+  if (fixed.length < 2) return false;
+  return fixed.includes(source) && fixed.includes(target);
+}
+
 // ドロップを適用する。中央は入れ替え（木の外のタブなら置換）、端は分割。
 // 選択は動かしたペインへ移す。
 export function dropOnPane(
