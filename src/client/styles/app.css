@@ -3600,6 +3600,50 @@ p.hwc-compaction,
   font-size: var(--text-secondary);
 }
 
+/* 根の外にあって配れないファイル。チップを出せない代わりに、理由と次の一手を 1 行で置く。 */
+.hwc-msg-outside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-1);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+}
+
+.hwc-msg-outside-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hwc-msg-outside-name {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+
+.hwc-msg-outside-action {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.hwc-msg-outside-action:hover {
+  background: var(--color-raised);
+}
+
+.hwc-msg-outside-action:active {
+  background: var(--color-line);
+}
+
 /* 折り畳みの … は吹き出しの面の色で隠す。 */
 .hwc-msg[data-pending="true"] .hwc-msg-more {
   background: linear-gradient(90deg, transparent, var(--color-active-bg) 60%);

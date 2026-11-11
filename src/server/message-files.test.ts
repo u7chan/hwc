@@ -410,6 +410,102 @@ test("finds an image in an extra root even without a checkout", async () => {
   }
 });
 
+test("reports the name of an absolute file that exists outside every root", async () => {
+  const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
+  await writeFile(join(outside, "shell-agent.html"), "<!doctype html>");
+  await writeFile(join(outside, "overview.png"), png);
+
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [
+      {
+        id: "a1",
+        role: "agent",
+        text: `モックは \`${join(outside, "shell-agent.html")}\` と \`${join(outside, "overview.png")}\` です。`,
+        at: 1,
+      },
+    ],
+  };
+
+  try {
+    const message = (await attachMessageFiles(chat, root)).messages[0];
+    // 配れないので files は空のまま、理由のために名前だけを持つ。絶対パスは返さない。
+    expect(message?.files).toBeUndefined();
+    expect(message?.outsideFile).toBe("shell-agent.html");
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("does not report a file that the extra roots can deliver", async () => {
+  const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+  const page = join(extra, "mock.html");
+  await writeFile(page, "<!doctype html>");
+
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: `モックは \`${page}\` です。`, at: 1 }],
+  };
+
+  try {
+    const message = (await attachMessageFiles(chat, root, [extra])).messages[0];
+    expect(message?.files).toMatchObject([{ name: "mock.html", root: 1 }]);
+    expect(message?.outsideFile).toBeUndefined();
+  } finally {
+    await rm(extra, { recursive: true, force: true });
+  }
+});
+
+test("reports nothing when the path is not absolute, missing, or not deliverable", async () => {
+  const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
+  await writeFile(join(outside, "notes.txt"), "log");
+  await writeFile(join(outside, "empty.html"), "");
+  // チェックアウトの中でも、サイズ 0 は配れない。理由は「根の外」ではない。
+  await writeFile(join(root, "empty.png"), "");
+
+  const text = [
+    "`mock.html`",
+    `\`${join(outside, "missing.html")}\``,
+    `\`${join(outside, "notes.txt")}\``,
+    `\`${join(outside, "empty.html")}\``,
+    "`empty.png`",
+  ].join(" と ");
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text, at: 1 }],
+  };
+
+  try {
+    const message = (await attachMessageFiles(chat, root)).messages[0];
+    expect(message?.files).toBeUndefined();
+    expect(message?.outsideFile).toBeUndefined();
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("changes the etag when an outside file appears without new messages", async () => {
+  const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
+  const page = join(outside, "mock.html");
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: `モックは \`${page}\` です。`, at: 1 }],
+  };
+
+  try {
+    const before = await attachMessageFiles(chat, root);
+    expect(before.messages[0]?.outsideFile).toBeUndefined();
+
+    await writeFile(page, "<!doctype html>");
+    const after = await attachMessageFiles(chat, root);
+    expect(after.messages[0]?.outsideFile).toBe("mock.html");
+    // 本文が同じでも、案内が変わったら 304 で古いスナップショットを返さない。
+    expect(after.etag).not.toBe(before.etag);
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
 test("keeps the root of a same-named file so delivery cannot swap it", async () => {
   await write("mock.html", new TextEncoder().encode("<!doctype html><p>checkout</p>"));
   const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));

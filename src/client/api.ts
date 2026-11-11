@@ -186,6 +186,7 @@ function toChatMessage(value: unknown): ChatMessage | null {
   if (typeof message.at !== "number") return null;
   const attachments = toAttachmentNames(message.attachments);
   const files = toChatFiles(message.files);
+  const outsideFile = toOutsideFile(message.outsideFile);
   const count = message.role === "error" ? toRetryCount(message.count) : undefined;
   return {
     id: message.id,
@@ -195,7 +196,15 @@ function toChatMessage(value: unknown): ChatMessage | null {
     ...(count === undefined ? {} : { count }),
     ...(attachments === undefined ? {} : { attachments }),
     ...(files === undefined ? {} : { files }),
+    ...(outsideFile === undefined ? {} : { outsideFile }),
   };
+}
+
+// 案内に出すのは名前だけ。区切りを含む値は、サーバーが契約を破ったということなので描かない。
+function toOutsideFile(value: unknown): string | undefined {
+  if (typeof value !== "string" || value === "") return undefined;
+  if (value.includes("/") || value.includes("\\")) return undefined;
+  return value;
 }
 
 // 1 回だけの失敗は count を持たない。飾りの値が壊れても失敗の行は捨てない。

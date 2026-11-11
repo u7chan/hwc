@@ -41,6 +41,7 @@ import {
   idleEchoExpired,
   isPendingConfirmed,
   latestUserAt,
+  moveRequestText,
   newSessionPending,
   newSessionReset,
   newSessionSnapshot,
@@ -245,6 +246,26 @@ function MessageFiles(props: {
   );
 }
 
+// 根の外にあったファイル。hwc 側では移せないので、エージェントに移してもらう入口だけを
+// 添える（ADR 0065）。パスではなく名前だけを出し、押したときに何を頼むかを本文で見せる。
+function OutsideFileNote(props: { name: string; onRequestMove: (name: string) => void }) {
+  return (
+    <div class="hwc-msg-outside">
+      <span class="hwc-msg-outside-text">
+        <span class="hwc-msg-outside-name">{props.name}</span>{" "}
+        はチェックアウトの外なのでプレビューできません
+      </span>
+      <button
+        type="button"
+        class="hwc-msg-outside-action"
+        onClick={() => props.onRequestMove(props.name)}
+      >
+        移動を依頼
+      </button>
+    </div>
+  );
+}
+
 // 画像記法の位置に描いた画像は、末尾の一覧から外す。裸パスだけの画像と HTML は
 // 本文に位置が無いので、今までどおりメッセージの後ろに並べる。
 function AgentMessage(props: {
@@ -254,6 +275,7 @@ function AgentMessage(props: {
   copyButton: ComponentChildren;
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
+  onRequestMove: (name: string) => void;
 }) {
   const { images, rest } = splitInlineImages(props.paneId, props.message.text, props.message.files);
   return (
@@ -271,6 +293,9 @@ function AgentMessage(props: {
           onOpen={props.onOpenImage}
           onPreview={props.onOpenPreview}
         />
+      )}
+      {props.message.outsideFile === undefined ? null : (
+        <OutsideFileNote name={props.message.outsideFile} onRequestMove={props.onRequestMove} />
       )}
       <div class="hwc-msg-meta">
         <span class="hwc-msg-time">{formatClock(props.message.at)}</span>
@@ -451,6 +476,7 @@ function ChatLog(props: {
   onCopy: (id: string, text: string) => void;
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
+  onRequestMove: (name: string) => void;
   pending: readonly PendingMessage[];
 }) {
   const copyButton = (message: ChatMessage) => {
@@ -538,6 +564,7 @@ function ChatLog(props: {
                   copyButton={copyButton(row.message)}
                   onOpenImage={props.onOpenImage}
                   onOpenPreview={props.onOpenPreview}
+                  onRequestMove={props.onRequestMove}
                 />
               ) : row.message.role === "error" ? (
                 <ErrorMessage message={row.message} copyButton={copyButton(row.message)} />
@@ -1424,6 +1451,32 @@ export function PaneDetail(props: PaneDetailProps) {
     isCommandPane(pane) &&
     isNewSessionCommand(text);
 
+  // 送った本文を、ポーリングが返すまでの控えとして積む。入力欄からの送信と、会話の行から
+  // 送る依頼で形を揃える。
+  const echoPending = (echo: {
+    text: string;
+    at: number;
+    from: number;
+    waiting: boolean;
+    after: number;
+    names: string[];
+  }) => {
+    setPending((items) => [
+      ...items,
+      {
+        id: `pending-${echo.at}-${items.length}`,
+        role: "user",
+        text: echo.text,
+        at: echo.at,
+        from: echo.from,
+        waiting: echo.waiting,
+        after: echo.after,
+        command: false,
+        ...(echo.names.length === 0 ? {} : { attachments: echo.names }),
+      },
+    ]);
+  };
+
   const submitInput = async (text: string, names: string[]): Promise<boolean> => {
     const newSession = startsNewSession(text, names);
     if (newSession) setSessionReset(newSessionReset(serverSnapshot, Date.now()));
@@ -1476,24 +1529,26 @@ export function PaneDetail(props: PaneDetailProps) {
       if (compactCommand) {
         markCompaction(baselineAt, text);
       } else if (!newCommand) {
-        setPending((items) => [
-          ...items,
-          {
-            id: `pending-${at}-${items.length}`,
-            role: "user",
-            text,
-            at,
-            from,
-            waiting,
-            after,
-            command: false,
-            ...(names.length === 0 ? {} : { attachments: names }),
-          },
-        ]);
+        echoPending({ text, at, from, waiting, after, names });
       }
     } else {
       setNotice(SEND_FAILED_NOTICE);
     }
+  };
+
+  // 根の外のファイルをエージェントに移してもらう。入力欄を通さない送信なので、下書き・添付・
+  // コマンドの解釈には触らない。控えだけは積んで、ポーリングを待たずに送ったことが見える。
+  const requestMove = async (name: string) => {
+    if (readOnly || sending) return;
+    setNotice(null);
+    const text = moveRequestText(name);
+    const from = latestUserAt(snapshot?.messages ?? []);
+    const waiting = replying;
+    const after = snapshot?.messages.length ?? 0;
+    if (await submitInput(text, [])) {
+      setPinned(true);
+      echoPending({ text, at: Date.now(), from, waiting, after, names: [] });
+    } else setNotice(SEND_FAILED_NOTICE);
   };
 
   const stopWorking = async () => {
@@ -1766,6 +1821,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 onCopy={copy}
                 onOpenImage={onOpenImage}
                 onOpenPreview={onOpenPreview}
+                onRequestMove={(name) => void requestMove(name)}
                 pending={pendingMessages}
               />
             </>
