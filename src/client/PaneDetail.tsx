@@ -2047,20 +2047,21 @@ export function PaneDetail(props: PaneDetailProps) {
               />
             </span>
             <div class="hwc-input-actions">
-              {compact ? null : pane.chat ? (
+              {/* 入口を出すのはシェルだけ。会話を読めないエージェント（Claude など）は chat が
+                  false になるので、chat ではなくペインの種類で分ける。 */}
+              {compact ? null : shell ? (
+                <button type="button" class="hwc-agent-start" onClick={startAgent}>
+                  <AgentIcon size={16} />
+                  エージェントを起動
+                </button>
+              ) : pane.chat ? (
                 <ComposerAdd
                   full={attachments.length >= MAX_ATTACHMENTS}
                   commands={composerCommands}
                   onFiles={(files) => takeImages(dropActionFrom(files))}
                   onProjects={openProjects}
                 />
-              ) : (
-                // シェルのペインは、会話ペインの + と同じ位置にエージェントの入口を置く。
-                <button type="button" class="hwc-agent-start" onClick={startAgent}>
-                  <AgentIcon size={16} />
-                  エージェントを起動
-                </button>
-              )}
+              ) : null}
               <span class="hwc-input-tail">
                 {info === null && meter === null ? null : (
                   <span class="hwc-input-info">
