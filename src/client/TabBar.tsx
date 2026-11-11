@@ -8,9 +8,10 @@ import { shortenSpaceName, statusLabel, tabDisplayName, type PaneRow } from "./s
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
-  // 開いたペインの履歴。全スペースを跨ぎ、左から開いた順。
-  openTabs: readonly PaneRow[];
-  // 4 スロットの並び。タブの左端のバーをスロット色にするためにだけ使う。
+  // タブバーの表示順。PC の 2 枚以上の分割では固定ゾーン（セルの読み順）の右に、
+  // 木の外のタブが MRU で続く（ADR 0063）。
+  tabs: readonly PaneRow[];
+  // 固定ゾーンの並び。タブの左端のバーをスロット色にするためにだけ使う。
   slots: readonly (string | null)[];
   currentPaneId: string | null;
   // 複数スペースのペインが開いているとき、ペインに固有の名前があるときだけ
@@ -114,7 +115,7 @@ export function TabBar(props: TabBarProps) {
         <ChevronLeftIcon />
       </button>
       <div class="hwc-tabs" role="tablist" aria-label="開いているペイン" ref={tabList}>
-        {props.openTabs.map((item) => {
+        {props.tabs.map((item) => {
           const selected = !previewing && item.pane.id === props.currentPaneId;
           const leaving = item.pane.id === props.leavingPaneId;
           const parent = props.parentPaneIds.has(item.pane.id);

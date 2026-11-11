@@ -92,13 +92,15 @@ import {
   dropOnPane,
   leafPanes,
   multiSpace,
-  nextOpenPane,
+  nextTabPane,
   normalizeSplitView,
   openPane,
+  readingOrder,
   removeTab,
   startSplitView,
   startsPaneDrag,
   syncSplitView,
+  tabPanes,
   type DropZone,
   type SplitNode,
   type SplitView,
@@ -201,7 +203,13 @@ function dropZoneAt(cell: HTMLElement, x: number, y: number): DropZone {
   return nearest[1] < 0.3 ? nearest[0] : "center";
 }
 
-function dropTargetAt(x: number, y: number, source: string, view: SplitView): DropTarget | null {
+function dropTargetAt(
+  x: number,
+  y: number,
+  source: string,
+  view: SplitView,
+  wide: boolean,
+): DropTarget | null {
   // ビューポートの外では何も返らない。掴んだまま画面外で離しただけで分割しない。
   const element = document.elementFromPoint(x, y);
   const cell = element?.closest("[data-drop-pane]");
@@ -209,7 +217,7 @@ function dropTargetAt(x: number, y: number, source: string, view: SplitView): Dr
   const pane = cell.dataset.dropPane;
   if (pane === undefined) return null;
   const zone = dropZoneAt(cell, x, y);
-  return canDrop(view, source, pane, zone) ? { pane, zone } : null;
+  return canDrop(view, source, pane, zone, wide) ? { pane, zone } : null;
 }
 
 // メニューを閉じても続く操作。busy はメニューの外に置き、開き直しても実行中を出す。
@@ -289,6 +297,7 @@ export function App() {
   );
   // 端末の外観は React の外にある。解決した明暗は、ANSI 色の補正と属性の両方で使う。
   const systemPrefersDark = useMediaQuery("(prefers-color-scheme: dark)");
+  const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
   const resolvedTheme = resolveTheme(theme, systemPrefersDark);
   const scheme = themeScheme(resolvedTheme);
   // 分割のドラッグ。PC のポインタだけが起点で、押した時点の位置だけを控える。
@@ -566,7 +575,7 @@ export function App() {
   const pane = state ? findPane(state, selectedPaneId) : null;
 
   // タブ・木・選択は 1 つのキーに保存する。同じ内容を書き直さない。
-  const splitKey = `${split.openTabs.join(" ")}\n${split.current ?? ""}\n${JSON.stringify(split.layout)}`;
+  const splitKey = `${split.openTabs.join(" ")}\n${split.recent.join(" ")}\n${split.current ?? ""}\n${JSON.stringify(split.layout)}`;
   useEffect(() => {
     if (state === null) return;
     writeSplitView(split);
@@ -607,14 +616,16 @@ export function App() {
   // セルごとに文脈を引く。1 つの context を共有すると、別スペースを並べたときに
   // PR のチップや Git のメニューが別スペースの値になる。
   const context = state ? findPaneContext(state, selectedPaneId) : null;
-  const openTabs =
+  // タブバーは表示順。PC の 2 枚以上の分割だけ、固定ゾーン（セルの読み順）の右に
+  // 木の外のタブを MRU で並べる。モバイルと 1 枚表示は開いた順（ADR 0063）。
+  const tabRows =
     state === null
       ? []
-      : split.openTabs.flatMap((paneId) => {
+      : tabPanes(split, wide).flatMap((paneId) => {
           const row = findPaneRow(state, paneId);
           return row === null ? [] : [row];
         });
-  const multiSpaceTabs = multiSpace(openTabs.map((row) => row.workspace.id));
+  const multiSpaceTabs = multiSpace(tabRows.map((row) => row.workspace.id));
 
   // プレビューは一時タブのまま。開いた履歴にもスロットにも入れず、対象ペインが開いている
   // 間だけタブに出せる。ペインを選ぶと隠れる。
@@ -822,7 +833,7 @@ export function App() {
     leavingTabRef.current = null;
     setLeavingTab(null);
     setView({
-      split: removeTab(splitRef.current, target.paneId, target.successor),
+      split: removeTab(splitRef.current, target.paneId, target.successor, wide),
       expanded: expandedRef.current,
     });
   };
@@ -856,7 +867,7 @@ export function App() {
     setClosing({
       paneId,
       action,
-      next: nextOpenPane(split.openTabs, paneId),
+      next: nextTabPane(split, paneId, wide),
       phase: "confirm",
     });
   };
@@ -1094,8 +1105,6 @@ export function App() {
 
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
 
-  const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
-
   // アクティブの帯から「すべて」のその場所へ移る。スコープと一覧のスクロールは PaneList が
   // 持ち、ここでは代表ペインと開閉だけを決める。狭い画面は一覧と詳細を同時に出せず、
   // 目的はワークツリーメニューなので、代表ペインは選ばず一覧のまま移る。
@@ -1160,7 +1169,8 @@ export function App() {
   // 落としたときの選択はレイアウト操作。一覧の行を開いたわけではないので、既読の
   // 保留は作らない（タブからのドラッグと同じ。ADR 0017 / 0061）。
   const applyDrop = (paneId: string, target: DropTarget) => {
-    const next = dropOnPane(split, paneId, target.pane, target.zone);
+    // ドラッグは広い画面だけで始まる。途中で幅が変わっても開始時の分割として扱う。
+    const next = dropOnPane(split, paneId, target.pane, target.zone, true);
     if (next === split) return;
     captureFlip();
     setView({ split: next, expanded });
@@ -1204,6 +1214,7 @@ export function App() {
         event.clientY,
         dragState.paneId,
         splitRef.current,
+        true,
       );
       setDragging({ paneId: dragState.paneId, target: dropTargetRef.current });
     };
@@ -1229,7 +1240,7 @@ export function App() {
   }, []);
 
   // グリッドは木の葉。空きは持たない（ADR 0061）。
-  const layoutPanes = leafPanes(split.layout);
+  const layoutPanes = readingOrder(split.layout);
   // 現在ペインが入っているスロット（1 始まり）。一覧の現在行とタブの色に使う。
   const currentSlot = currentSlotIndex(split);
   // セルが並ぶのは広い画面だけ。狭い画面は 1 枚表示なので、分割セル向けの表示を切り替える。
@@ -1571,10 +1582,10 @@ export function App() {
             />
           ) : state === null ? (
             placeholder
-          ) : (wide && openTabs.length > 0) || pane !== null ? (
+          ) : (wide && tabRows.length > 0) || pane !== null ? (
             <div class="hwc-detail-inner">
               <TabBar
-                openTabs={openTabs}
+                tabs={tabRows}
                 slots={wide ? layoutPanes : NO_SLOTS}
                 currentPaneId={selectedPaneId}
                 multiSpace={multiSpaceTabs}
