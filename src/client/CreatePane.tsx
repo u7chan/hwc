@@ -14,6 +14,8 @@ import {
   type CreatePaneRequest,
   type CreatePaneOutcome,
   type CreateWorktreeOutcome,
+  type StartAgentFailure,
+  startAgent,
 } from "./api";
 import { worktreeFailureNotice, worktreePartialNotice } from "./worktree-create";
 import { ChoiceCard } from "./ChoiceCard";
@@ -27,6 +29,8 @@ type CreatePaneProps = {
   paneId: string;
   // 値があればワークツリーを作り、その root pane でエージェントを起動する。
   worktreeWorkspaceId: string | null;
+  // 既存のシェルペイン（paneId）で起動する。ペインを作らないので名前と種類の切り替えは出さない。
+  start: boolean;
   // エージェントの起動を頼んだか。起動が終わるまで入力を閉じる側で使う。
   onCreated: (paneId: string, agent: boolean) => void;
   onClose: () => void;
@@ -71,8 +75,42 @@ function worktreeFailureView(result: Extract<CreateWorktreeOutcome, { ok: false 
   return worktreeFailureNotice(result.error);
 }
 
+// 既存のペインで起動する場合、ペインができているかの分岐はない。再試行できるかだけを分ける。
+function startFailureView(error: StartAgentFailure): FailureView {
+  switch (error) {
+    case "timeout":
+      return {
+        message:
+          "起動できたか確認できませんでした。ペインの状態を見てから、必要ならもう一度お試しください。",
+        retry: false,
+      };
+    case "pane_busy":
+      return {
+        message: "コマンドが動いています。停止してからもう一度お試しください。",
+        retry: true,
+      };
+    case "pane_not_shell":
+      return { message: "このペインではすでにエージェントが動いています。", retry: false };
+    case "pane_not_found":
+      return { message: "ペインが見つかりませんでした。", retry: false };
+    case "invalid_request":
+      return { message: "入力内容を確認してください。", retry: false };
+    case "agent_start_failed":
+      return {
+        message: "エージェントを起動できませんでした。ペインはシェルのまま残っています。",
+        retry: true,
+      };
+    default:
+      return {
+        message: "エージェントを起動できませんでした。もう一度お試しください。",
+        retry: true,
+      };
+  }
+}
+
 export function CreatePane(props: CreatePaneProps) {
   const worktree = props.worktreeWorkspaceId !== null;
+  const start = props.start;
   const [name, setName] = useState("");
   const [mode, setMode] = useState<Mode>("agent");
   const [agent, setAgent] = useState<AgentKind>("pi");
@@ -94,6 +132,21 @@ export function CreatePane(props: CreatePaneProps) {
     if (busy || !open) return;
     setBusy(true);
     setError(null);
+
+    if (start) {
+      const result = await startAgent(props.paneId, { agent, model, effort });
+      if (result.ok) {
+        props.onCreated(props.paneId, true);
+        setOpen(false);
+        return;
+      }
+      const view = startFailureView(result.error);
+      setBusy(false);
+      setSettled(!view.retry);
+      setError(view.message);
+      return;
+    }
+
     const request: CreatePaneRequest = {
       name: name.trim() === "" ? null : name.trim(),
       agent: mode === "agent" ? agent : null,
@@ -140,56 +193,65 @@ export function CreatePane(props: CreatePaneProps) {
       onExited={props.onClose}
     >
       <h2 class="hwc-dialog-title" id="hwc-create-title">
-        {worktree ? "新しいワークツリー" : "新しいペイン"}
+        {start ? "エージェントを起動" : worktree ? "新しいワークツリー" : "新しいペイン"}
       </h2>
 
-      {worktree ? (
+      {start ? (
+        <p class="hwc-dialog-text">
+          シェルペイン <span class="hwc-dialog-id">{props.paneId}</span>{" "}
+          の上で、作業ディレクトリと履歴を保ったまま起動します。
+        </p>
+      ) : worktree ? (
         <p class="hwc-dialog-text">ブランチ名と保存先は Herdr が自動で決めます。</p>
       ) : null}
 
-      <label class="hwc-create-field">
-        <span class="hwc-create-label">ペイン名（任意）</span>
-        <input
-          class="hwc-create-input"
-          type="text"
-          maxLength={80}
-          value={name}
-          placeholder="例: 実装"
-          autocomplete="off"
-          spellcheck={false}
-          disabled={busy || settled}
-          onInput={(event) => setName(event.currentTarget.value)}
-        />
-      </label>
+      {start ? null : (
+        <label class="hwc-create-field">
+          <span class="hwc-create-label">ペイン名（任意）</span>
+          <input
+            class="hwc-create-input"
+            type="text"
+            maxLength={80}
+            value={name}
+            placeholder="例: 実装"
+            autocomplete="off"
+            spellcheck={false}
+            disabled={busy || settled}
+            onInput={(event) => setName(event.currentTarget.value)}
+          />
+        </label>
+      )}
 
-      <div class="hwc-create-modes" role="radiogroup" aria-label="ペインの種類">
-        <button
-          type="button"
-          role="radio"
-          class="hwc-create-mode"
-          aria-checked={mode === "agent"}
-          disabled={busy || settled}
-          onClick={() => setMode("agent")}
-        >
-          <AgentIcon size={16} />
-          エージェント
-        </button>
-        <button
-          type="button"
-          role="radio"
-          class="hwc-create-mode"
-          aria-checked={mode === "shell"}
-          disabled={busy || settled}
-          onClick={() => {
-            setMode("shell");
-            setModel(null);
-            setEffort(null);
-          }}
-        >
-          <TerminalIcon size={16} />
-          シェル
-        </button>
-      </div>
+      {start ? null : (
+        <div class="hwc-create-modes" role="radiogroup" aria-label="ペインの種類">
+          <button
+            type="button"
+            role="radio"
+            class="hwc-create-mode"
+            aria-checked={mode === "agent"}
+            disabled={busy || settled}
+            onClick={() => setMode("agent")}
+          >
+            <AgentIcon size={16} />
+            エージェント
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="hwc-create-mode"
+            aria-checked={mode === "shell"}
+            disabled={busy || settled}
+            onClick={() => {
+              setMode("shell");
+              setModel(null);
+              setEffort(null);
+            }}
+          >
+            <TerminalIcon size={16} />
+            シェル
+          </button>
+        </div>
+      )}
 
       {mode === "agent" ? (
         <>
@@ -275,8 +337,16 @@ export function CreatePane(props: CreatePaneProps) {
               {busy ? (
                 <>
                   <span class="hwc-spinner" aria-hidden="true" />
-                  {worktree ? "作成中…" : mode === "agent" ? "起動中…" : "作成中…"}
+                  {start
+                    ? "起動中…"
+                    : worktree
+                      ? "作成中…"
+                      : mode === "agent"
+                        ? "起動中…"
+                        : "作成中…"}
                 </>
+              ) : start ? (
+                "起動"
               ) : mode === "agent" ? (
                 "作成して起動"
               ) : (

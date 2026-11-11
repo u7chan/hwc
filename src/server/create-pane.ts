@@ -1,8 +1,11 @@
 import {
   agentNameForPane,
   isAgentNotReady,
+  isAgentPaneBusy,
   type PaneClient,
+  restartAgentName,
   type SplitRequest,
+  type StartRequest,
 } from "./herdr/panes";
 import { planSplit } from "./herdr/split";
 import { supportsModelSelection } from "../shared/agents";
@@ -15,6 +18,9 @@ type CreationClient = Pick<PaneClient, "layout" | "split" | "startAgent" | "rena
 export type SetupClient = Pick<PaneClient, "startAgent" | "rename" | "directory">;
 
 export type PaneSetupFailure = "agent_start_failed" | "pane_rename_failed";
+
+// エージェント名と、シェルの準備待ちを見るか。分割直後か、既存のシェルかで変わる。
+export type SetupOptions = { agentName: string; waitForShell: boolean };
 
 type CreatePaneResult =
   | { ok: true; paneId: string }
@@ -39,12 +45,29 @@ export async function createPane(
     : { ok: false, error, paneId: created.paneId };
 }
 
+// 既存のシェルペインで起動する。ペインは作らないので、分割も名前の付け直しもしない。
+export async function startAgentInPane(
+  panes: SetupClient,
+  paneId: string,
+  request: StartRequest,
+  models?: AgentModelsClient,
+): Promise<PaneSetupFailure | null> {
+  return setupPane(
+    panes,
+    paneId,
+    { name: null, agent: request.agent, model: request.model, effort: request.effort },
+    models,
+    { agentName: restartAgentName(paneId), waitForShell: false },
+  );
+}
+
 // 起動に失敗しても、作成済みのペインは表示名を付けて残す。
 export async function setupPane(
   panes: SetupClient,
   paneId: string,
   request: SplitRequest,
   models?: AgentModelsClient,
+  options: SetupOptions = { agentName: agentNameForPane(paneId), waitForShell: true },
 ): Promise<PaneSetupFailure | null> {
   let error: PaneSetupFailure | null = null;
 
@@ -70,10 +93,14 @@ export async function setupPane(
         paneId,
         kind: request.agent,
         // 表示名は日本語や空白を許すため、Herdr のエージェント名には使わない。
-        name: agentNameForPane(paneId),
+        name: options.agentName,
+        // 待つのは分割直後だけ。既存のシェルでは待たずに拒否を返す。
+        ...(options.waitForShell ? {} : { waitForShell: false }),
         ...(args === undefined ? {} : { args }),
       });
     } catch (failure) {
+      // 既存のシェルで前景のコマンドが動いている。呼び出し側が 409 として返せるようにする。
+      if (!options.waitForShell && isAgentPaneBusy(failure)) throw failure;
       // 初回の trust / login 待ちでもエージェント自体は起動している。
       if (!isAgentNotReady(failure)) error = "agent_start_failed";
     }

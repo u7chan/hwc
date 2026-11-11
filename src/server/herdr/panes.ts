@@ -48,6 +48,13 @@ export type SplitRequest = {
   effort?: string | null;
 };
 
+// 既存のシェルペインで起動する要求。ペインは作らず名前も変えない。
+export type StartRequest = {
+  agent: AgentKind;
+  model: AgentModel | null;
+  effort: string | null;
+};
+
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
 
 export type SendOptions = { paneId: string; text: string; submit: boolean };
@@ -72,6 +79,9 @@ export type AgentStartOptions = {
   name: string;
   args?: string[];
   timeoutMs?: number;
+  // 分割直後はシェルが起動を受け付けるまで agent_pane_busy が返るので待つ。既存のシェルへ
+  // 起動するときは、同じ code が「コマンドが動いている」を意味するので待たない。
+  waitForShell?: boolean;
 };
 
 export type RenameOptions = { paneId: string; label: string };
@@ -81,6 +91,13 @@ export type RenameOptions = { paneId: string; label: string };
 export function agentNameForPane(paneId: string): string {
   const base = `hwc-${paneId}`.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
   return base.slice(0, 32);
+}
+
+// 同じペインで起動し直すと、前回のエージェント名が Herdr 側に残っていないか分からない。
+// 名前は Herdr の照会用で hwc はペイン id しか使わないため、起動のたびに変えてよい。
+export function restartAgentName(paneId: string, now: number = Date.now()): string {
+  const base = agentNameForPane(paneId).slice(0, 27);
+  return `${base}-${now.toString(36).slice(-4).padStart(4, "0")}`;
 }
 
 export type PaneClient = {
@@ -122,9 +139,46 @@ export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
   if (rawAgent !== undefined && rawAgent !== null && !isAgentKind(rawAgent)) {
     return { ok: false, status: 400, error: "agent must be one of pi, claude, codex, opencode" };
   }
+  const agent = isAgentKind(rawAgent) ? rawAgent : null;
 
+  const selection = parseAgentSelection(record, agent);
+  if (!selection.ok) return selection;
+
+  return {
+    ok: true,
+    value: {
+      name: name === "" ? null : name,
+      agent,
+      ...selection.value,
+    },
+  };
+}
+
+// 既存のシェルペインで起動する要求。名前は付け直さないので受け取らない。
+export function parseStartBody(body: unknown): Parsed<StartRequest> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, status: 400, error: "body must be an object" };
+  }
+
+  const record = body as Record<string, unknown>;
+  const agent = record.agent;
+  if (!isAgentKind(agent)) {
+    return { ok: false, status: 400, error: "agent must be one of pi, claude, codex, opencode" };
+  }
+
+  const selection = parseAgentSelection(record, agent);
+  if (!selection.ok) return selection;
+
+  return { ok: true, value: { agent, ...selection.value } };
+}
+
+// モデルと effort の整合は、分割で作る場合と既存のシェルで起動する場合で同じ。
+function parseAgentSelection(
+  record: Record<string, unknown>,
+  agent: AgentKind | null,
+): Parsed<{ model: AgentModel | null; effort: string | null }> {
   const model = record.model ?? null;
-  if (model !== null && (!supportsModelSelection(rawAgent) || !isAgentModel(model))) {
+  if (model !== null && (!supportsModelSelection(agent) || !isAgentModel(model))) {
     return { ok: false, status: 400, error: "model must identify a Pi, Codex, or OpenCode model" };
   }
 
@@ -137,15 +191,7 @@ export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
     };
   }
 
-  return {
-    ok: true,
-    value: {
-      name: name === "" ? null : name,
-      agent: rawAgent == null ? null : rawAgent,
-      model,
-      effort,
-    },
-  };
+  return { ok: true, value: { model, effort } };
 }
 
 export function parseOutputQuery(params: URLSearchParams): Parsed<Omit<ReadOptions, "paneId">> {
@@ -225,6 +271,12 @@ export function isInvalidRequest(error: unknown): boolean {
 // 初回の trust / login 待ちで Herdr が返す。エージェント自体は起動している。
 export function isAgentNotReady(error: unknown): boolean {
   return error instanceof HerdrError && error.code === "agent_not_ready";
+}
+
+// ペインのシェルが起動を受け付けられない。分割直後（準備待ち）と、前景のコマンドが
+// 動いている場合の両方で返る。
+export function isAgentPaneBusy(error: unknown): boolean {
+  return error instanceof HerdrError && error.code === "agent_pane_busy";
 }
 
 type Caller = <T>(
@@ -381,7 +433,7 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
       );
       return parsePaneSplit(result);
     },
-    async startAgent({ paneId, kind, name, args, timeoutMs = 30_000 }) {
+    async startAgent({ paneId, kind, name, args, timeoutMs = 30_000, waitForShell = true }) {
       // エージェントの起動は TUI の準備完了まで待つ。通常のソケット期限（8 秒）では
       // 足りないので、Herdr 側の期限より少し長く取る。
       const params = {
@@ -400,6 +452,7 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
           // 分割直後はシェルの準備待ち。別のペインが使われている場合も同じ code なので、
           // 期限までだけ試し、それ以上は失敗として返す。
           if (
+            !waitForShell ||
             !(error instanceof HerdrError) ||
             error.code !== "agent_pane_busy" ||
             Date.now() >= deadline

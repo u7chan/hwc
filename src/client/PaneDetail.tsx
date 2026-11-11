@@ -23,6 +23,7 @@ import {
   dropActionFrom,
   pasteActionFrom,
   SEND_FAILED_NOTICE,
+  SHELL_BUSY_NOTICE,
   SHELL_NEWLINE_NOTICE,
   STOP_FAILED_NOTICE,
   unsupportedImageNotice,
@@ -78,6 +79,7 @@ import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
 import {
   AgentGlyphIcon,
+  AgentIcon,
   ArrowDownIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -812,6 +814,8 @@ type PaneDetailProps = {
   onOpenWorkspaceMenu: (workspaceId: string, trigger: HTMLElement) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
   onStop: () => Promise<boolean>;
+  // シェルのペインでエージェントを起動する。ダイアログは App 直下に 1 つだけ出す。
+  onStartAgent: () => void;
   // ダイアログは App 直下に 1 つだけ出す。セルの中に置くと containment の内側に閉じる。
   onOpenImage: (url: string, name: string) => void;
   // HTML のプレビューは、タブの 1 つとして会話の外に出す。
@@ -1083,6 +1087,15 @@ export function PaneDetail(props: PaneDetailProps) {
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
   const copyId = () => copy("pane", pane.id);
+
+  // 前景でコマンドが動いていると Herdr は起動を受け付けない。先に止めてもらう。
+  const startAgent = () => {
+    if (running) {
+      setNotice(SHELL_BUSY_NOTICE);
+      return;
+    }
+    props.onStartAgent();
+  };
 
   // 入力量に合わせて高さを伸ばす。広げている間は CSS の高さに任せる。
   const fit = (field: HTMLTextAreaElement | null, open: boolean) => {
@@ -2034,13 +2047,19 @@ export function PaneDetail(props: PaneDetailProps) {
               />
             </span>
             <div class="hwc-input-actions">
-              {compact || !pane.chat ? null : (
+              {compact ? null : pane.chat ? (
                 <ComposerAdd
                   full={attachments.length >= MAX_ATTACHMENTS}
                   commands={composerCommands}
                   onFiles={(files) => takeImages(dropActionFrom(files))}
                   onProjects={openProjects}
                 />
+              ) : (
+                // シェルのペインは、会話ペインの + と同じ位置にエージェントの入口を置く。
+                <button type="button" class="hwc-agent-start" onClick={startAgent}>
+                  <AgentIcon size={16} />
+                  エージェントを起動
+                </button>
               )}
               <span class="hwc-input-tail">
                 {info === null && meter === null ? null : (

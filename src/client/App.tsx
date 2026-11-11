@@ -368,9 +368,11 @@ export function App() {
   const [removing, setRemoving] = useState<Removing | null>(null);
   const [closingSpace, setClosingSpace] = useState<ClosingSpace | null>(null);
   // 作成ダイアログ。ワークツリーを作る場合は、モデル一覧の取得元になる起点スペースの ID も持つ。
+  // start は、作らずに既存のシェルペインで起動する。
   const [creating, setCreating] = useState<{
     paneId: string;
     worktreeWorkspaceId: string | null;
+    start: boolean;
   } | null>(null);
   // 拡大中の画像。ダイアログはセルの containment の外（App 直下）に置く（ADR 0021）。
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
@@ -814,8 +816,13 @@ export function App() {
 
   // 名前とエージェントはダイアログで決める。メニューは入口だけ。
   const openCreateDialog = (paneId: string) => {
-    setCreating({ paneId, worktreeWorkspaceId: null });
+    setCreating({ paneId, worktreeWorkspaceId: null, start: false });
     closeMenu();
+  };
+
+  // シェルペインの入力欄から起動する。ペインは作らないので、名前も追加先も持たない。
+  const openStartAgentDialog = (paneId: string) => {
+    setCreating({ paneId, worktreeWorkspaceId: null, start: true });
   };
 
   // ワークツリーはリポジトリ本体のスペースからだけ作る。モデル一覧は起点スペースの先頭ペイン
@@ -828,7 +835,7 @@ export function App() {
     const paneId = workspace.tabs.flatMap((tab) => tab.panes)[0]?.id;
     if (paneId === undefined) return;
     closeMenu();
-    setCreating({ paneId, worktreeWorkspaceId: workspace.id });
+    setCreating({ paneId, worktreeWorkspaceId: workspace.id, start: false });
   };
 
   // タブから外す操作は、対象のタブが縮むアニメーションを見せてから履歴に反映する。
@@ -1343,6 +1350,7 @@ export function App() {
       onOpenWorkspaceMenu={openWorkspaceMenu}
       onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
       onStop={() => stopPane(item.id)}
+      onStartAgent={() => openStartAgentDialog(item.id)}
       onOpenImage={(url, name) => setViewer({ url, name })}
       onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
     />
@@ -1838,6 +1846,7 @@ export function App() {
         <CreatePane
           paneId={creating.paneId}
           worktreeWorkspaceId={creating.worktreeWorkspaceId}
+          start={creating.start}
           onCreated={(paneId, agent) => {
             setPendingSelect(paneId);
             // エージェントを起動しなかった（シェル・起動失敗）ペインは、すぐに入力できる。
