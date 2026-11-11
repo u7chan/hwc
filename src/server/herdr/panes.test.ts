@@ -234,6 +234,11 @@ test("exit requests /quit through the guarded agent API only when a parent shell
       options: { path: "/tmp/test.sock" },
     },
     {
+      method: "agent.get",
+      params: { target: "w1:p1" },
+      options: { path: "/tmp/test.sock", timeoutMs: 2_000 },
+    },
+    {
       method: "agent.prompt",
       params: { target: "w1:p1", text: "/quit" },
       options: { path: "/tmp/test.sock" },
@@ -277,9 +282,29 @@ test.each(["agent_not_ready", "agent_blocked"])(
     const client = createPaneClient({ call });
 
     await expect(client.exit({ paneId: "w1:p1" })).rejects.toThrow(code);
-    expect(calls.map((call) => call.method)).toEqual(["pane.process_info", "agent.prompt"]);
+    expect(calls.map((call) => call.method)).toEqual([
+      "pane.process_info",
+      "agent.get",
+      "agent.prompt",
+    ]);
   },
 );
+
+test("exit still prompts when the launch lookup fails", async () => {
+  const { calls, call } = recordingCaller({
+    "pane.process_info": processInfoReply,
+    "agent.get": new HerdrError("agent_not_found", "no agent"),
+  });
+  const client = createPaneClient({ call });
+
+  await client.exit({ paneId: "w1:p1" });
+
+  expect(calls.map((call) => call.method)).toEqual([
+    "pane.process_info",
+    "agent.get",
+    "agent.prompt",
+  ]);
+});
 
 const paneLayoutReply = {
   type: "pane_layout",

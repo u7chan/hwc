@@ -285,6 +285,22 @@ type Caller = <T>(
   options?: { path?: string; timeoutMs?: number },
 ) => Promise<T>;
 
+// Herdr の managed launch は、状態変化か agent.get の照会でしか完了判定が進まない。
+// hwc は起動後に問い合わせないため、idle のまま画面が動かないペインでは launch が
+// pending に残り、数分後でも agent.prompt が agent_not_ready で拒否され続ける。
+// Herdr CLI も agent.get を繰り返して待つ。送信可否の判定は agent.prompt が持つので、
+// 照会の失敗では止めない。
+// 追加の照会で終了の期限を削らないよう、この 1 回だけ短く切る。
+const LAUNCH_RECONCILE_TIMEOUT_MS = 2_000;
+
+async function reconcileAgentLaunch(call: Caller, paneId: string, path?: string) {
+  try {
+    await call("agent.get", { target: paneId }, { path, timeoutMs: LAUNCH_RECONCILE_TIMEOUT_MS });
+  } catch {
+    // 準備完了かどうかは agent.prompt が改めて判定する。
+  }
+}
+
 // タブ名に出すので、長いコマンド行はここで切る。表示側の幅は CSS の省略に任せる。
 const MAX_COMMAND_CHARS = 200;
 
@@ -411,6 +427,7 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
       if (!hasParentShell(info, paneId)) {
         throw new HerdrError("agent_exit_unsafe", "cannot confirm a parent shell");
       }
+      await reconcileAgentLaunch(call, paneId, path);
       // agent.prompt は実プロセスも検査し、シェルや要対応の画面への誤送信を拒否する。
       await call("agent.prompt", { target: paneId, text: "/quit" }, { path });
     },
