@@ -1043,26 +1043,45 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   color: var(--color-accent);
 }
 
-/* 現在行はグリッドのスロット位置の色で示す。ツリーとアクティブの両方に同じ色を置き、
-   タブのバー・セルの枠と同じスロットを指す（ADR 0058）。 */
-.hwc-pane[data-current="true"][data-slot="1"],
-.hwc-active-open[data-current="true"][data-slot="1"] {
+/* 一覧の行はグリッドのスロット位置の色で示す。ツリーとアクティブの両方に同じ色を置き、
+   タブのバー・セルの枠と同じスロットを指す（ADR 0058 / 0061）。グリッドに出ている行なら、
+   現在行でなくても色を付ける。 */
+.hwc-pane[data-slot="1"],
+.hwc-active-open[data-slot="1"] {
   --slot-color: var(--color-slot-1);
 }
 
-.hwc-pane[data-current="true"][data-slot="2"],
-.hwc-active-open[data-current="true"][data-slot="2"] {
+.hwc-pane[data-slot="2"],
+.hwc-active-open[data-slot="2"] {
   --slot-color: var(--color-slot-2);
 }
 
-.hwc-pane[data-current="true"][data-slot="3"],
-.hwc-active-open[data-current="true"][data-slot="3"] {
+.hwc-pane[data-slot="3"],
+.hwc-active-open[data-slot="3"] {
   --slot-color: var(--color-slot-3);
 }
 
-.hwc-pane[data-current="true"][data-slot="4"],
-.hwc-active-open[data-current="true"][data-slot="4"] {
+.hwc-pane[data-slot="4"],
+.hwc-active-open[data-slot="4"] {
   --slot-color: var(--color-slot-4);
+}
+
+/* 選択中かどうかは面と枠の強さで分ける。現在行は 2px の枠と選択面、グリッドに出ている
+   だけの行は 1px の控えめな枠にして、どのセルと対になっているかだけを示す。 */
+.hwc-pane[data-slot]:not([data-current="true"]) {
+  outline: 1px solid color-mix(in oklab, var(--slot-color) 60%, transparent);
+  outline-offset: -1px;
+}
+
+/* フォーカス中は行自身の輪郭を外す既存の規則に合わせ、枠も引かない。 */
+.hwc-active-open[data-slot]:not([data-current="true"]):not(:focus-visible) {
+  outline: 1px solid color-mix(in oklab, var(--slot-color) 60%, transparent);
+  outline-offset: -1px;
+}
+
+.hwc-pane[data-slot]:not([data-current="true"]) .hwc-pane-name,
+.hwc-active-open[data-slot]:not([data-current="true"]) .hwc-active-name {
+  color: var(--slot-color);
 }
 
 .hwc-pane[data-current="true"][data-slot] {

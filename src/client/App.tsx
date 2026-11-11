@@ -89,7 +89,6 @@ import {
   canDrop,
   canSwapTabs,
   clearCurrent,
-  currentSlotIndex,
   dropOnPane,
   leafPanes,
   multiSpace,
@@ -135,7 +134,7 @@ import {
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
 // スロット色を出さないときの並び。狭い画面は 4 色を使わない（ADR 0058）。
-const NO_SLOTS: readonly (string | null)[] = [];
+const NO_SLOTS: readonly string[] = [];
 const NO_TIMES: ReadonlyMap<string, number> = new Map();
 
 // 時刻は BFF が持つ。端末は受け取った時刻を並べるだけで、サーバーの時計に合わせた「今」で刻む。
@@ -1251,8 +1250,6 @@ export function App() {
 
   // グリッドは木の葉。空きは持たない（ADR 0061）。
   const layoutPanes = readingOrder(split.layout);
-  // 現在ペインが入っているスロット（1 始まり）。一覧の現在行とタブの色に使う。
-  const currentSlot = currentSlotIndex(split);
   // セルが並ぶのは広い画面だけ。狭い画面は 1 枚表示なので、分割セル向けの表示を切り替える。
   const splitCells = wide && layoutPanes.length > 1;
   // グリッドは広い画面で、current が実在するときだけ出す。
@@ -1483,7 +1480,7 @@ export function App() {
               state={state}
               selectedPaneId={selectedPaneId}
               // スロット色は PC だけ。狭い画面ではタブ履歴と 2 段目だけを出す（ADR 0058）。
-              currentSlot={wide && currentSlot >= 0 ? currentSlot + 1 : null}
+              slots={wide ? layoutPanes : NO_SLOTS}
               parentPaneIds={parentPaneIds}
               scope={scope}
               onScope={changeScope}
