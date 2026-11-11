@@ -233,7 +233,6 @@ async function collectAgainstRoots(
   const byKey = new Map<string, MessageFile>();
   let outsideFile: string | undefined;
   for (const candidate of candidates) {
-    if (files.length >= MAX_ATTACHMENTS) break;
     let resolved: ResolvedFile | null = null;
     for (const [root, rootReal] of rootsReal.entries()) {
       // 実在しない根も番号を詰めずに飛ばす。番号は配信の URL と共有している。
@@ -263,6 +262,8 @@ async function collectAgainstRoots(
       }
       continue;
     }
+    // 枠が埋まっても走査は止めない。根の外の案内は、配るファイルが 4 件揃った後ろの候補にもある。
+    if (files.length >= MAX_ATTACHMENTS) continue;
     const file: MessageFile = {
       name: resolved.name,
       version: resolved.version,

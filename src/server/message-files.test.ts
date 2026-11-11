@@ -484,6 +484,36 @@ test("reports nothing when the path is not absolute, missing, or not deliverable
   }
 });
 
+test("still reports an outside file after the file slots are full", async () => {
+  const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
+  const page = join(outside, "late.html");
+  await writeFile(page, "<!doctype html>");
+
+  const names = ["a.html", "b.html", "c.html", "d.html"];
+  for (const name of names) await write(name, new TextEncoder().encode("<!doctype html>"));
+
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [
+      {
+        id: "a1",
+        role: "agent",
+        text: [...names.map((name) => `\`${name}\``), `\`${page}\``].join(" "),
+        at: 1,
+      },
+    ],
+  };
+
+  try {
+    const message = (await attachMessageFiles(chat, root)).messages[0];
+    // 配る枠は 4 件で止めるが、案内は後ろの候補も見る。
+    expect(message?.files).toHaveLength(4);
+    expect(message?.outsideFile).toBe("late.html");
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
 test("changes the etag when an outside file appears without new messages", async () => {
   const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
   const page = join(outside, "mock.html");
