@@ -1492,7 +1492,25 @@ export function App() {
           )}
           <div class="hwc-sidebar-foot">
             <span class="hwc-foot-brand">
-              <span class="hwc-foot-name">HWC</span>
+              {/* 文字とマークのインクに合わせた実測の viewBox。高さは .hwc-foot-logo が決める。 */}
+              <svg class="hwc-foot-logo" viewBox="0 24 329.4 77" role="img" aria-label="HWC">
+                <g fill="currentColor">
+                  <rect x="0" y="24" width="33.8" height="33.8" rx="10.6" />
+                  <rect x="42.2" y="24" width="33.8" height="33.8" rx="10.6" />
+                  <rect x="0" y="66.2" width="33.8" height="33.8" rx="10.6" />
+                  <rect x="42.2" y="66.2" width="33.8" height="33.8" rx="10.6" opacity="0.45" />
+                </g>
+                <text
+                  x="97"
+                  y="100"
+                  font-size="100"
+                  font-weight="600"
+                  letter-spacing="2.5"
+                  fill="currentColor"
+                >
+                  HWC
+                </text>
+              </svg>
               {revision === null ? null : <span class="hwc-foot-rev">{revision}</span>}
             </span>
             <span class="hwc-foot-actions">{actions}</span>
