@@ -10,13 +10,10 @@ import {
 } from "./theme";
 
 test("every listed theme can be stored as a preference", () => {
-  expect(parseThemePreference("light")).toBe("light");
-  expect(parseThemePreference("dark")).toBe("dark");
-  expect(parseThemePreference("nord")).toBe("nord");
-  expect(parseThemePreference("catppuccin-mocha")).toBe("catppuccin-mocha");
   expect(parseThemePreference("system")).toBe("system");
   expect(parseThemePreference(null)).toBe("system");
   expect(parseThemePreference("sepia")).toBe("system");
+  expect(THEMES.filter((theme) => parseThemePreference(theme.id) !== theme.id)).toEqual([]);
 });
 
 test("the listed themes match the palettes in the stylesheet", async () => {
@@ -28,6 +25,51 @@ test("the listed themes match the palettes in the stylesheet", async () => {
   ids.add("light");
 
   expect(THEMES.filter((theme) => !ids.has(theme.id))).toEqual([]);
+});
+
+// テーマを足すときに必要な色が抜けないよう、各パレットが同じ組を持つことを仕様にする。
+const PALETTE_TOKENS = [
+  "bg",
+  "surface",
+  "raised",
+  "content",
+  "text",
+  "secondary",
+  "accent",
+  "on-accent",
+  "selected",
+  "line",
+  "control-line",
+  "active",
+  "active-bg",
+  "attention",
+  "attention-bg",
+  "success",
+  "success-bg",
+  "neutral",
+  "neutral-bg",
+  "danger",
+  "agent-claude",
+  "slot-1",
+  "slot-2",
+  "slot-3",
+  "slot-4",
+];
+
+test("every palette defines the same colour tokens", async () => {
+  const css = await Bun.file("src/client/styles/tokens.css").text();
+  const missing: string[] = [];
+
+  for (const theme of THEMES) {
+    const selector = theme.id === "light" ? ":root {" : `:root[data-theme="${theme.id}"] {`;
+    const start = css.indexOf(selector);
+    const block = css.slice(start, css.indexOf("}", start));
+    for (const token of PALETTE_TOKENS) {
+      if (!block.includes(`--color-${token}:`)) missing.push(`${theme.id}: ${token}`);
+    }
+  }
+
+  expect(missing).toEqual([]);
 });
 
 test("system follows the device and the rest is fixed", () => {

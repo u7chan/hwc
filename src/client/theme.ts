@@ -14,7 +14,11 @@ export type ThemeId =
   | "rose-pine-dawn"
   | "one-light"
   | "solarized-light"
-  | "solarized-dark";
+  | "solarized-dark"
+  | "sakura"
+  | "rose-pine-moon"
+  | "gruvbox-light"
+  | "horizon";
 
 export type ThemePreference = "system" | ThemeId;
 
@@ -121,6 +125,30 @@ export const THEMES: readonly ThemeMeta[] = [
     label: "Solarized Dark",
     scheme: "dark",
     swatch: { bg: "#002b36", surface: "#073642", accent: "#268bd2" },
+  },
+  {
+    id: "sakura",
+    label: "Sakura",
+    scheme: "light",
+    swatch: { bg: "#fbf4f5", surface: "#fffbfb", accent: "#a8385f" },
+  },
+  {
+    id: "rose-pine-moon",
+    label: "Rosé Pine Moon",
+    scheme: "dark",
+    swatch: { bg: "#232136", surface: "#2a273f", accent: "#e07a9a" },
+  },
+  {
+    id: "gruvbox-light",
+    label: "Gruvbox Light",
+    scheme: "light",
+    swatch: { bg: "#fbf1c7", surface: "#fffbef", accent: "#af3a03" },
+  },
+  {
+    id: "horizon",
+    label: "Horizon",
+    scheme: "dark",
+    swatch: { bg: "#1c1e26", surface: "#232530", accent: "#eb5e80" },
   },
 ];
 
