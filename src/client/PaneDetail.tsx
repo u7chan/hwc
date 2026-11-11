@@ -1543,12 +1543,16 @@ export function PaneDetail(props: PaneDetailProps) {
       writeDraft(storage(), pane.id, "");
       setDraft("");
       attachmentStore.clear(pane.id);
-      // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
-      // 代わりに圧縮中の行を出す。
-      if (compactCommand) {
-        markCompaction(baselineAt, text);
-      } else if (!newCommand) {
-        echoPending({ text, at, from, waiting, after, names });
+      // シェルペインには会話が無い。控えを積むと、同じペインで後から起動した
+      // エージェントの会話に、シェルで打ったコマンドが並ぶ。送信は端末にだけ届ける。
+      if (!shell) {
+        // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
+        // 代わりに圧縮中の行を出す。
+        if (compactCommand) {
+          markCompaction(baselineAt, text);
+        } else if (!newCommand) {
+          echoPending({ text, at, from, waiting, after, names });
+        }
       }
     } else {
       setNotice(SEND_FAILED_NOTICE);
