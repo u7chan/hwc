@@ -412,7 +412,10 @@ test("the move request names the file and asks for a checkout-internal place", (
   // 相対参照を壊さずに移すよう、まとめて移すことを伝える（モックはフォントを参照しうる）。
   expect(text).toContain(".artifacts/");
   expect(text).toContain("まとめて移して");
-  // クライアントは絶対パスを持たない。\n  expect(text).not.toContain("/tmp");
+  // 移動元は依頼文ではなく、エージェント自身の発話から読む。
+  expect(text).toContain("あなたが書いた発話");
+  // クライアントは絶対パスを持たない。依頼文にも入れない。
+  expect(text).not.toContain("/tmp");
 });
 
 test("a pending message is confirmed by a new user message after its baseline", () => {
