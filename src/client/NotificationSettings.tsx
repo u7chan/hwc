@@ -11,7 +11,12 @@ import {
 } from "./api";
 import { Confirm } from "./Confirm";
 import { DiscordIcon } from "./icons";
-import { canRegisterWebhook, saveNotificationText, testNotificationText } from "./notifications";
+import {
+  canRegisterWebhook,
+  saveNotificationText,
+  testNotificationText,
+  webhookHintText,
+} from "./notifications";
 
 type LoadState = "loading" | "ready" | "failed";
 
@@ -185,7 +190,7 @@ export function NotificationSettings() {
             </div>
 
             {view.discord.configured ? (
-              <p class="hwc-notify-hint">{view.discord.hint ?? ""}</p>
+              <p class="hwc-notify-hint">{webhookHintText(view.discord.hint)}</p>
             ) : null}
 
             {editing !== "none" || !view.discord.configured ? (

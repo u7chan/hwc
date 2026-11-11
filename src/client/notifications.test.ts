@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { canRegisterWebhook, saveNotificationText, testNotificationText } from "./notifications";
+import {
+  canRegisterWebhook,
+  saveNotificationText,
+  testNotificationText,
+  webhookHintText,
+} from "./notifications";
 
 const WEBHOOK = "https://discord.com/api/webhooks/1234567890/abcdefghijklmnopqrstuvwx-1234";
 
@@ -34,6 +39,12 @@ test("the test result is explained by the error code", () => {
   expect(testNotificationText({ ok: false, error: "unknown" })).toBe(
     "テスト通知を送信できませんでした。",
   );
+});
+
+test("the registered webhook shows the label with the hint", () => {
+  // 登録済みでも URL 全文は出さない。ラベルと末尾 4 文字だけを並べる。
+  expect(webhookHintText("…a1b2")).toBe("Webhook URL  …a1b2");
+  expect(webhookHintText(null)).toBe("");
 });
 
 test("the save failure is explained by the error code", () => {

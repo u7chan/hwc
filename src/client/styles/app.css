@@ -5471,6 +5471,18 @@ p.hwc-compaction,
     border-color 120ms ease;
 }
 
+/* 見た目は 48×28 のまま、上下のタップ領域を 44px まで広げる。行の高さ（64px）に
+   収まるので、隣の行に当たり判定は重ならない。 */
+.hwc-switch::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: var(--tap);
+  transform: translateY(-50%);
+}
+
 .hwc-switch-knob {
   position: absolute;
   top: 3px;
@@ -5614,6 +5626,8 @@ p.hwc-compaction,
 
 .hwc-notify-hint {
   margin: 0;
+  /* ラベルと hint の間の空白 2 つを、モックどおりに空ける。 */
+  white-space: pre-wrap;
   color: var(--color-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-secondary);
