@@ -234,7 +234,7 @@ test("the layout stops at four panes", () => {
   expect(canDrop(full, "w1:p1", "w1:p2", "top")).toBe(true);
 });
 
-test("dragging the shown pane onto its own edge splits with the next tab", () => {
+test("dragging the shown pane onto its own edge splits with the previous tab", () => {
   const shown = view(["w1:p1", "w1:p2"], "w1:p2", leaf("w1:p2"));
   expect(canDrop(shown, "w1:p2", "w1:p2", "center")).toBe(false);
   expect(dropOnPane(shown, "w1:p2", "w1:p2", "center")).toBe(shown);
@@ -242,10 +242,17 @@ test("dragging the shown pane onto its own edge splits with the next tab", () =>
   expect(right.layout).toEqual(row(leaf("w1:p1"), leaf("w1:p2")));
   expect(right.current).toBe("w1:p2");
   expect(right.openTabs).toEqual(["w1:p1", "w1:p2"]);
-  // 端は落とした側へ動かす。元のセルには次のタブが残る。
+  // 端は落とした側へ動かす。元のセルには別のタブが残る。
   expect(dropOnPane(shown, "w1:p2", "w1:p2", "top").layout).toEqual(
     col(leaf("w1:p2"), leaf("w1:p1")),
   );
+});
+
+test("a self split takes the next tab in the open history", () => {
+  const shown = view(["a", "b", "c"], "b", leaf("b"));
+  const right = dropOnPane(shown, "b", "b", "right");
+  expect(right.layout).toEqual(row(leaf("c"), leaf("b")));
+  expect(right.current).toBe("b");
 });
 
 test("a self split needs a tab outside the layout to fill the vacated cell", () => {
