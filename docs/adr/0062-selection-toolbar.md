@@ -100,6 +100,6 @@ BFF とセッションの入力契約は変えない。引用もコピーもク�
 
 ## References
 
-- [ADR 0014](0014-markdown-rendering.md): 本文の Markdown 描画と、先頭 blockquote の例外
+- [ADR 0014](0014-markdown-rendering.md): 本文の Markdown 描画と、user 本文の plain text 維持
 - [ADR 0016](0016-composer-command-chips.md): 引用時のチップと下書きの扱い
 - [ADR 0022](0022-reply-quote.md): 選択の引用を最初に実装した判断（この ADR で入力側の持ち方を置き換える）
