@@ -2390,6 +2390,18 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   white-space: nowrap;
 }
 
+/* 配信できないスクリプトを読み込む HTML の案内。iframe の上に 1 行だけ置く。 */
+.hwc-preview-warning {
+  flex: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+}
+
 .hwc-preview-frame {
   flex: 1;
   min-height: 0;
@@ -3618,9 +3630,14 @@ p.hwc-compaction,
 }
 
 .hwc-msg-page-kind {
-  flex: none;
+  /* 長い basename のラベルは省略する。ファイル名を潰さないよう、種別欄の幅を先に抑える。 */
+  flex: 0 1 auto;
+  max-width: 50%;
+  overflow: hidden;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 根の外にあって配れないファイル。チップを出せない代わりに、理由を 1 行で置く。 */

@@ -10,6 +10,9 @@ export type ChatFile = {
   kind: MessageFileKind;
   // 配信の根の番号。0 はチェックアウト、1 は /tmp、2 以上は HWC_PREVIEW_ROOTS の順。
   root: number;
+  // 根の表示用のラベル（例: `/tmp`、追加根の basename）。パスではない。
+  // チェックアウトは既定なので持たない。
+  rootLabel?: string;
   // 本文の画像記法の destination として一致した表記。この位置に描くための照合キーで、
   // 配信 URL には使わない。裸のパスだけで拾った画像は持たない。
   imageRefs?: string[];

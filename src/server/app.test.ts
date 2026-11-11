@@ -3520,6 +3520,74 @@ test("GET /api/panes/:id/preview reads an extra root only when it is configured"
   });
 });
 
+test("GET /api/panes/:id/preview warns only when the HTML loads a script it cannot serve", async () => {
+  await withCheckout(async (root) => {
+    await mkdir(join(root, "preview"), { recursive: true });
+    const warnedBody = '<script src="./app.tsx"></script>';
+    await writeFile(join(root, "preview", "warned.html"), warnedBody);
+    await writeFile(join(root, "preview", "plain.html"), '<script src="./app.js"></script>');
+    await writeFile(join(root, "preview", "app.js"), "export {};");
+    await writeFile(join(root, "preview", "app.css"), "body{}");
+    const app = createFilesApp(root);
+
+    const warned = await app.request("/api/panes/w1:p1/preview/0/preview/warned.html");
+    expect(warned.status).toBe(200);
+    expect(warned.headers.get("x-hwc-preview-warning")).toBe("script");
+    // iframe の中身は書き換えない。案内はヘッダーだけで伝える。
+    expect(await warned.text()).toBe(warnedBody);
+
+    const plain = await app.request("/api/panes/w1:p1/preview/0/preview/plain.html");
+    expect(plain.status).toBe(200);
+    expect(plain.headers.get("x-hwc-preview-warning")).toBeNull();
+
+    // 案内は iframe のプレビューだけ。CSS と JS の応答には付けない。
+    for (const path of ["preview/app.css", "preview/app.js"]) {
+      const response = await app.request(`/api/panes/w1:p1/preview/0/${path}`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("x-hwc-preview-warning")).toBeNull();
+    }
+
+    // クライアントは HEAD で同じ URL を確かめる。本文は 0 バイトのままでよい。
+    const head = await app.request("/api/panes/w1:p1/preview/0/preview/warned.html", {
+      method: "HEAD",
+    });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("x-hwc-preview-warning")).toBe("script");
+    expect((await head.arrayBuffer()).byteLength).toBe(0);
+  });
+});
+
+test("GET /api/panes/:id/chat labels the /tmp root of a pane without a checkout", async () => {
+  const dir = await mkdtemp(join("/tmp", "hwc-default-root-"));
+  const page = join(dir, "mock.html");
+  await writeFile(page, "<!doctype html>");
+
+  try {
+    const app = createFilesApp(null, {
+      previewRoots: ["/tmp"],
+      chat: {
+        snapshot: async () => ({
+          ...emptyChat,
+          messages: [{ id: "a1", role: "agent", text: `モックは \`${page}\` です。`, at: 1 }],
+        }),
+      },
+    });
+
+    const response = await app.request("/api/panes/w1:p1/chat");
+    const body = (await response.json()) as {
+      messages: { files?: { name: string; root: number; rootLabel?: string }[] }[];
+    };
+    // チェックアウトが無いペインでは /tmp が 0 番。ラベルは番号ではなく設定値から作る。
+    expect(body.messages[0]?.files?.[0]).toMatchObject({
+      name: `${basename(dir)}/mock.html`,
+      root: 0,
+      rootLabel: "/tmp",
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("GET /api/panes/:id/preview serves an HTML under /tmp by default", async () => {
   await withCheckout(async (root) => {
     const dir = await mkdtemp(join("/tmp", "hwc-default-root-"));

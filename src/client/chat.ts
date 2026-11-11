@@ -92,6 +92,18 @@ export function splitInlineImages(
   return { images, rest };
 }
 
+// チップとプレビューの見出しに出す名前。根のラベルは表示だけに使い、title は今までどおり
+// 根からの相対パスを出す。同じベース名が別の根にあっても、押す前に見分けられる。
+export function messageFileDisplayName(name: string, rootLabel: string | undefined): string {
+  const label = messageFileLabel(name);
+  return rootLabel === undefined ? label : `${label} · ${rootLabel}`;
+}
+
+// チップの種別欄。チェックアウトのファイルは既定なので、今までどおり種別だけで足りる。
+export function messageFileKindLabel(rootLabel: string | undefined): string {
+  return rootLabel === undefined ? "HTML" : `HTML · ${rootLabel}`;
+}
+
 export type PendingMessage = ChatMessage & {
   from: number;
   waiting: boolean;

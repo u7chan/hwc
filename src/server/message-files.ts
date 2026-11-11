@@ -221,9 +221,11 @@ async function outsideRootFile(
 
 // 根は順に試し、最初に見つかったものを採る。採った根の番号をファイルに持たせるので、
 // 配信は同じ実体を引き直せる（同名ファイルが別の根にあっても取り違えない）。
+// labels は根の表示用のラベル。チェックアウトの根は既定なので持たない。
 async function collectAgainstRoots(
   text: string,
   rootsReal: readonly (string | null)[],
+  labels: readonly (string | undefined)[] = [],
 ): Promise<CollectedFiles> {
   if (text === "" || rootsReal.length === 0) return { files: [] };
   const candidates = messagePathCandidates(text);
@@ -264,11 +266,13 @@ async function collectAgainstRoots(
     }
     // 枠が埋まっても走査は止めない。根の外の案内は、配るファイルが 4 件揃った後ろの候補にもある。
     if (files.length >= MAX_ATTACHMENTS) continue;
+    const rootLabel = labels[resolved.root];
     const file: MessageFile = {
       name: resolved.name,
       version: resolved.version,
       kind,
       root: resolved.root,
+      ...(rootLabel === undefined ? {} : { rootLabel }),
       ...(kind === "image" && candidate.imageRefs.length > 0
         ? { imageRefs: candidate.imageRefs }
         : {}),
@@ -308,6 +312,16 @@ export async function resolvePreviewFile(options: {
 // エージェントは使い捨てのモックを /tmp に書く。TMPDIR ではなく literal を見る。
 // 本文に書かれるのは `/tmp/...` なので、プロセスの環境で変えても一致しない（ADR 0066）。
 const DEFAULT_PREVIEW_ROOT = "/tmp";
+
+// チップとプレビューの見出しに出す根のラベル。番号ではなく設定値の文字列から作る。
+// 番号で /tmp を決めると、テストが注入した一時ディレクトリにも /tmp が付く。
+// realpath で決めると、/tmp が symlink の環境で別名になる（ADR 0067）。
+export function previewRootLabel(value: string): string {
+  if (resolve(value) === DEFAULT_PREVIEW_ROOT) return DEFAULT_PREVIEW_ROOT;
+  const name = basename(value);
+  // basename が空か `/` になるのは根が `/` のときだけ。ラベルに使えないので既定の文言にする。
+  return name === "" || name === sep ? "追加根" : name;
+}
 
 // 追加の根は既定で /tmp。HWC_PREVIEW_ROOTS はその後ろに足す（ADR 0051, 0066）。
 // 区切りは POSIX の `:`。Windows は対象外。
@@ -368,11 +382,16 @@ export async function attachMessageFiles(
   }
   if (rootsReal.every((item) => item === null)) return snapshot;
 
+  // 0 番がチェックアウトのときだけラベルを持たない。持たないペインでは /tmp が 0 番になる。
+  const labels = roots.map((item, index) =>
+    root !== null && index === 0 ? undefined : previewRootLabel(item),
+  );
+
   const messages = await Promise.all(
     snapshot.messages.map(async (message) => {
       // 失敗の行はプロバイダの文言で、エージェントの発話ではない。
       if (message.role !== "agent" || message.text === "") return message;
-      const files = await collectAgainstRoots(message.text, rootsReal);
+      const files = await collectAgainstRoots(message.text, rootsReal, labels);
       if (files.files.length === 0 && files.outsideFile === undefined) return message;
       return {
         ...message,
