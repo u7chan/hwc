@@ -2774,6 +2774,15 @@ a.hwc-pane-head-repo:focus-visible {
   line-height: var(--line-tight);
 }
 
+/* 行ボックスは line-height（1.2）で、フォントの内容（1.47em）より低い。overflow: hidden が
+   g や y の下を切るので、余白と相殺する負のマージンで、行の位置を変えずに切り取る箱だけ
+   広げる。line-height を広げると 2 段目の行との間隔が変わる。 */
+.hwc-tab-label,
+.hwc-tab-space {
+  padding-block: 2px;
+  margin-block: -2px;
+}
+
 .hwc-tab-label {
   max-width: 9em;
   overflow: hidden;
