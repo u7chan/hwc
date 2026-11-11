@@ -1160,6 +1160,8 @@ export function PaneDetail(props: PaneDetailProps) {
   }, [reply, pane.id]);
 
   // 選択が 1 つの本文の中で終わったときだけ返信ボタンを出す。位置は選択の下（入らなければ上）。
+  // マウスのドラッグ中は selectionchange が動くたびに発火するので評価せず、ボタンを離した
+  // pointerup で確定した選択を見る。キーボードの選択変更はそのまま selectionchange で拾う。
   // 選択変更・スクロール・リサイズでは隠す。ペインの切替は PaneDetail の作り直しで消える。
   useEffect(() => {
     const scrollerElement = scroller.current;
@@ -1167,13 +1169,38 @@ export function PaneDetail(props: PaneDetailProps) {
     if (scrollerElement === null || frameElement === null) return;
     if (touchFirst()) return;
 
-    const refresh = () => setQuoteAnchor(readQuoteAnchor(scrollerElement, frameElement));
+    let dragging = false;
+    const refresh = () => {
+      if (dragging) return;
+      setQuoteAnchor(readQuoteAnchor(scrollerElement, frameElement));
+    };
     const clear = () => setQuoteAnchor(null);
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" || event.button !== 0) return;
+      dragging = true;
+      // 押した時点で前の選択に紐づくボタンは隠す。ボタン自身の押下は startReply が
+      // 先に処理するので、ここで消しても操作は失われない。
+      clear();
+    };
+    const stopDragging = () => {
+      if (!dragging) return;
+      dragging = false;
+      refresh();
+    };
     document.addEventListener("selectionchange", refresh);
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointerup", stopDragging);
+    document.addEventListener("pointercancel", stopDragging);
+    // 窓の外で離すと pointerup が来ない。次のキーボード選択までドラッグ中のままにしない。
+    window.addEventListener("blur", stopDragging);
     scrollerElement.addEventListener("scroll", clear);
     window.addEventListener("resize", clear);
     return () => {
       document.removeEventListener("selectionchange", refresh);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerup", stopDragging);
+      document.removeEventListener("pointercancel", stopDragging);
+      window.removeEventListener("blur", stopDragging);
       scrollerElement.removeEventListener("scroll", clear);
       window.removeEventListener("resize", clear);
     };
