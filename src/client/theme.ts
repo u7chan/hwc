@@ -106,19 +106,19 @@ export const THEMES: readonly ThemeMeta[] = [
     id: "rose-pine-dawn",
     label: "Rosé Pine Dawn",
     scheme: "light",
-    swatch: { bg: "#faf4ed", surface: "#fffaf3", accent: "#907aa9" },
+    swatch: { bg: "#faf4ed", surface: "#fffaf3", accent: "#7a6890" },
   },
   {
     id: "one-light",
     label: "One Light",
     scheme: "light",
-    swatch: { bg: "#fafafa", surface: "#ffffff", accent: "#4078f2" },
+    swatch: { bg: "#fafafa", surface: "#ffffff", accent: "#3a6ddc" },
   },
   {
     id: "solarized-light",
     label: "Solarized Light",
     scheme: "light",
-    swatch: { bg: "#eee8d5", surface: "#fdf6e3", accent: "#268bd2" },
+    swatch: { bg: "#eee8d5", surface: "#fdf6e3", accent: "#2076b2" },
   },
   {
     id: "solarized-dark",
