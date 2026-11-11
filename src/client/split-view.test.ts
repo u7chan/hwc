@@ -193,6 +193,15 @@ test("dropping on an edge splits the target in that direction", () => {
   );
 });
 
+test("a pane outside the history is appended when dropped on an edge", () => {
+  // 一覧の行からは、まだ開いていないペインをそのまま分割へ入れられる。
+  const shown = view(["a", "b"], "a", leaf("a"));
+  const right = dropOnPane(shown, "c", "a", "right");
+  expect(right.openTabs).toEqual(["a", "b", "c"]);
+  expect(right.current).toBe("c");
+  expect(right.layout).toEqual(row(leaf("a"), leaf("c")));
+});
+
 test("a stacked pair splits left and right", () => {
   const shown = view(["w1:p1", "w1:p2", "w1:p3"], "w1:p1", col(leaf("w1:p1"), leaf("w1:p2")));
   expect(dropOnPane(shown, "w1:p3", "w1:p2", "left").layout).toEqual(

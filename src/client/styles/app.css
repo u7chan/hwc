@@ -316,6 +316,13 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   padding-top: var(--space-2);
 }
 
+/* 一覧のペイン行は分割のドラッグ起点でもある。触れる画面では縦のスクロールを
+   優先し、横へ動かしたときだけドラッグを始める（App の startPaneDrag）。 */
+.hwc-pane-open,
+.hwc-active-open {
+  touch-action: pan-y pinch-zoom;
+}
+
 /* 出すスペースの切り替え。タブではなく絞り込みなので、下線ではなく面で示す。 */
 .hwc-scope {
   position: relative;
