@@ -111,14 +111,6 @@ export function tabPanes(view: SplitView, wide: boolean): string[] {
   ];
 }
 
-export function slotIndexOf(view: SplitView, paneId: string): number {
-  return readingOrder(view.layout).indexOf(paneId);
-}
-
-export function currentSlotIndex(view: SplitView): number {
-  return view.current === null ? -1 : slotIndexOf(view, view.current);
-}
-
 export function multiSpace(workspaceIds: readonly string[]): boolean {
   return new Set(workspaceIds).size > 1;
 }

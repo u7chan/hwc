@@ -5,7 +5,6 @@ import {
   canDrop,
   canSwapTabs,
   clearCurrent,
-  currentSlotIndex,
   dropOnPane,
   leafPanes,
   multiSpace,
@@ -16,7 +15,6 @@ import {
   readingOrder,
   removeTab,
   serializeSplitView,
-  slotIndexOf,
   startSplitView,
   startsPaneDrag,
   syncSplitView,
@@ -54,9 +52,6 @@ test("slot colors follow the reading order, top-left to bottom-right", () => {
   expect(leafPanes(shown.layout)).toEqual(["w1:p1", "w1:p2", "w1:p3"]);
   // 左列の下 p2 より、右の縦長 p3 が先。上から右へ読む。
   expect(readingOrder(shown.layout)).toEqual(["w1:p1", "w1:p3", "w1:p2"]);
-  expect(slotIndexOf(shown, "w1:p2")).toBe(2);
-  expect(currentSlotIndex(shown)).toBe(2);
-  expect(currentSlotIndex(clearCurrent(shown))).toBe(-1);
   expect(tabPanes(shown, true)).toEqual(["w1:p1", "w1:p3", "w1:p2"]);
   expect(tabPanes(shown, false)).toEqual(["w1:p1", "w1:p2", "w1:p3"]);
 });
