@@ -616,6 +616,141 @@
   --color-slot-4: #e0579a;
 }
 
+/* 赤系のテーマは、アクセントと danger が同じ色相帯に寄る。アクセントを莓色・ローズに振り、
+   danger は暗い地で淡い赤、明るい地で煉瓦色にして、危険色がテーマ色に見えないようにする。
+   スロット 4 もピンクからマゼンタへずらす（ADR 0058）。 */
+:root[data-theme="sakura"] {
+  color-scheme: light;
+
+  --color-bg: #fbf4f5;
+  --color-surface: #fffbfb;
+  --color-raised: #f4e7ea;
+  --color-content: #fffdfd;
+  --color-text: #3a2b2f;
+  --color-secondary: #7b6167;
+  --color-accent: #a8385f;
+  --color-on-accent: #ffffff;
+  --color-selected: #f6dde4;
+  --color-line: #ead6da;
+  --color-control-line: #a58a91;
+  --color-active: #8f2f52;
+  --color-active-bg: #f2e3e7;
+  --color-attention: #8a5a00;
+  --color-attention-bg: #fdeed4;
+  --color-success: #1f6b4a;
+  --color-success-bg: #e2f1e9;
+  --color-neutral: #7b6167;
+  --color-neutral-bg: #f4e7ea;
+  --color-danger: #b02a1f;
+  --color-agent-claude: #c15f3c;
+
+  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
+     濃淡は color-mix で作る（ADR 0058）。 */
+  --color-slot-1: #2f62c8;
+  --color-slot-2: #7a4fd0;
+  --color-slot-3: #0f6f7d;
+  --color-slot-4: #a83a94;
+}
+
+:root[data-theme="rose-pine-moon"] {
+  color-scheme: dark;
+
+  --color-bg: #232136;
+  --color-surface: #2a273f;
+  --color-raised: #393552;
+  --color-content: #1b1929;
+  --color-text: #e0def4;
+  --color-secondary: #9793b0;
+  --color-accent: #e07a9a;
+  --color-on-accent: #1b1929;
+  --color-selected: #3f3050;
+  --color-line: #393552;
+  --color-control-line: #7b7698;
+  --color-active: #eb95b0;
+  --color-active-bg: #372d48;
+  --color-attention: #f6c177;
+  --color-attention-bg: #3d3327;
+  --color-success: #a3cfa0;
+  --color-success-bg: #2c3a30;
+  --color-neutral: #e0def4;
+  --color-neutral-bg: #393552;
+  --color-danger: #ff8f8f;
+  --color-agent-claude: #e08a68;
+
+  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
+     濃淡は color-mix で作る（ADR 0058）。 */
+  --color-slot-1: #8fa9f2;
+  --color-slot-2: #c4a7e7;
+  --color-slot-3: #9ccfd8;
+  --color-slot-4: #d17ab6;
+}
+
+:root[data-theme="gruvbox-light"] {
+  color-scheme: light;
+
+  --color-bg: #fbf1c7;
+  --color-surface: #fffbef;
+  --color-raised: #f2e5bc;
+  --color-content: #fffdf4;
+  --color-text: #3c3836;
+  --color-secondary: #6f6256;
+  --color-accent: #af3a03;
+  --color-on-accent: #fbf1c7;
+  --color-selected: #f6e7c4;
+  --color-line: #ebdbb2;
+  --color-control-line: #9a8b76;
+  --color-active: #8f2f00;
+  --color-active-bg: #f3e3bd;
+  --color-attention: #8a5a00;
+  --color-attention-bg: #f8e8c0;
+  --color-success: #3d7150;
+  --color-success-bg: #e9efd8;
+  --color-neutral: #6f6256;
+  --color-neutral-bg: #f2e5bc;
+  --color-danger: #9d0006;
+  --color-agent-claude: #c15f3c;
+
+  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
+     濃淡は color-mix で作る（ADR 0058）。 */
+  --color-slot-1: #076678;
+  --color-slot-2: #8f3f71;
+  --color-slot-3: #2f7f74;
+  --color-slot-4: #a84f74;
+}
+
+:root[data-theme="horizon"] {
+  color-scheme: dark;
+
+  --color-bg: #1c1e26;
+  --color-surface: #232530;
+  --color-raised: #2e303e;
+  --color-content: #17191f;
+  --color-text: #d5d8da;
+  --color-secondary: #9da0a5;
+  --color-accent: #eb5e80;
+  --color-on-accent: #17191f;
+  --color-selected: #3a2b36;
+  --color-line: #2e303e;
+  --color-control-line: #6a6f82;
+  --color-active: #ef7a94;
+  --color-active-bg: #332734;
+  --color-attention: #fac29a;
+  --color-attention-bg: #3a2f28;
+  --color-success: #a9c79a;
+  --color-success-bg: #293326;
+  --color-neutral: #d5d8da;
+  --color-neutral-bg: #2e303e;
+  --color-danger: #ff9ca4;
+  --color-agent-claude: #ef9062;
+
+  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
+     濃淡は color-mix で作る（ADR 0058）。 */
+  --color-slot-1: #7aa9d6;
+  --color-slot-2: #b877db;
+  --color-slot-3: #59c3c3;
+  --color-slot-4: #cf7bb0;
+}
+
 :root[data-scheme="dark"] {
   --ansi-0: #5c6370;
   --ansi-1: #ff7b86;
