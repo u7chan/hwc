@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canSend, canStop, composeReply, normaliseQuote, quoteLines, splitQuote } from "./reply";
+import { appendQuote, canSend, canStop, normaliseQuote, quoteLines, splitQuote } from "./reply";
 
 test("a one line selection keeps the line as it is", () => {
   expect(normaliseQuote("余白が残ります")).toBe("余白が残ります");
@@ -38,17 +38,26 @@ test("whitespace only lines become a bare marker", () => {
   expect(quoteLines("前\n   \n後")).toBe("> 前\n>\n> 後");
 });
 
-test("a draft follows the quote after one blank line", () => {
-  expect(composeReply("引用", "本文")).toBe("> 引用\n\n本文");
+test("a quote is appended after the draft with one blank line", () => {
+  expect(appendQuote("本文", "引用")).toEqual({ text: "本文\n\n> 引用\n\n", caret: 10 });
+  expect(appendQuote("本文\n", "引用").text).toBe("本文\n\n> 引用\n\n");
+  expect(appendQuote("本文\n\n", "引用").text).toBe("本文\n\n> 引用\n\n");
 });
 
-test("a quote alone is sent without a body", () => {
-  expect(composeReply("引用", "")).toBe("> 引用");
-  expect(composeReply("引用", "  \n ")).toBe("> 引用");
+test("a quote alone leaves a blank line for the follow-up", () => {
+  expect(appendQuote("", "引用")).toEqual({ text: "> 引用\n\n", caret: 6 });
+  expect(appendQuote("  \n ", "引用").text).toBe("> 引用\n\n");
 });
 
-test("a body without a quote is sent as it is", () => {
-  expect(composeReply("", "本文")).toBe("本文");
+test("an empty quote leaves the draft as it is", () => {
+  expect(appendQuote("本文", "  \n\t")).toEqual({ text: "本文", caret: 2 });
+});
+
+test("a comment between quotes keeps both quotes", () => {
+  const first = appendQuote("", "引用1");
+  const second = appendQuote(`${first.text}コメント`, "引用2");
+  expect(second.text).toBe("> 引用1\n\nコメント\n\n> 引用2\n\n");
+  expect(second.caret).toBe(second.text.length);
 });
 
 test("a quote followed by a blank line splits into a quote and a body", () => {
@@ -86,11 +95,10 @@ const idle = {
   replying: false,
   draft: "",
   attachments: 0,
-  reply: null,
 };
 
-test("a quote alone can be sent", () => {
-  expect(canSend({ ...idle, reply: "引用" })).toBe(true);
+test("a quoted draft can be sent", () => {
+  expect(canSend({ ...idle, draft: "> 引用" })).toBe(true);
 });
 
 test("a draft alone can be sent", () => {
@@ -123,7 +131,6 @@ const stoppable = {
   running: false,
   draft: "",
   attachments: 0,
-  reply: null,
   chip: null,
 };
 
@@ -157,6 +164,6 @@ test("content in the composer keeps the send action", () => {
   expect(canStop({ ...stoppable, draft: "続き" })).toBe(false);
   expect(canStop({ ...stoppable, draft: "  " })).toBe(true);
   expect(canStop({ ...stoppable, attachments: 1 })).toBe(false);
-  expect(canStop({ ...stoppable, reply: "引用" })).toBe(false);
+  expect(canStop({ ...stoppable, draft: "> 引用" })).toBe(false);
   expect(canStop({ ...stoppable, chip: "compact" })).toBe(false);
 });

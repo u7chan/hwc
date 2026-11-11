@@ -1,7 +1,7 @@
 import type { CommandId } from "./commands";
 import { agentGlyph } from "./select";
 
-// 選択範囲は trim 済みの生テキストで持ち、送信のときだけ引用の記号を付ける。
+// 選択範囲は trim 済みの生テキストで受け取り、引用の記号を付けて入力欄の下書きへ足す。
 // 前後の空行を落とし、最初と最後の行の端の空白だけを整える。行の中の空白は本文の一部なので残す。
 export function normaliseQuote(raw: string): string {
   const lines = raw.replace(/\r\n/g, "\n").split("\n");
@@ -19,12 +19,17 @@ export function quoteLines(quote: string): string {
     .join("\n");
 }
 
-// 引用と本文の間は空行 1 つ。空の本文は行を足さない。引用が無ければ本文だけを送る。
-export function composeReply(quote: string, draft: string): string {
+export type QuoteAppend = { text: string; caret: number };
+
+// 引用は入力欄の末尾へ、空行 1 つを挟んで足す。引用の後ろにも空行を 1 つ残し、
+// そこへカーソルを移す。空の選択は下書きを変えない。
+export function appendQuote(draft: string, quote: string): QuoteAppend {
   const selection = normaliseQuote(quote);
-  if (selection === "") return draft;
+  if (selection === "") return { text: draft, caret: draft.length };
   const quoted = quoteLines(selection);
-  return draft.trim() === "" ? quoted : `${quoted}\n\n${draft}`;
+  const base = draft.trim() === "" ? "" : draft.replace(/\n+$/, "");
+  const text = base === "" ? `${quoted}\n\n` : `${base}\n\n${quoted}\n\n`;
+  return { text, caret: text.length };
 }
 
 export type ReplySplit = { quote: string | null; body: string };
@@ -53,7 +58,6 @@ export type ComposeState = {
   replying: boolean;
   draft: string;
   attachments: number;
-  reply: string | null;
 };
 
 // 停止は実行中の既知エージェントと、前景プロセスが動いているシェル。入力が残っていれば、
@@ -64,17 +68,11 @@ export type StopState = {
   running: boolean;
   draft: string;
   attachments: number;
-  reply: string | null;
   chip: CommandId | null;
 };
 
 export function canStop(state: StopState): boolean {
-  if (
-    state.draft.trim() !== "" ||
-    state.attachments !== 0 ||
-    state.reply !== null ||
-    state.chip !== null
-  ) {
+  if (state.draft.trim() !== "" || state.attachments !== 0 || state.chip !== null) {
     return false;
   }
   if (state.replying) return agentGlyph(state.agent) !== "generic";
@@ -83,9 +81,10 @@ export function canStop(state: StopState): boolean {
   return state.agent === null && state.running;
 }
 
-// 引用だけでも送れる。アップロード中は添付が揃うまで待ち、チップは会話が動いていないときだけ。
+// 引用も下書きの一部として数える。アップロード中は添付が揃うまで待ち、
+// チップは会話が動いていないときだけ。
 export function canSend(state: ComposeState): boolean {
   if (state.uploading) return false;
   if (state.chip !== null) return !state.replying;
-  return state.draft.trim() !== "" || state.attachments > 0 || state.reply !== null;
+  return state.draft.trim() !== "" || state.attachments > 0;
 }
