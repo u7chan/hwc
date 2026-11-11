@@ -33,6 +33,7 @@ import {
 import { CloseConfirm } from "./CloseConfirm";
 import { CloseSpaceConfirm } from "./CloseSpaceConfirm";
 import { CreatePane } from "./CreatePane";
+import { DragGhost, clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
 import { applyFavicon, faviconStatus } from "./favicon";
 import { ImageViewer } from "./ImageViewer";
 import { Preview } from "./Preview";
@@ -47,7 +48,7 @@ import {
 } from "./icons";
 import { Menu } from "./Menu";
 import { PaneMenu } from "./PaneMenu";
-import { usePaneProcesses } from "./process";
+import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import { RemoveWorktreeConfirm } from "./RemoveWorktreeConfirm";
 import { WorkspaceGitActions } from "./WorkspaceGitActions";
@@ -64,6 +65,7 @@ import {
   groupIds,
   initialExpanded,
   markedParentPaneIds,
+  tabDisplayName,
   type PaneContext,
 } from "./select";
 import {
@@ -1117,6 +1119,17 @@ export function App() {
   // 異常のときだけ出す。正常な間は何も出さず、タブの幅を空けておく。
   const detailStatus = wide || connection === "live" ? null : connChip;
 
+  // 掴んでいるタブの見出し。タブバーと同じ名前を使い、掴んだものがそのまま付いてくるようにする。
+  const draggedRow =
+    state === null || dragging === null ? null : findPaneRow(state, dragging.paneId);
+  const draggingLabel =
+    draggedRow === null
+      ? ""
+      : tabDisplayName(
+          paneTabName(draggedRow.pane, processes.get(draggedRow.pane.id) ?? null),
+          draggedRow.workspace,
+        );
+
   // ドラッグの適用先。タブとセルの両方から掴むので、最新の状態を持つ関数を ref に置く。
   const captureFlip = () => {
     const rects = new Map<string, DOMRect>();
@@ -1155,6 +1168,7 @@ export function App() {
         draggedSincePress.current = true;
       }
       event.preventDefault();
+      setDragGhostPoint(event.clientX, event.clientY);
       dropTargetRef.current = dropTargetAt(
         event.clientX,
         event.clientY,
@@ -1169,6 +1183,7 @@ export function App() {
       if (dragState === null || !dragState.active) return;
       const target = dropTargetRef.current;
       dropTargetRef.current = null;
+      clearDragGhostPoint();
       setDragging(null);
       if (target !== null) applyDropLatest.current(dragState.paneId, target);
     };
@@ -1179,6 +1194,7 @@ export function App() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onEnd);
       window.removeEventListener("pointercancel", onEnd);
+      clearDragGhostPoint();
     };
   }, []);
 
@@ -1569,6 +1585,8 @@ export function App() {
           )}
         </main>
       </div>
+
+      {dragging === null ? null : <DragGhost label={draggingLabel} />}
 
       {menu === null || (menuPane === null && menuWorkspace === null) ? null : (
         <Menu

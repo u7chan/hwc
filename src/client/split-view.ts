@@ -166,10 +166,38 @@ function zoneDir(zone: Exclude<DropZone, "center">): SplitDir {
   return zone === "top" || zone === "bottom" ? "col" : "row";
 }
 
+// 自分自身の端へ落としたとき、空くセルへ入れるタブ。開いた順で、動かすペインの次、
+// 無ければ手前を探し、既に木に並んでいるペインは飛ばす。1 つのペインを 2 つのセルへ
+// 同時に置けないため。
+function vacatedPane(view: SplitView, paneId: string): string | null {
+  const shown = new Set(leafPanes(view.layout));
+  const at = view.openTabs.indexOf(paneId);
+  if (at < 0) return null;
+  const order = [...view.openTabs.slice(at + 1), ...view.openTabs.slice(0, at).reverse()];
+  return order.find((id) => id !== paneId && !shown.has(id)) ?? null;
+}
+
+// 木の中のペインを自分自身の端へ落とす。動かすペインを新しいセルへ出し、元のセルには
+// 次に開いていたタブを残す。VSCode でタブを自分の組から切り出すのと同じ結果にする。
+function selfSplitLayout(view: SplitView, paneId: string, zone: DropZone): SplitNode | null {
+  const layout = view.layout;
+  if (layout === null || zone === "center") return null;
+  if (!leafPanes(layout).includes(paneId)) return null;
+  if (leafPanes(layout).length + 1 > MAX_LEAVES) return null;
+  const replacement = vacatedPane(view, paneId);
+  if (replacement === null) return null;
+  const host = replaceLeaf(layout, paneId, replacement);
+  if (host === null) return null;
+  const dir = zoneDir(zone);
+  if (parentDirOf(host, replacement) === dir) return null;
+  return splitLeaf(host, replacement, dir, zone === "top" || zone === "left", paneId);
+}
+
 // そのドロップを受け付けられるか。プレビューを出すかどうかもこれで決める。
 // 同じ向きのネスト（3 列・3 段）と 4 枚超えは受け付けない。
 export function canDrop(view: SplitView, source: string, target: string, zone: DropZone): boolean {
-  if (view.layout === null || source === target) return false;
+  if (view.layout === null || !leafPanes(view.layout).includes(target)) return false;
+  if (source === target) return selfSplitLayout(view, source, zone) !== null;
   const inLayout = leafPanes(view.layout).includes(source);
   const base = inLayout ? withoutLeaf(view.layout, source) : view.layout;
   if (base === null) return false;
@@ -188,6 +216,10 @@ export function dropOnPane(
   target: string,
   zone: DropZone,
 ): SplitView {
+  if (source === target) {
+    const layout = selfSplitLayout(view, source, zone);
+    return layout === null ? view : { openTabs: view.openTabs, current: source, layout };
+  }
   if (!canDrop(view, source, target, zone)) return view;
   const layout = view.layout;
   if (layout === null) return view;

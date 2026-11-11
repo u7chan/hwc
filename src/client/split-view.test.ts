@@ -234,10 +234,56 @@ test("the layout stops at four panes", () => {
   expect(canDrop(full, "w1:p1", "w1:p2", "top")).toBe(true);
 });
 
-test("a pane cannot be dropped onto itself", () => {
-  const shown = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
-  expect(canDrop(shown, "w1:p1", "w1:p1", "center")).toBe(false);
-  expect(canDrop(shown, "w1:p1", "w1:p1", "top")).toBe(false);
+test("dragging the shown pane onto its own edge splits with the previous tab", () => {
+  const shown = view(["w1:p1", "w1:p2"], "w1:p2", leaf("w1:p2"));
+  expect(canDrop(shown, "w1:p2", "w1:p2", "center")).toBe(false);
+  expect(dropOnPane(shown, "w1:p2", "w1:p2", "center")).toBe(shown);
+  const right = dropOnPane(shown, "w1:p2", "w1:p2", "right");
+  expect(right.layout).toEqual(row(leaf("w1:p1"), leaf("w1:p2")));
+  expect(right.current).toBe("w1:p2");
+  expect(right.openTabs).toEqual(["w1:p1", "w1:p2"]);
+  // 端は落とした側へ動かす。元のセルには別のタブが残る。
+  expect(dropOnPane(shown, "w1:p2", "w1:p2", "top").layout).toEqual(
+    col(leaf("w1:p2"), leaf("w1:p1")),
+  );
+});
+
+test("a self split takes the next tab in the open history", () => {
+  const shown = view(["a", "b", "c"], "b", leaf("b"));
+  const right = dropOnPane(shown, "b", "b", "right");
+  expect(right.layout).toEqual(row(leaf("c"), leaf("b")));
+  expect(right.current).toBe("b");
+});
+
+test("a self split needs a tab outside the layout to fill the vacated cell", () => {
+  const single = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
+  expect(canDrop(single, "w1:p1", "w1:p1", "right")).toBe(false);
+  expect(dropOnPane(single, "w1:p1", "w1:p1", "right")).toBe(single);
+  const pair = view(["w1:p1", "w1:p2"], "w1:p1", row(leaf("w1:p1"), leaf("w1:p2")));
+  expect(canDrop(pair, "w1:p1", "w1:p1", "bottom")).toBe(false);
+});
+
+test("a self split skips tabs that are already shown", () => {
+  const shown = view(["a", "b", "c"], "c", row(leaf("b"), leaf("c")));
+  // c の次に開いていた b は既に木にある。空くセルには a が入る。
+  expect(dropOnPane(shown, "c", "c", "bottom").layout).toEqual(
+    row(leaf("b"), col(leaf("a"), leaf("c"))),
+  );
+});
+
+test("a self split along the parent axis is rejected", () => {
+  const shown = view(["a", "b", "c"], "b", row(leaf("a"), leaf("b")));
+  expect(canDrop(shown, "b", "b", "right")).toBe(false);
+  expect(canDrop(shown, "b", "b", "top")).toBe(true);
+});
+
+test("a self split stops at four panes", () => {
+  const full = view(
+    ["a", "b", "c", "d", "e"],
+    "a",
+    row(col(leaf("a"), leaf("b")), col(leaf("c"), leaf("d"))),
+  );
+  expect(canDrop(full, "a", "a", "bottom")).toBe(false);
 });
 
 test("restoring drops gone panes and collapses their splits", () => {

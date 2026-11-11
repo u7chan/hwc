@@ -553,14 +553,14 @@ html[data-order-guide="right"] .hwc-order-drop-label {
   left: auto;
 }
 
-/* 掴んでいる束の名前。指の下に隠れないよう、少し上に浮かせる。 */
+/* 掴んでいる束・タブの名前。指の下に隠れないよう、少し上に浮かせる。 */
 :root {
   /* 位置はドラッグ中だけ JS が :root に書く。var() の解決と初期値のために宣言しておく。 */
-  --hwc-order-ghost-x: 0px;
-  --hwc-order-ghost-y: 0px;
+  --hwc-drag-ghost-x: 0px;
+  --hwc-drag-ghost-y: 0px;
 }
 
-.hwc-order-ghost {
+.hwc-drag-ghost {
   position: fixed;
   top: 0;
   left: 0;
@@ -575,23 +575,23 @@ html[data-order-guide="right"] .hwc-order-drop-label {
   background: var(--color-surface);
   box-shadow: 0 10px 30px color-mix(in srgb, var(--color-text) 22%, transparent);
   pointer-events: none;
-  transform: translate3d(var(--hwc-order-ghost-x, 0px), var(--hwc-order-ghost-y, 0px), 0)
+  transform: translate3d(var(--hwc-drag-ghost-x, 0px), var(--hwc-drag-ghost-y, 0px), 0)
     translate(-50%, calc(-100% - 14px));
 }
 
-html[data-order-ghost="below"] .hwc-order-ghost {
-  transform: translate3d(var(--hwc-order-ghost-x, 0px), var(--hwc-order-ghost-y, 0px), 0)
+html[data-drag-ghost="below"] .hwc-drag-ghost {
+  transform: translate3d(var(--hwc-drag-ghost-x, 0px), var(--hwc-drag-ghost-y, 0px), 0)
     translate(-50%, 18px);
 }
 
-.hwc-order-ghost-grip {
+.hwc-drag-ghost-grip {
   display: grid;
   flex: none;
   place-items: center;
   color: var(--color-secondary);
 }
 
-.hwc-order-ghost-name {
+.hwc-drag-ghost-name {
   min-width: 0;
   overflow: hidden;
   font-weight: 600;
