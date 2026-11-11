@@ -97,6 +97,7 @@ import {
   openPane,
   removeTab,
   startSplitView,
+  startsPaneDrag,
   syncSplitView,
   type DropZone,
   type SplitNode,
@@ -180,9 +181,6 @@ type OperationMenu = {
 
 // ドラッグの落とし先。中央は入れ替え、端はその方向への分割（ADR 0061）。
 type DropTarget = { pane: string; zone: DropZone };
-
-// クリックと区別する移動量。これ未満では掴んだだけで、選択も並べ替えも始めない。
-const DRAG_THRESHOLD = 6;
 
 // ポインタがセルのどこにあるか。親の分割軸と直交する向きだけを返す。
 function dropZoneAt(cell: HTMLElement, x: number, y: number): DropZone {
@@ -1158,6 +1156,9 @@ export function App() {
     }
     flipRects.current = rects;
   };
+
+  // 落としたときの選択はレイアウト操作。一覧の行を開いたわけではないので、既読の
+  // 保留は作らない（タブからのドラッグと同じ。ADR 0017 / 0061）。
   const applyDrop = (paneId: string, target: DropTarget) => {
     const next = dropOnPane(split, paneId, target.pane, target.zone);
     if (next === split) return;
@@ -1192,12 +1193,7 @@ export function App() {
       if (!dragState.active) {
         const dx = event.clientX - dragState.x;
         const dy = event.clientY - dragState.y;
-        // 一覧は縦にスクロールする。触れる画面では、縦の動きをスクロールに譲り、
-        // セルの方へ向かう横の動きだけをドラッグの開始とみなす。
-        if (dragState.listStart && event.pointerType !== "mouse" && Math.abs(dx) <= Math.abs(dy)) {
-          return;
-        }
-        if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+        if (!startsPaneDrag(event.pointerType, dragState.listStart, dx, dy)) return;
         dragState.active = true;
         draggedSincePress.current = true;
       }

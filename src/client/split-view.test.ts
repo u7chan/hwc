@@ -16,6 +16,7 @@ import {
   serializeSplitView,
   slotIndexOf,
   startSplitView,
+  startsPaneDrag,
   syncSplitView,
   type SplitNode,
   type SplitView,
@@ -200,6 +201,21 @@ test("a pane outside the history is appended when dropped on an edge", () => {
   expect(right.openTabs).toEqual(["a", "b", "c"]);
   expect(right.current).toBe("c");
   expect(right.layout).toEqual(row(leaf("a"), leaf("c")));
+});
+
+test("a list drag on touch starts only toward the cell", () => {
+  // 移動量が足りない間はクリックとして扱う。
+  expect(startsPaneDrag("mouse", false, 5, 0)).toBe(false);
+  // マウスは向きを問わず、少し動けば始める。
+  expect(startsPaneDrag("mouse", true, -10, 0)).toBe(true);
+  // 触れる画面の一覧は、縦の動きをスクロールに譲る。
+  expect(startsPaneDrag("touch", true, 2, 10)).toBe(false);
+  expect(startsPaneDrag("touch", true, 10, 10)).toBe(false);
+  // セルの方（右）へ向かう横の動きだけが開始になる。
+  expect(startsPaneDrag("touch", true, -10, 2)).toBe(false);
+  expect(startsPaneDrag("touch", true, 10, 2)).toBe(true);
+  // 一覧以外（タブ・セルの見出し）は縦の移動でも始められる。
+  expect(startsPaneDrag("touch", false, 0, 10)).toBe(true);
 });
 
 test("a stacked pair splits left and right", () => {
