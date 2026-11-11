@@ -60,8 +60,8 @@ import { finishedClock, formatElapsed, workingMs } from "./time";
 type PaneListProps = {
   state: AppState;
   selectedPaneId: string | null;
-  // 現在ペインが入っているスロット（1 始まり）。ツリーとアクティブの現在行を slot 色にする。
-  currentSlot: number | null;
+  // グリッドに出ているペインの並び（読み順）。一覧の行をタブ・セルと同じスロット色にする。
+  slots: readonly string[];
   parentPaneIds: ReadonlySet<string>;
   scope: ListScope;
   onScope: (scope: ListScope) => void;
@@ -382,6 +382,7 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
           <ul class="hwc-active-rows">
             {group.rows.map(({ tab, pane }) => {
               const current = pane.id === props.selectedPaneId;
+              const slot = props.slots.indexOf(pane.id);
               const name = paneRowTitle(pane);
               return (
                 <li key={pane.id} class="hwc-active-row">
@@ -389,7 +390,7 @@ function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] 
                     type="button"
                     class="hwc-active-open"
                     data-current={current}
-                    data-slot={current ? (props.currentSlot ?? undefined) : undefined}
+                    data-slot={slot >= 0 ? slot + 1 : undefined}
                     aria-current={current ? "true" : undefined}
                     onPointerDown={(event) => props.onDragStart(event, pane.id)}
                     onClick={() => props.onOpen(pane.id)}
@@ -873,6 +874,7 @@ function TreePaneList(props: TreePaneListProps) {
         {tab.panes.map((pane) => {
           const startedAt = workingSince.get(pane.id);
           const branch = branchOf.get(pane.id) ?? null;
+          const slot = props.slots.indexOf(pane.id);
           return (
             // 狭い行の判定は、行そのものではなくこの枠の幅で行う。
             <li key={pane.id} class="hwc-pane-row">
@@ -880,9 +882,7 @@ function TreePaneList(props: TreePaneListProps) {
                 class="hwc-pane"
                 data-pane-id={pane.id}
                 data-current={pane.id === selectedPaneId}
-                data-slot={
-                  pane.id === selectedPaneId ? (props.currentSlot ?? undefined) : undefined
-                }
+                data-slot={slot >= 0 ? slot + 1 : undefined}
               >
                 <button
                   type="button"
