@@ -8,16 +8,18 @@ import {
   dropOnPane,
   leafPanes,
   multiSpace,
-  nextOpenPane,
+  nextTabPane,
   normalizeSplitView,
   openPane,
   parseSplitView,
+  readingOrder,
   removeTab,
   serializeSplitView,
   slotIndexOf,
   startSplitView,
   startsPaneDrag,
   syncSplitView,
+  tabPanes,
   type SplitNode,
   type SplitView,
 } from "./split-view";
@@ -30,7 +32,8 @@ const view = (
   openTabs: readonly string[],
   current: string | null,
   layout: SplitNode | null,
-): SplitView => ({ openTabs, current, layout });
+  recent: readonly string[] = openTabs,
+): SplitView => ({ openTabs, recent, current, layout });
 
 function existsAmong(ids: readonly string[]): (paneId: string) => boolean {
   return (paneId) => ids.includes(paneId);
@@ -41,22 +44,55 @@ test("the first visit opens what herdr focuses as one pane", () => {
   expect(startSplitView(null)).toEqual(EMPTY_SPLIT_VIEW);
 });
 
-test("slot colors follow the leaf order, top-left to bottom-right", () => {
+test("slot colors follow the reading order, top-left to bottom-right", () => {
   const shown = view(
     ["w1:p1", "w1:p2", "w1:p3"],
     "w1:p2",
     row(col(leaf("w1:p1"), leaf("w1:p2")), leaf("w1:p3")),
   );
   expect(leafPanes(shown.layout)).toEqual(["w1:p1", "w1:p2", "w1:p3"]);
-  expect(slotIndexOf(shown, "w1:p2")).toBe(1);
-  expect(currentSlotIndex(shown)).toBe(1);
+  // 左列の下 p2 より、右の縦長 p3 が先。上から右へ読む。
+  expect(readingOrder(shown.layout)).toEqual(["w1:p1", "w1:p3", "w1:p2"]);
+  expect(slotIndexOf(shown, "w1:p2")).toBe(2);
+  expect(currentSlotIndex(shown)).toBe(2);
   expect(currentSlotIndex(clearCurrent(shown))).toBe(-1);
+  expect(tabPanes(shown, true)).toEqual(["w1:p1", "w1:p3", "w1:p2"]);
+  expect(tabPanes(shown, false)).toEqual(["w1:p1", "w1:p2", "w1:p3"]);
+});
+
+test("the 2x2 reading order is top-left, top-right, bottom-left, bottom-right", () => {
+  const byColumns = row(col(leaf("a"), leaf("b")), col(leaf("c"), leaf("d")));
+  const byRows = col(row(leaf("a"), leaf("b")), row(leaf("c"), leaf("d")));
+  // 構造順は木の作り方で変わるが、表示はどちらも行優先。
+  expect(leafPanes(byColumns)).toEqual(["a", "b", "c", "d"]);
+  expect(readingOrder(byColumns)).toEqual(["a", "c", "b", "d"]);
+  expect(leafPanes(byRows)).toEqual(["a", "b", "c", "d"]);
+  expect(readingOrder(byRows)).toEqual(["a", "b", "c", "d"]);
+});
+
+test("the fixed zone is followed by the most recently used tabs", () => {
+  const shown = view(
+    ["a", "b", "c", "d", "e", "f"],
+    "a",
+    row(col(leaf("a"), leaf("b")), col(leaf("c"), leaf("d"))),
+    ["e", "a", "c", "b", "d", "f"],
+  );
+  expect(tabPanes(shown, true)).toEqual(["a", "c", "b", "d", "e", "f"]);
+  expect(tabPanes(shown, false)).toEqual(["a", "b", "c", "d", "e", "f"]);
+  // 固定ゾーンのタブを選んでも並びは変わらない。
+  expect(tabPanes(openPane(shown, "c"), true)).toEqual(["a", "c", "b", "d", "e", "f"]);
+});
+
+test("a tab missing from the MRU still appears at the end", () => {
+  const shown = view(["a", "b", "c"], "a", row(leaf("a"), leaf("b")), ["a", "a", "b"]);
+  expect(tabPanes(shown, true)).toEqual(["a", "b", "c"]);
 });
 
 test("opening a pane adds it to the right end of the history", () => {
   const first = openPane(EMPTY_SPLIT_VIEW, "w1:p1");
   const second = openPane(first, "w2:p1");
   expect(second.openTabs).toEqual(["w1:p1", "w2:p1"]);
+  expect(second.recent).toEqual(["w2:p1", "w1:p1"]);
   expect(second.current).toBe("w2:p1");
   // 木に 1 枚しか無ければ、開いたペインがその葉を置き換える。
   expect(second.layout).toEqual(leaf("w2:p1"));
@@ -66,6 +102,7 @@ test("opening a pane that is already shown only moves the selection", () => {
   const shown = view(["w1:p1", "w1:p2"], "w1:p2", row(leaf("w1:p1"), leaf("w1:p2")));
   const again = openPane(shown, "w1:p1");
   expect(again.openTabs).toEqual(["w1:p1", "w1:p2"]);
+  expect(again.recent).toEqual(["w1:p1", "w1:p2"]);
   expect(again.current).toBe("w1:p1");
   expect(again.layout).toEqual(row(leaf("w1:p1"), leaf("w1:p2")));
 });
@@ -89,11 +126,34 @@ test("going back to the list keeps the history and the layout", () => {
   expect(clearCurrent(shown)).toEqual(view(["w1:p1"], null, leaf("w1:p1")));
 });
 
-test("the successor is the next tab, or the one before when there is no next", () => {
-  expect(nextOpenPane(["w1:p1", "w1:p2", "w1:p3"], "w1:p1")).toBe("w1:p2");
-  expect(nextOpenPane(["w1:p1", "w1:p2", "w1:p3"], "w1:p3")).toBe("w1:p2");
-  expect(nextOpenPane(["w1:p1"], "w1:p1")).toBeNull();
-  expect(nextOpenPane(["w1:p1", "w1:p2"], "w9:p9")).toBeNull();
+test("the successor follows the displayed tab order", () => {
+  const shown = view(["w1:p1", "w1:p2", "w1:p3"], "w1:p2", row(leaf("w1:p2"), leaf("w1:p1")), [
+    "w1:p1",
+    "w1:p2",
+    "w1:p3",
+  ]);
+  // 固定ゾーンは p2, p1。右ゾーンに p3。
+  expect(tabPanes(shown, true)).toEqual(["w1:p2", "w1:p1", "w1:p3"]);
+  expect(nextTabPane(shown, "w1:p2", true)).toBe("w1:p1");
+  expect(nextTabPane(shown, "w1:p2", false)).toBe("w1:p3");
+  expect(nextTabPane(shown, "w1:p3", true)).toBe("w1:p1");
+  expect(nextTabPane(shown, "w1:p3", false)).toBe("w1:p2");
+  expect(nextTabPane(shown, "w9:p9", true)).toBeNull();
+  expect(nextTabPane(view(["w1:p1"], "w1:p1", leaf("w1:p1")), "w1:p1", true)).toBeNull();
+});
+
+test("removing a fixed tab selects its visible neighbor", () => {
+  const shown = view(
+    ["a", "b", "c", "d", "e"],
+    "b",
+    row(col(leaf("a"), leaf("b")), col(leaf("c"), leaf("d"))),
+    ["b", "a", "c", "d", "e"],
+  );
+  // 2x2 の読み順は a, c, b, d。b の次は d。
+  expect(tabPanes(shown, true)).toEqual(["a", "c", "b", "d", "e"]);
+  expect(removeTab(shown, "b", undefined, true).current).toBe("d");
+  // モバイルと 1 枚表示は開いた順の次。
+  expect(removeTab(shown, "b", undefined, false).current).toBe("c");
 });
 
 test("removing the current tab collapses its leaf and selects the successor", () => {
@@ -280,6 +340,18 @@ test("a self split takes the next tab in the open history", () => {
   expect(right.current).toBe("b");
 });
 
+test("a self split fills the vacated cell from the displayed order", () => {
+  const shown = view(["a", "b", "e", "f"], "a", row(leaf("a"), leaf("b")), ["f", "e", "a", "b"]);
+  // PC の分割は固定ゾーン a, b の右に MRU の f, e。空くセルには f が入る。
+  expect(dropOnPane(shown, "a", "a", "bottom", true).layout).toEqual(
+    row(col(leaf("f"), leaf("a")), leaf("b")),
+  );
+  // 1 枚表示と同じ開いた順なら e。
+  expect(dropOnPane(shown, "a", "a", "bottom", false).layout).toEqual(
+    row(col(leaf("e"), leaf("a")), leaf("b")),
+  );
+});
+
 test("a self split needs a tab outside the layout to fill the vacated cell", () => {
   const single = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
   expect(canDrop(single, "w1:p1", "w1:p1", "right")).toBe(false);
@@ -338,6 +410,37 @@ test("restoring keeps the selection when the tree is empty", () => {
   expect(next.layout).toEqual(leaf("w1:p1"));
 });
 
+test("restoring fills a missing MRU order from the open history", () => {
+  const restored = parseSplitView(
+    '{"openTabs":["a","b","c"],"current":"b","layout":{"kind":"leaf","pane":"b"}}',
+  );
+  const next = normalizeSplitView(restored, () => true);
+  expect(next.recent).toEqual(["b", "a", "c"]);
+});
+
+test("restoring adds layout leaves to the tab history", () => {
+  const restored = parseSplitView(
+    '{"openTabs":["a"],"current":"a","layout":{"kind":"split","dir":"row","children":[{"kind":"leaf","pane":"a"},{"kind":"leaf","pane":"b"}]}}',
+  );
+  const next = normalizeSplitView(restored, () => true);
+  expect(next.openTabs).toEqual(["a", "b"]);
+  expect(next.recent).toEqual(["a", "b"]);
+});
+
+test("dropping a tab on the center puts the displaced pane first in the right zone", () => {
+  const shown = view(
+    ["a", "b", "c", "d", "e"],
+    "a",
+    row(col(leaf("a"), leaf("b")), col(leaf("c"), leaf("d"))),
+    ["a", "e", "b", "c", "d"],
+  );
+  // e は固定ゾーンの外。e を a のセルへ落とすと、a が右ゾーンの先頭へ出る。
+  const next = dropOnPane(shown, "e", "a", "center", true);
+  expect(next.current).toBe("e");
+  expect(next.layout).toEqual(row(col(leaf("e"), leaf("b")), col(leaf("c"), leaf("d"))));
+  expect(tabPanes(next, true)).toEqual(["e", "c", "b", "d", "a"]);
+});
+
 test("restoring drops duplicates and extra leaves", () => {
   const duplicate = view(["w1:p1", "w1:p2"], "w1:p1", row(leaf("w1:p1"), leaf("w1:p1")));
   expect(normalizeSplitView(duplicate, () => true).layout).toEqual(leaf("w1:p1"));
@@ -369,6 +472,7 @@ test("a broken saved value starts empty", () => {
   expect(parseSplitView("[]")).toEqual(EMPTY_SPLIT_VIEW);
   expect(parseSplitView('{"openTabs":"w1:p1","current":3,"layout":{}}')).toEqual({
     openTabs: [],
+    recent: [],
     current: null,
     layout: null,
   });
@@ -379,7 +483,12 @@ test("the old slot form is read as a single pane", () => {
   const restored = parseSplitView(
     '{"openTabs":["w1:p1","w1:p2"],"current":"w1:p2","slots":["w1:p1","w1:p2"]}',
   );
-  expect(restored).toEqual({ openTabs: ["w1:p1", "w1:p2"], current: "w1:p2", layout: null });
+  expect(restored).toEqual({
+    openTabs: ["w1:p1", "w1:p2"],
+    recent: [],
+    current: "w1:p2",
+    layout: null,
+  });
   expect(normalizeSplitView(restored, () => true).layout).toEqual(leaf("w1:p2"));
 });
 
@@ -394,6 +503,7 @@ test("tabs opened in several spaces keep their order", () => {
   let next = EMPTY_SPLIT_VIEW;
   for (const paneId of ["w1:p1", "w2:p1", "w3:p1", "w1:p2"]) next = openPane(next, paneId);
   expect(next.openTabs).toEqual(["w1:p1", "w2:p1", "w3:p1", "w1:p2"]);
+  expect(next.recent).toEqual(["w1:p2", "w3:p1", "w2:p1", "w1:p1"]);
   expect(multiSpace(["w1", "w2"])).toBe(true);
   expect(multiSpace(["w1", "w1"])).toBe(false);
 });
