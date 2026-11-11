@@ -315,6 +315,26 @@ PR のチップは、1 枚表示と分割セルのペイン見出し、アクテ
 4. プレビューのタブの ×（PC は hover / focus、モバイルは常時）と中クリックでも閉じられる。ヘッダーの `閉じる` と同じく、タブが消えてペインのタブが選ばれた状態に戻る。
 5. モバイル幅でも同じ手順で全画面になり、ダイアログは出ない。
 
+### 根のラベル
+
+チップの種別欄は、チェックアウトのファイルでは `HTML` のまま、チェックアウト以外の根のファイルでは `HTML · /tmp` のように根を添える（[ADR 0067](adr/0067-preview-root-label-and-warning.md)）。既定の fixture の `mock.html` はチェックアウトにあるので、ラベルは付かない。同じベース名を `/tmp` 側にも置くときだけ、fixture に次を足す。
+
+1. `frontend` の `mock.html HTML` のチップを押す。ヘッダーは `mock.html` で、根のラベルは付かない。
+2. `e2e/fixtures/scenario.ts` の `createScenario` で、架空 Herdr の root（`e2e/fake-herdr.ts` の `mkdtemp`）の下、`work/` の外に `mock.html` をコピーする（例: `<root>/tmp-preview/mock.html`）。`work/*` の外に置くのは、他のペインのチェックアウトと解決先が紛れないようにするため。自ペインのチェックアウトの外なので、root 1（`/tmp`）で解決する。
+3. fixture のセッションに、その絶対パスを本文に書いた `assistant` のメッセージを 1 通、最後に足す。
+4. `bun run e2e:serve` で起動し、`frontend` を開くと、チップが `mock.html HTML` と `mock.html HTML · /tmp` の 2 つになる。ヘッダーは `mock.html · /tmp` になり、iframe の `title` も同じ文字列を含む。
+5. 足したメッセージが最後になるので、「HTML のプレビュー」の手順 1 の「最後のメッセージにある」は、その `a7-preview` のメッセージを指すと読み替える。新しいメッセージを `a7-preview` より前に置くなら、この読み替えは要らない。
+6. 確認したら fixture の変更は戻す。
+
+### 描けない HTML の案内
+
+HTML が配信できないスクリプトを読み込むと、iframe の上に 1 行の案内が出る（[ADR 0067](adr/0067-preview-root-label-and-warning.md)）。既定の `docs/preview/mock.html` は `./mock.js` だけを読むので出ない。
+
+1. `frontend` の `mock.html` を開く。案内の行は出ず、iframe の `一覧` の切り替えが動く。
+2. 案内を出すには、fixture の `docs/preview/mock.html` の script を配信できない参照に差し替える（例: `<script type="module" src="./mock.ts"></script>`）。開き直すと iframe の上に案内が出て、中身は白いままになる。`再読み込み` でもう一度 HEAD を送り、案内は残る。
+3. `<script src="./mock.js"></script>` に戻すと、開き直しで案内が消える。CSS と JS の応答自体には案内を出さない。
+4. 確認したら fixture の変更は戻す。案内の行が出たままの画面を、他の手順のスクリーンショットに使わない。
+
 `/tmp` は追加根の既定なので、fixture に置いてもチップとプレビューになる（[ADR 0066](adr/0066-tmp-preview-root.md)）。`HWC_PREVIEW_ROOTS` はさらに別の場所を足す設定で、fixture では使わない。追加根の検出と配信は BFF の unit / API テストで確認する。
 
 ### 根の外にあるファイルの案内

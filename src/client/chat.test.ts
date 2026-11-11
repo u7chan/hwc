@@ -21,6 +21,8 @@ import {
   isAbortError,
   isPendingConfirmed,
   latestUserAt,
+  messageFileDisplayName,
+  messageFileKindLabel,
   newSessionPending,
   newSessionReset,
   newSessionSnapshot,
@@ -111,6 +113,17 @@ test("a body over the analysis limit keeps every image in the trailing list", ()
   // 解析しない本文では記法が原文のまま残るので、末尾の一覧からも外さない。
   expect(images.size).toBe(0);
   expect(rest.map((file) => file.name)).toEqual(["docs/a.png"]);
+});
+
+test("a page chip and the preview header show the root label", () => {
+  // チェックアウトのファイルは既定なので、名前と種別だけで足りる。
+  expect(messageFileDisplayName("docs/preview/mock.html", undefined)).toBe("mock.html");
+  expect(messageFileKindLabel(undefined)).toBe("HTML");
+
+  // 同じベース名でも、根のラベルがあれば押す前に見分けられる。
+  expect(messageFileDisplayName("docs/preview/mock.html", "/tmp")).toBe("mock.html · /tmp");
+  expect(messageFileKindLabel("/tmp")).toBe("HTML · /tmp");
+  expect(messageFileKindLabel("mock")).toBe("HTML · mock");
 });
 
 test("a cancellation is not a failure", () => {

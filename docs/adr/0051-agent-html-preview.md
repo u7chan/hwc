@@ -6,6 +6,7 @@
 - Revises: 2026-11-11 にプレビューのタブの × と中クリックを閉じる入口として追加（[ADR 0059](0059-tab-close-detaches.md)）
 - Revises: 2026-11-11 に根の外のファイルの案内と移動の依頼を追加（[ADR 0065](0065-outside-preview-root.md)）
 - Revises: 2026-11-11 に追加根の既定を `/tmp` に変更（[ADR 0066](0066-tmp-preview-root.md)）
+- Revises: 2026-11-11 にチップとヘッダーの根のラベル、配信できないスクリプトの案内を追加（[ADR 0067](0067-preview-root-label-and-warning.md)）
 - Extends: [ADR 0041](0041-agent-message-images.md) の対象を画像から HTML へ広げる
 
 ## Context

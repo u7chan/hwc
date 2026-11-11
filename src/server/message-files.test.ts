@@ -9,6 +9,7 @@ import {
   collectMessageFiles,
   defaultPreviewRoots,
   messagePathCandidates,
+  previewRootLabel,
   resolveMessageFile,
   resolvePreviewFile,
 } from "./message-files";
@@ -392,6 +393,67 @@ test("delivers an HTML under /tmp with the default roots and reports no outside 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("labels the roots other than the checkout", async () => {
+  const extra = await mkdtemp(join(tmpdir(), "hwc-preview-root-"));
+  await writeFile(join(extra, "mock.html"), "<!doctype html>");
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: "`docs/mock.png` を見てください。", at: 1 }],
+  };
+
+  try {
+    await write("docs/mock.png", png);
+    // チェックアウトは既定の根なので、ラベルを持たない。
+    const checkout = await attachMessageFiles(chat, root, [extra]);
+    expect(checkout.messages[0]?.files?.[0]).toMatchObject({ root: 0 });
+    expect(checkout.messages[0]?.files?.[0]?.rootLabel).toBeUndefined();
+
+    const html: ChatSnapshot = {
+      ...chat,
+      messages: [
+        { id: "a1", role: "agent", text: `モックは \`${join(extra, "mock.html")}\` です。`, at: 1 },
+      ],
+    };
+    const labelled = await attachMessageFiles(html, root, [extra]);
+    expect(labelled.messages[0]?.files?.[0]).toMatchObject({
+      root: 1,
+      rootLabel: basename(extra),
+    });
+  } finally {
+    await rm(extra, { recursive: true, force: true });
+  }
+});
+
+test("labels /tmp from the configured value, even when it is root 0", async () => {
+  const dir = await mkdtemp(join("/tmp", "hwc-default-root-"));
+  const page = join(dir, "mock.html");
+  await writeFile(page, "<!doctype html>");
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: `モックは \`${page}\` です。`, at: 1 }],
+  };
+
+  try {
+    const withCheckout = (await attachMessageFiles(chat, root, ["/tmp"])).messages[0];
+    expect(withCheckout?.files?.[0]).toMatchObject({ root: 1, rootLabel: "/tmp" });
+
+    // チェックアウトを持たないペインでは /tmp が 0 番になる。番号ではなく設定値で決める。
+    const withoutCheckout = (await attachMessageFiles(chat, null, ["/tmp"])).messages[0];
+    expect(withoutCheckout?.files?.[0]).toMatchObject({ root: 0, rootLabel: "/tmp" });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("falls back to the default label when the root has no basename", () => {
+  expect(previewRootLabel("/tmp")).toBe("/tmp");
+  expect(previewRootLabel("/srv/mock")).toBe("mock");
+  expect(previewRootLabel("/srv/mock/")).toBe("mock");
+  // 空文字と `/` はベース名にならない。ラベルを黙って消さず、既定の文言を出す。
+  expect(previewRootLabel("")).toBe("追加根");
+  expect(previewRootLabel("/")).toBe("追加根");
 });
 
 test("finds an image in an extra root and keeps the root it was found in", async () => {

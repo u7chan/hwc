@@ -12,6 +12,7 @@ import type { PaneState } from "../server/herdr/state";
 import { gitStatusLabel, type GitSync } from "../shared/git";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
 import { messageFileLabel } from "../shared/message-files";
+import { messageFileKindLabel } from "./chat";
 import { activityLabel, activitySnippet, formatTokPerSecond, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
 import { attachmentStore, type AttachedImage } from "./attachment-store";
@@ -238,7 +239,7 @@ function MessageFiles(props: {
             >
               <EyeIcon size={16} />
               <span class="hwc-msg-page-name">{messageFileLabel(file.name)}</span>
-              <span class="hwc-msg-page-kind">HTML</span>
+              <span class="hwc-msg-page-kind">{messageFileKindLabel(file.rootLabel)}</span>
             </button>
           ))}
         </div>

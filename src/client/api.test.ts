@@ -416,6 +416,34 @@ test("a preview url keeps the root and the path separators", () => {
   ).toBe("/api/panes/w1%3Ap1/preview/0/preview/index.html");
 });
 
+test("a file keeps the root label only as a display string", () => {
+  const snapshotWithLabel = (rootLabel: unknown) =>
+    toChatSnapshot({
+      ...chatBody,
+      messages: [
+        {
+          id: "m1",
+          role: "agent" as const,
+          text: "`docs/mock.html`",
+          at: 1_000,
+          files: [{ name: "docs/mock.html", version: "1-2", kind: "html", root: 1, rootLabel }],
+        },
+      ],
+    })?.messages[0]?.files?.[0];
+
+  // チェックアウト以外の根は、固定の表記か設定値の basename だけを持つ。
+  expect(snapshotWithLabel("/tmp")?.rootLabel).toBe("/tmp");
+  expect(snapshotWithLabel("mock")?.rootLabel).toBe("mock");
+  // 長い basename は描画側で抑える。黙って捨てない。
+  const long = "a".repeat(120);
+  expect(snapshotWithLabel(long)?.rootLabel).toBe(long);
+
+  // 絶対パスを渡さない契約なので、区切りを含む値は捨てる。
+  for (const broken of ["/srv/mock", "a/b", "a\\b", "", 3, null]) {
+    expect(snapshotWithLabel(broken)?.rootLabel).toBeUndefined();
+  }
+});
+
 test("an image url carries the root, relative path and version", () => {
   expect(
     chatFileUrl("w1:p2", {

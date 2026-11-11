@@ -21,6 +21,7 @@ import {
 } from "../shared/agents";
 import { isAttachmentName } from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
+import type { PreviewWarning } from "../shared/message-files";
 import { parsePaneProcess, type PaneProcess } from "../shared/panes";
 import type { FolderTrustInteraction, PaneInteraction } from "../shared/confirmation";
 import { parseProjectList, type ProjectList } from "../shared/projects";
@@ -149,6 +150,15 @@ function toImageRefs(value: unknown): string[] | undefined {
   return refs.length === 0 ? undefined : refs;
 }
 
+// 根のラベルは表示だけに使う。絶対パスを渡さない契約なので、区切りを含む値は捨てる。
+// `/tmp` は固定の表記で、画面にもそのまま出ている。長さは描画側で抑える。
+function toRootLabel(value: unknown): string | undefined {
+  if (typeof value !== "string" || value === "") return undefined;
+  if (value === "/tmp") return value;
+  if (value.includes("/") || value.includes("\\")) return undefined;
+  return value;
+}
+
 function toChatFiles(value: unknown): ChatFile[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const files: ChatFile[] = [];
@@ -164,11 +174,13 @@ function toChatFiles(value: unknown): ChatFile[] | undefined {
     if (file.name === "" || file.name.startsWith("/")) continue;
     if (file.name.split("/").includes("..")) continue;
     const imageRefs = toImageRefs(file.imageRefs);
+    const rootLabel = toRootLabel(file.rootLabel);
     files.push({
       name: file.name,
       version: file.version,
       kind: file.kind,
       root: file.root,
+      ...(rootLabel === undefined ? {} : { rootLabel }),
       ...(imageRefs === undefined ? {} : { imageRefs }),
     });
   }
@@ -259,6 +271,24 @@ export function chatFileUrl(paneId: string, file: ChatFile): string {
 export function previewUrl(paneId: string, file: ChatFile): string {
   const encoded = file.name.split("/").map(encodeURIComponent).join("/");
   return `/api/panes/${encodeURIComponent(paneId)}/preview/${file.root}/${encoded}`;
+}
+
+// iframe に出す前に、配信できないスクリプトを読み込む HTML かをヘッダーだけで確かめる。
+// hc は HEAD を出せないので、この 1 本だけ素の fetch を使う。親ページと同じオリジンから
+// 送るので、sandbox の iframe とは別経路でヘッダーを読める。失敗と期限切れは案内を出さない。
+export async function probePreviewWarning(
+  paneId: string,
+  file: ChatFile,
+  signal: AbortSignal,
+): Promise<PreviewWarning | null> {
+  try {
+    const response = await fetch(previewUrl(paneId, file), { method: "HEAD", signal });
+    if (!response.ok) return null;
+    // 未知の値は無視する。クライアントが知っている案内だけを出す。
+    return response.headers.get("x-hwc-preview-warning") === "script" ? "script" : null;
+  } catch {
+    return null;
+  }
 }
 
 export function toAppState(value: unknown): AppState | null {

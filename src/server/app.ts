@@ -64,7 +64,7 @@ import {
   resolveMessageFile,
   resolvePreviewFile,
 } from "./message-files";
-import { isHtmlName } from "../shared/message-files";
+import { isHtmlName, previewWarning } from "../shared/message-files";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { placeOf } from "../shared/place";
 import { isAgentModel, supportsFolderTrust, supportsModelSelection } from "../shared/agents";
@@ -741,7 +741,13 @@ export function createApp(options: {
         const bytes = file === null ? null : await readMessageFile(file);
         if (file === null || bytes === null) return previewNotFound(c, requested);
 
-        return new Response(bytes, { headers: previewHeaders(file.contentType) });
+        const headers = previewHeaders(file.contentType);
+        // 配信で読んだバイト列をそのまま見る。HTML を書き換えずに、白紙の理由だけを知らせる。
+        if (isHtmlName(file.name)) {
+          const warning = previewWarning(new TextDecoder().decode(bytes));
+          if (warning !== null) headers["x-hwc-preview-warning"] = warning;
+        }
+        return new Response(bytes, { headers });
       })
       .get("/api/panes/:id/output", async (c) => {
         const query = parseOutputQuery(new URL(c.req.url).searchParams);
