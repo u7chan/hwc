@@ -3992,6 +3992,38 @@ p.hwc-compaction,
 
 /* 実行中の段階と thinking の末尾。会話のスクロール領域の外に置くので、読み返して
    いる間も見える。高さが変わっても下の入力欄は動かない。 */
+/* ターン終了時は高さを即座に返し、中身だけを短く薄く消す。高さごとアニメーション
+   すると、上に載る会話のリフローが毎フレーム走る。 */
+.hwc-live-slot {
+  flex: none;
+  position: relative;
+}
+
+.hwc-live-slot[data-state="closing"] {
+  height: 0;
+}
+
+.hwc-live-slot[data-state="closing"] > .hwc-live {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.hwc-live-slot[data-state="closing"] .hwc-live-head,
+.hwc-live-slot[data-state="closing"] .hwc-live-thought {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-live-slot[data-state="closing"] .hwc-live-head,
+  .hwc-live-slot[data-state="closing"] .hwc-live-thought {
+    transition: none;
+  }
+}
+
 .hwc-live {
   flex: none;
   display: flex;
