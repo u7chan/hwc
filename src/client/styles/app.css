@@ -107,11 +107,17 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   font-size: var(--text-secondary);
 }
 
-.hwc-foot-name {
+/* 足元の名前。マークが付くぶん、文字は本文より一段小さくする。
+   viewBox は文字とマークのインクに合わせてあるので、高さは viewBox の比で決まる（77/100）。 */
+.hwc-foot-logo {
+  flex: none;
+  height: 0.77em;
+  width: auto;
+  /* ブランド全体の補助サイズは継がない。本文サイズを基準に縮める。 */
+  font-size: calc(var(--text-body) * 0.88);
+  /* 同梱フォントの入れ替わり中に字が切れないよう、はみ出しは許す。 */
+  overflow: visible;
   color: var(--color-text);
-  font-size: var(--text-body);
-  font-weight: 600;
-  letter-spacing: 0.02em;
 }
 
 .hwc-foot-rev {

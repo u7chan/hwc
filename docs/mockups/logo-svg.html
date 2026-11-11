@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HWC の SVG ロゴ — デザインモック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Nerd Symbols Mono";
+        src: url("../../src/client/assets/fonts/NerdSymbolsMono.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      :root {
+        color-scheme: dark;
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-accent: #94baff;
+        --color-line: #32373f;
+        --color-control-line: #606976;
+        --color-success: #8fdbb1;
+        --color-neutral: #b6becb;
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+        --radius-sm: 8px;
+        --radius-control: 12px;
+        --radius-panel: 16px;
+        --text-body: 1.0625rem;
+        --text-secondary: 0.8125rem;
+        --line-body: 1.5;
+        --tap: 44px;
+        --hwc-sidebar-width: 352px;
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-accent: #255cd6;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-success: #216549;
+        --color-neutral: #5d6878;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: 15px;
+        line-height: var(--line-body);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      /* モックの見出し。アプリの面とは分ける。 */
+      .mock-head {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        height: 60px;
+        padding: 0 var(--space-5);
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-surface);
+      }
+
+      .mock-title {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-3);
+        min-width: 0;
+      }
+
+      .mock-title h1 {
+        font-size: 16px;
+        font-weight: 600;
+      }
+
+      .mock-title span {
+        overflow: hidden;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mock-toggle {
+        flex: none;
+        min-height: 36px;
+        padding: 0 var(--space-4);
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: var(--text-secondary);
+        cursor: pointer;
+      }
+
+      .mock-main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: var(--space-6) var(--space-5) 72px;
+        display: grid;
+        gap: var(--space-6);
+      }
+
+      /* 前提。案を読む前に、変えない条件を共有する。 */
+      .lead {
+        display: grid;
+        gap: var(--space-2);
+        padding-bottom: var(--space-4);
+        border-bottom: 1px solid var(--color-line);
+      }
+
+      .lead h2 {
+        font-size: var(--text-body);
+        font-weight: 600;
+      }
+
+      .lead p {
+        max-width: 70ch;
+        color: var(--color-secondary);
+        font-size: 13.5px;
+      }
+
+      .lead ul {
+        margin: 0;
+        padding-left: 1.3em;
+        color: var(--color-secondary);
+        font-size: 13.5px;
+      }
+
+      .lead code,
+      .notes code {
+        padding: 1px 5px;
+        border-radius: 5px;
+        background: var(--color-raised);
+        color: var(--color-text);
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+
+      /* 案の一覧。並べて比べるのが目的なので、同じ幅の枠で並べる。 */
+      .variants {
+        display: grid;
+        gap: var(--space-4);
+        grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+      }
+
+      .card {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+        overflow: hidden;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-2);
+        padding: var(--space-4) var(--space-4) var(--space-1);
+      }
+
+      .card-key {
+        padding: 1px 6px;
+        border-radius: 6px;
+        background: var(--color-raised);
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .card-name {
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .card-why {
+        padding: 0 var(--space-4) var(--space-4);
+        color: var(--color-secondary);
+        font-size: 13px;
+      }
+
+      /* 大きく出して字形を見る。文字サイズだけ変え、ロゴの作りはそのまま。 */
+      .stage {
+        display: flex;
+        align-items: center;
+        min-height: 108px;
+        padding: var(--space-6) var(--space-5);
+        border-top: 1px solid var(--color-line);
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-bg);
+        font-size: 44px;
+      }
+
+      .stage svg.logo {
+        color: var(--color-text);
+      }
+
+      /* 置く場所の実寸。アプリの .hwc-sidebar-foot と同じ寸法にする。 */
+      .foot-demo {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: var(--space-1) var(--space-4) var(--space-2);
+        border-top: 1px solid var(--color-line);
+        background: var(--color-bg);
+        font-size: var(--text-body);
+      }
+
+      .demo-brand {
+        display: inline-flex;
+        align-items: baseline;
+        gap: var(--space-2);
+        min-width: 0;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      /* プレート案だけは文字の下端がベースラインに無い。中心で揃える。 */
+      .demo-brand.is-center {
+        align-items: center;
+      }
+
+      .demo-brand svg.logo {
+        color: var(--color-text);
+        /* 足元の名前と同じ --text-body。ブランド全体の補助サイズを継ぐと小さくなる。 */
+        font-size: var(--text-body);
+      }
+
+      .demo-name {
+        color: var(--color-text);
+        font-size: var(--text-body);
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .demo-rev {
+        overflow: hidden;
+        color: var(--color-neutral);
+        font-family: var(--font-mono);
+        font-size: var(--text-secondary);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .demo-actions {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+      }
+
+      .demo-conn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .demo-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--color-success);
+      }
+
+      .demo-gear-button {
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        border-radius: var(--radius-control);
+        background: var(--color-raised);
+        color: var(--color-secondary);
+      }
+
+      .demo-gear {
+        width: 20px;
+        height: 20px;
+      }
+
+      .note {
+        flex: 1;
+        padding: var(--space-3) var(--space-4);
+        color: var(--color-secondary);
+        font-size: 12.5px;
+      }
+
+      .spec {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px var(--space-3);
+        padding: 0 var(--space-4) var(--space-4);
+        color: var(--color-secondary);
+        font-size: 11.5px;
+      }
+
+      .spec code {
+        color: var(--color-text);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      /* 実寸の比較。狭い画面の一覧幅に合わせて並べる。 */
+      .compare {
+        display: grid;
+        gap: var(--space-5);
+        grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+      }
+
+      .strip {
+        display: grid;
+        gap: var(--space-2);
+        align-content: start;
+      }
+
+      .strip-label {
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+
+      .strip .foot-demo {
+        max-width: var(--hwc-sidebar-width);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+      }
+
+      .compare-title {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-3);
+        margin-bottom: var(--space-4);
+      }
+
+      .compare-title h2 {
+        font-size: var(--text-body);
+        font-weight: 600;
+      }
+
+      .compare-title span {
+        color: var(--color-secondary);
+        font-size: 12.5px;
+      }
+
+      .notes {
+        display: grid;
+        gap: var(--space-3);
+        padding-top: var(--space-4);
+        border-top: 1px solid var(--color-line);
+      }
+
+      .notes h2 {
+        font-size: var(--text-body);
+        font-weight: 600;
+      }
+
+      .notes-text {
+        max-width: 70ch;
+        color: var(--color-secondary);
+        font-size: 13.5px;
+      }
+
+      .notes ul {
+        display: grid;
+        gap: var(--space-2);
+        margin: 0;
+        padding-left: 1.3em;
+        color: var(--color-secondary);
+        font-size: 13.5px;
+      }
+
+      .logo {
+        display: block;
+        flex: none;
+        width: auto;
+        height: 0.72em;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="mock-head">
+      <div class="mock-title">
+        <h1>HWC の SVG ロゴ</h1>
+        <span>一覧の足元をテキストから SVG テキストへ置き換える案</span>
+      </div>
+      <button class="mock-toggle" type="button" id="theme-toggle">ライト</button>
+    </header>
+
+    <main class="mock-main">
+      <section class="lead">
+        <h2>変えない前提</h2>
+        <p>
+          足元の <code>HWC</code> は、名前と revision を並べる静かな場所。色と大きさは今の役割を
+          そのまま使い、案の違いは字形・字間・付ける図形だけにする。パス化せず
+          <code>&lt;text&gt;</code> のまま置くので、同梱フォント・テーマ色・文字サイズに追従する。
+        </p>
+        <ul>
+          <li>
+            色は <code>--color-text</code>。SVG 側に色を書かず <code>currentColor</code> で受ける。
+          </li>
+          <li>
+            高さは <code>--text-body</code>（狭い画面 17px / 広い画面 15px）。右の revision
+            とベースラインを揃える。
+          </li>
+          <li>足元は識別と状態の場所。ロゴに状態や操作の意味を持たせない。</li>
+        </ul>
+      </section>
+
+      <section class="variants">
+        <article class="card" data-card="plain">
+          <div class="card-head">
+            <span class="card-key">A</span>
+            <h3 class="card-name">据え置き</h3>
+          </div>
+          <p class="card-why">見た目を変えずに SVG テキストへ移す。差し替えの基準。</p>
+          <div class="stage" data-variant="plain">
+            <svg class="logo" data-logo="plain" viewBox="0 0 320 120" role="img" aria-label="HWC">
+              <text
+                data-text
+                x="0"
+                y="100"
+                font-size="100"
+                font-weight="600"
+                letter-spacing="2"
+                fill="currentColor"
+              >
+                HWC
+              </text>
+            </svg>
+          </div>
+          <div class="foot-demo" data-foot="plain"></div>
+          <p class="note">利点はほぼ無い。他の案と比べるための基準として置く。</p>
+          <div class="spec">
+            <span>viewBox <code data-viewbox>—</code></span>
+            <span>高さ <code data-em>—</code></span>
+          </div>
+        </article>
+
+        <article class="card" data-card="tight">
+          <div class="card-head">
+            <span class="card-key">B</span>
+            <h3 class="card-name">詰め組み</h3>
+          </div>
+          <p class="card-why">
+            H–W の空きを詰めて 2 つの間隔を揃え、3 文字を 1 語のロゴとして見せる。
+          </p>
+          <div class="stage" data-variant="tight">
+            <svg class="logo" data-logo="tight" viewBox="0 0 320 120" role="img" aria-label="HWC">
+              <text
+                data-text
+                x="0"
+                y="100"
+                font-size="100"
+                font-weight="600"
+                letter-spacing="1.5"
+                fill="currentColor"
+              >
+                H<tspan dx="-5">W</tspan><tspan dx="0.5">C</tspan>
+              </text>
+            </svg>
+          </div>
+          <div class="foot-demo" data-foot="tight"></div>
+          <p class="note">
+            文字列ではなく印に見える。字間は SVG 側で固定するので、文字サイズに比例して詰まる。
+          </p>
+          <div class="spec">
+            <span>viewBox <code data-viewbox>—</code></span>
+            <span>高さ <code data-em>—</code></span>
+          </div>
+        </article>
+
+        <article class="card" data-card="mark">
+          <div class="card-head">
+            <span class="card-key">C</span>
+            <h3 class="card-name">格子マーク + 文字</h3>
+          </div>
+          <p class="card-why">
+            favicon と空状態で使っている 2×2 のマークを頭に置き、文字列から製品の印にする。
+          </p>
+          <div class="stage" data-variant="mark">
+            <svg class="logo" data-logo="mark" viewBox="0 0 420 120" role="img" aria-label="HWC">
+              <g fill="currentColor">
+                <rect data-shape x="0" y="24" width="33.8" height="33.8" rx="10.6" />
+                <rect data-shape x="42.2" y="24" width="33.8" height="33.8" rx="10.6" />
+                <rect data-shape x="0" y="66.2" width="33.8" height="33.8" rx="10.6" />
+                <rect
+                  data-shape
+                  x="42.2"
+                  y="66.2"
+                  width="33.8"
+                  height="33.8"
+                  rx="10.6"
+                  opacity="0.45"
+                />
+              </g>
+              <text
+                data-text
+                x="97"
+                y="100"
+                font-size="100"
+                font-weight="600"
+                letter-spacing="2.5"
+                fill="currentColor"
+              >
+                HWC
+              </text>
+            </svg>
+          </div>
+          <div class="foot-demo" data-foot="mark"></div>
+          <p class="note">
+            幅が約 1.4 倍になる。狭い画面では revision が早く省略される。マークは 1 色で持つ。
+          </p>
+          <div class="spec">
+            <span>viewBox <code data-viewbox>—</code></span>
+            <span>高さ <code data-em>—</code></span>
+          </div>
+        </article>
+
+        <article class="card" data-card="mono">
+          <div class="card-head">
+            <span class="card-key">D</span>
+            <h3 class="card-name">刻印</h3>
+          </div>
+          <p class="card-why">
+            等幅と字間で端末の道具らしさを出し、右の revision と同じ書体で揃える。
+          </p>
+          <div class="stage" data-variant="mono">
+            <svg class="logo" data-logo="mono" viewBox="0 0 420 120" role="img" aria-label="HWC">
+              <text
+                data-text
+                x="0"
+                y="100"
+                font-size="100"
+                font-weight="500"
+                letter-spacing="9"
+                fill="currentColor"
+                style="font-family: var(--font-mono)"
+              >
+                HWC
+              </text>
+              <rect data-caret data-shape rx="5" fill="var(--color-control-line)" />
+            </svg>
+          </div>
+          <div class="foot-demo" data-foot="mono"></div>
+          <p class="note">
+            等幅は同梱していない。OS
+            ごとに字形と幅が変わるので、ロゴとしては揺れる。カーソルは静止。
+          </p>
+          <div class="spec">
+            <span>viewBox <code data-viewbox>—</code></span>
+            <span>高さ <code data-em>—</code></span>
+          </div>
+        </article>
+
+        <article class="card" data-card="plate">
+          <div class="card-head">
+            <span class="card-key">E</span>
+            <h3 class="card-name">反転プレート</h3>
+          </div>
+          <p class="card-why">favicon のタイルと同じ発想で、足元に小さな製品タイルを置く。</p>
+          <div class="stage" data-variant="plate">
+            <svg class="logo" data-logo="plate" viewBox="0 0 400 160" role="img" aria-label="HWC">
+              <rect data-plate data-shape rx="24" fill="var(--color-text)" />
+              <text
+                data-text
+                x="0"
+                y="100"
+                font-size="100"
+                font-weight="600"
+                letter-spacing="2"
+                fill="var(--color-bg)"
+              >
+                HWC
+              </text>
+            </svg>
+          </div>
+          <div class="foot-demo" data-foot="plate"></div>
+          <p class="note">
+            6
+            案で最も強い。抜き文字の色は下の面に合わせる必要があり、面が変わると色も渡すことになる。
+          </p>
+          <div class="spec">
+            <span>viewBox <code data-viewbox>—</code></span>
+            <span>高さ <code data-em>—</code></span>
+          </div>
+        </article>
+
+        <article class="card" data-card="rule">
+          <div class="card-head">
+            <span class="card-key">F</span>
+            <h3 class="card-name">罫付き</h3>
+          </div>
+          <p class="card-why">
+            字間を開けて補助情報の位置に寄せ、上に細い罫を 1 本引いて足元の区切り線と対にする。
+          </p>
+          <div class="stage" data-variant="rule">
+            <svg class="logo" data-logo="rule" viewBox="0 0 360 140" role="img" aria-label="HWC">
+              <text
+                data-text
+                x="0"
+                y="100"
+                font-size="94"
+                font-weight="500"
+                letter-spacing="11"
+                fill="currentColor"
+              >
+                HWC
+              </text>
+              <rect data-rule data-shape height="6" rx="3" fill="var(--color-control-line)" />
+            </svg>
+          </div>
+          <div class="foot-demo" data-foot="rule"></div>
+          <p class="note">
+            罫は装飾。増やすなら 1 本まで。足元の区切り線と二重に見えない距離を取る。
+          </p>
+          <div class="spec">
+            <span>viewBox <code data-viewbox>—</code></span>
+            <span>高さ <code data-em>—</code></span>
+          </div>
+        </article>
+      </section>
+
+      <section>
+        <div class="compare-title">
+          <h2>実寸で並べる</h2>
+          <span>狭い画面の本文 17px。広い画面の 15px でも em ごと縮む</span>
+        </div>
+        <div class="compare">
+          <div class="strip">
+            <span class="strip-label">現状（テキスト）</span>
+            <div class="foot-demo" data-foot="current"></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">A 据え置き</span>
+            <div class="foot-demo" data-foot="plain"></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">B 詰め組み</span>
+            <div class="foot-demo" data-foot="tight"></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">C 格子マーク + 文字</span>
+            <div class="foot-demo" data-foot="mark"></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">D 刻印</span>
+            <div class="foot-demo" data-foot="mono"></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">E 反転プレート</span>
+            <div class="foot-demo" data-foot="plate"></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">F 罫付き</span>
+            <div class="foot-demo" data-foot="rule"></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="compare-title">
+          <h2>C の文字サイズ</h2>
+          <span>マークは文字のキャップ高。下の帯は本文 17px の足元をそのまま縮めたもの</span>
+        </div>
+        <div class="compare">
+          <div class="strip">
+            <span class="strip-label">17px 文字・マークとも</span>
+            <div class="foot-demo" data-foot="mark" data-logo-size="17"></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">15px（0.88em）文字・マークとも</span>
+            <div class="foot-demo" data-foot="mark" data-logo-size="15"></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">文字 15px / マーク 17px</span>
+            <div
+              class="foot-demo"
+              data-foot="mark"
+              data-logo-size="17"
+              data-text-scale="0.88"
+            ></div>
+          </div>
+          <div class="strip">
+            <span class="strip-label">13.5px 文字・マークとも</span>
+            <div class="foot-demo" data-foot="mark" data-logo-size="13.5"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="notes">
+        <h2>所感</h2>
+        <p class="notes-text">
+          足元の静けさを保つなら B、製品の印として立てたいなら C。E
+          は強いので、足元より上の面のほうが合う。 D は OS
+          ごとに字形が変わるため、ロゴには向かない。F は罫が 1
+          本増えるぶん、他の区切り線と競合しやすい。
+        </p>
+      </section>
+
+      <section class="notes">
+        <h2>実装メモ</h2>
+        <ul>
+          <li>
+            置き換え先は <code>src/client/App.tsx</code> の
+            <code>&lt;span class="hwc-foot-name"&gt;HWC&lt;/span&gt;</code>。採用する案は 1
+            つだけ残す。
+          </li>
+          <li>
+            色は <code>currentColor</code> で受ける。SVG に色を書かず親へ
+            <code>--color-text</code> を置けば、全テーマに追従する。E の抜き文字だけは例外。
+          </li>
+          <li>
+            高さは実測値の <code>em</code> で指定する。狭い画面 17px / 広い画面 15px
+            と、端末の文字サイズ変更に そのまま付いてくる。
+          </li>
+          <li>
+            文字の下端がベースラインなので、いまの <code>align-items: baseline</code> のまま
+            revision と揃う。E だけ中心揃え。
+          </li>
+          <li>
+            幅は viewBox
+            で固定する。同梱フォントが読めない間や差し替わったときに幅が動くのが困るなら、
+            <code>textLength</code> と <code>lengthAdjust="spacing"</code> で幅を決め打ちにする。
+          </li>
+          <li>
+            読み上げは <code>role="img"</code> と <code>aria-label="HWC"</code>。今と同じ 1 語。
+          </li>
+          <li>
+            各カードの viewBox
+            は実測値。ブラウザの文字計量から出したインクの範囲で、フォントは同梱の Noto Sans JP
+            固定なので、そのまま使える。
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <script>
+      const GEAR =
+        '<svg class="demo-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M10.43 5.18 L10.63 2.8 L13.37 2.8 L13.57 5.18 L15.71 6.06 L17.53 4.52 L19.48 6.47 L17.94 8.29 L18.82 10.43 L21.2 10.63 L21.2 13.37 L18.82 13.57 L17.94 15.71 L19.48 17.53 L17.53 19.48 L15.71 17.94 L13.57 18.82 L13.37 21.2 L10.63 21.2 L10.43 18.82 L8.29 17.94 L6.47 19.48 L4.52 17.53 L6.06 15.71 L5.18 13.57 L2.8 13.37 L2.8 10.63 L5.18 10.43 L6.06 8.29 L4.52 6.47 L6.47 4.52 L8.29 6.06 Z"/>' +
+        '<circle cx="12" cy="12" r="3.2"/></svg>';
+
+      // 足元は 1 つの組み立てに寄せる。案ごとに markup を複製すると、直すときに片方だけ古くなる。
+      function buildFoot(kind, host) {
+        const foot = document.createElement("div");
+        foot.className = "foot-demo";
+
+        const brand = document.createElement("span");
+        brand.className = "demo-brand";
+        if (kind === "current") {
+          const name = document.createElement("span");
+          name.className = "demo-name";
+          name.textContent = "HWC";
+          brand.append(name);
+        } else {
+          const source = document.querySelector('.stage[data-variant="' + kind + '"] svg.logo');
+          const logo = source.cloneNode(true);
+          // 比較のために、枠ごと（data-logo-size）と文字だけ（data-text-scale）を縮められる。
+          if (host.dataset.logoSize) logo.style.fontSize = host.dataset.logoSize + "px";
+          if (host.dataset.textScale) {
+            logo
+              .querySelector("[data-text]")
+              .setAttribute("font-size", String(100 * Number(host.dataset.textScale)));
+          }
+          brand.append(logo);
+          // プレート案は文字の下端がベースラインに無い。中心で揃える。
+          if (kind === "plate") brand.classList.add("is-center");
+        }
+
+        const rev = document.createElement("span");
+        rev.className = "demo-rev";
+        rev.textContent = "4b9e5cc";
+        brand.append(rev);
+
+        const actions = document.createElement("span");
+        actions.className = "demo-actions";
+        actions.innerHTML =
+          '<span class="demo-conn"><span class="demo-dot"></span>接続済</span>' +
+          '<span class="demo-gear-button">' +
+          GEAR +
+          "</span>";
+
+        foot.append(brand, actions);
+        return foot;
+      }
+
+      for (const host of document.querySelectorAll("[data-foot]")) {
+        host.replaceWith(buildFoot(host.dataset.foot, host));
+      }
+
+      const round = (value) => Number(value.toFixed(1));
+      const metrics = document.createElement("canvas").getContext("2d");
+
+      // getBBox は文字の送りとフォントの上下まで含む。ロゴの枠にはインクの範囲が要るので、
+      // 1 文字ずつの位置を SVG から、字形の外接を canvas から取って合成する。
+      function inkOf(text) {
+        const content = text.textContent.replace(/\s+/g, "");
+        const style = getComputedStyle(text);
+        metrics.font = [style.fontStyle, style.fontWeight, style.fontSize, style.fontFamily].join(
+          " ",
+        );
+        let left = Infinity;
+        let top = Infinity;
+        let right = -Infinity;
+        let bottom = -Infinity;
+        for (let index = 0; index < content.length; index += 1) {
+          const start = text.getStartPositionOfChar(index);
+          const box = metrics.measureText(content[index]);
+          left = Math.min(left, start.x - box.actualBoundingBoxLeft);
+          right = Math.max(right, start.x + box.actualBoundingBoxRight);
+          top = Math.min(top, start.y - box.actualBoundingBoxAscent);
+          bottom = Math.max(bottom, start.y + box.actualBoundingBoxDescent);
+        }
+        return { x: left, y: top, width: right - left, height: bottom - top, baseline: 100 };
+      }
+
+      // viewBox はインクに合わせて詰める。高さだけ em で持たせ、文字サイズに比例させる。
+      function measure() {
+        for (const svg of document.querySelectorAll("svg.logo")) {
+          const text = svg.querySelector("[data-text]");
+          if (text === null) continue;
+          // 整形で入った改行や字下げが、文字の位置を数えるインデックスをずらす。
+          for (const node of text.childNodes) {
+            if (node.nodeType === Node.TEXT_NODE)
+              node.nodeValue = node.nodeValue.replace(/\s+/g, "");
+          }
+          const ink = inkOf(text);
+          const kind = svg.dataset.logo;
+
+          if (kind === "mono") {
+            const caret = svg.querySelector("[data-caret]");
+            const width = 10;
+            caret.setAttribute("x", ink.x + ink.width + 18);
+            caret.setAttribute("width", width);
+            // カーソルはキャップの高さいっぱい。字面の下にぶら下げない。
+            caret.setAttribute("y", ink.y);
+            caret.setAttribute("height", ink.baseline - ink.y);
+          }
+          if (kind === "plate") {
+            const plate = svg.querySelector("[data-plate]");
+            const padX = 24;
+            const padY = 18;
+            plate.setAttribute("x", ink.x - padX);
+            plate.setAttribute("width", ink.width + padX * 2);
+            plate.setAttribute("y", ink.y - padY);
+            plate.setAttribute("height", ink.height + padY * 2);
+          }
+          if (kind === "rule") {
+            const rule = svg.querySelector("[data-rule]");
+            rule.setAttribute("x", ink.x);
+            rule.setAttribute("width", ink.width);
+            rule.setAttribute("y", ink.y - 20);
+          }
+
+          const parts = [
+            ink,
+            ...[...svg.querySelectorAll("[data-shape]")].map((node) => node.getBBox()),
+          ];
+          const left = Math.min(...parts.map((part) => part.x));
+          const top = Math.min(...parts.map((part) => part.y));
+          const right = Math.max(...parts.map((part) => part.x + part.width));
+          const bottom = Math.max(...parts.map((part) => part.y + part.height));
+          const width = right - left;
+          const height = bottom - top;
+
+          svg.setAttribute(
+            "viewBox",
+            [round(left), round(top), round(width), round(height)].join(" "),
+          );
+          svg.style.height = (height / 100).toFixed(3) + "em";
+        }
+
+        for (const card of document.querySelectorAll(".card")) {
+          const svg = card.querySelector(".stage svg.logo");
+          const box = card.querySelector("[data-viewbox]");
+          const em = card.querySelector("[data-em]");
+          if (svg === null) continue;
+          if (box !== null) box.textContent = svg.getAttribute("viewBox");
+          if (em !== null) em.textContent = svg.style.height;
+        }
+      }
+
+      measure();
+      // 同梱フォントの到着で字幅が変わる。読み終わりでもう一度測る。
+      document.fonts.ready.then(measure);
+
+      const toggle = document.querySelector("#theme-toggle");
+      toggle.addEventListener("click", () => {
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        toggle.textContent = next === "dark" ? "ライト" : "ダーク";
+      });
+    </script>
+  </body>
+</html>
