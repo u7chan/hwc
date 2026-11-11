@@ -524,6 +524,24 @@ test("an agent message keeps the files the server found", () => {
   ]);
 });
 
+test("an agent message keeps the name of a file outside the roots", () => {
+  const message = {
+    id: "m1",
+    role: "agent" as const,
+    text: "モックは `/tmp/demo/mock.html` に置きました。",
+    at: 1_000,
+    outsideFile: "mock.html",
+  };
+  expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
+
+  // 名前だけを描く。パスや空文字は、契約違反として捨てる。
+  for (const outsideFile of ["/tmp/demo/mock.html", "docs/mock.html", "", 3, null]) {
+    expect(
+      toChatSnapshot({ ...chatBody, messages: [{ ...message, outsideFile }] })?.messages[0],
+    ).toEqual({ id: "m1", role: "agent", text: message.text, at: 1_000 });
+  }
+});
+
 test("the created pane id is read from the response", () => {
   expect(toCreatedPane({ paneId: "w1:p2" })).toBe("w1:p2");
   expect(toCreatedPane({ paneId: "" })).toBeNull();

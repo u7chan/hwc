@@ -28,6 +28,9 @@ export type ChatMessage = {
   attachments?: string[];
   // エージェントの本文が指していたファイル。ユーザーの添付とは別の一覧。
   files?: ChatFile[];
+  // 本文が指していたが、配信の根（チェックアウトと追加根）の外にあったファイル名。
+  // プレビューできないことを 1 行で伝えるためだけに持つ。絶対パスは渡さない。
+  outsideFile?: string;
 };
 
 export type ChatContext = {

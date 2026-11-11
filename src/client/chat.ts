@@ -152,6 +152,18 @@ export function latestUserAt(messages: ChatMessage[]): number {
   );
 }
 
+// 根の外にあるファイルを、エージェント自身に移してもらう。hwc は根の外を配信しないので、
+// 移す以外にプレビューする道が無い（ADR 0065）。移動元は依頼した時点の発話にあるので、
+// 名前だけを渡して絶対パスをクライアントへ出さない契約を保つ。
+export function moveRequestText(name: string): string {
+  return [
+    `${name} がチェックアウトの外にあるため、hwc からプレビューできません。`,
+    "移動元は、この依頼より前にあなたが書いた発話にあります（本文に書いたパスを見てください）。",
+    "チェックアウト配下の、コミット対象外の場所（例: .artifacts/）へ移して、新しいパスを本文に書いてください。",
+    "相対参照している CSS・JS・画像・フォントがあれば、参照が壊れないようにまとめて移してください。ファイルの中身は変えないでください。",
+  ].join("\n");
+}
+
 // 本文は pi 側で trim やテンプレート展開されることがあるため、送信時点の最後の user 発話より後に
 // 新しい user 発話が現れたかで対応付ける。
 export function isPendingConfirmed(pending: PendingMessage, messages: ChatMessage[]): boolean {

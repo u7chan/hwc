@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   attachmentContentTypeFromName,
   MAX_ATTACHMENTS,
@@ -186,9 +186,36 @@ export async function resolveMessageFile(options: {
 // 根は実在するディレクトリ。無ければ何も返さない（プレビューを出さないだけ）。
 export async function collectMessageFiles(text: string, root: string): Promise<MessageFile[]> {
   try {
-    return await collectAgainstRoots(text, [await realpath(root)]);
+    return (await collectAgainstRoots(text, [await realpath(root)])).files;
   } catch {
     return [];
+  }
+}
+
+type CollectedFiles = {
+  files: MessageFile[];
+  // 根の外に実在したファイル名。最初の 1 件だけ持つ（画面は 1 行しか出さない）。
+  outsideFile?: string;
+};
+
+// 絶対パスで書かれた候補が、どの根の配下でもない場所に実在するか。相対パスは、本文だけから
+// 基準のディレクトリが決まらないので見ない。返すのは名前だけで、絶対パスは外へ出さない。
+async function outsideRootFile(
+  candidate: string,
+  rootsReal: readonly (string | null)[],
+): Promise<string | null> {
+  if (!isAbsolute(candidate)) return null;
+  try {
+    const real = await realpath(candidate);
+    if (rootsReal.some((root) => root !== null && (real === root || real.startsWith(root + sep))))
+      return null;
+
+    const info = await stat(real);
+    if (!info.isFile() || info.size === 0 || info.size > MAX_ATTACHMENT_BYTES) return null;
+    if (messageFileKindFromName(real) === null) return null;
+    return basename(real);
+  } catch {
+    return null;
   }
 }
 
@@ -197,15 +224,15 @@ export async function collectMessageFiles(text: string, root: string): Promise<M
 async function collectAgainstRoots(
   text: string,
   rootsReal: readonly (string | null)[],
-): Promise<MessageFile[]> {
-  if (text === "" || rootsReal.length === 0) return [];
+): Promise<CollectedFiles> {
+  if (text === "" || rootsReal.length === 0) return { files: [] };
   const candidates = messagePathCandidates(text);
-  if (candidates.length === 0) return [];
+  if (candidates.length === 0) return { files: [] };
 
   const files: MessageFile[] = [];
   const byKey = new Map<string, MessageFile>();
+  let outsideFile: string | undefined;
   for (const candidate of candidates) {
-    if (files.length >= MAX_ATTACHMENTS) break;
     let resolved: ResolvedFile | null = null;
     for (const [root, rootReal] of rootsReal.entries()) {
       // 実在しない根も番号を詰めずに飛ばす。番号は配信の URL と共有している。
@@ -218,7 +245,12 @@ async function collectAgainstRoots(
       );
       if (resolved !== null) break;
     }
-    if (resolved === null) continue;
+    if (resolved === null) {
+      // 配れない理由が「根の外」かどうかは、実在を確かめないと言えない。
+      if (outsideFile === undefined)
+        outsideFile = (await outsideRootFile(candidate.path, rootsReal)) ?? undefined;
+      continue;
+    }
     const kind = messageFileKindFromName(resolved.name);
     if (kind === null) continue;
     const key = `${resolved.root}:${resolved.name}`;
@@ -230,6 +262,8 @@ async function collectAgainstRoots(
       }
       continue;
     }
+    // 枠が埋まっても走査は止めない。根の外の案内は、配るファイルが 4 件揃った後ろの候補にもある。
+    if (files.length >= MAX_ATTACHMENTS) continue;
     const file: MessageFile = {
       name: resolved.name,
       version: resolved.version,
@@ -242,7 +276,7 @@ async function collectAgainstRoots(
     byKey.set(key, file);
     files.push(file);
   }
-  return files;
+  return outsideFile === undefined ? { files } : { files, outsideFile };
 }
 
 // プレビューで配信するファイル。html と同じディレクトリの css / js / 画像も、
@@ -290,6 +324,8 @@ function withFileVersions(etag: string, messages: readonly ChatMessage[]): strin
     for (const file of message.files ?? []) {
       parts.push(`${file.root}:${file.name}@${file.version}`);
     }
+    // 根の外のファイルが現れる・消えるのは本文が変わらないまま起きる。
+    if (message.outsideFile !== undefined) parts.push(`outside:${message.outsideFile}`);
   }
   if (parts.length === 0) return etag;
   const digest = createHash("sha256").update(parts.join("\n")).digest("hex").slice(0, 12);
@@ -321,7 +357,12 @@ export async function attachMessageFiles(
       // 失敗の行はプロバイダの文言で、エージェントの発話ではない。
       if (message.role !== "agent" || message.text === "") return message;
       const files = await collectAgainstRoots(message.text, rootsReal);
-      return files.length === 0 ? message : { ...message, files };
+      if (files.files.length === 0 && files.outsideFile === undefined) return message;
+      return {
+        ...message,
+        ...(files.files.length === 0 ? {} : { files: files.files }),
+        ...(files.outsideFile === undefined ? {} : { outsideFile: files.outsideFile }),
+      };
     }),
   );
   if (messages.every((message, index) => message === snapshot.messages[index])) return snapshot;
