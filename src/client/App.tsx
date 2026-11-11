@@ -87,6 +87,7 @@ import {
 import {
   EMPTY_SPLIT_VIEW,
   canDrop,
+  canSwapTabs,
   clearCurrent,
   currentSlotIndex,
   dropOnPane,
@@ -182,7 +183,8 @@ type OperationMenu = {
 };
 
 // ドラッグの落とし先。中央は入れ替え、端はその方向への分割（ADR 0061）。
-type DropTarget = { pane: string; zone: DropZone };
+// kind は落とし先がセルか固定ゾーンのタブか。枠を出す側を分けるために持つ（ADR 0064）。
+type DropTarget = { kind: "cell" | "tab"; pane: string; zone: DropZone };
 
 // ポインタがセルのどこにあるか。親の分割軸と直交する向きだけを返す。
 function dropZoneAt(cell: HTMLElement, x: number, y: number): DropZone {
@@ -213,11 +215,19 @@ function dropTargetAt(
   // ビューポートの外では何も返らない。掴んだまま画面外で離しただけで分割しない。
   const element = document.elementFromPoint(x, y);
   const cell = element?.closest("[data-drop-pane]");
-  if (!(cell instanceof HTMLElement)) return null;
-  const pane = cell.dataset.dropPane;
+  if (cell instanceof HTMLElement) {
+    const pane = cell.dataset.dropPane;
+    if (pane === undefined) return null;
+    const zone = dropZoneAt(cell, x, y);
+    return canDrop(view, source, pane, zone, wide) ? { kind: "cell", pane, zone } : null;
+  }
+  // 固定ゾーンのタブはセルの中央と同じ入れ替えを受け付ける（ADR 0064）。
+  // プレビュー中は TabBar が data-drop-tab を出さないので、ここへは来ない。
+  const tab = element?.closest("[data-drop-tab]");
+  if (!(tab instanceof HTMLElement)) return null;
+  const pane = tab.dataset.dropTab;
   if (pane === undefined) return null;
-  const zone = dropZoneAt(cell, x, y);
-  return canDrop(view, source, pane, zone, wide) ? { pane, zone } : null;
+  return canSwapTabs(view, source, pane, wide) ? { kind: "tab", pane, zone: "center" } : null;
 }
 
 // メニューを閉じても続く操作。busy はメニューの外に置き、開き直しても実行中を出す。
@@ -1385,7 +1395,11 @@ export function App() {
       }
       startPaneDrag(event, item.id);
     };
-    const target = dragging?.target?.pane === item.id ? dragging.target : null;
+    // 落とし先が固定タブのときは、セル側に枠を出さない（ADR 0064）。
+    const target =
+      dragging?.target?.kind === "cell" && dragging.target.pane === item.id
+        ? dragging.target
+        : null;
     return (
       <section
         class="hwc-split-cell"
@@ -1610,6 +1624,7 @@ export function App() {
                 onClosePreview={closePreview}
                 onBack={back}
                 onDragStart={startPaneDrag}
+                dropTargetPaneId={dragging?.target?.kind === "tab" ? dragging.target.pane : null}
               />
               <div class="hwc-detail-body" data-leaving={detailLeaving ? "true" : undefined}>
                 {previewing && preview !== null ? (

@@ -33,6 +33,8 @@ type TabBarProps = {
   onBack: () => void;
   // タブからのドラッグ。移動量で開始を判定するので、押した時点で位置だけ渡す。
   onDragStart: (event: PointerEvent, paneId: string) => void;
+  // ドラッグ中の落とし先が固定ゾーンのタブのとき、そのペイン。枠を出すためだけに使う。
+  dropTargetPaneId: string | null;
 };
 
 // 中クリックはブラウザのタブと同じく、その画面から外す操作にする。
@@ -131,12 +133,19 @@ export function TabBar(props: TabBarProps) {
           const space = `${item.workspace.label} · ${item.tab.label || item.tab.id}`;
           const description = `${space}、${item.pane.id}、${statusLabel(item.pane.agentStatus)}`;
           const slot = props.slots.indexOf(item.pane.id);
+          // 固定ゾーンのタブはドロップの落とし先になる（ADR 0064）。プレビュー中は
+          // グリッドが見えないので、レイアウトを変える落とし先にしない（ADR 0058）。
+          const droppable = slot >= 0 && !previewing;
           return (
             <div
               class="hwc-tab-item"
               key={item.pane.id}
               data-selected={selected}
               data-slot={slot >= 0 ? slot + 1 : undefined}
+              data-drop-tab={droppable ? item.pane.id : undefined}
+              data-drop-target={
+                droppable && props.dropTargetPaneId === item.pane.id ? "true" : undefined
+              }
               data-leaving={leaving ? "true" : undefined}
               inert={leaving}
             >

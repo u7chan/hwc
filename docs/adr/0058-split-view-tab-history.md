@@ -8,6 +8,7 @@
 - Revises: 2026-11-11 に 1 枚表示のセル枠を廃止（実ペインが 2 枚以上のときだけ枠を出す）
 - Revises: 2026-11-11 にレイアウトを方向つきの二分木へ変え、常設の追加帯と空きスロットを廃止した（[ADR 0061](0061-split-view-directional-tree.md)）
 - Revises: 2026-11-11 にタブ順をセルの読み順と MRU に変更した（[ADR 0063](0063-tab-order-by-pane-layout.md)）
+- Revises: 2026-11-11 に固定ゾーンのタブをドロップの落とし先にした（[ADR 0064](0064-tab-strip-swap.md)）
 
 ## Context
 
