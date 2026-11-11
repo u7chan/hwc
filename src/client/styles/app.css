@@ -4847,7 +4847,7 @@ p.hwc-compaction,
   border: 0;
   border-radius: var(--radius-control);
   background: var(--color-accent);
-  color: var(--color-on-accent);
+  color: var(--color-on-accent-icon);
   cursor: pointer;
 }
 
@@ -4865,7 +4865,7 @@ p.hwc-compaction,
 .hwc-send[data-sending="true"]:disabled,
 .hwc-send[data-stopping="true"]:disabled {
   background: var(--color-accent);
-  color: var(--color-on-accent);
+  color: var(--color-on-accent-icon);
 }
 
 .hwc-visually-hidden {

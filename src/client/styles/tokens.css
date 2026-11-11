@@ -27,6 +27,8 @@
   --color-secondary: #5d6878;
   --color-accent: #255cd6;
   --color-on-accent: #ffffff;
+  /* アクセント面のアイコン専用。明るいテーマは白、暗いテーマは on-accent。 */
+  --color-on-accent-icon: #ffffff;
   --color-selected: #e9f0ff;
   --color-line: #dce0e7;
   --color-control-line: #8490a1;
@@ -752,6 +754,8 @@
 }
 
 :root[data-scheme="dark"] {
+  --color-on-accent-icon: var(--color-on-accent);
+
   --ansi-0: #5c6370;
   --ansi-1: #ff7b86;
   --ansi-2: #98c379;
