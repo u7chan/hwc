@@ -1072,6 +1072,10 @@ export function PaneDetail(props: PaneDetailProps) {
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
   // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
   // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
+  const shell = isShellPane(pane);
+  // シェルには会話のコマンドが無い。エージェントを終了したときにチップが残っていても、
+  // シェルの入力欄では見せず、送信も本文として扱う。
+  const activeChip = shell ? null : chip;
   const compactDone = snapshot !== null && compactAlreadyDone(snapshot);
   const candidates =
     attachments.length === 0 && compactionRun === null
@@ -1080,7 +1084,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const uploading = attachments.some((item) => item.name === null);
   const sendable = canSend({
     uploading,
-    chip,
+    chip: activeChip,
     replying,
     draft,
     attachments: attachments.length,
@@ -1092,12 +1096,18 @@ export function PaneDetail(props: PaneDetailProps) {
     running,
     draft,
     attachments: attachments.length,
-    chip,
+    chip: activeChip,
   });
   const busy = sending || stopping;
-  const shell = isShellPane(pane);
   const placeholder =
-    chip === "compact" ? "圧縮の指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
+    activeChip === "compact" ? "圧縮の指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
+
+  // シェルに戻ったら、会話のコマンドチップは持ち越さない。残すと、シェルへ
+  // /compact を送ってしまい、次の会話に圧縮の控えが並ぶ。
+  useEffect(() => {
+    if (!shell) return;
+    setChip((current) => (current === null ? current : null));
+  }, [shell]);
 
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
@@ -1143,11 +1153,11 @@ export function PaneDetail(props: PaneDetailProps) {
   // 打つたびに書くと重いので、手が止まってから残す。compact チップ中の draft は
   // 指示であり、復元するとチップが無いぶん本文として送られてしまうので保存しない。
   useEffect(() => {
-    if (chip === "compact") return;
+    if (activeChip === "compact") return;
     const text = draft;
     const timer = setTimeout(() => writeDraft(storage(), pane.id, text), 250);
     return () => clearTimeout(timer);
-  }, [draft, pane.id, chip]);
+  }, [draft, pane.id, activeChip]);
 
   // 選択ツールバーは、選択の始まりと終わりがスクロール領域の中にあるときだけ出す。
   // マウスのドラッグ中は selectionchange が動くたびに発火するので評価せず、ボタンを
@@ -1399,7 +1409,7 @@ export function PaneDetail(props: PaneDetailProps) {
     const end = field?.selectionEnd ?? start;
     const next = insertProjectPath(draft, start, end, path);
     setDraft(next.text);
-    setChip(chipOnInput(chip));
+    setChip(chipOnInput(activeChip));
     setProjectDialog({ open: false, caret: next.caret });
   };
 
@@ -1544,12 +1554,16 @@ export function PaneDetail(props: PaneDetailProps) {
       writeDraft(storage(), pane.id, "");
       setDraft("");
       attachmentStore.clear(pane.id);
-      // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
-      // 代わりに圧縮中の行を出す。
-      if (compactCommand) {
-        markCompaction(baselineAt, text);
-      } else if (!newCommand) {
-        echoPending({ text, at, from, waiting, after, names });
+      // シェルペインには会話が無い。控えを積むと、同じペインで後から起動した
+      // エージェントの会話に、シェルで打ったコマンドが並ぶ。送信は端末にだけ届ける。
+      if (!shell) {
+        // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
+        // 代わりに圧縮中の行を出す。
+        if (compactCommand) {
+          markCompaction(baselineAt, text);
+        } else if (!newCommand) {
+          echoPending({ text, at, from, waiting, after, names });
+        }
       }
     } else {
       setNotice(SEND_FAILED_NOTICE);
@@ -1655,8 +1669,8 @@ export function PaneDetail(props: PaneDetailProps) {
     if (readOnly) return;
     // 添付を持ったまま /compact と打っても、候補にもチップにも流さず本文として送る。
     if (attachments.length === 0) {
-      if (chip !== null) {
-        void sendCommand(chip);
+      if (activeChip !== null) {
+        void sendCommand(activeChip);
         return;
       }
       const first = candidates[0];
@@ -2007,14 +2021,14 @@ export function PaneDetail(props: PaneDetailProps) {
                   );
                 })}
               </div>
-            ) : chip !== null ? (
+            ) : activeChip !== null ? (
               <div class="hwc-commands">
                 <span class="hwc-command" data-chip="true">
-                  <CommandBadge id={chip} />
+                  <CommandBadge id={activeChip} />
                   <button
                     type="button"
                     class="hwc-command-clear"
-                    aria-label={`${commandText(chip)} を解除`}
+                    aria-label={`${commandText(activeChip)} を解除`}
                     onClick={clearChip}
                   >
                     <CloseIcon size={14} />
@@ -2049,7 +2063,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 {...(compact ? {} : { placeholder })}
                 onInput={(event) => {
                   setDraft(event.currentTarget.value);
-                  setChip(chipOnInput(chip));
+                  setChip(chipOnInput(activeChip));
                 }}
                 onPaste={(event) => {
                   // シェルは改行を受け取れない。末尾の改行だけなら落として差し込み、
