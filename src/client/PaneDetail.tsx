@@ -607,6 +607,7 @@ function ChatLog(props: {
 
 // ターンが終わったとき、会話へ高さを返すのは即時、中身だけを短く薄く消す。高さを
 // アニメーションするとスクロール領域のリフローが毎フレーム走るため、高さは待たない。
+// この値で DOM を外す。app.css の closing の transition と同じ長さに揃える。
 const LIVE_EXIT_MS = 120;
 
 type LiveView = {
