@@ -5047,6 +5047,81 @@ p.hwc-compaction,
   font-size: var(--text-secondary);
 }
 
+/* テーマの選択中プレビュー。設定画面には出ない状態色とアクセント面だけを見せる。
+   テーマを選ぶと画面全体が切り替わるので、この中に専用の色は持たない。 */
+.hwc-theme-preview {
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.hwc-theme-preview-caption {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-theme-preview-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-line);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.hwc-theme-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.hwc-theme-preview-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* 一覧の行と同じ記号だが、プレビューでは行の高さを抑える。 */
+.hwc-theme-preview .hwc-status {
+  width: var(--space-6);
+  height: var(--space-6);
+}
+
+.hwc-theme-preview-link {
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hwc-theme-preview-focus {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+}
+
+/* 見本なので押せない。ボタンの形だけを借りる。 */
+.hwc-theme-preview-send {
+  cursor: default;
+  pointer-events: none;
+}
+
+.hwc-theme-preview-note {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
 /* テーマとエージェントの選択カード。テーマは面の色、エージェントは Provider の印で示す。 */
 .hwc-choice-grid {
   display: grid;
