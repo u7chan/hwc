@@ -15,16 +15,43 @@ import { loadSnapshot, startStateSync } from "./server/herdr/sync";
 import { createApp } from "./server/app";
 import { createAgentModelsClient } from "./server/agent-models";
 import { createPullRequestReader } from "./server/pull-request";
+import {
+  createDiscordSender,
+  createNotificationDispatcher,
+  createNotificationSettingsFile,
+  createNotificationSettingsStore,
+} from "./server/notifications";
 import index from "../index.html";
 
+const stateRoot = defaultStateRoot();
 const git = createGitClient();
 const store = createStateStore({
   load: () => loadSnapshot(),
   branch: createBranchReader(),
   git,
   // 添付と同じ状態ディレクトリ。実ホームを汚さないよう E2E では HWC_STATE_DIR で振り向ける。
-  times: createPaneTimesFile(defaultStateRoot()),
+  times: createPaneTimesFile(stateRoot),
 });
+
+const pullRequests = createPullRequestReader();
+const notificationSettings = createNotificationSettingsStore(
+  createNotificationSettingsFile(stateRoot),
+);
+const discordSender = createDiscordSender({
+  // E2E 専用。設定されていれば Discord へ送らず、送信内容をファイルに記録する（docs/e2e.md）。
+  sinkPath: process.env.HWC_E2E_DISCORD_WEBHOOK_SINK ?? null,
+});
+
+// 通知は状態の publish を購読する。startStateSync より先に張り、購読後の最初の publish を
+// 「送らない基準」として受け取る。
+store.onChange(
+  createNotificationDispatcher({
+    store,
+    settings: notificationSettings,
+    sender: discordSender,
+    pullRequests,
+  }),
+);
 
 startStateSync({
   store,
@@ -43,9 +70,11 @@ const app = createApp({
   opencode: createOpencodeChatClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   codex: createCodexChatClient(),
   models: createAgentModelsClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
-  pullRequests: createPullRequestReader(),
+  pullRequests,
   git,
   revision,
+  notificationSettings,
+  discordSender,
 });
 
 // Herdr の応答を待つルート（ワークツリー作成・削除・モデル指定の作成）は数十秒返さない。

@@ -175,7 +175,7 @@ export type StateStore = {
   // 観測の切れ目を立てる。次の publish が 1 回だけ消費し、その遷移は記録しない。
   // 購読が切れた後と取得に失敗した後に、落ちた遷移を観測したことにしないために使う。
   breakObservation: () => void;
-  onChange: (listener: (state: AppState) => void) => () => void;
+  onChange: (listener: (state: AppState, observed: boolean) => void) => () => void;
   chatSource: (paneId: string) => ChatSource | null;
   // ペインが作業しているチェックアウト。画像の配信元を決めるのに使う。
   workspaceRoot: (paneId: string) => string | null;
@@ -305,7 +305,7 @@ export function createStateStore(options: {
   times?: PaneTimesFile;
 }): StateStore {
   const retryDelayMs = options.retryDelayMs ?? 1_000;
-  const listeners = new Set<(state: AppState) => void>();
+  const listeners = new Set<(state: AppState, observed: boolean) => void>();
   let current: AppState | null = null;
   // スナップショットから作れる部分。遷移の判定にはこちらだけを使う。
   let snapshotState: SnapshotState | null = null;
@@ -380,7 +380,7 @@ export function createStateStore(options: {
     sources = toChatSources(snapshot);
     workspacePaths = roots;
     paneRoots = toPaneRoots(snapshot, roots);
-    for (const listener of listeners) listener(state);
+    for (const listener of listeners) listener(state, observing);
     return state;
   };
 

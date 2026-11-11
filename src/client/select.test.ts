@@ -26,7 +26,6 @@ import {
   mostUrgentStatus,
   paneName,
   paneRowTitle,
-  parentPaneOf,
   pullRequestLabel,
   pullRequestTone,
   shortenPath,
@@ -650,33 +649,6 @@ function parentWorkspace(id: string, tabs: readonly (readonly PaneState[])[]): W
     })),
   };
 }
-
-test("the parent is the first agent pane from the left", () => {
-  const workspace = parentWorkspace("w1", [
-    [
-      parentPane("w1:p1", null, "idle"),
-      parentPane("w1:p2", "pi", "done"),
-      parentPane("w1:p3", "codex", "idle"),
-    ],
-    [parentPane("w1:p4", "pi", "working")],
-  ]);
-
-  // シェルは飛ばし、左端のタブの先頭から見る。別タブの先頭エージェントは親にしない。
-  expect(parentPaneOf(workspace)?.id).toBe("w1:p2");
-});
-
-test("a workspace without agents has no parent", () => {
-  const workspace = parentWorkspace("w1", [[parentPane("w1:p1", null, "idle")]]);
-  expect(parentPaneOf(workspace)).toBeNull();
-});
-
-test("the parent search skips a tab with no agents", () => {
-  const workspace = parentWorkspace("w1", [
-    [parentPane("w1:p1", null, "idle")],
-    [parentPane("w1:p2", "pi", "done")],
-  ]);
-  expect(parentPaneOf(workspace)?.id).toBe("w1:p2");
-});
 
 test("the parent mark is only needed when the space has more than one agent", () => {
   const state: AppState = {

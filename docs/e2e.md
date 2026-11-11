@@ -14,19 +14,20 @@ bun run e2e:serve
 
 ## 実環境との分離
 
-| 対象                                 | 実環境                                              | E2E                                                                                                                            |
-| ------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Herdr ソケット                       | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                                 |
-| pi セッション                        | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                            |
-| pi モデルカタログ                    | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                               |
-| pi モデル・effort・上限              | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                                 |
-| GitHub の PR                         | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                                   |
-| Codex App Server                     | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない             |
-| OpenCode サービス                    | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                              |
-| ブランチ                             | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                 |
-| git のリモートと差                   | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す |
-| 状態ディレクトリ（添付・ペイン時刻） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                     |
-| ポート                               | 30000                                               | 31000                                                                                                                          |
+| 対象                                           | 実環境                                              | E2E                                                                                                                            |
+| ---------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Herdr ソケット                                 | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                                 |
+| pi セッション                                  | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                            |
+| pi モデルカタログ                              | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                               |
+| pi モデル・effort・上限                        | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                                 |
+| GitHub の PR                                   | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                                   |
+| Codex App Server                               | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない             |
+| OpenCode サービス                              | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                              |
+| ブランチ                                       | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                 |
+| git のリモートと差                             | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す |
+| 状態ディレクトリ（添付・ペイン時刻・通知設定） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                     |
+| Discord Webhook（通知のテスト・自動送信）      | 実 Discord のチャンネル                             | `HWC_E2E_DISCORD_WEBHOOK_SINK` を一時ファイルへ向け、POST せず送信内容を追記する                                               |
+| ポート                                         | 30000                                               | 31000                                                                                                                          |
 
 `e2e/serve.ts` が架空 Herdr を起動してから `src/server.ts` を読み込む。BFF とクライアントは本番コードのままで、ソケット経路・状態同期・チャット読み取りを通る。実 Herdr のソケットには接続しない。
 
@@ -330,6 +331,21 @@ PR のチップは、1 枚表示と分割セルのペイン見出し、アクテ
 1. 900px 以上の幅でペインを開く。本文・見出し・入力欄・実行中の段階の行の左端と右端が一致し、中央の 832px に収まる。
 2. タブをセルの端へドロップして 2 枚にすると、各セルは 24px の余白に揃う。
 3. 900px 未満では左右 16px のまま変わらない。
+
+## 通知
+
+設定画面の「通知」から、司令塔の完了を Discord Webhook へ送る（[ADR 0063](adr/0063-discord-done-notification.md)）。E2E では `HWC_E2E_DISCORD_WEBHOOK_SINK` により、送信は実 Discord ではなく架空のファイルへ記録する。**実 Discord へは送らない。**
+
+起動ログの `hwc e2e fixture: <root>` が示す `<root>/discord-webhook.jsonl` が sink。送信のたびに `{"content":"..."}` が 1 行追記される。
+
+1. 設定を開く。「通知」は未登録で、Discord の欄に URL 入力と「登録」が出る。スイッチはオフ。
+2. `https://discord.com/api/webhooks/1234567890/e2e-discord-token` を入れて「登録」を押す。「登録済み」と末尾 4 文字（`…oken`）だけが出て、URL 全文は画面にも応答にも出ない。
+3. 再読み込みして設定を開く。登録済みのまま復元される（`<root>/notifications.json`）。
+4. 「テスト通知」を押す。成功の文言が出て、`<root>/discord-webhook.jsonl` に「hwc のテスト通知です。このチャンネルに完了通知が届きます。」が 1 行追記される。
+5. スイッチと「通知する対象」を切り替える。「すべての作業」を選んで再読み込みすると、選んだ状態が残る。
+6. 「変更」は空の入力から始まり、「キャンセル」で元の登録済み表示に戻る。「削除」は確認のあと未登録になり、スイッチの状態は変わらない。
+7. 読み込み失敗は、ブラウザのリクエスト差し替えで `/api/notifications` に 502 を返して確かめる。「通知の設定を読み込めませんでした。」と「再試行」が出て、「未登録」とは出さない。
+8. 自動送信は、`acme-dashboard` で通知を有効にし、`/done` を送って親と子を `done` にする。山ごとに 1 回だけ sink に追記され、`done` のまま留まっても増えない。実 Herdr には `/done` が無いので、フィクスチャ専用の入力で確かめる。
 
 ## データを変える
 

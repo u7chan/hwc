@@ -1,6 +1,7 @@
 import type { AppState } from "../server/herdr/state";
 import { activePanes } from "./scope";
-import { parentPaneOf, statusTone, type StatusTone } from "./select";
+import { parentPaneOf } from "../shared/parent-pane";
+import { statusTone, type StatusTone } from "./select";
 
 export type FaviconStatus = "working" | "blocked" | "done";
 

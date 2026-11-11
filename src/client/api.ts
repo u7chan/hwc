@@ -24,6 +24,11 @@ import type { PaneCloseAction } from "../shared/pane-close";
 import { parsePaneProcess, type PaneProcess } from "../shared/panes";
 import type { FolderTrustInteraction, PaneInteraction } from "../shared/confirmation";
 import { parseProjectList, type ProjectList } from "../shared/projects";
+import {
+  type NotificationScope,
+  type NotificationView,
+  parseNotificationView,
+} from "../shared/notifications";
 import { parsePullRequest, type PullRequest } from "../shared/pull-request";
 
 export type OutputRead = PaneRead & { interaction: PaneInteraction | null };
@@ -882,5 +887,91 @@ export async function createWorktree(
       workspaceId: null,
       paneId: null,
     };
+  }
+}
+
+export type NotificationSaveResult =
+  | { ok: true; view: NotificationView }
+  | { ok: false; error: string | null };
+
+// テスト送信は BFF が Discord の応答を 8 秒まで待つ。BFF に届かないときにボタンが
+// 送信中のまま残らないよう、外側にもう少し長い期限を置く。
+export const TEST_NOTIFICATION_TIMEOUT_MS = 15_000;
+
+// hc の応答は Response ではなく ClientResponse。読むのは ok と本文だけ。
+async function toSaveResult(response: {
+  ok: boolean;
+  json: () => Promise<unknown>;
+}): Promise<NotificationSaveResult> {
+  const body: unknown = await response.json().catch(() => null);
+  if (response.ok) {
+    const view = parseNotificationView(body);
+    return view === null ? { ok: false, error: null } : { ok: true, view };
+  }
+  const error =
+    typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
+  return { ok: false, error: typeof error === "string" ? error : null };
+}
+
+export async function fetchNotifications(signal?: AbortSignal): Promise<NotificationView> {
+  const response = await client.api.notifications.$get({}, { init: { signal } });
+  if (!response.ok) throw new Error(`notifications: ${response.status}`);
+  const view = parseNotificationView(await response.json().catch(() => null));
+  if (view === null) throw new Error("notifications: unexpected body");
+  return view;
+}
+
+export async function saveNotificationSettings(input: {
+  enabled: boolean;
+  scope: NotificationScope;
+}): Promise<NotificationSaveResult> {
+  try {
+    const response = await client.api.notifications.$put({ json: input });
+    return await toSaveResult(response);
+  } catch {
+    return { ok: false, error: null };
+  }
+}
+
+export async function saveDiscordWebhook(url: string): Promise<NotificationSaveResult> {
+  try {
+    const response = await client.api.notifications.discord.$put({ json: { url } });
+    return await toSaveResult(response);
+  } catch {
+    return { ok: false, error: null };
+  }
+}
+
+export async function removeDiscordWebhook(): Promise<NotificationSaveResult> {
+  try {
+    const response = await client.api.notifications.discord.$delete({});
+    return await toSaveResult(response);
+  } catch {
+    return { ok: false, error: null };
+  }
+}
+
+export type NotificationTestResult = { ok: true } | { ok: false; error: string };
+
+// 状態ではなく BFF が返す error コードで文言を決める。BFF の 404 と Discord の 404 は
+// 別物で、ここではどちらもコードに畳まれている。
+export async function testDiscordWebhook(): Promise<NotificationTestResult> {
+  try {
+    // body は読まれないが、BFF は application/json 以外を 415 で弾く。
+    const response = await client.api.notifications.discord.test.$post(
+      {},
+      {
+        headers: { "content-type": "application/json" },
+        init: { signal: AbortSignal.timeout(TEST_NOTIFICATION_TIMEOUT_MS) },
+      },
+    );
+    const body: unknown = await response.json().catch(() => null);
+    if (response.ok) return { ok: true };
+    const error =
+      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
+    return { ok: false, error: typeof error === "string" ? error : "unknown" };
+  } catch {
+    // 期限切れと接続失敗はクライアント側でしか分からない。文言はコードで選ぶ。
+    return { ok: false, error: "unreachable" };
   }
 }

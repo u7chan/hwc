@@ -5453,6 +5453,256 @@ p.hwc-compaction,
   color: var(--color-danger);
 }
 
+/* 通知設定。スイッチ・対象の選択・Webhook の登録を 1 か所にまとめる。
+   色はトークンのアクセントを使い、Discord のマークだけブランド色にする。 */
+
+.hwc-switch {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-control-line);
+  border-radius: 999px;
+  background: var(--color-raised);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.hwc-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-secondary);
+  transition:
+    transform 140ms ease,
+    background 120ms ease;
+}
+
+.hwc-switch[data-on="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.hwc-switch[data-on="true"] .hwc-switch-knob {
+  transform: translateX(20px);
+  background: var(--color-on-accent);
+}
+
+.hwc-switch:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.hwc-switch:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-switch,
+  .hwc-switch-knob {
+    transition: none;
+  }
+}
+
+.hwc-notify-subtitle {
+  margin: var(--space-6) 0 var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-notify-scopes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hwc-notify-scope {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-notify-scope:hover:not(:disabled) {
+  border-color: var(--color-control-line);
+}
+
+.hwc-notify-scope[data-selected="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-raised);
+}
+
+.hwc-notify-scope:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hwc-notify-scope:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-notify-scope-mark {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1px solid var(--color-control-line);
+  border-radius: 50%;
+}
+
+.hwc-notify-scope[data-selected="true"] .hwc-notify-scope-mark {
+  border-color: var(--color-accent);
+  background: radial-gradient(circle, var(--color-accent) 0 4px, transparent 4.5px);
+}
+
+.hwc-notify-scope-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hwc-notify-scope-note {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.hwc-notify-discord {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.hwc-notify-discord-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hwc-notify-discord-mark {
+  display: grid;
+  place-items: center;
+  color: var(--color-discord);
+}
+
+.hwc-notify-discord-name {
+  font-weight: 600;
+}
+
+.hwc-notify-discord-state {
+  margin-left: auto;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-notify-hint {
+  margin: 0;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.hwc-notify-form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.hwc-notify-input {
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.hwc-notify-input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-notify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.hwc-notify-button {
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-notify-button:hover:not(:disabled) {
+  border-color: var(--color-control-line);
+}
+
+.hwc-notify-button:disabled {
+  color: var(--color-secondary);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.hwc-notify-primary {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.hwc-notify-primary:disabled {
+  border-color: var(--color-line);
+  color: var(--color-secondary);
+}
+
+.hwc-notify-result {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-notify-result[data-ok="true"] {
+  color: var(--color-success);
+}
+
+.hwc-notify-result[data-ok="false"] {
+  color: var(--color-danger);
+}
+
+.hwc-notify-failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 /* 空状態 */
 
 .hwc-empty {

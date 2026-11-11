@@ -6,6 +6,7 @@ import type {
   WorkspaceState,
 } from "../server/herdr/state";
 import type { GitSync } from "../shared/git";
+import { parentPaneOf } from "../shared/parent-pane";
 import type { Place } from "../shared/place";
 import { placeOf } from "../shared/place";
 import type { PullRequest, PullRequestState } from "../shared/pull-request";
@@ -161,17 +162,6 @@ export function countWorkspaceAgents(workspace: WorkspaceState): number {
 
 export function countTabAgents(tab: TabState): number {
   return tab.panes.filter((pane) => pane.agent !== null).length;
-}
-
-// スペースの親。左端のタブから順に、最初のエージェントのペイン。Herdr の snapshot には
-// 作成順が無いので、一覧の並び（左端）で代用する。最初のペインがシェルなら次を見る。
-export function parentPaneOf(workspace: WorkspaceState): PaneState | null {
-  for (const tab of workspace.tabs) {
-    for (const pane of tab.panes) {
-      if (pane.agent !== null) return pane;
-    }
-  }
-  return null;
 }
 
 // 親マークを出すペイン。エージェントが 1 枚だけのスペースは親が自明なので出さない。

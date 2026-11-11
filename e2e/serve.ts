@@ -8,6 +8,8 @@ process.env.HERDR_SOCKET_PATH = fake.socketPath;
 process.env.HWC_E2E_GIT_STATE = join(fake.root, "git-state.json");
 process.env.HWC_STATE_DIR = fake.root;
 process.env.HWC_OPENCODE_SERVICE = join(fake.root, "opencode", "service.json");
+// 通知のテストは実 Discord へ送らない。送信内容は架空の一時ファイルに記録される。
+process.env.HWC_E2E_DISCORD_WEBHOOK_SINK = join(fake.root, "discord-webhook.jsonl");
 process.env.HWC_REVISION = "e2e";
 process.env.HWC_NO_OPEN = "1";
 process.env.PATH = `${join(fake.root, "bin")}:${process.env.PATH ?? ""}`;

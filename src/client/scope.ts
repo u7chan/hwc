@@ -1,5 +1,6 @@
 import type { AgentStatus, AppState, WorkspaceState } from "../server/herdr/state";
-import { parentPaneOf, type PaneRow } from "./select";
+import { parentPaneOf } from "../shared/parent-pane";
+import type { PaneRow } from "./select";
 
 export type ListScope = "active" | "all";
 

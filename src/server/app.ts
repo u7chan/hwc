@@ -40,6 +40,19 @@ import { type AppState, findPane, type StateStore, type TabState } from "./herdr
 import { parseMoveWorkspacesBody, type WorkspaceClient } from "./herdr/workspaces";
 import type { WorktreeClient } from "./herdr/worktrees";
 import type { PullRequestReader } from "./pull-request";
+import {
+  createDiscordSender,
+  createNotificationSettingsStore,
+  type DiscordSender,
+  type NotificationSettingsStore,
+} from "./notifications";
+import {
+  TEST_NOTIFICATION_CONTENT,
+  isNotificationScope,
+  normalizeDiscordWebhookUrl,
+  toNotificationView,
+  type NotificationSettings,
+} from "../shared/notifications";
 import type { GitClient } from "./git";
 import { createProjectLister, type ProjectLister } from "./projects";
 import {
@@ -124,6 +137,9 @@ export function createApp(options: {
   attachmentsRoot?: string;
   // エージェントが示したファイルを配信してよい追加の根（チェックアウトの外）。
   previewRoots?: string[];
+  // 通知設定の保存先と Webhook 送信器。テストでは実ファイル・実ネットワークを避けて差し替える。
+  notificationSettings?: NotificationSettingsStore;
+  discordSender?: DiscordSender;
 }) {
   const {
     store,
@@ -141,6 +157,8 @@ export function createApp(options: {
     sseHeartbeatMs = SSE_HEARTBEAT_MS,
     attachmentsRoot = defaultAttachmentsRoot(),
     previewRoots = defaultPreviewRoots(),
+    notificationSettings = createNotificationSettingsStore({ read: () => null, write: () => {} }),
+    discordSender = createDiscordSender(),
   } = options;
 
   // 「今」は状態ではなく送信時に決める。状態に持たせると、キャッシュされた状態に古い時刻が
@@ -342,9 +360,69 @@ export function createApp(options: {
     });
   };
 
+  // 通知設定は 1 つのストアに集約する。トグル・scope・URL が同時に変わっても、
+  // 書き込みが成功した設定だけを返し、クライアントは応答で丸ごと置き換える。
+  const notificationView = () => toNotificationView(notificationSettings.get());
+
+  const saveNotificationSettings = (c: Context, next: NotificationSettings) => {
+    try {
+      notificationSettings.save(next);
+    } catch {
+      // メモリ上の設定は変えない。画面には古い設定が残る。
+      return c.json({ error: "settings_unavailable" }, 500);
+    }
+    return c.json(notificationView());
+  };
+
+  const parseNotificationUpdate = (
+    body: unknown,
+  ): Pick<NotificationSettings, "enabled" | "scope"> | null => {
+    if (typeof body !== "object" || body === null) return null;
+    const raw = body as { enabled?: unknown; scope?: unknown };
+    if (typeof raw.enabled !== "boolean" || !isNotificationScope(raw.scope)) return null;
+    return { enabled: raw.enabled, scope: raw.scope };
+  };
+
   return (
     new Hono()
       .get("/api/health", (c) => c.json({ ok: true, service: "hwc", revision }))
+      .get("/api/notifications", (c) => {
+        // Webhook URL は資格情報。共有キャッシュに残さない。
+        c.header("cache-control", "no-store");
+        return c.json(notificationView());
+      })
+      .put("/api/notifications", requireJson, async (c) => {
+        const parsed = parseNotificationUpdate(await c.req.json().catch(() => null));
+        if (parsed === null) return c.json({ error: "invalid_request" }, 400);
+        return saveNotificationSettings(c, { ...notificationSettings.get(), ...parsed });
+      })
+      .put("/api/notifications/discord", requireJson, async (c) => {
+        const body = await c.req.json().catch(() => null);
+        const raw =
+          typeof body === "object" && body !== null ? (body as { url?: unknown }).url : undefined;
+        if (typeof raw !== "string") return c.json({ error: "invalid_request" }, 400);
+        // 保存前に必ず再検証する。設定ファイルを手で書き換えられても、ここを通らない限り送らない。
+        const url = normalizeDiscordWebhookUrl(raw);
+        if (url === null) return c.json({ error: "invalid_webhook_url" }, 400);
+        return saveNotificationSettings(c, {
+          ...notificationSettings.get(),
+          discordWebhookUrl: url,
+        });
+      })
+      .delete("/api/notifications/discord", (c) =>
+        // 有効トグルは変えない。URL を消しても通知の設定は残す。
+        saveNotificationSettings(c, { ...notificationSettings.get(), discordWebhookUrl: null }),
+      )
+      .post("/api/notifications/discord/test", requireJson, async (c) => {
+        const url = notificationSettings.get().discordWebhookUrl;
+        if (url === null) return c.json({ error: "webhook_not_configured" }, 409);
+        // 疎通確認を先に行えるよう、有効・無効と scope に依存させない。応答は送信完了後。
+        const result = await discordSender(url, TEST_NOTIFICATION_CONTENT);
+        if (result.ok) return c.json({ ok: true });
+        const body: { error: string; retryAfter?: number } = { error: result.error };
+        if (result.retryAfter !== undefined) body.retryAfter = result.retryAfter;
+        return c.json(body, 502);
+      })
       .get("/api/panes/:id/models", async (c) => {
         const agent = c.req.query("agent");
         if (!supportsModelSelection(agent)) return c.json({ error: "invalid_request" }, 400);

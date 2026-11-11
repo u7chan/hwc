@@ -50,10 +50,10 @@ const empty: AppState = {
 };
 
 function createFakeStore(initial: AppState) {
-  const listeners = new Set<(state: AppState) => void>();
   let current = initial;
+  const listeners = new Set<(state: AppState, observed: boolean) => void>();
   const store: Pick<StateStore, "get" | "onChange"> & {
-    push: (next: AppState) => void;
+    push: (next: AppState, observed: boolean) => void;
     listening: () => number;
   } = {
     get: () => current,
@@ -63,9 +63,9 @@ function createFakeStore(initial: AppState) {
         listeners.delete(listener);
       };
     },
-    push: (next) => {
+    push: (next, observed) => {
       current = next;
-      for (const listener of listeners) listener(next);
+      for (const listener of listeners) listener(next, observed);
     },
     listening: () => listeners.size,
   };
@@ -89,12 +89,12 @@ test("clears the old agent screen once the pane is a shell", () => {
   const exitCleanup = createExitCleanup(store, panes);
 
   exitCleanup("w1:p1");
-  store.push(stateWith(null));
+  store.push(stateWith(null), true);
 
   expect(clearCalls).toEqual(["w1:p1"]);
   // 消した後は購読も外す。状態が届くたびに同じペインを消さない。
   expect(store.listening()).toBe(0);
-  store.push(stateWith(null));
+  store.push(stateWith(null), true);
   expect(clearCalls).toEqual(["w1:p1"]);
 });
 
@@ -104,14 +104,14 @@ test("waits while the agent is still running", () => {
   const exitCleanup = createExitCleanup(store, panes, SHORT_TIMEOUT_MS);
 
   exitCleanup("w1:p1");
-  store.push(stateWith("opencode"));
+  store.push(stateWith("opencode"), true);
 
   expect(clearCalls).toEqual([]);
   expect(store.listening()).toBe(1);
   // 上限を過ぎたら待つのをやめる。あとから終了しても、別の会話の画面を消さない。
   return Bun.sleep(SHORT_TIMEOUT_MS * 2).then(() => {
     expect(store.listening()).toBe(0);
-    store.push(stateWith(null));
+    store.push(stateWith(null), true);
     expect(clearCalls).toEqual([]);
   });
 });
@@ -130,7 +130,7 @@ test("does not clear a pane that is gone or was replaced by another agent", () =
   const first = createFakePanes();
   const cleanupGone = createExitCleanup(gone, first.panes);
   cleanupGone("w1:p1");
-  gone.push(empty);
+  gone.push(empty, true);
   expect(first.clearCalls).toEqual([]);
   expect(gone.listening()).toBe(0);
 
@@ -138,7 +138,7 @@ test("does not clear a pane that is gone or was replaced by another agent", () =
   const second = createFakePanes();
   const cleanupReplaced = createExitCleanup(replaced, second.panes);
   cleanupReplaced("w1:p1");
-  replaced.push(stateWith("codex"));
+  replaced.push(stateWith("codex"), true);
   expect(second.clearCalls).toEqual([]);
   expect(replaced.listening()).toBe(0);
 });
@@ -162,7 +162,7 @@ test("does not repeat a pending exit request", () => {
   exitCleanup("w1:p1");
   expect(store.listening()).toBe(1);
 
-  store.push(stateWith(null));
+  store.push(stateWith(null), true);
   expect(clearCalls).toEqual(["w1:p1"]);
 });
 
@@ -173,7 +173,7 @@ test("ignores a failed clear", async () => {
   };
 
   createExitCleanup(store, { clear })("w1:p1");
-  store.push(stateWith(null));
+  store.push(stateWith(null), true);
   await Bun.sleep(0);
 
   expect(store.listening()).toBe(0);
