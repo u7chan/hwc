@@ -3505,7 +3505,7 @@ test("GET /api/panes/:id/preview reads an extra root only when it is configured"
     await writeFile(page, "<!doctype html>");
 
     try {
-      const denied = await createFilesApp(root).request(
+      const denied = await createFilesApp(root, { previewRoots: [] }).request(
         `/api/panes/w1:p1/preview/1/${encodeURIComponent(page)}`,
       );
       expect(denied.status).toBe(404);
@@ -3516,6 +3516,25 @@ test("GET /api/panes/:id/preview reads an extra root only when it is configured"
       expect(await allowed.text()).toBe("<!doctype html>");
     } finally {
       await rm(extra, { recursive: true, force: true });
+    }
+  });
+});
+
+test("GET /api/panes/:id/preview serves an HTML under /tmp by default", async () => {
+  await withCheckout(async (root) => {
+    const dir = await mkdtemp(join("/tmp", "hwc-default-root-"));
+    const page = join(dir, "mock.html");
+    await writeFile(page, "<!doctype html>");
+
+    try {
+      // 追加根を設定しなくても、/tmp はチェックアウトの次の根になる（ADR 0066）。
+      const response = await createFilesApp(root).request(
+        `/api/panes/w1:p1/preview/1/${encodeURIComponent(page)}`,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe("<!doctype html>");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 });
@@ -3552,7 +3571,7 @@ test("GET /api/panes/:id/preview keeps the root the chip was found in", async ()
 test("GET /api/panes/:id/preview refuses a root that does not exist", async () => {
   await withCheckout(async (root) => {
     await writeFile(join(root, "mock.html"), "<!doctype html>");
-    const app = createFilesApp(root);
+    const app = createFilesApp(root, { previewRoots: [] });
 
     for (const index of ["1", "-1", "1.5", "x"]) {
       const response = await app.request(`/api/panes/w1:p1/preview/${index}/mock.html`);

@@ -42,7 +42,6 @@ import {
   idleEchoExpired,
   isPendingConfirmed,
   latestUserAt,
-  moveRequestText,
   newSessionPending,
   newSessionReset,
   newSessionSnapshot,
@@ -248,23 +247,14 @@ function MessageFiles(props: {
   );
 }
 
-// 根の外にあったファイル。hwc 側では移せないので、エージェントに移してもらう入口だけを
-// 添える（ADR 0065）。パスではなく名前だけを出し、押したときに何を頼むかを本文で見せる。
-function OutsideFileNote(props: { name: string; onRequestMove: (name: string) => void }) {
+// 根の外にあったファイル。hwc は根の外を配信しないので、チップを出せない理由だけを
+// 1 行で示す（ADR 0065, 0066）。移すかどうかは会話で決める。
+function OutsideFileNote(props: { name: string }) {
   return (
-    <div class="hwc-msg-outside">
-      <span class="hwc-msg-outside-text">
-        <span class="hwc-msg-outside-name">{props.name}</span>{" "}
-        はチェックアウトの外なのでプレビューできません
-      </span>
-      <button
-        type="button"
-        class="hwc-msg-outside-action"
-        onClick={() => props.onRequestMove(props.name)}
-      >
-        移動を依頼
-      </button>
-    </div>
+    <p class="hwc-msg-outside">
+      <span class="hwc-msg-outside-name">{props.name}</span> はチェックアウトと /tmp
+      の外にあるため、プレビューできません
+    </p>
   );
 }
 
@@ -277,7 +267,6 @@ function AgentMessage(props: {
   copyButton: ComponentChildren;
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
-  onRequestMove: (name: string) => void;
 }) {
   const { images, rest } = splitInlineImages(props.paneId, props.message.text, props.message.files);
   return (
@@ -297,7 +286,7 @@ function AgentMessage(props: {
         />
       )}
       {props.message.outsideFile === undefined ? null : (
-        <OutsideFileNote name={props.message.outsideFile} onRequestMove={props.onRequestMove} />
+        <OutsideFileNote name={props.message.outsideFile} />
       )}
       <div class="hwc-msg-meta">
         <span class="hwc-msg-time">{formatClock(props.message.at)}</span>
@@ -478,7 +467,6 @@ function ChatLog(props: {
   onCopy: (id: string, text: string) => void;
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
-  onRequestMove: (name: string) => void;
   pending: readonly PendingMessage[];
 }) {
   const copyButton = (message: ChatMessage) => {
@@ -566,7 +554,6 @@ function ChatLog(props: {
                   copyButton={copyButton(row.message)}
                   onOpenImage={props.onOpenImage}
                   onOpenPreview={props.onOpenPreview}
-                  onRequestMove={props.onRequestMove}
                 />
               ) : row.message.role === "error" ? (
                 <ErrorMessage message={row.message} copyButton={copyButton(row.message)} />
@@ -1568,21 +1555,6 @@ export function PaneDetail(props: PaneDetailProps) {
     }
   };
 
-  // 根の外のファイルをエージェントに移してもらう。入力欄を通さない送信なので、下書き・添付・
-  // コマンドの解釈には触らない。控えだけは積んで、ポーリングを待たずに送ったことが見える。
-  const requestMove = async (name: string) => {
-    if (readOnly || sending) return;
-    setNotice(null);
-    const text = moveRequestText(name);
-    const from = latestUserAt(snapshot?.messages ?? []);
-    const waiting = replying;
-    const after = snapshot?.messages.length ?? 0;
-    if (await submitInput(text, [])) {
-      setPinned(true);
-      echoPending({ text, at: Date.now(), from, waiting, after, names: [] });
-    } else setNotice(SEND_FAILED_NOTICE);
-  };
-
   const stopWorking = async () => {
     if (stopping || !stop) return;
     setStopping(true);
@@ -1853,7 +1825,6 @@ export function PaneDetail(props: PaneDetailProps) {
                 onCopy={copy}
                 onOpenImage={onOpenImage}
                 onOpenPreview={onOpenPreview}
-                onRequestMove={(name) => void requestMove(name)}
                 pending={pendingMessages}
               />
             </>

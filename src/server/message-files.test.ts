@@ -333,12 +333,21 @@ test("refuses traversal and unknown extensions in the preview route", async () =
   }
 });
 
-test("reads the extra preview roots from the environment", () => {
-  expect(defaultPreviewRoots({})).toEqual([]);
-  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "" })).toEqual([]);
+test("keeps /tmp as the first extra root and appends the environment", () => {
+  expect(defaultPreviewRoots({})).toEqual(["/tmp"]);
+  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "" })).toEqual(["/tmp"]);
   // 相対パスは作業ディレクトリに依存するので採らない。
-  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "relative:/tmp/mock" })).toEqual(["/tmp/mock"]);
-  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "/tmp/a:/tmp/b" })).toEqual(["/tmp/a", "/tmp/b"]);
+  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "relative:/tmp/mock" })).toEqual([
+    "/tmp",
+    "/tmp/mock",
+  ]);
+  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "/tmp/a:/tmp/b" })).toEqual([
+    "/tmp",
+    "/tmp/a",
+    "/tmp/b",
+  ]);
+  // 表記が違っても同じ実体は 1 回だけ試す。
+  expect(defaultPreviewRoots({ HWC_PREVIEW_ROOTS: "/tmp/" })).toEqual(["/tmp"]);
 });
 
 test("finds the HTML in an extra root only when the root is passed", async () => {
@@ -361,6 +370,27 @@ test("finds the HTML in an extra root only when the root is passed", async () =>
     ]);
   } finally {
     await rm(extra, { recursive: true, force: true });
+  }
+});
+
+test("delivers an HTML under /tmp with the default roots and reports no outside file", async () => {
+  const dir = await mkdtemp(join("/tmp", "hwc-default-root-"));
+  const page = join(dir, "mock.html");
+  await writeFile(page, "<!doctype html>");
+
+  const chat: ChatSnapshot = {
+    ...snapshot,
+    messages: [{ id: "a1", role: "agent", text: `モックは \`${page}\` です。`, at: 1 }],
+  };
+
+  try {
+    const message = (await attachMessageFiles(chat, root, defaultPreviewRoots({}))).messages[0];
+    expect(message?.files).toMatchObject([
+      { name: `${basename(dir)}/mock.html`, kind: "html", root: 1 },
+    ]);
+    expect(message?.outsideFile).toBeUndefined();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
 
