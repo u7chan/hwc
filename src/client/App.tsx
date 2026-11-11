@@ -428,6 +428,14 @@ export function App() {
       closeTarget.action === "close" &&
       findPane(next, closeTarget.paneId) === null
     ) {
+      // タブとして開いていないペインはアニメーションできない。保留だけ残すと
+      // 次のスナップショットまで一覧が古いままになるので、その場で適用する。
+      if (!splitRef.current.openTabs.includes(closeTarget.paneId)) {
+        heldSnapshot.current = null;
+        setClosing(null);
+        setState(next);
+        return;
+      }
       heldSnapshot.current = next;
       beginTabLeave(closeTarget.paneId, closeTarget.next);
       setClosing(null);
