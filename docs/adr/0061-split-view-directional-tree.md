@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-11
 - Revises: [ADR 0058](0058-split-view-tab-history.md) のレイアウト・追加帯・空きスロット・ドラッグの落とし先
-- Revises: 2026-11-11 にスロット色の順を深さ優先から読み順へ変更した（[ADR 0063](0063-tab-order-by-pane-layout.md)）
+- Revises: 2026-11-11 にスロット色の順を深さ優先から読み順へ、自分自身の端へのドロップで空くセルの補充を開いた順から表示順へ変更した（[ADR 0063](0063-tab-order-by-pane-layout.md)）
 
 ## Context
 

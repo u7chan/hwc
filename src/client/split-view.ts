@@ -242,7 +242,7 @@ function zoneDir(zone: Exclude<DropZone, "center">): SplitDir {
   return zone === "top" || zone === "bottom" ? "col" : "row";
 }
 
-// 自分自身の端へ落としたとき、空くセルへ入れるタブ。開いた順で、動かすペインの次、
+// 自分自身の端へ落としたとき、空くセルへ入れるタブ。表示順で、動かすペインの次、
 // 無ければ手前を探し、既に木に並んでいるペインは飛ばす。1 つのペインを 2 つのセルへ
 // 同時に置けないため。
 function vacatedPane(view: SplitView, paneId: string, wide: boolean): string | null {
@@ -255,7 +255,7 @@ function vacatedPane(view: SplitView, paneId: string, wide: boolean): string | n
 }
 
 // 木の中のペインを自分自身の端へ落とす。動かすペインを新しいセルへ出し、元のセルには
-// 次に開いていたタブを残す。VSCode でタブを自分の組から切り出すのと同じ結果にする。
+// 表示順で次（無ければ手前）のタブを残す。VSCode でタブを自分の組から切り出すのと同じ結果にする。
 function selfSplitLayout(
   view: SplitView,
   paneId: string,
