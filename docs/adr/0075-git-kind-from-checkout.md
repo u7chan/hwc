@@ -1,11 +1,11 @@
-# ADR 0059: git 種別の表示はチェックアウトから導く
+# ADR 0075: git 種別の表示はチェックアウトから導く
 
 - Status: Accepted
 - Date: 2026-11-10
 
 ## Context
 
-[ADR 0057](0057-github-remote-link.md) は、スペース見出しの先頭アイコンを「非 git / リポジトリ / linked worktree」の種類を表すものと決めた。実装は Herdr の `workspace.worktree` をそのまま使っている。
+[ADR 0072](0072-github-remote-link.md) は、スペース見出しの先頭アイコンを「非 git / リポジトリ / linked worktree」の種類を表すものと決めた。実装は Herdr の `workspace.worktree` をそのまま使っている。
 
 Herdr は `herdr worktree open` で開いたスペースにしか `worktree` を付けない。`herdr workspace create` で作ったスペースは、作業ディレクトリが git 管理下でも `worktree: null` になる。そのため、ブランチ・上流との差・GitHub のリポジトリ URL は `checkoutPaths` がペインの cwd にフォールバックして読めている（[ADR 0048](0048-git-remote-sync.md)）のに、アイコンだけは「非 git」のシェルになる。同じ画面で git の事実とアイコンが食い違う。
 

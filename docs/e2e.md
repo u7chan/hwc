@@ -122,7 +122,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 `frontend` の架空セッションは、最後のターンが失敗した状態（`stopReason: "error"` と `errorMessage`、本文は空）で終わる。同じ失敗をリトライの回数だけ並べてあり、Web では 1 行に畳まれて「3 回」と出る。その行が圧縮後の usage を変えないことも確かめる（[ADR 0039](adr/0039-chat-error-rows.md)）。
 
-その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を裸のパスで、`docs/preview/empty-state.png` と `docs/preview/empty-state-light.png` を画像記法で指す。どれも実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもの。連続した画像記法は本文のその位置に 1 行で並び、押すとダイアログで拡大でき、背景・`Esc`・閉じるボタンで閉じる（[ADR 0055](adr/0055-inline-message-images.md) / [ADR 0042](adr/0042-image-preview-dialog.md)）。裸のパスのほうは位置が無いので、今までどおりメッセージの末尾にサムネイルの行が出る（[ADR 0041](adr/0041-agent-message-images.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
+その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を裸のパスで、`docs/preview/empty-state.png` と `docs/preview/empty-state-light.png` を画像記法で指す。どれも実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもの。連続した画像記法は本文のその位置に 1 行で並び、押すとダイアログで拡大でき、背景・`Esc`・閉じるボタンで閉じる（[ADR 0071](adr/0071-inline-message-images.md) / [ADR 0042](adr/0042-image-preview-dialog.md)）。裸のパスのほうは位置が無いので、今までどおりメッセージの末尾にサムネイルの行が出る（[ADR 0041](adr/0041-agent-message-images.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
 
 送信前の添付チップも同じように拡大できる。入力欄に画像を貼り付けるかドロップし、アップロードが終わってサムネイルが出てから押すとダイアログが開く。`Esc` で閉じるとサムネイルへフォーカスが戻り、チップは残ったままになる。チップは送信するまで残り、別のペインを開いて戻っても同じチップが出る（[ADR 0018](adr/0018-pasted-image-attachments.md)）。
 
@@ -174,7 +174,7 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 ## エージェントの終了
 
 最後のエージェントを終了してもペインとスペースは残る（[ADR 0029](adr/0029-preserve-last-pane.md)）。
-終了したエージェントの画面と会話は、シェルに戻った時点で hwc が捨てる（[ADR 0059](adr/0059-clear-exited-agent-screen.md)）。
+終了したエージェントの画面と会話は、シェルに戻った時点で hwc が捨てる（[ADR 0073](adr/0073-clear-exited-agent-screen.md)）。
 
 1. `scratch` の `folder-trust-saved`（Codex、会話あり、待機）だけを残して他の 4 枚を閉じる。
    「…」メニューから 1 枚ずつ閉じてもよいし、`POST /api/panes/:id/close` を直接送ってもよい。
@@ -188,7 +188,7 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 
 ## シェルペインからの起動
 
-シェルのペインは、入力欄の左端の「エージェントを起動」から、分割せずその場でエージェントに変えられる（[ADR 0065](adr/0065-shell-pane-agent-start.md)）。
+シェルのペインは、入力欄の左端の「エージェントを起動」から、分割せずその場でエージェントに変えられる（[ADR 0077](adr/0077-shell-pane-agent-start.md)）。
 
 1. `scratch` の `notes`（シェル、待機）を開く。入力欄の下の左端（会話ペインの + と同じ位置）に「エージェントを起動」が出る。エージェントのペイン（`docs` の `writer` は Claude で会話を読めない）には出ない。
 2. 入力欄に `ls` と入れて送る。端末出力に `ls` が追記される。シェルには会話が無いので、控えは作られない。
@@ -268,14 +268,14 @@ fixture の `sandbox` は同じ場所を指す 2 スペースで、どちらも�
 2. そのまま「作成して起動」を押すと、架空 Herdr にリンクされたスペースが 1 つ増え、hwc が
    その root pane を開く。開いた直後は本文がスケルトン、入力欄がスピナーと「エージェントを起動しています。」
    になる。シェルの起動コマンドや Pi の TUI の途中、空状態は出ない。数秒で入力欄と会話（空状態を含む）に
-   一度で切り替わる（[ADR 0059](adr/0059-created-pane-starting.md)、[ADR 0068](adr/0068-starting-pane-mask.md)）。
+   一度で切り替わる（[ADR 0074](adr/0074-created-pane-starting.md)、[ADR 0078](adr/0078-starting-pane-mask.md)）。
    入力欄のモデル表示は起動時の指定で補われる（[ADR 0033](adr/0033-launch-model-before-first-message.md)）。
 3. linked worktree（`acme-dashboard (docs)`）の見出しのメニューには「新しいワークツリー」が無い。
 4. 4 ペインのタブを持つスペースでも、「新しいペイン」だけが無効で「新しいワークツリー」は押せる。
    4 枚のタブは既存のダイアログで 2 枚追加して用意してよい。
 5. 部分成功は、モデルに `@demo/start-fails` を選んで作成すると確かめられる。ワークツリーと
    root pane は残り、ダイアログに起動失敗の理由と「閉じる」だけが出る。閉じると新しい root pane
-   が表示され、入力欄は待ちを入れずにその場で使える（残ったのはシェルなので、ADR 0059 の待ちは
+   が表示され、入力欄は待ちを入れずにその場で使える（残ったのはシェルなので、ADR 0074 の待ちは
    入れない）。
 6. `worktree_open_failed`（結果不明）はブラウザのリクエスト差し替えで
    `/api/workspaces/:id/create-worktree` に 502 を返して確かめる。再送のボタンは出ず、「閉じる」だけになる。
@@ -374,7 +374,7 @@ HTML が配信できないスクリプトを読み込むと、iframe の上に 1
 
 ## 読み幅
 
-広い画面では、本文・ペインの見出し・入力欄・実行中や閲覧のみの行を読み幅の列に中央寄せする（[ADR 0045](adr/0045-wide-chat-measure.md)）。
+広い画面では、本文・ペインの見出し・入力欄・実行中や閲覧のみの行を読み幅の列に中央寄せする（[ADR 0070](adr/0070-wide-chat-measure.md)）。
 
 1. 900px 以上の幅でペインを開く。本文・見出し・入力欄・実行中の段階の行の左端と右端が一致し、中央の 832px に収まる。
 2. タブをセルの端へドロップして 2 枚にすると、各セルは 24px の余白に揃う。
@@ -382,7 +382,7 @@ HTML が配信できないスクリプトを読み込むと、iframe の上に 1
 
 ## 通知
 
-設定画面の「通知」から、司令塔の完了と要対応を Discord Webhook へ送る（[ADR 0063](adr/0063-discord-done-notification.md)、[ADR 0068](adr/0068-discord-blocked-notification.md)）。E2E では `HWC_E2E_DISCORD_WEBHOOK_SINK` により、送信は実 Discord ではなく架空のファイルへ記録する。**実 Discord へは送らない。**
+設定画面の「通知」から、司令塔の完了と要対応を Discord Webhook へ送る（[ADR 0076](adr/0076-discord-done-notification.md)、[ADR 0068](adr/0068-discord-blocked-notification.md)）。E2E では `HWC_E2E_DISCORD_WEBHOOK_SINK` により、送信は実 Discord ではなく架空のファイルへ記録する。**実 Discord へは送らない。**
 
 起動ログの `hwc e2e fixture: <root>` が示す `<root>/discord-webhook.jsonl` が sink。送信のたびに `{"content":"..."}` が 1 行追記される。
 

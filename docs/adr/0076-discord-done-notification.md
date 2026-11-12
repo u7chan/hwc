@@ -1,4 +1,4 @@
-# ADR 0063: 司令塔の完了を Discord Webhook で通知する
+# ADR 0076: 司令塔の完了を Discord Webhook で通知する
 
 - Status: Accepted
 - Date: 2026-11-12
@@ -63,7 +63,7 @@ Webhook URL は資格情報であり、同時に BFF が POST する先でもあ
 
 ### 本文
 
-PR がある作業だけ（ADR 0063 当時の画面名は「PR の作業だけ」）:
+PR がある作業だけ（ADR 0076 当時の画面名は「PR の作業だけ」）:
 
 ```text
 hwc: PR #228 の作業が完了しました
