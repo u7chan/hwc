@@ -62,9 +62,7 @@ function ThemePreview(props: { label: string }) {
                 実行中
               </span>
               <span class="hwc-theme-preview-status">
-                <span class="hwc-status hwc-status--attention">
-                  <StatusMark tone="attention" size={18} />
-                </span>
+                <StatusIcon status="blocked" />
                 要対応
               </span>
               <span class="hwc-theme-preview-status">
