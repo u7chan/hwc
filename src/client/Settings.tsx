@@ -1,4 +1,5 @@
-import { connectionLabel, type ConnectionStatus } from "./connection";
+import { ConnectionChip } from "./ConnectionChip";
+import type { ConnectionStatus } from "./connection";
 import { ChevronLeftIcon } from "./icons";
 import { NotificationSettings } from "./NotificationSettings";
 import { ThemePicker } from "./ThemePicker";
@@ -44,7 +45,7 @@ export function Settings(props: SettingsProps) {
               <div class="hwc-setting-row">
                 <span class="hwc-setting-label">状態</span>
                 <span class="hwc-setting-value" data-status={props.connection}>
-                  {connectionLabel(props.connection)}
+                  <ConnectionChip status={props.connection} />
                 </span>
               </div>
             </div>

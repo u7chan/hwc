@@ -24,12 +24,8 @@ import {
   type GitSyncFailure,
   type StateMessage,
 } from "./api";
-import {
-  INITIAL_CONNECTION,
-  connectionAfter,
-  connectionLabel,
-  type ConnectionStatus,
-} from "./connection";
+import { INITIAL_CONNECTION, connectionAfter, type ConnectionStatus } from "./connection";
+import { ConnectionChip } from "./ConnectionChip";
 import { CloseConfirm } from "./CloseConfirm";
 import { CloseSpaceConfirm } from "./CloseSpaceConfirm";
 import { CreatePane } from "./CreatePane";
@@ -1136,12 +1132,7 @@ export function App() {
     setReveal({ workspaceId, token: ++revealSeq.current });
   };
 
-  const connChip = (
-    <span class="hwc-conn" data-status={connection}>
-      <span class="hwc-conn-dot" />
-      {connectionLabel(connection)}
-    </span>
-  );
+  const connChip = <ConnectionChip status={connection} />;
 
   const actions = (
     <>
