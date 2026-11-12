@@ -24,8 +24,14 @@ import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
+import { useFavicon } from "./app/hooks/use-favicon";
+import { useListScope } from "./app/hooks/use-list-scope";
+import { useOpenGroups } from "./app/hooks/use-open-groups";
+import { useRevision } from "./app/hooks/use-revision";
+import { useServerClock } from "./app/hooks/use-server-clock";
+import { useSidebarWidth } from "./app/hooks/use-sidebar-width";
+import { useThemePreference } from "./app/hooks/use-theme-preference";
 import {
-  fetchRevision,
   fetchState,
   focusAgent,
   clearPaneOutput,
@@ -38,12 +44,10 @@ import {
   sendInput,
   stopAgent,
   syncWorkspace,
-  type StateMessage,
 } from "./api";
 import { INITIAL_CONNECTION, connectionAfter, type ConnectionStatus } from "./connection";
 import { ConnectionChip } from "./ConnectionChip";
 import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
-import { applyFavicon, faviconStatus } from "./favicon";
 import { Preview } from "./Preview";
 import { CloseIcon, HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
@@ -61,7 +65,6 @@ import {
   tabDisplayName,
   type PaneContext,
 } from "./select";
-import { OPEN_GROUPS_STORAGE_KEY, parseOpenGroups, rememberGroup } from "./expanded";
 import {
   defaultPaneOf,
   expandForWorkspace,
@@ -87,32 +90,17 @@ import {
   type SplitNode,
   type SplitView,
 } from "./split-view";
-import {
-  LIST_SCOPE_STORAGE_KEY,
-  parseListScope,
-  pendingReadAfter,
-  shouldFocusOnLeave,
-  type ListScope,
-} from "./scope";
+import { pendingReadAfter, shouldFocusOnLeave } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import { type StartingPane, paneStarting } from "./starting";
-import { clockSkew, serverClockNow, workingMs } from "./time";
+import { workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   SIDEBAR_STEP,
-  SIDEBAR_STORAGE_KEY,
   WIDE_LAYOUT_QUERY,
   clampSidebarWidth,
-  parseSidebarWidth,
 } from "./layout";
-import {
-  loadThemePreference,
-  resolveTheme,
-  saveThemePreference,
-  themeScheme,
-  type ThemePreference,
-} from "./theme";
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
 // スロット色を出さないときの並び。狭い画面は 4 色を使わない（ADR 0058）。
@@ -137,20 +125,7 @@ export function App() {
   const initialView = useRef<View | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dismissedConfirmations, setDismissedConfirmations] = useState<Record<string, string>>({});
-  const [revision, setRevision] = useState<string | null>(null);
-  const [sidebarWidth, setSidebarWidth] = useState(() =>
-    parseSidebarWidth(
-      typeof localStorage === "undefined" ? null : localStorage.getItem(SIDEBAR_STORAGE_KEY),
-    ),
-  );
-  const [theme, setTheme] = useState<ThemePreference>(() =>
-    loadThemePreference(typeof localStorage === "undefined" ? null : localStorage),
-  );
-  // 端末の外観は React の外にある。解決した明暗は、ANSI 色の補正と属性の両方で使う。
-  const systemPrefersDark = useMediaQuery("(prefers-color-scheme: dark)");
   const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
-  const resolvedTheme = resolveTheme(theme, systemPrefersDark);
-  const scheme = themeScheme(resolvedTheme);
   // 分割のドラッグ。PC のポインタだけが起点で、押した時点の位置だけを控える。
   // listStart は一覧の行から始めたドラッグ。触れる画面では縦の動きをスクロールに譲る。
   const paneDrag = useRef<{
@@ -174,20 +149,12 @@ export function App() {
   const flipRects = useRef<Map<string, DOMRect> | null>(null);
   // ドラッグ後の pointerup で click が成立しても、タブの選択を動かさない。
   const draggedSincePress = useRef(false);
-  // 開閉の記憶は初期表示と切り替えのときだけ読む。描き直しには使わない。
-  const openGroups = useRef<ReadonlyMap<string, boolean> | null>(null);
-  openGroups.current ??= parseOpenGroups(
-    typeof localStorage === "undefined" ? null : localStorage.getItem(OPEN_GROUPS_STORAGE_KEY),
-  );
-  const [scope, setScope] = useState<ListScope>(() =>
-    parseListScope(
-      typeof localStorage === "undefined" ? null : localStorage.getItem(LIST_SCOPE_STORAGE_KEY),
-    ),
-  );
+  const { openGroups, rememberOpen } = useOpenGroups();
   // 帯から「すべて」の場所へ移ったとき、一覧をその見出しまで送るための要求。
   // 同じ場所を何度も開けるよう、token で 1 回ずつ処理する。
   const [reveal, setReveal] = useState<{ workspaceId: string; token: number } | null>(null);
   const revealSeq = useRef(0);
+  const { scope, changeScope } = useListScope(() => setReveal(null));
   // メニューと確認はセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
   const [menu, setMenu] = useState<OperationMenu | null>(null);
@@ -237,17 +204,7 @@ export function App() {
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
   const snapshotWriter = useRef<SnapshotOrigin>("initial-fetch");
-  // サーバーの時計と端末の時計の差。スナップショットを受けた場所で固定し、以後の描画では
-  // ここに入れた値だけを使う。
-  const skew = useRef(0);
-  // 画面の「今」はサーバーの時計で刻む。状態が動かない間も経過が進むよう 1 秒ごとに描き直す。
-  const [now, setNow] = useState(() => Date.now());
-  const receive = (message: StateMessage) => {
-    skew.current = clockSkew(message.now, Date.now(), skew.current);
-    // 補正は次の刻みを待たない。待つと、状態が届いてから最初の刻みまで端末時計のずれだけ
-    // 経過がずれて見える（非表示タブでは可視化後の最初の刻みまで残る）。
-    setNow(serverClockNow(Date.now(), skew.current));
-  };
+  const { now, skew, receive } = useServerClock();
 
   // 消える行のアニメーションが終わったら、保留したスナップショットを適用する。
   const finishRemoval = () => {
@@ -319,11 +276,6 @@ export function App() {
   }, [leavingTab, removing?.phase]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(serverClockNow(Date.now(), skew.current)), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
     const controller = new AbortController();
     fetchState(controller.signal).then(
       (message) => {
@@ -355,52 +307,15 @@ export function App() {
     return () => events.close();
   }, []);
 
-  // どの版を見ているかを画面で確かめられるようにする。取れなくても表示だけ諦める。
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchRevision(controller.signal)
-      .then((revision) => {
-        if (revision !== null) setRevision(revision);
-      })
-      .catch(() => {
-        // 取れないときはラベルを出さない。
-      });
-    return () => controller.abort();
-  }, []);
-
-  // 端末の外観に追従するかは利用者の選択で決まる。解決した結果だけを attribute に出す。
-  useEffect(() => {
-    document.documentElement.dataset.theme = resolvedTheme;
-    document.documentElement.dataset.scheme = scheme;
-  }, [resolvedTheme, scheme]);
-
-  const changeTheme = (next: ThemePreference) => {
-    setTheme(next);
-    if (typeof localStorage !== "undefined") saveThemePreference(localStorage, next);
-  };
-
-  // 一覧をどこまで出すかは端末ごとの見え方。Herdr 側には持たせない。
-  const changeScope = (next: ListScope) => {
-    setReveal(null);
-    setScope(next);
-    if (typeof localStorage !== "undefined") {
-      try {
-        localStorage.setItem(LIST_SCOPE_STORAGE_KEY, next);
-      } catch {
-        // 保存だけ諦める。
-      }
-    }
-  };
+  const revision = useRevision();
+  const { theme, scheme, changeTheme } = useThemePreference();
 
   // 時刻は BFF が持つ。描画のたびに一度だけ Map へ引き直し、表示側の型は変えない。
   const workingSince = toTimes(state?.times.workingSince);
   const finishedAt = toTimes(state?.times.finishedAt);
 
-  // タブのアイコンは、開いているペインではなく全スペースの親を見る。別タブにいても
-  // 終わった親や質問に気付けるようにする。タイトルは変えない。
-  const favicon = state === null ? null : faviconStatus(state);
+  useFavicon(state);
   const parentPaneIds = state === null ? NO_PARENT_PANE_IDS : markedParentPaneIds(state);
-  useEffect(() => applyFavicon(favicon), [favicon]);
 
   // 選んだペインがスナップショットから消えても id は残す（ADR 0021）。findPane が null を
   // 返すので表示は一覧に戻り、戻ってきたときは同じペインを開ける。タブとスロットは
@@ -849,23 +764,6 @@ export function App() {
     });
   };
 
-  // 開閉は次に開いたときも同じにしたいので、既定からの差分として覚える。
-  const rememberOpen = (groupIds: readonly string[], open: boolean) => {
-    let remembered = openGroups.current ?? new Map<string, boolean>();
-    for (const groupId of groupIds) remembered = rememberGroup(remembered, groupId, open);
-    openGroups.current = remembered;
-    if (typeof localStorage !== "undefined") {
-      try {
-        localStorage.setItem(
-          OPEN_GROUPS_STORAGE_KEY,
-          JSON.stringify(Object.fromEntries(remembered)),
-        );
-      } catch {
-        // 保存だけ諦める。
-      }
-    }
-  };
-
   const toggle = (groupId: string) => {
     setReveal(null);
     const next = new Set(expanded);
@@ -934,26 +832,7 @@ export function App() {
         ].filter((id) => findPane(state, id)?.agent === null);
   const processes = usePaneProcesses(polledIds);
 
-  // 画面が狭くなったら一覧も詰める。詳細が読めない幅にはしない。
-  useEffect(() => {
-    const fit = () => setSidebarWidth((width) => clampSidebarWidth(width, window.innerWidth));
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, []);
-
-  const saveSidebarWidth = (width: number) => {
-    const clamped = clampSidebarWidth(width, window.innerWidth);
-    setSidebarWidth(clamped);
-    if (typeof localStorage !== "undefined") {
-      try {
-        localStorage.setItem(SIDEBAR_STORAGE_KEY, String(clamped));
-      } catch {
-        // 保存だけ諦める。
-      }
-    }
-  };
-
-  const drag = useRef<{ startX: number; startWidth: number } | null>(null);
+  const { sidebarWidth, setSidebarWidth, saveSidebarWidth, drag } = useSidebarWidth();
 
   // アクティブの帯から「すべて」のその場所へ移る。スコープと一覧のスクロールは PaneList が
   // 持ち、ここでは代表ペインと開閉だけを決める。狭い画面は一覧と詳細を同時に出せず、
