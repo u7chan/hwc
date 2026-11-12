@@ -12,3 +12,14 @@ export function isNearBottom(box: ScrollBox, threshold = BOTTOM_THRESHOLD): bool
 export function isLayoutShift(box: ScrollBox, last: ScrollBox): boolean {
   return box.scrollHeight !== last.scrollHeight || box.clientHeight !== last.clientHeight;
 }
+
+// 縦に伸びたときのスクロールが、高さの変化ではなく利用者の読み返しによるものか。
+// 伸びる前の底から離れていれば、利用者が動かしたとみなす。表示領域が変わった伸びは
+// 入力欄や添付の伸縮で、利用者の操作とは限らないため対象外にする。
+export function isUserScrollDuringGrowth(box: ScrollBox, last: ScrollBox): boolean {
+  return (
+    box.scrollHeight > last.scrollHeight &&
+    box.clientHeight === last.clientHeight &&
+    !isNearBottom(last)
+  );
+}

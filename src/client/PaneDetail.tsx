@@ -17,7 +17,7 @@ import { activityLabel, activitySnippet, formatTokPerSecond, usePaneActivity } f
 import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
 import { attachmentStore, type AttachedImage } from "./attachment-store";
 import { OutputText } from "./OutputText";
-import { isLayoutShift, isNearBottom } from "./scroll";
+import { isLayoutShift, isNearBottom, isUserScrollDuringGrowth } from "./scroll";
 import {
   ATTACHMENT_LIMIT_NOTICE,
   type AttachmentAction,
@@ -992,7 +992,9 @@ export function PaneDetail(props: PaneDetailProps) {
   const body = readOnly ? { kind: "output" as const } : normalBody;
   // 新しく届いた返答を一度に描くと、長いときに先頭がスクロールの外へ流れる。
   // 演出は会話を出している間だけ。初期表示と入れ替えでは再生しない。
-  const reveal = useMessageReveal(body.kind === "chat" ? body.snapshot : null);
+  // /new のマスク中は空の表示用スナップショットなので、比較させない。渡すと
+  // マスクが解けて元の会話へ戻るときに末尾の返答を追記と誤認する。
+  const reveal = useMessageReveal(resetting || body.kind !== "chat" ? null : body.snapshot);
   // 起動待ちの間は、端末に届いている途中の画面（シェルの起動コマンド、TUI の描画中、
   // 空の会話）を出さない。何が届いていてもスケルトンに置き換える。
   const launching = starting && !readOnly;
@@ -1827,11 +1829,7 @@ export function PaneDetail(props: PaneDetailProps) {
             // みなす。逐次表示は 150ms ごとに高さが変わるので、これが無いと上へ
             // スクロールしても高さの変化と誤認してすぐ底へ戻される。
             if (isLayoutShift(now, last)) {
-              const moved =
-                now.scrollHeight > last.scrollHeight &&
-                now.clientHeight === last.clientHeight &&
-                !isNearBottom(last);
-              if (moved) {
+              if (isUserScrollDuringGrowth(now, last)) {
                 setPinned(isNearBottom(now));
                 return;
               }
