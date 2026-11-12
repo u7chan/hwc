@@ -290,7 +290,7 @@ export function createApp(options: {
       if (result === "changed") return c.json({ error: "pane_action_changed" }, 409);
       launchModels.forget(paneId);
       // シェルに戻ったのを観測してから、終了したエージェントの画面を消す
-      // （ADR 0059 clear-exited-agent-screen）。
+      // （ADR 0073 clear-exited-agent-screen）。
       if (action === "exit") exitCleanup(paneId);
       return c.json({ ok: true });
     } catch (error) {

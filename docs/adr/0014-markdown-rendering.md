@@ -12,7 +12,7 @@
 ## Decision
 
 - Markdown 専用の外部ライブラリを追加しない（ADR 0009）
-- u7agent の `client/src/lib/markdown` を移植元にし、生 HTML・数式・ハイライト・図を削って `src/client/markdown/` に入れる。各ファイルの先頭に移植元を 1 行残す。画像は記法として解析だけし、描くかは BFF が実在を確認したファイルとの照合で決める（[ADR 0055](0055-inline-message-images.md)）
+- u7agent の `client/src/lib/markdown` を移植元にし、生 HTML・数式・ハイライト・図を削って `src/client/markdown/` に入れる。各ファイルの先頭に移植元を 1 行残す。画像は記法として解析だけし、描くかは BFF が実在を確認したファイルとの照合で決める（[ADR 0071](0071-inline-message-images.md)）
 - タスクリストは項目の `task`（true / false）だけを持ち、描画はチェックボックスにする。押した結果は表示だけで、Markdown は書き換えない
 - コードフェンスの右上にコピーボタンを置く。hover できる端末では hover で表示し、触れる端末では常に表示する
 - HTML 文字列を経由せず、Preact の VNode を組んで描画する。`innerHTML` / `dangerouslySetInnerHTML` / `DOMParser` を使わない（`src/client/markdown/safety.test.ts` が検査する）
@@ -36,7 +36,7 @@
 | コードフェンス                                            | ✓    | シンタックスハイライトはしない。言語名はラベルとして出し、本文は折り返さず横スクロールする                                                 |
 | 生 HTML                                                   | ✗    | タグは文字として出す（`<b>` / `<script>` / `<id>` のいずれも原文）                                                                         |
 | 数式 `$…$` `$$…$$` `\(…\)` `\[…\]`                        | ✗    | 区切りごと原文                                                                                                                             |
-| 画像 `![]()`                                              | ✓    | BFF が実在を確認したファイルだけを本文の位置に描く。照合できなければ記法ごと原文（`literal`）（[ADR 0055](0055-inline-message-images.md)） |
+| 画像 `![]()`                                              | ✓    | BFF が実在を確認したファイルだけを本文の位置に描く。照合できなければ記法ごと原文（`literal`）（[ADR 0071](0071-inline-message-images.md)） |
 | タスクリスト `- [ ]`                                      | ✓    | 項目の `task` に完了状態を持つ。押した結果は表示だけで、Markdown は書き換えない                                                            |
 | 相対パス・ファイルパスのリンク                            | ✗    | リンクにせず原文（`literal`）を出す                                                                                                        |
 | 実体参照 / 脚注 / 参照リンク / HTML ブロック / 遅延継続行 | ✗    | 原文表示                                                                                                                                   |

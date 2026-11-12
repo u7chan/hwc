@@ -1,4 +1,4 @@
-# ADR 0057: スペースの Git アイコンから GitHub のリポジトリを開く
+# ADR 0072: スペースの Git アイコンから GitHub のリポジトリを開く
 
 - Status: Accepted
 - Date: 2026-11-10

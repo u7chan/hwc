@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Revises: 2026-11-12 に「プッシュ通知は持たない」を改訂（[ADR 0063](0063-discord-done-notification.md)）
+- Revises: 2026-11-12 に「プッシュ通知は持たない」を改訂（[ADR 0076](0076-discord-done-notification.md)）
 
 ## Context
 
@@ -31,7 +31,7 @@ hwc を別のブラウザタブで開いたまま、エージェントの完了�
 
 ### 表示
 
-- favicon だけを変える。タブタイトルと右下の知らせは持たない。プッシュ通知は持たない（2026-11-12 改訂: [ADR 0063](0063-discord-done-notification.md) で、司令塔の完了を Discord Webhook へ送る通知を足した。この ADR のファビコンの挙動は変えない）
+- favicon だけを変える。タブタイトルと右下の知らせは持たない。プッシュ通知は持たない（2026-11-12 改訂: [ADR 0076](0076-discord-done-notification.md) で、司令塔の完了を Discord Webhook へ送る通知を足した。この ADR のファビコンの挙動は変えない）
 - 状態の点は、既存のファビコンと同じ角丸の背景とロゴの右下に置く。画像を状態ごとに用意せず、SVG 文字列を `data:image/svg+xml,` の URL にして `link[rel="icon"]` の `href` を差し替える
 - 色はファビコン専用に定義する。UI の `--color-attention`（オレンジ）と `--color-success`（緑）をそのまま使うと、指定の黄・赤・水色にならない
 - SVG の `viewBox` は四方に 1 単位の透明な余白を取り、図形を 0..24 に収める。Windows Chrome の 125% 表示で端の画素が反対側へにじむのを防ぐ
