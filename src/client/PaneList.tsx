@@ -252,9 +252,9 @@ function ActiveCount(props: { status: ActiveStatus; count: number }) {
 // 帯は場所。行はペイン。同じワークツリーの行を束ね、スクロール中も場所を見失わないよう
 // 上端に貼り付ける。状態の件数は束全体の量で、行の右端はそのペインの時刻。
 // 場所の記号は行の親を示す目印にする。子の段はこのアイコンの中心から線でつなぐ。
-// 帯全体は「すべて」のその場所へ移る入口。中身の上に透明なボタンを重ねる。
-// その移動は矢印で示す。ツリーの行末は同じ向きのシェブロンで開閉するため、同じ記号にすると
-// どちらも「進む／開く」に見えて意味が重なる。
+// 帯は「すべて」のその場所へ移る入口だが、`すべて` へ移れるのは右端の矢印だけにする。帯の大半は
+// 読むための面なので、触れただけで移ると誤操作になる。ツリーの行末は同じ向きのシェブロンで
+// 開閉するため、同じ記号にするとどちらも「進む／開く」に見えて意味が重なる。
 function ActiveBand(props: {
   group: ActiveGroup;
   pullRequest: PullRequest | null;
@@ -267,7 +267,7 @@ function ActiveBand(props: {
   const pullRequest = props.pullRequest;
   const sync = workspace.sync ?? null;
   // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば
-  // タイトルを先頭に置き、名前は帯全体のボタンの読み上げとツリーに残す。
+  // タイトルを先頭に置き、名前は矢印の読み上げとツリーに残す。
   const heading = pullRequest?.title ?? workspace.label;
   const pullRequestState = pullRequest === null ? null : pullRequestTone(pullRequest.state);
   // 件数は最後の行の右端に置く。タイトルの幅を件数に削らせない。
@@ -323,16 +323,15 @@ function ActiveBand(props: {
         )}
       </div>
       {branch === null ? countsNode : null}
-      <span class="hwc-active-band-jump" aria-hidden="true">
-        <ArrowRightIcon />
-      </span>
       <button
         type="button"
-        class="hwc-active-band-open"
+        class="hwc-active-band-jump"
         aria-label={`${workspace.label} をすべての一覧で開く`}
         title={branch === null ? workspace.label : `${workspace.label} · ${branch}`}
         onClick={props.onOpen}
-      />
+      >
+        <ArrowRightIcon />
+      </button>
     </div>
   );
 }
