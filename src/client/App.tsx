@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
-import type { ChatFile } from "../server/chat/contract";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
 import { PaneDetail } from "./PaneDetail";
@@ -7,6 +6,23 @@ import { attachmentStore } from "./attachment-store";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./Settings";
+import type {
+  Closing,
+  ClosingSpace,
+  DropTarget,
+  GitAction,
+  LeavingTab,
+  OperationMenu,
+  PreviewTarget,
+  Removing,
+  View,
+} from "./app/types";
+import { dropTargetAt } from "./app/drop";
+import { useMediaQuery } from "./app/use-media-query";
+import { defaultView } from "./app/default-view";
+import { toTimes } from "./app/times";
+import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
+import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
 import {
   fetchRevision,
   fetchState,
@@ -21,60 +37,33 @@ import {
   sendInput,
   stopAgent,
   syncWorkspace,
-  type GitSyncFailure,
   type StateMessage,
 } from "./api";
 import { INITIAL_CONNECTION, connectionAfter, type ConnectionStatus } from "./connection";
 import { ConnectionChip } from "./ConnectionChip";
-import { CloseConfirm } from "./CloseConfirm";
-import { CloseSpaceConfirm } from "./CloseSpaceConfirm";
-import { CreatePane } from "./CreatePane";
-import { DragGhost, clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
+import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
 import { applyFavicon, faviconStatus } from "./favicon";
-import { ImageViewer } from "./ImageViewer";
 import { Preview } from "./Preview";
-import {
-  ChevronRightIcon,
-  CloseIcon,
-  GitHubIcon,
-  HwcMark,
-  PlusIcon,
-  SettingsIcon,
-  TrashIcon,
-} from "./icons";
-import { Menu } from "./Menu";
-import { PaneMenu } from "./PaneMenu";
+import { CloseIcon, HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
-import { RemoveWorktreeConfirm } from "./RemoveWorktreeConfirm";
-import { WorkspaceGitActions } from "./WorkspaceGitActions";
-import { WorkspaceMenuHead } from "./WorkspaceMenuHead";
 import type { PaneOutputHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
-import { type PaneCloseAction, paneCloseAction } from "../shared/pane-close";
+import { paneCloseAction } from "../shared/pane-close";
 import {
   canCloseDuplicateSpace,
   findPane,
   findPaneContext,
   findPaneRow,
-  groupIds,
-  initialExpanded,
   markedParentPaneIds,
   tabDisplayName,
   type PaneContext,
 } from "./select";
-import {
-  OPEN_GROUPS_STORAGE_KEY,
-  applyOpenGroups,
-  parseOpenGroups,
-  rememberGroup,
-} from "./expanded";
+import { OPEN_GROUPS_STORAGE_KEY, parseOpenGroups, rememberGroup } from "./expanded";
 import {
   defaultPaneOf,
-  expandForPane,
   expandForWorkspace,
-  readSplitView,
   revealPane,
   revealPaneGroups,
   workspaceGroupIds,
@@ -82,18 +71,14 @@ import {
 } from "./selection";
 import {
   EMPTY_SPLIT_VIEW,
-  canDrop,
-  canSwapTabs,
   clearCurrent,
   dropOnPane,
   leafPanes,
   multiSpace,
   nextTabPane,
-  normalizeSplitView,
   openPane,
   readingOrder,
   removeTab,
-  startSplitView,
   startsPaneDrag,
   syncSplitView,
   tabPanes,
@@ -131,155 +116,15 @@ import {
 const NO_GROUPS: ReadonlySet<string> = new Set();
 // スロット色を出さないときの並び。狭い画面は 4 色を使わない（ADR 0058）。
 const NO_SLOTS: readonly string[] = [];
-const NO_TIMES: ReadonlyMap<string, number> = new Map();
-
-// 時刻は BFF が持つ。端末は受け取った時刻を並べるだけで、サーバーの時計に合わせた「今」で刻む。
-function toTimes(record: Record<string, number> | undefined): ReadonlyMap<string, number> {
-  return record === undefined ? NO_TIMES : new Map(Object.entries(record));
-}
-
-// 端末の幅は React の外にある。購読して、変わったときだけ描き直す。
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
-
-  useEffect(() => {
-    const media = window.matchMedia(query);
-    const apply = () => setMatches(media.matches);
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, [query]);
-
-  return matches;
-}
-
-type View = { split: SplitView; expanded: ReadonlySet<string> };
 
 const NO_PARENT_PANE_IDS: ReadonlySet<string> = new Set();
-
-// 開いているプレビュー。Herdr のペインではないので、状態には載せない。shown は
-// タブの選択と同じで、ペインのタブを選ぶと false に戻る（ADR 0051）。
-type PreviewTarget = { paneId: string; file: ChatFile; shown: boolean };
-
-// 閉じる確認。後継は確認を開いた時点で決める。SSE が閉じたペインを落とした後では、
-// 次のペインを引けないため。
-type Closing = {
-  paneId: string;
-  action: PaneCloseAction;
-  next: string | null;
-  phase: "confirm" | "busy" | "failed";
-};
-
-type OperationMenu = {
-  target: { kind: "pane" | "workspace"; id: string };
-  trigger: HTMLElement;
-  fromList: boolean;
-  open: boolean;
-};
-
-// ドラッグの落とし先。中央は入れ替え、端はその方向への分割（ADR 0061）。
-// kind は落とし先がセルか固定ゾーンのタブか。枠を出す側を分けるために持つ（ADR 0064）。
-type DropTarget = { kind: "cell" | "tab"; pane: string; zone: DropZone };
-
-// ポインタがセルのどこにあるか。親の分割軸と直交する向きだけを返す。
-function dropZoneAt(cell: HTMLElement, x: number, y: number): DropZone {
-  const rect = cell.getBoundingClientRect();
-  const u = (x - rect.left) / rect.width;
-  const v = (y - rect.top) / rect.height;
-  const parent = cell.dataset.dropParent;
-  if (parent === "row") return v < 0.32 ? "top" : v > 0.68 ? "bottom" : "center";
-  if (parent === "col") return u < 0.32 ? "left" : u > 0.68 ? "right" : "center";
-  // 親が無い単独セルは 4 方向。最も近い辺を選ぶ。
-  const edges: readonly (readonly [DropZone, number])[] = [
-    ["left", u],
-    ["right", 1 - u],
-    ["top", v],
-    ["bottom", 1 - v],
-  ];
-  const nearest = edges.reduce((a, b) => (b[1] < a[1] ? b : a));
-  return nearest[1] < 0.3 ? nearest[0] : "center";
-}
-
-function dropTargetAt(
-  x: number,
-  y: number,
-  source: string,
-  view: SplitView,
-  wide: boolean,
-): DropTarget | null {
-  // ビューポートの外では何も返らない。掴んだまま画面外で離しただけで分割しない。
-  const element = document.elementFromPoint(x, y);
-  const cell = element?.closest("[data-drop-pane]");
-  if (cell instanceof HTMLElement) {
-    const pane = cell.dataset.dropPane;
-    if (pane === undefined) return null;
-    const zone = dropZoneAt(cell, x, y);
-    return canDrop(view, source, pane, zone, wide) ? { kind: "cell", pane, zone } : null;
-  }
-  // 固定ゾーンのタブはセルの中央と同じ入れ替えを受け付ける（ADR 0064）。
-  // プレビュー中は TabBar が data-drop-tab を出さないので、ここへは来ない。
-  const tab = element?.closest("[data-drop-tab]");
-  if (!(tab instanceof HTMLElement)) return null;
-  const pane = tab.dataset.dropTab;
-  if (pane === undefined) return null;
-  return canSwapTabs(view, source, pane, wide) ? { kind: "tab", pane, zone: "center" } : null;
-}
-
-// メニューを閉じても続く操作。busy はメニューの外に置き、開き直しても実行中を出す。
-type GitAction =
-  | { workspaceId: string; action: "fetch" | "pull"; phase: "busy" }
-  | {
-      workspaceId: string;
-      action: "fetch" | "pull";
-      phase: "failed";
-      error: GitSyncFailure;
-    };
-
-// 削除の確認。対象の名前とパスは開いた時点のスナップショットから取る。SSE が
-// スペースを落とした後では、何を消すのかを引けない。leave は削除が確定し、一覧から
-// 対象が消えるアニメーションを見せている間。確認ダイアログは閉じる。
-type Removing = {
-  workspaceId: string;
-  label: string;
-  checkoutPath: string | null;
-  phase: "confirm" | "busy" | "leave" | "failed";
-};
 
 // 一覧の行が消えるアニメーション（PaneList）の完了が届かない場合の保険。
 // 待っている間も他の表示は止まるので、アニメーションより少し長い程度に留める。
 const REMOVAL_LEAVE_FALLBACK_MS = 800;
 
-// タブから外すアニメーション（TabBar）の対象。完了してから openTabs へ反映する。
-// successor は閉じる確認で決めた後継。× では省略し、removeTab の既定に任せる。
-type LeavingTab = { paneId: string; successor?: string | null };
-
 // タブのアニメーションの完了が届かない場合の保険。SSE の適用もこの間だけ遅らせる。
 const TAB_LEAVE_FALLBACK_MS = 400;
-
-// 重複したネイティブスペースを閉じる確認。フォルダは残るが、実行中のエージェントは終わる。
-type ClosingSpace = {
-  workspaceId: string;
-  label: string;
-  path: string | null;
-  phase: "confirm" | "busy" | "failed";
-};
-
-// 開き方の初期値は最初のスナップショットで決めて、以後の focus 移動には追従しない。
-// 読んでいる途中で勝手に別のペインへ切り替わらないようにするため。
-// 前回開いていたペインが残っていればそこへ戻す（再読み込みや HMR で先頭へ飛ばない）。
-function defaultView(state: AppState, openGroups: ReadonlyMap<string, boolean> | null): View {
-  const stored = readSplitView();
-  const split =
-    stored === null
-      ? startSplitView(findPane(state, state.focusedPaneId) === null ? null : state.focusedPaneId)
-      : normalizeSplitView(stored, (paneId) => findPane(state, paneId) !== null);
-  const remembered = openGroups ?? new Map();
-  const base = applyOpenGroups(initialExpanded(state), remembered, groupIds(state));
-  return {
-    split,
-    expanded: split.current === null ? base : expandForPane(state, split.current, base, remembered),
-  };
-}
 
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -1428,37 +1273,54 @@ export function App() {
       </div>
     );
 
-  const listPlaceholder = (
-    <div class="hwc-empty">
-      <div class="hwc-empty-mark">
-        <HwcMark size={32} />
-      </div>
-      <h2 class="hwc-empty-title">
-        {connection === "unavailable" ? "Herdr に接続できません" : "接続中"}
-      </h2>
-      <p class="hwc-empty-text">
-        {connection === "unavailable"
-          ? "Herdr が起動しているか確かめてください。"
-          : "ペインの一覧を受け取っています。"}
-      </p>
-    </div>
-  );
-
-  const placeholder = (
-    <div class="hwc-empty hwc-empty--detail">
-      <div class="hwc-empty-mark hwc-empty-mark--app">
-        <HwcMark size={40} />
-      </div>
-      <h2 class="hwc-empty-title">
-        {connection === "unavailable" ? "Herdr に接続できません" : "接続中"}
-      </h2>
-      <p class="hwc-empty-text">
-        {connection === "unavailable"
-          ? "Herdr が起動しているか確かめてください。接続が戻ると自動で表示されます。"
-          : "Herdr の状態を受け取っています。"}
-      </p>
-    </div>
-  );
+  const overlays: AppOverlaysProps = {
+    dragging,
+    draggingLabel,
+    menu,
+    menuPane,
+    menuWorkspace,
+    menuPaneId,
+    menuRow,
+    menuFull,
+    menuCloseAction,
+    menuPullRequest,
+    menuRepoUrl,
+    menuGitBusy,
+    menuGitFailed,
+    menuCanCloseSpace,
+    canCreateWorktree,
+    dismissMenu,
+    closeMenu,
+    setMenu,
+    openCreateDialog,
+    clearOutputForMenu,
+    openCloseConfirm,
+    openCreateWorktreeDialog,
+    openRemoveWorktreeConfirm,
+    openCloseSpaceConfirm,
+    runGitSync,
+    closing,
+    closingPane,
+    closingAvailable,
+    confirmClose,
+    cancelClose,
+    removing,
+    removingWorkspace,
+    removingAvailable,
+    confirmRemoveWorktree,
+    cancelRemoveWorktree,
+    closingSpace,
+    closingSpaceAvailable,
+    confirmCloseSpace,
+    cancelCloseSpace,
+    creating,
+    setCreating,
+    setPendingSelect,
+    setStarting,
+    skew,
+    viewer,
+    setViewer,
+  };
 
   return (
     <div
@@ -1469,7 +1331,7 @@ export function App() {
       <div class="hwc-body">
         <aside class="hwc-list" aria-label="ペイン一覧">
           {state === null ? (
-            listPlaceholder
+            <ListPlaceholder connection={connection} />
           ) : (
             <PaneList
               state={state}
@@ -1509,29 +1371,7 @@ export function App() {
           )}
           <div class="hwc-sidebar-foot">
             <span class="hwc-foot-brand">
-              {/*
-                文字とマークのインクに合わせた実測の viewBox。高さは .hwc-foot-logo が決める。
-                マークの比率は favicon（favicon.ts / favicon.svg）と HwcMark に揃える。
-                辺・隙間・角丸・4 象限目の不透明度を直すときは 4 か所そろえる。
-              */}
-              <svg class="hwc-foot-logo" viewBox="0 24 329.4 77" role="img" aria-label="HWC">
-                <g fill="currentColor">
-                  <rect x="0" y="24" width="33.8" height="33.8" rx="10.6" />
-                  <rect x="42.2" y="24" width="33.8" height="33.8" rx="10.6" />
-                  <rect x="0" y="66.2" width="33.8" height="33.8" rx="10.6" />
-                  <rect x="42.2" y="66.2" width="33.8" height="33.8" rx="10.6" opacity="0.45" />
-                </g>
-                <text
-                  x="97"
-                  y="100"
-                  font-size="100"
-                  font-weight="600"
-                  letter-spacing="2.5"
-                  fill="currentColor"
-                >
-                  HWC
-                </text>
-              </svg>
+              <FooterBrand />
               {revision === null ? null : <span class="hwc-foot-rev">{revision}</span>}
             </span>
             <span class="hwc-foot-actions">{actions}</span>
@@ -1587,7 +1427,7 @@ export function App() {
               onClose={() => setSettingsOpen(false)}
             />
           ) : state === null ? (
-            placeholder
+            <Placeholder connection={connection} />
           ) : (wide && tabRows.length > 0) || pane !== null ? (
             <div class="hwc-detail-inner">
               <TabBar
@@ -1657,192 +1497,7 @@ export function App() {
         </main>
       </div>
 
-      {dragging === null ? null : <DragGhost label={draggingLabel} />}
-
-      {menu === null || (menuPane === null && menuWorkspace === null) ? null : (
-        <Menu
-          key={`${menu.target.kind}:${menu.target.id}`}
-          label={`${menuWorkspace?.label ?? menuPaneId} の操作`}
-          trigger={menu.trigger}
-          open={menu.open}
-          onClose={dismissMenu}
-          onExited={() => setMenu((current) => (current?.open === false ? null : current))}
-          closeOnScroll={menu.fromList}
-        >
-          {menuPane === null ? null : (
-            <PaneMenu
-              pane={menuPane}
-              workspacePath={menuRow?.workspace.path ?? null}
-              full={menuFull}
-              closeAction={menuCloseAction}
-              onCreate={() => openCreateDialog(menuPane.id)}
-              onClearOutput={() => clearOutputForMenu(menuPane.id)}
-              onClosePane={openCloseConfirm}
-              onDismiss={closeMenu}
-            />
-          )}
-          {menuWorkspace === null ? null : (
-            <>
-              <WorkspaceMenuHead label={menuWorkspace.label} path={menuWorkspace.path ?? null} />
-              {menuWorkspace.tabs.map((tab) => {
-                const source = tab.panes[0];
-                const full = tab.panes.length >= MAX_PANES_PER_TAB;
-                return (
-                  <div key={tab.id}>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      class="hwc-menu-item"
-                      disabled={full || source === undefined}
-                      onClick={() => source && openCreateDialog(source.id)}
-                    >
-                      <PlusIcon size={14} />
-                      {menuWorkspace.tabs.length === 1
-                        ? "新しいペイン"
-                        : `${tab.label || tab.id} に新しいペイン`}
-                    </button>
-                    {full ? <p class="hwc-menu-note">このタブは 4 ペインまで</p> : null}
-                  </div>
-                );
-              })}
-              {menuPullRequest === null && menuRepoUrl === null ? null : (
-                <>
-                  <hr class="hwc-menu-separator" />
-                  {menuRepoUrl === null ? null : (
-                    <a
-                      class="hwc-menu-item"
-                      role="menuitem"
-                      href={menuRepoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={closeMenu}
-                    >
-                      <GitHubIcon size={14} />
-                      リポジトリを GitHub で開く
-                    </a>
-                  )}
-                  {menuPullRequest === null ? null : (
-                    <a
-                      class="hwc-menu-item"
-                      role="menuitem"
-                      href={menuPullRequest.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={closeMenu}
-                    >
-                      <ChevronRightIcon size={14} />
-                      PR #{menuPullRequest.number} を開く
-                    </a>
-                  )}
-                </>
-              )}
-              <WorkspaceGitActions
-                sync={menuWorkspace.sync ?? null}
-                busy={menuGitBusy}
-                failed={menuGitFailed}
-                onRun={(action) => void runGitSync(menuWorkspace.id, action)}
-              />
-              {canCreateWorktree ? (
-                <>
-                  <hr class="hwc-menu-separator" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    class="hwc-menu-item"
-                    onClick={openCreateWorktreeDialog}
-                  >
-                    <PlusIcon size={14} />
-                    新しいワークツリー
-                  </button>
-                </>
-              ) : null}
-              {menuWorkspace.worktree?.managed === true &&
-              menuWorkspace.worktree.isLinkedWorktree ? (
-                <>
-                  <hr class="hwc-menu-separator" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    class="hwc-menu-item hwc-menu-item--danger"
-                    onClick={openRemoveWorktreeConfirm}
-                  >
-                    <TrashIcon size={14} />
-                    ワークツリーを削除
-                  </button>
-                </>
-              ) : null}
-              {menuCanCloseSpace ? (
-                <>
-                  <hr class="hwc-menu-separator" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    class="hwc-menu-item hwc-menu-item--danger"
-                    onClick={openCloseSpaceConfirm}
-                  >
-                    <TrashIcon size={14} />
-                    スペースを閉じる
-                  </button>
-                </>
-              ) : null}
-            </>
-          )}
-        </Menu>
-      )}
-
-      {closing === null || closingPane === null ? null : (
-        <CloseConfirm
-          pane={closingPane}
-          action={closing.action}
-          available={closingAvailable}
-          busy={closing.phase === "busy"}
-          failed={closing.phase === "failed"}
-          onConfirm={confirmClose}
-          onCancel={cancelClose}
-        />
-      )}
-
-      {removing === null || removing.phase === "leave" || removingWorkspace === null ? null : (
-        <RemoveWorktreeConfirm
-          label={removing.label}
-          checkoutPath={removing.checkoutPath}
-          available={removingAvailable}
-          busy={removing.phase === "busy"}
-          failed={removing.phase === "failed"}
-          onConfirm={confirmRemoveWorktree}
-          onCancel={cancelRemoveWorktree}
-        />
-      )}
-
-      {closingSpace === null ? null : (
-        <CloseSpaceConfirm
-          label={closingSpace.label}
-          path={closingSpace.path}
-          available={closingSpaceAvailable}
-          busy={closingSpace.phase === "busy"}
-          failed={closingSpace.phase === "failed"}
-          onConfirm={confirmCloseSpace}
-          onCancel={cancelCloseSpace}
-        />
-      )}
-
-      {creating === null ? null : (
-        <CreatePane
-          paneId={creating.paneId}
-          worktreeWorkspaceId={creating.worktreeWorkspaceId}
-          start={creating.start}
-          onCreated={(paneId, agent) => {
-            setPendingSelect(paneId);
-            // エージェントを起動しなかった（シェル・起動失敗）ペインは、すぐに入力できる。
-            setStarting(agent ? { paneId, at: serverClockNow(Date.now(), skew.current) } : null);
-          }}
-          onClose={() => setCreating(null)}
-        />
-      )}
-
-      {viewer === null ? null : (
-        <ImageViewer url={viewer.url} name={viewer.name} onClose={() => setViewer(null)} />
-      )}
+      <AppOverlays {...overlays} />
     </div>
   );
 }
