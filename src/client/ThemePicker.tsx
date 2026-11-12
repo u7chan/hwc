@@ -1,5 +1,6 @@
+import { useState } from "preact/hooks";
 import { ChoiceCard } from "./ChoiceCard";
-import { SendIcon, StatusMark } from "./icons";
+import { ChevronRightIcon, SendIcon, StatusMark } from "./icons";
 import { StatusIcon } from "./StatusLabel";
 import { THEMES, themeGroups, type ThemeMeta, type ThemePreference } from "./theme";
 
@@ -23,40 +24,67 @@ function selectedThemeLabel(value: ThemePreference): string {
   return THEMES.find((theme) => theme.id === value)?.label ?? "";
 }
 
+const PREVIEW_BODY_ID = "hwc-theme-preview-body";
+
 // 設定画面には出ない状態色とアクセント面を、いまのテーマで見せる。テーマを選ぶと
 // 画面全体が切り替わり、このプレビューも同じトークンで描き直される。
+// 既定は畳む。常に開いておくとテーマ一覧の上で高さを取り、通知まで遠くなる。
 function ThemePreview(props: { label: string }) {
+  const [open, setOpen] = useState(false);
+
   return (
     <div class="hwc-theme-preview">
-      <p class="hwc-theme-preview-caption">選択中: {props.label}</p>
-      <div class="hwc-theme-preview-inner" aria-hidden="true">
-        <div class="hwc-theme-preview-row">
-          <span class="hwc-theme-preview-status">
-            <StatusIcon status="working" />
-            実行中
-          </span>
-          <span class="hwc-theme-preview-status">
-            <span class="hwc-status hwc-status--attention">
-              <StatusMark tone="attention" size={18} />
-            </span>
-            要対応
-          </span>
-          <span class="hwc-theme-preview-status">
-            <span class="hwc-status hwc-status--success">
-              <StatusMark tone="success" size={18} />
-            </span>
-            完了
-          </span>
-        </div>
-        <div class="hwc-theme-preview-row">
-          <span class="hwc-theme-preview-link">リンク</span>
-          <span class="hwc-theme-preview-focus">フォーカス</span>
-        </div>
-        <div class="hwc-theme-preview-row">
-          <span class="hwc-send hwc-theme-preview-send">
-            <SendIcon />
-          </span>
-          <span class="hwc-theme-preview-note">送信</span>
+      <button
+        type="button"
+        class="hwc-theme-preview-head"
+        aria-expanded={open}
+        aria-controls={PREVIEW_BODY_ID}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>選択中: {props.label}</span>
+        <span class="hwc-theme-preview-icon">
+          <ChevronRightIcon size={16} />
+        </span>
+      </button>
+
+      <div class="hwc-theme-preview-body" id={PREVIEW_BODY_ID} data-open={open}>
+        <div class="hwc-theme-preview-clip">
+          <div class="hwc-theme-preview-inner" aria-hidden="true">
+            {/* 吹き出しは会話と同じ記号で見せる。見本に写しを持つと、後にアクセント面や
+                on-accent を変えたとき、見本だけが古い色のまま残る。 */}
+            <div class="hwc-msg hwc-theme-preview-msg" data-role="user">
+              <div class="hwc-msg-bubble">このテーマで送信します</div>
+            </div>
+
+            <div class="hwc-theme-preview-row">
+              <span class="hwc-theme-preview-status">
+                <StatusIcon status="working" />
+                実行中
+              </span>
+              <span class="hwc-theme-preview-status">
+                <span class="hwc-status hwc-status--attention">
+                  <StatusMark tone="attention" size={18} />
+                </span>
+                要対応
+              </span>
+              <span class="hwc-theme-preview-status">
+                <span class="hwc-status hwc-status--success">
+                  <StatusMark tone="success" size={18} />
+                </span>
+                完了
+              </span>
+            </div>
+            <div class="hwc-theme-preview-row">
+              <span class="hwc-theme-preview-link">リンク</span>
+              <span class="hwc-theme-preview-focus">フォーカス</span>
+            </div>
+            <div class="hwc-theme-preview-row">
+              <span class="hwc-send hwc-theme-preview-send">
+                <SendIcon />
+              </span>
+              <span class="hwc-theme-preview-note">送信</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
