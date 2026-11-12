@@ -1,21 +1,12 @@
-import { Fragment, createPortal, type ComponentChildren, type Ref } from "preact";
+import { createPortal, type Ref } from "preact";
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type {
-  ChatCompaction,
-  ChatContext,
-  ChatFile,
-  ChatMessage,
-  ChatSnapshot,
-  ChatUsage,
-} from "../server/chat/contract";
+import type { ChatFile } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { gitStatusLabel, type GitSync } from "../shared/git";
 import { MAX_ATTACHMENTS } from "../shared/attachments";
-import { messageFileLabel } from "../shared/message-files";
-import { messageFileKindLabel } from "./chat";
-import { activityLabel, activitySnippet, formatTokPerSecond, usePaneActivity } from "./activity";
-import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
-import { attachmentStore, type AttachedImage } from "./attachment-store";
+import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
+import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
+import { attachmentStore } from "./attachment-store";
 import { OutputText } from "./OutputText";
 import { isLayoutShift, isNearBottom, isUserScrollDuringGrowth } from "./scroll";
 import {
@@ -32,14 +23,7 @@ import {
 } from "./attachments";
 import {
   agentInfo,
-  type AgentInfo,
-  compactionLabel,
-  contextDetails,
   contextMeter,
-  type ContextMeterView,
-  chatRows,
-  compactionInsertIndex,
-  echoInsertIndex,
   idleEchoExpired,
   isPendingConfirmed,
   latestUserAt,
@@ -50,11 +34,10 @@ import {
   paneBody,
   type PendingMessage,
   PENDING_TURN_GRACE_MS,
-  splitInlineImages,
   usePaneChat,
 } from "./chat";
 import { enterInsertsNewline } from "./input";
-import { type MessageReveal, useMessageReveal } from "./reveal";
+import { useMessageReveal } from "./reveal";
 import {
   chipOnInput,
   type CommandId,
@@ -75,7 +58,6 @@ import {
 import { ComposerAdd } from "./ComposerAdd";
 import { useCopy } from "./copy";
 import { readDraft, storage, writeDraft } from "./drafts";
-import { useHint } from "./hint";
 import { insertProjectPath } from "./projects";
 import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
@@ -84,23 +66,24 @@ import {
   AgentIcon,
   ArrowDownIcon,
   ChevronDownIcon,
-  ChevronRightIcon,
   CloseIcon,
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
-  EyeIcon,
   MoreIcon,
   PaneIcon,
   SendIcon,
   StatusMark,
   StopIcon,
-  TerminalIcon,
 } from "./icons";
 import { GitCount } from "./GitCount";
-import { Markdown } from "./Markdown";
 import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
+import { ChatLog } from "./pane/chat-log";
+import { OutputEmpty, OutputSkeleton } from "./pane/empty";
+import { AgentInfoHint, CommandBadge, ContextMeter } from "./pane/info";
+import { LiveStatus } from "./pane/live-status";
+import { useAttachments } from "./pane/use-attachments";
 import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
@@ -117,46 +100,7 @@ import { SelectionToolbar, type SelectionToolbarState } from "./SelectionToolbar
 import { readSelectionAnchor } from "./selection-toolbar";
 import { selectionCopyText } from "./selection-copy";
 import { Spinner } from "./Spinner";
-import { formatClock, formatElapsed } from "./time";
 
-// 出力がまだ無いときは、空の枠だけ置いても意味がないので案内を出す。
-function OutputEmpty() {
-  return (
-    <div class="hwc-output-empty">
-      <span class="hwc-output-empty-mark">
-        <TerminalIcon size={22} />
-      </span>
-      <p class="hwc-output-empty-title">まだ出力はありません</p>
-      <p class="hwc-output-empty-text">エージェントが動くと、その様子がここに流れます。</p>
-    </div>
-  );
-}
-
-function ChatEmpty() {
-  return (
-    <div class="hwc-output-empty">
-      <span class="hwc-output-empty-mark">
-        <TerminalIcon size={22} />
-      </span>
-      <p class="hwc-output-empty-title">まだ会話はありません</p>
-      <p class="hwc-output-empty-text">メッセージを送ると、やり取りがここに並びます。</p>
-    </div>
-  );
-}
-
-// 中身が届くまでの置き。行数を多めにして、下から伸びるように見せる。
-function OutputSkeleton() {
-  return (
-    <div class="hwc-skeleton" aria-hidden="true">
-      {[92, 78, 86, 64, 88, 72, 40].map((width, index) => (
-        <span class="hwc-skeleton-line" key={index} style={{ width: `${width}%` }} />
-      ))}
-    </div>
-  );
-}
-
-const USER_MESSAGE_CLAMP_LINES = 5;
-const USER_MESSAGE_CLAMP_FALLBACK = 128;
 const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
 
@@ -167,643 +111,6 @@ function touchFirst(): boolean {
   touchOnly ??=
     window.matchMedia("(hover: none)").matches || window.matchMedia("(pointer: coarse)").matches;
   return touchOnly;
-}
-
-function MessageAttachments(props: {
-  paneId: string;
-  names: string[];
-  onOpen: (url: string, name: string) => void;
-}) {
-  return (
-    <div class="hwc-msg-attachments">
-      {props.names.map((name) => {
-        const url = attachmentUrl(props.paneId, name);
-        return (
-          <button
-            type="button"
-            class="hwc-msg-attachment"
-            key={name}
-            aria-label="添付画像を拡大"
-            aria-haspopup="dialog"
-            onClick={() => props.onOpen(url, name)}
-          >
-            <img class="hwc-msg-attachment-image" src={url} alt="" loading="lazy" />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// エージェントが本文で示したファイル。画像はユーザーの添付と同じ見た目で拡大し、
-// HTML はプレビューのタブで開く（ADR 0051）。
-function MessageFiles(props: {
-  paneId: string;
-  files: ChatFile[];
-  onOpen: (url: string, name: string) => void;
-  onPreview: (file: ChatFile) => void;
-}) {
-  const images = props.files.filter((file) => file.kind === "image");
-  const pages = props.files.filter((file) => file.kind === "html");
-  return (
-    <>
-      {images.length === 0 ? null : (
-        <div class="hwc-msg-attachments">
-          {images.map((file) => {
-            const url = chatFileUrl(props.paneId, file);
-            const label = messageFileLabel(file.name);
-            return (
-              <button
-                type="button"
-                class="hwc-msg-attachment"
-                key={`${file.name}@${file.version}`}
-                aria-label={`${label} を拡大`}
-                aria-haspopup="dialog"
-                onClick={() => props.onOpen(url, label)}
-              >
-                <img class="hwc-msg-attachment-image" src={url} alt="" loading="lazy" />
-              </button>
-            );
-          })}
-        </div>
-      )}
-      {pages.length === 0 ? null : (
-        <div class="hwc-msg-pages">
-          {pages.map((file) => (
-            <button
-              type="button"
-              class="hwc-msg-page"
-              key={`${file.name}@${file.version}`}
-              title={file.name}
-              onClick={() => props.onPreview(file)}
-            >
-              <EyeIcon size={16} />
-              <span class="hwc-msg-page-name">{messageFileLabel(file.name)}</span>
-              <span class="hwc-msg-page-kind">{messageFileKindLabel(file.rootLabel)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
-
-// 根の外にあったファイル。hwc は根の外を配信しないので、チップを出せない理由だけを
-// 1 行で示す（ADR 0065 outside-preview-root, 0066）。移すかどうかは会話で決める。
-function OutsideFileNote(props: { name: string }) {
-  return (
-    <p class="hwc-msg-outside">
-      <span class="hwc-msg-outside-name">{props.name}</span> はチェックアウトと /tmp
-      の外にあるため、プレビューできません
-    </p>
-  );
-}
-
-// 画像記法の位置に描いた画像は、末尾の一覧から外す。裸パスだけの画像と HTML は
-// 本文に位置が無いので、今までどおりメッセージの後ろに並べる。
-function AgentMessage(props: {
-  paneId: string;
-  message: ChatMessage;
-  taskScope: string;
-  copyButton: ComponentChildren;
-  // 逐次表示の途中は本文がまだ途中。末尾の一覧と根の外の注記は、本文が出きってから出す。
-  complete?: boolean;
-  onOpenImage: (url: string, name: string) => void;
-  onOpenPreview: (file: ChatFile) => void;
-}) {
-  const { images, rest } = splitInlineImages(props.paneId, props.message.text, props.message.files);
-  const complete = props.complete !== false;
-  return (
-    <>
-      <Markdown
-        text={props.message.text}
-        taskScope={props.taskScope}
-        images={images}
-        onOpenImage={props.onOpenImage}
-      />
-      {!complete || rest.length === 0 ? null : (
-        <MessageFiles
-          paneId={props.paneId}
-          files={rest}
-          onOpen={props.onOpenImage}
-          onPreview={props.onOpenPreview}
-        />
-      )}
-      {!complete || props.message.outsideFile === undefined ? null : (
-        <OutsideFileNote name={props.message.outsideFile} />
-      )}
-      {complete ? (
-        <div class="hwc-msg-meta">
-          <span class="hwc-msg-time">{formatClock(props.message.at)}</span>
-          {props.copyButton}
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-function UserMessage(props: {
-  paneId: string;
-  message: ChatMessage;
-  copyButton: ComponentChildren;
-  onOpenImage: (url: string, name: string) => void;
-  pending?: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [contentHeight, setContentHeight] = useState(0);
-  const [lineHeight, setLineHeight] = useState(0);
-  const content = useRef<HTMLDivElement>(null);
-  const textId = `hwc-msg-text-${props.message.id}`;
-
-  useLayoutEffect(() => {
-    const element = content.current;
-    if (!element) return;
-    const measure = () => {
-      setContentHeight(element.scrollHeight);
-      setLineHeight(Number.parseFloat(getComputedStyle(element).lineHeight) || 0);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [props.message.text]);
-
-  const clampHeight =
-    lineHeight > 0 ? lineHeight * USER_MESSAGE_CLAMP_LINES : USER_MESSAGE_CLAMP_FALLBACK;
-  const overflowing = contentHeight > clampHeight + 1;
-
-  return (
-    <>
-      <div class="hwc-msg-bubble">
-        {props.message.text === "" ? null : (
-          <div
-            class="hwc-msg-body"
-            id={textId}
-            ref={content}
-            style={{ maxHeight: `${expanded ? contentHeight : clampHeight}px` }}
-          >
-            {props.message.text}
-            {overflowing && !expanded ? (
-              <span class="hwc-msg-more" aria-hidden="true">
-                …
-              </span>
-            ) : null}
-          </div>
-        )}
-        {overflowing ? (
-          <button
-            type="button"
-            class="hwc-msg-expand"
-            aria-expanded={expanded}
-            aria-controls={textId}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            <span>{expanded ? "閉じる" : "もっとみる"}</span>
-            <span class="hwc-msg-expand-icon">
-              <ChevronRightIcon size={16} />
-            </span>
-          </button>
-        ) : null}
-        {props.message.attachments === undefined ? null : (
-          <MessageAttachments
-            paneId={props.paneId}
-            names={props.message.attachments}
-            onOpen={props.onOpenImage}
-          />
-        )}
-      </div>
-      <div class="hwc-msg-meta">
-        {props.copyButton}
-        <span class="hwc-msg-time">{props.pending ? "送信中" : formatClock(props.message.at)}</span>
-      </div>
-    </>
-  );
-}
-
-// 圧縮の境目。吹き出しではなく、履歴が切り替わる区切りとして置く。
-function CompactionRule() {
-  return <span class="hwc-compaction-rule" aria-hidden="true" />;
-}
-
-// 要約は開かないと読めない。畳んだ 1 行だけでも、ここより前が圧縮されたことが分かる。
-// 所要時間は開始を観測できたときだけ添える。リロード後は tokens とホバー時刻だけになる。
-function Compaction(props: {
-  compaction: ChatCompaction;
-  expandable: boolean;
-  durationMs: number | null;
-}) {
-  const label = compactionLabel(props.compaction);
-  const shown = props.durationMs === null ? label : `${formatElapsed(props.durationMs)} · ${label}`;
-  const title = `${formatClock(props.compaction.at)} に圧縮`;
-  if (!props.expandable || props.compaction.summary === "") {
-    return (
-      <p class="hwc-compaction">
-        <CompactionRule />
-        <span class="hwc-compaction-label" title={title}>
-          {shown}
-        </span>
-        <CompactionRule />
-      </p>
-    );
-  }
-
-  return (
-    <details class="hwc-compaction">
-      <summary class="hwc-compaction-head">
-        <CompactionRule />
-        <span class="hwc-compaction-label" title={title}>
-          {shown}
-        </span>
-        <span class="hwc-compaction-icon">
-          <ChevronRightIcon size={16} />
-        </span>
-        <CompactionRule />
-      </summary>
-      <div class="hwc-compaction-body">{props.compaction.summary}</div>
-    </details>
-  );
-}
-
-// ローカルで送った /compact の控え。セッションには残らないので、リロードや
-// ペイン切り替えで消える。完了した compaction の直前、実行中は後から送ったメッセージの前に置く。
-function CommandEcho(props: { text: string; at: number }) {
-  return (
-    <li class="hwc-msg" data-role="command">
-      <div class="hwc-command-echo">{props.text}</div>
-      <div class="hwc-msg-meta">
-        <span class="hwc-msg-time">{formatClock(props.at)}</span>
-      </div>
-    </li>
-  );
-}
-
-// 失敗したターン。吹き出しにはせず、応答が返らなかった記録として置く。
-// 本文はプロバイダが返した生の文言なので、Markdown として解釈せずそのまま出す。
-function ErrorMessage(props: { message: ChatMessage; copyButton: ComponentChildren }) {
-  const count = props.message.count ?? 1;
-  return (
-    <>
-      <div class="hwc-error">
-        <span class="hwc-error-head">
-          <StatusMark tone="attention" size={12} />
-          応答に失敗しました
-          {count > 1 ? <span class="hwc-error-count">{count} 回</span> : null}
-        </span>
-        <p class="hwc-error-text">{props.message.text}</p>
-      </div>
-      <div class="hwc-msg-meta">
-        <span class="hwc-msg-time">{formatClock(props.message.at)}</span>
-        {props.copyButton}
-      </div>
-    </>
-  );
-}
-
-// 会話として読むための並び。ユーザーは右、エージェントは左。
-// どのエージェントかは入力欄の側に出しているので、ここでは繰り返さない。
-function ChatLog(props: {
-  paneId: string;
-  snapshot: ChatSnapshot;
-  replying: boolean;
-  compacting: boolean;
-  copiedId: string | null;
-  expandable: boolean;
-  compactionDurationMs: number | null;
-  compactionEcho: { text: string; at: number; completedAt: number | null } | null;
-  onCopy: (id: string, text: string) => void;
-  onOpenImage: (url: string, name: string) => void;
-  onOpenPreview: (file: ChatFile) => void;
-  pending: readonly PendingMessage[];
-  reveal: MessageReveal | null;
-}) {
-  const copyButton = (message: ChatMessage) => {
-    const copied = props.copiedId === message.id;
-    return (
-      <button
-        type="button"
-        class="hwc-msg-copy"
-        data-copied={copied}
-        aria-label={copied ? "コピーしました" : "このメッセージをコピー"}
-        onClick={() => props.onCopy(message.id, message.text)}
-      >
-        <CopyGlyph copied={copied} size={14} />
-      </button>
-    );
-  };
-  // 画像だけのメッセージは本文が無い。空文字をコピーさせない。
-  const userCopyButton = (message: ChatMessage) =>
-    message.text === "" ? null : copyButton(message);
-
-  // ツール実行だけのターンは会話に残らない。返答待ちの表示だけが動いていることを示す。
-  const rows = chatRows(props.snapshot.messages, props.pending);
-  const compaction = props.snapshot.compaction;
-  // サーバーが返す位置は messages 基準。再取得の境目で欠けても落ちないよう clamp する。
-  const compactionAt =
-    compaction === null
-      ? null
-      : Math.min(Math.max(0, compaction.index), props.snapshot.messages.length);
-  const compactionRow =
-    compaction === null ? null : (
-      <li class="hwc-compaction-row">
-        <Compaction
-          compaction={compaction}
-          expandable={props.expandable}
-          durationMs={props.compactionDurationMs}
-        />
-      </li>
-    );
-  const echo = props.compactionEcho;
-  const echoPending = echo !== null && echo.completedAt === null;
-  const echoAtLog =
-    echo !== null && echo.completedAt !== null && compaction?.at === echo.completedAt;
-  const echoVisible = echoPending || echoAtLog;
-  const echoRow =
-    echoVisible && echo !== null ? <CommandEcho text={echo.text} at={echo.at} /> : null;
-  // 実行中はメッセージの末尾（後から送った echo より前）、完了後は compaction の
-  // 区切りの直前に置く。
-  const echoIndex = echoPending && echo !== null ? echoInsertIndex(rows, echo.at) : null;
-  // 圧縮の区切りはメッセージ境界に置く。同じ境界のコマンドの控えは、その手前に残す。
-  const compactionIndex = compactionInsertIndex(rows, compactionAt);
-  const compactionBlock =
-    compactionRow === null ? null : (
-      <>
-        {echoAtLog ? echoRow : null}
-        {compactionRow}
-      </>
-    );
-  if (
-    rows.length === 0 &&
-    !props.replying &&
-    !props.compacting &&
-    compaction === null &&
-    !echoVisible
-  )
-    return <ChatEmpty />;
-  return (
-    <ol class="hwc-chat">
-      {rows.map((row, index) => {
-        const reveal = props.reveal;
-        const revealing = reveal !== null && row.message.id === reveal.id;
-        const message = revealing ? { ...row.message, text: reveal.text } : row.message;
-        return (
-          <Fragment key={row.message.id}>
-            {echoIndex === index ? echoRow : null}
-            {compactionIndex === index ? compactionBlock : null}
-            {row.echo === "command" ? (
-              <CommandEcho text={row.message.text} at={row.message.at} />
-            ) : (
-              <li
-                class="hwc-msg"
-                data-role={row.message.role}
-                data-pending={row.echo === "pending" ? "true" : undefined}
-              >
-                {row.message.role === "agent" ? (
-                  <AgentMessage
-                    paneId={props.paneId}
-                    message={message}
-                    taskScope={`${index + 1}番目のメッセージ`}
-                    complete={!revealing}
-                    // 途中までしか見えていない本文をコピーさせない。出きってから記号を出す。
-                    copyButton={revealing ? null : copyButton(row.message)}
-                    onOpenImage={props.onOpenImage}
-                    onOpenPreview={props.onOpenPreview}
-                  />
-                ) : row.message.role === "error" ? (
-                  <ErrorMessage message={row.message} copyButton={copyButton(row.message)} />
-                ) : (
-                  <UserMessage
-                    paneId={props.paneId}
-                    message={row.message}
-                    copyButton={userCopyButton(row.message)}
-                    onOpenImage={props.onOpenImage}
-                    pending={row.echo === "pending"}
-                  />
-                )}
-              </li>
-            )}
-          </Fragment>
-        );
-      })}
-      {echoIndex === rows.length ? echoRow : null}
-      {compactionIndex === rows.length ? compactionBlock : null}
-    </ol>
-  );
-}
-
-// ターンが終わったとき、会話へ高さを返すのは即時、中身だけを短く薄く消す。高さを
-// アニメーションするとスクロール領域のリフローが毎フレーム走るため、高さは待たない。
-// この値で DOM を外す。app.css の closing の transition と同じ長さに揃える。
-const LIVE_EXIT_MS = 120;
-
-type LiveView = {
-  phase: string | null;
-  thought: string;
-  elapsedMs: number | null;
-  compacting: boolean;
-  stopping: boolean;
-  // 低いセルでは会話の高さを優先する。thinking の枠を出さず、段階と経過だけにする。
-  // 出すときは thinking が無い間も 2 行分を空けたままにする。段階の切り替わりで
-  // 高さが変わると、上に載る会話の見える範囲が動くため。
-  showThought: boolean;
-  // 生成中だけ入る。低いセルでは親が null にする。
-  tokPerSecond: number | null;
-};
-
-// 実行中の段階と thinking の末尾。会話の外（入力欄の直上）に固定して出し、
-// 読み返している間も何が起きているかを見せる。入力欄の上なので、高さが変わっても
-// 入力欄の位置は動かない。
-function LiveStatus(props: LiveView & { open: boolean; onCancelCompaction: () => void }) {
-  const latest = useRef<LiveView | null>(null);
-  const wasOpen = useRef(false);
-  const [fading, setFading] = useState(false);
-
-  const view: LiveView = {
-    phase: props.phase,
-    thought: props.thought,
-    elapsedMs: props.elapsedMs,
-    compacting: props.compacting,
-    stopping: props.stopping,
-    showThought: props.showThought,
-    tokPerSecond: props.tokPerSecond,
-  };
-  // 消える間は、閉じる直前の内容をそのまま薄くする。閉じた瞬間に親の値が
-  // null へ戻るため、そのまま描くと空の帯が一瞬光って見える。
-  if (props.open) latest.current = view;
-  const shown = props.open ? view : latest.current;
-  // 閉じた最初の描画も closing として置く。effect を待つと 1 フレームだけ消える。
-  const closingNow = wasOpen.current && !props.open;
-  wasOpen.current = props.open;
-
-  useEffect(() => {
-    if (props.open) {
-      setFading(false);
-      return;
-    }
-    if (latest.current === null) return;
-    setFading(true);
-    const timer = window.setTimeout(() => setFading(false), LIVE_EXIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [props.open]);
-
-  if (shown === null || (!props.open && !closingNow && !fading)) return null;
-
-  const tok = shown.tokPerSecond === null ? null : formatTokPerSecond(shown.tokPerSecond);
-  return (
-    <div class="hwc-live-slot" data-state={props.open ? "open" : "closing"}>
-      {/* pi 以外や sidecar の無いペインでは、中身が経過時間だけになる。状態名を
-          支援技術へも渡すため、名前は帯に持たせる。消える間は操作も読み上げも止める。 */}
-      <div
-        class="hwc-live"
-        role="group"
-        aria-label={shown.compacting ? "会話を圧縮しています" : "返答を待っています"}
-        aria-hidden={!props.open}
-      >
-        <div class="hwc-live-head">
-          <span class="hwc-typing">
-            <span />
-            <span />
-            <span />
-          </span>
-          {shown.phase === null ? null : <span class="hwc-live-phase">{shown.phase}</span>}
-          {shown.compacting ? (
-            <span class="hwc-compaction-pending">会話を圧縮しています</span>
-          ) : null}
-          <span class="hwc-live-tail">
-            {shown.compacting ? (
-              <button
-                type="button"
-                class="hwc-compaction-cancel"
-                disabled={shown.stopping}
-                tabIndex={props.open ? undefined : -1}
-                onClick={props.onCancelCompaction}
-              >
-                {shown.stopping ? "中断中" : "中断"}
-              </button>
-            ) : null}
-            {tok === null ? null : <span class="hwc-live-tok">{tok} tok/s</span>}
-            {shown.elapsedMs === null ? null : (
-              <span class="hwc-live-elapsed">{formatElapsed(shown.elapsedMs)}</span>
-            )}
-          </span>
-        </div>
-        {shown.showThought ? (
-          <div class="hwc-live-thought">
-            {shown.thought === "" ? null : <p class="hwc-live-thought-text">{shown.thought}</p>}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-// 送る文字列は短いので、記号だけを出さず、何が起きるかを並べる。
-function CommandBadge(props: { id: CommandId }) {
-  return (
-    <>
-      <span class="hwc-command-text">{commandText(props.id)}</span>
-      <span class="hwc-command-label">{commandLabel(props.id)}</span>
-    </>
-  );
-}
-
-function ContextMeter(props: { view: ContextMeterView; context: ChatContext; usage?: ChatUsage }) {
-  const { view, context, usage } = props;
-  const hint = useHint();
-  return (
-    <span class="hwc-hint-wrap" ref={hint.root} {...hint.wrapperProps}>
-      <button
-        type="button"
-        class="hwc-context"
-        data-tone={view.tone}
-        aria-label={`コンテキスト使用量 ${view.wide}`}
-        aria-describedby={hint.open === null ? undefined : hint.panelId}
-        aria-expanded={hint.open !== null}
-        {...hint.triggerProps}
-      >
-        <span class="hwc-context-text" aria-hidden="true">
-          <span class="hwc-context-wide">{view.wide}</span>
-          <span class="hwc-context-narrow">{view.narrow}</span>
-        </span>
-        {view.percent === null ? null : (
-          <span class="hwc-context-bar" aria-hidden="true">
-            <span class="hwc-context-bar-fill" style={{ width: `${view.fill}%` }} />
-          </span>
-        )}
-      </button>
-      <span
-        id={hint.panelId}
-        ref={hint.panel}
-        role="tooltip"
-        class="hwc-hint-panel"
-        data-open={hint.open !== null}
-        tabIndex={hint.panelTabIndex}
-      >
-        <span class="hwc-hint-title">直近のコンテキスト使用量</span>
-        {contextDetails(context, usage).map(([label, value]) => (
-          <span class="hwc-hint-row" key={label}>
-            <span>{label}</span>
-            <span>{value}</span>
-          </span>
-        ))}
-        <span class="hwc-hint-note">
-          設定枠はモデル仕様上の最大値とは限りません。自動圧縮は枠に達する前に行われることがあります。
-        </span>
-      </span>
-    </span>
-  );
-}
-
-// モデル名は狭い画面で省略される。全体を読む口と、名前を持ち出す口を同じパネルに置く。
-function AgentInfoHint(props: { info: AgentInfo }) {
-  const model = props.info.model;
-  const effort = props.info.effort;
-  const hint = useHint();
-  const { copiedId, copy } = useCopy();
-  const copied = copiedId === "model";
-  return (
-    <span class="hwc-hint-wrap hwc-agent-hint" ref={hint.root} {...hint.wrapperProps}>
-      <button
-        type="button"
-        class="hwc-agent-info"
-        aria-expanded={hint.open !== null}
-        aria-controls={hint.panelId}
-        {...hint.triggerProps}
-      >
-        {model === null ? null : <span class="hwc-input-model">{model}</span>}
-        {effort === null ? null : <span class="hwc-input-effort">{effort}</span>}
-      </button>
-      <span
-        id={hint.panelId}
-        ref={hint.panel}
-        role="group"
-        aria-label="モデルとエフォート"
-        class="hwc-hint-panel"
-        data-open={hint.open !== null}
-        tabIndex={hint.panelTabIndex}
-      >
-        {model === null ? null : (
-          <span class="hwc-model-row">
-            <span class="hwc-model-name">{model}</span>
-            <button
-              type="button"
-              class="hwc-model-copy"
-              data-copied={copied}
-              aria-label={copied ? "コピーしました" : "モデル名をコピー"}
-              onClick={() => copy("model", model)}
-            >
-              <CopyGlyph copied={copied} size={14} />
-            </button>
-          </span>
-        )}
-        {effort === null ? null : (
-          <span class="hwc-hint-row">
-            <span>エフォート</span>
-            <span>{effort}</span>
-          </span>
-        )}
-      </span>
-    </span>
-  );
 }
 
 type PaneDetailProps = {
@@ -848,19 +155,6 @@ type PaneDetailProps = {
   // HTML のプレビューは、タブの 1 つとして会話の外に出す。
   onOpenPreview: (file: ChatFile) => void;
 };
-
-// ペインごとの添付を購読する。ペインが変わったら、その時点の一覧へ差し替える。
-function useAttachments(paneId: string): readonly AttachedImage[] {
-  const [items, setItems] = useState(() => attachmentStore.items(paneId));
-  useEffect(() => {
-    const update = () => setItems(attachmentStore.items(paneId));
-    // 購読の前に完了した分を取りこぼさないよう、購読してから読み直す。
-    const unsubscribe = attachmentStore.subscribe(paneId, update);
-    update();
-    return unsubscribe;
-  }, [paneId]);
-  return items;
-}
 
 export function PaneDetail(props: PaneDetailProps) {
   const {
