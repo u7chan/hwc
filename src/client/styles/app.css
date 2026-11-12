@@ -3049,16 +3049,24 @@ a.hwc-pane-head-repo:focus-visible {
   border-top: 1px solid var(--color-line);
 }
 
-/* 入力欄の代わりに置く起動待ち。行の高さと下端の余白を .hwc-input に合わせ、
-   起動が終わったときに入力欄が同じ位置へ入るようにする。 */
+/* 入力欄の代わりに置く起動待ち。起動が終わったときに入力欄が同じ位置へ入るよう、
+   入力欄と同じ高さを取る。compact は 1 行の入力欄に合わせる。 */
 .hwc-starting {
   flex: none;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
+  min-height: calc(
+    max(16px, var(--text-body)) * var(--line-body) + var(--space-2) * 2 + var(--space-3) +
+      var(--tap) + var(--space-1) + var(--space-3) * 2 + 1px
+  );
   margin: 0;
   padding: var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
   border-top: 1px solid var(--color-line);
+}
+
+.hwc-starting[data-compact="true"] {
+  min-height: calc(var(--tap) + var(--space-2) * 2 + 1px);
 }
 
 /* 回転する記号は文字ではない。折り返しても行の中央に置く。 */
@@ -4377,6 +4385,11 @@ p.hwc-compaction,
   .hwc-input-frame {
     transition: none;
   }
+
+  .hwc-input-field,
+  .hwc-input-prompt {
+    transition: none;
+  }
 }
 
 /* コマンドの候補とチップ。入力欄の中で行を占める。浮かせるとキーボードに隠れる。 */
@@ -4527,6 +4540,8 @@ p.hwc-compaction,
   font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-ui);
   /* 高さは fit() が入力量に合わせる。手で伸ばすと次の入力で戻るので、取っ手を出さない。 */
   resize: none;
+  /* シェルからエージェントへの切り替わりで、$ の跡が飛ばないようにする。 */
+  transition: padding-left 120ms ease;
 }
 
 .hwc-input-field:focus-visible {
@@ -4547,10 +4562,25 @@ p.hwc-compaction,
 }
 
 .hwc-input-prompt {
+  flex: none;
+  /* 幅を明示しないと auto から 0 へ遷移できない。$ は 1 文字ぶん。 */
+  width: calc(1ch + var(--space-2));
+  overflow: hidden;
+  white-space: nowrap;
   padding: var(--space-2) 0 var(--space-2) var(--space-2);
   color: var(--color-secondary);
   font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-mono);
   user-select: none;
+  transition:
+    opacity 120ms ease,
+    width 120ms ease,
+    padding-left 120ms ease;
+}
+
+.hwc-input-prompt[data-hidden="true"] {
+  width: 0;
+  padding-left: 0;
+  opacity: 0;
 }
 
 .hwc-input[data-shell="true"] .hwc-input-field {
@@ -6080,6 +6110,23 @@ html:not([data-input-modality="pointer"])
   .hwc-input {
     padding: var(--space-4) var(--hwc-gutter);
     border-top-color: var(--color-line);
+  }
+
+  /* 起動待ちも入力欄と同じ高さにする。広い画面では上下の余白が 16px になる。 */
+  .hwc-starting {
+    padding-top: var(--space-4);
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+    min-height: calc(
+      max(16px, var(--text-body)) * var(--line-body) + var(--space-2) * 2 + var(--space-3) +
+        var(--tap) + var(--space-1) + var(--space-4) * 2 + 1px
+    );
+  }
+
+  /* compact の入力欄は 1 行で、上下の余白も 8px のまま。 */
+  .hwc-starting[data-compact="true"] {
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+    min-height: calc(var(--tap) + var(--space-2) * 2 + 1px);
   }
 
   /* 本文と入力本文のあいだに積まれる行も同じ列に置く。面（背景と上罫線）は全幅。 */

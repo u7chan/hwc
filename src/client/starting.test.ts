@@ -23,15 +23,30 @@ test("a created pane stays locked right after the response, before the first fre
   expect(paneStarting(starting, pane({ agent: null }), AT)).toBe(true);
 });
 
-test("the lock opens after the settle window when the agent owns the terminal", () => {
-  expect(paneStarting(starting, pane(), AT + STARTING_SETTLE_MS)).toBe(false);
+test("the lock opens after the settle window once the conversation is readable", () => {
+  expect(paneStarting(starting, pane({ chat: true }), AT + STARTING_SETTLE_MS)).toBe(false);
+});
+
+test("a chat-capable agent stays locked until its conversation is readable", () => {
+  // 起動直後の pane.chat は false。エージェントが検出されても、セッションができるまでは
+  // TUI の起動途中とシェル形式の入力が残る。
+  for (const agent of ["pi", "codex", "opencode"]) {
+    expect(paneStarting(starting, pane({ agent }), AT + STARTING_SETTLE_MS)).toBe(true);
+    expect(paneStarting(starting, pane({ agent }), AT + STARTING_LIMIT_MS - 1)).toBe(true);
+    expect(paneStarting(starting, pane({ agent, chat: true }), AT + STARTING_SETTLE_MS)).toBe(
+      false,
+    );
+  }
+});
+
+test("an agent without chat opens as soon as it owns the terminal", () => {
+  expect(paneStarting(starting, pane({ agent: "claude" }), AT + STARTING_SETTLE_MS)).toBe(false);
 });
 
 test("a pane without a detected agent stays locked until the agent arrives", () => {
   const shell = pane({ agent: null });
   expect(paneStarting(starting, shell, AT + STARTING_SETTLE_MS)).toBe(true);
   expect(paneStarting(starting, shell, AT + STARTING_LIMIT_MS - 1)).toBe(true);
-  expect(paneStarting(starting, pane(), AT + STARTING_LIMIT_MS - 1)).toBe(false);
 });
 
 test("the lock opens at the agent start deadline so the pane is never unreachable", () => {
