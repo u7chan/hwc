@@ -17,7 +17,7 @@ import { activityLabel, activitySnippet, formatTokPerSecond, usePaneActivity } f
 import { OUTPUT_LINES, attachmentUrl, chatFileUrl, uploadAttachment } from "./api";
 import { attachmentStore, type AttachedImage } from "./attachment-store";
 import { OutputText } from "./OutputText";
-import { isLayoutShift, isNearBottom } from "./scroll";
+import { isLayoutShift, isNearBottom, isUserScrollDuringGrowth } from "./scroll";
 import {
   ATTACHMENT_LIMIT_NOTICE,
   type AttachmentAction,
@@ -54,6 +54,7 @@ import {
   usePaneChat,
 } from "./chat";
 import { enterInsertsNewline } from "./input";
+import { type MessageReveal, useMessageReveal } from "./reveal";
 import {
   chipOnInput,
   type CommandId,
@@ -266,10 +267,13 @@ function AgentMessage(props: {
   message: ChatMessage;
   taskScope: string;
   copyButton: ComponentChildren;
+  // 逐次表示の途中は本文がまだ途中。末尾の一覧と根の外の注記は、本文が出きってから出す。
+  complete?: boolean;
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
 }) {
   const { images, rest } = splitInlineImages(props.paneId, props.message.text, props.message.files);
+  const complete = props.complete !== false;
   return (
     <>
       <Markdown
@@ -278,7 +282,7 @@ function AgentMessage(props: {
         images={images}
         onOpenImage={props.onOpenImage}
       />
-      {rest.length === 0 ? null : (
+      {!complete || rest.length === 0 ? null : (
         <MessageFiles
           paneId={props.paneId}
           files={rest}
@@ -286,13 +290,15 @@ function AgentMessage(props: {
           onPreview={props.onOpenPreview}
         />
       )}
-      {props.message.outsideFile === undefined ? null : (
+      {!complete || props.message.outsideFile === undefined ? null : (
         <OutsideFileNote name={props.message.outsideFile} />
       )}
-      <div class="hwc-msg-meta">
-        <span class="hwc-msg-time">{formatClock(props.message.at)}</span>
-        {props.copyButton}
-      </div>
+      {complete ? (
+        <div class="hwc-msg-meta">
+          <span class="hwc-msg-time">{formatClock(props.message.at)}</span>
+          {props.copyButton}
+        </div>
+      ) : null}
     </>
   );
 }
@@ -469,6 +475,7 @@ function ChatLog(props: {
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
   pending: readonly PendingMessage[];
+  reveal: MessageReveal | null;
 }) {
   const copyButton = (message: ChatMessage) => {
     const copied = props.copiedId === message.id;
@@ -535,42 +542,49 @@ function ChatLog(props: {
     return <ChatEmpty />;
   return (
     <ol class="hwc-chat">
-      {rows.map((row, index) => (
-        <Fragment key={row.message.id}>
-          {echoIndex === index ? echoRow : null}
-          {compactionIndex === index ? compactionBlock : null}
-          {row.echo === "command" ? (
-            <CommandEcho text={row.message.text} at={row.message.at} />
-          ) : (
-            <li
-              class="hwc-msg"
-              data-role={row.message.role}
-              data-pending={row.echo === "pending" ? "true" : undefined}
-            >
-              {row.message.role === "agent" ? (
-                <AgentMessage
-                  paneId={props.paneId}
-                  message={row.message}
-                  taskScope={`${index + 1}番目のメッセージ`}
-                  copyButton={copyButton(row.message)}
-                  onOpenImage={props.onOpenImage}
-                  onOpenPreview={props.onOpenPreview}
-                />
-              ) : row.message.role === "error" ? (
-                <ErrorMessage message={row.message} copyButton={copyButton(row.message)} />
-              ) : (
-                <UserMessage
-                  paneId={props.paneId}
-                  message={row.message}
-                  copyButton={userCopyButton(row.message)}
-                  onOpenImage={props.onOpenImage}
-                  pending={row.echo === "pending"}
-                />
-              )}
-            </li>
-          )}
-        </Fragment>
-      ))}
+      {rows.map((row, index) => {
+        const reveal = props.reveal;
+        const revealing = reveal !== null && row.message.id === reveal.id;
+        const message = revealing ? { ...row.message, text: reveal.text } : row.message;
+        return (
+          <Fragment key={row.message.id}>
+            {echoIndex === index ? echoRow : null}
+            {compactionIndex === index ? compactionBlock : null}
+            {row.echo === "command" ? (
+              <CommandEcho text={row.message.text} at={row.message.at} />
+            ) : (
+              <li
+                class="hwc-msg"
+                data-role={row.message.role}
+                data-pending={row.echo === "pending" ? "true" : undefined}
+              >
+                {row.message.role === "agent" ? (
+                  <AgentMessage
+                    paneId={props.paneId}
+                    message={message}
+                    taskScope={`${index + 1}番目のメッセージ`}
+                    complete={!revealing}
+                    // 途中までしか見えていない本文をコピーさせない。出きってから記号を出す。
+                    copyButton={revealing ? null : copyButton(row.message)}
+                    onOpenImage={props.onOpenImage}
+                    onOpenPreview={props.onOpenPreview}
+                  />
+                ) : row.message.role === "error" ? (
+                  <ErrorMessage message={row.message} copyButton={copyButton(row.message)} />
+                ) : (
+                  <UserMessage
+                    paneId={props.paneId}
+                    message={row.message}
+                    copyButton={userCopyButton(row.message)}
+                    onOpenImage={props.onOpenImage}
+                    pending={row.echo === "pending"}
+                  />
+                )}
+              </li>
+            )}
+          </Fragment>
+        );
+      })}
       {echoIndex === rows.length ? echoRow : null}
       {compactionIndex === rows.length ? compactionBlock : null}
     </ol>
@@ -976,6 +990,11 @@ export function PaneDetail(props: PaneDetailProps) {
   const view = confirmationView({ pane, interaction, dismissedId: dismissedConfirmation, failed });
   const readOnly = view !== "normal";
   const body = readOnly ? { kind: "output" as const } : normalBody;
+  // 新しく届いた返答を一度に描くと、長いときに先頭がスクロールの外へ流れる。
+  // 演出は会話を出している間だけ。初期表示と入れ替えでは再生しない。
+  // /new のマスク中は空の表示用スナップショットなので、比較させない。渡すと
+  // マスクが解けて元の会話へ戻るときに末尾の返答を追記と誤認する。
+  const reveal = useMessageReveal(resetting || body.kind !== "chat" ? null : body.snapshot);
   // 起動待ちの間は、端末に届いている途中の画面（シェルの起動コマンド、TUI の描画中、
   // 空の会話）を出さない。何が届いていてもスケルトンに置き換える。
   const launching = starting && !readOnly;
@@ -1281,6 +1300,8 @@ export function PaneDetail(props: PaneDetailProps) {
     replying,
     atBottom,
     pendingMessages.length,
+    // 逐次表示は本文が伸びるたびに底へ寄せる。伸びなければ何もしない。
+    reveal?.text.length,
     notice,
     compactionRun,
     compactionEcho,
@@ -1804,7 +1825,14 @@ export function PaneDetail(props: PaneDetailProps) {
             lastClientHeight.current = now.clientHeight;
             // 高さが変わっただけなら、底を詰めた副作用。読み返しの意思とはみなさない。
             // 縮んだ結果ブラウザが底へ寄せた場合に備え、追従の判断は今の位置で取り直す。
+            // ただし縦に伸びたときは、伸びる前の底から離れた位置なら利用者が動かしたと
+            // みなす。逐次表示は 150ms ごとに高さが変わるので、これが無いと上へ
+            // スクロールしても高さの変化と誤認してすぐ底へ戻される。
             if (isLayoutShift(now, last)) {
+              if (isUserScrollDuringGrowth(now, last)) {
+                setPinned(isNearBottom(now));
+                return;
+              }
               if (pinned.current) element.scrollTop = element.scrollHeight;
               if (isNearBottom(now)) setPinned(true);
               return;
@@ -1845,6 +1873,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 onOpenImage={onOpenImage}
                 onOpenPreview={onOpenPreview}
                 pending={pendingMessages}
+                reveal={reveal}
               />
             </>
           ) : (
@@ -1871,6 +1900,8 @@ export function PaneDetail(props: PaneDetailProps) {
             </>
           )}
         </div>
+        {/* 逐次表示の先端を背景へ溶かす。読み返しで上へ離れたら出さない。 */}
+        {reveal === null || !atBottom ? null : <div class="hwc-output-fade" aria-hidden="true" />}
         {confirmation !== null ? null : (
           <button
             type="button"

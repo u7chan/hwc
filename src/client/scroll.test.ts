@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { isLayoutShift, isNearBottom } from "./scroll";
+import { isLayoutShift, isNearBottom, isUserScrollDuringGrowth } from "./scroll";
 
 const box = (scrollTop: number, clientHeight = 600, scrollHeight = 2000) => ({
   scrollTop,
@@ -26,4 +26,17 @@ test("a change of the content or the box height is a layout shift", () => {
 
 test("the same content and box height means the reader moved", () => {
   expect(isLayoutShift(box(0, 600, 2000), box(1400, 600, 2000))).toBe(false);
+});
+
+test("a scroll above the previous bottom while the content grows is the reader's", () => {
+  // 8px 以内は底とみなす。伸びる前の高さで測るので、位置は今の scrollTop のまま。
+  expect(isUserScrollDuringGrowth(box(1400, 600, 2100), box(1400, 600, 2000))).toBe(false);
+  expect(isUserScrollDuringGrowth(box(1392, 600, 2100), box(1392, 600, 2000))).toBe(false);
+  expect(isUserScrollDuringGrowth(box(1391, 600, 2100), box(1391, 600, 2000))).toBe(true);
+});
+
+test("growth alone, a resized box, or a shrink is not a reader's scroll", () => {
+  expect(isUserScrollDuringGrowth(box(1391, 600, 2000), box(1391, 600, 2000))).toBe(false);
+  expect(isUserScrollDuringGrowth(box(1391, 551, 2100), box(1391, 600, 2000))).toBe(false);
+  expect(isUserScrollDuringGrowth(box(1391, 600, 1900), box(1391, 600, 2000))).toBe(false);
 });
