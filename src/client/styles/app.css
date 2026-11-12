@@ -1,7 +1,9 @@
 @import "./parts/shell.css";
 @import "./parts/list.css";
 @import "./parts/dialogs.css";
-@import "./parts/active-detail.css";
+@import "./parts/active.css";
+@import "./parts/detail.css";
+@import "./parts/detail-body.css";
 @import "./parts/chat.css";
 @import "./parts/input.css";
 @import "./parts/settings.css";

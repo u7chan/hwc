@@ -1,0 +1,614 @@
+/* 詳細 */
+
+.hwc-detail-inner {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: hwc-view-in 200ms ease-out;
+}
+
+/* タブの下の中身。タブを外す間だけ、どのペインが消えるかを本文側でも見せる。 */
+.hwc-detail-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 180ms ease-out;
+}
+
+.hwc-detail-body[data-leaving="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 分割は方向つきの木。区切り線はセルの隙間から見せる（ADR 0061）。 */
+.hwc-split {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  gap: 1px;
+  background: var(--color-line);
+}
+
+.hwc-split[data-dir="row"] {
+  flex-direction: row;
+}
+
+.hwc-split[data-dir="col"] {
+  flex-direction: column;
+}
+
+.hwc-split-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-content);
+  /* 高さは親の flex で確定するので containment は安全。中の 55cqh とバーの有無の
+     判定をセル基準にするために置く。 */
+  container: hwc-cell / size;
+}
+
+/* セルの枠はスロット位置の色。current は濃く、他のスロットは控えめにして、タブと
+   一覧の現在行と同じ色で結び付ける（ADR 0058 / 0061）。 */
+.hwc-split-cell {
+  position: relative;
+  transition: opacity 180ms ease-out;
+}
+
+/* 外すペインのセルは、タブが縮む間に淡く消す。消えたあとは残りのセルが広がる。 */
+.hwc-split-cell[data-leaving="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hwc-split-cell[data-slot="1"] {
+  --slot-color: var(--color-slot-1);
+}
+
+.hwc-split-cell[data-slot="2"] {
+  --slot-color: var(--color-slot-2);
+}
+
+.hwc-split-cell[data-slot="3"] {
+  --slot-color: var(--color-slot-3);
+}
+
+.hwc-split-cell[data-slot="4"] {
+  --slot-color: var(--color-slot-4);
+}
+
+/* outline は子の背景（出力欄・入力欄）の下に描かれ、左右と下辺が隠れる。セルの手前に
+   重ねた枠にして全周を見せる。 */
+.hwc-split-cell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 1px solid color-mix(in oklab, var(--slot-color, var(--color-line)) 35%, transparent);
+  pointer-events: none;
+}
+
+.hwc-split-cell[data-current="true"]::after {
+  border-width: 2px;
+  border-color: var(--slot-color, var(--color-accent));
+}
+
+/* 枠は複数セルのどれが current かを示す。実ペインが 1 枚なら対象がないので出さない。 */
+.hwc-detail-grid[data-single="true"] .hwc-split-cell::after {
+  border: 0;
+}
+
+/* ドラッグ中だけ出るプレビュー。落としたあとの形の半分を塗り、向きは文字でも示す。 */
+.hwc-drop {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background: color-mix(in oklab, var(--slot-color) 14%, transparent);
+  border: 1px dashed var(--slot-color);
+  animation: hwc-drop-in 120ms ease-out;
+}
+
+.hwc-drop[data-zone="top"] {
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 50%;
+}
+
+.hwc-drop[data-zone="bottom"] {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 50%;
+}
+
+.hwc-drop[data-zone="left"] {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 50%;
+}
+
+.hwc-drop[data-zone="right"] {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50%;
+}
+
+/* 中央はセル全体を囲む。入れ替えは分割ではないので、半面を塗らない。 */
+.hwc-drop[data-zone="center"] {
+  inset: var(--space-1);
+  align-content: start;
+  padding-top: var(--space-4);
+  background: color-mix(in oklab, var(--slot-color) 8%, transparent);
+  border: 1px solid var(--slot-color);
+}
+
+.hwc-drop > span {
+  padding: 2px var(--space-3);
+  border: 1px solid color-mix(in oklab, var(--slot-color) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-content) 84%, transparent);
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@keyframes hwc-drop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* 追加帯は廃止した（ADR 0061）。グリッドは detail の残りをそのまま使う。 */
+.hwc-detail-grid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* プレビューはタブの 1 つ。分割は止め、detail の残りをそのまま iframe に渡す。 */
+.hwc-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hwc-preview-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--row-head);
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.hwc-preview-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 配信できないスクリプトを読み込む HTML の案内。iframe の上に 1 行だけ置く。 */
+.hwc-preview-warning {
+  flex: none;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+}
+
+.hwc-preview-frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: var(--color-content);
+}
+
+/* 半分の幅になるので、見出しと入力欄の左右は詰める。 */
+.hwc-split-cell .hwc-pane-head,
+.hwc-split-cell .hwc-input {
+  padding-right: var(--space-4);
+  padding-left: var(--space-4);
+}
+
+/* ペインの見出し。1 枚表示はブランチと ID、分割セルは名前と ID を上端に置く。 */
+.hwc-pane-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-8);
+  padding: 0 var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-pane-head-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.hwc-pane-head-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 1 枚のときだけ、ペインの代わりにスペースの文脈を置く。長い名前は切る。
+   狭い画面ではこのブランチがスペースメニューの入口になる。 */
+.hwc-pane-head-branch {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-pane-head-branch-menu {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.hwc-pane-head-branch-menu:hover,
+.hwc-pane-head-branch-menu[data-open="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.hwc-pane-head-branch-menu:focus-visible {
+  outline-offset: -3px;
+}
+
+.hwc-pane-head-branch-menu .hwc-pane-head-branch {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.hwc-chevron-down {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--color-secondary);
+}
+
+/* PC の 1 枚表示では、ペイン名の代わりにリポジトリ名を出す。GitHub のリモートが
+   あるときだけリンクにし、無いときは文字のままにする。 */
+.hwc-pane-head-repo {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.hwc-pane-head-repo {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 var(--space-1);
+  margin: 0 calc(-1 * var(--space-1));
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+a.hwc-pane-head-repo:hover {
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
+a.hwc-pane-head-repo:active {
+  background: var(--color-line);
+}
+
+a.hwc-pane-head-repo:focus-visible {
+  outline-offset: -3px;
+}
+
+/* 上流との差。動きがある側だけをラベルで出す。メニューの入口ではないので、
+   ボタンの見た目やタップ領域を持たない。 */
+.hwc-git-count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hwc-active-band-line .hwc-git-count,
+.hwc-pane-head .hwc-git-count {
+  margin-left: 0;
+}
+
+.hwc-git-count-part[data-tone="ahead"] {
+  color: var(--color-success);
+}
+
+.hwc-git-count-part[data-tone="behind"] {
+  color: var(--color-attention);
+}
+
+/* ブランチに PR が紐づいているときだけ出る。潰さないため、チップ以外が縮む
+   （1 枚表示はブランチ、分割セルはペイン名）。タップ領域は見出しの高さ (32px) いっぱい。
+   44px に広げると下の会話領域に重なる。 */
+.hwc-pane-head-pr {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 140ms ease;
+}
+
+.hwc-pane-head-pr:hover {
+  background: var(--color-surface);
+}
+
+.hwc-pane-head-pr:active {
+  background: var(--color-line);
+}
+
+.hwc-pane-head-pr:focus-visible {
+  outline-offset: -3px;
+}
+
+.hwc-pane-head .hwc-pane-id {
+  margin-left: auto;
+}
+
+.hwc-tabbar {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+  /* 上に余白を置き、選択中の面が上端に貼り付かないようにする。切り替えの高さを
+     その分だけ縮め、バー全体の高さは --row-head のまま保つ。 */
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  background: var(--color-bg);
+}
+
+/* バーの下辺。選択中は面を塗るだけのチップなので、線は隠さず下まで通す。 */
+.hwc-tabbar::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  height: 1px;
+  background: var(--color-line);
+}
+
+.hwc-tabbar > .hwc-back {
+  align-self: center;
+}
+
+/* 異常のときだけ出る接続の表示。タブの幅を常には奪わない。 */
+.hwc-tabbar > .hwc-conn {
+  flex: none;
+  align-self: center;
+}
+
+/* ID は面を付けない。見出しの名前と並んでも重くならないように。 */
+.hwc-pane-id {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 40%;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  transition: color 180ms ease;
+}
+
+/* コピーできたことは色と記号で返す。一瞬だけ弾ませて目で追えるように。 */
+.hwc-pane-id[data-copied="true"] {
+  color: var(--color-success);
+  animation: hwc-badge-pop 320ms ease;
+}
+
+@keyframes hwc-badge-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.05);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hwc-pane-id-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-pane-id-copy {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 120ms ease;
+}
+
+.hwc-pane-id-copy:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-pane-id-copy:active {
+  transform: scale(0.9);
+}
+
+/* ポインタの画面では、ID は見出しに乗ったときだけ出す。 */
+@media (hover: hover) {
+  .hwc-pane-id {
+    opacity: 0;
+    transform: translateX(var(--space-1));
+    transition:
+      opacity 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      color 180ms ease;
+  }
+
+  .hwc-pane-head:hover .hwc-pane-id,
+  .hwc-pane-id:focus-within {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* 名前を持たない見出しは、ホバー待ちにすると空の行に見える。ID は常に出す。 */
+  .hwc-pane-head[data-bare="true"] .hwc-pane-id {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 狭い画面では ID とコピーをメニューに任せ、見出しの幅をブランチに回す。 */
+@media (max-width: 899px) {
+  .hwc-pane-head .hwc-pane-id {
+    display: none;
+  }
+
+  /* ID の margin-left: auto が無くなるので、メニューを右端に寄せる。 */
+  .hwc-pane-head .hwc-pane-more {
+    margin-left: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-pane-id[data-copied="true"] {
+    animation: none;
+  }
+
+  .hwc-copy-glyph-layer,
+  .hwc-pane-id-copy {
+    transition: none;
+  }
+}
+
+/* 詳細の見出しの「…」は、hover できる端末でも常に出す。閉じる入口がここしか無い。 */
+.hwc-pane-head .hwc-pane-more {
+  opacity: 1;
+}
+
+/* 外側の輪郭は見出しの高さを超え、後に描かれる会話領域に隠れる。 */
+.hwc-pane-head .hwc-pane-more:focus-visible {
+  outline-offset: -3px;
+}
+
+.hwc-tabs {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.hwc-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* ペインの切り替えは、選択中だけ面を塗ったチップにする。本文と同じ面でつなげると
+   タブに見えるが、ここはペインの切り替えなので、下辺の線から離して置く。 */
+.hwc-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: calc(var(--row-head) - var(--space-2) - var(--space-1));
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--color-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* 切り替えと × を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */
+.hwc-tab-item {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease;
+}
