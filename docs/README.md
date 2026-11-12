@@ -8,6 +8,7 @@
 - [エージェント対応状況](agents.md) - 各 CLI の対応範囲と更新手順
 - [CI](ci.md) - GitHub Actions の workflow、action の固定、Dependabot
 - [E2E](e2e.md) - 架空 Herdr で実データを混ぜずに画面を確認する
+- [反映](deploy.md) - 常駐サーバーへの main の取り込みと、古いバンドルを配ったときの判定・復旧
 - [DESIGN スキル](../.agents/skills/design/SKILL.md) - 再利用可能な UI デザイン仕様
 
 ## 外部

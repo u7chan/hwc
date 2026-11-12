@@ -14,6 +14,7 @@ import {
   type StateStore,
   NO_TIMES,
 } from "./herdr/state";
+import { createRestartSettingsStore, type RestartRunner } from "./restart";
 
 export const pane: PaneState = {
   id: "w1:p1",
@@ -304,6 +305,23 @@ export function createFakeWorkspaces(overrides: Partial<WorkspaceClient> = {}): 
   };
 }
 
+// 実プロセスは起動しない。起動したコマンドとその cwd だけを記録する。
+export function createFakeRestart(
+  options: { command?: string | null; afterPull?: boolean; executable?: boolean } = {},
+) {
+  const restartSettings = createRestartSettingsStore({ read: () => null, write: () => {} });
+  restartSettings.save({ command: options.command ?? null, afterPull: options.afterPull ?? false });
+  const runs: Array<{ command: string; cwd: string }> = [];
+  const restart: RestartRunner = {
+    isExecutable: () => options.executable ?? true,
+    run: (command, cwd) => {
+      runs.push({ command, cwd });
+      return "started";
+    },
+  };
+  return { restartSettings, restart, runs };
+}
+
 // どのテストも同じ BFF を叩く。テストごとに書くのは、そのテストが見たい差分だけにする。
 export type TestAppOptions = {
   state?: AppState | null;
@@ -328,6 +346,9 @@ export type TestAppOptions = {
     | "previewRoots"
     | "notificationSettings"
     | "discordSender"
+    | "restartSettings"
+    | "restart"
+    | "restartDelayMs"
   >
 >;
 

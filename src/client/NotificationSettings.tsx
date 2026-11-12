@@ -120,13 +120,13 @@ export function NotificationSettings() {
       {load === "loading" ? (
         <p class="hwc-section-note">通知の設定を読み込んでいます。</p>
       ) : load === "failed" || view === null ? (
-        <div class="hwc-notify-failure">
+        <div class="hwc-setting-failure">
           <p class="hwc-section-note" role="alert">
             通知の設定を読み込めませんでした。
           </p>
           <button
             type="button"
-            class="hwc-notify-button"
+            class="hwc-setting-button"
             onClick={() => setReloadKey((key) => key + 1)}
           >
             再試行
@@ -197,7 +197,7 @@ export function NotificationSettings() {
 
             {editing !== "none" || !view.discord.configured ? (
               <form
-                class="hwc-notify-form"
+                class="hwc-setting-form"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void submitWebhook();
@@ -205,7 +205,7 @@ export function NotificationSettings() {
               >
                 <input
                   type="url"
-                  class="hwc-notify-input"
+                  class="hwc-setting-input"
                   inputmode="url"
                   autocomplete="off"
                   spellcheck={false}
@@ -215,10 +215,10 @@ export function NotificationSettings() {
                   disabled={busy}
                   onInput={(event) => setUrl(event.currentTarget.value)}
                 />
-                <div class="hwc-notify-actions">
+                <div class="hwc-setting-actions">
                   <button
                     type="submit"
-                    class="hwc-notify-button hwc-notify-primary"
+                    class="hwc-setting-button hwc-setting-primary"
                     disabled={busy || !canRegisterWebhook(url)}
                   >
                     {view.discord.configured ? "保存" : "登録"}
@@ -226,7 +226,7 @@ export function NotificationSettings() {
                   {view.discord.configured ? (
                     <button
                       type="button"
-                      class="hwc-notify-button"
+                      class="hwc-setting-button"
                       disabled={busy}
                       onClick={() => {
                         setEditing("none");
@@ -240,10 +240,10 @@ export function NotificationSettings() {
                 </div>
               </form>
             ) : (
-              <div class="hwc-notify-actions">
+              <div class="hwc-setting-actions">
                 <button
                   type="button"
-                  class="hwc-notify-button"
+                  class="hwc-setting-button"
                   disabled={busy || testing}
                   onClick={() => void sendTest()}
                 >
@@ -251,7 +251,7 @@ export function NotificationSettings() {
                 </button>
                 <button
                   type="button"
-                  class="hwc-notify-button"
+                  class="hwc-setting-button"
                   disabled={busy || testing}
                   onClick={() => {
                     setEditing("change");
@@ -263,7 +263,7 @@ export function NotificationSettings() {
                 </button>
                 <button
                   type="button"
-                  class="hwc-notify-button"
+                  class="hwc-setting-button"
                   disabled={busy || testing}
                   onClick={() => setConfirmDelete(true)}
                 >
@@ -273,12 +273,12 @@ export function NotificationSettings() {
             )}
 
             {testResult === null ? null : (
-              <p class="hwc-notify-result" data-ok={testResult.ok} role="status">
+              <p class="hwc-setting-result" data-ok={testResult.ok} role="status">
                 {testNotificationText(testResult)}
               </p>
             )}
             {message === null ? null : (
-              <p class="hwc-notify-result" data-ok={false} role="alert">
+              <p class="hwc-setting-result" data-ok={false} role="alert">
                 {message}
               </p>
             )}

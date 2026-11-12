@@ -6,8 +6,10 @@ import {
   state,
   threeWorkspaces,
   checkoutPath,
+  createFakeRestart,
   createFakeStore,
   createTestApp,
+  waitFor,
 } from "./app.test-helpers";
 
 const pullRequestState: AppState = {
@@ -186,6 +188,86 @@ test("POST /api/workspaces/:id/git pulls with fast-forward only", async () => {
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true });
   expect(calls).toEqual([checkoutPath]);
+});
+
+test("POST /api/workspaces/:id/git runs the restart command after a successful pull", async () => {
+  const { restartSettings, restart, runs } = createFakeRestart({
+    command: "/opt/hwc/restart",
+    afterPull: true,
+  });
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit(),
+    restartSettings,
+    restart,
+    restartDelayMs: 0,
+  });
+
+  const response = await app.request("/api/workspaces/w1/git", postGit("pull"));
+
+  expect(response.status).toBe(200);
+  await waitFor(() => runs.length === 1);
+  // どのリポジトリを pull したかをコマンドへ渡す。cwd が無いと、ガードが BFF 側の
+  // チェックアウトを見てしまい、別のスペースの pull でも再起動する。
+  expect(runs).toEqual([{ command: "/opt/hwc/restart", cwd: checkoutPath }]);
+});
+
+test("POST /api/workspaces/:id/git does not run the command without the toggle", async () => {
+  const { restartSettings, restart, runs } = createFakeRestart({ command: "/opt/hwc/restart" });
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit(),
+    restartSettings,
+    restart,
+    restartDelayMs: 0,
+  });
+
+  expect((await app.request("/api/workspaces/w1/git", postGit("pull"))).status).toBe(200);
+  expect((await app.request("/api/workspaces/w1/git", postGit("fetch"))).status).toBe(200);
+  await Bun.sleep(20);
+  expect(runs).toEqual([]);
+});
+
+test("POST /api/workspaces/:id/git does not run the command on a fetch", async () => {
+  const { restartSettings, restart, runs } = createFakeRestart({
+    command: "/opt/hwc/restart",
+    afterPull: true,
+  });
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit(),
+    restartSettings,
+    restart,
+    restartDelayMs: 0,
+  });
+
+  expect((await app.request("/api/workspaces/w1/git", postGit("fetch"))).status).toBe(200);
+  await Bun.sleep(20);
+  expect(runs).toEqual([]);
+});
+
+test("POST /api/workspaces/:id/git does not run the command when the pull fails", async () => {
+  const { restartSettings, restart, runs } = createFakeRestart({
+    command: "/opt/hwc/restart",
+    afterPull: true,
+  });
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit({
+      pull: async () => {
+        throw new Error("conflict");
+      },
+    }),
+    restartSettings,
+    restart,
+    restartDelayMs: 0,
+  });
+
+  const response = await app.request("/api/workspaces/w1/git", postGit("pull"));
+
+  expect(response.status).toBe(502);
+  await Bun.sleep(20);
+  expect(runs).toEqual([]);
 });
 
 test("POST /api/workspaces/:id/git refuses a fetch without a remote", async () => {
