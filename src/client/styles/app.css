@@ -1794,8 +1794,7 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   line-height: var(--line-tight);
 }
 
-/* 名前と同じ行に置く。チップだけを帯全体の移動ボタンより上に重ね、名前のタップは
-   今までどおり移動に残す。 */
+/* 名前と同じ行に置く。チップは移動の入口ではないので、帯の矢印とは別に押せる。 */
 .hwc-active-band-title {
   display: flex;
   align-items: center;
@@ -1804,8 +1803,6 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 }
 
 .hwc-active-band-pr {
-  position: relative;
-  z-index: 2;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1858,36 +1855,40 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   margin-left: auto;
 }
 
-/* 帯全体が「すべて」のその場所へ移る入口。中身はそのまま、上に透明なボタンを重ねる。
-   記号は移動を表す矢印で、開閉のシェブロンと形で区別する。 */
+/* 「すべて」のその場所へ移る入口は右端の矢印だけ。名前とブランチは読む面なので、
+   押しても移らない。記号は移動を表す矢印で、開閉のシェブロンと形で区別する。
+   見た目は 32px に収め、タップ領域だけ 44px に広げる。 */
 .hwc-active-band-jump {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;
-  width: var(--space-4);
-  height: var(--space-4);
-  color: var(--color-secondary);
-}
-
-.hwc-active-band-open {
-  position: absolute;
-  inset: 0;
+  width: var(--space-8);
+  height: var(--space-8);
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  border-radius: var(--radius-control);
   background: transparent;
+  color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
-.hwc-active-band-open:focus-visible {
-  outline-offset: -3px;
+.hwc-active-band-jump::after {
+  content: "";
+  position: absolute;
+  inset: calc((var(--space-8) - var(--tap)) / 2);
 }
 
-/* ポインタの画面では、押せることが分かるように名前と矢印をアクセント色にする。 */
-@media (hover: hover) {
-  .hwc-active-band:hover .hwc-active-band-name,
-  .hwc-active-band:hover .hwc-active-band-jump {
-    color: var(--color-accent);
-  }
+.hwc-active-band-jump:hover {
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
+.hwc-active-band-jump:active {
+  background: var(--color-line);
 }
 
 /* 件数は目安。押す対象ではなく、状態記号に数を添えるだけ。 */
