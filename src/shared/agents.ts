@@ -21,6 +21,12 @@ export function supportsModelSelection(agent: unknown): agent is ModelAgentKind 
   return agent === "pi" || agent === "codex" || agent === "opencode";
 }
 
+// hwc が起動したときに会話を読める見込みがあるエージェント。起動直後はセッションが
+// できるまで pane.chat が false のままになる（Claude は会話を持たない）。
+export function supportsChat(agent: unknown): agent is ModelAgentKind {
+  return agent === "pi" || agent === "codex" || agent === "opencode";
+}
+
 // 起動時に、既知のフォルダ信頼確認で止まるエージェント。
 export type FolderTrustAgent = "pi" | "codex";
 

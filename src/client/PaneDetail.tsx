@@ -976,6 +976,9 @@ export function PaneDetail(props: PaneDetailProps) {
   const view = confirmationView({ pane, interaction, dismissedId: dismissedConfirmation, failed });
   const readOnly = view !== "normal";
   const body = readOnly ? { kind: "output" as const } : normalBody;
+  // 起動待ちの間は、端末に届いている途中の画面（シェルの起動コマンド、TUI の描画中、
+  // 空の会話）を出さない。何が届いていてもスケルトンに置き換える。
+  const launching = starting && !readOnly;
   const confirmation =
     view === "confirm" && interaction?.kind === "folder-trust" ? interaction : null;
   const output = read?.text ?? null;
@@ -1054,7 +1057,8 @@ export function PaneDetail(props: PaneDetailProps) {
     !compacting &&
     visibleCompactionEcho === null &&
     !replying;
-  const empty = body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty;
+  const empty =
+    !launching && (body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty);
   const info = agentInfo(snapshot);
   // モデルと effort が無くても、コンテキストの材料があれば行を出す。
   const meter = contextMeter(snapshot?.context ?? null);
@@ -1816,7 +1820,7 @@ export function PaneDetail(props: PaneDetailProps) {
               onConfirm={() => onConfirmFolderTrust(confirmation.id)}
               onDismiss={() => onDismissConfirmation(confirmation.id)}
             />
-          ) : body.kind === "skeleton" ? (
+          ) : launching || body.kind === "skeleton" ? (
             <OutputSkeleton />
           ) : body.kind === "chat" ? (
             <>
@@ -1926,7 +1930,7 @@ export function PaneDetail(props: PaneDetailProps) {
       ) : starting ? (
         // 起動が終わるまで入力欄を出さない。相手がまだシェルだと、書いた文字が
         // そのまま端末へ届く。Spinner はこの行に 1 つだけ置く。
-        <p class="hwc-starting" role="status">
+        <p class="hwc-starting" role="status" data-compact={compact}>
           <span class="hwc-starting-mark">
             <Spinner size={14} />
           </span>
@@ -2045,12 +2049,14 @@ export function PaneDetail(props: PaneDetailProps) {
               </div>
             )}
             <span class="hwc-input-line">
-              {shell ? (
-                // 端末への入力であることを 1 文字で示す。文字なので大きさと色は行に従う。
-                <span class="hwc-input-prompt" aria-hidden="true">
-                  $
-                </span>
-              ) : null}
+              {/* 消えるときに幅が跳ねないよう、シェル以外でも置いたまま折りたたむ。 */}
+              <span
+                class="hwc-input-prompt"
+                aria-hidden="true"
+                data-hidden={shell ? undefined : "true"}
+              >
+                $
+              </span>
               <textarea
                 id={`hwc-input-${pane.id}`}
                 ref={input}
