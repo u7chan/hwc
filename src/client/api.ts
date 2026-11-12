@@ -32,6 +32,9 @@ import {
 } from "../shared/notifications";
 import { parsePullRequest, type PullRequest } from "../shared/pull-request";
 
+// BFF 側の期限: Herdr ソケット 8 秒、エージェント起動 30 秒、worktree 60 秒、git 60 秒。
+// クライアントの期限はこれを目安に置く。
+
 export type OutputRead = PaneRead & { interaction: PaneInteraction | null };
 
 // 1 回に読む行数。スマホの画面に収まる範囲に留め、全文は端末で読む。
@@ -487,7 +490,7 @@ export type GitSyncFailure =
 
 export type GitSyncOutcome = { ok: true } | { ok: false; error: GitSyncFailure };
 
-// fetch / pull はネットワークと git の走査を伴う。BFF の git 期限（60 秒）を覆う。
+// fetch / pull はネットワークと git の走査を伴う。
 export const GIT_SYNC_TIMEOUT_MS = 70_000;
 
 export async function syncWorkspace(
@@ -579,7 +582,7 @@ export async function confirmFolderTrust(paneId: string, id: string): Promise<vo
 }
 
 export async function focusAgent(paneId: string, signal?: AbortSignal): Promise<void> {
-  // body は読まれないが、BFF は application/json 以外を 415 で弾く。
+  // body は読まれないが、415 を避けて application/json を付ける。
   const response = await client.api.panes[":id"].focus.$post(paneParam(paneId), {
     headers: { "content-type": "application/json" },
     init: { signal },
@@ -628,7 +631,7 @@ export async function clearPaneOutput(paneId: string): Promise<boolean> {
   }
 }
 
-// チェックアウトの削除は git の走査を含む。BFF のソケット期限（60 秒）より長く待つ。
+// チェックアウトの削除は git の走査を含む。
 export const REMOVE_WORKTREE_TIMEOUT_MS = 70_000;
 // 消えたワークツリーは目的の状態に達している。close と同じく 404 は成功として扱う。
 export async function removeWorktree(workspaceId: string): Promise<CloseOutcome> {
@@ -660,7 +663,7 @@ export async function closeWorkspace(workspaceId: string): Promise<CloseOutcome>
   }
 }
 
-// 並びは Herdr の状態そのもの。ソケットの期限（8 秒）と取り直しの分を少し上乗せする。
+// 並びは Herdr の状態そのもの。取り直しの分を少し上乗せする。
 export const MOVE_WORKSPACES_TIMEOUT_MS = 10_000;
 
 export async function moveWorkspaceBlock(
@@ -824,16 +827,15 @@ export function toCreateError(value: unknown): { error: CreatePaneFailure; paneI
   return { error, paneId };
 }
 
-// エージェントの起動は Herdr 側で最大 30 秒待つ。分割・リネームのソケット期限（各 8 秒）と
-// シェル準備待ち（5 秒）を含めた最悪値を覆う。ここを短くすると、ペインができた後に
-// クライアントだけ諦めて、再試行で 2 枚目を作ってしまう。
+// エージェント起動・分割・リネーム・シェル準備待ちを含めた最悪値を覆う。ここを短くすると、
+// ペインができた後にクライアントだけ諦めて、再試行で 2 枚目を作ってしまう。
 export const CREATE_TIMEOUT_MS = 65_000;
 
 // モデル指定時は cwd と候補を確認し、effort 指定なら対応段階も再取得する。
 export const MODEL_CREATE_TIMEOUT_MS = 120_000;
 
-// ワークツリー作成は 1 リクエストで worktree.create（ソケット期限 60 秒）とエージェント起動
-// （30 秒）を行う。ここを短くすると、作成済みのワークツリーを見失って再送してしまう。
+// ワークツリー作成は 1 リクエストで worktree.create とエージェント起動を行う。ここを短く
+// すると、作成済みのワークツリーを見失って再送してしまう。
 export const CREATE_WORKTREE_TIMEOUT_MS = 120_000;
 
 // モデル指定時は root pane の cwd で候補・effort を再検証する。
@@ -865,8 +867,8 @@ export async function createPane(
   }
 }
 
-// 既存のシェルペインでエージェントを起動する。分割は無いが、起動の待ち（Herdr 側で最大 30 秒）
-// とモデル指定時の再検証を含むので、作成と同じ期限で待つ。
+// 既存のシェルペインでエージェントを起動する。分割は無いが、起動の待ちとモデル指定時の
+// 再検証を含むので、作成と同じ期限で待つ。
 export async function startAgent(
   paneId: string,
   request: StartAgentRequest,
@@ -988,8 +990,8 @@ export type NotificationSaveResult =
   | { ok: true; view: NotificationView }
   | { ok: false; error: string | null };
 
-// テスト送信は BFF が Discord の応答を 8 秒まで待つ。BFF に届かないときにボタンが
-// 送信中のまま残らないよう、外側にもう少し長い期限を置く。
+// テスト送信は BFF が Discord の応答を待つ。BFF に届かないときにボタンが送信中のまま
+// 残らないよう、外側にもう少し長い期限を置く。
 export const TEST_NOTIFICATION_TIMEOUT_MS = 15_000;
 
 // hc の応答は Response ではなく ClientResponse。読むのは ok と本文だけ。
@@ -1051,7 +1053,7 @@ export type NotificationTestResult = { ok: true } | { ok: false; error: string }
 // 別物で、ここではどちらもコードに畳まれている。
 export async function testDiscordWebhook(): Promise<NotificationTestResult> {
   try {
-    // body は読まれないが、BFF は application/json 以外を 415 で弾く。
+    // body は読まれないが、415 を避けて application/json を付ける。
     const response = await client.api.notifications.discord.test.$post(
       {},
       {

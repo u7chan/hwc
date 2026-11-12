@@ -86,8 +86,7 @@ export function useMessageReveal(snapshot: ChatSnapshot | null): MessageReveal |
     });
   }, [snapshot]);
 
-  // 進み具合は state で持つが、刻むのは経過時間から決める。タブが隠れて間引かれても
-  // 戻ったときに追いつく。
+  // 進み具合は state に持ち、刻むのは revealedLength に任せる。
   useEffect(() => {
     if (reveal === null) return;
     const timer = window.setInterval(() => {

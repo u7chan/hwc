@@ -208,6 +208,6 @@ export function saveThemePreference(
   try {
     storage.setItem(THEME_STORAGE_KEY, preference);
   } catch {
-    // 保存できなくてもその場の表示は変える。
+    // 保存だけ諦める。
   }
 }

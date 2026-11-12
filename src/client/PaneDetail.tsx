@@ -169,7 +169,6 @@ function touchFirst(): boolean {
   return touchOnly;
 }
 
-// サムネイルは会話の高さに合わせて小さく出す。押したら同じ配信 URL を拡大する。
 function MessageAttachments(props: {
   paneId: string;
   names: string[];
@@ -250,7 +249,7 @@ function MessageFiles(props: {
 }
 
 // 根の外にあったファイル。hwc は根の外を配信しないので、チップを出せない理由だけを
-// 1 行で示す（ADR 0065, 0066）。移すかどうかは会話で決める。
+// 1 行で示す（ADR 0065 outside-preview-root, 0066）。移すかどうかは会話で決める。
 function OutsideFileNote(props: { name: string }) {
   return (
     <p class="hwc-msg-outside">
@@ -818,7 +817,7 @@ type PaneDetailProps = {
   // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
   showSpace: boolean;
   // スペースのブランチ。分割セルでも PR のチップを引くために渡す。
-  // 文字として出すかは showBranch と labeled が決める。
+  // 文字として出すかは showBranch が決め、labeled のときは名前を優先する。
   branch: string | null;
   // 一覧が隠れる狭い画面でだけ、ブランチを名前に代えて出す。
   showBranch: boolean;
@@ -835,17 +834,16 @@ type PaneDetailProps = {
   confirmationAttempts: ReadonlyMap<string, ConfirmationAttempt>;
   onConfirmFolderTrust: (id: string) => void;
   onDismissConfirmation: (id: string) => void;
-  // メニューはセルの外（App 直下）に 1 つだけ出す。クリア後の読み直しだけ、
-  // この詳細の実行口を一覧から使う。
   menuOpen: boolean;
+  // クリア後の読み直しだけ、この詳細の実行口を一覧から使う。
   outputRef: Ref<PaneOutputHandle>;
   onOpenMenu: (paneId: string, trigger: HTMLElement) => void;
   onOpenWorkspaceMenu: (workspaceId: string, trigger: HTMLElement) => void;
   onSubmit: (text: string, attachments: string[]) => Promise<boolean>;
   onStop: () => Promise<boolean>;
-  // シェルのペインでエージェントを起動する。ダイアログは App 直下に 1 つだけ出す。
+  // シェルのペインでエージェントを起動する。
   onStartAgent: () => void;
-  // ダイアログは App 直下に 1 つだけ出す。セルの中に置くと containment の内側に閉じる。
+  // 拡大はダイアログで行う。セルの中に置くと containment の内側に閉じる。
   onOpenImage: (url: string, name: string) => void;
   // HTML のプレビューは、タブの 1 つとして会話の外に出す。
   onOpenPreview: (file: ChatFile) => void;
@@ -1092,14 +1090,14 @@ export function PaneDetail(props: PaneDetailProps) {
   const quoting = useRef(false);
   quoting.current = selectionToolbar !== null;
 
-  // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
-  // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
-  // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
   const shell = isShellPane(pane);
   // シェルには会話のコマンドが無い。エージェントを終了したときにチップが残っていても、
   // シェルの入力欄では見せず、送信も本文として扱う。
   const activeChip = shell ? null : chip;
   const compactDone = snapshot !== null && compactAlreadyDone(snapshot);
+  // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
+  // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
+  // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
   const candidates =
     attachments.length === 0 && compactionRun === null
       ? commandCandidates(pane, draft, snapshot)
@@ -1692,7 +1690,7 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const submit = () => {
     if (readOnly) return;
-    // 添付を持ったまま /compact と打っても、候補にもチップにも流さず本文として送る。
+    // 添付中は候補にもチップにも流さない。
     if (attachments.length === 0) {
       if (activeChip !== null) {
         void sendCommand(activeChip);

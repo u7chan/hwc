@@ -18,7 +18,8 @@ type PaneMenuProps = {
   onDismiss: () => void;
 };
 
-// 会話コマンドは入力欄の + から実行する（ADR 0057）。ここはペインとタブの操作だけに残す。
+// 会話コマンドは入力欄の + から実行する（ADR 0057 composer-conversation-commands）。
+// ここはペインとタブの操作だけに残す。
 export function PaneMenu(props: PaneMenuProps) {
   const { pane, workspacePath } = props;
   const [clearing, setClearing] = useState(false);

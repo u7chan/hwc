@@ -68,7 +68,7 @@ export function createPullRequestReader(
 }
 
 async function listLatestPullRequests(checkoutPath: string, branch: string): Promise<unknown> {
-  // 調査用プロセスが呼び出し元のペインを自分のものとして報告しないようにする。
+  // HERDR_ を継ぐとペイン扱いになる。
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
   );

@@ -6,7 +6,7 @@ import { supportsChat } from "../shared/agents";
 export type StartingPane = { paneId: string; at: number };
 
 // 出力のポーリングは 2 秒なので、ペインを開いた直後の読み取りは起動前の画面（シェルの
-// プロンプトと起動コマンド）のことがある。次の読み取りが届くまでを起動待ちにする。
+// プロンプトと起動コマンド）のことがある。次の読み取りに 1 秒の余裕を足して起動待ちにする。
 export const STARTING_SETTLE_MS = 3_000;
 
 // エージェントが検出されないまま待ち続けない。過ぎたら開ける。起動しなかったペインを、
