@@ -15,7 +15,7 @@ systemctl --user restart hwc
 
 どのリポジトリで実行するかを絞るのはコマンド側の責務。上のガードが無いと、ほかのスペースで pull しても HWC が落ちる。HWC は自分が動いているチェックアウトを知らないので、この判定は BFF 側に持たせない。
 
-設定は状態ディレクトリ（`HWC_STATE_DIR`、既定は `~/.local/state/hwc`）に保存する。マシンを作り直したら入れ直す。方式の判断は [ADR 0069](adr/0069-restart-command.md) を参照する。
+設定は状態ディレクトリ（`HWC_STATE_DIR`、既定は `~/.local/state/hwc`）に保存する。マシンを作り直したら入れ直す。方式の判断は [ADR 0079](adr/0079-restart-command.md) を参照する。
 
 ## 反映
 
