@@ -87,10 +87,11 @@ export type RestartRunner = {
   // 応答を返す前に確かめるための判定。実行はしない。
   isExecutable: (command: string) => boolean;
   // 実行ファイルを直接起動する。終了は待たない（HWC 自身を止めるコマンドが入り得る）。
-  run: (command: string) => RestartOutcome;
+  // cwd は pull したチェックアウト。どのリポジトリを再起動してよいかはコマンドが cwd で判定する。
+  run: (command: string, cwd: string) => RestartOutcome;
 };
 
-type Spawn = (command: string) => { exited: Promise<number> };
+type Spawn = (command: string, cwd: string) => { exited: Promise<number> };
 
 // 起動できなかったことと、0 以外で終わったことをログに残す。設定したコマンドが動かない
 // まま気づけないと、設定画面には成功に見える。
@@ -107,9 +108,9 @@ export function createRestartRunner(options: { spawn?: Spawn } = {}): RestartRun
   };
   return {
     isExecutable,
-    run: (command) => {
+    run: (command, cwd) => {
       if (!isExecutable(command)) return "not_executable";
-      const child = spawn(command);
+      const child = spawn(command, cwd);
       child.exited.then(
         (code) => {
           if (code !== 0) console.error(`restart: ${command} exited with ${code}`);
@@ -121,6 +122,6 @@ export function createRestartRunner(options: { spawn?: Spawn } = {}): RestartRun
   };
 }
 
-function spawnDetached(command: string) {
-  return Bun.spawn([command], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+function spawnDetached(command: string, cwd: string) {
+  return Bun.spawn([command], { cwd, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
 }

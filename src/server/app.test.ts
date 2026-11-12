@@ -626,11 +626,11 @@ function createFakeRestart(
 ) {
   const restartSettings = createRestartSettingsStore({ read: () => null, write: () => {} });
   restartSettings.save({ command: options.command ?? null, afterPull: options.afterPull ?? false });
-  const runs: string[] = [];
+  const runs: Array<{ command: string; cwd: string }> = [];
   const restart: RestartRunner = {
     isExecutable: () => options.executable ?? true,
-    run: (command) => {
-      runs.push(command);
+    run: (command, cwd) => {
+      runs.push({ command, cwd });
       return "started";
     },
   };
@@ -758,11 +758,11 @@ test("POST /api/restart refuses a server without a command", async () => {
 });
 
 test("POST /api/restart refuses a command that cannot be executed", async () => {
-  const { restartSettings, runs } = createFakeRestart({
+  const { restartSettings, restart, runs } = createFakeRestart({
     command: "/opt/hwc/restart",
     executable: false,
   });
-  const { app } = createTestApp({ restartSettings });
+  const { app } = createTestApp({ restartSettings, restart });
 
   const response = await app.request("/api/restart", postJson({}));
 
@@ -782,7 +782,8 @@ test("POST /api/restart answers before starting the command", async () => {
   // コマンドが HWC を止める場合でも、応答を書き終えてから起動する。
   expect(runs).toEqual([]);
   await waitFor(() => runs.length === 1);
-  expect(runs).toEqual(["/opt/hwc/restart"]);
+  // 手元からの再起動は BFF のチェックアウトで動く。
+  expect(runs).toEqual([{ command: "/opt/hwc/restart", cwd: process.cwd() }]);
 });
 
 test("a successful pull runs the command when the toggle is on", async () => {
@@ -802,15 +803,18 @@ test("a successful pull runs the command when the toggle is on", async () => {
 
   expect(response.status).toBe(200);
   await waitFor(() => runs.length === 1);
-  expect(runs).toEqual(["/opt/hwc/restart"]);
+  // どのリポジトリを pull したかをコマンドへ渡す。cwd が無いと、ガードが BFF 側の
+  // チェックアウトを見てしまい、別のスペースの pull でも再起動する。
+  expect(runs).toEqual([{ command: "/opt/hwc/restart", cwd: checkoutPath }]);
 });
 
 test("a pull or fetch does not run the command without the toggle", async () => {
-  const { restartSettings, runs } = createFakeRestart({ command: "/opt/hwc/restart" });
+  const { restartSettings, restart, runs } = createFakeRestart({ command: "/opt/hwc/restart" });
   const { app } = createTestApp({
     state: syncState,
     git: createFakeGit(),
     restartSettings,
+    restart,
     restartDelayMs: 0,
   });
 
@@ -821,7 +825,7 @@ test("a pull or fetch does not run the command without the toggle", async () => 
 });
 
 test("a fetch does not run the command even with the toggle on", async () => {
-  const { restartSettings, runs } = createFakeRestart({
+  const { restartSettings, restart, runs } = createFakeRestart({
     command: "/opt/hwc/restart",
     afterPull: true,
   });
@@ -829,6 +833,7 @@ test("a fetch does not run the command even with the toggle on", async () => {
     state: syncState,
     git: createFakeGit(),
     restartSettings,
+    restart,
     restartDelayMs: 0,
   });
 
@@ -838,7 +843,7 @@ test("a fetch does not run the command even with the toggle on", async () => {
 });
 
 test("a failed pull does not run the command", async () => {
-  const { restartSettings, runs } = createFakeRestart({
+  const { restartSettings, restart, runs } = createFakeRestart({
     command: "/opt/hwc/restart",
     afterPull: true,
   });
@@ -850,6 +855,7 @@ test("a failed pull does not run the command", async () => {
       },
     }),
     restartSettings,
+    restart,
     restartDelayMs: 0,
   });
 

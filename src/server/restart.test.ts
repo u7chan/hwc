@@ -67,24 +67,26 @@ test("a command that is not an executable file is refused before spawning", () =
   const script = join(root, "restart.sh");
   writeFileSync(script, "#!/bin/sh\n");
 
-  const spawned: string[] = [];
+  const spawned: Array<{ command: string; cwd: string }> = [];
   const runner = createRestartRunner({
-    spawn: (command) => {
-      spawned.push(command);
+    spawn: (command, cwd) => {
+      spawned.push({ command, cwd });
       return { exited: Promise.resolve(0) };
     },
   });
 
   expect(runner.isExecutable(script)).toBe(false);
-  expect(runner.run(script)).toBe("not_executable");
+  expect(runner.run(script, root)).toBe("not_executable");
   expect(runner.isExecutable(join(root, "missing"))).toBe(false);
   expect(runner.isExecutable(root)).toBe(false);
   expect(spawned).toEqual([]);
 
   chmodSync(script, 0o755);
   expect(runner.isExecutable(script)).toBe(true);
-  expect(runner.run(script)).toBe("started");
-  expect(spawned).toEqual([script]);
+  expect(runner.run(script, root)).toBe("started");
+  // コマンドは pull したチェックアウトで動く。どのリポジトリを再起動してよいかは
+  // コマンドが cwd で判定する。
+  expect(spawned).toEqual([{ command: script, cwd: root }]);
 });
 
 test("the settings directory is created on the first save", () => {
@@ -107,7 +109,7 @@ test("a command that exits with a failure is logged", async () => {
     const runner = createRestartRunner({
       spawn: () => ({ exited: Promise.resolve(3) }),
     });
-    expect(runner.run(script)).toBe("started");
+    expect(runner.run(script, root)).toBe("started");
     await Bun.sleep(0);
   } finally {
     console.error = original;

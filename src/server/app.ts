@@ -406,9 +406,9 @@ export function createApp(options: {
 
   // 再起動コマンドが HWC 自身を止める場合、応答より先に起動するとその応答が落ちる。
   // 設定画面から押したときに失敗に見えないよう、応答を書き終えてから起動する。
-  const scheduleRestart = (command: string) => {
+  const scheduleRestart = (command: string, cwd: string) => {
     setTimeout(() => {
-      const outcome = restart.run(command);
+      const outcome = restart.run(command, cwd);
       if (outcome === "not_executable") console.error(`restart: ${command} is not executable`);
     }, restartDelayMs);
   };
@@ -446,7 +446,8 @@ export function createApp(options: {
         const command = restartSettings.get().command;
         if (command === null) return c.json({ error: "command_not_configured" }, 409);
         if (!restart.isExecutable(command)) return c.json({ error: "command_not_executable" }, 409);
-        scheduleRestart(command);
+        // 手元からの再起動は、BFF が動いているチェックアウトを対象にする。
+        scheduleRestart(command, process.cwd());
         return c.json({ ok: true }, 202);
       })
       .get("/api/notifications", (c) => {
@@ -635,10 +636,11 @@ export function createApp(options: {
         store.invalidateGit(workspace.id);
         await store.refresh().catch(() => {});
 
-        // どのリポジトリで実行するかはコマンド側が判定する。ここでは対象を絞らない。
+        // どのリポジトリで実行するかはコマンドが cwd で判定する。pull したチェックアウトを
+        // 渡さないと、ガードが BFF 自身の cwd を見てしまい、ほかのスペースの pull でも再起動する。
         const restartCommand = restartSettings.get();
         if (action === "pull" && restartCommand.afterPull && restartCommand.command !== null) {
-          scheduleRestart(restartCommand.command);
+          scheduleRestart(restartCommand.command, checkoutPath);
         }
         return c.json({ ok: true });
       })
