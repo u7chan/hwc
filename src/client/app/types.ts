@@ -60,3 +60,11 @@ export type ClosingSpace = {
   path: string | null;
   phase: "confirm" | "busy" | "failed";
 };
+
+// 作成ダイアログ。ワークツリーを作る場合は、モデル一覧の取得元になる起点スペースの ID も持つ。
+// start は、作らずに既存のシェルペインで起動する。
+export type CreatingPane = {
+  paneId: string;
+  worktreeWorkspaceId: string | null;
+  start: boolean;
+};
