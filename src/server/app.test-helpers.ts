@@ -188,6 +188,26 @@ export const twoChatPanesState: AppState = {
   ],
 };
 
+export const fourPaneState: AppState = {
+  ...state,
+  workspaces: [
+    {
+      ...state.workspaces[0]!,
+      tabs: [
+        {
+          ...state.workspaces[0]!.tabs[0]!,
+          panes: [
+            pane,
+            { ...pane, id: "w1:p2" },
+            { ...pane, id: "w1:p3" },
+            { ...pane, id: "w1:p4" },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 export const checkoutPath = "/work/acme";
 export const sessionPath = "/sessions/--home-dev--/2026-01-01.jsonl";
 export const otherSessionPath = "/sessions/--home-dev--/2026-01-02.jsonl";
