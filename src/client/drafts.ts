@@ -17,7 +17,7 @@ function safely<T>(run: () => T, fallback: T): T {
   }
 }
 
-// localStorage が使えない環境では null を返し、保存だけ諦める。
+// localStorage が使えない環境では null を返す。保存できなくてもその場の表示は変える。
 export function storage(): DraftStorage | null {
   return safely(() => window.localStorage, null);
 }

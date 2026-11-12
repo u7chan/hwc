@@ -19,6 +19,7 @@ const COMMAND_IDS: readonly CommandId[] = ["new", "compact"];
 const COMMAND_AGENTS: ReadonlySet<string> = new Set(["pi", "claude", "codex", "opencode"]);
 
 // pi の keepRecentTokens の既定値の写し。pi 側が変われば追随が要る。
+// 履歴が小さいと /compact は失敗し、hwc には結果が来ない。
 const COMPACT_MIN_TOKENS = 20000;
 
 // セルの外にあるメニューから、ポーリングを待たず出力を読み直す。
@@ -97,7 +98,6 @@ export function chipOnInput(chip: CommandId | null): CommandId | null {
   return chip === "compact" ? chip : null;
 }
 
-// compact は履歴が小さいと失敗し、hwc には結果が来ない。閾値未満では押させない。
 // tokens が null（compaction 直後など）は判定できないので押せる側に倒す。
 export function commandAvailable(
   id: CommandId,
@@ -133,9 +133,7 @@ function matchCommands(draft: string): readonly CommandId[] {
   return COMMAND_IDS.filter((id) => commandText(id).startsWith(typed));
 }
 
-// 履歴が小さいと pi の /compact は失敗し、hwc には何も出ない。明らかに小さい間は
-// 候補から外す。tokens が null（compaction 直後など）は判定できないので出し、
-// 押せて失敗する側に倒す。実行中は候補を出さない。走っている会話へ割り込ませない。
+// 実行中は候補を出さない。走っている会話へ割り込ませない。
 export function commandCandidates(
   pane: PaneState,
   draft: string,

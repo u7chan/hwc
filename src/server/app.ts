@@ -271,7 +271,8 @@ export function createApp(options: {
       if (result === "missing") return c.json({ error: "pane_not_found" }, 404);
       if (result === "changed") return c.json({ error: "pane_action_changed" }, 409);
       launchModels.forget(paneId);
-      // シェルに戻ったのを観測してから、終了したエージェントの画面を消す（ADR 0059）。
+      // シェルに戻ったのを観測してから、終了したエージェントの画面を消す
+      // （ADR 0059 clear-exited-agent-screen）。
       if (action === "exit") exitCleanup(paneId);
       return c.json({ ok: true });
     } catch (error) {
@@ -949,7 +950,7 @@ export function createApp(options: {
             return c.json({ error: result.error, paneId: result.paneId }, 502);
           }
 
-          // focus / close と同じく、状態の取り直しは Herdr のイベント（pane.created）に任せる。
+          // 取り直しは pane.created に任せる。
           return c.json({ paneId: result.paneId });
         } catch (error) {
           return paneFailure(c, error);
@@ -977,7 +978,7 @@ export function createApp(options: {
           if (request.value.model != null) {
             launchModels.remember(paneId, request.value.model, request.value.effort ?? null);
           }
-          // 状態の取り直しは Herdr のイベント（pane.updated）に任せる。
+          // 取り直しは pane.updated に任せる。
           return c.json({ ok: true });
         } catch (error) {
           // 前景でコマンドが動いている。クライアントの 3 秒ポーリングが古い場合に届く。
@@ -1018,7 +1019,7 @@ export function createApp(options: {
               502,
             );
           }
-          // 状態の取り直しは Herdr のイベント（workspace.created / pane.created）に任せる。
+          // 取り直しは workspace.created / pane.created に任せる。
           return c.json({ workspaceId: result.workspaceId, paneId: result.paneId });
         } catch (error) {
           return worktreeFailure(c, error);

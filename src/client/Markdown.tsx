@@ -20,7 +20,8 @@ const ImageContext = createContext<ImageContextValue>({});
 
 type MdGroup =
   | { kind: "block"; block: MdBlock }
-  // 画像記法だけでできた段落は、縦に積まずに横へ並べる（ADR 0055）。
+  // 画像記法だけでできた段落は、縦に積まずに横へ並べる
+  // （ADR 0055 inline-message-images）。
   | { kind: "images"; images: MdImage[] };
 
 // 画像の段落が連続しているときは 1 つの行にまとめる。改行で区切られていても、
@@ -372,7 +373,7 @@ function imageNode(node: MdImage, context: ImageContextValue) {
   }
   const alt = inlineText(node.children).trim();
   // 読み上げ名は alt を優先する。img は装飾にし、ボタンの名前だけを読ませる
-  // （ADR 0042 / ADR 0055）。
+  // （ADR 0042 / ADR 0055 inline-message-images）。
   const name = alt === "" ? image.label : alt;
   return (
     <button

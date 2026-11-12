@@ -1,5 +1,6 @@
 // 分割ビューの状態。開いた順（openTabs）、最後に選んだ順（recent）、選択（current）、
-// 方向つきの二分木（layout）だけを持ち、Herdr の状態は持たない（ADR 0061 / 0063）。
+// 方向つきの二分木（layout）だけを持ち、Herdr の状態は持たない
+// （ADR 0061 / 0063 tab-order-by-pane-layout）。
 export const MAX_LEAVES = 4;
 
 export type SplitDir = "row" | "col";
@@ -12,10 +13,11 @@ export type DropZone = "center" | "top" | "bottom" | "left" | "right";
 
 export type SplitView = {
   // 開いた順。全スペースを跨ぎ、一意で、実在するペインだけ。
-  // モバイルと 1 枚表示のタブ順に使う（ADR 0063）。
+  // モバイルと 1 枚表示のタブ順に使う（ADR 0063 tab-order-by-pane-layout）。
   openTabs: readonly string[];
   // 最後に選んだ順。openTabs と同じ集合の並べ替えで、先頭が current。
-  // PC の 2 枚以上の分割で、固定ゾーンの外に出たタブの順に使う（ADR 0063）。
+  // PC の 2 枚以上の分割で、固定ゾーンの外に出たタブの順に使う
+  // （ADR 0063 tab-order-by-pane-layout）。
   recent: readonly string[];
   // 選択中のペイン。消えたペインの ID を保持することがある（ADR 0021）。
   current: string | null;
@@ -43,7 +45,7 @@ export function startSplitView(paneId: string | null): SplitView {
 }
 
 // 木の葉を、木の構造順（深さ優先）で返す。3 枚=T 字 / 4 枚=2x2 の組み直しと、
-// 葉の集合の判定に使う。表示順は readingOrder（ADR 0063）。
+// 葉の集合の判定に使う。表示順は readingOrder（ADR 0063 tab-order-by-pane-layout）。
 export function leafPanes(node: SplitNode | null): string[] {
   if (node === null) return [];
   if (node.kind === "leaf") return [node.pane];
@@ -78,7 +80,8 @@ function collectLeafBoxes(
 }
 
 // 画面の読み順（上端→左端）。2x2 は左上→右上→左下→右下、T 字は左上→右上→左下。
-// 木の深さ優先（左上→左下→右上→右下）とは 3 枚以上で変わる（ADR 0063）。
+// 木の深さ優先（左上→左下→右上→右下）とは 3 枚以上で変わる
+// （ADR 0063 tab-order-by-pane-layout）。
 export function readingOrder(node: SplitNode | null): string[] {
   if (node === null) return [];
   const boxes: LeafBox[] = [];
@@ -94,7 +97,8 @@ export function readingOrder(node: SplitNode | null): string[] {
 }
 
 // タブバーの表示順。PC の 2 枚以上の分割だけ、固定ゾーンをセルの読み順にし、
-// 残りを recent の新しい順に置く。モバイルと 1 枚表示は開いた順のまま（ADR 0063）。
+// 残りを recent の新しい順に置く。モバイルと 1 枚表示は開いた順のまま
+// （ADR 0063 tab-order-by-pane-layout）。
 export function tabPanes(view: SplitView, wide: boolean): string[] {
   const fixed = readingOrder(view.layout);
   if (!wide || fixed.length < 2) return [...view.openTabs];

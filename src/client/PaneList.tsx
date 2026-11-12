@@ -157,7 +157,6 @@ function GroupSpaces(props: { spaces: number }) {
   );
 }
 
-// 既定を先頭に置く。既定が「すべて」なので、開いたときにつまみが左にいる。
 const SCOPE_OPTIONS: readonly { scope: ListScope; label: string }[] = [
   { scope: "all", label: "すべて" },
   { scope: "active", label: "アクティブ" },
@@ -233,7 +232,6 @@ function ActiveTrail(props: {
   );
 }
 
-// 帯に出す件数。状態の意味（要対応 → 完了 → 実行中）の順に並べる。0 件は出さない。
 const COUNT_STATUSES: readonly ActiveStatus[] = ["blocked", "done", "working"];
 
 function ActiveCount(props: { status: ActiveStatus; count: number }) {
@@ -345,8 +343,8 @@ function spaceId(workspaceId: string): string {
   return `hwc-space-${workspaceId}`;
 }
 
-// ワークスペース（ワークツリー）ごとに束ねた行を並べる。束は PaneList が activeGroups で作る。
-// 開いた時点では既読を送らない。保留は App が持ち、選択が離れた時点で done なら送る。
+// ワークスペース（ワークツリー）ごとに束ねた行を並べる（activeGroups）。
+// 開いた時点では既読を送らない。
 function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] }) {
   const { groups } = props;
   if (groups.length === 0) {

@@ -8,8 +8,7 @@ import { shortenSpaceName, statusLabel, tabDisplayName, type PaneRow } from "./s
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
-  // タブバーの表示順。PC の 2 枚以上の分割では固定ゾーン（セルの読み順）の右に、
-  // 木の外のタブが MRU で続く（ADR 0063）。
+  // タブバーの表示順（ADR 0063 tab-order-by-pane-layout）。
   tabs: readonly PaneRow[];
   // 固定ゾーンの並び。タブの左端のバーをスロット色にするためにだけ使う。
   slots: readonly (string | null)[];

@@ -369,7 +369,7 @@ export function App() {
     worktreeWorkspaceId: string | null;
     start: boolean;
   } | null>(null);
-  // 拡大中の画像。ダイアログはセルの containment の外（App 直下）に置く（ADR 0021）。
+  // 拡大中の画像。ダイアログは App 直下（ADR 0021）。
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
   // 開いているプレビュー。対象のペインは、そのタブを開いている間だけ出す。
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
@@ -497,7 +497,6 @@ export function App() {
     return () => controller.abort();
   }, []);
 
-  // 受信したスナップショットで丸ごと置き換える。差分は適用しない（ADR 0005）。
   useEffect(() => {
     const events = new EventSource("/api/events");
     events.onmessage = (event) => {
@@ -548,7 +547,7 @@ export function App() {
       try {
         localStorage.setItem(LIST_SCOPE_STORAGE_KEY, next);
       } catch {
-        // 保存できなくてもその場の表示は変える。
+        // 保存だけ諦める。
       }
     }
   };
@@ -623,8 +622,7 @@ export function App() {
   // セルごとに文脈を引く。1 つの context を共有すると、別スペースを並べたときに
   // PR のチップや Git のメニューが別スペースの値になる。
   const context = state ? findPaneContext(state, selectedPaneId) : null;
-  // タブバーは表示順。PC の 2 枚以上の分割だけ、固定ゾーン（セルの読み順）の右に
-  // 木の外のタブを MRU で並べる。モバイルと 1 枚表示は開いた順（ADR 0063）。
+  // タブバーは表示順（ADR 0063 tab-order-by-pane-layout）。
   const tabRows =
     state === null
       ? []
@@ -680,9 +678,8 @@ export function App() {
     });
   };
 
-  // 選択の変更は必ずここを通す。保留中の既読は、そのペインを離れる時点で done なら送る。
-  // 開いた時点で送らないので、読んでいる間は行が残る。保留は state にしない（再描画しない）。
-  // 同じペインへの移動（詳細のタブバーやツリーでの選び直し）はまだ離れていないので、保留を残す。
+  // 選択の変更は必ずここを通す。既読の保留の判定は scope.ts が持つ。
+  // 保留は state にしない（再描画しない）。
   const moveTo = (
     paneId: string | null,
     opened = false,
@@ -863,7 +860,8 @@ export function App() {
     leaveTabTimer.current = window.setTimeout(() => finishTabLeave(paneId), TAB_LEAVE_FALLBACK_MS);
   };
 
-  // タブの × はタブから外すだけ。ペインは閉じず、Herdr 側で動き続ける（ADR 0059）。
+  // タブの × はタブから外すだけ。ペインは閉じず、Herdr 側で動き続ける
+  // （ADR 0059 tab-close-detaches）。
   const removeFromTabs = (paneId: string) => beginTabLeave(paneId);
 
   // プレビューのタブとヘッダーの × は同じ入口にする。どちらも画面から外すだけで、
@@ -1023,7 +1021,7 @@ export function App() {
           JSON.stringify(Object.fromEntries(remembered)),
         );
       } catch {
-        // 保存できなくてもその場の表示は変える。
+        // 保存だけ諦める。
       }
     }
   };
@@ -1110,7 +1108,7 @@ export function App() {
       try {
         localStorage.setItem(SIDEBAR_STORAGE_KEY, String(clamped));
       } catch {
-        // 保存できなくてもその場の幅は変える。
+        // 保存だけ諦める。
       }
     }
   };
@@ -1246,11 +1244,9 @@ export function App() {
     };
   }, []);
 
-  // グリッドは木の葉。空きは持たない（ADR 0061）。
+  // 空きの葉は持たない（ADR 0061）。
   const layoutPanes = readingOrder(split.layout);
-  // セルが並ぶのは広い画面だけ。狭い画面は 1 枚表示なので、分割セル向けの表示を切り替える。
   const splitCells = wide && layoutPanes.length > 1;
-  // グリッドは広い画面で、current が実在するときだけ出す。
   const gridOn = wide && pane !== null && split.layout !== null;
   const compact = splitCells;
   // 消えるペインが画面に出ているとき、本文側でも同じ時間だけ淡く消す。セルが並ぶ
