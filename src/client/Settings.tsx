@@ -2,6 +2,7 @@ import { ConnectionChip } from "./ConnectionChip";
 import type { ConnectionStatus } from "./connection";
 import { ChevronLeftIcon } from "./icons";
 import { NotificationSettings } from "./NotificationSettings";
+import { RestartSettings } from "./RestartSettings";
 import { ThemePicker } from "./ThemePicker";
 import type { ThemePreference } from "./theme";
 
@@ -38,6 +39,8 @@ export function Settings(props: SettingsProps) {
           </section>
 
           <NotificationSettings />
+
+          <RestartSettings />
 
           <section class="hwc-section">
             <h3 class="hwc-section-title">接続</h3>

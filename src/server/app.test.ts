@@ -13,6 +13,11 @@ import type { WorktreeClient } from "./herdr/worktrees";
 import { HerdrError } from "./herdr/socket";
 import type { GitClient } from "./git";
 import {
+  createRestartSettingsStore,
+  type RestartRunner,
+  type RestartSettingsFile,
+} from "./restart";
+import {
   type AppState,
   type ChatSource,
   NO_TIMES,
@@ -341,6 +346,9 @@ type TestAppOptions = {
     | "previewRoots"
     | "notificationSettings"
     | "discordSender"
+    | "restartSettings"
+    | "restart"
+    | "restartDelayMs"
   >
 >;
 
@@ -597,6 +605,38 @@ function postGit(action: unknown): RequestInit {
   };
 }
 
+function postJson(body: unknown): RequestInit {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
+function putJson(body: unknown): RequestInit {
+  return {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
+function createFakeRestart(
+  options: { command?: string | null; afterPull?: boolean; executable?: boolean } = {},
+) {
+  const restartSettings = createRestartSettingsStore({ read: () => null, write: () => {} });
+  restartSettings.save({ command: options.command ?? null, afterPull: options.afterPull ?? false });
+  const runs: string[] = [];
+  const restart: RestartRunner = {
+    isExecutable: () => options.executable ?? true,
+    run: (command) => {
+      runs.push(command);
+      return "started";
+    },
+  };
+  return { restartSettings, restart, runs };
+}
+
 test("POST /api/workspaces/:id/git fetches and republishes the state", async () => {
   const calls: string[] = [];
   const invalidated: string[] = [];
@@ -643,6 +683,181 @@ test("POST /api/workspaces/:id/git pulls with fast-forward only", async () => {
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true });
   expect(calls).toEqual([checkoutPath]);
+});
+
+test("GET /api/restart returns the saved command and toggle", async () => {
+  const { restartSettings } = createFakeRestart({ command: "/opt/hwc/restart", afterPull: true });
+  const { app } = createTestApp({ restartSettings });
+
+  const response = await app.request("/api/restart");
+
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.json()).toEqual({ command: "/opt/hwc/restart", afterPull: true });
+});
+
+test("PUT /api/restart saves an absolute path and the pull toggle", async () => {
+  const { restartSettings } = createFakeRestart();
+  const { app } = createTestApp({ restartSettings });
+
+  const response = await app.request(
+    "/api/restart",
+    putJson({ command: "/opt/hwc/restart", afterPull: true }),
+  );
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ command: "/opt/hwc/restart", afterPull: true });
+  expect(restartSettings.get()).toEqual({ command: "/opt/hwc/restart", afterPull: true });
+
+  // 空に戻すと未設定に戻る。トグルは残す。
+  const cleared = await app.request("/api/restart", putJson({ command: "  ", afterPull: true }));
+  expect(await cleared.json()).toEqual({ command: null, afterPull: true });
+});
+
+test("PUT /api/restart refuses a command that is not an absolute path", async () => {
+  const { restartSettings } = createFakeRestart({ command: "/opt/hwc/restart" });
+  const { app } = createTestApp({ restartSettings });
+
+  const response = await app.request(
+    "/api/restart",
+    putJson({ command: "restart-hwc", afterPull: false }),
+  );
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({ error: "invalid_request" });
+  expect(restartSettings.get()).toEqual({ command: "/opt/hwc/restart", afterPull: false });
+});
+
+test("PUT /api/restart keeps the previous settings when the write fails", async () => {
+  const file: RestartSettingsFile = {
+    read: () => null,
+    write: () => {
+      throw new Error("disk full");
+    },
+  };
+  const { app } = createTestApp({ restartSettings: createRestartSettingsStore(file) });
+
+  const response = await app.request(
+    "/api/restart",
+    putJson({ command: "/opt/hwc/restart", afterPull: false }),
+  );
+
+  expect(response.status).toBe(500);
+  expect(await response.json()).toEqual({ error: "settings_unavailable" });
+});
+
+test("POST /api/restart refuses a server without a command", async () => {
+  const { restartSettings, runs } = createFakeRestart();
+  const { app } = createTestApp({ restartSettings });
+
+  const response = await app.request("/api/restart", postJson({}));
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "command_not_configured" });
+  expect(runs).toEqual([]);
+});
+
+test("POST /api/restart refuses a command that cannot be executed", async () => {
+  const { restartSettings, runs } = createFakeRestart({
+    command: "/opt/hwc/restart",
+    executable: false,
+  });
+  const { app } = createTestApp({ restartSettings });
+
+  const response = await app.request("/api/restart", postJson({}));
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "command_not_executable" });
+  expect(runs).toEqual([]);
+});
+
+test("POST /api/restart answers before starting the command", async () => {
+  const { restartSettings, restart, runs } = createFakeRestart({ command: "/opt/hwc/restart" });
+  const { app } = createTestApp({ restartSettings, restart, restartDelayMs: 0 });
+
+  const response = await app.request("/api/restart", postJson({}));
+
+  expect(response.status).toBe(202);
+  expect(await response.json()).toEqual({ ok: true });
+  // コマンドが HWC を止める場合でも、応答を書き終えてから起動する。
+  expect(runs).toEqual([]);
+  await waitFor(() => runs.length === 1);
+  expect(runs).toEqual(["/opt/hwc/restart"]);
+});
+
+test("a successful pull runs the command when the toggle is on", async () => {
+  const { restartSettings, restart, runs } = createFakeRestart({
+    command: "/opt/hwc/restart",
+    afterPull: true,
+  });
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit(),
+    restartSettings,
+    restart,
+    restartDelayMs: 0,
+  });
+
+  const response = await app.request("/api/workspaces/w1/git", postGit("pull"));
+
+  expect(response.status).toBe(200);
+  await waitFor(() => runs.length === 1);
+  expect(runs).toEqual(["/opt/hwc/restart"]);
+});
+
+test("a pull or fetch does not run the command without the toggle", async () => {
+  const { restartSettings, runs } = createFakeRestart({ command: "/opt/hwc/restart" });
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit(),
+    restartSettings,
+    restartDelayMs: 0,
+  });
+
+  expect((await app.request("/api/workspaces/w1/git", postGit("pull"))).status).toBe(200);
+  expect((await app.request("/api/workspaces/w1/git", postGit("fetch"))).status).toBe(200);
+  await Bun.sleep(20);
+  expect(runs).toEqual([]);
+});
+
+test("a fetch does not run the command even with the toggle on", async () => {
+  const { restartSettings, runs } = createFakeRestart({
+    command: "/opt/hwc/restart",
+    afterPull: true,
+  });
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit(),
+    restartSettings,
+    restartDelayMs: 0,
+  });
+
+  expect((await app.request("/api/workspaces/w1/git", postGit("fetch"))).status).toBe(200);
+  await Bun.sleep(20);
+  expect(runs).toEqual([]);
+});
+
+test("a failed pull does not run the command", async () => {
+  const { restartSettings, runs } = createFakeRestart({
+    command: "/opt/hwc/restart",
+    afterPull: true,
+  });
+  const { app } = createTestApp({
+    state: syncState,
+    git: createFakeGit({
+      pull: async () => {
+        throw new Error("conflict");
+      },
+    }),
+    restartSettings,
+    restartDelayMs: 0,
+  });
+
+  const response = await app.request("/api/workspaces/w1/git", postGit("pull"));
+
+  expect(response.status).toBe(502);
+  await Bun.sleep(20);
+  expect(runs).toEqual([]);
 });
 
 test("POST /api/workspaces/:id/git refuses a fetch without a remote", async () => {

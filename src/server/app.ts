@@ -54,8 +54,15 @@ import {
   toNotificationView,
   type NotificationSettings,
 } from "../shared/notifications";
+import { normalizeRestartCommand, type RestartSettings } from "../shared/restart";
 import type { GitClient } from "./git";
 import { createProjectLister, type ProjectLister } from "./projects";
+import {
+  createRestartRunner,
+  createRestartSettingsStore,
+  type RestartRunner,
+  type RestartSettingsStore,
+} from "./restart";
 import {
   attachMessageFiles,
   defaultPreviewRoots,
@@ -74,6 +81,10 @@ import { HerdrError } from "./herdr/socket";
 // Bun.serve は 10 秒間何も書かれない chunked 応答を打ち切る。状態が変わらない間も接続を
 // 保つため、これより短い間隔でハートビートを送る。
 export const SSE_HEARTBEAT_MS = 5_000;
+
+// 再起動コマンドを起動するまでの猶予。応答の書き込みを終える前に走らせると、HWC 自身を
+// 止めるコマンドの場合にその応答が落ちる。
+export const RESTART_DELAY_MS = 100;
 
 // 状態を変える JSON POST は simple request で叩かれないようにする。
 // CORS を返さないので、cross-origin は preflight で止まる。body はここでは読まない。
@@ -142,6 +153,10 @@ export function createApp(options: {
   // 通知設定の保存先と Webhook 送信器。テストでは実ファイル・実ネットワークを避けて差し替える。
   notificationSettings?: NotificationSettingsStore;
   discordSender?: DiscordSender;
+  // 再起動コマンドの保存先と起動器。テストでは実プロセスを起動しないよう差し替える。
+  restartSettings?: RestartSettingsStore;
+  restart?: RestartRunner;
+  restartDelayMs?: number;
 }) {
   const {
     store,
@@ -161,6 +176,9 @@ export function createApp(options: {
     previewRoots = defaultPreviewRoots(),
     notificationSettings = createNotificationSettingsStore({ read: () => null, write: () => {} }),
     discordSender = createDiscordSender(),
+    restartSettings = createRestartSettingsStore({ read: () => null, write: () => {} }),
+    restart = createRestartRunner(),
+    restartDelayMs = RESTART_DELAY_MS,
   } = options;
 
   // 「今」は状態ではなく送信時に決める。状態に持たせると、キャッシュされた状態に古い時刻が
@@ -386,9 +404,51 @@ export function createApp(options: {
     return { enabled: raw.enabled, scope: raw.scope };
   };
 
+  // 再起動コマンドが HWC 自身を止める場合、応答より先に起動するとその応答が落ちる。
+  // 設定画面から押したときに失敗に見えないよう、応答を書き終えてから起動する。
+  const scheduleRestart = (command: string) => {
+    setTimeout(() => {
+      const outcome = restart.run(command);
+      if (outcome === "not_executable") console.error(`restart: ${command} is not executable`);
+    }, restartDelayMs);
+  };
+
+  const parseRestartUpdate = (body: unknown): RestartSettings | null => {
+    if (typeof body !== "object" || body === null) return null;
+    const raw = body as { command?: unknown; afterPull?: unknown };
+    if (typeof raw.afterPull !== "boolean") return null;
+    const command = normalizeRestartCommand(raw.command ?? null);
+    if (command === undefined) return null;
+    return { command, afterPull: raw.afterPull };
+  };
+
   return (
     new Hono()
       .get("/api/health", (c) => c.json({ ok: true, service: "hwc", revision }))
+      .get("/api/restart", (c) => {
+        // 設定画面だけが読む。実行ファイルのパスを共有キャッシュに残さない。
+        c.header("cache-control", "no-store");
+        return c.json(restartSettings.get());
+      })
+      .put("/api/restart", requireJson, async (c) => {
+        const parsed = parseRestartUpdate(await c.req.json().catch(() => null));
+        if (parsed === null) return c.json({ error: "invalid_request" }, 400);
+        try {
+          restartSettings.save(parsed);
+        } catch {
+          // メモリ上の設定は変えない。画面には古い設定が残る。
+          return c.json({ error: "settings_unavailable" }, 500);
+        }
+        return c.json(restartSettings.get());
+      })
+      // 応答を返してから起動する。実行できたかは起動前の判定までで、終了は待たない。
+      .post("/api/restart", requireJson, (c) => {
+        const command = restartSettings.get().command;
+        if (command === null) return c.json({ error: "command_not_configured" }, 409);
+        if (!restart.isExecutable(command)) return c.json({ error: "command_not_executable" }, 409);
+        scheduleRestart(command);
+        return c.json({ ok: true }, 202);
+      })
       .get("/api/notifications", (c) => {
         // Webhook URL は資格情報。共有キャッシュに残さない。
         c.header("cache-control", "no-store");
@@ -574,6 +634,12 @@ export function createApp(options: {
         // 次の状態公開で上流との差を読み直す。取得に失敗しても git の操作自体は終わっている。
         store.invalidateGit(workspace.id);
         await store.refresh().catch(() => {});
+
+        // どのリポジトリで実行するかはコマンド側が判定する。ここでは対象を絞らない。
+        const restartCommand = restartSettings.get();
+        if (action === "pull" && restartCommand.afterPull && restartCommand.command !== null) {
+          scheduleRestart(restartCommand.command);
+        }
         return c.json({ ok: true });
       })
       .post("/api/workspaces/move", requireJson, async (c) => {

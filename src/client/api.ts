@@ -31,6 +31,7 @@ import {
   parseNotificationView,
 } from "../shared/notifications";
 import { parsePullRequest, type PullRequest } from "../shared/pull-request";
+import { parseRestartSettings, type RestartSettings } from "../shared/restart";
 
 // BFF 側の期限: Herdr ソケット 8 秒、エージェント起動 30 秒、worktree 60 秒、git 60 秒。
 // クライアントの期限はこれを目安に置く。
@@ -1069,5 +1070,51 @@ export async function testDiscordWebhook(): Promise<NotificationTestResult> {
   } catch {
     // 期限切れと接続失敗はクライアント側でしか分からない。文言はコードで選ぶ。
     return { ok: false, error: "unreachable" };
+  }
+}
+
+export async function fetchRestartSettings(signal?: AbortSignal): Promise<RestartSettings> {
+  const response = await client.api.restart.$get({}, { init: { signal } });
+  if (!response.ok) throw new Error(`restart: ${response.status}`);
+  return parseRestartSettings(await response.json().catch(() => null));
+}
+
+export type RestartSaveResult =
+  | { ok: true; view: RestartSettings }
+  | { ok: false; error: string | null };
+
+export async function saveRestartSettings(input: {
+  command: string | null;
+  afterPull: boolean;
+}): Promise<RestartSaveResult> {
+  try {
+    const response = await client.api.restart.$put({ json: input });
+    const body: unknown = await response.json().catch(() => null);
+    if (response.ok) return { ok: true, view: parseRestartSettings(body) };
+    const error =
+      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
+    return { ok: false, error: typeof error === "string" ? error : null };
+  } catch {
+    return { ok: false, error: null };
+  }
+}
+
+export type RunRestartResult = "started" | "not_configured" | "not_executable" | "unreachable";
+
+// 起動したかどうかだけを返す。コマンドが HWC を再起動する構成なら、この応答の直後に
+// 接続が切れ、ページは自動で読み直される。
+export async function runRestart(): Promise<RunRestartResult> {
+  try {
+    // body は読まれないが、BFF は application/json 以外を 415 で弾く。
+    const response = await client.api.restart.$post({ json: {} });
+    if (response.ok) return "started";
+    const body: unknown = await response.json().catch(() => null);
+    const error =
+      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
+    if (error === "command_not_configured") return "not_configured";
+    if (error === "command_not_executable") return "not_executable";
+    return "unreachable";
+  } catch {
+    return "unreachable";
   }
 }

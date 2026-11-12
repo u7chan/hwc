@@ -21,6 +21,7 @@ import {
   createNotificationSettingsFile,
   createNotificationSettingsStore,
 } from "./server/notifications";
+import { createRestartSettingsFile, createRestartSettingsStore } from "./server/restart";
 import index from "../index.html";
 
 const stateRoot = defaultStateRoot();
@@ -41,6 +42,7 @@ const discordSender = createDiscordSender({
   // E2E 専用。設定されていれば Discord へ送らず、送信内容をファイルに記録する（docs/e2e.md）。
   sinkPath: process.env.HWC_E2E_DISCORD_WEBHOOK_SINK ?? null,
 });
+const restartSettings = createRestartSettingsStore(createRestartSettingsFile(stateRoot));
 
 // 通知は状態の publish を購読する。startStateSync より先に張り、購読後の最初の publish を
 // 「送らない基準」として受け取る。
@@ -75,6 +77,7 @@ const app = createApp({
   revision,
   notificationSettings,
   discordSender,
+  restartSettings,
 });
 
 // Herdr の応答を待つルート（ワークツリー作成・削除・モデル指定の作成）は数十秒返さない。
