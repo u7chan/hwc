@@ -1,8 +1,13 @@
 import { expect, test } from "bun:test";
 
 const tokens = await Bun.file("src/client/styles/tokens.css").text();
-const app = await Bun.file("src/client/styles/app.css").text();
-// 2 ファイルは同じページに読み込まれる。解決と接頭辞は全体で見る。
+const partFiles: string[] = [];
+for await (const file of new Bun.Glob("src/client/styles/**/*.css").scan(".")) {
+  if (!file.endsWith("/tokens.css")) partFiles.push(file);
+}
+partFiles.sort();
+const app = (await Promise.all(partFiles.map((file) => Bun.file(file).text()))).join("\n");
+// tokens.css と各パートは同じページに読み込まれる。解決と接頭辞は全体で見る。
 const css = `${tokens}\n${app}`;
 
 // 素の値と役割トークンが混ざると、同じ意図の値が少しずつずれる。機械で見張れる範囲はここで止める。

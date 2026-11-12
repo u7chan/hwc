@@ -1,0 +1,946 @@
+/* 設定 */
+
+.hwc-settings-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* 上は中身側で取る。見出しを貼り付けたときに上端まで届かせるため。 */
+  padding: 0 var(--space-4) var(--space-8);
+  /* 見出しを貼り付けるので、下を流れる中身を隠せる色を持たせる。 */
+  background: var(--color-bg);
+  --settings-bg: var(--color-bg);
+}
+
+.hwc-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  max-width: 560px;
+  margin: 0 auto;
+  padding-top: var(--space-6);
+}
+
+/* 長い設定を辿るときも、いま何の項目かを見失わないよう見出しを貼る。 */
+.hwc-section-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) 0;
+  background: var(--settings-bg);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-weight: 400;
+}
+
+.hwc-section-note {
+  margin: var(--space-3) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* テーマの選択中プレビュー。設定画面には出ない状態色とアクセント面だけを見せる。
+   テーマを選ぶと画面全体が切り替わるので、この中に専用の色は持たない。 */
+.hwc-theme-preview {
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+/* 見本は既定で畳む。テーマは選んだ瞬間に画面全体へ反映されるので、この中で
+   常に高さを取る必要はない。見出し行をそのままボタンにして開く道を残す。 */
+.hwc-theme-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 0;
+  background: transparent;
+  color: var(--color-secondary);
+  font: inherit;
+  font-size: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-theme-preview-head:active {
+  opacity: 0.72;
+}
+
+/* 行の輪郭はカードの overflow: hidden で切れるので、フォーカス中はカード側に出す。
+   タッチ・ペンでは ADR 0040 と同じく出さない。 */
+html:not([data-input-modality="pointer"])
+  .hwc-theme-preview:has(.hwc-theme-preview-head:focus-visible) {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.hwc-theme-preview-head:focus-visible {
+  outline: none;
+}
+
+.hwc-theme-preview-icon {
+  display: grid;
+  place-items: center;
+  transition: transform 220ms ease;
+}
+
+.hwc-theme-preview-head[aria-expanded="true"] .hwc-theme-preview-icon {
+  transform: rotate(90deg);
+}
+
+/* 中身は固定の見本なので、max-height を測らずにトラックの 0fr → 1fr で動かす。 */
+.hwc-theme-preview-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+
+.hwc-theme-preview-body[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.hwc-theme-preview-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hwc-theme-preview-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-line);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.hwc-theme-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* 会話の吹き出しは 85% を上限にするので、見本の行を幅いっぱいにして同じ比率にする。 */
+.hwc-theme-preview-msg {
+  width: 100%;
+}
+
+.hwc-theme-preview-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* 一覧の行と同じ記号だが、プレビューでは行の高さを抑える。 */
+.hwc-theme-preview .hwc-status {
+  width: var(--space-6);
+  height: var(--space-6);
+}
+
+.hwc-theme-preview-link {
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hwc-theme-preview-focus {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+}
+
+/* 見本なので押せない。ボタンの形だけを借りる。 */
+.hwc-theme-preview-send {
+  cursor: default;
+  pointer-events: none;
+}
+
+.hwc-theme-preview-note {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-theme-preview-body,
+  .hwc-theme-preview-icon {
+    transition: none;
+  }
+}
+
+/* テーマとエージェントの選択カード。テーマは面の色、エージェントは Provider の印で示す。 */
+.hwc-choice-grid {
+  display: grid;
+  /* 1fr の最小値は中身の幅。長い名前で列が広がり、横スクロールになるので 0 を下限にする。 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+/* 明るさの切り替えは 3 つ並べる。狭くても入るよう、面の下に名前を置く。 */
+.hwc-choice-grid--modes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hwc-choice-grid--modes .hwc-choice {
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  text-align: center;
+}
+
+.hwc-divider {
+  height: 1px;
+  margin: var(--space-4) 0;
+  background: var(--color-line);
+}
+
+.hwc-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: var(--tap);
+  padding: var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-choice-visual {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+/* 選択中の枠は内側に描く。外側に出すと、押した瞬間だけ枠が膨らんで見える。 */
+.hwc-choice:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-choice:hover {
+  border-color: var(--color-control-line);
+  color: var(--color-text);
+}
+
+.hwc-choice:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hwc-choice[data-selected="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-theme-swatch {
+  position: relative;
+  flex: none;
+  display: block;
+  width: var(--space-8);
+  height: var(--space-6);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.hwc-theme-swatch-bar {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  bottom: var(--space-1);
+  left: var(--space-1);
+  border-radius: 3px;
+}
+
+.hwc-theme-swatch-dot {
+  position: absolute;
+  right: var(--space-1);
+  bottom: var(--space-1);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+/* システムは左がライト・右がダークの面で示す。 */
+.hwc-theme-swatch--system {
+  background: var(--color-raised);
+}
+
+.hwc-theme-split {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 50%;
+  height: 100%;
+  background: var(--color-control-line);
+}
+
+.hwc-choice-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-secondary);
+}
+
+/* 狭い画面では面と余白を詰めて、長い名前が入る幅を残す。 */
+@media (max-width: 480px) {
+  .hwc-choice {
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-1);
+  }
+
+  .hwc-theme-swatch {
+    width: var(--space-6);
+  }
+
+  /* 入り切らない長い名前は 2 行にして、省略記号で切らない。 */
+  .hwc-choice-grid:not(.hwc-choice-grid--modes) .hwc-choice-label {
+    white-space: normal;
+    line-height: 1.25;
+  }
+}
+
+.hwc-agent-grid {
+  margin-top: var(--space-3);
+}
+
+.hwc-choice-icon {
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-6);
+  color: var(--color-secondary);
+}
+
+.hwc-choice-icon[data-agent="claude"] {
+  color: var(--color-agent-claude);
+}
+
+.hwc-choice[data-selected="true"] .hwc-choice-icon {
+  color: var(--color-text);
+}
+
+.hwc-choice[data-selected="true"] .hwc-choice-icon[data-agent="claude"] {
+  color: var(--color-agent-claude);
+}
+
+.hwc-create-field {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.hwc-create-label {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-create-input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font: inherit;
+  font-size: max(16px, 1em);
+}
+
+.hwc-create-input:disabled {
+  color: var(--color-secondary);
+  cursor: default;
+}
+
+.hwc-create-input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.hwc-create-select {
+  display: grid;
+}
+
+.hwc-create-select > * {
+  grid-area: 1 / 1;
+}
+
+.hwc-create-select .hwc-create-input[data-loading="true"] {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.hwc-create-select .hwc-create-input[data-loading="false"] {
+  animation: hwc-create-select-in 200ms ease-out both;
+}
+
+.hwc-create-skeleton {
+  align-self: center;
+  width: 42%;
+  height: 14px;
+  margin-left: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-control-line);
+  pointer-events: none;
+  animation: hwc-create-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes hwc-create-select-in {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hwc-create-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-create-select .hwc-create-input[data-loading="false"],
+  .hwc-create-skeleton {
+    animation: none;
+  }
+
+  .hwc-create-skeleton {
+    opacity: 0.4;
+  }
+}
+
+.hwc-create-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  margin-bottom: var(--space-3);
+  padding: 2px;
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+}
+
+.hwc-create-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+  border: 0;
+  border-radius: calc(var(--radius-control) - 2px);
+  background: transparent;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-create-mode[aria-checked="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.hwc-create-mode:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-create-mode:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hwc-create-note {
+  margin: var(--space-3) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+}
+
+.hwc-create-model,
+.hwc-create-effort {
+  margin-top: var(--space-4);
+}
+
+.hwc-create-model .hwc-create-field,
+.hwc-create-effort .hwc-create-field {
+  margin-bottom: 0;
+}
+
+.hwc-create-actions {
+  margin-top: var(--space-4);
+}
+
+.hwc-project-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+  max-height: min(560px, calc(100dvh - var(--space-4) * 2));
+  overflow: hidden;
+}
+
+.hwc-project-dialog .hwc-dialog-title,
+.hwc-project-dialog .hwc-dialog-text {
+  flex: none;
+}
+
+.hwc-project-dialog .hwc-dialog-text {
+  margin-bottom: var(--space-3);
+}
+
+.hwc-project-search {
+  display: block;
+  flex: none;
+  margin-bottom: var(--space-2);
+}
+
+.hwc-project-list {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  margin: 0 calc(var(--space-1) * -1);
+  padding: 0 var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hwc-project-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-project-row:hover {
+  background: var(--color-raised);
+}
+
+.hwc-project-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hwc-project-path {
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.hwc-project-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.hwc-project-retry {
+  min-height: var(--tap);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hwc-project-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.hwc-project-footer {
+  display: flex;
+  flex: none;
+  margin-top: var(--space-3);
+}
+
+.hwc-project-footer .hwc-dialog-button {
+  flex: 1;
+}
+
+/* 広い画面はフォームに幅を使える。狭い画面の縦積みとタップ領域の寸法は変えない。 */
+@media (min-width: 900px) {
+  .hwc-create-dialog {
+    max-width: 480px;
+    padding: var(--space-6);
+  }
+
+  .hwc-create-dialog .hwc-dialog-title {
+    font-size: var(--text-page);
+  }
+
+  .hwc-create-dialog .hwc-dialog-actions {
+    justify-content: flex-end;
+  }
+
+  .hwc-create-dialog .hwc-dialog-button {
+    flex: 0 0 auto;
+    /* ルート文字サイズを上げた環境でも、2 つのボタンが行幅を超えないようにする。 */
+    min-width: min(9rem, calc((100% - var(--space-2)) / 2));
+    padding-inline: var(--space-4);
+  }
+}
+
+.hwc-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: var(--space-1);
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: hwc-spin 700ms linear infinite;
+  vertical-align: -2px;
+}
+
+@keyframes hwc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-spinner {
+    animation-duration: 2s;
+  }
+}
+
+.hwc-setting-group {
+  background: var(--color-surface);
+  border-radius: var(--radius-panel);
+}
+
+.hwc-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--row-pane);
+  padding: var(--space-4);
+}
+
+.hwc-setting-value {
+  color: var(--color-secondary);
+}
+
+.hwc-setting-value[data-status="live"] {
+  color: var(--color-success);
+}
+
+.hwc-setting-value[data-status="unavailable"] {
+  color: var(--color-danger);
+}
+
+.hwc-setting-value .hwc-conn {
+  color: inherit;
+  font-size: inherit;
+}
+
+/* 通知設定。スイッチ・対象の選択・Webhook の登録を 1 か所にまとめる。
+   色はトークンのアクセントを使い、Discord のマークだけブランド色にする。 */
+
+.hwc-switch {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-control-line);
+  border-radius: 999px;
+  background: var(--color-raised);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+/* 見た目は 48×28 のまま、上下のタップ領域を 44px まで広げる。行の高さ（64px）に
+   収まるので、隣の行に当たり判定は重ならない。 */
+.hwc-switch::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: var(--tap);
+  transform: translateY(-50%);
+}
+
+.hwc-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-secondary);
+  transition:
+    transform 140ms ease,
+    background 120ms ease;
+}
+
+.hwc-switch[data-on="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.hwc-switch[data-on="true"] .hwc-switch-knob {
+  transform: translateX(20px);
+  background: var(--color-on-accent);
+}
+
+.hwc-switch:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.hwc-switch:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-switch,
+  .hwc-switch-knob {
+    transition: none;
+  }
+}
+
+.hwc-notify-subtitle {
+  margin: var(--space-6) 0 var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-notify-scopes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hwc-notify-scope {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-notify-scope:hover:not(:disabled) {
+  border-color: var(--color-control-line);
+}
+
+.hwc-notify-scope[data-selected="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-raised);
+}
+
+.hwc-notify-scope:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hwc-notify-scope:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-notify-scope-mark {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1px solid var(--color-control-line);
+  border-radius: 50%;
+}
+
+.hwc-notify-scope[data-selected="true"] .hwc-notify-scope-mark {
+  border-color: var(--color-accent);
+  background: radial-gradient(circle, var(--color-accent) 0 4px, transparent 4.5px);
+}
+
+.hwc-notify-scope-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hwc-notify-scope-note {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.hwc-notify-discord {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.hwc-notify-discord-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hwc-notify-discord-mark {
+  display: grid;
+  place-items: center;
+  color: var(--color-discord);
+}
+
+.hwc-notify-discord-name {
+  font-weight: 600;
+}
+
+.hwc-notify-discord-state {
+  margin-left: auto;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-notify-hint {
+  margin: 0;
+  /* ラベルと hint の間の空白 2 つを、モックどおりに空ける。 */
+  white-space: pre-wrap;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.hwc-setting-form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.hwc-setting-input {
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.hwc-setting-input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.hwc-setting-button {
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-setting-button:hover:not(:disabled) {
+  border-color: var(--color-control-line);
+}
+
+.hwc-setting-button:disabled {
+  color: var(--color-secondary);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.hwc-setting-primary {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.hwc-setting-primary:disabled {
+  border-color: var(--color-line);
+  color: var(--color-secondary);
+}
+
+.hwc-setting-result {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-setting-result[data-ok="true"] {
+  color: var(--color-success);
+}
+
+.hwc-setting-result[data-ok="false"] {
+  color: var(--color-danger);
+}
+
+.hwc-setting-failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}

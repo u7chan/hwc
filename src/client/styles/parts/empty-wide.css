@@ -1,0 +1,179 @@
+/* 空状態 */
+
+.hwc-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  text-align: center;
+}
+
+.hwc-empty-mark {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-mark);
+  background: var(--color-surface);
+  color: var(--color-secondary);
+}
+
+/* アプリの空状態はロゴを出す。何のアプリかがそのまま分かる。 */
+.hwc-empty-mark--app {
+  color: var(--color-text);
+}
+
+.hwc-empty-title {
+  margin: var(--space-6) 0 0;
+  font-size: var(--text-page);
+  font-weight: 600;
+  line-height: var(--line-tight);
+  letter-spacing: -0.035em;
+}
+
+.hwc-empty-text {
+  max-width: 28rem;
+  margin: var(--space-3) 0 0;
+  color: var(--color-secondary);
+}
+
+/* 広い画面 */
+
+@media (min-width: 900px) {
+  .hwc-body {
+    flex-direction: row;
+  }
+
+  .hwc-list {
+    flex: none;
+    width: var(--hwc-sidebar-width);
+  }
+
+  .hwc-sidebar-foot {
+    padding: var(--space-2) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
+  }
+
+  .hwc-resizer {
+    display: block;
+  }
+
+  .hwc-app[data-view="list"] .hwc-detail {
+    display: flex;
+  }
+
+  .hwc-group-block {
+    margin: 0 var(--space-4) var(--space-2);
+    background: transparent;
+    border-radius: 0;
+  }
+
+  /* カードの角丸を外したので、見出しの枠も角を丸めない。 */
+  .hwc-group-row[data-reveal="true"] {
+    border-radius: 0;
+  }
+
+  .hwc-group {
+    min-height: var(--row-pane);
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
+  }
+
+  .hwc-back {
+    display: none;
+  }
+
+  /* 詳細はカードにしない。一覧の右をそのまま使う。 */
+  .hwc-settings-scroll {
+    background: var(--color-content);
+    --settings-bg: var(--color-content);
+  }
+
+  .hwc-detail-inner {
+    background: var(--color-content);
+    /* 本文と入力欄の左右余白。読み幅を超えた分は左右に均等に振る。
+       分割セルではセル幅が読み幅に満たないので、下限の 24px に落ちて今までと同じになる。 */
+    --hwc-gutter: max(var(--space-6), calc((100% - var(--hwc-measure)) / 2));
+  }
+
+  .hwc-detail-bar {
+    padding: 0 var(--space-8);
+    background: var(--color-content);
+  }
+
+  /* カードの外側の余白を外したので、タブバーの左端を本文と揃える。 */
+  .hwc-tabbar {
+    padding: var(--space-2) var(--space-6) var(--space-1);
+  }
+
+  .hwc-output-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  .hwc-output-scroll {
+    padding: var(--space-4) var(--hwc-gutter) var(--space-6);
+  }
+
+  .hwc-input {
+    padding: var(--space-4) var(--hwc-gutter);
+    border-top-color: var(--color-line);
+  }
+
+  /* 起動待ちも入力欄と同じ高さにする。広い画面では上下の余白が 16px になる。 */
+  .hwc-starting {
+    padding-top: var(--space-4);
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+    min-height: calc(
+      max(16px, var(--text-body)) * var(--line-body) + var(--space-2) * 2 + var(--space-3) +
+        var(--tap) + var(--space-1) + var(--space-4) * 2 + 1px
+    );
+  }
+
+  /* compact の入力欄は 1 行で、上下の余白も 8px のまま。 */
+  .hwc-starting[data-compact="true"] {
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+    min-height: calc(var(--tap) + var(--space-2) * 2 + 1px);
+  }
+
+  /* 本文と入力本文のあいだに積まれる行も同じ列に置く。面（背景と上罫線）は全幅。 */
+  .hwc-live,
+  .hwc-terminal-note,
+  .hwc-starting {
+    padding-right: var(--hwc-gutter);
+    padding-left: var(--hwc-gutter);
+  }
+
+  .hwc-send {
+    width: 36px;
+    height: 36px;
+  }
+
+  .hwc-send .hwc-stop-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .hwc-send-notice {
+    padding-right: var(--hwc-gutter);
+    padding-left: var(--hwc-gutter);
+  }
+
+  /* 見出し・本文・入力は同じ列に揃える。分割セルはセル幅で同じ式を解くので、
+     読み幅に満たないセルでは下限の 24px になる。 */
+  .hwc-pane-head {
+    padding: 0 var(--hwc-gutter);
+  }
+
+  .hwc-split-cell .hwc-pane-head,
+  .hwc-split-cell .hwc-input,
+  .hwc-split-cell .hwc-send-notice {
+    padding-right: var(--hwc-gutter);
+    padding-left: var(--hwc-gutter);
+  }
+}

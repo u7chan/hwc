@@ -1,0 +1,467 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* 押下の表示は各ボタンの :active で行う。ブラウザ既定のタップ時の矩形は出さない。 */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  /* 画面の部品は選べないようにする。選ばせたい本文と入力だけ下で戻す。 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  font: 400 var(--text-body) / var(--line-body) var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* body 全体で許可するとボタンや一覧のラベルまで選べてしまうので、必要な文字列に限る。
+   iOS は body の user-select と touch-callout を継承するため、接頭辞付きの指定と
+   callout の解除も必要。 */
+.hwc-output,
+.hwc-md,
+.hwc-msg-body,
+.hwc-input-field,
+.hwc-input-model,
+.hwc-input-effort,
+.hwc-model-name,
+.hwc-context-text,
+.hwc-hint-panel {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
+#app {
+  height: 100dvh;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* iOS の Safari は、タッチ後にプログラムで移したフォーカスにも :focus-visible を当てる。
+   タッチ・ペン操作の間は輪郭を出さない。入力欄は、タップで入ったことが分かるよう自前の輪郭に任せる。 */
+html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(select) {
+  outline: none !important;
+}
+
+@keyframes hwc-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hwc-app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+}
+
+/* 画面上端は一覧と詳細が直接使う。上にバーを置かない。 */
+
+/* 接続と設定は一覧の下端に置く。狭い画面も wide と同じ足元に揃える（上のバーは
+   チャットの高さを奪うため置かない）。狭い画面では親指の届く位置になる。 */
+.hwc-sidebar-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  /* 左に名前と版、右に接続と設定。状態バーの形に揃える。 */
+  justify-content: space-between;
+  gap: var(--space-3);
+  /* 下端はホームインジケーターに重ねない。 */
+  padding: var(--space-1) var(--space-4) max(var(--space-2), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-line);
+}
+
+.hwc-foot-brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* 足元の名前。マークが付くぶん、文字は本文より一段小さくする。
+   viewBox は文字とマークのインクに合わせてあるので、高さは viewBox の比で決まる（77/100）。 */
+.hwc-foot-logo {
+  flex: none;
+  height: 0.77em;
+  width: auto;
+  /* ブランド全体の補助サイズは継がない。本文サイズを基準に縮める。 */
+  font-size: calc(var(--text-body) * 0.88);
+  /* 同梱フォントの入れ替わり中に字が切れないよう、はみ出しは許す。 */
+  overflow: visible;
+  color: var(--color-text);
+}
+
+.hwc-foot-rev {
+  overflow: hidden;
+  color: var(--color-neutral);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-foot-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hwc-foot-button {
+  color: var(--color-secondary);
+}
+
+.hwc-conn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-attention);
+}
+
+/* 正常な間は点をゆっくり明滅させる。点自身を動かすだけなら、拡大しても中心は動かない。
+   合図は補助なので、文字だけでも状態は読める。 */
+@keyframes hwc-conn-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.hwc-conn[data-status="live"] .hwc-conn-dot {
+  background: var(--color-success);
+  animation: hwc-conn-breathe 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-conn[data-status="live"] .hwc-conn-dot {
+    animation: none;
+  }
+}
+
+.hwc-conn[data-status="unavailable"] .hwc-conn-dot {
+  background: var(--color-danger);
+}
+
+/* 本体 */
+
+/* 一覧と詳細の境目は 1px の線だけにする。線の前後に暗い地が残ると、境界が帯に見える。 */
+.hwc-resizer {
+  display: none;
+  position: relative;
+  flex: none;
+  /* 幅を持たせず、線そのものを境界にする。 */
+  width: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  /* 本文の面より上に線を置く。flex の子は z-index: auto だと後の兄弟に隠れる。 */
+  z-index: 1;
+}
+
+/* 1px の線はそのままでは掴みにくい。詳細側へ 8px 広げた見えない面を掴む。
+   一覧側へ広げると、一覧のスクロールバーと重なる。 */
+.hwc-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 0 calc(var(--space-1) * -2) 0 0;
+}
+
+.hwc-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: var(--color-line);
+}
+
+/* フォーカスは通常の輪郭に任せる。ここでも帯を足すと二重になる。 */
+.hwc-resizer:hover::after {
+  left: -1px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.hwc-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hwc-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* 上端のバーを外したぶん、一覧の先頭に余白を置く。 */
+  padding-top: var(--space-2);
+}
+
+/* 画面を切り替えたときだけ、入ってくる側を短く動かす。 */
+.hwc-app[data-view="list"] .hwc-list {
+  animation: hwc-view-in 200ms ease-out;
+}
+
+/* スクロールバーは細く、面に馴染ませる。矢印も枠も出さない。
+   入力欄は、内容が入力欄の高さを超えたときだけスクロールするので、同じ見た目に揃える。 */
+.hwc-list-scroll,
+.hwc-output-scroll,
+.hwc-settings-scroll,
+.hwc-input-field {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-control-line) transparent;
+}
+
+:is(
+  .hwc-list-scroll,
+  .hwc-output-scroll,
+  .hwc-settings-scroll,
+  .hwc-tabs,
+  .hwc-input-field
+)::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+:is(
+  .hwc-list-scroll,
+  .hwc-output-scroll,
+  .hwc-settings-scroll,
+  .hwc-tabs,
+  .hwc-input-field
+)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:is(
+  .hwc-list-scroll,
+  .hwc-output-scroll,
+  .hwc-settings-scroll,
+  .hwc-tabs,
+  .hwc-input-field
+)::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--color-control-line);
+}
+
+:is(
+    .hwc-list-scroll,
+    .hwc-output-scroll,
+    .hwc-settings-scroll,
+    .hwc-tabs,
+    .hwc-input-field
+  )::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-secondary);
+}
+
+:is(
+  .hwc-list-scroll,
+  .hwc-output-scroll,
+  .hwc-settings-scroll,
+  .hwc-tabs,
+  .hwc-input-field
+)::-webkit-scrollbar-button {
+  display: none;
+}
+
+.hwc-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--space-6);
+  overscroll-behavior: contain;
+}
+
+/* 上は中身側で取る。枠に padding-top を置くと、帯を貼り付けたときに上端まで届かず、
+   その隙間に後ろの行が覗く。 */
+.hwc-list-body {
+  position: relative;
+  padding-top: var(--space-2);
+}
+
+/* 一覧のペイン行は分割のドラッグ起点でもある。触れる画面では縦のスクロールを
+   優先し、横へ動かしたときだけドラッグを始める（App の startPaneDrag）。 */
+.hwc-pane-open,
+.hwc-active-open {
+  touch-action: pan-y pinch-zoom;
+}
+
+/* 出すスペースの切り替え。タブではなく絞り込みなので、下線ではなく面で示す。 */
+.hwc-scope {
+  position: relative;
+  flex: none;
+  display: flex;
+  margin: 0 var(--space-4) var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+}
+
+/* 選んだ側へつまみが滑る。2 等分の 1 つをそのまま覆うので、幅は 2 分の 1 で足りる。 */
+.hwc-scope-thumb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(100% / 2);
+  border-radius: calc(var(--radius-control) - 1px);
+  background: var(--color-surface);
+  pointer-events: none;
+  transition: transform 180ms ease;
+}
+
+/* 既定の「すべて」は先頭なので、all ではつまみを動かさない。 */
+.hwc-scope[data-scope="active"] .hwc-scope-thumb {
+  transform: translateX(100%);
+}
+
+.hwc-scope-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  flex: 1;
+  min-height: var(--tap);
+  border: 0;
+  border-radius: calc(var(--radius-control) - 1px);
+  background: transparent;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.hwc-scope-option[aria-pressed="true"] {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* 件数は目安。押す対象ではなく、急かさない色で小さく添える。 */
+.hwc-scope-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4em;
+  height: 1.4em;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-mark);
+  /* 面は一覧の下地と同じ色なので、縁が無いと未選択のときに背景へ溶ける。 */
+  background: var(--color-raised);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-scope-thumb,
+  .hwc-scope-option {
+    transition: none;
+  }
+}
+
+/* 絞り込んで空になったときは、戻し方をその場に書く。 */
+.hwc-list-note {
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+}
+
+/* 空状態を中身の内側に置いたぶん、中身の上余白を打ち消して従来の位置に揃える。 */
+.hwc-list-body > .hwc-list-note {
+  margin-top: calc(var(--space-2) * -1);
+}
+
+.hwc-list-note-title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+}
+
+.hwc-list-note-text {
+  margin: 0;
+}
+
+/* 並べ替えを Herdr に渡せなかったとき。一覧の並びは Herdr のまま変えない。
+   一覧の下の方で落としても見えるよう、スクロール領域の上端に貼り付ける。 */
+.hwc-list-notice {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 var(--space-4) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-attention);
+  border-radius: var(--radius-sm);
+  background: var(--color-attention-bg);
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
+}
+
+.hwc-detail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* 狭い画面は一覧と詳細を画面遷移で分ける。広い画面は両方を並べる。 */
+@media (max-width: 899px) {
+  .hwc-detail {
+    display: none;
+  }
+
+  .hwc-app[data-view="detail"] .hwc-list,
+  .hwc-app[data-view="settings"] .hwc-list {
+    display: none;
+  }
+
+  .hwc-app[data-view="detail"] .hwc-detail,
+  .hwc-app[data-view="settings"] .hwc-detail {
+    display: flex;
+  }
+}

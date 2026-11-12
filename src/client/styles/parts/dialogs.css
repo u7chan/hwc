@@ -1,0 +1,498 @@
+/* 行き場のない場所を押したら閉じる。 */
+.hwc-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.hwc-menu {
+  position: fixed;
+  z-index: 21;
+  width: max-content;
+  min-width: min(220px, calc(100vw - var(--space-2) * 2));
+  max-width: calc(100vw - var(--space-2) * 2);
+  max-height: calc(100dvh - var(--space-2) * 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  transform-origin: top right;
+  animation: hwc-menu-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.hwc-menu[data-open="false"] {
+  pointer-events: none;
+  animation: hwc-menu-out 160ms ease-in both;
+}
+
+@keyframes hwc-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes hwc-menu-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-menu {
+    animation: none;
+  }
+  .hwc-menu[data-open="false"] {
+    opacity: 0;
+    animation: none;
+  }
+}
+
+.hwc-copy-glyph {
+  position: relative;
+  flex: none;
+  display: inline-block;
+}
+
+.hwc-copy-glyph-layer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity 160ms ease,
+    transform 160ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.hwc-copy-glyph[data-copied="true"] .hwc-copy-glyph-copy {
+  opacity: 0;
+  transform: scale(0.4) rotate(-25deg);
+}
+
+.hwc-copy-glyph[data-copied="false"] .hwc-copy-glyph-check {
+  opacity: 0;
+  transform: scale(0.4) rotate(25deg);
+}
+
+.hwc-menu-head {
+  margin: 0 0 var(--space-1);
+  padding: 0 var(--space-2);
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.hwc-menu-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: 0;
+  padding-right: 0;
+}
+
+.hwc-menu-space-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-right: 0;
+}
+
+/* パスは末尾で場所を見分ける。省略は shortenPath が行い、ここでは枠から溢れない
+   ようにするだけにする。 */
+.hwc-menu-space-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hwc-menu-space-name {
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: var(--line-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-menu-space-path {
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-menu-copy {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-menu-copy:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-body);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.hwc-menu-item:hover {
+  background: var(--color-raised);
+}
+
+/* 入力の下から開く追加メニュー。補助説明を 2 行目に置くぶん、通常の項目より縦に広い。 */
+.hwc-add-item {
+  align-items: flex-start;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+
+.hwc-add-item > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.hwc-add-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hwc-add-item-hint {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.hwc-menu-item:disabled {
+  color: var(--color-secondary);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.hwc-menu-item:disabled:hover {
+  background: transparent;
+}
+
+/* 最後のペインを保護する場合以外は、止まったエージェントも畳めるようにする。 */
+.hwc-menu-item--danger {
+  color: var(--color-danger);
+}
+
+/* メニュー内の補足。上限の理由を 1 行で添える。 */
+.hwc-menu-note {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* 壊す操作の前に置く。メニューの項目が増えても、close が別の群だと分かる。 */
+.hwc-menu-separator {
+  height: 0;
+  margin: var(--space-1) 0;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+/* 確認ダイアログ。破壊的な操作の手前に一度だけ挟む。 */
+.hwc-dialog-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.hwc-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--color-text);
+  animation: hwc-scrim-in 180ms ease forwards;
+}
+
+.hwc-dialog-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  /* 中央に置くためだけの枠。押した場所を背後へ通し、背景タップで閉じられるようにする。 */
+  pointer-events: none;
+}
+
+.hwc-dialog:focus {
+  outline: none;
+}
+
+.hwc-dialog {
+  width: 100%;
+  max-width: 320px;
+  max-height: calc(100dvh - var(--space-4) * 2);
+  overflow-y: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+  animation: hwc-dialog-in 240ms ease-out both;
+  /* 枠から中身だけ押せるようにする（.hwc-dialog-wrap の none を戻す）。 */
+  pointer-events: auto;
+}
+
+.hwc-dialog-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+.hwc-dialog-text {
+  margin: 0 0 var(--space-5);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  /* パスなどの区切りの無い長い文字列で、ダイアログごと横に広がらないようにする。 */
+  overflow-wrap: anywhere;
+}
+
+.hwc-dialog-id {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.hwc-dialog-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.hwc-dialog-button {
+  flex: 1;
+  min-height: var(--tap);
+  border-radius: var(--radius-control);
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hwc-dialog-cancel {
+  border: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.hwc-dialog-confirm {
+  border: 0;
+  background: var(--color-danger);
+  color: var(--color-surface);
+}
+
+.hwc-dialog-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* 送信中は押せない。危険色を外し、実行を抑止していることを面で示す。 */
+.hwc-dialog-button:disabled {
+  border: 1px solid var(--color-line);
+  background: var(--color-raised);
+  color: var(--color-secondary);
+  cursor: default;
+}
+
+.hwc-dialog-error {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--color-danger);
+}
+
+.hwc-dialog-button:active {
+  transform: scale(0.98);
+}
+
+.hwc-dialog-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* 画像の拡大。会話の中のサムネイルと同じ配信 URL を、ダイアログで大きく出す。
+   画像は縦に伸びても画面からはみ出さないよう、ヘッダーとフッターの分を引いた高さで止める。 */
+.hwc-image-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* 画像の大きさに合わせて縮み、大きな画像だけ 960px で止める。名前とリンクの分は残す。 */
+  width: fit-content;
+  min-width: min(100%, 20rem);
+  max-width: min(100%, 960px);
+  padding: var(--space-2);
+}
+
+.hwc-image-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-2);
+}
+
+.hwc-image-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-image-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-image-close:hover {
+  background: var(--color-raised);
+}
+
+.hwc-image-full {
+  display: block;
+  align-self: center;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100dvh - 12rem);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+  object-fit: contain;
+}
+
+.hwc-image-open {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+}
+
+.hwc-dialog-layer[data-open="false"] .hwc-dialog {
+  pointer-events: none;
+  animation: hwc-dialog-out 180ms ease-in both;
+}
+
+.hwc-dialog-layer[data-open="false"] .hwc-dialog-backdrop {
+  animation: hwc-scrim-out 180ms ease-in both;
+}
+
+@keyframes hwc-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes hwc-dialog-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@keyframes hwc-scrim-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 0.32;
+  }
+}
+
+@keyframes hwc-scrim-out {
+  from {
+    opacity: 0.32;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-dialog,
+  .hwc-dialog-backdrop,
+  .hwc-dialog-layer[data-open="false"] .hwc-dialog,
+  .hwc-dialog-layer[data-open="false"] .hwc-dialog-backdrop {
+    animation: none;
+  }
+
+  .hwc-dialog-backdrop {
+    opacity: 0.32;
+  }
+
+  .hwc-dialog-layer[data-open="false"] {
+    opacity: 0;
+  }
+}

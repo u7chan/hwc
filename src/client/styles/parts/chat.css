@@ -1,0 +1,1041 @@
+/* 会話。ユーザーは右、エージェントは左に置いて、誰の発話かを行の寄せで示す。 */
+.hwc-chat {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: var(--space-4);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-msg {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+/* 圧縮の境目。吹き出しではなく、履歴が切り替わる区切りとして置く。 */
+.hwc-compaction {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* 区切りは会話の li と同じ並びに置く。行間は .hwc-chat の gap に任せる。 */
+.hwc-compaction-row {
+  display: block;
+}
+
+/* 1 行だけのときと、details の見出し。同じ並びにする。 */
+p.hwc-compaction,
+.hwc-compaction-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hwc-compaction-head {
+  min-height: var(--tap);
+  list-style: none;
+  cursor: pointer;
+}
+
+/* 既定の三角は自前の記号と二重になる。 */
+.hwc-compaction-head::-webkit-details-marker {
+  display: none;
+}
+
+.hwc-compaction-head:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.hwc-compaction-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--color-line);
+}
+
+.hwc-compaction-label {
+  flex: none;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 開閉は一覧の disclosure と同じシェブロン。軸のある矢印は場所の移動に使うので、ここでは使わない。 */
+.hwc-compaction-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  transition: transform 220ms ease;
+}
+
+.hwc-compaction[open] .hwc-compaction-icon {
+  transform: rotate(90deg);
+}
+
+/* 要約は長いが、内側でスクロールさせない。会話のスクロール 1 本で読ませる。 */
+.hwc-compaction-body {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-raised);
+  color: var(--color-text);
+  line-height: var(--line-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-compaction-icon {
+    transition: none;
+  }
+}
+
+/* 記号は本文の下の行へ。本文の幅を削らない。 */
+.hwc-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-6);
+}
+
+.hwc-msg[data-role="user"] .hwc-msg-meta {
+  justify-content: flex-end;
+}
+
+.hwc-msg-copy {
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-mark);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-msg-copy:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+/* 押した結果は、記号の入れ替えに加えて面の色と弾みでも示す。 */
+.hwc-msg-copy[data-copied="true"] {
+  opacity: 1;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  animation: hwc-copy-bounce 380ms cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+
+@keyframes hwc-copy-bounce {
+  0% {
+    transform: scale(1);
+  }
+
+  35% {
+    transform: scale(1.18);
+  }
+
+  70% {
+    transform: scale(0.96);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hwc-msg-copy:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* 掴める画面では、行をなぞったときだけ出す。常に並ぶと騒がしい。 */
+@media (hover: hover) {
+  .hwc-msg-copy {
+    opacity: 0;
+    transition: opacity 140ms ease;
+  }
+
+  .hwc-msg:hover .hwc-msg-copy,
+  .hwc-msg:focus-within .hwc-msg-copy {
+    opacity: 1;
+  }
+}
+
+.hwc-msg[data-role="user"] {
+  align-items: flex-end;
+}
+
+/* ローカルで送った /compact の控え。通常会話の青い吹き出しと区別する。 */
+.hwc-msg[data-role="command"] {
+  align-items: flex-end;
+}
+
+.hwc-msg[data-role="command"] .hwc-msg-meta {
+  justify-content: flex-end;
+}
+
+.hwc-command-echo {
+  max-width: 85%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-panel);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 失敗したターン。吹き出しにせず、応答が返らなかった記録として左に線を置く。
+   色だけに意味を持たせないよう、記号と文言も添える。 */
+.hwc-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-attention);
+}
+
+.hwc-error-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+}
+
+/* 自動リトライの回数。ラベルと同じ強さで読ませない。 */
+.hwc-error-count {
+  margin-left: var(--space-1);
+  color: var(--color-secondary);
+}
+
+.hwc-error-text {
+  margin: 0;
+  color: var(--color-text);
+  font: 400 var(--text-secondary) / var(--line-body) var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.hwc-msg[data-role="user"] .hwc-msg-bubble {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: var(--space-1);
+  max-width: 85%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-panel) var(--radius-panel) var(--radius-sm) var(--radius-panel);
+  background: var(--color-accent);
+  /* 面の上の文字は surface ではなく on-accent。surface はテーマによって面と近く、
+     Solarized などでコントラストが 4.5:1 を割る。 */
+  color: var(--color-on-accent);
+  font-size: var(--text-body);
+  line-height: var(--line-body);
+}
+
+/* 送信が確定するまでは進行中の面にして、送信済みの青い吹き出しと分ける。
+   状態は色だけに頼らず、時刻の代わりに「送信中」と出す。 */
+.hwc-msg[data-pending="true"] .hwc-msg-bubble {
+  background: var(--color-active-bg);
+  color: var(--color-text);
+}
+
+.hwc-msg-body {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  transition: max-height 220ms ease;
+}
+
+/* 添付の画像。押すとダイアログで原寸を開く。 */
+.hwc-msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.hwc-msg-attachment {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.hwc-msg-attachment:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.hwc-msg-attachment-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 180px;
+}
+
+/* エージェントが書いた HTML。押すとプレビューのタブが開く。 */
+.hwc-msg-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.hwc-msg-page {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.hwc-msg-page:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.hwc-msg-page-name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-msg-page-kind {
+  /* 長い basename のラベルは省略する。ファイル名を潰さないよう、種別欄の幅を先に抑える。 */
+  flex: 0 1 auto;
+  max-width: 50%;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 根の外にあって配れないファイル。チップを出せない代わりに、理由を 1 行で置く。 */
+.hwc-msg-outside {
+  margin: var(--space-1) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  overflow-wrap: anywhere;
+}
+
+.hwc-msg-outside-name {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+
+/* 折り畳みの … は吹き出しの面の色で隠す。 */
+.hwc-msg[data-pending="true"] .hwc-msg-more {
+  background: linear-gradient(90deg, transparent, var(--color-active-bg) 60%);
+}
+
+.hwc-msg-more {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: 4rem;
+  height: 1.6em;
+  padding-right: var(--space-1);
+  background: linear-gradient(90deg, transparent, var(--color-accent) 60%);
+  color: inherit;
+  /* 折り畳み中の … を選択範囲に混ぜない。 */
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
+.hwc-msg-expand {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 2px;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-secondary);
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.hwc-msg-expand:hover {
+  opacity: 1;
+}
+
+.hwc-msg-expand:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: var(--radius-mark);
+}
+
+.hwc-msg-expand-icon {
+  display: grid;
+  place-items: center;
+  transition: transform 220ms ease;
+}
+
+.hwc-msg-expand[aria-expanded="true"] .hwc-msg-expand-icon {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-msg-body,
+  .hwc-msg-expand-icon {
+    transition: none;
+  }
+}
+
+/* エージェント本文の Markdown。散文はサンセリフ、コードと解析できなかった記法だけを等幅にする。 */
+.hwc-md {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font: 400 var(--text-body) / var(--line-body) var(--font-ui);
+
+  /* 見出しの段階は本文の大きさを基準にした固定値。tokens.css の段は増やさない。 */
+  --md-h3: calc(var(--text-body) * 1.25);
+  --md-h4: calc(var(--text-body) * 1.15);
+  --md-h5: calc(var(--text-body) * 1.05);
+  --md-h6: var(--text-body);
+}
+
+.hwc-md[data-plain] {
+  white-space: pre-wrap;
+}
+
+.hwc-md h3,
+.hwc-md h4,
+.hwc-md h5,
+.hwc-md h6 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-weight: 700;
+  line-height: var(--line-tight);
+}
+
+.hwc-md h3 {
+  font-size: var(--md-h3);
+}
+
+.hwc-md h4 {
+  font-size: var(--md-h4);
+}
+
+.hwc-md h5 {
+  font-size: var(--md-h5);
+}
+
+.hwc-md h6 {
+  font-size: var(--md-h6);
+  color: var(--color-secondary);
+}
+
+.hwc-md p,
+.hwc-md ul,
+.hwc-md ol,
+.hwc-md blockquote,
+.hwc-md hr,
+.hwc-md-figure,
+.hwc-md-table-wrap {
+  margin: var(--space-3) 0;
+}
+
+/* 先頭と末尾の余白はメッセージ側の gap に任せる。入れ子の再帰でも同じ規則を使う。 */
+.hwc-md > :first-child,
+.hwc-md blockquote > :first-child {
+  margin-block-start: 0;
+}
+
+.hwc-md > :last-child,
+.hwc-md blockquote > :last-child {
+  margin-block-end: 0;
+}
+
+/* 会話全体が <ol> なので、UA の ol ul / ul ul に頼らず、記号は自前の列で置く。
+   先頭のリストも段落と同じ左端に揃える。 */
+.hwc-md ul,
+.hwc-md ol {
+  padding-inline-start: 0;
+  list-style: none;
+}
+
+.hwc-md li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.hwc-md li + li {
+  margin-block-start: var(--space-1);
+}
+
+/* 記号は 20px の内容列に右寄せし、右に 4px の余白を置く。本文はさらに 4px 空けるので、
+   記号と本文は 8px 離れる。2 桁の番号が折り返すと行の高さが変わるため、記号は折り返さない。
+   入れ子のリストは本文の列の中に置くので、段ごとに 28px 下がる。 */
+.hwc-md-marker {
+  flex: none;
+  width: var(--space-6);
+  padding-right: var(--space-1);
+  color: var(--color-secondary);
+  line-height: inherit;
+  text-align: right;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hwc-md-li-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 項目内の段落は入れ子リストの前後で余白を作らない。段落が続くときだけ空ける。 */
+.hwc-md-li-body > p {
+  margin-block: 0;
+}
+
+.hwc-md-li-body > p + p {
+  margin-block-start: var(--space-3);
+}
+
+/* 入れ子は前の行に続けて置く。汎用の 12px だと親項目から離れて別の段落に見える。 */
+.hwc-md-li-body > :is(ul, ol) {
+  margin-block-start: var(--space-1);
+}
+
+.hwc-md-li-body > :first-child {
+  margin-block-start: 0;
+}
+
+.hwc-md-li-body > :last-child {
+  margin-block-end: 0;
+}
+
+/* タスクリストのチェック。押した結果はこの画面だけに持ち、Markdown は書き換えない。 */
+.hwc-md-task {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-5);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hwc-md-task-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1.5px solid var(--color-control-line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-on-accent);
+}
+
+.hwc-md-task:hover .hwc-md-task-box {
+  border-color: var(--color-text);
+}
+
+.hwc-md-task-box[data-checked="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.hwc-md-task-box svg {
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+.hwc-md blockquote {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--color-line);
+  color: var(--color-secondary);
+}
+
+.hwc-md hr {
+  border: 0;
+  border-block-start: 1px solid var(--color-line);
+}
+
+.hwc-md a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.hwc-md code,
+.hwc-md-literal {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+}
+
+/* インラインコードと literal は面で囲む。フェンス内の code は下で打ち消す。 */
+.hwc-md-literal,
+.hwc-md :not(pre) > code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+}
+
+/* 本文の画像記法だけの段落は横に並べる。入りきらない分は折り返す。 */
+.hwc-md-image-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+/* 本文の画像記法。押すとダイアログで原寸を開く。 */
+.hwc-md-image {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  overflow: hidden;
+  cursor: zoom-in;
+  vertical-align: middle;
+}
+
+.hwc-md-image:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.hwc-md-image-content {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 180px;
+}
+
+.hwc-md-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.hwc-md-lang {
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+}
+
+/* コードは折り返さず、ブロックの中だけ横スクロールさせる。 */
+.hwc-md-pre {
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+  line-height: 1.55;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hwc-md-pre code {
+  padding: 0;
+  background: none;
+}
+
+/* コードブロックのコピー。hover できる端末では hover でフワッと出し、
+   触れる端末では常に出す。 */
+.hwc-md-code {
+  position: relative;
+  min-width: 0;
+}
+
+.hwc-md-copy {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-mark);
+  background: var(--color-raised);
+  color: var(--color-secondary);
+  cursor: pointer;
+  opacity: 1;
+  transition:
+    opacity 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (hover: hover) {
+  .hwc-md-copy {
+    opacity: 0;
+  }
+
+  .hwc-md-code:hover .hwc-md-copy,
+  .hwc-md-copy:focus-visible {
+    opacity: 1;
+  }
+}
+
+.hwc-md-copy:hover {
+  background: var(--color-selected);
+  color: var(--color-text);
+}
+
+.hwc-md-copy[data-copied="true"] {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-md-copy {
+    transition: none;
+  }
+}
+
+.hwc-md-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 表は折り返して画面に収め、入らないときだけ横スクロールする。 */
+.hwc-md-table {
+  border-collapse: collapse;
+  font-size: var(--text-body);
+}
+
+.hwc-md-table th,
+.hwc-md-table td {
+  min-width: 5em;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  text-align: left;
+  overflow-wrap: break-word;
+}
+
+.hwc-md-table th {
+  background: var(--color-raised);
+  font-weight: 700;
+}
+
+.hwc-md-table [data-align="center"] {
+  text-align: center;
+}
+
+.hwc-md-table [data-align="right"] {
+  text-align: right;
+}
+
+.hwc-msg-time {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 実行中の段階と thinking の末尾。会話のスクロール領域の外に置くので、読み返して
+   いる間も見える。高さが変わっても下の入力欄は動かない。 */
+/* ターン終了時は高さを即座に返し、中身だけを短く薄く消す。高さごとアニメーション
+   すると、上に載る会話のリフローが毎フレーム走る。長さは PaneDetail.tsx の
+   LIVE_EXIT_MS と揃える。短いと途中で DOM から外れ、長いと不可視の帯が残る。 */
+.hwc-live-slot {
+  flex: none;
+  position: relative;
+}
+
+.hwc-live-slot[data-state="closing"] {
+  height: 0;
+}
+
+.hwc-live-slot[data-state="closing"] > .hwc-live {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.hwc-live-slot[data-state="closing"] .hwc-live-head,
+.hwc-live-slot[data-state="closing"] .hwc-live-thought {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-live-slot[data-state="closing"] .hwc-live-head,
+  .hwc-live-slot[data-state="closing"] .hwc-live-thought {
+    transition: none;
+  }
+}
+
+.hwc-live {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-content);
+}
+
+/* 文字はベースラインで揃える。等幅の経過時間と本文のフォントでは行の高さが違い、
+   center だと秒数だけ浮いて見える。3 点は文字ではないので個別に中央へ。 */
+.hwc-live-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.hwc-live-head .hwc-typing {
+  align-self: center;
+}
+
+/* 何をしているかを、経過時間の左に短く添える。長い文言でも行を増やさず、
+   幅が足りないときは省略する。 */
+.hwc-live-phase {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 実行中であることを文字自体でも示す。段階の文字だけを光が通り、点・経過時間・速度は
+   止めたままにする。loading-ui の既定は地の色を currentColor の 55% まで薄めるが、
+   明るいテーマでは secondary が読めないほど薄くなるため、地は currentColor のまま、
+   帯だけ --color-text へ寄せる（暗いテーマでは明るく、明るいテーマでは濃く抜ける）。 */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .hwc-live-phase {
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    /* color-mix 非対応では次の宣言ごと無効になる。透明な文字だけが残らないよう、
+       同じ色の帯で先に塗っておく（掃引はしないが、ラベルは読める）。 */
+    background-image:
+      linear-gradient(
+        90deg,
+        transparent calc(50% - 1.4em),
+        currentColor,
+        transparent calc(50% + 1.4em)
+      ),
+      linear-gradient(currentColor, currentColor);
+    background-image:
+      linear-gradient(
+        90deg,
+        transparent calc(50% - 1.4em),
+        color-mix(in oklab, currentColor 35%, var(--color-text)),
+        transparent calc(50% + 1.4em)
+      ),
+      linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-size:
+      250% 100%,
+      auto;
+    background-position: 100% center;
+    animation: hwc-live-shimmer 2s linear infinite;
+  }
+
+  @keyframes hwc-live-shimmer {
+    from {
+      background-position: 100% center;
+    }
+
+    to {
+      background-position: 0% center;
+    }
+  }
+
+  /* 意味は文字が担う。動きを減らす設定では静止したラベルに戻す。 */
+  @media (prefers-reduced-motion: reduce), (forced-colors: active) {
+    .hwc-live-phase {
+      -webkit-text-fill-color: currentColor;
+      background-image: none;
+      animation: none;
+    }
+  }
+}
+
+/* 経過時間は常に右端に置く。文言の長さや秒数の桁が変わっても右端が動かないので、
+   時間の位置が揺れない。中断ボタンは時間の左に並べ、ラベルが伸びても
+   （「中断」→「中断中」）時間を押し出さない。 */
+.hwc-live-tail {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.hwc-live-elapsed {
+  flex: none;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 生成速度。経過時間の左に置き、速度の有無で右端の時間を押し出さない。 */
+.hwc-live-tok {
+  flex: none;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* thinking は 2 行分の高さを先に確保する。中身は下端に寄せ、折り返しであふれた
+   上側を切って新しい方だけを見せる（切れる位置は行の境界なので、文字は欠けない）。
+   枠は thinking の外（応答待ち・回答の生成中・ツール実行中）でも空けたままにする。
+   段階の切り替わりで帯の高さが変わると、上に載る会話の見える範囲が動く。 */
+.hwc-live-thought {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: calc(var(--text-secondary) * 3);
+  overflow: hidden;
+}
+
+/* 会話の本文ではなく、いま組み立てている途中の文章であることを左の線で示す。 */
+.hwc-live-thought-text {
+  margin: 0;
+  padding-left: var(--space-2);
+  border-left: 2px solid var(--color-control-line);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 圧縮中だけ、返答待ちの 3 点に何が起きているかを添える。 */
+.hwc-compaction-pending {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* 失敗を観測できない圧縮を、利用者がローカルに畳むための逃げ道。 */
+.hwc-compaction-cancel {
+  min-height: var(--space-6);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-compaction-cancel:hover {
+  background: var(--color-raised);
+}
+
+.hwc-compaction-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hwc-typing,
+.hwc-compaction-pending,
+.hwc-compaction-cancel {
+  flex-shrink: 0;
+}
+
+/* 返答待ちの 3 点。行の高さを保って、返答が来たときに跳ねないようにする。 */
+.hwc-typing {
+  display: inline-flex;
+  gap: 5px;
+  padding: var(--space-2) 0;
+}
+
+.hwc-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-secondary);
+  animation: hwc-typing 1s ease-in-out infinite;
+}
+
+.hwc-typing span:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.hwc-typing span:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+@keyframes hwc-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-typing span {
+    animation: none;
+  }
+}
