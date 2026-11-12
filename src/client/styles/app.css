@@ -5686,6 +5686,12 @@ html:not([data-input-modality="pointer"])
   color: var(--color-danger);
 }
 
+/* 設定の行では、足元と同じ点と文言を行の文字サイズ・色で出す。 */
+.hwc-setting-value .hwc-conn {
+  color: inherit;
+  font-size: inherit;
+}
+
 /* 通知設定。スイッチ・対象の選択・Webhook の登録を 1 か所にまとめる。
    色はトークンのアクセントを使い、Discord のマークだけブランド色にする。 */
 
