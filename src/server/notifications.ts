@@ -201,12 +201,16 @@ export function settledWorkspaceIds(state: AppState): Set<string> {
 
 // 要対応は完了と違い、親やほかのペインの状態を待たない。答えるまで止まっている
 // ペインそのものが対象なので、シェルを除いた全ペインを見る。
+function isBlockedAgentPane(pane: PaneState): boolean {
+  return pane.agent !== null && pane.agentStatus === "blocked";
+}
+
 export function blockedPaneIds(state: AppState): Set<string> {
   const ids = new Set<string>();
   for (const workspace of state.workspaces) {
     for (const tab of workspace.tabs) {
       for (const pane of tab.panes) {
-        if (pane.agent !== null && pane.agentStatus === "blocked") ids.add(pane.id);
+        if (isBlockedAgentPane(pane)) ids.add(pane.id);
       }
     }
   }
@@ -217,9 +221,7 @@ function blockedPanesOf(workspace: WorkspaceState, paneIds: ReadonlySet<string>)
   const panes: PaneState[] = [];
   for (const tab of workspace.tabs) {
     for (const pane of tab.panes) {
-      if (pane.agent !== null && pane.agentStatus === "blocked" && paneIds.has(pane.id)) {
-        panes.push(pane);
-      }
+      if (paneIds.has(pane.id) && isBlockedAgentPane(pane)) panes.push(pane);
     }
   }
   return panes;
