@@ -135,7 +135,6 @@ test("a cancellation is not a failure", () => {
 });
 
 test("the terminal output is shown until the conversation is readable", () => {
-  // 会話を持たないペインは端末出力のまま。
   expect(paneBody({ chat: false, blocked: false, failed: false, snapshot })).toEqual({
     kind: "output",
   });
@@ -143,7 +142,6 @@ test("the terminal output is shown until the conversation is readable", () => {
   expect(paneBody({ chat: true, blocked: true, failed: false, snapshot })).toEqual({
     kind: "output",
   });
-  // 読めない間も端末出力へ切り替える。
   expect(paneBody({ chat: true, blocked: false, failed: true, snapshot: null })).toEqual({
     kind: "output",
   });

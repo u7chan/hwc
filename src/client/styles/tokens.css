@@ -146,8 +146,6 @@
   --color-danger: #ff9ca4;
   --color-agent-claude: #e08a68;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #7aa7ff;
   --color-slot-2: #b79bff;
   --color-slot-3: #6fcbd6;
@@ -179,8 +177,6 @@
   --color-danger: #d20f39;
   --color-agent-claude: #c15f3c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #1e66f5;
   --color-slot-2: #8839ef;
   --color-slot-3: #179299;
@@ -212,8 +208,6 @@
   --color-danger: #e78284;
   --color-agent-claude: #e39a7c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #8caaee;
   --color-slot-2: #ca9ee6;
   --color-slot-3: #81c8be;
@@ -245,8 +239,6 @@
   --color-danger: #ed8796;
   --color-agent-claude: #e39a7c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #8aadf4;
   --color-slot-2: #c6a0f6;
   --color-slot-3: #8bd5ca;
@@ -278,8 +270,6 @@
   --color-danger: #f38ba8;
   --color-agent-claude: #e39a7c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #89b4fa;
   --color-slot-2: #cba6f7;
   --color-slot-3: #94e2d5;
@@ -311,8 +301,6 @@
   --color-danger: #bf616a;
   --color-agent-claude: #d08770;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #81a1c1;
   --color-slot-2: #b48ead;
   --color-slot-3: #8fbcbb;
@@ -344,8 +332,6 @@
   --color-danger: #f7768e;
   --color-agent-claude: #e3906e;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #7aa2f7;
   --color-slot-2: #bb9af7;
   --color-slot-3: #7dcfff;
@@ -377,8 +363,6 @@
   --color-danger: #e46876;
   --color-agent-claude: #e08a68;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #7e9cd8;
   --color-slot-2: #957fb8;
   --color-slot-3: #7aa89f;
@@ -410,8 +394,6 @@
   --color-danger: #fb4934;
   --color-agent-claude: #d65d0e;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #6f9fc8;
   --color-slot-2: #b16286;
   --color-slot-3: #89b0ae;
@@ -443,8 +425,6 @@
   --color-danger: #e67e80;
   --color-agent-claude: #e08a68;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #7fb2d9;
   --color-slot-2: #b58fb6;
   --color-slot-3: #7fbbb3;
@@ -476,8 +456,6 @@
   --color-danger: #ff5555;
   --color-agent-claude: #ffb86c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #7fb0ff;
   --color-slot-2: #bd93f9;
   --color-slot-3: #8be9fd;
@@ -510,8 +488,6 @@
   --color-danger: #b4637a;
   --color-agent-claude: #c15f3c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #286983;
   --color-slot-2: #907aa9;
   --color-slot-3: #56949f;
@@ -544,8 +520,6 @@
   --color-danger: #e45649;
   --color-agent-claude: #c15f3c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #4078f2;
   --color-slot-2: #a626a4;
   --color-slot-3: #0184bc;
@@ -578,8 +552,6 @@
   --color-danger: #dc322f;
   --color-agent-claude: #cb4b16;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #268bd2;
   --color-slot-2: #6c71c4;
   --color-slot-3: #2aa198;
@@ -611,8 +583,6 @@
   --color-danger: #dc322f;
   --color-agent-claude: #cb4b16;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #3f9fe0;
   --color-slot-2: #8a8fd8;
   --color-slot-3: #35bdb2;
@@ -647,8 +617,6 @@
   --color-danger: #b02a1f;
   --color-agent-claude: #c15f3c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #2f62c8;
   --color-slot-2: #7a4fd0;
   --color-slot-3: #0f6f7d;
@@ -680,8 +648,6 @@
   --color-danger: #ff8f8f;
   --color-agent-claude: #e08a68;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #8fa9f2;
   --color-slot-2: #c4a7e7;
   --color-slot-3: #9ccfd8;
@@ -713,8 +679,6 @@
   --color-danger: #9d0006;
   --color-agent-claude: #c15f3c;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #076678;
   --color-slot-2: #8f3f71;
   --color-slot-3: #2f7f74;
@@ -746,8 +710,6 @@
   --color-danger: #ff9ca4;
   --color-agent-claude: #ef9062;
 
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
   --color-slot-1: #7aa9d6;
   --color-slot-2: #b877db;
   --color-slot-3: #59c3c3;

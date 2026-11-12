@@ -181,7 +181,6 @@ test("a message carries the state and the server clock it was sent with", () => 
 test("a broken event body is dropped instead of thrown", () => {
   expect(parseAppState("{")).toBeNull();
   expect(parseAppState('"state"')).toBeNull();
-  // 封筒の外側が壊れていれば状態も無い。
   expect(parseAppState(JSON.stringify(state))).toBeNull();
   expect(parseAppState(JSON.stringify({ now: 1_000 }))).toBeNull();
 });
