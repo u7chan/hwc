@@ -818,7 +818,6 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   min-height: calc((var(--text-body) + var(--text-secondary)) * var(--line-body) + var(--space-1));
 }
 
-/* 名前の行。種類の記号は名前の手前に小さく添える。 */
 .hwc-pane-title {
   display: flex;
   align-items: center;
@@ -1898,7 +1897,7 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   background: var(--color-line);
 }
 
-/* 件数は目安。押す対象ではなく、状態記号に数を添えるだけ。 */
+/* 状態記号に数を添えるだけ。 */
 .hwc-active-count {
   display: inline-flex;
   align-items: center;
@@ -2639,7 +2638,6 @@ a.hwc-pane-head-repo:focus-visible {
   align-self: center;
 }
 
-/* ペイン ID は詳細の右端に置く。すぐコピーできるようにボタンを添える。 */
 /* ID は面を付けない。見出しの名前と並んでも重くならないように。 */
 .hwc-pane-id {
   flex: none;
@@ -3380,7 +3378,6 @@ p.hwc-compaction,
   border-radius: var(--radius-sm);
 }
 
-/* 区切りの線は文字の左右に伸ばす。長さは行の残りで決まる。 */
 .hwc-compaction-rule {
   flex: 1;
   height: 1px;
@@ -3731,7 +3728,6 @@ p.hwc-compaction,
   border-radius: var(--radius-mark);
 }
 
-/* 開閉は一覧の disclosure と同じシェブロン。軸のある矢印は場所の移動に使うので、ここでは使わない。 */
 .hwc-msg-expand-icon {
   display: grid;
   place-items: center;
@@ -4417,7 +4413,6 @@ p.hwc-compaction,
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  /* 右は開閉ボタンの分だけ空ける。 */
   padding: 0 calc(var(--tap) + var(--space-2)) 0 var(--space-2);
 }
 
@@ -5142,7 +5137,6 @@ html:not([data-input-modality="pointer"])
   outline: none;
 }
 
-/* 開閉は一覧の disclosure と同じシェヴロン。 */
 .hwc-theme-preview-icon {
   display: grid;
   place-items: center;
@@ -5735,7 +5729,6 @@ html:not([data-input-modality="pointer"])
   color: var(--color-danger);
 }
 
-/* 設定の行では、足元と同じ点と文言を行の文字サイズ・色で出す。 */
 .hwc-setting-value .hwc-conn {
   color: inherit;
   font-size: inherit;

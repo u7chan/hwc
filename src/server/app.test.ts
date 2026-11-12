@@ -3220,7 +3220,6 @@ test("POST /api/panes/:id/attachments refuses a pane id that would escape the ro
       const response = await uploadImage(app, { paneId });
       expect(response.status).toBe(404);
     }
-    // どこにも書いていない。
     expect(await readdir(root)).toEqual([]);
   });
 });
