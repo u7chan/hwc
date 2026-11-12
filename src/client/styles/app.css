@@ -3100,6 +3100,18 @@ a.hwc-pane-head-repo:focus-visible {
   overscroll-behavior: contain;
 }
 
+/* 逐次表示の先端。スクロール領域の下端で新しい行を背景へ溶かす。高さは本文の
+   行間とスクロール領域の下余白に合わせ、最後の 1 行だけが薄く見えるようにする。 */
+.hwc-output-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  background: linear-gradient(to bottom, transparent, var(--color-content));
+  pointer-events: none;
+}
+
 .hwc-jump {
   position: absolute;
   left: 50%;
