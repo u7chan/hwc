@@ -218,7 +218,7 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
 
   // done は観測側の既読でだけ idle になる状態。hwc からは作れないので、E2E の
   // フィクスチャだけが直接作れるようにする（終了時刻の表示を確かめるため）。
-  const setAgentStatus = (paneId: string, status: "working" | "idle" | "done") => {
+  const setAgentStatus = (paneId: string, status: "working" | "idle" | "blocked" | "done") => {
     const pane = findPane(paneId);
     if (pane === null) return;
     pane.agent_status = status;
@@ -720,6 +720,13 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
         if (text.trim() === "/done") {
           send(socket, { id, result: { type: "ok" } });
           setAgentStatus(paneId, "done");
+          return;
+        }
+        // フィクスチャ専用の入力。許可待ちや質問で止まった状態を E2E から作る。
+        // 実 Herdr では、ペインが人間の応答を待つと blocked になる。
+        if (text.trim() === "/blocked") {
+          send(socket, { id, result: { type: "ok" } });
+          setAgentStatus(paneId, "blocked");
           return;
         }
         const compact =

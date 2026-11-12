@@ -23,7 +23,7 @@ type LoadState = "loading" | "ready" | "failed";
 const SCOPE_OPTIONS: ReadonlyArray<{ scope: NotificationScope; title: string; note: string }> = [
   {
     scope: "pull-request",
-    title: "PR の作業だけ",
+    title: "PR がある作業だけ",
     note: "ブランチの最新 PR が open のスペースの完了を通知",
   },
   {
@@ -152,12 +152,13 @@ export function NotificationSettings() {
             </div>
           </div>
           <p class="hwc-section-note">
-            司令塔が完了し、ほかのエージェントが動いていないときに 1 回だけ送ります。Herdr
+            司令塔が完了し、ほかのエージェントが動いていないときに完了を 1
+            回だけ送ります。通知中は、要対応になったときも対象に関係なくその場で送ります。Herdr
             の状態を受け取った時点で判定します。
           </p>
 
-          <p class="hwc-notify-subtitle">通知する対象</p>
-          <div class="hwc-notify-scopes" role="radiogroup" aria-label="通知する対象">
+          <p class="hwc-notify-subtitle">完了通知の対象</p>
+          <div class="hwc-notify-scopes" role="radiogroup" aria-label="完了通知の対象">
             {SCOPE_OPTIONS.map((option) => (
               <button
                 key={option.scope}
@@ -177,6 +178,7 @@ export function NotificationSettings() {
               </button>
             ))}
           </div>
+          <p class="hwc-section-note">要対応の通知は、この対象に関係なく送ります。</p>
 
           <div class="hwc-notify-discord">
             <div class="hwc-notify-discord-head">

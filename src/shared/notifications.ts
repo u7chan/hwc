@@ -30,7 +30,7 @@ export type NotificationView = {
 };
 
 export const TEST_NOTIFICATION_CONTENT =
-  "hwc のテスト通知です。このチャンネルに完了通知が届きます。";
+  "hwc のテスト通知です。このチャンネルに完了通知と要対応の通知が届きます。";
 
 // 送信先は Discord の Webhook だけに限る。BFF に任意の URL を POST させないための
 // 条件なので、緩めると SSRF の入口になる。

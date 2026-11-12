@@ -15,7 +15,7 @@ import {
 } from "../shared/notifications";
 import { parentPaneOf } from "../shared/parent-pane";
 import type { PullRequest } from "../shared/pull-request";
-import type { AppState, StateStore, WorkspaceState } from "./herdr/state";
+import type { AppState, PaneState, StateStore, WorkspaceState } from "./herdr/state";
 import type { PullRequestReader } from "./pull-request";
 
 // 設定ファイルの読み書き。中身は JSON のまま扱い、解釈は parseNotificationSettings に任せる。
@@ -199,6 +199,72 @@ export function settledWorkspaceIds(state: AppState): Set<string> {
   return ids;
 }
 
+// 要対応は完了と違い、親やほかのペインの状態を待たない。答えるまで止まっている
+// ペインそのものが対象なので、シェルを除いた全ペインを見る。
+function isBlockedAgentPane(pane: PaneState): boolean {
+  return pane.agent !== null && pane.agentStatus === "blocked";
+}
+
+export function blockedPaneIds(state: AppState): Set<string> {
+  const ids = new Set<string>();
+  for (const workspace of state.workspaces) {
+    for (const tab of workspace.tabs) {
+      for (const pane of tab.panes) {
+        if (isBlockedAgentPane(pane)) ids.add(pane.id);
+      }
+    }
+  }
+  return ids;
+}
+
+function blockedPanesOf(workspace: WorkspaceState, paneIds: ReadonlySet<string>): PaneState[] {
+  const panes: PaneState[] = [];
+  for (const tab of workspace.tabs) {
+    for (const pane of tab.panes) {
+      if (paneIds.has(pane.id) && isBlockedAgentPane(pane)) panes.push(pane);
+    }
+  }
+  return panes;
+}
+
+// 1 回の publish で同じスペースの複数ペインが要対応になっても、1 通にまとめる。
+// ペインごとに送ると、同時に確認を求められたときに Discord のレート制限へ当たる。
+function blockedPaneIdsByWorkspace(
+  state: AppState,
+  paneIds: ReadonlySet<string>,
+): Array<{ workspaceId: string; paneIds: string[] }> {
+  const groups: Array<{ workspaceId: string; paneIds: string[] }> = [];
+  for (const workspace of state.workspaces) {
+    const ids: string[] = [];
+    for (const tab of workspace.tabs) {
+      for (const pane of tab.panes) {
+        if (paneIds.has(pane.id)) ids.push(pane.id);
+      }
+    }
+    if (ids.length > 0) groups.push({ workspaceId: workspace.id, paneIds: ids });
+  }
+  return groups;
+}
+
+// ラベルが無いペインはエージェント名、それも無ければ id で呼ぶ。
+export function notificationPaneLabel(pane: PaneState): string {
+  const label = pane.label?.trim() ?? "";
+  if (label !== "") return label;
+  return pane.agent ?? pane.id;
+}
+
+export function blockedNotificationContent(
+  workspace: WorkspaceState,
+  panes: readonly PaneState[],
+): string {
+  const head = `hwc: ${notificationWorkspaceLabel(workspace)} が対応を待っています`;
+  const names = panes.map(notificationPaneLabel).join(", ");
+  const branch = workspace.branch ?? null;
+  const lines = [head, `ペイン: ${names}`];
+  if (branch !== null) lines.push(`ブランチ: ${branch}`);
+  return lines.join("\n");
+}
+
 export function pullRequestNotificationContent(pullRequest: PullRequest): string {
   return `hwc: PR #${pullRequest.number} の作業が完了しました\n${pullRequest.title}\n${pullRequest.url}`;
 }
@@ -218,8 +284,8 @@ export function workspaceNotificationContent(workspace: WorkspaceState): string 
 
 export type NotificationDispatcher = (state: AppState, observed: boolean) => void;
 
-// 収束した瞬間に 1 回だけ送り、done のまま留まっている間は再送しない。送信は
-// 状態の publish を待たせない（PR の取得と POST は fire-and-forget）。
+// 収束した瞬間と要対応になった瞬間に 1 回だけ送り、そのまま留まっている間は再送しない。
+// 送信は状態の publish を待たせない（PR の取得と POST は fire-and-forget）。
 export function createNotificationDispatcher(options: {
   store: Pick<StateStore, "get" | "workspacePath">;
   settings: NotificationSettingsStore;
@@ -231,6 +297,7 @@ export function createNotificationDispatcher(options: {
   // 購読直後の最初の publish は、観測が続いているかに関係なく基準でしかない。
   let baseline = false;
   let settled = new Set<string>();
+  let blocked = new Set<string>();
   let reportedFailure = false;
 
   const contentFor = async (
@@ -247,6 +314,18 @@ export function createNotificationDispatcher(options: {
     // 古い open が残っていても、最新が open でなければ送らない。
     if (pullRequest === null || pullRequest.state !== "OPEN") return null;
     return pullRequestNotificationContent(pullRequest);
+  };
+
+  const deliver = async (url: string, content: string) => {
+    const result = await options.sender(url, content);
+    if (result.ok) {
+      reportedFailure = false;
+      return;
+    }
+    if (reportedFailure) return;
+    reportedFailure = true;
+    // URL は資格情報。失敗のログにも出さない。
+    log(`discord notification: ${result.error}`);
   };
 
   const notifyWorkspace = async (workspaceId: string) => {
@@ -267,27 +346,43 @@ export function createNotificationDispatcher(options: {
     const latestWorkspace = latestState?.workspaces.find((item) => item.id === workspaceId);
     if (latestWorkspace === undefined || !isSettledWorkspace(latestWorkspace)) return;
 
-    const result = await options.sender(url, content);
-    if (result.ok) {
-      reportedFailure = false;
-      return;
-    }
-    if (reportedFailure) return;
-    reportedFailure = true;
-    // URL は資格情報。失敗のログにも出さない。
-    log(`discord notification: ${result.error}`);
+    await deliver(url, content);
+  };
+
+  // scope は完了通知だけに効かせる。要対応は人間が答えるまで止まっているので、
+  // PR の有無で絞ると見落とす。PR も引かない（gh の待ちで通知を遅らせない）。
+  const notifyBlockedPanes = async (workspaceId: string, paneIds: readonly string[]) => {
+    const settings = options.settings.get();
+    const url = settings.discordWebhookUrl;
+    if (!settings.enabled || url === null) return;
+    const workspace = options.store.get()?.workspaces.find((item) => item.id === workspaceId);
+    if (workspace === undefined) return;
+    const panes = blockedPanesOf(workspace, new Set(paneIds));
+    if (panes.length === 0) return;
+    await deliver(url, blockedNotificationContent(workspace, panes));
+  };
+
+  const reportError = (error: unknown) => {
+    log(`discord notification: ${error instanceof Error ? error.message : String(error)}`);
   };
 
   return (state, observed) => {
-    const next = settledWorkspaceIds(state);
-    const entering = baseline && observed ? [...next].filter((id) => !settled.has(id)) : [];
+    const nextSettled = settledWorkspaceIds(state);
+    const nextBlocked = blockedPaneIds(state);
+    const enteredSettled =
+      baseline && observed ? [...nextSettled].filter((id) => !settled.has(id)) : [];
+    const enteredBlocked =
+      baseline && observed ? [...nextBlocked].filter((id) => !blocked.has(id)) : [];
     // 判定と同時に基準を更新する。送信を待つ間に次の publish が来ても二重に送らない。
-    settled = next;
+    settled = nextSettled;
+    blocked = nextBlocked;
     baseline = true;
-    for (const id of entering) {
-      notifyWorkspace(id).catch((error: unknown) => {
-        log(`discord notification: ${error instanceof Error ? error.message : String(error)}`);
-      });
+    for (const id of enteredSettled) {
+      notifyWorkspace(id).catch(reportError);
+    }
+    const entered = new Set(enteredBlocked);
+    for (const group of blockedPaneIdsByWorkspace(state, entered)) {
+      notifyBlockedPanes(group.workspaceId, group.paneIds).catch(reportError);
     }
   };
 }

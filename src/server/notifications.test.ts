@@ -9,11 +9,14 @@ import type { NotificationSettings } from "../shared/notifications";
 import type { PullRequestReader } from "./pull-request";
 import { DEFAULT_NOTIFICATION_SETTINGS } from "../shared/notifications";
 import {
+  blockedNotificationContent,
+  blockedPaneIds,
   createDiscordSender,
   createNotificationDispatcher,
   createNotificationSettingsFile,
   createNotificationSettingsStore,
   isSettledWorkspace,
+  notificationPaneLabel,
   notificationSettingsPath,
   settledWorkspaceIds,
   toDiscordPayload,
@@ -334,6 +337,44 @@ test("settled ids are collected per space", () => {
   expect([...settledWorkspaceIds(state)]).toEqual(["w1", "w3"]);
 });
 
+// 要対応の判定と本文
+
+test("blocked ids are collected per pane and skip shell panes", () => {
+  const state = appState([
+    workspace("w1", [
+      pane("w1:p1", "pi", "blocked"),
+      pane("w1:p2", "codex", "working"),
+      pane("w1:p3", null, "blocked"),
+    ]),
+    workspace("w2", [pane("w2:p1", "codex", "blocked")]),
+  ]);
+  expect([...blockedPaneIds(state)]).toEqual(["w1:p1", "w2:p1"]);
+});
+
+test("the blocked body names the workspace, the panes and the branch", () => {
+  const panes = [
+    { ...pane("w1:p1", "pi", "blocked"), label: "impl" },
+    { ...pane("w1:p2", "codex", "blocked"), label: "  " },
+  ];
+  const labeled = workspace("w1", panes, {
+    label: "acme-dashboard",
+    branch: "feat/empty-state",
+  });
+  expect(blockedNotificationContent(labeled, panes)).toBe(
+    "hwc: acme-dashboard が対応を待っています\nペイン: impl, codex\nブランチ: feat/empty-state",
+  );
+
+  // ブランチが読めないスペースでは行を出さない。
+  const noBranch = workspace("w2", [pane("w2:p1", "pi", "blocked")]);
+  expect(blockedNotificationContent(noBranch, noBranch.tabs[0]?.panes ?? [])).toBe(
+    "hwc: w2 が対応を待っています\nペイン: pi",
+  );
+
+  // ラベルが無いペインはエージェント名、それも無ければ id で呼ぶ。
+  expect(notificationPaneLabel(pane("w1:p9", "pi", "blocked"))).toBe("pi");
+  expect(notificationPaneLabel(pane("w1:p9", null, "blocked"))).toBe("w1:p9");
+});
+
 test("the all-scope body uses the workspace label and the branch", () => {
   expect(workspaceNotificationContent(settledSpace("w1"))).toBe(
     "hwc: w1 が完了しました\nブランチ: feat/empty-state",
@@ -476,6 +517,135 @@ test("an unobserved publish never sends but updates the baseline", async () => {
   await Bun.sleep(0);
 
   expect(calls).toEqual([]);
+});
+
+// 要対応の遷移と送信
+
+function blockedSpace(id = "w1"): WorkspaceState {
+  return workspace(id, [pane(`${id}:p1`, "pi", "done"), pane(`${id}:p2`, "codex", "blocked")], {
+    branch: "feat/empty-state",
+  });
+}
+
+test("a pane entering blocked sends once, regardless of scope and PR", async () => {
+  const settings = createSettings({
+    enabled: true,
+    scope: "pull-request",
+    discordWebhookUrl: WEBHOOK,
+  });
+  const { sender, calls } = createSender({ ok: true });
+  let reads = 0;
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+    paths: { w1: "/work/acme" },
+    pullRequests: async () => {
+      reads += 1;
+      return null;
+    },
+  });
+
+  const state = blockedSpace();
+  publish(appState([workingSpace()]));
+  publish(appState([state]));
+  // blocked のまま留まる間は再送しない。
+  publish(appState([state]));
+  await Bun.sleep(0);
+
+  expect(calls).toEqual([
+    {
+      url: WEBHOOK,
+      content: "hwc: w1 が対応を待っています\nペイン: codex\nブランチ: feat/empty-state",
+    },
+  ]);
+  // 要対応は PR の有無で絞らない。gh も呼ばない。
+  expect(reads).toBe(0);
+});
+
+test("a pane that blocks again after unblocking sends again", async () => {
+  const settings = createSettings({ enabled: true, scope: "all", discordWebhookUrl: WEBHOOK });
+  const { sender, calls } = createSender({ ok: true });
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+  });
+
+  const blocked = blockedSpace();
+  publish(appState([workingSpace()]));
+  publish(appState([blocked]));
+  await Bun.sleep(0);
+  publish(appState([workingSpace()]));
+  publish(appState([blocked]));
+  await Bun.sleep(0);
+
+  expect(calls).toHaveLength(2);
+});
+
+test("an unobserved blocked transition never sends but updates the baseline", async () => {
+  const settings = createSettings({ enabled: true, scope: "all", discordWebhookUrl: WEBHOOK });
+  const { sender, calls } = createSender({ ok: true });
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+  });
+
+  publish(appState([workingSpace()]));
+  publish(appState([blockedSpace()]), false);
+  publish(appState([blockedSpace()]));
+  await Bun.sleep(0);
+
+  expect(calls).toEqual([]);
+});
+
+test("blocked panes in one space are sent as one message", async () => {
+  const settings = createSettings({ enabled: true, scope: "all", discordWebhookUrl: WEBHOOK });
+  const { sender, calls } = createSender({ ok: true });
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+  });
+
+  const both = workspace(
+    "w1",
+    [pane("w1:p1", "pi", "blocked"), pane("w1:p2", "codex", "blocked")],
+    { branch: "feat/empty-state" },
+  );
+  publish(appState([workingSpace()]));
+  publish(appState([both]));
+  await Bun.sleep(0);
+
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.content).toBe(
+    "hwc: w1 が対応を待っています\nペイン: pi, codex\nブランチ: feat/empty-state",
+  );
+});
+
+test("blocked panes are tracked while notifications are disabled", async () => {
+  const settings = createSettings({ enabled: false, scope: "all", discordWebhookUrl: WEBHOOK });
+  const { sender, calls } = createSender({ ok: true });
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+  });
+
+  publish(appState([workingSpace()]));
+  publish(appState([blockedSpace()]));
+  // 有効化しても、既に blocked だったペインには遡らない。
+  settings.update({ enabled: true });
+  publish(appState([blockedSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toEqual([]);
+
+  // 解除して再び blocked になれば送る。
+  publish(appState([workingSpace()]));
+  publish(appState([blockedSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(1);
 });
 
 test("settled spaces are tracked while notifications are disabled", async () => {
