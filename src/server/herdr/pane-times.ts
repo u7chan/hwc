@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentStatus } from "./contract";
-import type { SnapshotState } from "./state";
+import type { SnapshotState } from "./snapshot";
 
 // 経過時間の起点と終了時刻。どちらも Herdr は返さないので BFF が唯一の持ち主になる。
 // 端末ではなく 1 プロセスが持つため、どの端末から見ても同じ値になる（ADR 0017）。
