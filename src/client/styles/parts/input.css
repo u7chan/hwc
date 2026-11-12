@@ -18,8 +18,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  /* ドロップ中の面の色を、戻るときも滑らかにする。 */
-  transition: background-color 120ms ease;
+  /* ドロップ中の面の色を、戻るときも滑らかにする。開閉では行の間隔も変わるので、
+     入力欄の高さと一緒に動かす。 */
+  transition:
+    background-color 120ms ease,
+    gap 200ms ease;
 }
 
 /* ファイルをドラッグしている間は、画像を落とせる範囲を面と破線で示す。
@@ -189,8 +192,12 @@
   font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-ui);
   /* 高さは fit() が入力量に合わせる。手で伸ばすと次の入力で戻るので、取っ手を出さない。 */
   resize: none;
-  /* シェルからエージェントへの切り替わりで、$ の跡が飛ばないようにする。 */
-  transition: padding-left 120ms ease;
+  /* シェルからエージェントへの切り替わりで、$ の跡が飛ばないようにする。開閉では上下の
+     余白も変わるので、高さに合わせて滑らせる。 */
+  transition:
+    padding-left 120ms ease,
+    padding-top 200ms ease,
+    padding-bottom 200ms ease;
 }
 
 .hwc-input-field:focus-visible {
@@ -254,8 +261,10 @@
   gap: var(--space-3);
 }
 
+/* 広げた高さは min-height ではなく height で与える。min-height だと、広げ始めた
+   フレームから常に 40dvh に切り上げられ、伸びる途中が見えない。 */
 .hwc-input[data-expanded="true"] .hwc-input-field {
-  min-height: 40dvh;
+  height: 40dvh;
   max-height: 60dvh;
 }
 

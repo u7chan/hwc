@@ -302,6 +302,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const frame = useRef<HTMLDivElement>(null);
   // 引用を足した直後、再描画後の入力欄へカーソルを移す位置。
   const pendingCaret = useRef<number | null>(null);
+  // 開閉を押した時点の入力欄の高さ。開閉後の高さへ動かす始点にする。
+  const toggleFrom = useRef<number | null>(null);
   const { selectionToolbar, quoting, dismissSelection, closeToolbar } = useSelectionToolbar({
     paneId: pane.id,
     scroller,
@@ -397,6 +399,27 @@ export function PaneDetail(props: PaneDetailProps) {
   useLayoutEffect(() => {
     fit(input.current, expanded);
   }, [draft, expanded, compact, readOnly]);
+
+  // 高さが変わるのは開閉を押したときだけにする。打鍵に合わせた伸縮まで滑らせると、
+  // 1 文字ごとに箱が動いて入力の手応えが鈍る。
+  useLayoutEffect(() => {
+    const field = input.current;
+    const from = toggleFrom.current;
+    toggleFrom.current = null;
+    if (field === null || from === null) return;
+    const to = field.getBoundingClientRect().height;
+    if (Math.abs(to - from) < 1) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    field.animate([{ height: `${from}px` }, { height: `${to}px` }], {
+      duration: 200,
+      easing: "cubic-bezier(0.2, 0, 0, 1)",
+    });
+  }, [expanded]);
+
+  const toggleExpanded = () => {
+    toggleFrom.current = input.current?.getBoundingClientRect().height ?? null;
+    setExpandedOpen((current) => !current);
+  };
 
   // 引用を足したあと、再描画された入力欄の末尾（引用の後の空行）へカーソルを移す。
   useLayoutEffect(() => {
@@ -1058,8 +1081,9 @@ export function PaneDetail(props: PaneDetailProps) {
                 type="button"
                 class="hwc-input-toggle"
                 aria-expanded={expanded}
+                aria-controls={`hwc-input-${pane.id}`}
                 aria-label={expanded ? "入力を折りたたむ" : "入力を広げる"}
-                onClick={() => setExpandedOpen((current) => !current)}
+                onClick={toggleExpanded}
               >
                 {expanded ? <CollapseIcon /> : <ExpandIcon />}
               </button>
