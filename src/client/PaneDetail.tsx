@@ -1,5 +1,5 @@
 import { createPortal, type Ref } from "preact";
-import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatFile } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { gitStatusLabel, type GitSync } from "../shared/git";
@@ -8,7 +8,6 @@ import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
 import { OutputText } from "./OutputText";
-import { isLayoutShift, isNearBottom, isUserScrollDuringGrowth } from "./scroll";
 import {
   ATTACHMENT_LIMIT_NOTICE,
   type AttachmentAction,
@@ -57,7 +56,6 @@ import {
 } from "./commands";
 import { ComposerAdd } from "./ComposerAdd";
 import { useCopy } from "./copy";
-import { readDraft, storage, writeDraft } from "./drafts";
 import { insertProjectPath } from "./projects";
 import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
@@ -84,6 +82,11 @@ import { OutputEmpty, OutputSkeleton } from "./pane/empty";
 import { AgentInfoHint, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
 import { useAttachments } from "./pane/use-attachments";
+import { useCompactionEcho } from "./pane/use-compaction-echo";
+import { useDraft } from "./pane/use-draft";
+import { useOutputFollow } from "./pane/use-output-follow";
+import { useOutputVersion } from "./pane/use-output-version";
+import { useSelectionToolbar } from "./pane/use-selection-toolbar";
 import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
@@ -96,22 +99,12 @@ import {
   shortenPaneName,
   type PaneContext,
 } from "./select";
-import { SelectionToolbar, type SelectionToolbarState } from "./SelectionToolbar";
-import { readSelectionAnchor } from "./selection-toolbar";
+import { SelectionToolbar } from "./SelectionToolbar";
 import { selectionCopyText } from "./selection-copy";
 import { Spinner } from "./Spinner";
 
 const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
-
-// スマホは選択メニューを差し替えられない。選択ツールバーはポインタを持つ画面だけに出す。
-// 端末の性質は途中で変わらないので、最初の判定を使い回す。
-let touchOnly: boolean | null = null;
-function touchFirst(): boolean {
-  touchOnly ??=
-    window.matchMedia("(hover: none)").matches || window.matchMedia("(pointer: coarse)").matches;
-  return touchOnly;
-}
 
 type PaneDetailProps = {
   pane: PaneState;
@@ -190,21 +183,10 @@ export function PaneDetail(props: PaneDetailProps) {
     context.workspaceLabel,
     context.workspaceName,
   );
-  // 下書きはペインごとに残す。書きかけのまま一覧へ戻っても消えない。
-  const [draft, setDraft] = useState(() => readDraft(storage(), pane.id));
   const [expandedOpen, setExpandedOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [atBottom, setAtBottom] = useState(true);
-  // クリア後にポーリングを待たず、出力を取り直すための契機。
-  const [outputVersion, setOutputVersion] = useState(0);
-  // 追従するかは state が正。イベント購読からも読むので、同じ値を ref に写す
-  // （chat.ts の statusRef と同じ扱い）。更新は setPinned の 1 経路だけ。
-  const pinned = useRef(true);
-  // 高さが変わっただけのスクロール（入力欄や添付が伸縮して底が詰まる）は利用者の操作ではない。
-  // 直前の content 高・表示領域の高さと比べて、変わっていれば追従の判断を変えない。
-  const lastHeight = useRef(0);
-  const lastClientHeight = useRef(0);
+  const { outputVersion, requestOutputRefresh } = useOutputVersion();
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const [sessionReset, setSessionReset] = useState<NewSessionReset | null>(null);
   // チップは id だけを持つ。表示名と送信文字列は定数から引く。
@@ -222,15 +204,6 @@ export function PaneDetail(props: PaneDetailProps) {
   // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
   const [dropping, setDropping] = useState(false);
   const dragDepth = useRef(0);
-  // 選択ツールバーは閉じたあとも短い遷移の間だけ state に残す。dismissed は Esc や
-  // 外側の押下で閉じたあと、選択が変わるまで出し直さないための印。
-  const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbarState | null>(null);
-  const dismissed = useRef(false);
-
-  const setPinned = (next: boolean) => {
-    pinned.current = next;
-    setAtBottom(next);
-  };
 
   // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
   const expanded = expandedOpen && !compact;
@@ -297,67 +270,16 @@ export function PaneDetail(props: PaneDetailProps) {
   const replying = pane.agentStatus === "working";
   // /compact の開始を観測できたときだけ、完了までの所要時間をログに添える。
   // リロードやペイン切り替えでは失う（永続化は別スコープ）。
-  const [compactionRun, setCompactionRun] = useState<{
-    startedAt: number;
-    baselineAt: number | null;
-  } | null>(null);
-  const [compactionNow, setCompactionNow] = useState(() => Date.now());
-  const compactionSawWorking = useRef(false);
-  const [compactionDuration, setCompactionDuration] = useState<{
-    at: number;
-    ms: number;
-  } | null>(null);
-  const [compactionEcho, setCompactionEcho] = useState<{
-    text: string;
-    at: number;
-    completedAt: number | null;
-  } | null>(null);
-  const markCompaction = (baselineAt: number | null, text: string) => {
-    const startedAt = Date.now();
-    compactionSawWorking.current = false;
-    setCompactionNow(startedAt);
-    setCompactionEcho({ text, at: startedAt, completedAt: null });
-    setCompactionRun({ startedAt, baselineAt });
-  };
-  useEffect(() => {
-    if (compactionRun === null) return;
-    setCompactionNow(Date.now());
-    const timer = window.setInterval(() => setCompactionNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [compactionRun]);
-  useEffect(() => {
-    if (compactionRun === null) return;
-    const at = snapshot?.compaction?.at ?? null;
-    // 新しい compaction が届いたら、開始からの差を所要時間として残す。
-    if (at !== null && at !== compactionRun.baselineAt) {
-      const ms = at - compactionRun.startedAt;
-      if (ms > 0 && ms < 24 * 60 * 60 * 1000) setCompactionDuration({ at, ms });
-      setCompactionEcho((echo) => (echo === null ? null : { ...echo, completedAt: at }));
-      setCompactionRun(null);
-      return;
-    }
-    // 手動の /compact は Herdr の agent_status を working にしない。working を観測
-    // できた場合だけ idle 復帰を失敗とみなし、それ以外は完了か上限まで待つ。
-    if (replying) {
-      compactionSawWorking.current = true;
-      return;
-    }
-    if (compactionSawWorking.current) {
-      const timer = window.setTimeout(() => {
-        setCompactionRun((run) => (run === compactionRun ? null : run));
-      }, 3000);
-      return () => window.clearTimeout(timer);
-    }
-    const timer = window.setTimeout(
-      () => {
-        setCompactionRun((run) => (run === compactionRun ? null : run));
-      },
-      10 * 60 * 1000,
-    );
-    return () => window.clearTimeout(timer);
-  }, [compactionRun, replying, snapshot?.compaction?.at]);
-  const compactionElapsedMs =
-    compactionRun === null ? null : Math.max(0, compactionNow - compactionRun.startedAt);
+  const compactionAt = snapshot?.compaction?.at ?? null;
+  const {
+    compactionRun,
+    compactionEcho,
+    compactionDuration,
+    compactionElapsedMs,
+    markCompaction,
+    clearCompaction,
+    resetCompaction,
+  } = useCompactionEcho({ compactionAt, replying });
   const compacting = !resetting && compactionRun !== null;
   const visibleCompactionEcho = resetting ? null : compactionEcho;
   const chatEmpty =
@@ -380,14 +302,17 @@ export function PaneDetail(props: PaneDetailProps) {
   const frame = useRef<HTMLDivElement>(null);
   // 引用を足した直後、再描画後の入力欄へカーソルを移す位置。
   const pendingCaret = useRef<number | null>(null);
-  // 選択ツールバーを出している間は自動追従を止める。購読を張り直さずに読むため ref に写す。
-  const quoting = useRef(false);
-  quoting.current = selectionToolbar !== null;
+  const { selectionToolbar, quoting, dismissSelection, closeToolbar } = useSelectionToolbar({
+    paneId: pane.id,
+    scroller,
+    frame,
+  });
 
   const shell = isShellPane(pane);
   // シェルには会話のコマンドが無い。エージェントを終了したときにチップが残っていても、
   // シェルの入力欄では見せず、送信も本文として扱う。
   const activeChip = shell ? null : chip;
+  const { draft, setDraft, clearDraft } = useDraft(pane.id, activeChip !== "compact");
   const compactDone = snapshot !== null && compactAlreadyDone(snapshot);
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
   // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
@@ -465,96 +390,6 @@ export function PaneDetail(props: PaneDetailProps) {
     field.style.height = `${field.scrollHeight}px`;
   };
 
-  // 打つたびに書くと重いので、手が止まってから残す。compact チップ中の draft は
-  // 指示であり、復元するとチップが無いぶん本文として送られてしまうので保存しない。
-  useEffect(() => {
-    if (activeChip === "compact") return;
-    const text = draft;
-    const timer = setTimeout(() => writeDraft(storage(), pane.id, text), 250);
-    return () => clearTimeout(timer);
-  }, [draft, pane.id, activeChip]);
-
-  // 選択ツールバーは、選択の始まりと終わりがスクロール領域の中にあるときだけ出す。
-  // マウスのドラッグ中は selectionchange が動くたびに発火するので評価せず、ボタンを
-  // 離した pointerup で確定した選択を見る。キーボードの選択変更はそのまま拾う。
-  // スクロール・リサイズでは位置を追い、選択が領域の外へ出たら閉じる。
-  useEffect(() => {
-    const scrollerElement = scroller.current;
-    const frameElement = frame.current;
-    if (scrollerElement === null || frameElement === null) return;
-    if (touchFirst()) {
-      setSelectionToolbar(null);
-      return;
-    }
-
-    dismissed.current = false;
-    setSelectionToolbar(null);
-    let dragging = false;
-    let frameRequest = 0;
-
-    const close = () => {
-      setSelectionToolbar((current) => (current === null ? null : { ...current, open: false }));
-    };
-    const refresh = () => {
-      if (dragging || dismissed.current) return;
-      const anchor = readSelectionAnchor(scrollerElement, frameElement);
-      if (anchor === null) close();
-      else setSelectionToolbar({ anchor, open: true });
-    };
-    const scheduleRefresh = () => {
-      if (frameRequest !== 0) return;
-      frameRequest = requestAnimationFrame(() => {
-        frameRequest = 0;
-        refresh();
-      });
-    };
-    const onSelectionChange = () => {
-      dismissed.current = false;
-      refresh();
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.pointerType !== "mouse" || event.button !== 0) return;
-      const target = event.target;
-      if (target instanceof Element && target.closest("[data-selection-toolbar]") !== null) {
-        return;
-      }
-      dragging = true;
-      dismissed.current = true;
-      close();
-    };
-    const stopDragging = () => {
-      if (!dragging) return;
-      dragging = false;
-      refresh();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      dismissed.current = true;
-      close();
-    };
-
-    document.addEventListener("selectionchange", onSelectionChange);
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("pointerup", stopDragging);
-    document.addEventListener("pointercancel", stopDragging);
-    document.addEventListener("keydown", onKeyDown);
-    // 窓の外で離すと pointerup が来ない。次のキーボード選択までドラッグ中のままにしない。
-    window.addEventListener("blur", stopDragging);
-    scrollerElement.addEventListener("scroll", scheduleRefresh);
-    window.addEventListener("resize", scheduleRefresh);
-    return () => {
-      if (frameRequest !== 0) cancelAnimationFrame(frameRequest);
-      document.removeEventListener("selectionchange", onSelectionChange);
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("pointerup", stopDragging);
-      document.removeEventListener("pointercancel", stopDragging);
-      document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("blur", stopDragging);
-      scrollerElement.removeEventListener("scroll", scheduleRefresh);
-      window.removeEventListener("resize", scheduleRefresh);
-    };
-  }, [pane.id]);
-
   // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
   // 前の inline height を残さない。
   // 描画の後に高さを直すと、改行した 1 フレームだけ箱が低いままになり、
@@ -579,49 +414,20 @@ export function PaneDetail(props: PaneDetailProps) {
     if (confirmation !== null && scroller.current) scroller.current.scrollTop = 0;
   }, [confirmation?.id]);
 
-  // 最新が見えている間だけ追従する。読み返しているときは勝手に動かさない。
-  // 失敗の notice はメッセージ領域を縮めるので、出たときも追従し直す。
-  // 圧縮の吹き出しと進捗行は chat の末尾にローカルで足すため、content が変わらない
-  // 間も追従できるよう compactionRun / compactionEcho も依存に入れる。
-  useEffect(() => {
-    if (confirmation !== null) return;
-    const element = scroller.current;
-    if (element && atBottom && !quoting.current) element.scrollTop = element.scrollHeight;
-  }, [
+  const { atBottom, setPinned, jumpToLatest, onScroll } = useOutputFollow({
+    scroller,
+    quoting,
+    outputRef: props.outputRef,
+    requestOutputRefresh,
     content,
     replying,
-    atBottom,
-    pendingMessages.length,
-    // 逐次表示は本文が伸びるたびに底へ寄せる。伸びなければ何もしない。
-    reveal?.text.length,
+    pendingCount: pendingMessages.length,
+    revealLength: reveal?.text.length,
     notice,
     compactionRun,
     compactionEcho,
-    confirmation?.id,
-  ]);
-
-  // 画像の読み込みや入力欄の伸びで高さが後から変わっても、最新を見ている間は底に留める。
-  // 画像の load は bubble しないので capture で拾い、領域の伸縮は ResizeObserver で拾う。
-  useLayoutEffect(() => {
-    const element = scroller.current;
-    if (!element) return;
-    const keep = () => {
-      lastHeight.current = element.scrollHeight;
-      lastClientHeight.current = element.clientHeight;
-      if (confirmation !== null || !pinned.current || quoting.current) return;
-      element.scrollTop = element.scrollHeight;
-    };
-    // 初回は今の高さを基準にする。0 のまま残すと、最初のスクロールを伸縮と誤認する。
-    lastHeight.current = element.scrollHeight;
-    lastClientHeight.current = element.clientHeight;
-    element.addEventListener("load", keep, true);
-    const observer = new ResizeObserver(keep);
-    observer.observe(element);
-    return () => {
-      element.removeEventListener("load", keep, true);
-      observer.disconnect();
-    };
-  }, [confirmation?.id]);
+    confirmation,
+  });
 
   useEffect(() => {
     if (pending.length === 0) return;
@@ -677,12 +483,6 @@ export function PaneDetail(props: PaneDetailProps) {
     return () => clearTimeout(timer);
   }, [pending]);
 
-  const jumpToLatest = () => {
-    setPinned(true);
-    const element = scroller.current;
-    element?.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
-  };
-
   // 候補を選ぶとチップになり、入力欄の /... は消える。送信はもう一度 Enter。
   const pick = (id: CommandId) => {
     setChip(id);
@@ -708,9 +508,7 @@ export function PaneDetail(props: PaneDetailProps) {
     setDraft(next.text);
     setChip(null);
     pendingCaret.current = next.caret;
-    dismissed.current = true;
-    document.getSelection()?.removeAllRanges();
-    setSelectionToolbar((current) => (current === null ? null : { ...current, open: false }));
+    dismissSelection();
   };
 
   const openProjects = () => setProjectDialog({ open: true, caret: null });
@@ -831,9 +629,7 @@ export function PaneDetail(props: PaneDetailProps) {
     if (newSession) {
       if (sent) {
         setPending([]);
-        setCompactionRun(null);
-        setCompactionEcho(null);
-        setCompactionDuration(null);
+        resetCompaction();
       } else setSessionReset(null);
       refreshChat();
     }
@@ -867,9 +663,7 @@ export function PaneDetail(props: PaneDetailProps) {
       const at = Date.now();
       // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
       setPinned(true);
-      // 250ms の debounce を待たずに消す。先にペインを切り替えると古い値が戻る。
-      writeDraft(storage(), pane.id, "");
-      setDraft("");
+      clearDraft();
       attachmentStore.clear(pane.id);
       // シェルペインには会話が無い。控えを積むと、同じペインで後から起動した
       // エージェントの会話に、シェルで打ったコマンドが並ぶ。送信は端末にだけ届ける。
@@ -903,8 +697,7 @@ export function PaneDetail(props: PaneDetailProps) {
     setStopping(true);
     setNotice(null);
     if (await onStop()) {
-      setCompactionRun(null);
-      setCompactionEcho(null);
+      clearCompaction();
     } else setNotice(STOP_FAILED_NOTICE);
     setStopping(false);
   };
@@ -974,13 +767,6 @@ export function PaneDetail(props: PaneDetailProps) {
         },
       }
     : null;
-
-  useImperativeHandle(props.outputRef, () => ({
-    refreshOutput: () => {
-      setPinned(true);
-      setOutputVersion((version) => version + 1);
-    },
-  }));
 
   const submit = () => {
     if (readOnly) return;
@@ -1096,42 +882,7 @@ export function PaneDetail(props: PaneDetailProps) {
         </button>
       </div>
       <div class="hwc-output-wrap" ref={frame}>
-        <div
-          class="hwc-output-scroll"
-          data-empty={empty}
-          ref={scroller}
-          onScroll={(event) => {
-            if (confirmation !== null) return;
-            const element = event.currentTarget;
-            const now = {
-              scrollTop: element.scrollTop,
-              clientHeight: element.clientHeight,
-              scrollHeight: element.scrollHeight,
-            };
-            const last = {
-              scrollTop: now.scrollTop,
-              clientHeight: lastClientHeight.current,
-              scrollHeight: lastHeight.current,
-            };
-            lastHeight.current = now.scrollHeight;
-            lastClientHeight.current = now.clientHeight;
-            // 高さが変わっただけなら、底を詰めた副作用。読み返しの意思とはみなさない。
-            // 縮んだ結果ブラウザが底へ寄せた場合に備え、追従の判断は今の位置で取り直す。
-            // ただし縦に伸びたときは、伸びる前の底から離れた位置なら利用者が動かしたと
-            // みなす。逐次表示は 150ms ごとに高さが変わるので、これが無いと上へ
-            // スクロールしても高さの変化と誤認してすぐ底へ戻される。
-            if (isLayoutShift(now, last)) {
-              if (isUserScrollDuringGrowth(now, last)) {
-                setPinned(isNearBottom(now));
-                return;
-              }
-              if (pinned.current) element.scrollTop = element.scrollHeight;
-              if (isNearBottom(now)) setPinned(true);
-              return;
-            }
-            setPinned(isNearBottom(now));
-          }}
-        >
+        <div class="hwc-output-scroll" data-empty={empty} ref={scroller} onScroll={onScroll}>
           {confirmation !== null ? (
             <PaneConfirmation
               key={confirmation.id}
@@ -1217,7 +968,7 @@ export function PaneDetail(props: PaneDetailProps) {
             if (selection === null || selection.rangeCount === 0 || element === null) return "";
             return selectionCopyText(element, selection.getRangeAt(0));
           }}
-          onExited={() => setSelectionToolbar(null)}
+          onExited={closeToolbar}
         />
       </div>
 
