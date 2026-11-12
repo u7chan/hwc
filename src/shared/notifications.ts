@@ -1,6 +1,6 @@
 // Discord の Webhook URL は資格情報。BFF は全文を返さず、クライアントは末尾だけで
 // 登録済みを示す。検証と hint は BFF とクライアントで同じものを使う
-// （ADR 0063 discord-done-notification）。
+// （ADR 0076 discord-done-notification）。
 
 export type NotificationScope = "pull-request" | "all";
 
