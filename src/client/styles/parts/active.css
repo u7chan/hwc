@@ -1,0 +1,520 @@
+/* 名前は 1 行に保つ。狭い画面で 1 文字ずつ折れると読めなくなる。 */
+.hwc-pane-name,
+.hwc-pane-sub,
+.hwc-active-band-name,
+.hwc-active-band-branch,
+.hwc-active-name,
+.hwc-active-tab,
+.hwc-group-name,
+.hwc-tabrow-name,
+.hwc-group-sub,
+.hwc-tabrow-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 経過と終了時刻は目安。数字が揺れないよう等幅の数字で出す。 */
+.hwc-pane-elapsed {
+  flex: none;
+  margin-left: var(--space-2);
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 時刻は状態の色に合わせる。待機は終わった時刻を持っていても淡いまま。 */
+.hwc-pane-elapsed[data-tone="active"] {
+  color: var(--color-active);
+}
+
+.hwc-pane-elapsed[data-tone="success"] {
+  color: var(--color-success);
+}
+
+/* 名前の幅を最優先で残す。固定幅の要素で埋まると、実行中の行だけ名前が読めなくなる。 */
+@container (max-width: 320px) {
+  .hwc-pane-open {
+    gap: var(--space-2);
+    padding: var(--space-3) 0 var(--space-3) var(--space-1);
+  }
+
+  /* 経過時間の前は gap が空ける。右端には一覧の余白を残す。 */
+  .hwc-pane-elapsed {
+    margin-left: 0;
+    margin-right: var(--space-2);
+  }
+}
+
+/* メニューを残すため、名前が潰れる行だけ経過時間を省く。 */
+@container (max-width: 240px) {
+  .hwc-pane-elapsed {
+    display: none;
+  }
+}
+
+/* ワークスペース単位の束。帯を貼り付けるため、カード全体で overflow を切らない
+   （切ると sticky が効かない）。束の間は余白だけにし、面を分けて場所を区切る。 */
+.hwc-active {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 var(--space-4) var(--space-4);
+  padding: 0;
+}
+
+.hwc-active-group {
+  background: var(--color-surface);
+  border-radius: var(--radius-panel);
+}
+
+/* 場所はスクロール領域の上端に残す。次の束の帯が押し出す。 */
+.hwc-active-band {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row-head);
+  padding: var(--space-2) var(--space-4);
+  /* 上の角の外側は一覧の地で塗る。要素の背景に角丸を持たせると角の外側が透明になり、
+     貼り付いた帯の後ろを流れる行がそこから覗く。 */
+  background: var(--color-bg);
+}
+
+/* 帯の面。角丸は面にだけ持ち、角の外側は一覧の地のまま残す。 */
+.hwc-active-band::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--color-raised);
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  box-shadow: inset 0 -1px 0 var(--color-line);
+}
+
+/* ツリーの見出しと同じ枠。行はこのアイコンの中心から線を引いて子だと示す。 */
+.hwc-active-band-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--icon-frame);
+  height: var(--icon-frame);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-icon);
+  color: var(--color-secondary);
+}
+
+.hwc-active-band-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.hwc-active-band-name {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: var(--line-tight);
+}
+
+/* ブランチはスペースの属性。行ごとに繰り返さず、帯に 1 度だけ出す。 */
+.hwc-active-band-branch {
+  margin: 0;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+}
+
+/* 名前と同じ行に置く。チップは移動の入口ではないので、帯の矢印とは別に押せる。 */
+.hwc-active-band-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.hwc-active-band-pr {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 140ms ease;
+}
+
+/* マージ済みは終わったタスク。開いている PR と同じ青にせず、完了と同じ緑に記号を添える。 */
+.hwc-active-band-pr[data-state="merged"] {
+  color: var(--color-success);
+}
+
+.hwc-active-band-pr:hover {
+  background: var(--color-surface);
+}
+
+.hwc-active-band-pr:active {
+  background: var(--color-line);
+}
+
+.hwc-active-band-pr:focus-visible {
+  outline-offset: -3px;
+}
+
+/* ブランチと上流との差を同じ行に置く。ブランチだけを縮め、数字は残す。 */
+.hwc-active-band-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
+.hwc-active-band-counts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 2 行目に置いたときは右端へ寄せる。ブランチと上流の差だけを縮める。 */
+.hwc-active-band-line .hwc-active-band-counts {
+  margin-left: auto;
+}
+
+/* 「すべて」のその場所へ移る入口は右端の矢印だけ。名前とブランチは読む面なので、
+   押しても移らない。記号は移動を表す矢印で、開閉のシェブロンと形で区別する。
+   見た目は 32px に収め、タップ領域だけ 44px に広げる。 */
+.hwc-active-band-jump {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.hwc-active-band-jump::after {
+  content: "";
+  position: absolute;
+  inset: calc((var(--space-8) - var(--tap)) / 2);
+}
+
+.hwc-active-band-jump:hover {
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
+.hwc-active-band-jump:active {
+  background: var(--color-line);
+}
+
+/* 状態記号に数を添えるだけ。 */
+.hwc-active-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hwc-active-count[data-tone="attention"] {
+  color: var(--color-attention);
+}
+
+.hwc-active-count[data-tone="success"] {
+  color: var(--color-success);
+}
+
+.hwc-active-count[data-tone="active"] {
+  color: var(--color-active);
+}
+
+/* 帯が記号を持つので、行の記号は件数より小さくして名前の幅を残す。枠も縮めないと、
+   32px の操作領域が名前の幅を削る。 */
+.hwc-active-count .hwc-status {
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.hwc-active-count .hwc-status svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* 行は帯の子。帯のアイコンの中心から縦に線を引き、行を同じ段だけ下げる。
+   線は最後の行の中央で止め、行の背景（選択・ホバー）の上に描く。 */
+.hwc-active-rows {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-active-rows::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: calc(var(--row-pane) / 2);
+  left: calc(var(--space-4) + var(--icon-frame) / 2);
+  width: 1px;
+  background: var(--color-line);
+  pointer-events: none;
+}
+
+.hwc-active-row + .hwc-active-row {
+  border-top: 1px solid var(--color-line);
+}
+
+.hwc-active-group .hwc-active-row:last-child .hwc-active-open {
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+
+.hwc-active-open {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--row-pane);
+  /* 親のアイコンから子の段へ。ツリーのペイン行と同じ位置に記号を置く。 */
+  padding: var(--space-3) var(--space-4) var(--space-3)
+    calc(var(--space-4) + var(--icon-frame) / 2 + var(--space-6));
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-active-open:hover {
+  background: var(--color-raised);
+}
+
+.hwc-active-open[data-current="true"] {
+  background: var(--color-selected);
+}
+
+/* 行自身がボタンなので、フォーカス中は枠を外して外側の :focus-visible の輪郭に
+   譲る。内側の枠を残すと同じ outline を上書きし、フォーカス位置が見えなくなる。 */
+.hwc-active-open[data-current="true"]:not(:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* 場所は帯が持つ。名前は並べるときの主役なので、選択中の行だけ太くする。 */
+.hwc-active-main {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.hwc-active-name {
+  flex: 0 1 auto;
+  font-weight: 400;
+}
+
+.hwc-active-title {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.hwc-active-open[data-current="true"] .hwc-active-name {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.hwc-active-tab {
+  flex: none;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-active-flag {
+  flex: none;
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* 状態ラベル */
+
+/* 状態は記号だけで示し、文言はホバー中だけ添える。 */
+.hwc-status-label {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+
+/* ワークスペースを開くとまとめの状態は引っ込む。場所は残して淡く消す。 */
+.hwc-group-status {
+  flex: none;
+  display: inline-flex;
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+
+.hwc-group-status[data-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* エージェントの居ない束は、状態の代わりにシェルの記号を置く。状態の記号と同じ 32px の枠に
+   収め、右端の位置を揃える。シェルだけだと分かるよう、記号の濃さは状態より淡くする。 */
+.hwc-group-shell {
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  color: var(--color-neutral);
+  opacity: 0.6;
+}
+
+@keyframes hwc-status-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.hwc-status {
+  animation: hwc-status-in 160ms ease-out;
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-sm);
+  color: var(--color-neutral);
+}
+
+.hwc-status-text {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: calc(100% + var(--space-2));
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  /* 目印の側から離れる向きに、少しだけ動かす。 */
+  transform: translate(var(--space-1), -50%);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 140ms;
+}
+
+/* 左端の記号の文言は行の内側（右）へ開く。左へ出すと一覧の外で切れる。 */
+.hwc-pane-state .hwc-status-text {
+  left: calc(100% + var(--space-2));
+  right: auto;
+  transform: translate(calc(-1 * var(--space-1)), -50%);
+}
+
+.hwc-status-label:hover .hwc-status-text,
+.hwc-status-label:focus-within .hwc-status-text {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-status-text {
+    transition: none;
+  }
+}
+
+.hwc-status--active {
+  color: var(--color-active);
+}
+
+.hwc-status--attention {
+  color: var(--color-attention);
+}
+
+.hwc-status--success {
+  color: var(--color-success);
+}
+
+.hwc-status--neutral {
+  color: var(--color-neutral);
+}
+
+@keyframes hwc-arc-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hwc-arc {
+  animation: hwc-arc-turn 0.75s linear infinite;
+}
+
+.hwc-arc-turn {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hwc-arc-turn 0.75s linear infinite;
+}
+
+@keyframes hwc-bars-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.2;
+  }
+}
+
+.hwc-bars rect {
+  animation: hwc-bars-fade 0.75s linear infinite;
+}
+
+/* 送信中の回転は、止めると送信が止まったように見える。ダイアログのスピナー
+   （.hwc-spinner）と同じく遅くして動きの量を減らす。一覧の状態記号は StatusIcon が
+   静止した記号に差し替えるので、ここでは扱わない。 */
+@media (prefers-reduced-motion: reduce) {
+  .hwc-arc {
+    animation-duration: 2s;
+  }
+}
