@@ -132,7 +132,6 @@ test("active carries the workspace and the tab of each pane", () => {
 test("a waiting agent stays in the list", () => {
   const state = app(workspace("w1", [pane("w1:p1", "pi", "idle")]));
 
-  // 開いても消えない。起動している限り、待機中も行は残る。
   expect(activePanes(state).map((row) => row.pane.id)).toEqual(["w1:p1"]);
 });
 

@@ -95,7 +95,6 @@ test("panes no longer polled are dropped from the map", () => {
   const next = mergeProcesses(before, [[shell.id, null]], [shell.id]);
   expect([...next.keys()]).toEqual([shell.id]);
 
-  // 対象が変わっていなければ、同じ Map を使い回す。
   const same = mergeProcesses(before, [], [shell.id, other]);
   expect(same).toBe(before);
 });
