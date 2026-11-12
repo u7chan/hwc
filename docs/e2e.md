@@ -379,18 +379,19 @@ HTML が配信できないスクリプトを読み込むと、iframe の上に 1
 
 ## 通知
 
-設定画面の「通知」から、司令塔の完了を Discord Webhook へ送る（[ADR 0063](adr/0063-discord-done-notification.md)）。E2E では `HWC_E2E_DISCORD_WEBHOOK_SINK` により、送信は実 Discord ではなく架空のファイルへ記録する。**実 Discord へは送らない。**
+設定画面の「通知」から、司令塔の完了と要対応を Discord Webhook へ送る（[ADR 0063](adr/0063-discord-done-notification.md)、[ADR 0068](adr/0068-discord-blocked-notification.md)）。E2E では `HWC_E2E_DISCORD_WEBHOOK_SINK` により、送信は実 Discord ではなく架空のファイルへ記録する。**実 Discord へは送らない。**
 
 起動ログの `hwc e2e fixture: <root>` が示す `<root>/discord-webhook.jsonl` が sink。送信のたびに `{"content":"..."}` が 1 行追記される。
 
 1. 設定を開く。「通知」は未登録で、Discord の欄に URL 入力と「登録」が出る。スイッチはオフ。
 2. `https://discord.com/api/webhooks/1234567890/e2e-discord-token` を入れて「登録」を押す。「登録済み」と末尾 4 文字（`…oken`）だけが出て、URL 全文は画面にも応答にも出ない。
 3. 再読み込みして設定を開く。登録済みのまま復元される（`<root>/notifications.json`）。
-4. 「テスト通知」を押す。成功の文言が出て、`<root>/discord-webhook.jsonl` に「hwc のテスト通知です。このチャンネルに完了通知が届きます。」が 1 行追記される。
-5. スイッチと「通知する対象」を切り替える。「すべての作業」を選んで再読み込みすると、選んだ状態が残る。
+4. 「テスト通知」を押す。成功の文言が出て、`<root>/discord-webhook.jsonl` に「hwc のテスト通知です。このチャンネルに完了通知と要対応の通知が届きます。」が 1 行追記される。
+5. スイッチと「完了通知の対象」を切り替える。「すべての作業」を選んで再読み込みすると、選んだ状態が残る。「要対応の通知は、この対象に関係なく送ります。」が出ている。
 6. 「変更」は空の入力から始まり、「キャンセル」で元の登録済み表示に戻る。「削除」は確認のあと未登録になり、スイッチの状態は変わらない。
 7. 読み込み失敗は、ブラウザのリクエスト差し替えで `/api/notifications` に 502 を返して確かめる。「通知の設定を読み込めませんでした。」と「再試行」が出て、「未登録」とは出さない。
 8. 自動送信は、`acme-dashboard` で通知を有効にし、`/done` を送って親と子を `done` にする。山ごとに 1 回だけ sink に追記され、`done` のまま留まっても増えない。実 Herdr には `/done` が無いので、フィクスチャ専用の入力で確かめる。
+9. 要対応は、`acme-dashboard` の `review` を開き、フィクスチャ専用の `/blocked` を送る。`hwc: acme-dashboard が対応を待っています\nペイン: review\nブランチ: feat/empty-state` が 1 行追記される。`/blocked` をもう一度送っても増えない。`/done` で解除してから `/blocked` を送ると、もう 1 行追記される。「完了通知の対象」が「PR がある作業だけ」でも送られる。
 
 ## データを変える
 

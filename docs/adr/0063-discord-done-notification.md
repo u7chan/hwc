@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-12
 - Revises: [ADR 0054](0054-favicon-parent-status.md) の「プッシュ通知は持たない」
+- Revises: 2026-11-12 に要対応（blocked）の通知と設定画面のラベルを追加（[ADR 0068](0068-discord-blocked-notification.md)）
 
 ## Context
 
