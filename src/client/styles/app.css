@@ -901,7 +901,8 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 }
 
 /* 行のホバーは raised で行全体を塗るため、上に乗っただけでは開閉の入口が分からない。
-   左の種類アイコンと同じ 44px の枠で surface に落とし、押せる範囲を示す。 */
+   左の種類アイコンと同じ 44px の枠で surface に落とし、押せる範囲を示す。
+   触れる端末では hover がタップ後に残るので、ポインタのある端末だけに出す。 */
 .hwc-chevron {
   flex: none;
   display: grid;
@@ -911,18 +912,24 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   border-radius: var(--radius-control);
   color: var(--color-secondary);
   transition:
-    transform 180ms ease,
     background-color 140ms ease,
     color 140ms ease;
 }
 
-.hwc-chevron[data-open="true"] {
+/* 回すのは中の記号だけ。枠まで回すと、開閉のたびに角丸の四角が振れて見える。 */
+.hwc-chevron > svg {
+  transition: transform 180ms ease;
+}
+
+.hwc-chevron[data-open="true"] > svg {
   transform: rotate(90deg);
 }
 
-.hwc-chevron:hover {
-  background: var(--color-surface);
-  color: var(--color-text);
+@media (hover: hover) {
+  .hwc-chevron:hover {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
 }
 
 /* タブの行。ワークスペースの下に 1 段下げて置く。 */
