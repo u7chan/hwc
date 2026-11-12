@@ -1,0 +1,687 @@
+/* 入力 */
+
+.hwc-input {
+  position: relative;
+  flex: none;
+  margin: 0;
+  padding: var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+
+.hwc-input:focus-within {
+  border-top-color: var(--color-accent);
+}
+
+.hwc-input-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  /* ドロップ中の面の色を、戻るときも滑らかにする。 */
+  transition: background-color 120ms ease;
+}
+
+/* ファイルをドラッグしている間は、画像を落とせる範囲を面と破線で示す。
+   フォーカスの輪郭（実線・外側）と取り違えないよう、内側の破線にする。 */
+.hwc-input[data-drop="true"] .hwc-input-frame {
+  border-radius: var(--radius-control);
+  background: var(--color-selected);
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-input-frame {
+    transition: none;
+  }
+
+  .hwc-input-field,
+  .hwc-input-prompt {
+    transition: none;
+  }
+}
+
+/* コマンドの候補とチップ。入力欄の中で行を占める。浮かせるとキーボードに隠れる。 */
+.hwc-commands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 calc(var(--tap) + var(--space-2)) 0 var(--space-2);
+}
+
+.hwc-command {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.hwc-command:hover {
+  background: var(--color-raised);
+}
+
+.hwc-command:active {
+  opacity: 0.72;
+}
+
+/* 選んだチップは送信待ちで、押しても何も起きない。面と枠で候補と見分ける。 */
+.hwc-command[data-chip="true"] {
+  padding: 0 0 0 var(--space-3);
+  border-color: var(--color-accent);
+  background: var(--color-selected);
+  cursor: default;
+}
+
+.hwc-command[data-chip="true"]:hover,
+.hwc-command[data-chip="true"]:active {
+  background: var(--color-selected);
+}
+
+.hwc-command-text {
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+}
+
+.hwc-command-label {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hwc-command-clear {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-command-clear:hover {
+  background: var(--color-raised);
+}
+
+/* 添付のチップ。サムネイルの高さで行が伸びないよう、記号の代わりに小さく切って置く。 */
+.hwc-command.hwc-attachment {
+  padding: 0 0 0 var(--space-1);
+  gap: var(--space-1);
+}
+
+/* サムネイルは小さいまま、押せる範囲だけチップの中で 44px に広げる。 */
+.hwc-attachment-open {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.hwc-attachment-open:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.hwc-attachment-thumb {
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.hwc-attachment-sending {
+  padding: 0 var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hwc-input-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-input-toggle:hover {
+  background: var(--color-raised);
+}
+
+.hwc-input-toggle:active {
+  opacity: 0.72;
+}
+
+.hwc-input-field {
+  /* 縦の flex で伸ばすと height 指定が効かず、内容がはみ出して切れる。 */
+  flex: none;
+  min-width: 0;
+  min-height: var(--row-pane);
+  max-height: 30dvh;
+  /* 右の上に開閉ボタンが載るので、その分だけ行を短くする。 */
+  padding: var(--space-1) calc(var(--tap) + var(--space-2)) var(--space-1) var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  /* 16px を下回ると iOS がフォーカス時に拡大する。 */
+  font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-ui);
+  /* 高さは fit() が入力量に合わせる。手で伸ばすと次の入力で戻るので、取っ手を出さない。 */
+  resize: none;
+  /* シェルからエージェントへの切り替わりで、$ の跡が飛ばないようにする。 */
+  transition: padding-left 120ms ease;
+}
+
+.hwc-input-field:focus-visible {
+  outline: none;
+}
+
+/* シェルの入力欄は端末。$ を 1 行目の左に置き、カーソルをブロックにする。 */
+.hwc-input-line {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* 行の中では入力欄が残り幅いっぱいに広がる（.hwc-input-field の flex: none を打ち消す）。 */
+.hwc-input-line > .hwc-input-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hwc-input-prompt {
+  flex: none;
+  /* 幅を明示しないと auto から 0 へ遷移できない。$ は 1 文字ぶん。 */
+  width: calc(1ch + var(--space-2));
+  overflow: hidden;
+  white-space: nowrap;
+  padding: var(--space-2) 0 var(--space-2) var(--space-2);
+  color: var(--color-secondary);
+  font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-mono);
+  user-select: none;
+  transition:
+    opacity 120ms ease,
+    width 120ms ease,
+    padding-left 120ms ease;
+}
+
+.hwc-input-prompt[data-hidden="true"] {
+  width: 0;
+  padding-left: 0;
+  opacity: 0;
+}
+
+.hwc-input[data-shell="true"] .hwc-input-field {
+  padding-left: var(--space-1);
+  /* 未対応の環境では既定の細いカーソルになるだけ。 */
+  caret-shape: block;
+  caret-color: var(--color-accent);
+}
+
+/* 折りたたみ時は 1 行 + 上下同じ余白に収める。--row-pane（64px）のままだと 1 行の
+   ときに文字の下だけ空いて上に寄って見える。高さは fit() が入力量に合わせて伸ばす。 */
+.hwc-input:not([data-expanded="true"]) .hwc-input-field {
+  min-height: calc(1lh + var(--space-2) * 2);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+/* 入力欄が 40px になると、右上の開閉ボタン（--tap = 44px）の下端が送信ボタンの行に接する。
+   開閉のつもりのタップが送信に落ちないよう、ボタンの下に 8px 空ける。チップ行との重なりは
+   入力欄の高さに依存しないため、ここでは変えない。 */
+.hwc-input:not([data-expanded="true"]) .hwc-input-frame {
+  gap: var(--space-3);
+}
+
+.hwc-input[data-expanded="true"] .hwc-input-field {
+  min-height: 40dvh;
+  max-height: 60dvh;
+}
+
+.hwc-input-field::placeholder {
+  color: var(--color-secondary);
+}
+
+.hwc-input-tail {
+  /* 追加ボタンが入っても送信を押し出さないよう、残り幅を取って右端に寄せる。 */
+  flex: 1 1 auto;
+  /* 幅の判定は画面ではなく、情報と送信が入る行の幅で行う。+ メニューは tail の
+     外側にあり、container-type の子孫にならないので fixed の基準を奪わない。 */
+  container: hwc-input-tail / inline-size;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  /* 札と送信ボタンが近いと息苦しいので、間を空ける。 */
+  gap: var(--space-3);
+  margin-left: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* 送信の手前にモデルと effort を並べる。行の右端に寄せる。 */
+.hwc-input-info {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+}
+
+.hwc-input-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* モデルと effort は押すと詳細を開く。値を並べるだけの行なので、面は付けず文字をそのまま置く。 */
+.hwc-agent-info {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* 記号は枠を付けず、モデル名の手前に小さく置く。 */
+.hwc-input-agent {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--color-secondary);
+}
+
+.hwc-input-agent[data-agent="claude"] {
+  color: var(--color-agent-claude);
+}
+
+/* effort は名前と混ざらないよう、小さな札にする。 */
+.hwc-input-effort {
+  flex: none;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-control-line);
+  border-radius: 999px;
+  color: var(--color-secondary);
+  font-size: 0.6875rem;
+  line-height: 1.25rem;
+}
+
+.hwc-hint-wrap {
+  position: relative;
+  flex: none;
+}
+
+/* モデル札は長い名前のとき縮んで省略する。外枠が縮まないと、右の使用量と送信を押し出す。 */
+.hwc-agent-hint {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.hwc-context {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hwc-hint-panel {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 240px;
+  max-width: min(280px, 85vw);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(var(--space-1));
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease,
+    visibility 0s linear 150ms;
+}
+
+.hwc-hint-panel[data-placement="below"] {
+  top: 100%;
+  bottom: auto;
+}
+
+.hwc-hint-panel > * {
+  flex: none;
+}
+
+.hwc-hint-panel[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+
+.hwc-hint-title {
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+.hwc-hint-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.hwc-hint-row > :last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 名前は省略せず折り返して全部出す。読み上げとコピーの対象でもある。 */
+.hwc-model-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hwc-model-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+}
+
+/* 記号は小さく保ち、触れる範囲だけ 44px に広げる。 */
+.hwc-model-copy {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hwc-model-copy::after {
+  content: "";
+  position: absolute;
+  inset: calc((var(--space-6) - var(--tap)) / 2);
+}
+
+.hwc-model-copy:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-model-copy[data-copied="true"] {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.hwc-hint-note {
+  margin-top: var(--space-1);
+  color: var(--color-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-hint-panel {
+    transition: none;
+  }
+}
+
+.hwc-context[data-tone="secondary"] {
+  color: var(--color-secondary);
+}
+
+.hwc-context[data-tone="attention"] {
+  color: var(--color-attention);
+}
+
+.hwc-context-narrow {
+  display: none;
+}
+
+@container hwc-input-tail (max-width: 340px) {
+  .hwc-context-wide {
+    display: none;
+  }
+
+  .hwc-context-narrow {
+    display: inline;
+  }
+}
+
+.hwc-context-bar {
+  flex: none;
+  width: 48px;
+  height: 4px;
+  border-radius: 999px;
+  /* 溝が surface に埋もれると、低い割合で棒が点に見える。装飾の輪郭トークンで line を使う。 */
+  background: var(--color-line);
+  overflow: hidden;
+}
+
+.hwc-context-bar-fill {
+  display: block;
+  height: 100%;
+  background: currentColor;
+}
+
+.hwc-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  cursor: pointer;
+}
+
+.hwc-send:active {
+  opacity: 0.72;
+}
+
+.hwc-send:disabled {
+  background: var(--color-raised);
+  color: var(--color-secondary);
+  cursor: default;
+}
+
+/* 送信中・停止中もボタンの面は残す。押せないが処理中であることが見えるように。 */
+.hwc-send[data-sending="true"]:disabled,
+.hwc-send[data-stopping="true"]:disabled {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.hwc-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 入力に足す操作。送信の主操作と競合しないよう、控えめな面にする。 */
+.hwc-add {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.hwc-add:hover {
+  background: var(--color-selected);
+}
+
+/* シェルのペインをエージェントに変える入口。会話ペインの + と同じ位置・同じ高さに置く。 */
+.hwc-agent-start {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-size: var(--text-body);
+  cursor: pointer;
+}
+
+.hwc-agent-start > svg {
+  flex: none;
+  color: var(--color-accent);
+}
+
+.hwc-agent-start:hover {
+  background: var(--color-selected);
+}
+
+.hwc-agent-start:active {
+  opacity: 0.72;
+}
+
+.hwc-input-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 0 var(--space-1) var(--space-2);
+}
+
+/* 分割中は入力欄を 1 行に畳み、会話へ高さを回す。開閉ボタンと placeholder は出さない。 */
+.hwc-split-cell[data-compact="true"] .hwc-input {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+/* 入力欄と情報・送信を同じ行に置く。開閉ボタンが無いので右の余白も詰める。 */
+.hwc-split-cell[data-compact="true"] .hwc-input-frame {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+/* 簡略時は候補を入力欄の下へ回す。隠すと、打った /n がそのまま本文として送られる。 */
+.hwc-split-cell[data-compact="true"] .hwc-commands {
+  order: 1;
+  flex-basis: 100%;
+  padding: 0;
+}
+
+/* 入力欄を包む行も横に伸ばす（包みが伸びないと入力欄が中身の幅で止まる）。 */
+.hwc-split-cell[data-compact="true"] .hwc-input-line {
+  flex: 1;
+  min-width: 0;
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-input-field {
+  flex: 1;
+  min-height: var(--tap);
+  /* 入力量に応じて伸びるが、セルからはみ出さない。 */
+  max-height: min(30dvh, 55cqh);
+  padding-right: var(--space-2);
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-input-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0;
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-input-tail {
+  flex: 0 1 auto;
+  gap: var(--space-2);
+  /* 簡略時は container query を使わず、下の固定規則で narrow にする。 */
+  container: normal;
+}
+
+/* 簡略時は narrow 表記に固定する。セル基準の 360px 判定では wide 表記（106k/1.0M (10.6%)）が
+   出て、入力欄が約 90px まで落ちる。 */
+.hwc-split-cell[data-compact="true"] .hwc-context-wide {
+  display: none;
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-context-narrow {
+  display: inline;
+}
+
+/* 折り返して複数行になった入力欄は読み幅いっぱいに使う。情報と送信は次の行へ回し、
+   狭い列に文字を押し込めない。1 行のときは同じ行に残して会話へ高さを回す。 */
+.hwc-split-cell[data-compact="true"] .hwc-input[data-wrapped] .hwc-input-line {
+  flex-basis: 100%;
+}
+
+.hwc-split-cell[data-compact="true"] .hwc-input[data-wrapped] .hwc-input-actions {
+  flex: 1 1 100%;
+}
+
+/* 540px を切ると、バーの 48px が入力欄を圧迫する。バーを隠して数値を優先する。 */
+@container hwc-cell (max-width: 540px) {
+  .hwc-context-bar {
+    display: none;
+  }
+}
