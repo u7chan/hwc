@@ -5057,11 +5057,66 @@ p.hwc-compaction,
   overflow: hidden;
 }
 
-.hwc-theme-preview-caption {
-  margin: 0;
-  padding: var(--space-2) var(--space-4);
+/* 見本は既定で畳む。テーマは選んだ瞬間に画面全体へ反映されるので、この中で
+   常に高さを取る必要はない。見出し行をそのままボタンにして開く道を残す。 */
+.hwc-theme-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 0;
+  background: transparent;
   color: var(--color-secondary);
+  font: inherit;
   font-size: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-theme-preview-head:active {
+  opacity: 0.72;
+}
+
+/* 行の輪郭はカードの overflow: hidden で切れるので、フォーカス中はカード側に出す。
+   タッチ・ペンでは ADR 0040 と同じく出さない。 */
+html:not([data-input-modality="pointer"])
+  .hwc-theme-preview:has(.hwc-theme-preview-head:focus-visible) {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.hwc-theme-preview-head:focus-visible {
+  outline: none;
+}
+
+/* 開閉は一覧の disclosure と同じシェヴロン。 */
+.hwc-theme-preview-icon {
+  display: grid;
+  place-items: center;
+  transition: transform 220ms ease;
+}
+
+.hwc-theme-preview-head[aria-expanded="true"] .hwc-theme-preview-icon {
+  transform: rotate(90deg);
+}
+
+/* 中身は固定の見本なので、max-height を測らずにトラックの 0fr → 1fr で動かす。 */
+.hwc-theme-preview-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+
+.hwc-theme-preview-body[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.hwc-theme-preview-clip {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .hwc-theme-preview-inner {
@@ -5079,6 +5134,11 @@ p.hwc-compaction,
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-4);
+}
+
+/* 会話の吹き出しは 85% を上限にするので、見本の行を幅いっぱいにして同じ比率にする。 */
+.hwc-theme-preview-msg {
+  width: 100%;
 }
 
 .hwc-theme-preview-status {
@@ -5120,6 +5180,13 @@ p.hwc-compaction,
 .hwc-theme-preview-note {
   color: var(--color-secondary);
   font-size: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-theme-preview-body,
+  .hwc-theme-preview-icon {
+    transition: none;
+  }
 }
 
 /* テーマとエージェントの選択カード。テーマは面の色、エージェントは Provider の印で示す。 */
