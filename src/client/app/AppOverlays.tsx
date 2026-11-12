@@ -18,9 +18,14 @@ import type { StartingPane } from "../starting";
 import { serverClockNow } from "../time";
 import { WorkspaceGitActions } from "../WorkspaceGitActions";
 import { WorkspaceMenuHead } from "../WorkspaceMenuHead";
-import type { Closing, ClosingSpace, DropTarget, OperationMenu, Removing } from "./types";
-
-type CreatingPane = { paneId: string; worktreeWorkspaceId: string | null; start: boolean };
+import type {
+  Closing,
+  ClosingSpace,
+  CreatingPane,
+  DropTarget,
+  OperationMenu,
+  Removing,
+} from "./types";
 
 export type AppOverlaysProps = {
   dragging: { paneId: string; target: DropTarget | null } | null;

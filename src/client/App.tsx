@@ -9,6 +9,7 @@ import { Settings } from "./Settings";
 import type {
   Closing,
   ClosingSpace,
+  CreatingPane,
   DropTarget,
   GitAction,
   LeavingTab,
@@ -207,13 +208,7 @@ export function App() {
   const [leavingTab, setLeavingTab] = useState<LeavingTab | null>(null);
   const [removing, setRemoving] = useState<Removing | null>(null);
   const [closingSpace, setClosingSpace] = useState<ClosingSpace | null>(null);
-  // 作成ダイアログ。ワークツリーを作る場合は、モデル一覧の取得元になる起点スペースの ID も持つ。
-  // start は、作らずに既存のシェルペインで起動する。
-  const [creating, setCreating] = useState<{
-    paneId: string;
-    worktreeWorkspaceId: string | null;
-    start: boolean;
-  } | null>(null);
+  const [creating, setCreating] = useState<CreatingPane | null>(null);
   // 拡大中の画像。ダイアログは App 直下（ADR 0021）。
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
   // 開いているプレビュー。対象のペインは、そのタブを開いている間だけ出す。
