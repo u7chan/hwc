@@ -317,18 +317,47 @@
   border-top: 1px solid var(--color-line);
 }
 
-.hwc-active-group .hwc-active-row:last-child .hwc-active-open {
+/* 行は「開く」と「メニュー」の 2 つのボタンで持つ。枠と選択面は行全体に掛け、
+   メニューを開くだけの押下で行の選択や既読を変えない。 */
+.hwc-active-row {
+  container-type: inline-size;
+}
+
+.hwc-active-pane {
+  display: flex;
+  align-items: center;
+  min-height: var(--row-pane);
+  padding-right: var(--space-2);
+}
+
+.hwc-active-pane:hover {
+  background: var(--color-raised);
+}
+
+.hwc-active-pane[data-current="true"] {
+  background: var(--color-selected);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+/* 最後の行も、開く面・メニューの面・選択面を同じ角丸に収める。 */
+.hwc-active-group .hwc-active-row:last-child .hwc-active-pane {
   border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+
+.hwc-active-group .hwc-active-row:last-child .hwc-pane-more {
+  border-bottom-right-radius: var(--radius-panel);
 }
 
 .hwc-active-open {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: var(--space-3);
-  width: 100%;
+  min-width: 0;
   min-height: var(--row-pane);
   /* 親のアイコンから子の段へ。ツリーのペイン行と同じ位置に記号を置く。 */
-  padding: var(--space-3) var(--space-4) var(--space-3)
+  padding: var(--space-3) var(--space-2) var(--space-3)
     calc(var(--space-4) + var(--icon-frame) / 2 + var(--space-6));
   border: 0;
   background: transparent;
@@ -337,19 +366,23 @@
   cursor: pointer;
 }
 
-.hwc-active-open:hover {
+/* 帯の中は面が surface なので、ツリーの hover（surface）では差が出ない。 */
+.hwc-active-pane .hwc-pane-more:hover,
+.hwc-active-pane .hwc-pane-more[aria-expanded="true"] {
   background: var(--color-raised);
 }
 
-.hwc-active-open[data-current="true"] {
-  background: var(--color-selected);
-}
-
-/* 行自身がボタンなので、フォーカス中は枠を外して外側の :focus-visible の輪郭に
-   譲る。内側の枠を残すと同じ outline を上書きし、フォーカス位置が見えなくなる。 */
-.hwc-active-open[data-current="true"]:not(:focus-visible) {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
+/* 幅が足りない行ではタブ名、次に時刻を譲る。名前と 44px の操作領域を残す。
+   時刻は状態を読むための手掛かりなので、タブ名より後に省く。 */
+@container (max-width: 340px) {
+  .hwc-active-pane .hwc-active-tab {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* 場所は帯が持つ。名前は並べるときの主役なので、選択中の行だけ太くする。 */
@@ -374,7 +407,7 @@
   min-width: 0;
 }
 
-.hwc-active-open[data-current="true"] .hwc-active-name {
+.hwc-active-pane[data-current="true"] .hwc-active-name {
   color: var(--color-accent);
   font-weight: 600;
 }

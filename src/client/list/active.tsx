@@ -1,6 +1,6 @@
 import type { PaneState } from "../../server/herdr/state";
 import type { PullRequest } from "../../shared/pull-request";
-import { ArrowRightIcon, MergeIcon, PaneIcon } from "../icons";
+import { ArrowRightIcon, MergeIcon, MoreIcon, PaneIcon } from "../icons";
 import { GitCount } from "../GitCount";
 import { MENU_ID } from "../Menu";
 import { ParentMark } from "../ParentMark";
@@ -222,34 +222,49 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
               const name = paneRowTitle(pane);
               return (
                 <li key={pane.id} class="hwc-active-row">
-                  <button
-                    type="button"
-                    class="hwc-active-open"
+                  <div
+                    class="hwc-active-pane"
                     data-current={current}
                     data-slot={slot >= 0 ? slot + 1 : undefined}
-                    aria-current={current ? "true" : undefined}
-                    onPointerDown={(event) => props.onDragStart(event, pane.id)}
-                    onClick={() => props.onOpen(pane.id)}
                   >
-                    <StatusIcon status={pane.agentStatus} />
-                    <span class="hwc-active-main">
-                      <span class="hwc-active-title">
-                        <span class="hwc-active-name" title={name}>
-                          {activeRowName(group.workspace.label, name)}
+                    <button
+                      type="button"
+                      class="hwc-active-open"
+                      aria-current={current ? "true" : undefined}
+                      onPointerDown={(event) => props.onDragStart(event, pane.id)}
+                      onClick={() => props.onOpen(pane.id)}
+                    >
+                      <StatusIcon status={pane.agentStatus} />
+                      <span class="hwc-active-main">
+                        <span class="hwc-active-title">
+                          <span class="hwc-active-name" title={name}>
+                            {activeRowName(group.workspace.label, name)}
+                          </span>
+                          {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
                         </span>
-                        {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
+                        {showsTabName(group.workspace) ? (
+                          <span class="hwc-active-tab">· {tab.label}</span>
+                        ) : null}
                       </span>
-                      {showsTabName(group.workspace) ? (
-                        <span class="hwc-active-tab">· {tab.label}</span>
-                      ) : null}
-                    </span>
-                    <ActiveTrail
-                      pane={pane}
-                      workingSince={props.workingSince}
-                      finishedAt={props.finishedAt}
-                      now={props.now}
-                    />
-                  </button>
+                      <ActiveTrail
+                        pane={pane}
+                        workingSince={props.workingSince}
+                        finishedAt={props.finishedAt}
+                        now={props.now}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      class="hwc-pane-more"
+                      aria-label={`${name} のメニュー`}
+                      aria-haspopup="menu"
+                      aria-expanded={props.openPaneMenuId === pane.id}
+                      aria-controls={MENU_ID}
+                      onClick={(event) => props.onPaneMenu(pane.id, event.currentTarget)}
+                    >
+                      <MoreIcon />
+                    </button>
+                  </div>
                 </li>
               );
             })}
