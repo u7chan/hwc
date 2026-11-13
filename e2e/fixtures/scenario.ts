@@ -652,7 +652,8 @@ const sessionEntries = [
     timestamp: "2026-01-01T09:00:03.000Z",
     message: {
       role: "user",
-      content: "その方針でお願いします。テストも 1 本足してください。",
+      content:
+        "その方針でお願いします。テストも 1 本足してください。\n\n<attached_files>\n- /tmp/hwc-e2e/attachments/w1:p1/empty-state-reference.zip\n</attached_files>",
       timestamp: Date.parse("2026-01-01T09:00:03.000Z"),
     },
   },
