@@ -53,9 +53,10 @@ export function faviconHref(status: FaviconStatus | null, baseHref: string): str
   return `data:image/svg+xml,${encodeURIComponent(faviconSvg(status))}`;
 }
 
-// SVG favicon を持たないブラウザ（Safari 26 未満、iOS の Chrome）のアイコンは、HTML に
-// 置いた PNG が担う。消すとそのブラウザではアイコンが 1 枚も無くなる。Chrome は PNG が
-// 残っていても SVG の href の差し替えを反映するので、点の更新は妨げられない。
+// SVG favicon を持たないブラウザ（macOS / iOS の Safari 26 未満。iOS の Chrome も同じ
+// WebKit）のアイコンは、HTML に置いた PNG が担う。消すとそのブラウザではアイコンが 1 枚も
+// 無くなる。Chrome は PNG が残っていても SVG の href の差し替えを反映するので、点の更新は
+// 妨げられない。
 export function applyFavicon(status: FaviconStatus | null): void {
   const svg = document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/svg+xml"]');
   if (svg === null) return;
