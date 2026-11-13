@@ -122,12 +122,19 @@
   line-height: var(--line-tight);
 }
 
-/* リポジトリは場所の所属。見出しが PR タイトルになるため、ここでしか読めない。
-   狭いときはブランチ側を先に省き、リポジトリ名を残す。 */
+/* 場所の所属とブランチをまとめる。ブランチは残り幅を取り、足りないときはリポジトリ名より
+   先に縮む。リポジトリ名は最後まで残し、本当に入らないときだけ省略する。 */
+.hwc-active-band-place {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* リポジトリは場所の所属。見出しが PR タイトルになるため、ここでしか読めない。 */
 .hwc-active-band-repo {
-  /* 幅が足りないときはブランチを先に縮め、最後にリポジトリ名も省く。 */
-  flex: 0 0 auto;
-  max-width: 9em;
+  flex: 0 1 auto;
   color: var(--color-text);
   font-size: var(--text-secondary);
   font-weight: 600;
@@ -138,7 +145,7 @@
    リポジトリ名に譲って縮む。区切りを置くと、ブランチが 0 まで縮んだときに点だけが
    残るため、書体と色の違いで分ける。 */
 .hwc-active-band-branch {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   margin: 0;
   color: var(--color-secondary);
   font-family: var(--font-mono);
@@ -151,10 +158,6 @@
 @container (max-width: 250px) {
   .hwc-active-band-branch {
     display: none;
-  }
-
-  .hwc-active-band-repo {
-    flex-shrink: 1;
   }
 }
 

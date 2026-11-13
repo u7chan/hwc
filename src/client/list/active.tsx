@@ -144,13 +144,15 @@ function ActiveBand(props: {
         </div>
         {branch === null ? null : (
           <p class="hwc-active-band-line">
-            {repoName === null ? null : (
-              <span class="hwc-active-band-repo" title={repoName}>
-                {repoName}
+            <span class="hwc-active-band-place">
+              {repoName === null ? null : (
+                <span class="hwc-active-band-repo" title={repoName}>
+                  {repoName}
+                </span>
+              )}
+              <span class="hwc-active-band-branch" title={branch}>
+                {branchLabel}
               </span>
-            )}
-            <span class="hwc-active-band-branch" title={branch}>
-              {branchLabel}
             </span>
             <GitCount sync={sync} />
             {countsNode}
