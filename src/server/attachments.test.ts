@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { isStoredAttachmentName } from "../shared/attachments";
 import {
   attachmentExists,
   attachmentFilePath,
@@ -31,6 +32,19 @@ test("saves under the pane and never overwrites a name already taken", async () 
   expect([first, second, third]).toEqual(["report.zip", "report-1.zip", "report-2.zip"]);
   const bytes = await readAttachment({ root, paneId: "w1:p1", name: first ?? "" });
   expect(new Uint8Array(bytes ?? new ArrayBuffer(0))).toEqual(png);
+});
+
+test("a 200-byte name and its numbered sibling are both readable", async () => {
+  // 長い末尾を拡張子として予約すると、連番で上限を超えて保存名の検証に落ちる。
+  const long = `a.${"b".repeat(198)}`;
+  const first = await saveAttachment({ root, paneId: "w1:p1", name: long, bytes: png });
+  const second = await saveAttachment({ root, paneId: "w1:p1", name: long, bytes: png });
+
+  expect(first).toBe(long);
+  expect(second).not.toBe(first);
+  expect(isStoredAttachmentName(second ?? "")).toBe(true);
+  expect(await attachmentFilePath(root, "w1:p1", second ?? "")).not.toBeNull();
+  expect(await readAttachment({ root, paneId: "w1:p1", name: second ?? "" })).not.toBeNull();
 });
 
 test("sanitizes the name and refuses one that has nothing left", async () => {

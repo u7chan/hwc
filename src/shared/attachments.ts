@@ -61,30 +61,54 @@ function stripNameCharacters(raw: string): string {
     }
     const code = character.codePointAt(0) ?? 0;
     if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
+    // 行区切りは注記 1 行を壊す。空白として扱うと前後の除去だけで中身が残る。
+    if (code === 0x2028 || code === 0x2029) continue;
     kept += character;
   }
   return kept;
 }
 
+// 拡張子として残すのは短いものだけ。長い末尾は拡張子ではなく名前の一部として扱い、
+// 切り詰めの計算と衝突名の組み立てで同じ切り分けを使う。
+function splitExtension(name: string): { stem: string; extension: string } {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return { stem: name, extension: "" };
+  const extension = name.slice(dot);
+  if (byteLength(extension) > MAX_EXTENSION_BYTES) return { stem: name, extension: "" };
+  return { stem: name.slice(0, dot), extension };
+}
+
 // 保存名は利用者由来で、そのまま注記・履歴・URL に出る。パスへ連結する前にこの規則を
 // 通し、通した後も同じ名前になるものだけを受け付ける。
 // 先頭の `.` は隠しファイル名を、`-` はシェルのオプションを装う名前を落とす。
-export function sanitizeAttachmentName(raw: string): string {
+// 空白は ASCII だけでなく NBSP や全角空白も落とす。履歴の strip は `trim()` で
+// 名前を取り出すので、ここで残すと保存名と履歴名が食い違う。
+function sanitizeOnce(raw: string): string {
   const cleaned = stripNameCharacters(raw).normalize("NFC");
-  const trimmed = cleaned.replace(/^[.-]+/, "").replace(/[. ]+$/, "");
+  const trimmed = cleaned.replace(/^[.\s-]+/u, "").replace(/[.\s]+$/u, "");
   if (trimmed === "") return "";
 
-  const dot = trimmed.lastIndexOf(".");
-  const extension =
-    dot > 0 && byteLength(trimmed.slice(dot)) <= MAX_EXTENSION_BYTES ? trimmed.slice(dot) : "";
-  const stem = extension === "" ? trimmed : trimmed.slice(0, dot);
+  const { stem, extension } = splitExtension(trimmed);
   // 切り詰めで末尾の空白や `.` が戻るので、切った後にもう一度落とす。
   const body = truncateName(stem, MAX_ATTACHMENT_NAME_BYTES - byteLength(extension)).replace(
-    /[. ]+$/,
+    /[.\s]+$/u,
     "",
   );
   if (body === "") return "";
   return body + extension;
+}
+
+// 切り詰めで拡張子の切り分けが変わることがある。変わらなくなるまで通し、sanitize の
+// 結果が必ず isStoredAttachmentName を通る（冪等である）ことを保証する。
+export function sanitizeAttachmentName(raw: string): string {
+  let name = sanitizeOnce(raw);
+  for (let pass = 0; pass < 4; pass += 1) {
+    if (name === "") return "";
+    const next = sanitizeOnce(name);
+    if (next === name) return name;
+    name = next;
+  }
+  return name;
 }
 
 export function isStoredAttachmentName(value: string): boolean {
@@ -154,12 +178,12 @@ export function decodeAttachmentName(value: string | undefined | null): string |
 // 同名は上書きせず連番にする。拡張子の前に足し、全体を上限に収める。
 export function attachmentCollisionName(name: string, index: number): string {
   if (index === 0) return name;
-  const dot = name.lastIndexOf(".");
-  const extension = dot > 0 ? name.slice(dot) : "";
-  const stem = extension === "" ? name : name.slice(0, dot);
+  const { stem, extension } = splitExtension(name);
   const suffix = `-${index}`;
   const limit = Math.max(1, MAX_ATTACHMENT_NAME_BYTES - byteLength(extension) - suffix.length);
-  return `${truncateName(stem, limit).replace(/[. ]+$/, "")}${suffix}${extension}`;
+  const body = truncateName(stem, limit).replace(/[.\s]+$/u, "");
+  // 連番を足した後も保存名の規則を通ることを、ここで確定させる。
+  return sanitizeAttachmentName(`${body}${suffix}${extension}`);
 }
 
 export function formatMegaBytes(bytes: number): string {

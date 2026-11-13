@@ -139,6 +139,47 @@ test("a taken name gets a number before the extension instead of an overwrite", 
   expect(bytesOf(numbered)).toBeLessThanOrEqual(MAX_ATTACHMENT_NAME_BYTES);
 });
 
+test("a numbered name still fits the limit and passes the stored-name check", () => {
+  // 末尾の長い塊は拡張子ではない。拡張子として予約すると、連番で 200 バイトを超える。
+  const long = `a.${"b".repeat(198)}`;
+  expect(bytesOf(long)).toBe(MAX_ATTACHMENT_NAME_BYTES);
+  expect(isStoredAttachmentName(long)).toBe(true);
+
+  const numbered = attachmentCollisionName(long, 1);
+  expect(bytesOf(numbered)).toBeLessThanOrEqual(MAX_ATTACHMENT_NAME_BYTES);
+  expect(isStoredAttachmentName(numbered)).toBe(true);
+  expect(numbered.endsWith("-1")).toBe(true);
+});
+
+test("a trailing Unicode space is dropped like the ASCII one", () => {
+  // 履歴の strip は trim() で名前を取り出す。ここで残すと保存名と履歴名が食い違う。
+  expect(sanitizeAttachmentName("report.png\u00a0")).toBe("report.png");
+  expect(sanitizeAttachmentName("report.csv\u3000")).toBe("report.csv");
+  expect(isStoredAttachmentName("report.png\u00a0")).toBe(false);
+
+  const saved = sanitizeAttachmentName("report.png\u00a0");
+  const note = composeInputText("", [`/state/attachments/w1:p1/${saved}`]);
+  expect(stripAttachedFiles(note).attachments).toEqual([saved]);
+});
+
+test("sanitizing a saved name again leaves it unchanged", () => {
+  const raw = [
+    `a.${"b".repeat(198)}`,
+    `${"a".repeat(183)} .${"b".repeat(70)}`,
+    "report.png\u00a0",
+    `${"あ".repeat(100)}.docx`,
+    "My Report.xlsx",
+    "x</attached_files>.zip",
+  ];
+
+  for (const value of raw) {
+    const once = sanitizeAttachmentName(value);
+    expect(once).not.toBe("");
+    expect(sanitizeAttachmentName(once)).toBe(once);
+    expect(isStoredAttachmentName(once)).toBe(true);
+  }
+});
+
 test("a byte limit is shown in whole megabytes", () => {
   expect(formatMegaBytes(MAX_IMAGE_ATTACHMENT_BYTES)).toBe("10MB");
   expect(formatMegaBytes(MAX_FILE_ATTACHMENT_BYTES)).toBe("25MB");
