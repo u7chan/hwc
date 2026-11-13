@@ -404,6 +404,35 @@ test("a message keeps its attachments as saved names and sizes, images or not", 
     },
   ]);
 
+  // 負数・小数・非数は表示に使わない。名前だけを残す。
+  expect(
+    toChatSnapshot({
+      ...chatBody,
+      messages: [
+        {
+          ...message,
+          attachments: [
+            { name: "report.zip", size: -1 },
+            { name: "report-1.zip", size: 1.9 },
+            { name: "report-2.zip", size: Number.NaN },
+          ],
+        },
+      ],
+    })?.messages,
+  ).toEqual([
+    {
+      id: "m1",
+      role: "user",
+      text: "",
+      at: 1_000,
+      attachments: [
+        { name: "report.zip", size: null },
+        { name: "report-1.zip", size: 1 },
+        { name: "report-2.zip", size: null },
+      ],
+    },
+  ]);
+
   // 保存名の規則を通らない名前は配信 URL にしない。名前が全部落ちたら添付なしとして扱う。
   expect(
     toChatSnapshot({

@@ -3,14 +3,13 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { stripAttachedFiles } from "../../shared/attachments";
-import {
-  type ChatCompaction,
-  type ChatContext,
-  type ChatMessage,
-  type ChatSnapshot,
-  type ChatUsage,
-  type SessionChatClient,
-  chatAttachments,
+import type {
+  ChatCompaction,
+  ChatContext,
+  ChatMessage,
+  ChatSnapshot,
+  ChatUsage,
+  SessionChatClient,
 } from "./contract";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
@@ -266,7 +265,7 @@ function parseContext(raw: unknown): Projected {
         at: timestampOf(record.time),
         ...(stripped.attachments.length === 0
           ? {}
-          : { attachments: chatAttachments(stripped.attachments) }),
+          : { attachments: stripped.attachments.map((name) => ({ name, size: null })) }),
       });
       continue;
     }

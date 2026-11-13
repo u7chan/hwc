@@ -23,10 +23,6 @@ export type ChatFile = {
 // 実在を知らないので null を置き、BFF が状態ディレクトリを見て埋める。
 export type ChatAttachment = { name: string; size: number | null };
 
-export function chatAttachments(names: readonly string[]): ChatAttachment[] {
-  return names.map((name) => ({ name, size: null }));
-}
-
 export type ChatMessage = {
   id: string;
   // error はターンが失敗した記録。本文はプロバイダや CLI が返した失敗の文言で、

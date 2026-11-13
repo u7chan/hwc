@@ -1,8 +1,10 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { createHash } from "node:crypto";
 import {
   attachmentCollisionName,
+  attachmentExtFromName,
   isSafePaneId,
   isStoredAttachmentName,
   sanitizeAttachmentName,
@@ -99,8 +101,9 @@ export async function attachmentExists(
 }
 
 // 添付 1 件の実バイト数。名前は保存名の検証を通ったものだけを読み、消えたファイルは
-// 値を持たせない（呼び出し側は名前だけを出す）。
-export async function attachmentSizes(
+// 値を持たせない（呼び出し側は名前だけを出す）。画像は履歴でサムネイルを出すだけで
+// 大きさを表示しないため、stat しない。
+async function attachmentSizes(
   root: string,
   paneId: string,
   names: readonly string[],
@@ -109,7 +112,7 @@ export async function attachmentSizes(
   await Promise.all(
     names.map(async (name) => {
       const path = attachmentFilePath(root, paneId, name);
-      if (path === null) return;
+      if (path === null || attachmentExtFromName(name) !== null) return;
       try {
         const info = await stat(path);
         if (info.isFile()) sizes.set(name, info.size);
@@ -119,6 +122,21 @@ export async function attachmentSizes(
     }),
   );
   return sizes;
+}
+
+// サイズは本文が変わらないまま変わる（ファイルが消える）。etag に混ぜないと、
+// 304 で古い大きさが残り続ける。
+function withAttachmentSizes(
+  etag: string,
+  names: readonly string[],
+  sizes: Map<string, number>,
+): string {
+  const parts = [...names]
+    .sort()
+    .map((name) => `${name}@${sizes.get(name) ?? "missing"}`)
+    .join("\n");
+  const digest = createHash("sha256").update(parts).digest("hex").slice(0, 12);
+  return `${etag}-${digest}`;
 }
 
 // 会話の添付にサイズを足す。各 CLI の reader は保存先を知らないので、
@@ -144,7 +162,11 @@ export async function attachAttachmentSizes(
       })),
     };
   });
-  return { ...snapshot, messages };
+  return {
+    ...snapshot,
+    messages,
+    etag: withAttachmentSizes(snapshot.etag, [...names], sizes),
+  };
 }
 
 function isEexist(error: unknown): boolean {

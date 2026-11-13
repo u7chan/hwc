@@ -1,14 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { type FileHandle, open, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import {
-  type ChatCompaction,
-  type ChatContext,
-  type ChatMessage,
-  type ChatSnapshot,
-  type ChatUsage,
-  type SessionChatClient,
-  chatAttachments,
+import type {
+  ChatCompaction,
+  ChatContext,
+  ChatMessage,
+  ChatSnapshot,
+  ChatUsage,
+  SessionChatClient,
 } from "./contract";
 import { stripAttachedFiles } from "../../shared/attachments";
 import { ChatUnavailableError } from "./errors";
@@ -337,7 +336,9 @@ function project(id: string, message: Record<string, unknown>, entryTimestamp: u
               role: "user",
               text,
               at,
-              ...(attachments.length === 0 ? {} : { attachments: chatAttachments(attachments) }),
+              ...(attachments.length === 0
+                ? {}
+                : { attachments: attachments.map((name) => ({ name, size: null })) }),
             },
           ],
       model: null,

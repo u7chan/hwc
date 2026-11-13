@@ -766,6 +766,67 @@ test("POST /api/panes/:id/input returns 404 for the pane that holds the images",
   });
 });
 
+test("a deleted attachment drops its size and changes the etag so the client refetches", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const chat = createFakeChat({
+      snapshot: async () => ({
+        ...emptyChat,
+        messages: [
+          {
+            id: "u1",
+            role: "user" as const,
+            text: "",
+            at: 1,
+            // 同じ名前が 2 通に出ても、stat は 1 回で両方に同じ大きさを入れる。
+            attachments: [{ name: "report.zip", size: null }],
+          },
+          {
+            id: "u2",
+            role: "user" as const,
+            text: "",
+            at: 2,
+            attachments: [{ name: "report.zip", size: null }],
+          },
+        ],
+      }),
+    });
+    const { app, store } = createTestApp({ state: chatState, chat, attachmentsRoot: root });
+    store.setChatSource("w1:p1", { agent: "pi", path: "/sessions/demo.jsonl" });
+
+    expect((await uploadFile(app, { name: "report.zip", type: "application/zip" })).status).toBe(
+      200,
+    );
+
+    const first = await app.request("/api/panes/w1:p1/chat");
+    const etag = first.headers.get("etag") ?? "";
+    const firstBody = (await first.json()) as {
+      messages: { attachments?: { name: string; size: number | null }[] }[];
+    };
+    expect(firstBody.messages[0]?.attachments).toEqual([
+      { name: "report.zip", size: pngBytes.byteLength },
+    ]);
+    expect(firstBody.messages[1]?.attachments).toEqual(firstBody.messages[0]?.attachments);
+
+    // 同じ内容なら 304。大きさが変わらなければ etag も変わらない。
+    const cached = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": etag },
+    });
+    expect(cached.status).toBe(304);
+
+    // 添付ファイルだけが消えると本文は変わらない。それでも再取得させる。
+    await rm(join(root, "w1:p1", "report.zip"), { force: true });
+    const afterDelete = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": etag },
+    });
+    expect(afterDelete.status).toBe(200);
+    expect(afterDelete.headers.get("etag")).not.toBe(etag);
+    const deletedBody = (await afterDelete.json()) as {
+      messages: { attachments?: { name: string; size: number | null }[] }[];
+    };
+    expect(deletedBody.messages[0]?.attachments).toEqual([{ name: "report.zip", size: null }]);
+  });
+});
+
 test("GET /api/panes/:id/chat fills in the saved size of each attachment", async () => {
   await withAttachmentsRoot(async (root) => {
     const chat = createFakeChat({

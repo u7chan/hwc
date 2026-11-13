@@ -193,21 +193,30 @@ export function formatMegaBytes(bytes: number): string {
 
 const SIZE_UNITS = ["B", "KB", "MB", "GB"] as const;
 
-// 添付チップに出す大きさ。1024 進で次の単位へ落とし、10 未満だけ小数第 1 位を残す。
-// 桁を落としすぎると 1.0KB と 999B のような並びで大小が読めなくなる。
-export function formatFileSize(bytes: number): string {
-  let value = Math.max(0, bytes);
-  let unit = 0;
-  while (value >= 1024 && unit < SIZE_UNITS.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
+// 表示する桁に丸めた値。9.96KB のように丸めで 10 以上になる場合だけ "10.0" を "10" に寄せる。
+// 10 未満は小数第 1 位を残し、1.5KB と 1.0KB の桁を揃える。
+function sizeText(value: number, unit: number): string {
   const text =
     unit === 0
       ? String(Math.round(value))
       : value < 10
         ? value.toFixed(1)
         : String(Math.round(value));
+  return text.endsWith(".0") && Number(text) >= 10 ? text.slice(0, -2) : text;
+}
+
+// 添付チップに出す大きさ。1024 進で次の単位へ落とし、10 未満だけ小数第 1 位を残す。
+// 桁を落としすぎると 1.0KB と 999B のような並びで大小が読めなくなる。
+export function formatFileSize(bytes: number): string {
+  let value = Math.max(0, bytes);
+  let unit = 0;
+  let text = sizeText(value, unit);
+  // 1048575B は 1023.999KB で、丸めると 1024KB になる。丸めた値でも単位を上げ直す。
+  while (unit < SIZE_UNITS.length - 1 && (value >= 1024 || Number(text) >= 1024)) {
+    value /= 1024;
+    unit += 1;
+    text = sizeText(value, unit);
+  }
   return `${text}${SIZE_UNITS[unit]}`;
 }
 

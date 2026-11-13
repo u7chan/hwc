@@ -18,12 +18,15 @@ test("a pending upload is still there when its pane is shown again", () => {
   const unsubscribe = store.subscribe("w1:p1", () => undefined);
   unsubscribe();
 
-  expect(store.items("w1:p1").map((item) => [item.key, item.name])).toEqual([[key, null]]);
+  // 送信する前のチップは、選んだ File のサイズで描く。
+  expect(store.items("w1:p1").map((item) => [item.key, item.name, item.size])).toEqual([
+    [key, null, 1200],
+  ]);
 
   store.settle("w1:p1", key, "pasted-20260101-000000.png");
 
-  expect(store.items("w1:p1").map((item) => [item.key, item.name])).toEqual([
-    [key, "pasted-20260101-000000.png"],
+  expect(store.items("w1:p1").map((item) => [item.key, item.name, item.size])).toEqual([
+    [key, "pasted-20260101-000000.png", 1200],
   ]);
 });
 
