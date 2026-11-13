@@ -2,6 +2,7 @@
 .hwc-pane-name,
 .hwc-pane-sub,
 .hwc-active-band-name,
+.hwc-active-band-repo,
 .hwc-active-band-branch,
 .hwc-active-name,
 .hwc-active-tab,
@@ -111,6 +112,7 @@
 .hwc-active-band-main {
   flex: 1;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .hwc-active-band-name {
@@ -120,13 +122,40 @@
   line-height: var(--line-tight);
 }
 
-/* ブランチはスペースの属性。行ごとに繰り返さず、帯に 1 度だけ出す。 */
+/* リポジトリは場所の所属。見出しが PR タイトルになるため、ここでしか読めない。
+   狭いときはブランチ側を先に省き、リポジトリ名を残す。 */
+.hwc-active-band-repo {
+  /* 幅が足りないときはブランチを先に縮め、最後にリポジトリ名も省く。 */
+  flex: 0 0 auto;
+  max-width: 9em;
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  line-height: var(--line-tight);
+}
+
+/* ブランチはスペースの属性。行ごとに繰り返さず、帯に 1 度だけ出す。幅が足りないときは
+   リポジトリ名に譲って縮む。区切りを置くと、ブランチが 0 まで縮んだときに点だけが
+   残るため、書体と色の違いで分ける。 */
 .hwc-active-band-branch {
+  flex: 0 1 auto;
   margin: 0;
   color: var(--color-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-secondary);
   line-height: var(--line-tight);
+}
+
+/* 帯の幅が狭いときはリポジトリ名を優先し、ブランチを隠す。ブランチはこの幅では
+   すでに読めない。リポジトリ名も入らない幅なら、そちらを省略して件数と上流の差を残す。 */
+@container (max-width: 250px) {
+  .hwc-active-band-branch {
+    display: none;
+  }
+
+  .hwc-active-band-repo {
+    flex-shrink: 1;
+  }
 }
 
 /* 名前と同じ行に置く。チップは移動の入口ではないので、帯の矢印とは別に押せる。 */

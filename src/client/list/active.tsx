@@ -10,6 +10,7 @@ import {
   paneRowTitle,
   pullRequestLabel,
   pullRequestTone,
+  shortenBranchName,
   statusLabel,
   statusTone,
 } from "../select";
@@ -89,6 +90,10 @@ function ActiveBand(props: {
 }) {
   const { workspace, counts } = props.group;
   const branch = workspace.branch ?? null;
+  const branchLabel = branch === null ? null : shortenBranchName(workspace, branch);
+  // 帯の 2 段目は場所の所属とブランチ。見出しが PR タイトルになるため、リポジトリは
+  // ここでしか読めない。狭いときはブランチ側を先に省き、リポジトリ名を残す。
+  const repoName = workspace.worktree?.repoName ?? null;
   const pullRequest = props.pullRequest;
   const sync = workspace.sync ?? null;
   // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば
@@ -139,8 +144,13 @@ function ActiveBand(props: {
         </div>
         {branch === null ? null : (
           <p class="hwc-active-band-line">
+            {repoName === null ? null : (
+              <span class="hwc-active-band-repo" title={repoName}>
+                {repoName}
+              </span>
+            )}
             <span class="hwc-active-band-branch" title={branch}>
-              {branch}
+              {branchLabel}
             </span>
             <GitCount sync={sync} />
             {countsNode}
