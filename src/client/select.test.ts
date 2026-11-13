@@ -28,6 +28,7 @@ import {
   paneRowTitle,
   pullRequestLabel,
   pullRequestTone,
+  shortenBranchName,
   shortenPath,
   shortenPaneName,
   shortenSpaceName,
@@ -565,6 +566,18 @@ test("a linked worktree drops the generated prefix where the name is short", () 
   expect(shortenSpaceName(linked("worktree-x", { ...worktree, isLinkedWorktree: false }))).toBe(
     "worktree-x",
   );
+
+  // ブランチも同じく、linked worktree の `worktree/` だけを表示から落とす。
+  expect(shortenBranchName(linked("x"), "worktree/quiet-stone-1bb5")).toBe("quiet-stone-1bb5");
+  expect(shortenBranchName(linked("x"), "feat/quiet-stone")).toBe("feat/quiet-stone");
+  expect(shortenBranchName(linked("x", null), "worktree/quiet-stone-1bb5")).toBe(
+    "worktree/quiet-stone-1bb5",
+  );
+  expect(
+    shortenBranchName(linked("x", { ...worktree, isLinkedWorktree: false }), "worktree/x"),
+  ).toBe("worktree/x");
+  // 落とした結果が空なら元のブランチを使う。
+  expect(shortenBranchName(linked("x"), "worktree/")).toBe("worktree/");
 });
 
 test("a long path without a separator in the tail keeps its last characters", () => {

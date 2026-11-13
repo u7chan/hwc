@@ -238,6 +238,10 @@ export function paneRowTitle(pane: PaneState): string {
 // 呼び名が隠れるので、表示だけ落とす。TUI と照合するフルは title と aria に残す。
 const WORKTREE_PREFIX = "worktree-";
 
+// ブランチも Herdr の linked worktree では `worktree/<name>` になる。スペース名と同じく
+// 表示だけ落とし、PR の取得やメニューに使うフルは変えない。
+const WORKTREE_BRANCH_PREFIX = "worktree/";
+
 export function shortenSpaceName(workspace: WorkspaceState): string {
   const label = workspace.label;
   if (workspace.worktree?.isLinkedWorktree !== true || !label.startsWith(WORKTREE_PREFIX)) {
@@ -245,6 +249,13 @@ export function shortenSpaceName(workspace: WorkspaceState): string {
   }
   const rest = label.slice(WORKTREE_PREFIX.length);
   return rest === "" ? label : rest;
+}
+
+export function shortenBranchName(workspace: WorkspaceState, branch: string): string {
+  if (workspace.worktree?.isLinkedWorktree !== true) return branch;
+  if (!branch.startsWith(WORKTREE_BRANCH_PREFIX)) return branch;
+  const rest = branch.slice(WORKTREE_BRANCH_PREFIX.length);
+  return rest === "" ? branch : rest;
 }
 
 // 名前の無いペインの端末タイトルはワークツリー名そのものになる。狭いタブやセルでは 2 段目や
