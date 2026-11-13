@@ -18,8 +18,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  /* ドロップ中の面の色を、戻るときも滑らかにする。 */
-  transition: background-color 120ms ease;
+  /* ドロップ中の面の色を、戻るときも滑らかにする。開閉では行の間隔も変わるので、
+     入力欄の高さと一緒に動かす。 */
+  transition:
+    background-color 120ms ease,
+    gap 200ms ease;
 }
 
 /* ファイルをドラッグしている間は、画像を落とせる範囲を面と破線で示す。
@@ -29,17 +32,6 @@
   background: var(--color-selected);
   outline: 2px dashed var(--color-accent);
   outline-offset: -2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hwc-input-frame {
-    transition: none;
-  }
-
-  .hwc-input-field,
-  .hwc-input-prompt {
-    transition: none;
-  }
 }
 
 /* コマンドの候補とチップ。入力欄の中で行を占める。浮かせるとキーボードに隠れる。 */
@@ -254,8 +246,10 @@
   gap: var(--space-3);
 }
 
+/* 広げた高さは min-height ではなく height で与える。min-height だと、広げ始めた
+   フレームから常に 40dvh に切り上げられ、伸びる途中が見えない。 */
 .hwc-input[data-expanded="true"] .hwc-input-field {
-  min-height: 40dvh;
+  height: 40dvh;
   max-height: 60dvh;
 }
 
@@ -683,5 +677,15 @@
 @container hwc-cell (max-width: 540px) {
   .hwc-context-bar {
     display: none;
+  }
+}
+
+/* 動きは意味を運ばないので、止めても操作と状態は同じに読める。同じファイルの後ろに
+   置く。先に置くと、後続の transition 宣言に打ち消される。 */
+@media (prefers-reduced-motion: reduce) {
+  .hwc-input-frame,
+  .hwc-input-field,
+  .hwc-input-prompt {
+    transition: none;
   }
 }
