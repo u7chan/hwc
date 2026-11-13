@@ -589,22 +589,22 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
    タブのバー・セルの枠と同じスロットを指す（ADR 0058 / 0061）。グリッドに出ている行なら、
    現在行でなくても色を付ける。 */
 .hwc-pane[data-slot="1"],
-.hwc-active-open[data-slot="1"] {
+.hwc-active-pane[data-slot="1"] {
   --slot-color: var(--color-slot-1);
 }
 
 .hwc-pane[data-slot="2"],
-.hwc-active-open[data-slot="2"] {
+.hwc-active-pane[data-slot="2"] {
   --slot-color: var(--color-slot-2);
 }
 
 .hwc-pane[data-slot="3"],
-.hwc-active-open[data-slot="3"] {
+.hwc-active-pane[data-slot="3"] {
   --slot-color: var(--color-slot-3);
 }
 
 .hwc-pane[data-slot="4"],
-.hwc-active-open[data-slot="4"] {
+.hwc-active-pane[data-slot="4"] {
   --slot-color: var(--color-slot-4);
 }
 
@@ -616,13 +616,13 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 }
 
 /* フォーカス中は行自身の輪郭を外す既存の規則に合わせ、枠も引かない。 */
-.hwc-active-open[data-slot]:not([data-current="true"]):not(:focus-visible) {
+.hwc-active-pane[data-slot]:not([data-current="true"]):not(:focus-within) {
   outline: 1px solid color-mix(in oklab, var(--slot-color) 60%, transparent);
   outline-offset: -1px;
 }
 
 .hwc-pane[data-slot]:not([data-current="true"]) .hwc-pane-name,
-.hwc-active-open[data-slot]:not([data-current="true"]) .hwc-active-name {
+.hwc-active-pane[data-slot]:not([data-current="true"]) .hwc-active-name {
   color: var(--slot-color);
 }
 
@@ -631,11 +631,11 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 }
 
 .hwc-pane[data-current="true"][data-slot] .hwc-pane-name,
-.hwc-active-open[data-current="true"][data-slot] .hwc-active-name {
+.hwc-active-pane[data-current="true"][data-slot] .hwc-active-name {
   color: var(--slot-color);
 }
 
-.hwc-active-open[data-current="true"][data-slot]:not(:focus-visible) {
+.hwc-active-pane[data-current="true"][data-slot] {
   outline-color: var(--slot-color);
 }
 
@@ -695,6 +695,9 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   .hwc-pane:hover .hwc-pane-more,
   .hwc-pane:focus-within .hwc-pane-more,
   .hwc-pane[data-current="true"] .hwc-pane-more,
+  .hwc-active-pane:hover .hwc-pane-more,
+  .hwc-active-pane:focus-within .hwc-pane-more,
+  .hwc-active-pane[data-current="true"] .hwc-pane-more,
   .hwc-group-row:hover .hwc-pane-more,
   .hwc-group-row:focus-within .hwc-pane-more,
   .hwc-pane-more[aria-expanded="true"] {
