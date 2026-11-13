@@ -304,6 +304,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const pendingCaret = useRef<number | null>(null);
   // 開閉を押した時点の入力欄の高さ。開閉後の高さへ動かす始点にする。
   const toggleFrom = useRef<number | null>(null);
+  // 実行中の開閉アニメーション。高さを測る前に止める。
+  const heightAnimation = useRef<Animation | null>(null);
   const { selectionToolbar, quoting, dismissSelection, closeToolbar } = useSelectionToolbar({
     paneId: pane.id,
     scroller,
@@ -370,6 +372,9 @@ export function PaneDetail(props: PaneDetailProps) {
   // 行の往復が起きるので、空にするまで広い側を保つ。
   const fit = (field: HTMLTextAreaElement | null, open: boolean) => {
     if (!field) return;
+    // アニメーション中の rect と scrollHeight は途中の高さになる。計測の前に止める。
+    heightAnimation.current?.cancel();
+    heightAnimation.current = null;
     const form = field.closest(".hwc-input");
     field.style.height = "";
     if (open) {
@@ -410,10 +415,15 @@ export function PaneDetail(props: PaneDetailProps) {
     const to = field.getBoundingClientRect().height;
     if (Math.abs(to - from) < 1) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    field.animate([{ height: `${from}px` }, { height: `${to}px` }], {
-      duration: 200,
-      easing: "cubic-bezier(0.2, 0, 0, 1)",
-    });
+    heightAnimation.current = field.animate(
+      [
+        // min-height / max-height も一緒に動かす。状態ごとの制約が残ると、始点の高さが
+        // その範囲へ切り詰められて 1 フレーム目で跳ぶ（開: 42→64px、閉: 293→220px）。
+        { height: `${from}px`, minHeight: `${from}px`, maxHeight: `${from}px` },
+        { height: `${to}px`, minHeight: `${to}px`, maxHeight: `${to}px` },
+      ],
+      { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+    );
   }, [expanded]);
 
   const toggleExpanded = () => {

@@ -34,17 +34,6 @@
   outline-offset: -2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .hwc-input-frame {
-    transition: none;
-  }
-
-  .hwc-input-field,
-  .hwc-input-prompt {
-    transition: none;
-  }
-}
-
 /* コマンドの候補とチップ。入力欄の中で行を占める。浮かせるとキーボードに隠れる。 */
 .hwc-commands {
   display: flex;
@@ -192,12 +181,8 @@
   font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-ui);
   /* 高さは fit() が入力量に合わせる。手で伸ばすと次の入力で戻るので、取っ手を出さない。 */
   resize: none;
-  /* シェルからエージェントへの切り替わりで、$ の跡が飛ばないようにする。開閉では上下の
-     余白も変わるので、高さに合わせて滑らせる。 */
-  transition:
-    padding-left 120ms ease,
-    padding-top 200ms ease,
-    padding-bottom 200ms ease;
+  /* シェルからエージェントへの切り替わりで、$ の跡が飛ばないようにする。 */
+  transition: padding-left 120ms ease;
 }
 
 .hwc-input-field:focus-visible {
@@ -692,5 +677,15 @@
 @container hwc-cell (max-width: 540px) {
   .hwc-context-bar {
     display: none;
+  }
+}
+
+/* 動きは意味を運ばないので、止めても操作と状態は同じに読める。同じファイルの後ろに
+   置く。先に置くと、後続の transition 宣言に打ち消される。 */
+@media (prefers-reduced-motion: reduce) {
+  .hwc-input-frame,
+  .hwc-input-field,
+  .hwc-input-prompt {
+    transition: none;
   }
 }
