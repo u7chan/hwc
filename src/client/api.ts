@@ -1,6 +1,7 @@
 import { hc } from "hono/client";
 import type { AppType } from "../server/app";
 import type {
+  ChatAttachment,
   ChatCompaction,
   ChatContext,
   ChatFile,
@@ -19,7 +20,11 @@ import {
   isAgentModel,
   supportsFolderTrust,
 } from "../shared/agents";
-import { isAttachmentName } from "../shared/attachments";
+import {
+  encodeAttachmentName,
+  FILENAME_HEADER,
+  isStoredAttachmentName,
+} from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
 import type { PreviewWarning } from "../shared/message-files";
 import { parsePaneProcess, type PaneProcess } from "../shared/panes";
@@ -138,13 +143,23 @@ function isIndex(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
-function toAttachmentNames(value: unknown): string[] | undefined {
+function toChatAttachments(value: unknown): ChatAttachment[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  // 名前は配信 URL になる。書式の外れた値は捨て、リンクも画像も作らない。
-  const names = value.filter(
-    (item): item is string => typeof item === "string" && isAttachmentName(item),
-  );
-  return names.length === 0 ? undefined : names;
+  const attachments: ChatAttachment[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue;
+    const attachment = item as Partial<ChatAttachment>;
+    // 名前は配信 URL になる。保存名の規則を通らない値は捨て、リンクも画像も作らない。
+    if (typeof attachment.name !== "string" || !isStoredAttachmentName(attachment.name)) continue;
+    // サイズは表示だけに使う。壊れた値は名前だけを出す。
+    const size = attachment.size;
+    attachments.push({
+      name: attachment.name,
+      size:
+        typeof size === "number" && Number.isFinite(size) && size >= 0 ? Math.trunc(size) : null,
+    });
+  }
+  return attachments.length === 0 ? undefined : attachments;
 }
 
 function toImageRefs(value: unknown): string[] | undefined {
@@ -200,7 +215,7 @@ function toChatMessage(value: unknown): ChatMessage | null {
   }
   if (typeof message.text !== "string") return null;
   if (typeof message.at !== "number") return null;
-  const attachments = toAttachmentNames(message.attachments);
+  const attachments = toChatAttachments(message.attachments);
   const files = toChatFiles(message.files);
   const outsideFile = toOutsideFile(message.outsideFile);
   const count = message.role === "error" ? toRetryCount(message.count) : undefined;
@@ -542,12 +557,22 @@ export async function uploadAttachment(
   file: File,
   signal?: AbortSignal,
 ): Promise<UploadResult> {
+  let encoded: string;
+  try {
+    encoded = encodeAttachmentName(file.name);
+  } catch {
+    // encodeURIComponent は孤立したサロゲートで投げる。名前が無い要求は送らない。
+    return { ok: false, status: 0 };
+  }
+  // 型は拡張子で決まるので、Content-Type は送れたら送るだけ。空文字は送らない。
+  const headers: Record<string, string> = { [FILENAME_HEADER]: encoded };
+  if (file.type !== "") headers["content-type"] = file.type;
+
   let response: Response;
   try {
-    // 生バイトで送る。Content-Type は BFF の allowlist 判定に使うので file.type をそのまま渡す。
     response = await fetch(attachmentUploadUrl(paneId), {
       method: "POST",
-      headers: { "content-type": file.type },
+      headers,
       body: file,
       signal,
     });
@@ -559,7 +584,7 @@ export async function uploadAttachment(
 
   const body = (await response.json().catch(() => null)) as { name?: unknown } | null;
   const name = body?.name;
-  if (typeof name !== "string" || !isAttachmentName(name)) return { ok: false, status: 0 };
+  if (typeof name !== "string" || !isStoredAttachmentName(name)) return { ok: false, status: 0 };
   return { ok: true, name };
 }
 

@@ -4,7 +4,7 @@ import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   attachmentContentTypeFromName,
   MAX_ATTACHMENTS,
-  MAX_ATTACHMENT_BYTES,
+  MAX_PREVIEW_FILE_BYTES,
 } from "../shared/attachments";
 import { messageFileKindFromName, previewContentType } from "../shared/message-files";
 import type { ChatFile, ChatMessage, ChatSnapshot } from "./chat/contract";
@@ -148,7 +148,7 @@ async function resolveAgainstRoot(
     if (real !== rootReal && !real.startsWith(rootReal + sep)) return null;
 
     const info = await stat(real);
-    if (!info.isFile() || info.size === 0 || info.size > MAX_ATTACHMENT_BYTES) return null;
+    if (!info.isFile() || info.size === 0 || info.size > MAX_PREVIEW_FILE_BYTES) return null;
     if (!accept(real)) return null;
 
     const name = relative(rootReal, real);
@@ -211,7 +211,7 @@ async function outsideRootFile(
       return null;
 
     const info = await stat(real);
-    if (!info.isFile() || info.size === 0 || info.size > MAX_ATTACHMENT_BYTES) return null;
+    if (!info.isFile() || info.size === 0 || info.size > MAX_PREVIEW_FILE_BYTES) return null;
     if (messageFileKindFromName(real) === null) return null;
     return basename(real);
   } catch {
@@ -408,7 +408,7 @@ export async function readMessageFile(file: { path: string }): Promise<ArrayBuff
   try {
     const bytes = await readFile(file.path);
     // stat の後で伸びた分も見る。上限を超えたら配信しない。
-    if (bytes.byteLength === 0 || bytes.byteLength > MAX_ATTACHMENT_BYTES) return null;
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_PREVIEW_FILE_BYTES) return null;
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);
     return copy.buffer;

@@ -18,6 +18,11 @@ export type ChatFile = {
   imageRefs?: string[];
 };
 
+// ユーザーが送った添付 1 件。name は保存名で、絶対パスは渡さない。
+// size は保存済みファイルのバイト数で、チップの表示にだけ使う。会話を読む側はファイルの
+// 実在を知らないので null を置き、BFF が状態ディレクトリを見て埋める。
+export type ChatAttachment = { name: string; size: number | null };
+
 export type ChatMessage = {
   id: string;
   // error はターンが失敗した記録。本文はプロバイダや CLI が返した失敗の文言で、
@@ -28,7 +33,7 @@ export type ChatMessage = {
   // 同一文言の失敗が連続したときの試行回数。1 のときは持たない。
   count?: number;
   // ペイン配下のファイル名だけを持つ。絶対パスはクライアントへ渡さない。
-  attachments?: string[];
+  attachments?: ChatAttachment[];
   // エージェントの本文が指していたファイル。ユーザーの添付とは別の一覧。
   files?: ChatFile[];
   // 本文が指していたが、配信の根（チェックアウトと追加根）の外にあったファイル名。

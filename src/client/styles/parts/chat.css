@@ -270,6 +270,8 @@ p.hwc-compaction,
 .hwc-msg-attachments {
   display: flex;
   flex-wrap: wrap;
+  /* 名前だけのチップを、同じ行に並ぶ画像の高さまで伸ばさない。 */
+  align-items: flex-start;
   gap: var(--space-1);
 }
 
@@ -294,6 +296,35 @@ p.hwc-compaction,
   height: auto;
   max-width: 100%;
   max-height: 180px;
+}
+
+/* 画像以外の添付。配信しないので、名前と大きさをチップとして並べる。
+   吹き出しの面（accent）の上に載るので、地の secondary ではなく吹き出しの文字色を継ぐ。
+   線も同じ色の薄い割合から作る。color-mix 非対応の環境では実線で落とす。 */
+.hwc-msg-attachment-file {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  max-width: 100%;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid currentColor;
+  border: 1px solid color-mix(in oklab, currentColor 45%, transparent);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* 名前だけを省略する。大きさは桁が変わっても読み比べられるよう、常に出す。 */
+.hwc-msg-attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hwc-msg-attachment-size {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 /* エージェントが書いた HTML。押すとプレビューのタブが開く。 */

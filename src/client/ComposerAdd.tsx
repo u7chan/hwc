@@ -1,7 +1,12 @@
 import type { ComponentChild } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { attachmentTypeLabels, MAX_ATTACHMENTS } from "../shared/attachments";
-import { CollapseIcon, ImageIcon, NewSessionIcon, PlusIcon, RepoIcon } from "./icons";
+import {
+  formatMegaBytes,
+  MAX_ATTACHMENTS,
+  MAX_FILE_ATTACHMENT_BYTES,
+  MAX_IMAGE_ATTACHMENT_BYTES,
+} from "../shared/attachments";
+import { CollapseIcon, FileIcon, NewSessionIcon, PlusIcon, RepoIcon } from "./icons";
 import { Menu } from "./Menu";
 
 export const ADD_MENU_ID = "hwc-add-menu";
@@ -68,7 +73,6 @@ export function ComposerAdd(props: ComposerAddProps) {
         ref={file}
         class="hwc-visually-hidden"
         type="file"
-        accept="image/*"
         multiple
         tabIndex={-1}
         aria-hidden="true"
@@ -105,11 +109,13 @@ export function ComposerAdd(props: ComposerAddProps) {
               file.current?.click();
             }}
           >
-            <ImageIcon size={18} />
+            <FileIcon size={18} />
             <span class="hwc-add-item-text">
-              <span>画像を追加</span>
+              <span>ファイルを追加</span>
               <span class="hwc-add-item-hint">
-                {props.full ? `${MAX_ATTACHMENTS} 枚まで添付済み` : attachmentTypeLabels()}
+                {props.full
+                  ? `${MAX_ATTACHMENTS} 件まで添付済み`
+                  : `画像 ${formatMegaBytes(MAX_IMAGE_ATTACHMENT_BYTES)} / ファイル ${formatMegaBytes(MAX_FILE_ATTACHMENT_BYTES)}`}
               </span>
             </span>
           </button>

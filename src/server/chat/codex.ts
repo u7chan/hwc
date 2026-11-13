@@ -97,7 +97,9 @@ function projectTurn(raw: unknown): ChatMessage[] {
         role: "user",
         text,
         at,
-        ...(attachments.length === 0 ? {} : { attachments }),
+        ...(attachments.length === 0
+          ? {}
+          : { attachments: attachments.map((name) => ({ name, size: null })) }),
       });
     }
   }

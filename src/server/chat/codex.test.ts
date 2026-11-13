@@ -98,7 +98,7 @@ test("Codex user attachment annotations are stripped, including image-only sends
     ],
   });
   const snapshot = await client.snapshot(thread.id);
-  expect(snapshot.messages[0]).toMatchObject({ text: "", attachments: [name] });
+  expect(snapshot.messages[0]).toMatchObject({ text: "", attachments: [{ name, size: null }] });
   expect(snapshot.messages[1]?.text).toBe("[画像]");
   expect(JSON.stringify(snapshot)).not.toContain("/private");
 });

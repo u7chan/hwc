@@ -1,9 +1,14 @@
 import { createPortal, type Ref } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { ChatFile } from "../server/chat/contract";
+import type { ChatAttachment, ChatFile } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { gitStatusLabel, type GitSync } from "../shared/git";
-import { MAX_ATTACHMENTS } from "../shared/attachments";
+import {
+  attachmentExtFromName,
+  attachmentKindOfFileName,
+  formatFileSize,
+  MAX_ATTACHMENTS,
+} from "../shared/attachments";
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
@@ -11,13 +16,14 @@ import { OutputText } from "./OutputText";
 import {
   ATTACHMENT_LIMIT_NOTICE,
   type AttachmentAction,
+  attachmentTooLargeNotice,
   dropActionFrom,
+  exceedsAttachmentLimit,
   pasteActionFrom,
   SEND_FAILED_NOTICE,
   SHELL_BUSY_NOTICE,
   SHELL_NEWLINE_NOTICE,
   STOP_FAILED_NOTICE,
-  unsupportedImageNotice,
   uploadFailureNotice,
 } from "./attachments";
 import {
@@ -578,8 +584,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const removeAttachment = (key: string) => attachmentStore.remove(pane.id, key);
 
   // ペインを切り替えても止めない。送り先が消えたときだけ App が中断する。
-  const uploadImage = async (file: File) => {
-    const { key, controller } = attachmentStore.begin(pane.id);
+  const uploadFile = async (file: File) => {
+    const { key, controller } = attachmentStore.begin(pane.id, file.size);
 
     const result = await uploadAttachment(pane.id, file, controller.signal);
     if (result.ok) {
@@ -589,11 +595,12 @@ export function PaneDetail(props: PaneDetailProps) {
     // 外された添付は一覧から既に消えている。その失敗は知らせない。
     if (controller.signal.aborted) return;
     attachmentStore.remove(pane.id, key);
-    setNotice(uploadFailureNotice(result.status));
+    setNotice(uploadFailureNotice(result.status, attachmentKindOfFileName(file.name)));
   };
 
-  // 貼った画像を見たらコマンドではなく本文を書く。書きかけの draft は捨てない。
-  const addImages = (files: File[]) => {
+  // 貼ったファイルを見たらコマンドではなく本文を書く。書きかけの draft は捨てない。
+  // 上限を超えるものは送る前に弾く。
+  const addFiles = (files: File[]) => {
     const room = MAX_ATTACHMENTS - attachments.length;
     if (room <= 0) {
       setNotice(ATTACHMENT_LIMIT_NOTICE);
@@ -601,7 +608,13 @@ export function PaneDetail(props: PaneDetailProps) {
     }
     if (files.length > room) setNotice(ATTACHMENT_LIMIT_NOTICE);
     setChip(null);
-    for (const file of files.slice(0, room)) void uploadImage(file);
+    for (const file of files.slice(0, room)) {
+      if (exceedsAttachmentLimit(file)) {
+        setNotice(attachmentTooLargeNotice(attachmentKindOfFileName(file.name)));
+        continue;
+      }
+      void uploadFile(file);
+    }
   };
 
   // ファイルのドラッグだけを扱う。テキストやページ内の要素のドラッグは既定動作のまま。
@@ -610,17 +623,12 @@ export function PaneDetail(props: PaneDetailProps) {
     return transfer;
   };
 
-  // 貼り付けとドロップで同じ受け付け方をする。未対応の形式は保存せず、その場で伝える。
-  // アップロードする画像が無ければ既定動作を止めない（ADR 0018）。
-  // 何もアップロードしないときは false を返し、呼び出し側に preventDefault させない。
-  const takeImages = (action: AttachmentAction): boolean => {
-    if (action.kind === "upload") {
-      if (action.unsupported) setNotice(unsupportedImageNotice());
-      addImages(action.files);
-      return true;
-    }
-    if (action.kind === "unsupported") setNotice(unsupportedImageNotice());
-    return false;
+  // 貼り付けとドロップで同じ受け付け方をする。アップロードするファイルが無ければ
+  // 既定動作を止めない（ADR 0018）。何もアップロードしないときは false を返す。
+  const takeFiles = (action: AttachmentAction): boolean => {
+    if (action.kind !== "upload") return false;
+    addFiles(action.files);
+    return true;
   };
 
   const startsNewSession = (text: string, names: readonly string[]) =>
@@ -637,7 +645,7 @@ export function PaneDetail(props: PaneDetailProps) {
     from: number;
     waiting: boolean;
     after: number;
-    names: string[];
+    attachments: ChatAttachment[];
   }) => {
     setPending((items) => [
       ...items,
@@ -650,7 +658,7 @@ export function PaneDetail(props: PaneDetailProps) {
         waiting: echo.waiting,
         after: echo.after,
         command: false,
-        ...(echo.names.length === 0 ? {} : { attachments: echo.names }),
+        ...(echo.attachments.length === 0 ? {} : { attachments: echo.attachments }),
       },
     ]);
   };
@@ -674,6 +682,10 @@ export function PaneDetail(props: PaneDetailProps) {
     const names = attachments
       .map((item) => item.name)
       .filter((name): name is string => name !== null);
+    // 控えのチップは手元の File のサイズで描く。次のスナップショットで実バイト数に置き換わる。
+    const echoed: ChatAttachment[] = attachments.flatMap((item) =>
+      item.name === null ? [] : [{ name: item.name, size: item.size }],
+    );
     const text = draft;
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
     const compactCommand = attachments.length === 0 && isCompactCommand(text);
@@ -706,7 +718,7 @@ export function PaneDetail(props: PaneDetailProps) {
         if (compactCommand) {
           markCompaction(baselineAt, text);
         } else if (!newCommand) {
-          echoPending({ text, at, from, waiting, after, names });
+          echoPending({ text, at, from, waiting, after, attachments: echoed });
         }
       }
     } else {
@@ -1074,12 +1086,12 @@ export function PaneDetail(props: PaneDetailProps) {
           onDrop={(event) => {
             const transfer = fileTransfer(event.dataTransfer);
             if (transfer === null) return;
-            // 画像以外のファイルもアップロードせず、ブラウザに開かせもしない。
+            // ファイルはブラウザに開かせない。
             event.preventDefault();
             dragDepth.current = 0;
             setDropping(false);
             if (!pane.chat) return;
-            takeImages(dropActionFrom(transfer.files));
+            takeFiles(dropActionFrom(transfer.files));
           }}
         >
           <label class="hwc-visually-hidden" for={`hwc-input-${pane.id}`}>
@@ -1099,13 +1111,21 @@ export function PaneDetail(props: PaneDetailProps) {
               </button>
             )}
             {attachments.length > 0 ? (
-              <div class="hwc-commands" role="group" aria-label="添付画像">
+              <div class="hwc-commands" role="group" aria-label="添付ファイル">
                 {attachments.map((item) => {
                   const name = item.name;
                   return (
                     <span class="hwc-command hwc-attachment" data-chip="true" key={item.key}>
                       {name === null ? (
                         <span class="hwc-attachment-sending">送信中</span>
+                      ) : attachmentExtFromName(name) === null ? (
+                        // 画像以外は配信しない。名前だけを見せ、押しても何も開かない。
+                        <>
+                          <span class="hwc-attachment-name" title={name}>
+                            {name}
+                          </span>
+                          <span class="hwc-attachment-size">{formatFileSize(item.size)}</span>
+                        </>
                       ) : (
                         <button
                           type="button"
@@ -1202,7 +1222,7 @@ export function PaneDetail(props: PaneDetailProps) {
                   const action = pasteActionFrom(event.clipboardData?.items);
                   // テキストだけの貼り付けは入力欄の既定動作のままにする。
                   if (action.kind === "default") return;
-                  if (takeImages(action)) event.preventDefault();
+                  if (takeFiles(action)) event.preventDefault();
                 }}
                 onKeyDown={(event) => {
                   const composing = event.isComposing || event.keyCode === 229;
@@ -1233,7 +1253,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 <ComposerAdd
                   full={attachments.length >= MAX_ATTACHMENTS}
                   commands={composerCommands}
-                  onFiles={(files) => takeImages(dropActionFrom(files))}
+                  onFiles={(files) => takeFiles(dropActionFrom(files))}
                   onProjects={openProjects}
                 />
               ) : null}

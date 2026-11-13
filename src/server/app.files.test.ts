@@ -5,12 +5,19 @@ import { basename, join } from "node:path";
 import { createApp } from "./app";
 import type { PaneClient } from "./herdr/panes";
 import type { AppState } from "./herdr/state";
-import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
+import {
+  encodeAttachmentName,
+  FILENAME_HEADER,
+  MAX_FILE_ATTACHMENT_BYTES,
+  MAX_IMAGE_ATTACHMENT_BYTES,
+} from "../shared/attachments";
 import {
   state,
   chatState,
   twoChatPanesState,
   createTestApp,
+  createFakeChat,
+  emptyChat,
   pngBytes,
   withCheckout,
   createFilesApp,
@@ -36,10 +43,11 @@ function createAttachmentApp(
   }).app;
 }
 
-async function uploadImage(
+async function uploadFile(
   app: ReturnType<typeof createApp>,
   options: {
     paneId?: string;
+    name?: string;
     type?: string;
     body?: Uint8Array<ArrayBuffer>;
     headers?: Record<string, string>;
@@ -48,6 +56,7 @@ async function uploadImage(
   return app.request(`/api/panes/${options.paneId ?? "w1:p1"}/attachments`, {
     method: "POST",
     headers: {
+      [FILENAME_HEADER]: encodeAttachmentName(options.name ?? "image.png"),
       "content-type": options.type ?? "image/png",
       ...options.headers,
     },
@@ -55,44 +64,63 @@ async function uploadImage(
   });
 }
 
-const savedName = /^pasted-\d{8}-\d{6}(-\d+)?\.png$/;
-
-test("POST /api/panes/:id/attachments saves the image under the pane", async () => {
+test("POST /api/panes/:id/attachments saves the file under its original basename", async () => {
   await withAttachmentsRoot(async (root) => {
     const app = createAttachmentApp(root);
-    const response = await uploadImage(app);
+    const response = await uploadFile(app, { name: "screenshot.png" });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { name: string };
-    expect(body.name).toMatch(savedName);
+    expect(body.name).toBe("screenshot.png");
     expect(await readFile(join(root, "w1:p1", body.name))).toEqual(Buffer.from(pngBytes));
 
-    // 続けて貼った画像は上書きせず、別の名前になる。
-    const second = (await (await uploadImage(app)).json()) as { name: string };
-    expect(second.name).toMatch(savedName);
-    expect(second.name).not.toBe(body.name);
+    // 続けて貼った同名のファイルは上書きせず、拡張子の前に連番が付く。
+    const second = (await (await uploadFile(app, { name: "screenshot.png" })).json()) as {
+      name: string;
+    };
+    expect(second.name).toBe("screenshot-1.png");
+    expect(await readFile(join(root, "w1:p1", second.name))).toEqual(Buffer.from(pngBytes));
   });
 });
 
-test("POST /api/panes/:id/attachments refuses a type outside the allowlist before the body", async () => {
+test("POST /api/panes/:id/attachments sanitizes the name before saving it", async () => {
   await withAttachmentsRoot(async (root) => {
-    // ペインが無くても型の判定が先。simple request は preflight を通らないため。
-    for (const type of ["image/svg+xml", "image/gif", "text/plain", "application/octet-stream"]) {
-      const app = createAttachmentApp(root, { state });
-      const response = await uploadImage(app, { type });
-      expect(response.status).toBe(415);
-      expect(await response.json()).toEqual({ error: "unsupported_media_type" });
+    const app = createAttachmentApp(root);
+
+    const path = (await (
+      await uploadFile(app, { name: "../escape/report.zip", type: "application/zip" })
+    ).json()) as { name: string };
+    expect(path.name).toBe("escapereport.zip");
+
+    const dotted = (await (await uploadFile(app, { name: ".env" })).json()) as { name: string };
+    expect(dotted.name).toBe("env");
+
+    // 保存先の外は作られない。
+    expect((await readdir(root)).sort()).toEqual(["w1:p1"]);
+    expect((await readdir(join(root, "w1:p1"))).sort()).toEqual(["env", "escapereport.zip"]);
+  });
+});
+
+test("POST /api/panes/:id/attachments refuses a request without a usable file name", async () => {
+  await withAttachmentsRoot(async (root) => {
+    // 名前は body より先に見る。ペインが無くても 400 が返る。
+    const app = createAttachmentApp(root, { state });
+    for (const value of ["", "%E0%A4%A", "%zz", encodeURIComponent("...")]) {
+      const response = await uploadFile(app, { headers: { [FILENAME_HEADER]: value } });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "invalid_request" });
     }
+    expect(await readdir(root)).toEqual([]);
   });
 });
 
 test("POST /api/panes/:id/attachments returns 404 for a pane that is gone or has no chat", async () => {
   await withAttachmentsRoot(async (root) => {
-    const missing = await uploadImage(createAttachmentApp(root), { paneId: "w1:p9" });
+    const missing = await uploadFile(createAttachmentApp(root), { paneId: "w1:p9" });
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({ error: "pane_not_found" });
 
-    const noChat = await uploadImage(createAttachmentApp(root, { state }));
+    const noChat = await uploadFile(createAttachmentApp(root, { state }));
     expect(noChat.status).toBe(404);
     expect(await noChat.json()).toEqual({ error: "no_chat" });
   });
@@ -104,7 +132,7 @@ test("POST /api/panes/:id/attachments refuses a pane id that would escape the ro
 
     // %2e%2e は URL の解決で消える。%2F は残るので、デコードすると区切りを含む id になる。
     for (const paneId of ["%2e%2e", "..%2F..", "..%2F..%2Ftmp"]) {
-      const response = await uploadImage(app, { paneId });
+      const response = await uploadFile(app, { paneId });
       expect(response.status).toBe(404);
     }
     expect(await readdir(root)).toEqual([]);
@@ -114,8 +142,8 @@ test("POST /api/panes/:id/attachments refuses a pane id that would escape the ro
 test("POST /api/panes/:id/attachments stops an oversized image before reading it", async () => {
   await withAttachmentsRoot(async (root) => {
     const app = createAttachmentApp(root);
-    const response = await uploadImage(app, {
-      headers: { "content-length": String(MAX_ATTACHMENT_BYTES + 1) },
+    const response = await uploadFile(app, {
+      headers: { "content-length": String(MAX_IMAGE_ATTACHMENT_BYTES + 1) },
     });
 
     expect(response.status).toBe(413);
@@ -123,14 +151,35 @@ test("POST /api/panes/:id/attachments stops an oversized image before reading it
   });
 });
 
-test("POST /api/panes/:id/attachments accepts exactly the size limit and refuses one byte more", async () => {
+test("POST /api/panes/:id/attachments accepts exactly the image limit and refuses one byte more", async () => {
   await withAttachmentsRoot(async (root) => {
     const app = createAttachmentApp(root);
 
-    const atLimit = await uploadImage(app, { body: new Uint8Array(MAX_ATTACHMENT_BYTES) });
+    const atLimit = await uploadFile(app, { body: new Uint8Array(MAX_IMAGE_ATTACHMENT_BYTES) });
     expect(atLimit.status).toBe(200);
 
-    const over = await uploadImage(app, { body: new Uint8Array(MAX_ATTACHMENT_BYTES + 1) });
+    const over = await uploadFile(app, { body: new Uint8Array(MAX_IMAGE_ATTACHMENT_BYTES + 1) });
+    expect(over.status).toBe(413);
+    expect(await over.json()).toEqual({ error: "attachment_too_large" });
+  });
+});
+
+test("POST /api/panes/:id/attachments gives a non-image file the larger limit", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    const zip = { name: "report.zip", type: "application/zip" };
+
+    // 画像なら 413 になる大きさでも、zip なら 25MB まで受け付ける。
+    const atLimit = await uploadFile(app, {
+      ...zip,
+      body: new Uint8Array(MAX_FILE_ATTACHMENT_BYTES),
+    });
+    expect(atLimit.status).toBe(200);
+
+    const over = await uploadFile(app, {
+      ...zip,
+      headers: { "content-length": String(MAX_FILE_ATTACHMENT_BYTES + 1) },
+    });
     expect(over.status).toBe(413);
     expect(await over.json()).toEqual({ error: "attachment_too_large" });
   });
@@ -144,10 +193,13 @@ test("POST /api/panes/:id/attachments counts the bytes it actually read", async 
     let sent = 0;
     const request = new Request("http://localhost/api/panes/w1:p1/attachments", {
       method: "POST",
-      headers: { "content-type": "image/png" },
+      headers: {
+        "content-type": "image/png",
+        [FILENAME_HEADER]: encodeAttachmentName("image.png"),
+      },
       body: new ReadableStream<Uint8Array>({
         pull(controller) {
-          if (sent > MAX_ATTACHMENT_BYTES) {
+          if (sent > MAX_IMAGE_ATTACHMENT_BYTES) {
             controller.close();
             return;
           }
@@ -170,7 +222,7 @@ test("POST /api/panes/:id/attachments counts the bytes it actually read", async 
 test("POST /api/panes/:id/attachments rejects an empty body", async () => {
   await withAttachmentsRoot(async (root) => {
     const app = createAttachmentApp(root);
-    const response = await uploadImage(app, { body: new Uint8Array(0) });
+    const response = await uploadFile(app, { body: new Uint8Array(0) });
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "invalid_request" });
@@ -180,7 +232,9 @@ test("POST /api/panes/:id/attachments rejects an empty body", async () => {
 test("GET /api/panes/:id/attachments/:name serves the saved image as immutable", async () => {
   await withAttachmentsRoot(async (root) => {
     const app = createAttachmentApp(root);
-    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+    const { name } = (await (await uploadFile(app, { name: "screenshot.png" })).json()) as {
+      name: string;
+    };
 
     const response = await app.request(`/api/panes/w1:p1/attachments/${name}`);
 
@@ -192,16 +246,28 @@ test("GET /api/panes/:id/attachments/:name serves the saved image as immutable",
   });
 });
 
+test("GET /api/panes/:id/attachments/:name serves only the image types", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const app = createAttachmentApp(root);
+    // 保存はできるが配信はしない。名前が保存名として正しくても、画像以外は 400。
+    await uploadFile(app, { name: "report.zip", type: "application/zip" });
+    await uploadFile(app, { name: "mock.html", type: "text/html" });
+    await uploadFile(app, { name: "icon.svg", type: "image/svg+xml" });
+
+    for (const name of ["report.zip", "mock.html", "icon.svg"]) {
+      const response = await app.request(`/api/panes/w1:p1/attachments/${name}`);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "invalid_request" });
+    }
+  });
+});
+
 test("GET /api/panes/:id/attachments/:name returns 400 for a name outside the format", async () => {
   await withAttachmentsRoot(async (root) => {
     const app = createAttachmentApp(root);
 
     // %2F は URL の解決で消えないので、デコードすると "../" を含む名前になる。
-    for (const name of [
-      "notes.png",
-      "pasted-20261103-120000.gif",
-      "..%2Fpasted-20261103-120000.png",
-    ]) {
+    for (const name of [".env", "..%2Fimage.png", "a%2Fb.png", "image.png."]) {
       const response = await app.request(`/api/panes/w1:p1/attachments/${name}`);
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({ error: "invalid_request" });
@@ -218,7 +284,7 @@ test("GET /api/panes/:id/attachments/:name returns 404 for a name this pane neve
     expect(await absent.json()).toEqual({ error: "not_found" });
 
     // 別のペイン（state に実在する w1:p2）にだけ置いた名前は、w1:p1 からは開けない。
-    const { name } = (await (await uploadImage(app, { paneId: "w1:p2" })).json()) as {
+    const { name } = (await (await uploadFile(app, { paneId: "w1:p2" })).json()) as {
       name: string;
     };
     const own = await app.request(`/api/panes/w1:p2/attachments/${name}`);
@@ -561,7 +627,7 @@ test("POST /api/panes/:id/input appends the saved paths as a note", async () => 
         },
       },
     });
-    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+    const { name } = (await (await uploadFile(app)).json()) as { name: string };
 
     const response = await app.request("/api/panes/w1:p1/input", {
       method: "POST",
@@ -590,7 +656,7 @@ test("POST /api/panes/:id/input accepts a message made of the images only", asyn
         },
       },
     });
-    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+    const { name } = (await (await uploadFile(app)).json()) as { name: string };
 
     const response = await app.request("/api/panes/w1:p1/input", {
       method: "POST",
@@ -652,7 +718,7 @@ test("POST /api/panes/:id/input rejects an attachment this pane never saved", as
 test("POST /api/panes/:id/input counts the note towards the size limit", async () => {
   await withAttachmentsRoot(async (root) => {
     const app = createAttachmentApp(root);
-    const { name } = (await (await uploadImage(app)).json()) as { name: string };
+    const { name } = (await (await uploadFile(app)).json()) as { name: string };
 
     // 注記の分だけ本文に書ける量が減る。素の本文なら収まる長さで確かめる。
     const note = `<attached_files>\n- ${join(root, "w1:p1", name)}\n</attached_files>`;
@@ -697,5 +763,104 @@ test("POST /api/panes/:id/input returns 404 for the pane that holds the images",
     });
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({ error: "pane_not_found" });
+  });
+});
+
+test("a deleted attachment drops its size and changes the etag so the client refetches", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const chat = createFakeChat({
+      snapshot: async () => ({
+        ...emptyChat,
+        messages: [
+          {
+            id: "u1",
+            role: "user" as const,
+            text: "",
+            at: 1,
+            // 同じ名前が 2 通に出ても、stat は 1 回で両方に同じ大きさを入れる。
+            attachments: [{ name: "report.zip", size: null }],
+          },
+          {
+            id: "u2",
+            role: "user" as const,
+            text: "",
+            at: 2,
+            attachments: [{ name: "report.zip", size: null }],
+          },
+        ],
+      }),
+    });
+    const { app, store } = createTestApp({ state: chatState, chat, attachmentsRoot: root });
+    store.setChatSource("w1:p1", { agent: "pi", path: "/sessions/demo.jsonl" });
+
+    expect((await uploadFile(app, { name: "report.zip", type: "application/zip" })).status).toBe(
+      200,
+    );
+
+    const first = await app.request("/api/panes/w1:p1/chat");
+    const etag = first.headers.get("etag") ?? "";
+    const firstBody = (await first.json()) as {
+      messages: { attachments?: { name: string; size: number | null }[] }[];
+    };
+    expect(firstBody.messages[0]?.attachments).toEqual([
+      { name: "report.zip", size: pngBytes.byteLength },
+    ]);
+    expect(firstBody.messages[1]?.attachments).toEqual(firstBody.messages[0]?.attachments);
+
+    // 同じ内容なら 304。大きさが変わらなければ etag も変わらない。
+    const cached = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": etag },
+    });
+    expect(cached.status).toBe(304);
+
+    // 添付ファイルだけが消えると本文は変わらない。それでも再取得させる。
+    await rm(join(root, "w1:p1", "report.zip"), { force: true });
+    const afterDelete = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": etag },
+    });
+    expect(afterDelete.status).toBe(200);
+    expect(afterDelete.headers.get("etag")).not.toBe(etag);
+    const deletedBody = (await afterDelete.json()) as {
+      messages: { attachments?: { name: string; size: number | null }[] }[];
+    };
+    expect(deletedBody.messages[0]?.attachments).toEqual([{ name: "report.zip", size: null }]);
+  });
+});
+
+test("GET /api/panes/:id/chat fills in the saved size of each attachment", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const chat = createFakeChat({
+      snapshot: async () => ({
+        ...emptyChat,
+        messages: [
+          {
+            id: "u1",
+            role: "user" as const,
+            text: "",
+            at: 1,
+            attachments: [
+              { name: "report.zip", size: null },
+              { name: "already-gone.zip", size: null },
+            ],
+          },
+        ],
+      }),
+    });
+    const { app, store } = createTestApp({ state: chatState, chat, attachmentsRoot: root });
+    store.setChatSource("w1:p1", { agent: "pi", path: "/sessions/demo.jsonl" });
+
+    const uploaded = await uploadFile(app, { name: "report.zip", type: "application/zip" });
+    expect(uploaded.status).toBe(200);
+
+    const response = await app.request("/api/panes/w1:p1/chat");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      messages: { attachments?: { name: string; size: number | null }[] }[];
+    };
+    // 消えたファイルはサイズを持たせない。名前は会話に残す。
+    expect(body.messages[0]?.attachments).toEqual([
+      { name: "report.zip", size: pngBytes.byteLength },
+      { name: "already-gone.zip", size: null },
+    ]);
   });
 });

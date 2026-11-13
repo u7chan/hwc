@@ -21,14 +21,14 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | モデル・effort の表示                    | ○            | ×      | ○             | ○                 |
 | コンテキスト使用量・usage                | ○            | ×      | ×             | ○                 |
 | 圧縮の区切り                             | ○            | ×      | ×             | ○                 |
-| 添付画像                                 | ○            | ×      | △             | △                 |
+| 添付ファイル（画像以外も可）             | ○            | ×      | △             | △                 |
 | メッセージ内の画像プレビュー             | ○            | ×      | ○             | ○                 |
 | 引用返信                                 | ○            | ×      | ○             | ○                 |
 | `/new` `/compact` の候補                 | ○            | △      | △             | △                 |
 | 起動時の信頼確認                         | ○            | ×      | ○             | –                 |
 | ライブ activity                          | △（pi 拡張） | ×      | ×             | ×                 |
 
-- 添付画像の UI 自体は会話を持つペインで使えるが、hwc は画像の実体を CLI へ渡さず、本文に `<attached_files>` のパス注記を足すだけ。Pi はこの経路を前提にしている（[ADR 0018](adr/0018-pasted-image-attachments.md)）。Codex と OpenCode は、それぞれの CLI がそのパスを読めるか次第（[ADR 0028](adr/0028-opencode-chat.md)、[ADR 0031](adr/0031-codex-chat.md)）。
+- 添付ファイルの UI 自体は会話を持つペインで使えるが、hwc は実体を CLI へ渡さず、本文に `<attached_files>` のパス注記を足すだけ。Pi はこの経路を前提にしている（[ADR 0018](adr/0018-pasted-image-attachments.md)、[ADR 0080](adr/0080-file-attachments.md)）。Codex と OpenCode は、それぞれの CLI がそのパスを読めるか次第（[ADR 0028](adr/0028-opencode-chat.md)、[ADR 0031](adr/0031-codex-chat.md)）。
 - Pi と Codex のフォルダ信頼確認は、専用ビューで「信頼して続行」だけを回答できる（[ADR 0032](adr/0032-codex-folder-trust.md)、[ADR 0044](adr/0044-pi-project-trust.md)）。それ以外の選択肢は端末で行う。
 - Claude の起動時の信頼確認は hwc では操作しない。応答は端末で行う。`blocked` 中も入力欄は有効なので、確認画面へ Enter を送らないよう注意する。
 - Codex の会話表示は、hwc が `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインだけ。既に起動している Codex や hwc 外で起動した Codex は端末出力になる（[ADR 0031](adr/0031-codex-chat.md)）。
@@ -54,13 +54,13 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 - 会話はローカルサービスの HTTP API から読む（[ADR 0028](adr/0028-opencode-chat.md)）。`service.json` が無い、loopback でない、API が失敗するときは端末出力へフォールバックする
 - モデルと effort はサービス API の model と variants から選ぶ。サービス未起動ではモデル候補が出ないが、デフォルト起動はできる（[ADR 0030](adr/0030-new-pane-model.md)）
-- 添付画像の実体は渡さず、本文のパス注記だけを送る
+- 添付ファイルの実体は渡さず、本文のパス注記だけを送る
 - 圧縮は完了したものだけを区切りにし、`tokensBefore` は `null`
 
 ### Pi
 
 - 会話はセッション JSONL の active branch から読む（[ADR 0013](adr/0013-pi-session-chat.md)）
-- モデル・effort・context・usage・圧縮・添付・引用の基準実装
+- モデル・effort・context・usage・圧縮・添付ファイル・引用の基準実装
 - プロジェクトの `Trust project folder?` は、既定の `Trust` だけを専用ビューで回答する。`.pi` や `.agents/skills` など信頼対象のリソースがあるフォルダでは、起動がこの確認で止まる。他の選択肢は端末で行う（[ADR 0044](adr/0044-pi-project-trust.md)）。hwc は `--approve` を渡さない
 - Herdr は Pi の信頼確認を `blocked` としないため、一覧の行は `idle` のまま。確認ビューは、開いているペインの画面から出す
 - ライブ activity は pi 拡張の sidecar がある場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）

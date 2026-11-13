@@ -112,7 +112,13 @@ export async function createScenario(root: string): Promise<Scenario> {
     ),
   );
 
+  // 添付チップは保存済みファイルの実バイト数を出す。会話の注記は basename しか使わないが、
+  // 大きさを出すために実ファイルを状態ディレクトリへ置く。
+  const attachmentDir = join(root, "attachments", "w1:p1");
+  await mkdir(attachmentDir, { recursive: true });
+
   await Promise.all([
+    writeFile(join(attachmentDir, "empty-state-reference.zip"), Buffer.alloc(2 * 1024 * 1024)),
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
     writeFile(sessionPath, sessionLines.map((line) => `${line}\n`).join("")),
     writeFile(emptySessionPath, `${JSON.stringify(emptySessionHeader)}\n`),
@@ -652,7 +658,8 @@ const sessionEntries = [
     timestamp: "2026-01-01T09:00:03.000Z",
     message: {
       role: "user",
-      content: "その方針でお願いします。テストも 1 本足してください。",
+      content:
+        "その方針でお願いします。テストも 1 本足してください。\n\n<attached_files>\n- /tmp/hwc-e2e/attachments/w1:p1/empty-state-reference.zip\n</attached_files>",
       timestamp: Date.parse("2026-01-01T09:00:03.000Z"),
     },
   },

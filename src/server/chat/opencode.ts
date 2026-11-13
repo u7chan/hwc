@@ -263,7 +263,9 @@ function parseContext(raw: unknown): Projected {
         role: "user",
         text: stripped.text,
         at: timestampOf(record.time),
-        ...(stripped.attachments.length === 0 ? {} : { attachments: stripped.attachments }),
+        ...(stripped.attachments.length === 0
+          ? {}
+          : { attachments: stripped.attachments.map((name) => ({ name, size: null })) }),
       });
       continue;
     }

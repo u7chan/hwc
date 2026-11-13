@@ -1,8 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
-import { type AttachedImage, attachmentStore } from "../attachment-store";
+import { type AttachedFile, attachmentStore } from "../attachment-store";
 
 // ペインごとの添付を購読する。ペインが変わったら、その時点の一覧へ差し替える。
-export function useAttachments(paneId: string): readonly AttachedImage[] {
+export function useAttachments(paneId: string): readonly AttachedFile[] {
   const [items, setItems] = useState(() => attachmentStore.items(paneId));
   useEffect(() => {
     const update = () => setItems(attachmentStore.items(paneId));

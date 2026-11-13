@@ -2,16 +2,18 @@
 // 片方だけ変えると、送った画像が履歴から開けなくなる。
 
 export const MAX_ATTACHMENTS = 4;
-export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+// 画像はスクリーンショットや写真で、10MB を超えるものはまず無い。画像以外は zip や
+// Office 文書で、25MB までを全量バッファで受ける。
+export const MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_FILE_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+// エージェントが本文に書いたファイルのプレビュー配信の上限。添付の上限とは別に持つ。
+// 添付の上限を上げても、会話を開くたびに読む量は変えない。
+export const MAX_PREVIEW_FILE_BYTES = 10 * 1024 * 1024;
 
 export type AttachmentExt = "png" | "jpg" | "webp";
-
-// SVG は同一オリジンでスクリプトが動く形式なので、保存も配信もしない。
-const EXT_BY_CONTENT_TYPE: ReadonlyMap<string, AttachmentExt> = new Map([
-  ["image/png", "png"],
-  ["image/jpeg", "jpg"],
-  ["image/webp", "webp"],
-]);
+export type AttachmentKind = "image" | "file";
 
 const CONTENT_TYPE_BY_EXT: ReadonlyMap<AttachmentExt, string> = new Map([
   ["png", "image/png"],
@@ -21,25 +23,98 @@ const CONTENT_TYPE_BY_EXT: ReadonlyMap<AttachmentExt, string> = new Map([
 
 const EXTENSIONS: ReadonlySet<string> = new Set(CONTENT_TYPE_BY_EXT.keys());
 
-// 案内文の表記だけを持つ。受け付ける形式とその並びは allowlist から引く。
-const LABEL_BY_EXT: ReadonlyMap<AttachmentExt, string> = new Map([
-  ["png", "PNG"],
-  ["jpg", "JPEG"],
-  ["webp", "WebP"],
-]);
-
 const BYTES_PER_MB = 1024 * 1024;
 
-// pasted-<YYYYMMDD>-<HHmmss>[-n].<ext>。名前に規則があるので、配信の前に書式だけで弾ける。
-const ATTACHMENT_NAME = /^pasted-\d{8}-\d{6}(-\d+)?\.(png|jpg|webp)$/;
+// 保存名の上限。Windows の MAX_PATH ではなく、注記 1 行と URL 1 セグメントに収まる長さで決める。
+export const MAX_ATTACHMENT_NAME_BYTES = 200;
+const MAX_EXTENSION_BYTES = 16;
+// percent-encode すると 1 バイトが最大 3 文字になる。decode の前に長さで弾く。
+const MAX_ENCODED_NAME_LENGTH = MAX_ATTACHMENT_NAME_BYTES * 3;
 
-export function isAttachmentName(value: string): boolean {
-  return ATTACHMENT_NAME.test(value);
+const ENCODER = new TextEncoder();
+
+function byteLength(value: string): number {
+  return ENCODER.encode(value).length;
 }
 
-export function attachmentExtOf(contentType: string | undefined): AttachmentExt | null {
-  const type = (contentType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
-  return EXT_BY_CONTENT_TYPE.get(type) ?? null;
+// 拡張子を残したまま、コードポイントの境界で切る。バイト列の途中で切ると壊れた文字が残る。
+function truncateName(value: string, limit: number): string {
+  if (byteLength(value) <= limit) return value;
+  let used = 0;
+  let kept = "";
+  for (const character of value) {
+    const size = byteLength(character);
+    if (used + size > limit) break;
+    kept += character;
+    used += size;
+  }
+  return kept;
+}
+
+// 名前に入れない文字を落とす。`/` と `\` はパス区切り、`<` と `>` は注記の区切り、
+// C0 / DEL / C1 は行や URL を壊す。
+function stripNameCharacters(raw: string): string {
+  let kept = "";
+  for (const character of raw) {
+    if (character === "/" || character === "\\" || character === "<" || character === ">") {
+      continue;
+    }
+    const code = character.codePointAt(0) ?? 0;
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
+    // 行区切りは注記 1 行を壊す。空白として扱うと前後の除去だけで中身が残る。
+    if (code === 0x2028 || code === 0x2029) continue;
+    kept += character;
+  }
+  return kept;
+}
+
+// 拡張子として残すのは短いものだけ。長い末尾は拡張子ではなく名前の一部として扱い、
+// 切り詰めの計算と衝突名の組み立てで同じ切り分けを使う。
+function splitExtension(name: string): { stem: string; extension: string } {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return { stem: name, extension: "" };
+  const extension = name.slice(dot);
+  if (byteLength(extension) > MAX_EXTENSION_BYTES) return { stem: name, extension: "" };
+  return { stem: name.slice(0, dot), extension };
+}
+
+// 保存名は利用者由来で、そのまま注記・履歴・URL に出る。パスへ連結する前にこの規則を
+// 通し、通した後も同じ名前になるものだけを受け付ける。
+// 先頭の `.` は隠しファイル名を、`-` はシェルのオプションを装う名前を落とす。
+// 空白は ASCII だけでなく NBSP や全角空白も落とす。履歴の strip は `trim()` で
+// 名前を取り出すので、ここで残すと保存名と履歴名が食い違う。
+function sanitizeOnce(raw: string): string {
+  const cleaned = stripNameCharacters(raw).normalize("NFC");
+  const trimmed = cleaned.replace(/^[.\s-]+/u, "").replace(/[.\s]+$/u, "");
+  if (trimmed === "") return "";
+
+  const { stem, extension } = splitExtension(trimmed);
+  // 切り詰めで末尾の空白や `.` が戻るので、切った後にもう一度落とす。
+  const body = truncateName(stem, MAX_ATTACHMENT_NAME_BYTES - byteLength(extension)).replace(
+    /[.\s]+$/u,
+    "",
+  );
+  if (body === "") return "";
+  return body + extension;
+}
+
+// 切り詰めで拡張子の切り分けが変わることがある。変わらなくなるまで通し、sanitize の
+// 結果が必ず isStoredAttachmentName を通る（冪等である）ことを保証する。
+export function sanitizeAttachmentName(raw: string): string {
+  let name = sanitizeOnce(raw);
+  for (let pass = 0; pass < 4; pass += 1) {
+    if (name === "") return "";
+    const next = sanitizeOnce(name);
+    if (next === name) return name;
+    name = next;
+  }
+  return name;
+}
+
+export function isStoredAttachmentName(value: string): boolean {
+  // UTF-16 の長さは UTF-8 のバイト数を超えない。長すぎる値は正規化の前に落とす。
+  if (value === "" || value.length > MAX_ATTACHMENT_NAME_BYTES) return false;
+  return sanitizeAttachmentName(value) === value;
 }
 
 const EXT_ALIASES: ReadonlyMap<string, AttachmentExt> = new Map([["jpeg", "jpg"]]);
@@ -59,19 +134,90 @@ export function attachmentContentTypeFromName(name: string): string | null {
   return ext === null ? null : (CONTENT_TYPE_BY_EXT.get(ext) ?? null);
 }
 
+// 配信してよいのは画像 3 形式だけ。保存名の検証とは別に、この 1 か所で絞る。
+export function isImageAttachmentName(value: string): boolean {
+  return isStoredAttachmentName(value) && attachmentExtFromName(value) !== null;
+}
+
 export function attachmentContentType(name: string): string | null {
-  if (!isAttachmentName(name)) return null;
+  if (!isImageAttachmentName(name)) return null;
   return attachmentContentTypeFromName(name);
 }
 
-// 利用者に見せる形式の一覧。allowlist を変えたときに案内文だけが古くならないようにする。
-export function attachmentTypeLabels(): string {
-  return [...EXT_BY_CONTENT_TYPE.values()].map((ext) => LABEL_BY_EXT.get(ext) ?? ext).join(" / ");
+export function attachmentKindOfName(name: string): AttachmentKind {
+  return attachmentExtFromName(name) === null ? "file" : "image";
+}
+
+// クライアントが持つのは保存前の file.name。保存名に直してから種別を決め、
+// 上限の判定を BFF と同じ規則に揃える。
+export function attachmentKindOfFileName(name: string): AttachmentKind {
+  return attachmentKindOfName(sanitizeAttachmentName(name));
+}
+
+export function maxAttachmentBytes(kind: AttachmentKind): number {
+  return kind === "image" ? MAX_IMAGE_ATTACHMENT_BYTES : MAX_FILE_ATTACHMENT_BYTES;
+}
+
+// 元のファイル名は ASCII しか運べないヘッダで受ける。decode できない値は名前にしない。
+export const FILENAME_HEADER = "x-hwc-filename";
+
+export function encodeAttachmentName(name: string): string {
+  return encodeURIComponent(name);
+}
+
+export function decodeAttachmentName(value: string | undefined | null): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (value.length > MAX_ENCODED_NAME_LENGTH) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
+// 同名は上書きせず連番にする。拡張子の前に足し、全体を上限に収める。
+export function attachmentCollisionName(name: string, index: number): string {
+  if (index === 0) return name;
+  const { stem, extension } = splitExtension(name);
+  const suffix = `-${index}`;
+  const limit = Math.max(1, MAX_ATTACHMENT_NAME_BYTES - byteLength(extension) - suffix.length);
+  const body = truncateName(stem, limit).replace(/[.\s]+$/u, "");
+  // 連番を足した後も保存名の規則を通ることを、ここで確定させる。
+  return sanitizeAttachmentName(`${body}${suffix}${extension}`);
 }
 
 export function formatMegaBytes(bytes: number): string {
   const mb = bytes / BYTES_PER_MB;
   return `${Number.isInteger(mb) ? mb : mb.toFixed(1)}MB`;
+}
+
+const SIZE_UNITS = ["B", "KB", "MB", "GB"] as const;
+
+// 表示する桁に丸めた値。9.96KB のように丸めで 10 以上になる場合だけ "10.0" を "10" に寄せる。
+// 10 未満は小数第 1 位を残し、1.5KB と 1.0KB の桁を揃える。
+function sizeText(value: number, unit: number): string {
+  const text =
+    unit === 0
+      ? String(Math.round(value))
+      : value < 10
+        ? value.toFixed(1)
+        : String(Math.round(value));
+  return text.endsWith(".0") && Number(text) >= 10 ? text.slice(0, -2) : text;
+}
+
+// 添付チップに出す大きさ。1024 進で次の単位へ落とし、10 未満だけ小数第 1 位を残す。
+// 桁を落としすぎると 1.0KB と 999B のような並びで大小が読めなくなる。
+export function formatFileSize(bytes: number): string {
+  let value = Math.max(0, bytes);
+  let unit = 0;
+  let text = sizeText(value, unit);
+  // 1048575B は 1023.999KB で、丸めると 1024KB になる。丸めた値でも単位を上げ直す。
+  while (unit < SIZE_UNITS.length - 1 && (value >= 1024 || Number(text) >= 1024)) {
+    value /= 1024;
+    unit += 1;
+    text = sizeText(value, unit);
+  }
+  return `${text}${SIZE_UNITS[unit]}`;
 }
 
 // ペイン id はそのままディレクトリ名になる。区切りと親参照を含む id をここで弾く。
@@ -82,18 +228,6 @@ export function isSafePaneId(value: string): boolean {
     if (character.charCodeAt(0) < 0x20) return false;
   }
   return true;
-}
-
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
-// 同名は上書きせず、index で連番にする。時刻はローカル時刻。
-export function attachmentName(ext: AttachmentExt, at: Date, index = 0): string {
-  const date = `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}`;
-  const time = `${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
-  const suffix = index === 0 ? "" : `-${index}`;
-  return `pasted-${date}-${time}${suffix}.${ext}`;
 }
 
 export const ATTACHED_FILES_OPEN = "<attached_files>";
@@ -131,7 +265,7 @@ export function stripAttachedFiles(text: string): { text: string; attachments: s
     .map((line) => line.trim())
     .filter((line) => line.startsWith("- "))
     .map((line) => baseName(line.slice(2).trim()))
-    .filter(isAttachmentName);
+    .filter(isStoredAttachmentName);
   if (attachments.length === 0) return { text, attachments: [] };
 
   return { text: text.slice(0, open).replace(/\n+$/, ""), attachments };

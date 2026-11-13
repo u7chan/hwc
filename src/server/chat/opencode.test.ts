@@ -252,7 +252,7 @@ test("the hwc attachment note stays out of the text", async () => {
       role: "user",
       text: "見て",
       at: 1_000,
-      attachments: ["pasted-20260101-010203.png"],
+      attachments: [{ name: "pasted-20260101-010203.png", size: null }],
     },
   ]);
 });

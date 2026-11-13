@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
-import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
+import { MAX_PREVIEW_FILE_BYTES } from "../shared/attachments";
 import type { ChatSnapshot } from "./chat/contract";
 import {
   attachMessageFiles,
@@ -212,7 +212,7 @@ test("only serves a regular file with an allowed image extension", async () => {
 });
 
 test("refuses an image over the size limit", async () => {
-  await write("big.png", new Uint8Array(MAX_ATTACHMENT_BYTES + 1));
+  await write("big.png", new Uint8Array(MAX_PREVIEW_FILE_BYTES + 1));
 
   expect(await resolveMessageFile({ root, path: "big.png" })).toBeNull();
 });

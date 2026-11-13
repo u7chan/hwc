@@ -1,4 +1,4 @@
-import { isAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
+import { isStoredAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
 import { IDLE_PANE_PROCESS, type PaneProcess } from "../../shared/panes";
 import { listeningPorts } from "../ports";
 import {
@@ -230,7 +230,7 @@ export function parseInputBody(body: unknown): Parsed<InputBody> {
   if (attachments.length > MAX_ATTACHMENTS) {
     return { ok: false, status: 400, error: `attachments must be at most ${MAX_ATTACHMENTS}` };
   }
-  // 画像だけを送れるようにする。本文も添付も無いメッセージは送らない。
+  // 添付は画像に限らない。本文も添付も無いメッセージは送らない。
   if (record.text.trim() === "" && attachments.length === 0) {
     return { ok: false, status: 400, error: "text must be a non-empty string" };
   }
@@ -246,7 +246,7 @@ function parseAttachments(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   const names: string[] = [];
   for (const item of value) {
-    if (typeof item !== "string" || !isAttachmentName(item)) return null;
+    if (typeof item !== "string" || !isStoredAttachmentName(item)) return null;
     names.push(item);
   }
   return names;

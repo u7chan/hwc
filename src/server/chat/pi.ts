@@ -336,7 +336,9 @@ function project(id: string, message: Record<string, unknown>, entryTimestamp: u
               role: "user",
               text,
               at,
-              ...(attachments.length === 0 ? {} : { attachments }),
+              ...(attachments.length === 0
+                ? {}
+                : { attachments: attachments.map((name) => ({ name, size: null })) }),
             },
           ],
       model: null,

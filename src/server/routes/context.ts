@@ -1,9 +1,12 @@
 import type { Context, Env } from "hono";
 import {
   attachmentContentType,
-  attachmentExtOf,
-  isAttachmentName,
-  MAX_ATTACHMENT_BYTES,
+  attachmentKindOfName,
+  decodeAttachmentName,
+  FILENAME_HEADER,
+  isImageAttachmentName,
+  maxAttachmentBytes,
+  sanitizeAttachmentName,
 } from "../../shared/attachments";
 import { defaultAttachmentsRoot, readAttachment, saveAttachment } from "../attachments";
 import type { SessionChatClient } from "../chat/contract";
@@ -259,10 +262,12 @@ export function createAppContext(options: CreateAppOptions) {
 
   // 画像は 1 枚の生バイトで受ける。保存名はサーバが決め、上書きしない。
   const uploadAttachment = async (c: IdContext) => {
-    // 415 は body を読む前に返す。text/plain のような simple request は preflight を
-    // 通らないので、Content-Type の allowlist だけで守る。
-    const ext = attachmentExtOf(c.req.header("content-type"));
-    if (ext === null) return c.json({ error: "unsupported_media_type" }, 415);
+    // 種別と上限は元のファイル名の拡張子で決まる。body を読む前に名前を検査する。
+    // ヘッダは ASCII しか運べないので、クライアントは percent-encode して送る。
+    const decoded = decodeAttachmentName(c.req.header(FILENAME_HEADER));
+    const name = decoded === null ? "" : sanitizeAttachmentName(decoded);
+    if (name === "") return c.json({ error: "invalid_request" }, 400);
+    const limit = maxAttachmentBytes(attachmentKindOfName(name));
 
     const state = await current();
     if (!state) return c.json({ error: "herdr_unavailable" }, 502);
@@ -274,21 +279,21 @@ export function createAppContext(options: CreateAppOptions) {
 
     // 宣言された長さで先に落とし、読み終えた実バイト数でも見る。
     const declared = Number(c.req.header("content-length"));
-    if (Number.isFinite(declared) && declared > MAX_ATTACHMENT_BYTES) {
+    if (Number.isFinite(declared) && declared > limit) {
       return c.json({ error: "attachment_too_large" }, 413);
     }
     const bytes = new Uint8Array(await c.req.arrayBuffer());
-    if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+    if (bytes.byteLength > limit) {
       return c.json({ error: "attachment_too_large" }, 413);
     }
     if (bytes.byteLength === 0) return c.json({ error: "invalid_request" }, 400);
 
-    const name = await saveAttachment({ root: attachmentsRoot, paneId, ext, bytes });
-    if (name === null) return c.json({ error: "invalid_request" }, 400);
-    return c.json({ name });
+    const saved = await saveAttachment({ root: attachmentsRoot, paneId, name, bytes });
+    if (saved === null) return c.json({ error: "invalid_request" }, 400);
+    return c.json({ name: saved });
   };
 
-  // 保存した画像を返す。名前は固定書式だけを通してからパスへ連結する。
+  // 保存した画像を返す。配信するのは画像 3 形式だけで、名前の検証とは別に絞る。
   const serveAttachment = async (c: IdNameContext) => {
     const state = await current();
     if (!state) return c.json({ error: "herdr_unavailable" }, 502);
@@ -299,7 +304,7 @@ export function createAppContext(options: CreateAppOptions) {
     if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
     const name = c.req.param("name") ?? "";
-    if (!isAttachmentName(name)) return c.json({ error: "invalid_request" }, 400);
+    if (!isImageAttachmentName(name)) return c.json({ error: "invalid_request" }, 400);
     const bytes = await readAttachment({ root: attachmentsRoot, paneId, name });
     if (bytes === null) return c.json({ error: "not_found" }, 404);
 

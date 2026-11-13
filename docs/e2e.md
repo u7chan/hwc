@@ -118,6 +118,8 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 画面は消さずに末尾へシェルのプロンプトを足す。要対応のペインは実 Herdr と同じく
 `agent_blocked` で拒否する。最後のエージェントの終了要求、拒否、残ったシェルの削除禁止を確認する。
 
+`frontend` の user メッセージの 1 通は `<attached_files>` 注記を持ち、`empty-state-reference.zip` が履歴のチップに出る。大きさは fixture が `<root>/attachments/w1:p1/` に置いた 2MB の実ファイルから BFF が `stat` で引くので、チップは `2.0MB` になる。
+
 `pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。セッションがまだ無いペインでは、この追記の前にヘッダと `model_change` / `thinking_level_change` を書く。
 
 `frontend` の架空セッションは、最後のターンが失敗した状態（`stopReason: "error"` と `errorMessage`、本文は空）で終わる。同じ失敗をリトライの回数だけ並べてあり、Web では 1 行に畳まれて「3 回」と出る。その行が圧縮後の usage を変えないことも確かめる（[ADR 0039](adr/0039-chat-error-rows.md)）。
@@ -126,7 +128,9 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 送信前の添付チップも同じように拡大できる。入力欄に画像を貼り付けるかドロップし、アップロードが終わってサムネイルが出てから押すとダイアログが開く。`Esc` で閉じるとサムネイルへフォーカスが戻り、チップは残ったままになる。チップは送信するまで残り、別のペインを開いて戻っても同じチップが出る（[ADR 0018](adr/0018-pasted-image-attachments.md)）。
 
-入力欄の + からは、同じ経路で画像を選べる。ファイル入力の `accept` は `image/*` で、`dropActionFrom` と `takeImages` を通る。Playwright では画像のメニュー項目を押した後の File chooser に `upload` でファイルを渡す。
+画像以外のファイルも貼り付け・ドロップ・+ から添付できる。チップには元のファイル名と大きさが出て、押しても何も開かない。送信すると履歴にも名前と大きさのチップが並び、`GET /api/panes/:id/attachments/<name>` は 400 を返す（配信するのは画像 3 形式だけ。[ADR 0080](adr/0080-file-attachments.md)）。履歴の大きさは BFF が保存済みファイルを `stat` した実バイト数で、入力欄は選んだ `File.size`。消えたファイルは大きさだけ落ちて名前が残る。
+
+入力欄の + からは、同じ経路でファイルを選べる。ファイル入力に `accept` は無く、`dropActionFrom` と `takeFiles` を通る。Playwright では「ファイルを追加」を押した後の File chooser に `upload` でファイルを渡す。名前は `X-HWC-Filename`（percent-encode）で送られ、保存名になる。
 
 `+` の「プロジェクトを選ぶ」は、`<root>/bin/git` の `ls-files` が返すマニフェストから候補を作る。架空 Herdr の `pane.get` は `…/work/acme-dashboard` を cwd として返し、偽 git はその cwd に対して `package.json`、`packages/api/package.json`、`packages/web/pyproject.toml`、`apps/desktop/Cargo.toml` を返す。cwd 自身の `package.json` は候補から外れるので、`desktop`、`api`、`web` の 3 件になる。実ファイルは作らない。
 
@@ -147,12 +151,12 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 
 ## 入力の + メニュー
 
-入力欄の下部左端の + から、会話のコマンドを実行し、画像とプロジェクトを追加する（[ADR 0055](adr/0055-composer-add-menu.md)、[ADR 0056](adr/0056-project-picker.md)、[ADR 0057](adr/0057-composer-conversation-commands.md)）。
+入力欄の下部左端の + から、会話のコマンドを実行し、ファイルとプロジェクトを追加する（[ADR 0055](adr/0055-composer-add-menu.md)、[ADR 0056](adr/0056-project-picker.md)、[ADR 0057](adr/0057-composer-conversation-commands.md)）。
 
-1. `review` を開き、+ を押す。+ の上に「新しい会話」「会話を圧縮」、区切り、「画像を追加」「プロジェクトを選ぶ」が開き、`Escape` か外側のタップで閉じる。`frontend`（実行中）では 2 つのコマンドが無効になり、補助文に「実行中は使えません」が出る。`new`（空の会話）では「会話が始まると使えます」になる。
+1. `review` を開き、+ を押す。+ の上に「新しい会話」「会話を圧縮」、区切り、「ファイルを追加」「プロジェクトを選ぶ」が開き、`Escape` か外側のタップで閉じる。`frontend`（実行中）では 2 つのコマンドが無効になり、補助文に「実行中は使えません」が出る。`new`（空の会話）では「会話が始まると使えます」になる。
 2. `review` で「新しい会話」を選ぶと確認ダイアログが開く。「キャンセル」では会話が残り、「始める」では会話が空になる。チップや直接入力の `/new` は確認を挟まない。ペイン見出しの「…」メニューには 2 つのコマンドが出ない。
 3. `review` で「会話を圧縮」を選ぶと `/compact` が送られ、履歴に控えと「会話を圧縮しています」が出る。`review` は Codex なので、架空 Herdr は完了の compaction を追記しない。進捗行の「中断」でローカルの表示を畳む。指示付きの圧縮はチップか直接入力で行う。
-4. 「画像を追加」を選び、`src/client/assets/apple-touch-icon.png` をアップロードする。入力欄の上に添付チップが出て、書きかけの本文は残る。4 枚添付すると「画像を追加」が無効になり、理由が補助文に出る。
+4. 「ファイルを追加」を選び、`src/client/assets/apple-touch-icon.png` をアップロードする。入力欄の上に添付チップが出て、書きかけの本文は残る。4 件添付すると「ファイルを追加」が無効になり、理由が補助文に出る。同じ手順で `report.zip`（Playwright の `setInputFiles` に buffer と名前を渡す）を選ぶと、画像と同じ枚数の枠で名前と大きさのチップになる。10MB を超える画像と 25MB を超えるファイルは、送信前に notice で断られる。
 5. 「プロジェクトを選ぶ」を選ぶ。`desktop`、`api`、`web` が名前と相対パスで並ぶ。検索欄に `web` と入れると `web` だけに絞り込まれる。
 6. `web` を選ぶとダイアログが閉じ、本文に `./packages/web/` が入り、入力欄にフォーカスが戻る。`Escape` で閉じた場合は + にフォーカスが戻り、本文は変わらない。
 7. 会話を持つペインを選び、分割セルで入力欄が 1 行に畳まれる幅にすると + は出ない。2 つのコマンドは `/` と打ったときの候補だけになる。狭い画面でも送信ボタンは右端に残り、モデル名だけが省略される。
