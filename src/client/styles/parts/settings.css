@@ -868,6 +868,12 @@ html:not([data-input-modality="pointer"])
   gap: var(--space-2);
 }
 
+/* グループに続くフォームは、角丸の面と入力枠の境目が分かるよう、補足説明と同じ
+   12px だけ離す。 */
+.hwc-setting-group + .hwc-setting-form {
+  margin-top: var(--space-3);
+}
+
 .hwc-setting-input {
   min-width: 0;
   min-height: var(--tap);
