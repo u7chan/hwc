@@ -235,7 +235,7 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 1. `アクティブ` を開く。`acme-dashboard` の `frontend` と、`scratch` の `folder-trust` に王冠の親マークが付く。`acme-dashboard (docs)` はエージェントが 1 枚だけなので付かない。
 2. `すべて` に切り替え、同じ王冠がツリーのペイン名の横に出ることを確かめる。
 3. `frontend` を開く。詳細のペインタブの `frontend` に王冠が出る。同じタブの `shell` には出ない。`checks` タブの `review` にも出ない。
-4. `link[rel="icon"]` を調べる。PNG のリンクが消え、SVG の `href` が `data:image/svg+xml,` で始まる。fixture では `writer` と `folder-trust` が `blocked` なので、点は赤になる。
+4. `link[rel="icon"]` を調べる。PNG のリンクが残り、SVG の `href` が `data:image/svg+xml,` で始まる。fixture では `writer` と `folder-trust` が `blocked` なので、点は赤になる。SVG favicon を持たないブラウザは PNG でアイコンを出す（[ADR 0054](adr/0054-favicon-parent-status.md)）。
 5. `document.title` が `HWC` のままであることを確かめる。
 
 ## 一覧の並べ替え

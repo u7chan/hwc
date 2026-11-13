@@ -53,8 +53,9 @@ export function faviconHref(status: FaviconStatus | null, baseHref: string): str
   return `data:image/svg+xml,${encodeURIComponent(faviconSvg(status))}`;
 }
 
-// PNG が選ばれると SVG の href 変更がタブに反映されない。JS が動き出した後は
-// SVG だけをアイコンの更新対象にする。点なしは HTML と同じ静的ファイルへ戻す。
+// SVG favicon を持たないブラウザ（Safari 26 未満、iOS の Chrome）のアイコンは、HTML に
+// 置いた PNG が担う。消すとそのブラウザではアイコンが 1 枚も無くなる。Chrome は PNG が
+// 残っていても SVG の href の差し替えを反映するので、点の更新は妨げられない。
 export function applyFavicon(status: FaviconStatus | null): void {
   const svg = document.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/svg+xml"]');
   if (svg === null) return;
@@ -62,6 +63,8 @@ export function applyFavicon(status: FaviconStatus | null): void {
   // 組み立てず、最初の href を控えて点なしへ戻すときにも使う。
   const baseHref = svg.dataset.baseHref ?? svg.getAttribute("href") ?? "";
   if (svg.dataset.baseHref === undefined) svg.dataset.baseHref = baseHref;
-  document.querySelector('link[rel="icon"][type="image/png"]')?.remove();
-  svg.href = faviconHref(status, baseHref);
+  const href = faviconHref(status, baseHref);
+  // 同じ値で書き直すと、ブラウザがアイコンの取得をやり直してタブに出るまでが遅れる。
+  // 状態が変わったときだけ触る。
+  if (svg.getAttribute("href") !== href) svg.href = href;
 }
