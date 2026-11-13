@@ -270,6 +270,8 @@ p.hwc-compaction,
 .hwc-msg-attachments {
   display: flex;
   flex-wrap: wrap;
+  /* 名前だけのチップを、同じ行に並ぶ画像の高さまで伸ばさない。 */
+  align-items: flex-start;
   gap: var(--space-1);
 }
 

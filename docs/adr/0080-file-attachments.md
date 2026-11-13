@@ -23,11 +23,11 @@
 ## Decision
 
 - 保存先は画像と同じ `$HWC_STATE_DIR/attachments/<pane-id>/`（[ADR 0018](0018-pasted-image-attachments.md) の規則を変えない）。種別で木を分けない
-- 保存名は画像も非画像も **元の basename** を残す。`pasted-<timestamp>.<ext>` の新規発行はやめる。既存の名前はそのまま配ってよい
+- 保存名は画像も非画像も **元のファイル名** を残す（パス区切りを落とした後の 1 セグメント）。`pasted-<timestamp>.<ext>` の新規発行はやめる。既存の名前はそのまま配ってよい
 - 名前の sanitize は `src/shared/attachments.ts` の 1 か所に集約する。パス区切り（`/` `\`）と注記の区切り（`<` `>`）、制御文字（C0 / DEL / C1）を落とし、NFC に正規化し、先頭の `.` と `-` を落とし、末尾の空白と `.` を落とす。拡張子を残したままコードポイントの境界で UTF-8 200 バイトへ切り詰め、切り詰めで戻った末尾の空白と `.` をもう一度落とす。空になったら拒否する。検証は「sanitize しても名前が変わらないこと」で行い、`attachmentFilePath` はこの検証を通った名前だけを連結する。衝突は拡張子の前に `-1`、`-2` と連番を足し、上書きしない
 - 保存名の検証を 2 つに分ける。`isStoredAttachmentName` は保存・`attachmentFilePath`・履歴の strip・送信 body の名前に使い、`isImageAttachmentName: isStoredAttachmentName && 拡張子が画像 3 形式` を配信と `Content-Type` の決定に使う。配信 allowlist は広げない。非画像の名前は配信で 400 にする（保存名として正しいかは見ない）
 - アップロードは生バイトのまま、元のファイル名を `X-HWC-Filename`（UTF-8 を percent-encode）で受ける。ヘッダが無い、decode できない、長すぎる、sanitize すると空になる要求は body を読む前に 400。型と上限は拡張子で決め、`Content-Type` は見ない（zip や Office 文書は `application/octet-stream` や空文字で来る）。`Content-Type` の allowlist による 415 は無くなる
-- 上限は種類別に分ける。`MAX_IMAGE_ATTACHMENT_BYTES` = 10MB、`MAX_FILE_ATTACHMENT_BYTES` = 25MB。種別は受け取った名前の拡張子で決める。`MAX_ATTACHMENTS` は 4 件のまま、画像と非画像の合計で数える。413 の文言は種別ごとの上限を出す
+- 上限は種類別に分ける。`MAX_IMAGE_ATTACHMENT_BYTES` = 10MB、`MAX_FILE_ATTACHMENT_BYTES` = 25MB。種別は受け取った名前の拡張子で決める。`MAX_ATTACHMENTS` は 4 件のまま、画像と非画像の合計で数える。413 は `attachment_too_large` だけを返し、クライアントが種別ごとの上限を文言にする
 - クライアントは送る前に `file.size` を拡張子から決めた上限と比べ、超えていればアップロードしない。25MB を LAN 越しに送り切ってから 413 を出すのは遅い。BFF の 413 は同じ文言の防御として残す
 - プレビュー配信（`src/server/message-files.ts`）の上限は `MAX_PREVIEW_FILE_BYTES` = 10MB として別の定数にする。添付の上限を上げても、会話を開くたびに読む量は変えない
 - 非画像は配信しない。`GET /api/panes/:id/attachments/:name` は画像 3 形式だけを返す。ダウンロード導線も作らない。入力欄のチップも履歴も、非画像は名前だけのチップにしてリンクにしない
