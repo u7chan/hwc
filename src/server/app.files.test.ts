@@ -16,6 +16,8 @@ import {
   chatState,
   twoChatPanesState,
   createTestApp,
+  createFakeChat,
+  emptyChat,
   pngBytes,
   withCheckout,
   createFilesApp,
@@ -761,5 +763,43 @@ test("POST /api/panes/:id/input returns 404 for the pane that holds the images",
     });
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({ error: "pane_not_found" });
+  });
+});
+
+test("GET /api/panes/:id/chat fills in the saved size of each attachment", async () => {
+  await withAttachmentsRoot(async (root) => {
+    const chat = createFakeChat({
+      snapshot: async () => ({
+        ...emptyChat,
+        messages: [
+          {
+            id: "u1",
+            role: "user" as const,
+            text: "",
+            at: 1,
+            attachments: [
+              { name: "report.zip", size: null },
+              { name: "already-gone.zip", size: null },
+            ],
+          },
+        ],
+      }),
+    });
+    const { app, store } = createTestApp({ state: chatState, chat, attachmentsRoot: root });
+    store.setChatSource("w1:p1", { agent: "pi", path: "/sessions/demo.jsonl" });
+
+    const uploaded = await uploadFile(app, { name: "report.zip", type: "application/zip" });
+    expect(uploaded.status).toBe(200);
+
+    const response = await app.request("/api/panes/w1:p1/chat");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      messages: { attachments?: { name: string; size: number | null }[] }[];
+    };
+    // 消えたファイルはサイズを持たせない。名前は会話に残す。
+    expect(body.messages[0]?.attachments).toEqual([
+      { name: "report.zip", size: pngBytes.byteLength },
+      { name: "already-gone.zip", size: null },
+    ]);
   });
 });

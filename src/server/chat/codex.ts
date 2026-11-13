@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { stripAttachedFiles } from "../../shared/attachments";
 import { asRecord, type CodexReader, nextCursor, withCodex } from "../codex";
-import type { ChatMessage, ChatSnapshot, SessionChatClient } from "./contract";
+import {
+  type ChatMessage,
+  type ChatSnapshot,
+  type SessionChatClient,
+  chatAttachments,
+} from "./contract";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages, MAX_CHAT_MESSAGES } from "./limit";
 
@@ -97,7 +102,7 @@ function projectTurn(raw: unknown): ChatMessage[] {
         role: "user",
         text,
         at,
-        ...(attachments.length === 0 ? {} : { attachments }),
+        ...(attachments.length === 0 ? {} : { attachments: chatAttachments(attachments) }),
       });
     }
   }

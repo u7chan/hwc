@@ -154,6 +154,15 @@
   white-space: nowrap;
 }
 
+/* 名前を省略しても大きさは残す。 */
+.hwc-attachment-size {
+  flex-shrink: 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .hwc-input-toggle {
   position: absolute;
   top: 0;

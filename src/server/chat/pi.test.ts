@@ -196,14 +196,14 @@ test("keeps the images a user message was sent with, and drops the note from the
       role: "user",
       text: "look at this",
       at: 1_700_000_000_000,
-      attachments: ["pasted-20261103-120000.png"],
+      attachments: [{ name: "pasted-20261103-120000.png", size: null }],
     },
     {
       id: "u2",
       role: "user",
       text: "",
       at: 1_700_000_000_000,
-      attachments: ["pasted-20261103-120000.png"],
+      attachments: [{ name: "pasted-20261103-120000.png", size: null }],
     },
   ]);
 });

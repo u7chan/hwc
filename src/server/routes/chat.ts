@@ -1,3 +1,4 @@
+import { attachAttachmentSizes } from "../attachments";
 import { readActivity } from "../chat/activity";
 import { OpencodeServiceNotRunningError } from "../chat/opencode";
 import { findPane } from "../herdr/state";
@@ -15,6 +16,7 @@ export function createChatHandlers(ctx: AppContext) {
     models,
     projects,
     previewRoots,
+    attachmentsRoot,
     current,
     launchModels,
     paneFailure,
@@ -76,9 +78,14 @@ export function createChatHandlers(ctx: AppContext) {
           paneId,
           await client.snapshot(source.agent === "pi" ? source.path : source.sessionId),
         );
+        // 添付のチップに出すサイズは保存済みファイルの実バイト数。名前から引く。
+        const withSizes = await attachAttachmentSizes(snapshot, {
+          root: attachmentsRoot,
+          paneId,
+        });
         // 本文が指しているファイルを足す。中身が変わると etag も変わり、次の取得で新しい URL になる。
         const withFiles = await attachMessageFiles(
-          snapshot,
+          withSizes,
           store.workspaceRoot(paneId),
           previewRoots,
         );

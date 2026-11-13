@@ -374,25 +374,47 @@ test("the attachment urls keep the pane id and the saved name in single segments
   );
 });
 
-test("a message keeps its attachments as saved names, images or not", () => {
+test("a message keeps its attachments as saved names and sizes, images or not", () => {
   const message = {
     id: "m1",
     role: "user" as const,
     text: "",
     at: 1_000,
-    attachments: ["pasted-20261103-120000.png", "report.zip", "My Report.xlsx"],
+    attachments: [
+      { name: "pasted-20261103-120000.png", size: 2048 },
+      { name: "report.zip", size: 3_013_590 },
+      { name: "My Report.xlsx", size: null },
+    ],
   };
   expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
 
+  // サイズは表示だけに使う。壊れた値は名前だけを出す。
+  expect(
+    toChatSnapshot({
+      ...chatBody,
+      messages: [{ ...message, attachments: [{ name: "report.zip", size: "big" }] }],
+    })?.messages,
+  ).toEqual([
+    {
+      id: "m1",
+      role: "user",
+      text: "",
+      at: 1_000,
+      attachments: [{ name: "report.zip", size: null }],
+    },
+  ]);
+
   // 保存名の規則を通らない名前は配信 URL にしない。名前が全部落ちたら添付なしとして扱う。
   expect(
-    toChatSnapshot({ ...chatBody, messages: [{ ...message, attachments: ["../x.png"] }] })
-      ?.messages,
+    toChatSnapshot({
+      ...chatBody,
+      messages: [{ ...message, attachments: [{ name: "../x.png", size: 1 }] }],
+    })?.messages,
   ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
   expect(
     toChatSnapshot({
       ...chatBody,
-      messages: [{ ...message, attachments: ".env" }],
+      messages: [{ ...message, attachments: [{ name: ".env", size: 1 }] }],
     })?.messages,
   ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
   expect(

@@ -1,7 +1,12 @@
 import { type ComponentChildren } from "preact";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { ChatCompaction, ChatFile, ChatMessage } from "../../server/chat/contract";
-import { attachmentExtFromName } from "../../shared/attachments";
+import type {
+  ChatAttachment,
+  ChatCompaction,
+  ChatFile,
+  ChatMessage,
+} from "../../server/chat/contract";
+import { attachmentExtFromName, formatFileSize } from "../../shared/attachments";
 import { messageFileLabel } from "../../shared/message-files";
 import { attachmentUrl, chatFileUrl } from "../api";
 import { compactionLabel, messageFileKindLabel, splitInlineImages } from "../chat";
@@ -14,17 +19,21 @@ const USER_MESSAGE_CLAMP_FALLBACK = 128;
 
 function MessageAttachments(props: {
   paneId: string;
-  names: string[];
+  attachments: ChatAttachment[];
   onOpen: (url: string, name: string) => void;
 }) {
   return (
     <div class="hwc-msg-attachments">
-      {props.names.map((name) => {
-        // 配信するのは画像だけ。それ以外は名前だけを残し、押しても何も開かない。
+      {props.attachments.map((attachment) => {
+        const { name, size } = attachment;
+        // 配信するのは画像だけ。それ以外は名前と大きさを残し、押しても何も開かない。
         if (attachmentExtFromName(name) === null) {
           return (
             <span class="hwc-msg-attachment-file" key={name} title={name}>
-              {name}
+              <span class="hwc-msg-attachment-name">{name}</span>
+              {size === null ? null : (
+                <span class="hwc-msg-attachment-size">{formatFileSize(size)}</span>
+              )}
             </span>
           );
         }
@@ -218,7 +227,7 @@ export function UserMessage(props: {
         {props.message.attachments === undefined ? null : (
           <MessageAttachments
             paneId={props.paneId}
-            names={props.message.attachments}
+            attachments={props.message.attachments}
             onOpen={props.onOpenImage}
           />
         )}

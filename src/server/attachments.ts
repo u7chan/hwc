@@ -7,6 +7,7 @@ import {
   isStoredAttachmentName,
   sanitizeAttachmentName,
 } from "../shared/attachments";
+import type { ChatSnapshot } from "./chat/contract";
 
 // 同名で連番を試す回数。1 秒に 1000 枚を超える貼り付けは想定しない。
 const MAX_NAME_ATTEMPTS = 1000;
@@ -95,6 +96,55 @@ export async function attachmentExists(
   } catch {
     return false;
   }
+}
+
+// 添付 1 件の実バイト数。名前は保存名の検証を通ったものだけを読み、消えたファイルは
+// 値を持たせない（呼び出し側は名前だけを出す）。
+export async function attachmentSizes(
+  root: string,
+  paneId: string,
+  names: readonly string[],
+): Promise<Map<string, number>> {
+  const sizes = new Map<string, number>();
+  await Promise.all(
+    names.map(async (name) => {
+      const path = attachmentFilePath(root, paneId, name);
+      if (path === null) return;
+      try {
+        const info = await stat(path);
+        if (info.isFile()) sizes.set(name, info.size);
+      } catch {
+        // 消えたファイルはサイズを出さない。名前は会話に残す。
+      }
+    }),
+  );
+  return sizes;
+}
+
+// 会話の添付にサイズを足す。各 CLI の reader は保存先を知らないので、
+// BFF がスナップショットを返す直前に埋める。
+export async function attachAttachmentSizes(
+  snapshot: ChatSnapshot,
+  options: { root: string; paneId: string },
+): Promise<ChatSnapshot> {
+  const names = new Set<string>();
+  for (const message of snapshot.messages) {
+    for (const attachment of message.attachments ?? []) names.add(attachment.name);
+  }
+  if (names.size === 0) return snapshot;
+
+  const sizes = await attachmentSizes(options.root, options.paneId, [...names]);
+  const messages = snapshot.messages.map((message) => {
+    if (message.attachments === undefined) return message;
+    return {
+      ...message,
+      attachments: message.attachments.map((attachment) => ({
+        ...attachment,
+        size: sizes.get(attachment.name) ?? null,
+      })),
+    };
+  });
+  return { ...snapshot, messages };
 }
 
 function isEexist(error: unknown): boolean {

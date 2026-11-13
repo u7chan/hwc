@@ -1,6 +1,7 @@
 import { hc } from "hono/client";
 import type { AppType } from "../server/app";
 import type {
+  ChatAttachment,
   ChatCompaction,
   ChatContext,
   ChatFile,
@@ -142,13 +143,23 @@ function isIndex(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
-function toAttachmentNames(value: unknown): string[] | undefined {
+function toChatAttachments(value: unknown): ChatAttachment[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  // 名前は配信 URL になる。保存名の規則を通らない値は捨て、リンクも画像も作らない。
-  const names = value.filter(
-    (item): item is string => typeof item === "string" && isStoredAttachmentName(item),
-  );
-  return names.length === 0 ? undefined : names;
+  const attachments: ChatAttachment[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue;
+    const attachment = item as Partial<ChatAttachment>;
+    // 名前は配信 URL になる。保存名の規則を通らない値は捨て、リンクも画像も作らない。
+    if (typeof attachment.name !== "string" || !isStoredAttachmentName(attachment.name)) continue;
+    // サイズは表示だけに使う。壊れた値は名前だけを出す。
+    const size = attachment.size;
+    attachments.push({
+      name: attachment.name,
+      size:
+        typeof size === "number" && Number.isFinite(size) && size >= 0 ? Math.trunc(size) : null,
+    });
+  }
+  return attachments.length === 0 ? undefined : attachments;
 }
 
 function toImageRefs(value: unknown): string[] | undefined {
@@ -204,7 +215,7 @@ function toChatMessage(value: unknown): ChatMessage | null {
   }
   if (typeof message.text !== "string") return null;
   if (typeof message.at !== "number") return null;
-  const attachments = toAttachmentNames(message.attachments);
+  const attachments = toChatAttachments(message.attachments);
   const files = toChatFiles(message.files);
   const outsideFile = toOutsideFile(message.outsideFile);
   const count = message.role === "error" ? toRetryCount(message.count) : undefined;

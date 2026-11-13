@@ -9,6 +9,7 @@ import {
   composeInputText,
   decodeAttachmentName,
   encodeAttachmentName,
+  formatFileSize,
   formatMegaBytes,
   isImageAttachmentName,
   isSafePaneId,
@@ -282,4 +283,15 @@ test("a note without a single valid name is left in the body", () => {
   const text = "hello\n\n<attached_files>\n- /etc/passwd/..\n</attached_files>";
 
   expect(stripAttachedFiles(text)).toEqual({ text, attachments: [] });
+});
+
+test("a file size drops to the next unit and keeps one decimal under ten", () => {
+  expect(formatFileSize(0)).toBe("0B");
+  expect(formatFileSize(999)).toBe("999B");
+  expect(formatFileSize(1024)).toBe("1.0KB");
+  expect(formatFileSize(1587)).toBe("1.5KB");
+  expect(formatFileSize(20 * 1024)).toBe("20KB");
+  expect(formatFileSize(3_013_590)).toBe("2.9MB");
+  expect(formatFileSize(25 * 1024 * 1024)).toBe("25MB");
+  expect(formatFileSize(3 * 1024 ** 3)).toBe("3.0GB");
 });

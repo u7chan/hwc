@@ -1,11 +1,12 @@
 import { createPortal, type Ref } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { ChatFile } from "../server/chat/contract";
+import type { ChatAttachment, ChatFile } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { gitStatusLabel, type GitSync } from "../shared/git";
 import {
   attachmentExtFromName,
   attachmentKindOfFileName,
+  formatFileSize,
   MAX_ATTACHMENTS,
 } from "../shared/attachments";
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
@@ -584,7 +585,7 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // ペインを切り替えても止めない。送り先が消えたときだけ App が中断する。
   const uploadFile = async (file: File) => {
-    const { key, controller } = attachmentStore.begin(pane.id);
+    const { key, controller } = attachmentStore.begin(pane.id, file.size);
 
     const result = await uploadAttachment(pane.id, file, controller.signal);
     if (result.ok) {
@@ -644,7 +645,7 @@ export function PaneDetail(props: PaneDetailProps) {
     from: number;
     waiting: boolean;
     after: number;
-    names: string[];
+    attachments: ChatAttachment[];
   }) => {
     setPending((items) => [
       ...items,
@@ -657,7 +658,7 @@ export function PaneDetail(props: PaneDetailProps) {
         waiting: echo.waiting,
         after: echo.after,
         command: false,
-        ...(echo.names.length === 0 ? {} : { attachments: echo.names }),
+        ...(echo.attachments.length === 0 ? {} : { attachments: echo.attachments }),
       },
     ]);
   };
@@ -681,6 +682,10 @@ export function PaneDetail(props: PaneDetailProps) {
     const names = attachments
       .map((item) => item.name)
       .filter((name): name is string => name !== null);
+    // 控えのチップは手元の File のサイズで描く。次のスナップショットで実バイト数に置き換わる。
+    const echoed: ChatAttachment[] = attachments.flatMap((item) =>
+      item.name === null ? [] : [{ name: item.name, size: item.size }],
+    );
     const text = draft;
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
     const compactCommand = attachments.length === 0 && isCompactCommand(text);
@@ -713,7 +718,7 @@ export function PaneDetail(props: PaneDetailProps) {
         if (compactCommand) {
           markCompaction(baselineAt, text);
         } else if (!newCommand) {
-          echoPending({ text, at, from, waiting, after, names });
+          echoPending({ text, at, from, waiting, after, attachments: echoed });
         }
       }
     } else {
@@ -1115,9 +1120,12 @@ export function PaneDetail(props: PaneDetailProps) {
                         <span class="hwc-attachment-sending">送信中</span>
                       ) : attachmentExtFromName(name) === null ? (
                         // 画像以外は配信しない。名前だけを見せ、押しても何も開かない。
-                        <span class="hwc-attachment-name" title={name}>
-                          {name}
-                        </span>
+                        <>
+                          <span class="hwc-attachment-name" title={name}>
+                            {name}
+                          </span>
+                          <span class="hwc-attachment-size">{formatFileSize(item.size)}</span>
+                        </>
                       ) : (
                         <button
                           type="button"

@@ -6,7 +6,10 @@
 
 export type AttachedFile = {
   key: string;
+  // 保存が終わるまでは null。送信するのは名前だけ。
   name: string | null;
+  // アップロード前に選んだ File のバイト数。送信して履歴に載るまでのチップに出す。
+  size: number;
   controller: AbortController;
 };
 
@@ -18,7 +21,7 @@ type PaneAttachments = {
 export type AttachmentStore = {
   items: (paneId: string) => readonly AttachedFile[];
   subscribe: (paneId: string, listener: () => void) => () => void;
-  begin: (paneId: string) => { key: string; controller: AbortController };
+  begin: (paneId: string, size: number) => { key: string; controller: AbortController };
   settle: (paneId: string, key: string, name: string) => void;
   remove: (paneId: string, key: string) => void;
   clear: (paneId: string) => void;
@@ -48,12 +51,12 @@ export function createAttachmentStore(): AttachmentStore {
     };
   };
 
-  const begin = (paneId: string) => {
+  const begin = (paneId: string, size: number) => {
     const entry = panes.get(paneId) ?? { items: [], nextKey: 0 };
     const key = `attachment-${entry.nextKey}`;
     entry.nextKey += 1;
     const controller = new AbortController();
-    entry.items = [...entry.items, { key, name: null, controller }];
+    entry.items = [...entry.items, { key, name: null, size, controller }];
     panes.set(paneId, entry);
     notify(paneId);
     return { key, controller };

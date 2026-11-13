@@ -191,6 +191,26 @@ export function formatMegaBytes(bytes: number): string {
   return `${Number.isInteger(mb) ? mb : mb.toFixed(1)}MB`;
 }
 
+const SIZE_UNITS = ["B", "KB", "MB", "GB"] as const;
+
+// 添付チップに出す大きさ。1024 進で次の単位へ落とし、10 未満だけ小数第 1 位を残す。
+// 桁を落としすぎると 1.0KB と 999B のような並びで大小が読めなくなる。
+export function formatFileSize(bytes: number): string {
+  let value = Math.max(0, bytes);
+  let unit = 0;
+  while (value >= 1024 && unit < SIZE_UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const text =
+    unit === 0
+      ? String(Math.round(value))
+      : value < 10
+        ? value.toFixed(1)
+        : String(Math.round(value));
+  return `${text}${SIZE_UNITS[unit]}`;
+}
+
 // ペイン id はそのままディレクトリ名になる。区切りと親参照を含む id をここで弾く。
 export function isSafePaneId(value: string): boolean {
   if (value === "" || value === "." || value === "..") return false;
