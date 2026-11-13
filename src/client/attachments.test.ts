@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
-import { MAX_ATTACHMENT_BYTES } from "../shared/attachments";
+import { MAX_FILE_ATTACHMENT_BYTES, MAX_IMAGE_ATTACHMENT_BYTES } from "../shared/attachments";
 import {
   ATTACHMENT_LIMIT_NOTICE,
+  attachmentTooLargeNotice,
   dropActionFrom,
+  exceedsAttachmentLimit,
   pasteActionFrom,
   uploadFailureNotice,
 } from "./attachments";
@@ -12,87 +14,75 @@ function clipboardItem(type: string, file: File | null, kind = "file") {
 }
 
 const png = new File([new Uint8Array([0x89, 0x50])], "image.png", { type: "image/png" });
-const jpeg = new File([new Uint8Array([0xff, 0xd8])], "image.jpg", { type: "image/jpeg" });
+const zip = new File(["PK"], "report.zip", { type: "application/zip" });
 const plain = new File(["hello"], "note.txt", { type: "text/plain" });
 const svg = new File(["<svg/>"], "image.svg", { type: "image/svg+xml" });
-const gif = new File(["GIF89a"], "image.gif", { type: "image/gif" });
+const noType = new File(["PK"], "report.zip", { type: "" });
 
-test("the accepted images are uploaded and the default paste is prevented", () => {
+test("every pasted file is uploaded and the default paste is prevented", () => {
   const action = pasteActionFrom([
     clipboardItem("image/png", png),
     clipboardItem("text/plain", plain),
+    clipboardItem("application/zip", zip),
     clipboardItem("", null, "string"),
-    clipboardItem("image/jpeg", jpeg),
   ]);
 
-  expect(action).toEqual({ kind: "upload", files: [png, jpeg], unsupported: false });
+  expect(action).toEqual({ kind: "upload", files: [png, plain, zip] });
 });
 
-test("an unsupported image type is reported instead of being dropped silently", () => {
-  // GIF と SVG は保存しない。何も起きないと利用者は理由を知れない。
-  expect(pasteActionFrom([clipboardItem("image/gif", gif)])).toEqual({
-    kind: "unsupported",
-  });
-  expect(
-    pasteActionFrom([clipboardItem("image/gif", gif), clipboardItem("image/svg+xml", svg)]),
-  ).toEqual({ kind: "unsupported" });
-});
-
-test("an unsupported image next to a supported one is uploaded and reported", () => {
-  expect(
-    pasteActionFrom([clipboardItem("image/png", png), clipboardItem("image/gif", gif)]),
-  ).toEqual({ kind: "upload", files: [png], unsupported: true });
-});
-
-test("a paste without images keeps the default behaviour", () => {
+test("a paste without files keeps the default behaviour", () => {
   // テキストだけの貼り付けでは preventDefault しない。入力欄の既定動作のままにする。
-  expect(pasteActionFrom([clipboardItem("text/plain", plain)])).toEqual({ kind: "default" });
-  expect(pasteActionFrom([clipboardItem("", null, "string")])).toEqual({ kind: "default" });
+  expect(pasteActionFrom([clipboardItem("text/plain", null, "string")])).toEqual({
+    kind: "default",
+  });
   expect(pasteActionFrom([])).toEqual({ kind: "default" });
   expect(pasteActionFrom(null)).toEqual({ kind: "default" });
   expect(pasteActionFrom(undefined)).toEqual({ kind: "default" });
-  // 画像の項目でも File が取れなければ添付しない。
+  // ファイルの項目でも File が取れなければ添付しない。
   expect(pasteActionFrom([clipboardItem("image/png", null)])).toEqual({ kind: "default" });
 });
 
-test("the accepted images dropped together are uploaded and the default is prevented", () => {
-  expect(dropActionFrom([png, plain, jpeg])).toEqual({
+test("the dropped files are uploaded whatever the type is", () => {
+  expect(dropActionFrom([png, plain, zip])).toEqual({
     kind: "upload",
-    files: [png, jpeg],
-    unsupported: false,
+    files: [png, plain, zip],
   });
+  // SVG も画像形式の制限を外したので、そのまま添付の対象になる。
+  expect(dropActionFrom([svg])).toEqual({ kind: "upload", files: [svg] });
+  expect(dropActionFrom([noType])).toEqual({ kind: "upload", files: [noType] });
 });
 
-test("a dropped unsupported image is reported instead of being ignored", () => {
-  expect(dropActionFrom([gif])).toEqual({ kind: "unsupported" });
-  expect(dropActionFrom([gif, svg])).toEqual({ kind: "unsupported" });
-});
-
-test("a dropped unsupported image next to a supported one is uploaded and reported", () => {
-  expect(dropActionFrom([png, gif])).toEqual({
-    kind: "upload",
-    files: [png],
-    unsupported: true,
-  });
-});
-
-test("a drop without images keeps the default behaviour", () => {
-  // 画像以外のファイルは添付しない。既定動作を止めるかどうかは呼び出し側が決める。
-  expect(dropActionFrom([plain])).toEqual({ kind: "default" });
+test("a drop without files keeps the default behaviour", () => {
   expect(dropActionFrom([])).toEqual({ kind: "default" });
   expect(dropActionFrom(null)).toEqual({ kind: "default" });
   expect(dropActionFrom(undefined)).toEqual({ kind: "default" });
 });
 
-test("the limit notice names the number of images", () => {
+test("the limit notice names the number of attachments", () => {
   expect(ATTACHMENT_LIMIT_NOTICE).toContain("4");
+  expect(ATTACHMENT_LIMIT_NOTICE).toContain("件");
+});
+
+test("the size limit is decided by the extension, not by the browser type", () => {
+  expect(exceedsAttachmentLimit({ name: "a.png", size: MAX_IMAGE_ATTACHMENT_BYTES })).toBe(false);
+  expect(exceedsAttachmentLimit({ name: "a.png", size: MAX_IMAGE_ATTACHMENT_BYTES + 1 })).toBe(
+    true,
+  );
+  // 同じ 11MB でも、画像なら超えていて、zip なら超えていない。
+  expect(exceedsAttachmentLimit({ name: "a.zip", size: MAX_IMAGE_ATTACHMENT_BYTES + 1 })).toBe(
+    false,
+  );
+  expect(exceedsAttachmentLimit({ name: "a.zip", size: MAX_FILE_ATTACHMENT_BYTES + 1 })).toBe(true);
+  // 型が空でも拡張子で決まる。
+  expect(exceedsAttachmentLimit({ name: "a.zip", size: 11 * 1024 * 1024 })).toBe(false);
+  // 保存名に直すと拡張子が変わる名前も、BFF と同じ種別になる。
+  expect(exceedsAttachmentLimit({ name: "a.png ", size: 11 * 1024 * 1024 })).toBe(true);
 });
 
 test("an upload failure says what the user can change", () => {
-  expect(uploadFailureNotice(413)).toBe(
-    `画像が大きすぎます（${MAX_ATTACHMENT_BYTES / (1024 * 1024)}MB まで）`,
-  );
-  expect(uploadFailureNotice(415)).toBe("対応していない画像形式です（PNG / JPEG / WebP）");
-  expect(uploadFailureNotice(0)).toBe("画像を送信できませんでした");
-  expect(uploadFailureNotice(502)).toBe("画像を送信できませんでした");
+  expect(uploadFailureNotice(413, "image")).toBe("画像が大きすぎます（10MB まで）");
+  expect(uploadFailureNotice(413, "file")).toBe("ファイルが大きすぎます（25MB まで）");
+  expect(attachmentTooLargeNotice("file")).toContain("25MB");
+  expect(uploadFailureNotice(0, "file")).toBe("ファイルを送信できませんでした");
+  expect(uploadFailureNotice(502, "image")).toBe("ファイルを送信できませんでした");
 });

@@ -2,10 +2,10 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import {
-  type AttachmentExt,
-  attachmentName,
-  isAttachmentName,
+  attachmentCollisionName,
   isSafePaneId,
+  isStoredAttachmentName,
+  sanitizeAttachmentName,
 } from "../shared/attachments";
 
 // 同名で連番を試す回数。1 秒に 1000 枚を超える貼り付けは想定しない。
@@ -32,24 +32,24 @@ function paneDir(root: string, paneId: string): string | null {
 // ペイン id は実在確認と検証を通したものだけを渡す。ここでも書式を確かめてから連結する。
 export function attachmentFilePath(root: string, paneId: string, name: string): string | null {
   const dir = paneDir(root, paneId);
-  if (dir === null || !isAttachmentName(name)) return null;
+  if (dir === null || !isStoredAttachmentName(name)) return null;
   return join(dir, name);
 }
 
 export async function saveAttachment(options: {
   root: string;
   paneId: string;
-  ext: AttachmentExt;
+  name: string;
   bytes: Uint8Array;
-  now?: Date;
 }): Promise<string | null> {
   const dir = paneDir(options.root, options.paneId);
   if (dir === null) return null;
+  const base = sanitizeAttachmentName(options.name);
+  if (base === "") return null;
   await mkdir(dir, { recursive: true });
 
-  const at = options.now ?? new Date();
   for (let index = 0; index < MAX_NAME_ATTEMPTS; index += 1) {
-    const name = attachmentName(options.ext, at, index);
+    const name = attachmentCollisionName(base, index);
     try {
       // wx は既存ファイルを上書きしない。同名の判定と書き込みを 1 手に畳む。
       await writeFile(join(dir, name), options.bytes, { flag: "wx" });

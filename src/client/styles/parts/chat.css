@@ -296,6 +296,19 @@ p.hwc-compaction,
   max-height: 180px;
 }
 
+/* 画像以外の添付。配信しないので、名前だけをチップとして並べる。 */
+.hwc-msg-attachment-file {
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* エージェントが書いた HTML。押すとプレビューのタブが開く。 */
 .hwc-msg-pages {
   display: flex;

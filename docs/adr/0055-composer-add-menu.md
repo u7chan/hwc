@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-10
+- Revises: 2026-11-13 に「画像を追加」の受け付けをファイル全体へ広げた（[ADR 0080](0080-file-attachments.md)）
 
 ## Context
 

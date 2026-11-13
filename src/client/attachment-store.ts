@@ -4,19 +4,19 @@
 // リロードは保証しない。復元には保存名を localStorage へ残す必要があるが、
 // 進行中のアップロードはどのみち復元できないので、ペイン切り替えのためだけに持つ。
 
-export type AttachedImage = {
+export type AttachedFile = {
   key: string;
   name: string | null;
   controller: AbortController;
 };
 
 type PaneAttachments = {
-  items: AttachedImage[];
+  items: AttachedFile[];
   nextKey: number;
 };
 
 export type AttachmentStore = {
-  items: (paneId: string) => readonly AttachedImage[];
+  items: (paneId: string) => readonly AttachedFile[];
   subscribe: (paneId: string, listener: () => void) => () => void;
   begin: (paneId: string) => { key: string; controller: AbortController };
   settle: (paneId: string, key: string, name: string) => void;
@@ -29,14 +29,14 @@ export function createAttachmentStore(): AttachmentStore {
   const panes = new Map<string, PaneAttachments>();
   // 購読はペインごと。表示中の 1 枚だけが購読するので、他のペインの変更を配り直さない。
   const listeners = new Map<string, Set<() => void>>();
-  const empty: readonly AttachedImage[] = [];
+  const empty: readonly AttachedFile[] = [];
 
   const notify = (paneId: string) => {
     // 通知中に購読解除されても取りこぼさないよう、コピーを回す。
     for (const listener of new Set(listeners.get(paneId) ?? [])) listener();
   };
 
-  const items = (paneId: string): readonly AttachedImage[] => panes.get(paneId)?.items ?? empty;
+  const items = (paneId: string): readonly AttachedFile[] => panes.get(paneId)?.items ?? empty;
 
   const subscribe = (paneId: string, listener: () => void) => {
     const set = listeners.get(paneId) ?? new Set<() => void>();

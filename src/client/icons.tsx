@@ -171,6 +171,16 @@ export function ImageIcon({ size = 16 }: IconProps) {
   );
 }
 
+// 画像以外のファイル。添付メニューの項目に使う。
+export function FileIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z" />
+      <path d="M13 3v6h6" />
+    </Svg>
+  );
+}
+
 // 新しい会話。同じペインで会話だけを作り直すが、円を描き直す矢印は更新に見えるので、会話の吹き出しに + を添える。
 export function NewSessionIcon({ size = 16 }: IconProps) {
   return (

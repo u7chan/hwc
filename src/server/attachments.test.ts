@@ -21,33 +21,36 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const at = new Date(2026, 10, 3, 12, 0, 0);
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 
-test("saves under the pane and never overwrites a name taken in the same second", async () => {
-  const first = await saveAttachment({ root, paneId: "w1:p1", ext: "png", bytes: png, now: at });
-  const second = await saveAttachment({ root, paneId: "w1:p1", ext: "png", bytes: png, now: at });
-  const third = await saveAttachment({ root, paneId: "w1:p1", ext: "png", bytes: png, now: at });
+test("saves under the pane and never overwrites a name already taken", async () => {
+  const first = await saveAttachment({ root, paneId: "w1:p1", name: "report.zip", bytes: png });
+  const second = await saveAttachment({ root, paneId: "w1:p1", name: "report.zip", bytes: png });
+  const third = await saveAttachment({ root, paneId: "w1:p1", name: "report.zip", bytes: png });
 
-  expect([first, second, third]).toEqual([
-    "pasted-20261103-120000.png",
-    "pasted-20261103-120000-1.png",
-    "pasted-20261103-120000-2.png",
-  ]);
+  expect([first, second, third]).toEqual(["report.zip", "report-1.zip", "report-2.zip"]);
   const bytes = await readAttachment({ root, paneId: "w1:p1", name: first ?? "" });
   expect(new Uint8Array(bytes ?? new ArrayBuffer(0))).toEqual(png);
 });
 
+test("sanitizes the name and refuses one that has nothing left", async () => {
+  expect(
+    await saveAttachment({ root, paneId: "w1:p1", name: "../../etc/passwd", bytes: png }),
+  ).toBe("etcpasswd");
+  expect(await saveAttachment({ root, paneId: "w1:p1", name: "...", bytes: png })).toBeNull();
+  expect(await saveAttachment({ root, paneId: "w1:p1", name: ".env", bytes: png })).toBe("env");
+});
+
 test("refuses a pane id or a name that would escape the pane directory", async () => {
-  expect(await saveAttachment({ root, paneId: "../x", ext: "png", bytes: png })).toBeNull();
-  expect(attachmentFilePath(root, "../x", "pasted-20261103-120000.png")).toBeNull();
-  expect(attachmentFilePath(root, "w1:p1", "../pasted-20261103-120000.png")).toBeNull();
+  expect(await saveAttachment({ root, paneId: "../x", name: "report.zip", bytes: png })).toBeNull();
+  expect(attachmentFilePath(root, "../x", "report.zip")).toBeNull();
+  expect(attachmentFilePath(root, "w1:p1", "../report.zip")).toBeNull();
   expect(attachmentFilePath(root, "w1:p1", "/etc/passwd")).toBeNull();
 });
 
 test("keeps the panes apart", async () => {
   const name =
-    (await saveAttachment({ root, paneId: "w1:p1", ext: "png", bytes: png, now: at })) ?? "";
+    (await saveAttachment({ root, paneId: "w1:p1", name: "report.zip", bytes: png })) ?? "";
 
   expect(await attachmentExists(root, "w1:p1", name)).toBe(true);
   expect(await attachmentExists(root, "w1:p2", name)).toBe(false);
@@ -55,11 +58,9 @@ test("keeps the panes apart", async () => {
 });
 
 test("a file that is gone or not a saved name has no bytes", async () => {
-  expect(
-    await readAttachment({ root, paneId: "w1:p1", name: "pasted-20261103-120000.png" }),
-  ).toBeNull();
-  expect(await readAttachment({ root, paneId: "w1:p1", name: "notes.png" })).toBeNull();
-  expect(await attachmentExists(root, "w1:p1", "notes.png")).toBe(false);
+  expect(await readAttachment({ root, paneId: "w1:p1", name: "report.zip" })).toBeNull();
+  expect(await readAttachment({ root, paneId: "w1:p1", name: "../report.zip" })).toBeNull();
+  expect(await attachmentExists(root, "w1:p1", "../report.zip")).toBe(false);
 });
 
 test("the root comes from the state dir and ignores a relative path", () => {

@@ -19,7 +19,11 @@ import {
   isAgentModel,
   supportsFolderTrust,
 } from "../shared/agents";
-import { isAttachmentName } from "../shared/attachments";
+import {
+  encodeAttachmentName,
+  FILENAME_HEADER,
+  isStoredAttachmentName,
+} from "../shared/attachments";
 import type { PaneCloseAction } from "../shared/pane-close";
 import type { PreviewWarning } from "../shared/message-files";
 import { parsePaneProcess, type PaneProcess } from "../shared/panes";
@@ -140,9 +144,9 @@ function isIndex(value: unknown): value is number {
 
 function toAttachmentNames(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  // 名前は配信 URL になる。書式の外れた値は捨て、リンクも画像も作らない。
+  // 名前は配信 URL になる。保存名の規則を通らない値は捨て、リンクも画像も作らない。
   const names = value.filter(
-    (item): item is string => typeof item === "string" && isAttachmentName(item),
+    (item): item is string => typeof item === "string" && isStoredAttachmentName(item),
   );
   return names.length === 0 ? undefined : names;
 }
@@ -542,12 +546,22 @@ export async function uploadAttachment(
   file: File,
   signal?: AbortSignal,
 ): Promise<UploadResult> {
+  let encoded: string;
+  try {
+    encoded = encodeAttachmentName(file.name);
+  } catch {
+    // encodeURIComponent は孤立したサロゲートで投げる。名前が無い要求は送らない。
+    return { ok: false, status: 0 };
+  }
+  // 型は拡張子で決まるので、Content-Type は送れたら送るだけ。空文字は送らない。
+  const headers: Record<string, string> = { [FILENAME_HEADER]: encoded };
+  if (file.type !== "") headers["content-type"] = file.type;
+
   let response: Response;
   try {
-    // 生バイトで送る。Content-Type は BFF の allowlist 判定に使うので file.type をそのまま渡す。
     response = await fetch(attachmentUploadUrl(paneId), {
       method: "POST",
-      headers: { "content-type": file.type },
+      headers,
       body: file,
       signal,
     });
@@ -559,7 +573,7 @@ export async function uploadAttachment(
 
   const body = (await response.json().catch(() => null)) as { name?: unknown } | null;
   const name = body?.name;
-  if (typeof name !== "string" || !isAttachmentName(name)) return { ok: false, status: 0 };
+  if (typeof name !== "string" || !isStoredAttachmentName(name)) return { ok: false, status: 0 };
   return { ok: true, name };
 }
 

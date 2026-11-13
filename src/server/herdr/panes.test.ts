@@ -476,6 +476,22 @@ test("parseInputBody keeps at most four attachment names", () => {
   });
 });
 
+test("parseInputBody accepts any saved name, images or not", () => {
+  expect(
+    parseInputBody({
+      text: "hi",
+      attachments: ["pasted-20261103-120000.png", "report.zip", "My Report.xlsx"],
+    }),
+  ).toEqual({
+    ok: true,
+    value: {
+      text: "hi",
+      submit: false,
+      attachments: ["pasted-20261103-120000.png", "report.zip", "My Report.xlsx"],
+    },
+  });
+});
+
 test("parseInputBody rejects an attachment name that is not a saved one", () => {
   const rejected = {
     ok: false as const,
@@ -487,9 +503,7 @@ test("parseInputBody rejects an attachment name that is not a saved one", () => 
     rejected,
   );
   expect(parseInputBody({ text: "hi", attachments: ["../../etc/passwd"] })).toEqual(rejected);
-  expect(parseInputBody({ text: "hi", attachments: ["pasted-20261103-120000.gif"] })).toEqual(
-    rejected,
-  );
+  expect(parseInputBody({ text: "hi", attachments: [".env"] })).toEqual(rejected);
   expect(parseInputBody({ text: "hi", attachments: [42] })).toEqual(rejected);
 });
 

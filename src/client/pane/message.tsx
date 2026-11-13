@@ -1,6 +1,7 @@
 import { type ComponentChildren } from "preact";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatCompaction, ChatFile, ChatMessage } from "../../server/chat/contract";
+import { attachmentExtFromName } from "../../shared/attachments";
 import { messageFileLabel } from "../../shared/message-files";
 import { attachmentUrl, chatFileUrl } from "../api";
 import { compactionLabel, messageFileKindLabel, splitInlineImages } from "../chat";
@@ -19,6 +20,14 @@ function MessageAttachments(props: {
   return (
     <div class="hwc-msg-attachments">
       {props.names.map((name) => {
+        // 配信するのは画像だけ。それ以外は名前だけを残し、押しても何も開かない。
+        if (attachmentExtFromName(name) === null) {
+          return (
+            <span class="hwc-msg-attachment-file" key={name} title={name}>
+              {name}
+            </span>
+          );
+        }
         const url = attachmentUrl(props.paneId, name);
         return (
           <button

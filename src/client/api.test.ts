@@ -374,17 +374,17 @@ test("the attachment urls keep the pane id and the saved name in single segments
   );
 });
 
-test("a message keeps its attachments only as names in the saved format", () => {
+test("a message keeps its attachments as saved names, images or not", () => {
   const message = {
     id: "m1",
     role: "user" as const,
     text: "",
     at: 1_000,
-    attachments: ["pasted-20261103-120000.png", "pasted-20261103-120000-1.jpg"],
+    attachments: ["pasted-20261103-120000.png", "report.zip", "My Report.xlsx"],
   };
   expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
 
-  // 書式の外れた名前は配信 URL にしない。名前が全部落ちたら添付なしとして扱う。
+  // 保存名の規則を通らない名前は配信 URL にしない。名前が全部落ちたら添付なしとして扱う。
   expect(
     toChatSnapshot({ ...chatBody, messages: [{ ...message, attachments: ["../x.png"] }] })
       ?.messages,
@@ -392,7 +392,7 @@ test("a message keeps its attachments only as names in the saved format", () => 
   expect(
     toChatSnapshot({
       ...chatBody,
-      messages: [{ ...message, attachments: "pasted-20261103-120000.png" }],
+      messages: [{ ...message, attachments: ".env" }],
     })?.messages,
   ).toEqual([{ id: "m1", role: "user", text: "", at: 1_000 }]);
   expect(

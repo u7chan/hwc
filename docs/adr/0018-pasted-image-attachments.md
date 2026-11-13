@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-03
 - Revises: 2026-11-10 に添付チップをペイン切り替えでも保持する
+- Revises: 2026-11-13 に添付を画像 3 形式に限る判断を改訂（[ADR 0080](0080-file-attachments.md)）
 
 ## Context
 
