@@ -14,7 +14,7 @@ type TemplateDialogProps = {
   onPick: (body: string) => void;
 };
 
-// 札を選ぶだけでは本文を変えない。入れるのは「本文に入れる」を押したときだけ。
+// 名前を選ぶだけでは本文を変えない。引用するのは「引用する」を押したときだけ。
 // 検索は自動フォーカスしない（キーボードがプレビューを潰すため）。
 export function TemplateDialog(props: TemplateDialogProps) {
   const [load, setLoad] = useState<Load>({ kind: "loading" });
@@ -60,10 +60,10 @@ export function TemplateDialog(props: TemplateDialogProps) {
       onExited={props.onExited}
     >
       <h2 class="hwc-dialog-title" id="hwc-template-title">
-        定型文を入れる
+        定型文を引用
       </h2>
       <p class="hwc-dialog-text" id="hwc-template-note">
-        札を選ぶと本文が出ます。入れるまで下書きは変わりません。
+        選ぶだけでは下書きは変わりません。「引用する」を押すと、本文がカーソル位置に加わります。
       </p>
 
       <label class="hwc-template-search">
@@ -76,7 +76,7 @@ export function TemplateDialog(props: TemplateDialogProps) {
           autocomplete="off"
           onInput={(event) => {
             setQuery(event.currentTarget.value);
-            // 絞り込みで札が入れ替わる。前の選択を持ち越さない。
+            // 絞り込みで名前の一覧が入れ替わる。前の選択を持ち越さない。
             setSelectedId(null);
           }}
         />
@@ -135,7 +135,7 @@ export function TemplateDialog(props: TemplateDialogProps) {
             </div>
             <div class="hwc-template-preview">
               {selected === null ? (
-                <p class="hwc-template-preview-empty">札を選ぶと、本文がここに出ます。</p>
+                <p class="hwc-template-preview-empty">定型文を選ぶと、本文がここに出ます。</p>
               ) : (
                 <pre class="hwc-template-preview-text">{selected.body}</pre>
               )}
@@ -157,7 +157,7 @@ export function TemplateDialog(props: TemplateDialogProps) {
             if (selected !== null) props.onPick(selected.body);
           }}
         >
-          本文に入れる
+          引用する
         </button>
         <button type="button" class="hwc-dialog-button hwc-dialog-cancel" onClick={props.onClose}>
           閉じる

@@ -1,4 +1,4 @@
-// 定型文は BFF が正。名前は一覧で選ぶための札、本文はそのまま入力欄へ入れる。
+// 定型文は BFF が正。名前は一覧で選ぶボタン、本文は引用してそのまま下書きに加える。
 // 変数展開や送信は持たない（ADR 0084）。上限と検証は BFF・設定画面・ダイアログで共有する。
 
 export type Template = {
@@ -7,7 +7,7 @@ export type Template = {
   body: string;
 };
 
-// スマホのダイアログで探せる範囲に留める。30 件を超えると札の一覧が読めなくなる。
+// スマホのダイアログで探せる範囲に留める。30 件を超えると名前の一覧が読みにくくなる。
 export const MAX_TEMPLATES = 30;
 export const MAX_TEMPLATE_TITLE_LENGTH = 40;
 export const MAX_TEMPLATE_BODY_LENGTH = 2000;
@@ -31,7 +31,7 @@ export function characterCount(text: string): number {
   return [...text].length;
 }
 
-// 名前は 1 行の札にする。改行と連続する空白は 1 つに畳む。
+// 名前は 1 行にする。改行と連続する空白は 1 つに畳む。
 function normalizeTitle(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const title = value.trim().replace(/\s+/g, " ");

@@ -206,8 +206,8 @@ export function TemplateSettings() {
           )}
 
           <p class="hwc-section-note">
-            入力欄の + から選んで本文に入れます。{MAX_TEMPLATES} 件・名前{" "}
-            {MAX_TEMPLATE_TITLE_LENGTH} 文字・本文 {MAX_TEMPLATE_BODY_LENGTH} 文字まで。
+            入力欄の + から本文に引用できます。{MAX_TEMPLATES} 件・名前 {MAX_TEMPLATE_TITLE_LENGTH}{" "}
+            文字・本文 {MAX_TEMPLATE_BODY_LENGTH} 文字まで。
             {view.length >= MAX_TEMPLATES ? " 上限に達しています。" : ""}
           </p>
         </>
