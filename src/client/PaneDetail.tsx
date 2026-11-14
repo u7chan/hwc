@@ -339,8 +339,9 @@ export function PaneDetail(props: PaneDetailProps) {
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
   // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
   // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
+  // 起動中も出すと、選んだ時点で下書きがチップに変わり消える。準備ができるまで出さない。
   const candidates =
-    attachments.length === 0 && compactionRun === null
+    !launchBlocked && attachments.length === 0 && compactionRun === null
       ? commandCandidates(pane, draft, snapshot)
       : [];
   const uploading = attachments.some((item) => item.name === null);
@@ -545,7 +546,9 @@ export function PaneDetail(props: PaneDetailProps) {
   }, [pending]);
 
   // 候補を選ぶとチップになり、入力欄の /... は消える。送信はもう一度 Enter。
+  // 起動中は候補を出さないが、古い描画からのクリックでも下書きを消さない。
   const pick = (id: CommandId) => {
+    if (launchBlocked) return;
     setChip(id);
     setDraft("");
     // タップでキーボードが閉じないよう、入力欄へ焦点を戻す。
