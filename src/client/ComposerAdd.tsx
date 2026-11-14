@@ -24,7 +24,7 @@ type ComposerAddProps = {
   commands: { newSession: ComposerCommand; compact: ComposerCommand } | null;
   // 読めていないときは null。押せる側に倒し、ダイアログが読み直して失敗を出す。
   templateCount: number | null;
-  // 定型文を入れられない理由。件数以外の理由（圧縮の指示中）を 1 つだけ出す。
+  // 定型文を引用できない理由。件数以外の理由（圧縮の指示中）を 1 つだけ出す。
   templateBlock: string | null;
   onFiles: (files: File[]) => void;
   onProjects: () => void;
@@ -44,7 +44,7 @@ export function ComposerAdd(props: ComposerAddProps) {
   const templatesFull = props.templateCount === 0;
   const templateHint = templatesFull
     ? "設定で登録できます"
-    : (props.templateBlock ?? "登録した文を入力欄へ入れる");
+    : (props.templateBlock ?? "設定で登録した文から選ぶ");
 
   const command = (item: ComposerCommand, icon: ComponentChild) => (
     <button
@@ -121,7 +121,7 @@ export function ComposerAdd(props: ComposerAddProps) {
           >
             <TemplateIcon size={18} />
             <span class="hwc-add-item-text">
-              <span>定型文を入れる</span>
+              <span>定型文を引用</span>
               <span class="hwc-add-item-hint">{templateHint}</span>
             </span>
           </button>

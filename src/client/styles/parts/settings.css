@@ -1096,7 +1096,7 @@ html:not([data-input-modality="pointer"])
   line-height: var(--line-body);
 }
 
-/* 入力欄の + から開く定型文のダイアログ。札とプレビューの高さを固定し、
+/* 入力欄の + から開く定型文のダイアログ。名前の一覧とプレビューの高さを固定し、
    選び直しても位置が動かないようにする。 */
 
 .hwc-template-dialog {
@@ -1118,6 +1118,8 @@ html:not([data-input-modality="pointer"])
 
 .hwc-template-dialog .hwc-dialog-actions {
   flex: none;
+  /* プレビューの枠に接すると、本文の一部のように見えて押し間違える。 */
+  margin-top: var(--space-5);
 }
 
 .hwc-template-search {
@@ -1150,7 +1152,7 @@ html:not([data-input-modality="pointer"])
   min-height: var(--tap);
   max-width: 100%;
   padding: 0 var(--space-3);
-  /* 上限いっぱいの名前でも札の外へはみ出さない。 */
+  /* 上限いっぱいの名前でもボタンの外へはみ出さない。 */
   overflow-wrap: anywhere;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-control);
@@ -1220,7 +1222,7 @@ html:not([data-input-modality="pointer"])
   flex: none;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--color-line);
   color: var(--color-secondary);
   font-size: var(--text-secondary);
@@ -1253,7 +1255,7 @@ html:not([data-input-modality="pointer"])
   cursor: pointer;
 }
 
-/* 横向きやキーボード表示で画面が低いときは、札を 2 行までに抑えて
+/* 横向きやキーボード表示で画面が低いときは、名前の一覧を 2 行までに抑えて
    本文プレビューへ読める高さを残す。注記は省き、余白も詰める。 */
 @media (max-height: 520px) {
   .hwc-template-dialog {
@@ -1277,8 +1279,8 @@ html:not([data-input-modality="pointer"])
   }
 }
 
-/* さらに低い画面では、札とプレビューを同時に確保できない。本文を潰す代わりに
-   ダイアログの中身を 1 つのスクロールにし、札はすべて見せて本文はその下に置く。 */
+/* さらに低い画面では、名前の一覧とプレビューを同時に確保できない。本文を潰す代わりに
+   ダイアログの中身を 1 つのスクロールにし、名前はすべて見せて本文はその下に置く。 */
 @media (max-height: 380px) {
   .hwc-template-content {
     overflow-y: auto;

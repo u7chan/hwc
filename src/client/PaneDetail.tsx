@@ -209,7 +209,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // メニューからの /new だけ、送る前に確認する。
   const [confirmNew, setConfirmNew] = useState(false);
   const attachments = useAttachments(pane.id);
-  // + メニューの「定型文を入れる」を押せるかだけに使う。読めなければ押せる側に倒す。
+  // + メニューの「定型文を引用」を押せるかだけに使う。読めなければ押せる側に倒す。
   const templates = useTemplates(pane.chat);
   // プロジェクトのダイアログは閉じるアニメーションの間も残す。caret は選んだ直後に
   // 入力欄へ戻す位置で、閉じただけ（キャンセル）のときは null のまま。
@@ -375,7 +375,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const busy = sending || stopping;
   const placeholder =
     activeChip === "compact" ? "圧縮の指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
-  // 圧縮のチップ中は入力欄が指示になる。長い定型文を入れる先ではない。
+  // 圧縮のチップ中は入力欄が指示になる。長い定型文を引用する先ではない。
   const templateBlock = activeChip === "compact" ? "圧縮の指示には使えません" : null;
 
   // シェルに戻ったら、会話のコマンドチップは持ち越さない。残すと、シェルへ
