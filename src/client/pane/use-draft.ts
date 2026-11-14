@@ -33,6 +33,9 @@ export function useDraft(paneId: string, persist: boolean): UseDraft {
   // 入力のたびに、localStorage の debounce を待たずにメモリへ置く。切り替えた直後に
   // 開き直しても、新しいインスタンスがこの値を読める。チップ中の指示は保存しない。
   const setDraft = (value: string) => {
+    const pending = pendingDrafts.get(paneId);
+    // アンマウント後に届いたコマンドの完了で、新しいインスタンスの下書きを上書きしない。
+    if (pending !== undefined && pending.owner !== ownerId) return;
     if (persist) pendingDrafts.set(paneId, { owner: ownerId, text: value });
     setDraftState(value);
   };
