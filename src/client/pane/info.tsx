@@ -1,9 +1,10 @@
+import { useId, useState } from "preact/hooks";
 import type { ChatContext, ChatUsage } from "../../server/chat/contract";
 import { type AgentInfo, type ContextMeterView, contextDetails } from "../chat";
 import { type CommandId, commandLabel, commandText } from "../commands";
 import { useCopy } from "../copy";
 import { useHint } from "../hint";
-import { CopyGlyph } from "../icons";
+import { CopyGlyph, InfoIcon } from "../icons";
 
 // 送る文字列は短いので、記号だけを出さず、何が起きるかを並べる。
 export function CommandBadge(props: { id: CommandId }) {
@@ -22,6 +23,10 @@ export function ContextMeter(props: {
 }) {
   const { view, context, usage } = props;
   const hint = useHint();
+  const noteId = useId();
+  // 開いた状態はパネルを閉じても保つ。閉じるたびに既定へ戻すには開閉を監視する必要があり、
+  // 閉じるアニメーションの途中でパネルの高さが変わるため採らない。
+  const [noteOpen, setNoteOpen] = useState(false);
   return (
     <span class="hwc-hint-wrap" ref={hint.root} {...hint.wrapperProps}>
       <button
@@ -46,21 +51,35 @@ export function ContextMeter(props: {
       <span
         id={hint.panelId}
         ref={hint.panel}
-        role="tooltip"
+        role="group"
+        aria-label="コンテキスト使用量"
         class="hwc-hint-panel"
         data-open={hint.open !== null}
         tabIndex={hint.panelTabIndex}
       >
-        <span class="hwc-hint-title">直近のコンテキスト使用量</span>
+        <span class="hwc-hint-title-row">
+          <span class="hwc-hint-title">直近のコンテキスト使用量</span>
+          <button
+            type="button"
+            class="hwc-hint-icon-button hwc-hint-note-toggle"
+            data-open={noteOpen}
+            aria-label="設定枠の補足"
+            aria-expanded={noteOpen}
+            aria-controls={noteId}
+            onClick={() => setNoteOpen((open) => !open)}
+          >
+            <InfoIcon size={16} />
+          </button>
+        </span>
+        <span id={noteId} class="hwc-hint-note" hidden={!noteOpen}>
+          設定枠はモデル仕様上の最大値とは限りません。自動圧縮は枠に達する前に行われることがあります。
+        </span>
         {contextDetails(context, usage).map(([label, value]) => (
           <span class="hwc-hint-row" key={label}>
             <span>{label}</span>
             <span>{value}</span>
           </span>
         ))}
-        <span class="hwc-hint-note">
-          設定枠はモデル仕様上の最大値とは限りません。自動圧縮は枠に達する前に行われることがあります。
-        </span>
       </span>
     </span>
   );
@@ -99,7 +118,7 @@ export function AgentInfoHint(props: { info: AgentInfo }) {
             <span class="hwc-model-name">{model}</span>
             <button
               type="button"
-              class="hwc-model-copy"
+              class="hwc-hint-icon-button hwc-model-copy"
               data-copied={copied}
               aria-label={copied ? "コピーしました" : "モデル名をコピー"}
               onClick={() => copy("model", model)}
