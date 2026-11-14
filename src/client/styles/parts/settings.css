@@ -995,6 +995,8 @@ html:not([data-input-modality="pointer"])
 
 .hwc-template-row-name {
   font-weight: 600;
+  /* 空白のない長い名前でも、一覧の幅を押し広げずに折り返す。 */
+  overflow-wrap: anywhere;
 }
 
 .hwc-template-row-preview {
@@ -1142,6 +1144,8 @@ html:not([data-input-modality="pointer"])
   min-height: var(--tap);
   max-width: 100%;
   padding: 0 var(--space-3);
+  /* 上限いっぱいの名前でも札の外へはみ出さない。 */
+  overflow-wrap: anywhere;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-control);
   background: transparent;
@@ -1241,4 +1245,28 @@ html:not([data-input-modality="pointer"])
   font-size: var(--text-secondary);
   font-weight: 600;
   cursor: pointer;
+}
+
+/* 横向きやキーボード表示で画面が低いときは、札を 2 行までに抑えて
+   本文プレビューへ読める高さを残す。注記は省き、余白も詰める。 */
+@media (max-height: 520px) {
+  .hwc-template-dialog {
+    padding: var(--space-4);
+  }
+
+  .hwc-template-dialog .hwc-dialog-text {
+    display: none;
+  }
+
+  .hwc-template-dialog .hwc-dialog-actions {
+    margin-top: var(--space-2);
+  }
+
+  .hwc-template-chips {
+    max-height: 92px;
+  }
+
+  .hwc-template-preview {
+    min-height: 120px;
+  }
 }
