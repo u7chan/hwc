@@ -1,6 +1,6 @@
 import type { PaneState } from "../../server/herdr/state";
 import type { PullRequest } from "../../shared/pull-request";
-import { ArrowRightIcon, MergeIcon, MoreIcon, PaneIcon } from "../icons";
+import { ArrowRightIcon, GitHubIcon, MergeIcon, MoreIcon, PaneIcon } from "../icons";
 import { GitCount } from "../GitCount";
 import { MENU_ID } from "../Menu";
 import { ParentMark } from "../ParentMark";
@@ -96,6 +96,9 @@ function ActiveBand(props: {
   const repoName = workspace.worktree?.repoName ?? null;
   const pullRequest = props.pullRequest;
   const sync = workspace.sync ?? null;
+  // GitHub のリモートがあるかは、リポジトリ名の左の記号で示す。ローカルのみの
+  // リポジトリと非 git は記号を持たない（ADR 0083）。
+  const hasGitHubRemote = sync?.repoUrl != null;
   // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば
   // タイトルを先頭に置き、名前は矢印の読み上げとツリーに残す。
   const heading = pullRequest?.title ?? workspace.label;
@@ -146,8 +149,20 @@ function ActiveBand(props: {
           <p class="hwc-active-band-line">
             <span class="hwc-active-band-place">
               {repoName === null ? null : (
-                <span class="hwc-active-band-repo" title={repoName}>
-                  {repoName}
+                <span class="hwc-active-band-repo-group">
+                  {hasGitHubRemote ? (
+                    <span
+                      class="hwc-active-band-remote"
+                      role="img"
+                      aria-label="GitHub リモートあり"
+                      title="GitHub リモートあり"
+                    >
+                      <GitHubIcon size={13} />
+                    </span>
+                  ) : null}
+                  <span class="hwc-active-band-repo" title={repoName}>
+                    {repoName}
+                  </span>
                 </span>
               )}
               <span class="hwc-active-band-branch" title={branch}>

@@ -133,12 +133,29 @@
 }
 
 /* リポジトリは場所の所属。見出しが PR タイトルになるため、ここでしか読めない。 */
+.hwc-active-band-repo-group {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 .hwc-active-band-repo {
   flex: 0 1 auto;
   color: var(--color-text);
   font-size: var(--text-secondary);
   font-weight: 600;
   line-height: var(--line-tight);
+}
+
+/* GitHub のリモートがあることを、リポジトリ名の左の記号で示す。ローカルのみの
+   リポジトリと非 git は記号を持たないので、名前の有無と合わせて 3 種類を見分けられる。 */
+.hwc-active-band-remote {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--color-secondary);
 }
 
 /* ブランチはスペースの属性。行ごとに繰り返さず、帯に 1 度だけ出す。幅が足りないときは
