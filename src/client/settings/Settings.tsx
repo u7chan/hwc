@@ -68,10 +68,16 @@ export function Settings(props: SettingsProps) {
   // 常設するので、何も開いていなければ先頭を出す。
   const shown = opened ?? "display";
 
+  // 選んでいるカテゴリをもう一度押しても何もしない。作り直すと、入力途中のフォームが
+  // 確認なしに消える。
   const open = (id: SettingsCategoryId) => {
+    if (id === opened) return;
     setEditingTitle(null);
     setVisit((count) => count + 1);
     setOpened(id);
+    // カテゴリを移るついでに一覧の値も読み直す。前回の読み込みが失敗していても、
+    // 保存するまで空のままにならない。
+    refreshSummary();
   };
   const back = () => {
     setEditingTitle(null);
@@ -117,7 +123,9 @@ export function Settings(props: SettingsProps) {
 
         <div class="hwc-settings-scroll">
           {/* カテゴリを左に常設している間はバーを隠すので、見出しは本文の側に置く。 */}
-          {sideBySide ? <h2 class="hwc-visually-hidden">{settingsCategoryLabel(shown)}</h2> : null}
+          {sideBySide ? (
+            <h2 class="hwc-visually-hidden">{editingTitle ?? settingsCategoryLabel(shown)}</h2>
+          ) : null}
           {opened === null && !sideBySide ? (
             index("page", null)
           ) : (
