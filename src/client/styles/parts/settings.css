@@ -898,6 +898,12 @@ html:not([data-input-modality="pointer"])
   gap: var(--space-2);
 }
 
+/* グループに続く操作は、補足説明と同じ 12px だけ離す。角丸の面に接すると、
+   面の一部か別の操作かが読み取れない。 */
+.hwc-setting-group + .hwc-setting-actions {
+  margin-top: var(--space-3);
+}
+
 .hwc-setting-button {
   min-height: var(--tap);
   padding: 0 var(--space-4);
