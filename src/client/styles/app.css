@@ -6,5 +6,8 @@
 @import "./parts/detail-body.css";
 @import "./parts/chat.css";
 @import "./parts/input.css";
+@import "./parts/section.css";
+@import "./parts/setting.css";
+@import "./parts/choice.css";
 @import "./parts/settings.css";
 @import "./parts/empty-wide.css";
