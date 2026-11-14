@@ -29,7 +29,7 @@ function saveText(error: string | null): string {
 }
 
 // 設定は BFF が正。変更後の応答でスナップショットを丸ごと置き換える。
-export function RestartSettings() {
+export function RestartSettings(props: { onSaved?: () => void }) {
   const [view, setView] = useState<RestartSettings | null>(null);
   const [load, setLoad] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
@@ -60,6 +60,7 @@ export function RestartSettings() {
       setView(saved.view);
       setDraft(null);
       setMessage(null);
+      props.onSaved?.();
       return true;
     }
     setMessage(saveText(saved.error));
@@ -84,9 +85,7 @@ export function RestartSettings() {
   const shown = draft ?? saved;
 
   return (
-    <section class="hwc-section">
-      <h3 class="hwc-section-title">再起動</h3>
-
+    <section>
       {load === "loading" ? (
         <p class="hwc-section-note">再起動の設定を読み込んでいます。</p>
       ) : load === "failed" || view === null ? (

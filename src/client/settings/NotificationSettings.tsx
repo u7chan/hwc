@@ -35,7 +35,7 @@ const SCOPE_OPTIONS: ReadonlyArray<{ scope: NotificationScope; title: string; no
 
 // 設定は BFF が正。変更後の応答でスナップショットを丸ごと置き換え、同時操作で
 // トグル・scope・URL が食い違わないようにする。
-export function NotificationSettings() {
+export function NotificationSettings(props: { onSaved?: () => void }) {
   const [view, setView] = useState<NotificationView | null>(null);
   const [load, setLoad] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
@@ -68,6 +68,7 @@ export function NotificationSettings() {
     if (result.ok) {
       setView(result.view);
       setMessage(null);
+      props.onSaved?.();
       return true;
     }
     setMessage(saveNotificationText(result.error));
@@ -114,9 +115,7 @@ export function NotificationSettings() {
   };
 
   return (
-    <section class="hwc-section">
-      <h3 class="hwc-section-title">通知</h3>
-
+    <section>
       {load === "loading" ? (
         <p class="hwc-section-note">通知の設定を読み込んでいます。</p>
       ) : load === "failed" || view === null ? (

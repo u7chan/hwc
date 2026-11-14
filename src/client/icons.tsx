@@ -454,6 +454,44 @@ export function HwcMark({ size = 24 }: IconProps) {
   );
 }
 
+// 設定の一覧で、項目名の左に置く線画。色は文字と同じ補助色で使う。
+export function ThemeIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function BellIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M6 9a6 6 0 0 1 12 0v4l2 3H4l2-3z" />
+      <path d="M10 19a2 2 0 0 0 4 0" />
+    </Svg>
+  );
+}
+
+export function LinkIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M9 15l6-6" />
+      <path d="M10.5 6.5l1.8-1.8a3.5 3.5 0 0 1 5 5l-1.8 1.8" />
+      <path d="M13.5 17.5l-1.8 1.8a3.5 3.5 0 0 1-5-5l1.8-1.8" />
+    </Svg>
+  );
+}
+
+export function CommitIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M3 12h6M15 12h6" />
+    </Svg>
+  );
+}
+
 export function SettingsIcon({ size = 20 }: IconProps) {
   return (
     <Svg size={size}>

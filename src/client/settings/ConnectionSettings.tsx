@@ -7,8 +7,7 @@ type ConnectionSettingsProps = {
 
 export function ConnectionSettings(props: ConnectionSettingsProps) {
   return (
-    <section class="hwc-section">
-      <h3 class="hwc-section-title">接続</h3>
+    <section>
       <div class="hwc-setting-group">
         <div class="hwc-setting-row">
           <span class="hwc-setting-label">状態</span>

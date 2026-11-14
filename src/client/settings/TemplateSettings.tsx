@@ -21,7 +21,10 @@ function saveErrorText(error: string | null): string {
 }
 
 // 設定は BFF が正。保存後の応答で一覧を丸ごと置き換え、画面と保存済みの一覧を食い違わせない。
-export function TemplateSettings() {
+export function TemplateSettings(props: {
+  onEditingTitleChange: (title: string | null) => void;
+  onSaved?: () => void;
+}) {
   const [view, setView] = useState<Template[] | null>(null);
   const [load, setLoad] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
@@ -58,6 +61,8 @@ export function TemplateSettings() {
       setView(result.templates);
       setEditing(null);
       setMessage(null);
+      props.onEditingTitleChange(null);
+      props.onSaved?.();
       return true;
     }
     setMessage(saveErrorText(result.error));
@@ -67,6 +72,7 @@ export function TemplateSettings() {
   const startNew = () => {
     if (busy || view === null || view.length >= MAX_TEMPLATES) return;
     setEditing({ kind: "new" });
+    props.onEditingTitleChange("定型文を追加");
     setTitle("");
     setBody("");
     setMessage(null);
@@ -75,6 +81,7 @@ export function TemplateSettings() {
   const startEdit = (template: Template) => {
     if (busy) return;
     setEditing({ kind: "edit", id: template.id });
+    props.onEditingTitleChange("定型文を編集");
     setTitle(template.title);
     setBody(template.body);
     setMessage(null);
@@ -83,6 +90,7 @@ export function TemplateSettings() {
   const cancelEdit = () => {
     if (busy) return;
     setEditing(null);
+    props.onEditingTitleChange(null);
     setMessage(null);
   };
 
@@ -132,9 +140,7 @@ export function TemplateSettings() {
       : null;
 
   return (
-    <section class="hwc-section">
-      <h3 class="hwc-section-title">定型文</h3>
-
+    <section>
       {load === "loading" ? (
         <p class="hwc-section-note">定型文を読み込んでいます。</p>
       ) : load === "failed" || view === null ? (

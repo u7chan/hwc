@@ -1,0 +1,2462 @@
+<!doctype html>
+<html lang="ja" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>設定の分割 — デザインモック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Nerd Symbols Mono";
+        src: url("../../src/client/assets/fonts/NerdSymbolsMono.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      :root {
+        color-scheme: light;
+
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-content: #ffffff;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-accent: #255cd6;
+        --color-on-accent: #ffffff;
+        --color-selected: #e9f0ff;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-active: #4f5f73;
+        --color-active-bg: #eef1f5;
+        --color-attention: #a34c0a;
+        --color-attention-bg: #fff0da;
+        --color-success: #216549;
+        --color-success-bg: #e6f3ed;
+        --color-neutral: #5d6878;
+        --color-neutral-bg: #eef0f3;
+        --color-danger: #b3333c;
+        --color-discord: #5865f2;
+
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+
+        --radius-sm: 8px;
+        --radius-icon: 10px;
+        --radius-control: 12px;
+        --radius-panel: 16px;
+
+        --text-body: 1.0625rem;
+        --text-secondary: 0.8125rem;
+        --line-body: 1.5;
+        --tap: 44px;
+        --row-head: 56px;
+        --row-pane: 64px;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-content: #131619;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-accent: #94baff;
+        --color-on-accent: #101215;
+        --color-selected: #23334e;
+        --color-line: #32373f;
+        --color-control-line: #606976;
+        --color-active: #8db8ff;
+        --color-active-bg: #2b3038;
+        --color-attention: #f6c57f;
+        --color-attention-bg: #352b1e;
+        --color-success: #8fdbb1;
+        --color-success-bg: #20392e;
+        --color-neutral: #b6becb;
+        --color-neutral-bg: #2b2f36;
+        --color-danger: #ff9ca4;
+        --color-discord: #7d88ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      /* アイコンは stroke で描く。symbol 側に属性を書かず、use へ継承させる。 */
+      svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        line-height: var(--line-body);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .page {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 40px 24px 96px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 32px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.5rem;
+        font-weight: 600;
+        line-height: 1.3;
+        letter-spacing: -0.02em;
+      }
+
+      .hero p {
+        max-width: 78ch;
+        margin: 0 0 8px;
+        color: var(--color-secondary);
+      }
+
+      .small-note {
+        font-size: 13px;
+        color: var(--color-secondary);
+      }
+
+      .theme-toggle {
+        flex: none;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .mock-banner {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        margin: 0 0 32px;
+        padding: 12px 16px;
+        border: 1px solid var(--color-attention);
+        border-radius: var(--radius-panel);
+        background: var(--color-attention-bg);
+        color: var(--color-text);
+        font-size: 14px;
+      }
+
+      .mock-banner strong {
+        flex: none;
+        color: var(--color-attention);
+        font-weight: 600;
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 32px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .toc a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 12px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        color: var(--color-text);
+        font-size: 14px;
+        text-decoration: none;
+      }
+
+      .toc a:hover {
+        background: var(--color-raised);
+      }
+
+      .flow {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: step;
+      }
+
+      .flow li {
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .flow li::before {
+        counter-increment: step;
+        content: counter(step);
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: var(--color-raised);
+        color: var(--color-text);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .flow b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      .measure {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin: 24px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .measure li {
+        padding: 12px 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+      }
+
+      .measure b {
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .measure span {
+        color: var(--color-secondary);
+        font-size: 13px;
+      }
+
+      .pattern {
+        margin-top: 56px;
+        padding-top: 24px;
+        border-top: 1px solid var(--color-line);
+      }
+
+      .pattern-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.125rem;
+        font-weight: 600;
+      }
+
+      .badge {
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        background: var(--color-selected);
+        color: var(--color-accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .pattern-note {
+        max-width: 86ch;
+        margin: 0 0 24px;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .frames {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 24px;
+      }
+
+      .frame {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .caption {
+        max-width: 390px;
+        color: var(--color-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .caption b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      /* ---- 端末の枠 ---- */
+
+      .phone {
+        display: flex;
+        flex-direction: column;
+        width: 390px;
+        height: 760px;
+        border: 1px solid var(--color-line);
+        border-radius: 28px;
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      .desktop {
+        display: flex;
+        width: 1200px;
+        max-width: 100%;
+        height: 760px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      /* ---- 詳細の上部バー ---- */
+
+      .detail-bar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        min-height: var(--row-head);
+        padding: 0 var(--space-4);
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-content);
+      }
+
+      .icon-button {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: var(--color-raised);
+        color: var(--color-text);
+      }
+
+      .detail-heading {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .detail-title {
+        margin: 0;
+        font-size: var(--text-body);
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+
+      .detail-sub {
+        margin: var(--space-1) 0 0;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      /* ---- 設定のスクロール領域 ---- */
+
+      .settings-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0 var(--space-4) var(--space-8);
+        background: var(--color-bg);
+      }
+
+      .settings {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-8);
+        max-width: 560px;
+        margin: 0 auto;
+        padding-top: var(--space-6);
+      }
+
+      .group-label {
+        margin: 0 0 var(--space-2);
+        padding-left: var(--space-1);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        font-weight: 400;
+      }
+
+      .setting-group {
+        background: var(--color-surface);
+        border-radius: var(--radius-panel);
+        overflow: hidden;
+      }
+
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        width: 100%;
+        min-height: var(--row-pane);
+        padding: 0 var(--space-4);
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .nav-row + .nav-row {
+        border-top: 1px solid var(--color-line);
+      }
+
+      .nav-row:hover {
+        background: var(--color-raised);
+      }
+
+      .nav-label {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .nav-value {
+        flex: none;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .nav-row > svg {
+        flex: none;
+        color: var(--color-secondary);
+      }
+
+      /* アイコンの見比べ用。枠なしは 20px の線画、枠付きは 32px の面。 */
+      .nav-icon {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        color: var(--color-secondary);
+      }
+
+      .nav-icon--frame {
+        width: var(--space-8);
+        height: var(--space-8);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-icon);
+      }
+
+      .setting-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        min-height: var(--row-pane);
+        padding: var(--space-4);
+      }
+
+      .setting-label {
+        min-width: 0;
+      }
+
+      .setting-value {
+        color: var(--color-secondary);
+        text-align: right;
+      }
+
+      .setting-value[data-status="live"] {
+        color: var(--color-success);
+      }
+
+      .section-note {
+        margin: var(--space-3) 0 0;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      /* ---- 操作 ---- */
+
+      .setting-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+      }
+
+      .setting-group + .setting-actions {
+        margin-top: var(--space-3);
+      }
+
+      .setting-button {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: var(--tap);
+        padding: 0 var(--space-4);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: var(--text-secondary);
+        cursor: pointer;
+      }
+
+      .setting-primary {
+        border-color: var(--color-accent);
+        color: var(--color-accent);
+      }
+
+      .setting-input {
+        width: 100%;
+        min-height: var(--tap);
+        padding: 0 var(--space-3);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-bg);
+        color: var(--color-text);
+        font: inherit;
+      }
+
+      .setting-input::placeholder {
+        color: var(--color-secondary);
+      }
+
+      .setting-form {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .setting-group + .setting-form {
+        margin-top: var(--space-3);
+      }
+
+      /* ---- スイッチ ---- */
+
+      .switch {
+        position: relative;
+        flex: none;
+        width: 48px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid var(--color-control-line);
+        border-radius: 999px;
+        background: var(--color-raised);
+        cursor: pointer;
+      }
+
+      .switch-knob {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--color-secondary);
+      }
+
+      .switch[data-on="true"] {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+      }
+
+      .switch[data-on="true"] .switch-knob {
+        transform: translateX(20px);
+        background: var(--color-on-accent);
+      }
+
+      /* ---- テーマ ---- */
+
+      .theme-preview {
+        margin-bottom: var(--space-3);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+        overflow: hidden;
+      }
+
+      .theme-preview-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        width: 100%;
+        min-height: var(--tap);
+        padding: 0 var(--space-4);
+        border: 0;
+        background: transparent;
+        color: var(--color-secondary);
+        font: inherit;
+        font-size: var(--text-secondary);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .choice-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-2);
+      }
+
+      .choice-grid--modes {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .choice {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-width: 0;
+        min-height: var(--tap);
+        padding: var(--space-2);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .choice-grid--modes .choice {
+        flex-direction: column;
+        justify-content: center;
+        gap: var(--space-1);
+        padding: var(--space-2) var(--space-1);
+        text-align: center;
+      }
+
+      .choice[data-selected="true"] {
+        border-color: var(--color-accent);
+        background: var(--color-raised);
+        color: var(--color-text);
+      }
+
+      .choice-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--text-secondary);
+      }
+
+      .swatch {
+        position: relative;
+        flex: none;
+        display: block;
+        width: var(--space-8);
+        height: var(--space-6);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+
+      .swatch-bar {
+        position: absolute;
+        inset: var(--space-1);
+        border-radius: 3px;
+      }
+
+      .swatch-dot {
+        position: absolute;
+        right: var(--space-1);
+        bottom: var(--space-1);
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+      }
+
+      .swatch--system {
+        background: var(--color-raised);
+      }
+
+      .swatch-split {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: 50%;
+        height: 100%;
+        background: var(--color-control-line);
+      }
+
+      .divider {
+        height: 1px;
+        margin: var(--space-4) 0;
+        background: var(--color-line);
+      }
+
+      /* ---- 定型文 ---- */
+
+      .template-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        width: 100%;
+        min-height: var(--row-pane);
+        padding: var(--space-3) var(--space-4);
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .template-row + .template-row {
+        border-top: 1px solid var(--color-line);
+      }
+
+      .template-row:hover {
+        background: var(--color-raised);
+      }
+
+      .template-row-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .template-row-name {
+        font-weight: 600;
+      }
+
+      .template-row-preview {
+        overflow: hidden;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        line-height: 1.4;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .template-row > svg {
+        flex: none;
+        margin-left: auto;
+        color: var(--color-secondary);
+      }
+
+      /* ---- 通知 ---- */
+
+      .notify-subtitle {
+        margin: var(--space-6) 0 var(--space-2);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .notify-scopes {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .notify-scope {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-3);
+        width: 100%;
+        min-height: var(--row-pane);
+        padding: var(--space-3) var(--space-4);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .notify-scope[data-selected="true"] {
+        border-color: var(--color-accent);
+        background: var(--color-raised);
+      }
+
+      .scope-mark {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        border: 1px solid var(--color-control-line);
+        border-radius: 50%;
+      }
+
+      .notify-scope[data-selected="true"] .scope-mark {
+        border: 5px solid var(--color-accent);
+        background: var(--color-surface);
+      }
+
+      .scope-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .scope-title {
+        font-weight: 600;
+      }
+
+      .scope-note {
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        line-height: 1.4;
+      }
+
+      .discord-card {
+        display: grid;
+        gap: var(--space-3);
+        margin-top: var(--space-6);
+        padding: var(--space-4);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+      }
+
+      .discord-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .discord-mark {
+        display: grid;
+        place-items: center;
+        color: var(--color-discord);
+      }
+
+      .discord-name {
+        font-weight: 600;
+      }
+
+      .discord-state {
+        margin-left: auto;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .discord-hint {
+        margin: 0;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: var(--text-secondary);
+      }
+
+      /* ---- 広い画面 ---- */
+
+      .wide-shell {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .wide-sidebar {
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        width: 352px;
+        border-right: 1px solid var(--color-line);
+        background: var(--color-bg);
+      }
+
+      .wide-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: var(--row-head);
+        padding: 0 var(--space-4);
+      }
+
+      .wide-brand {
+        font-weight: 600;
+      }
+
+      .wide-version {
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .wide-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0 var(--space-3) var(--space-4);
+      }
+
+      .wide-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-height: var(--row-pane);
+        padding: var(--space-3) var(--space-3);
+        border-radius: var(--radius-control);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .wide-pane b {
+        color: var(--color-text);
+        font-size: var(--text-body);
+        font-weight: 600;
+      }
+
+      .wide-pane[data-current="true"] {
+        background: var(--color-raised);
+      }
+
+      .wide-foot {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: var(--space-1) var(--space-4) var(--space-2);
+        border-top: 1px solid var(--color-line);
+      }
+
+      .wide-foot-brand {
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .wide-foot-actions {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .wide-foot-button {
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: var(--color-raised);
+        color: var(--color-text);
+      }
+
+      .wide-detail {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-bg);
+      }
+
+      .wide-settings {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .wide-nav {
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+        width: 260px;
+        padding: var(--space-6) var(--space-3);
+        border-right: 1px solid var(--color-line);
+      }
+
+      .wide-nav-title {
+        margin: 0 0 var(--space-2);
+        padding: 0 var(--space-2);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .wide-nav-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        min-height: var(--tap);
+        padding: 0 var(--space-2) 0 var(--space-3);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: 15px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .wide-nav-item:hover {
+        background: var(--color-raised);
+      }
+
+      .wide-nav-item[aria-current="true"] {
+        background: var(--color-selected);
+        color: var(--color-accent);
+        font-weight: 600;
+      }
+
+      .wide-nav-value {
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        font-weight: 400;
+      }
+
+      .wide-content {
+        flex: 1;
+        min-width: 0;
+        overflow-y: auto;
+        padding: 0 var(--space-8) var(--space-8);
+      }
+
+      .wide-content .settings {
+        padding-top: var(--space-8);
+      }
+
+      /* ---- 仕様メモ ---- */
+
+      .spec {
+        display: grid;
+        gap: 24px;
+        max-width: 92ch;
+      }
+
+      .spec h3 {
+        margin: 0 0 8px;
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .spec dl {
+        display: grid;
+        grid-template-columns: minmax(120px, 180px) 1fr;
+        gap: 8px 24px;
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .spec dt {
+        color: var(--color-secondary);
+      }
+
+      .spec dd {
+        margin: 0;
+      }
+
+      .spec ul {
+        margin: 0;
+        padding-left: 20px;
+        font-size: 14px;
+        color: var(--color-secondary);
+      }
+
+      .spec li + li {
+        margin-top: 4px;
+      }
+
+      @media (max-width: 1280px) {
+        .desktop {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <symbol id="i-chevron-left" viewBox="0 0 24 24">
+            <path d="M15 5l-7 7 7 7" />
+          </symbol>
+          <symbol id="i-chevron-right" viewBox="0 0 24 24">
+            <path d="M9 5l7 7-7 7" />
+          </symbol>
+          <symbol id="i-settings" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M12 3v2.2M12 18.8V21M4.2 7.5l1.9 1.1M17.9 15.4l1.9 1.1M4.2 16.5l1.9-1.1M17.9 8.6l1.9-1.1"
+            />
+          </symbol>
+          <symbol id="i-plus" viewBox="0 0 24 24">
+            <path d="M12 5v14M5 12h14" />
+          </symbol>
+          <symbol id="i-theme" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none" />
+          </symbol>
+          <symbol id="i-template" viewBox="0 0 24 24">
+            <path d="M4 5h16v11H9l-5 4z" />
+            <path d="M8 9h8M8 12.5h5" />
+          </symbol>
+          <symbol id="i-bell" viewBox="0 0 24 24">
+            <path d="M6 9a6 6 0 0 1 12 0v4l2 3H4l2-3z" />
+            <path d="M10 19a2 2 0 0 0 4 0" />
+          </symbol>
+          <symbol id="i-reload" viewBox="0 0 24 24">
+            <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+            <path d="M20 4v4h-4" />
+          </symbol>
+          <symbol id="i-link" viewBox="0 0 24 24">
+            <path d="M9 15l6-6" />
+            <path d="M10.5 6.5l1.8-1.8a3.5 3.5 0 0 1 5 5l-1.8 1.8" />
+            <path d="M13.5 17.5l-1.8 1.8a3.5 3.5 0 0 1-5-5l1.8-1.8" />
+          </symbol>
+          <symbol id="i-commit" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M3 12h6M15 12h6" />
+          </symbol>
+          <symbol id="i-discord" viewBox="0 0 24 24">
+            <path
+              d="M7.5 6.5c2.5-1 6.5-1 9 0l2 6.5c0 3-1 5.5-2 6.5l-2.5-1M7.5 6.5 6 18l2 1 2.5-1M9 12h.01M15 12h.01"
+            />
+          </symbol>
+        </g>
+      </defs>
+    </svg>
+
+    <main class="page">
+      <header class="hero">
+        <div>
+          <h1>設定を「一覧 → 詳細」に分ける — デザインモック</h1>
+          <p>
+            いまの設定は 1 画面に 6 セクションを積み、sticky の見出しで現在地だけを示しています。
+            390×844 で内容は 2,509px あり、目的の項目まで平均して 1.5 画面ぶんスクロールします。
+            設定は頻繁に開く画面ではありませんが、開くときは目的が決まっています（通知を切りたい、
+            定型文を足したい）。入口をカテゴリの一覧にして、目的の画面へ 1 タップで着く形にします。
+          </p>
+          <p class="small-note">
+            静的モックです。保存・送信・読み込みは行いません。データは架空。右上のボタンでライト /
+            ダークを切り替えられます。
+          </p>
+        </div>
+        <button class="theme-toggle" type="button" id="theme-toggle">ライト / ダーク</button>
+      </header>
+
+      <div class="mock-banner">
+        <strong>モック</strong>
+        <span>
+          行の現在値（「システム」「オン」など）は一覧の見え方を示すためのものです。実際の値は BFF
+          のスナップショットから引きます。広い画面のカテゴリ列は案 A
+          で、採るかどうかは下の仕様メモにあります。
+        </span>
+      </div>
+
+      <ul class="toc">
+        <li><a href="#why">なぜ分けるか</a></li>
+        <li><a href="#list">A: 設定一覧</a></li>
+        <li><a href="#theme">B: 詳細「表示」</a></li>
+        <li><a href="#templates">C: 詳細「定型文」</a></li>
+        <li><a href="#notify">D: 詳細「通知」</a></li>
+        <li><a href="#restart">E: 詳細「再起動」</a></li>
+        <li><a href="#about">F: 詳細「接続・このビルド」</a></li>
+        <li><a href="#wide">G: 広い画面</a></li>
+        <li><a href="#icons">H: アイコン</a></li>
+        <li><a href="#spec">仕様メモ</a></li>
+      </ul>
+
+      <section class="pattern" id="why">
+        <div class="pattern-head">
+          <h2>なぜ分けるか</h2>
+        </div>
+        <ol class="flow">
+          <li><b>歯車</b>で開く（狭い画面は一覧の右上、広い画面はサイドバーの足元）</li>
+          <li><b>カテゴリ</b>を選ぶ。行に現在値が出るので、開かなくても状態が分かる</li>
+          <li><b>詳細</b>で変更して保存する。戻るは一覧へ</li>
+          <li><b>歯車</b>はどこからでも設定を閉じる（一覧と詳細のどちらでも）</li>
+        </ol>
+        <ul class="measure">
+          <li><b>3.2 画面</b><span>いまの設定（2,509px / 788px）</span></li>
+          <li><b>1 画面</b><span>設定一覧（6 行 + 見出し）</span></li>
+          <li><b>0.9 画面</b><span>いちばん長い詳細「通知」</span></li>
+        </ul>
+        <p class="pattern-note" style="margin-top: 24px">
+          スクロールの総量は増えますが、1 回の操作で見る範囲は 1 画面に収まります。
+          「どこに何があるか」を一覧で覚えられることを優先します。
+        </p>
+      </section>
+
+      <section class="pattern" id="list">
+        <div class="pattern-head">
+          <h2>A: 設定一覧</h2>
+          <span class="badge">入口</span>
+        </div>
+        <p class="pattern-note">
+          操作する設定（表示・定型文・通知・再起動）と、状態を見るだけの項目（接続・このビルド）を 2
+          つのグループに分けます。行には現在値を出し、開かなくても状態が分かるようにします。
+          行の高さは 64px、値は補助文字で、右端に矢印を置きます。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">設定</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">表示</span>
+                        <span class="nav-value">システム</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">定型文</span>
+                        <span class="nav-value">3 件</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">通知</span>
+                        <span class="nav-value">オン</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">再起動</span>
+                        <span class="nav-value">未設定</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section>
+                    <p class="group-label">アプリ</p>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">接続</span>
+                        <span class="nav-value" style="color: var(--color-success)">接続済み</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">このビルド</span>
+                        <span class="nav-value">e2e</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>設定一覧。</b>4 行 + 2 行の 2 グループで、1 画面に収まります。行の値は
+              「開かなくても分かる」ことだけを出し、詳細の内容は繰り返しません。
+            </p>
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">設定</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button" style="background: var(--color-raised)">
+                        <span class="nav-label">表示</span>
+                        <span class="nav-value">システム</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">定型文</span>
+                        <span class="nav-value">3 件</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">通知</span>
+                        <span class="nav-value">オン</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">再起動</span>
+                        <span class="nav-value">未設定</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section>
+                    <p class="group-label">アプリ</p>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">接続</span>
+                        <span class="nav-value" style="color: var(--color-success)">接続済み</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">このビルド</span>
+                        <span class="nav-value">e2e</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>押した状態。</b>行全体が操作領域で、面を <code>raised</code>
+              にします。この面は一覧の行が「開いた」ことを示すだけで、詳細画面には引き継ぎません。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="theme">
+        <div class="pattern-head">
+          <h2>B: 詳細「表示」</h2>
+        </div>
+        <p class="pattern-note">
+          セクションの見出しは上部バーへ移すので、本文の sticky 見出しは畳みます。同じ名前を 2
+          回出さず、内容の先頭から読み始められます。中身と余白は今のままです。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">表示</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="theme-preview">
+                      <button class="theme-preview-head" type="button">
+                        <span>選択中: System（端末に追従）</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+
+                    <div class="choice-grid choice-grid--modes">
+                      <button class="choice" type="button" data-selected="true">
+                        <span class="swatch swatch--system"
+                          ><span class="swatch-split"></span
+                        ></span>
+                        <span class="choice-label">System</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #f4f5f7">
+                          <span class="swatch-bar" style="background: #ffffff"></span>
+                          <span class="swatch-dot" style="background: #255cd6"></span>
+                        </span>
+                        <span class="choice-label">Light</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #101215">
+                          <span class="swatch-bar" style="background: #1b1e23"></span>
+                          <span class="swatch-dot" style="background: #94baff"></span>
+                        </span>
+                        <span class="choice-label">Dark</span>
+                      </button>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="choice-grid">
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #e6e9ef">
+                          <span class="swatch-bar" style="background: #eff1f5"></span>
+                          <span class="swatch-dot" style="background: #1e66f5"></span>
+                        </span>
+                        <span class="choice-label">Catppuccin Latte</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #11111b">
+                          <span class="swatch-bar" style="background: #1e1e2e"></span>
+                          <span class="swatch-dot" style="background: #fab387"></span>
+                        </span>
+                        <span class="choice-label">Catppuccin Mocha</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #2e3440">
+                          <span class="swatch-bar" style="background: #3b4252"></span>
+                          <span class="swatch-dot" style="background: #88c0d0"></span>
+                        </span>
+                        <span class="choice-label">Nord</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #1a1b26">
+                          <span class="swatch-bar" style="background: #1f2335"></span>
+                          <span class="swatch-dot" style="background: #7aa2f7"></span>
+                        </span>
+                        <span class="choice-label">Tokyo Night</span>
+                      </button>
+                    </div>
+
+                    <p class="section-note">システムは端末の外観設定に合わせます。</p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>表示。</b
+              >選択した瞬間に画面全体へ反映されるので、保存ボタンはありません（今と同じ）。
+            </p>
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">表示</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="theme-preview">
+                      <button class="theme-preview-head" type="button">
+                        <span>選択中: Nord</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+
+                    <div class="choice-grid choice-grid--modes">
+                      <button class="choice" type="button">
+                        <span class="swatch swatch--system"
+                          ><span class="swatch-split"></span
+                        ></span>
+                        <span class="choice-label">System</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #f4f5f7">
+                          <span class="swatch-bar" style="background: #ffffff"></span>
+                          <span class="swatch-dot" style="background: #255cd6"></span>
+                        </span>
+                        <span class="choice-label">Light</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #101215">
+                          <span class="swatch-bar" style="background: #1b1e23"></span>
+                          <span class="swatch-dot" style="background: #94baff"></span>
+                        </span>
+                        <span class="choice-label">Dark</span>
+                      </button>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <div class="choice-grid">
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #e6e9ef">
+                          <span class="swatch-bar" style="background: #eff1f5"></span>
+                          <span class="swatch-dot" style="background: #1e66f5"></span>
+                        </span>
+                        <span class="choice-label">Catppuccin Latte</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #11111b">
+                          <span class="swatch-bar" style="background: #1e1e2e"></span>
+                          <span class="swatch-dot" style="background: #fab387"></span>
+                        </span>
+                        <span class="choice-label">Catppuccin Mocha</span>
+                      </button>
+                      <button class="choice" type="button" data-selected="true">
+                        <span class="swatch" style="background: #2e3440">
+                          <span class="swatch-bar" style="background: #3b4252"></span>
+                          <span class="swatch-dot" style="background: #88c0d0"></span>
+                        </span>
+                        <span class="choice-label">Nord</span>
+                      </button>
+                      <button class="choice" type="button">
+                        <span class="swatch" style="background: #1a1b26">
+                          <span class="swatch-bar" style="background: #1f2335"></span>
+                          <span class="swatch-dot" style="background: #7aa2f7"></span>
+                        </span>
+                        <span class="choice-label">Tokyo Night</span>
+                      </button>
+                    </div>
+
+                    <p class="section-note">システムは端末の外観設定に合わせます。</p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>色テーマを選んだ状態。</b>明るさの 3 択と色テーマは、今の 2
+              段の構成をそのまま使います。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="templates">
+        <div class="pattern-head">
+          <h2>C: 詳細「定型文」</h2>
+        </div>
+        <p class="pattern-note">
+          一覧・追加ボタン・補足説明の構成は今のままです。追加と編集はこの画面の中で完結します。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">定型文</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <button class="template-row" type="button">
+                        <span class="template-row-text">
+                          <span class="template-row-name">PR〜レビュー</span>
+                          <span class="template-row-preview"
+                            >PRまで実装進めて。PR作成後は別ペインにレビューを委譲して。</span
+                          >
+                        </span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="template-row" type="button">
+                        <span class="template-row-text">
+                          <span class="template-row-name">続けて</span>
+                          <span class="template-row-preview"
+                            >続けてください。止まった理由が分からなければ、まず状況を整理して。</span
+                          >
+                        </span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="template-row" type="button">
+                        <span class="template-row-text">
+                          <span class="template-row-name">差分だけレビュー</span>
+                          <span class="template-row-preview"
+                            >変更をレビューして、指摘だけ返して。修正はしないで。</span
+                          >
+                        </span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+
+                    <div class="setting-actions">
+                      <button class="setting-button" type="button">
+                        <svg width="16" height="16"><use href="#i-plus" /></svg>
+                        定型文を追加
+                      </button>
+                    </div>
+
+                    <p class="section-note">
+                      入力欄の + から選んで本文に入れます。30 件・名前 40 文字・本文 2000 文字まで。
+                    </p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>定型文。</b>追加ボタンは一覧の下、補足説明はその下。前回直した 12px
+              の余白はそのままです。
+            </p>
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">定型文を編集</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <form
+                        class="setting-form"
+                        style="padding: var(--space-4)"
+                        onsubmit="return false;"
+                      >
+                        <label class="group-label" for="mock-name" style="margin: 0">名前</label>
+                        <input
+                          id="mock-name"
+                          class="setting-input"
+                          type="text"
+                          value="PR〜レビュー"
+                        />
+                        <label class="group-label" for="mock-body" style="margin: 0">本文</label>
+                        <textarea
+                          id="mock-body"
+                          class="setting-input"
+                          rows="5"
+                          style="padding: var(--space-3); resize: none"
+                        >
+PRまで実装進めて。PR作成後は別ペインにレビューを委譲して。</textarea>
+                        <span class="section-note" style="margin: 0">31 / 2000</span>
+
+                        <div class="setting-actions">
+                          <button class="setting-button setting-primary" type="button">保存</button>
+                          <button class="setting-button" type="button">キャンセル</button>
+                          <button
+                            class="setting-button"
+                            type="button"
+                            style="color: var(--color-danger)"
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                    <p class="section-note">
+                      名前と本文を直して保存します。削除はフォームの中に置き、確認ダイアログを挟みます。
+                    </p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>編集。</b
+              >上部バーの名前を「定型文を編集」にして、一覧へ戻るのではなくフォームを閉じる 1
+              段深い状態であることを示します。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="notify">
+        <div class="pattern-head">
+          <h2>D: 詳細「通知」</h2>
+          <span class="badge">いちばん長い詳細</span>
+        </div>
+        <p class="pattern-note">
+          いまの通知セクションをそのまま 1 画面にします。見出しがバーへ移るぶん、内容は 1 画面弱に
+          収まります。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">通知</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <div class="setting-row">
+                        <span class="setting-label">Discord へ通知</span>
+                        <button
+                          class="switch"
+                          type="button"
+                          role="switch"
+                          data-on="true"
+                          aria-checked="true"
+                          aria-label="Discord へ通知"
+                        >
+                          <span class="switch-knob"></span>
+                        </button>
+                      </div>
+                    </div>
+                    <p class="section-note">
+                      司令塔が完了し、ほかのエージェントが動いていないときに完了を 1
+                      回だけ送ります。要対応になったときは、対象に関係なくその場で送ります。
+                    </p>
+
+                    <p class="notify-subtitle">完了通知の対象</p>
+                    <div class="notify-scopes">
+                      <button class="notify-scope" type="button" data-selected="true">
+                        <span class="scope-mark"></span>
+                        <span class="scope-text">
+                          <span class="scope-title">PR がある作業だけ</span>
+                          <span class="scope-note"
+                            >ブランチの最新 PR が open のスペースの完了を通知</span
+                          >
+                        </span>
+                      </button>
+                      <button class="notify-scope" type="button">
+                        <span class="scope-mark"></span>
+                        <span class="scope-text">
+                          <span class="scope-title">すべての作業</span>
+                          <span class="scope-note">PR のない調査や雑務の完了も通知</span>
+                        </span>
+                      </button>
+                    </div>
+                    <p class="section-note">要対応の通知は、この対象に関係なく送ります。</p>
+
+                    <div class="discord-card">
+                      <div class="discord-head">
+                        <span class="discord-mark">
+                          <svg width="18" height="18"><use href="#i-discord" /></svg>
+                        </span>
+                        <span class="discord-name">Discord</span>
+                        <span class="discord-state">登録済み</span>
+                      </div>
+                      <p class="discord-hint">https://discord.com/api/webhooks/…a91f</p>
+                      <div class="setting-actions">
+                        <button class="setting-button" type="button">テスト通知</button>
+                        <button class="setting-button" type="button">変更</button>
+                        <button
+                          class="setting-button"
+                          type="button"
+                          style="color: var(--color-danger)"
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </div>
+
+                    <p class="section-note">
+                      Webhook URL は hwc のサーバーに保存します。ブラウザを閉じても通知は届きます。
+                    </p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>通知。</b>スイッチ・対象・Webhook を 1 画面にまとめます。見出しがバーにあるので、
+              「完了通知の対象」のような下位の見出しだけを本文に残します。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="restart">
+        <div class="pattern-head">
+          <h2>E: 詳細「再起動」</h2>
+        </div>
+        <p class="pattern-note">
+          スイッチとコマンド入力を 1 画面にします。保存と「今すぐ再起動」は入力の下に残します。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">再起動</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <div class="setting-row">
+                        <span class="setting-label">プル成功後に実行</span>
+                        <button
+                          class="switch"
+                          type="button"
+                          role="switch"
+                          aria-checked="false"
+                          aria-label="プル成功後に実行"
+                        >
+                          <span class="switch-knob"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <form class="setting-form" onsubmit="return false;">
+                      <input
+                        class="setting-input"
+                        type="text"
+                        placeholder="/usr/local/bin/restart-hwc"
+                        aria-label="再起動コマンドのパス"
+                      />
+                      <div class="setting-actions">
+                        <button class="setting-button setting-primary" type="button">保存</button>
+                        <button class="setting-button" type="button" disabled>今すぐ再起動</button>
+                      </div>
+                    </form>
+
+                    <p class="section-note">
+                      実行ファイルの絶対パスを、シェルを介さずに起動します。プル成功後に実行すると、マージの
+                      反映と再起動をまとめて行えます。対象のリポジトリを絞るときは、コマンド側で
+                      <code>git rev-parse --show-toplevel</code> などを見て判定してください。
+                    </p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>再起動。</b
+              >入力と操作の配置は今のまま。値が未設定なので「今すぐ再起動」は押せません。
+            </p>
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">接続とこのビルド</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <div class="setting-row">
+                        <span class="setting-label">状態</span>
+                        <span class="setting-value" data-status="live">接続済み</span>
+                      </div>
+                      <div class="setting-row" style="border-top: 1px solid var(--color-line)">
+                        <span class="setting-label">コミット</span>
+                        <span class="setting-value" style="font-family: var(--font-mono)">e2e</span>
+                      </div>
+                    </div>
+                    <p class="section-note">
+                      Herdr
+                      から届いた状態をそのまま表示しています。切断するとブラウザが自動で再接続します。
+                    </p>
+                    <p class="section-note">
+                      コミットは起動中の BFF
+                      のビルドです。取得できないときは「取得できませんでした」と出します。
+                    </p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>接続とこのビルド。</b>読み取り専用なので、値を並べるだけです。1 行にまとめると
+              「設定」と「情報」の区別が曖昧になるため、一覧では別グループにしています。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="about">
+        <div class="pattern-head">
+          <h2>F: 一覧に「情報」を出すか</h2>
+        </div>
+        <p class="pattern-note">
+          接続とこのビルドは操作しない項目です。一覧に出すと「設定」と同じ見た目で並び、変更できるように
+          見えます。別グループ（上の A）に分ける案と、一覧の末尾に小さく置く案があります。上の A は
+          別グループ案です。
+        </p>
+      </section>
+
+      <section class="pattern" id="wide">
+        <div class="pattern-head">
+          <h2>G: 広い画面</h2>
+          <span class="badge">案 A: 左にカテゴリ</span>
+        </div>
+        <p class="pattern-note">
+          広い画面では一覧を常に左へ置き、右に選択中のカテゴリを出します。戻るボタンは出さず、
+          カテゴリの切り替えだけで移動します。狭い画面と同じ項目・同じ並びです。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="desktop">
+              <div class="wide-shell">
+                <aside class="wide-sidebar">
+                  <div class="wide-head">
+                    <span class="wide-brand">HWC</span>
+                    <span class="wide-version">e2e</span>
+                  </div>
+                  <div class="wide-list">
+                    <div class="wide-pane" data-current="true">
+                      <b>worktree-lucky-forest</b>
+                      <span>hwc · 2 ペイン</span>
+                    </div>
+                    <div class="wide-pane">
+                      <b>hwc</b>
+                      <span>main · 1 ペイン</span>
+                    </div>
+                    <div class="wide-pane">
+                      <b>refactor-settings-split</b>
+                      <span>hwc · 3 ペイン</span>
+                    </div>
+                  </div>
+                  <div class="wide-foot">
+                    <span class="wide-foot-brand">HWC · e2e</span>
+                    <div class="wide-foot-actions">
+                      <span>接続済み</span>
+                      <button class="wide-foot-button" type="button" aria-label="設定を閉じる">
+                        <svg width="20" height="20"><use href="#i-settings" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+
+                <div class="wide-detail">
+                  <div class="wide-settings">
+                    <nav class="wide-nav" aria-label="設定のカテゴリ">
+                      <p class="wide-nav-title">設定</p>
+                      <button class="wide-nav-item" type="button">
+                        <span>表示</span>
+                        <span class="wide-nav-value">システム</span>
+                      </button>
+                      <button class="wide-nav-item" type="button">
+                        <span>定型文</span>
+                        <span class="wide-nav-value">3 件</span>
+                      </button>
+                      <button class="wide-nav-item" type="button" aria-current="true">
+                        <span>通知</span>
+                        <span class="wide-nav-value">オン</span>
+                      </button>
+                      <button class="wide-nav-item" type="button">
+                        <span>再起動</span>
+                        <span class="wide-nav-value">未設定</span>
+                      </button>
+                      <p class="wide-nav-title" style="margin-top: 24px">アプリ</p>
+                      <button class="wide-nav-item" type="button">
+                        <span>接続</span>
+                        <span class="wide-nav-value">接続済み</span>
+                      </button>
+                      <button class="wide-nav-item" type="button">
+                        <span>このビルド</span>
+                        <span class="wide-nav-value">e2e</span>
+                      </button>
+                    </nav>
+
+                    <div class="wide-content">
+                      <div class="settings">
+                        <section>
+                          <div class="setting-group">
+                            <div class="setting-row">
+                              <span class="setting-label">Discord へ通知</span>
+                              <button
+                                class="switch"
+                                type="button"
+                                role="switch"
+                                data-on="true"
+                                aria-checked="true"
+                                aria-label="Discord へ通知"
+                              >
+                                <span class="switch-knob"></span>
+                              </button>
+                            </div>
+                          </div>
+                          <p class="section-note">
+                            司令塔が完了し、ほかのエージェントが動いていないときに完了を 1
+                            回だけ送ります。要対応になったときは、対象に関係なくその場で送ります。
+                          </p>
+
+                          <p class="notify-subtitle">完了通知の対象</p>
+                          <div class="notify-scopes">
+                            <button class="notify-scope" type="button" data-selected="true">
+                              <span class="scope-mark"></span>
+                              <span class="scope-text">
+                                <span class="scope-title">PR がある作業だけ</span>
+                                <span class="scope-note"
+                                  >ブランチの最新 PR が open のスペースの完了を通知</span
+                                >
+                              </span>
+                            </button>
+                            <button class="notify-scope" type="button">
+                              <span class="scope-mark"></span>
+                              <span class="scope-text">
+                                <span class="scope-title">すべての作業</span>
+                                <span class="scope-note">PR のない調査や雑務の完了も通知</span>
+                              </span>
+                            </button>
+                          </div>
+                          <p class="section-note">要対応の通知は、この対象に関係なく送ります。</p>
+
+                          <div class="discord-card">
+                            <div class="discord-head">
+                              <span class="discord-mark">
+                                <svg width="18" height="18"><use href="#i-discord" /></svg>
+                              </span>
+                              <span class="discord-name">Discord</span>
+                              <span class="discord-state">登録済み</span>
+                            </div>
+                            <p class="discord-hint">https://discord.com/api/webhooks/…a91f</p>
+                            <div class="setting-actions">
+                              <button class="setting-button" type="button">テスト通知</button>
+                              <button class="setting-button" type="button">変更</button>
+                              <button
+                                class="setting-button"
+                                type="button"
+                                style="color: var(--color-danger)"
+                              >
+                                削除
+                              </button>
+                            </div>
+                          </div>
+                        </section>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>案 A: 左にカテゴリ。</b>サイドバー（ペイン一覧）はそのまま残し、右の領域の中を
+              カテゴリ列と内容に分けます。1200px で内容は 588px あり、560px の上限に収まります。
+            </p>
+          </div>
+
+          <div class="frame">
+            <div class="desktop" style="width: 980px; height: 520px">
+              <div class="wide-shell">
+                <aside class="wide-sidebar" style="width: 352px">
+                  <div class="wide-head">
+                    <span class="wide-brand">HWC</span>
+                    <span class="wide-version">e2e</span>
+                  </div>
+                  <div class="wide-list">
+                    <div class="wide-pane" data-current="true">
+                      <b>worktree-lucky-forest</b>
+                      <span>hwc · 2 ペイン</span>
+                    </div>
+                    <div class="wide-pane">
+                      <b>hwc</b>
+                      <span>main · 1 ペイン</span>
+                    </div>
+                  </div>
+                  <div class="wide-foot">
+                    <span class="wide-foot-brand">HWC · e2e</span>
+                    <div class="wide-foot-actions">
+                      <span>接続済み</span>
+                      <button class="wide-foot-button" type="button" aria-label="設定を閉じる">
+                        <svg width="20" height="20"><use href="#i-settings" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+                <div class="wide-detail">
+                  <div class="detail-bar">
+                    <button class="icon-button" type="button" aria-label="戻る">
+                      <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                    </button>
+                    <div class="detail-heading">
+                      <h3 class="detail-title">通知</h3>
+                    </div>
+                  </div>
+                  <div class="settings-scroll">
+                    <div class="settings">
+                      <section>
+                        <div class="setting-group">
+                          <div class="setting-row">
+                            <span class="setting-label">Discord へ通知</span>
+                            <button
+                              class="switch"
+                              type="button"
+                              role="switch"
+                              data-on="true"
+                              aria-checked="true"
+                              aria-label="Discord へ通知"
+                            >
+                              <span class="switch-knob"></span>
+                            </button>
+                          </div>
+                        </div>
+                        <p class="section-note">
+                          司令塔が完了し、ほかのエージェントが動いていないときに完了を 1
+                          回だけ送ります。
+                        </p>
+                        <p class="notify-subtitle">完了通知の対象</p>
+                        <div class="notify-scopes">
+                          <button class="notify-scope" type="button" data-selected="true">
+                            <span class="scope-mark"></span>
+                            <span class="scope-text">
+                              <span class="scope-title">PR がある作業だけ</span>
+                              <span class="scope-note"
+                                >ブランチの最新 PR が open のスペースの完了を通知</span
+                              >
+                            </span>
+                          </button>
+                          <button class="notify-scope" type="button">
+                            <span class="scope-mark"></span>
+                            <span class="scope-text">
+                              <span class="scope-title">すべての作業</span>
+                              <span class="scope-note">PR のない調査や雑務の完了も通知</span>
+                            </span>
+                          </button>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>案 B: 1 カラム（狭い画面と同じ）。</b>カテゴリ列を増やさず、右の領域で一覧 →
+              詳細を切り替えます。900〜1100px では内容の幅を確保しやすい形です。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="icons">
+        <div class="pattern-head">
+          <h2>H: 一覧のアイコン</h2>
+          <span class="badge">見比べ</span>
+        </div>
+        <p class="pattern-note">
+          項目名の左にアイコンを置く案です。行の中で名前を探す手がかりを増やせますが、要素が 1
+          つ増える ぶん、名前と値に使える幅は減ります。枠なしの 20px、枠付きの 32px、アイコンなしの
+          3 つを 390px で並べます。アイコンは既存の線画に合わせて新規に 4
+          つ描く前提です（表示・通知・接続・ このビルド。定型文と再起動は既存の TemplateIcon /
+          ReloadIcon を使う）。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone" style="height: 640px">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">設定</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">表示</span>
+                        <span class="nav-value">システム</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">定型文</span>
+                        <span class="nav-value">3 件</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">通知</span>
+                        <span class="nav-value">オン</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">再起動</span>
+                        <span class="nav-value">未設定</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section>
+                    <p class="group-label">アプリ</p>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">接続</span>
+                        <span class="nav-value" style="color: var(--color-success)">接続済み</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-label">このビルド</span>
+                        <span class="nav-value">e2e</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>0: アイコンなし。</b>いまの案。要素は「名前・値・矢印」の 3 つだけで、名前の幅が
+              いちばん広い。
+            </p>
+          </div>
+
+          <div class="frame">
+            <div class="phone" style="height: 640px">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">設定</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon"
+                          ><svg width="20" height="20"><use href="#i-theme" /></svg
+                        ></span>
+                        <span class="nav-label">表示</span>
+                        <span class="nav-value">システム</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon"
+                          ><svg width="20" height="20"><use href="#i-template" /></svg
+                        ></span>
+                        <span class="nav-label">定型文</span>
+                        <span class="nav-value">3 件</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon"
+                          ><svg width="20" height="20"><use href="#i-bell" /></svg
+                        ></span>
+                        <span class="nav-label">通知</span>
+                        <span class="nav-value">オン</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon"
+                          ><svg width="20" height="20"><use href="#i-reload" /></svg
+                        ></span>
+                        <span class="nav-label">再起動</span>
+                        <span class="nav-value">未設定</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section>
+                    <p class="group-label">アプリ</p>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon"
+                          ><svg width="20" height="20"><use href="#i-link" /></svg
+                        ></span>
+                        <span class="nav-label">接続</span>
+                        <span class="nav-value" style="color: var(--color-success)">接続済み</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon"
+                          ><svg width="20" height="20"><use href="#i-commit" /></svg
+                        ></span>
+                        <span class="nav-label">このビルド</span>
+                        <span class="nav-value">e2e</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>1: 枠なし 20px。</b>線の太さは既存のアイコンと同じ。色は補助文字と同じで、名前より
+              手前に出ない。行の高さは変わらない。
+            </p>
+          </div>
+
+          <div class="frame">
+            <div class="phone" style="height: 640px">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <div class="detail-heading">
+                  <h3 class="detail-title">設定</h3>
+                </div>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon nav-icon--frame"
+                          ><svg width="18" height="18"><use href="#i-theme" /></svg
+                        ></span>
+                        <span class="nav-label">表示</span>
+                        <span class="nav-value">システム</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon nav-icon--frame"
+                          ><svg width="18" height="18"><use href="#i-template" /></svg
+                        ></span>
+                        <span class="nav-label">定型文</span>
+                        <span class="nav-value">3 件</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon nav-icon--frame"
+                          ><svg width="18" height="18"><use href="#i-bell" /></svg
+                        ></span>
+                        <span class="nav-label">通知</span>
+                        <span class="nav-value">オン</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon nav-icon--frame"
+                          ><svg width="18" height="18"><use href="#i-reload" /></svg
+                        ></span>
+                        <span class="nav-label">再起動</span>
+                        <span class="nav-value">未設定</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section>
+                    <p class="group-label">アプリ</p>
+                    <div class="setting-group">
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon nav-icon--frame"
+                          ><svg width="18" height="18"><use href="#i-link" /></svg
+                        ></span>
+                        <span class="nav-label">接続</span>
+                        <span class="nav-value" style="color: var(--color-success)">接続済み</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="nav-row" type="button">
+                        <span class="nav-icon nav-icon--frame"
+                          ><svg width="18" height="18"><use href="#i-commit" /></svg
+                        ></span>
+                        <span class="nav-label">このビルド</span>
+                        <span class="nav-value">e2e</span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <p class="caption">
+              <b>2: 枠付き 32px。</b
+              >アイコンの面が並ぶので一覧のリズムは出るが、行の要素が強くなり、 名前の幅は約 24px
+              減る。設定は操作より読む画面なので、ここまで主張させない方が静か。
+            </p>
+          </div>
+        </div>
+
+        <p class="pattern-note" style="margin-top: 24px">
+          推奨は <b>1（枠なし 20px）</b>。全行に同じ太さの線画を置き、色は補助文字と同じにします。
+          状態は値の側（「接続済み」の緑など）に残し、アイコンで状態を表しません。アイコンの色分けは、
+          選択中の行や異常がある行だけにします。
+        </p>
+      </section>
+
+      <section class="pattern" id="spec">
+        <div class="pattern-head">
+          <h2>仕様メモ</h2>
+        </div>
+
+        <div class="spec">
+          <div>
+            <h3>決めたこと</h3>
+            <dl>
+              <dt>一覧の現在値</dt>
+              <dd>表示・定型文・通知・再起動の行に、いまの値を出す。開かなくても状態が分かる。</dd>
+              <dt>グループ</dt>
+              <dd>
+                操作する設定（表示・定型文・通知・再起動）と、状態を見るアプリ情報（接続・このビルド）を分ける。
+              </dd>
+              <dt>詳細の見出し</dt>
+              <dd>上部バーへ移し、本文の sticky 見出しは畳む。同じ名前を 2 回出さない。</dd>
+              <dt>戻る</dt>
+              <dd>詳細 → 一覧 → 元の画面。歯車は一覧・詳細のどちらからでも設定を閉じる。</dd>
+              <dt>スクロール位置</dt>
+              <dd>保持しない。一覧は常に先頭から開く（6 行なので戻す必要がない）。</dd>
+              <dt>保存</dt>
+              <dd>今までどおり各画面で保存する。一覧の値は BFF のスナップショットから引き直す。</dd>
+            </dl>
+          </div>
+
+          <div>
+            <h3>未決</h3>
+            <ul>
+              <li>広い画面でカテゴリ列を出すか（案 A）、1 カラムのままか（案 B）。</li>
+              <li>接続とこのビルドを一覧に出すか、詳細の末尾に「アプリ情報」としてまとめるか。</li>
+              <li>
+                定型文の編集画面のように、詳細からもう 1 段深くなる画面の戻り先（フォーム → 詳細 →
+                一覧）。
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3>実装メモ</h3>
+            <ul>
+              <li>
+                状態は「どのカテゴリを開いているか」の 1 つだけ。id を持ち、閉じるときに null
+                へ戻す。
+              </li>
+              <li>
+                狭い画面は <code>hwc-detail-bar</code> と
+                <code>hwc-settings-scroll</code> をそのまま使う。
+              </li>
+              <li>
+                行は既存の <code>hwc-template-row</code> と同じ形（行全体がボタン、線は行間）。
+              </li>
+              <li>
+                カテゴリの値は、既存の設定コンポーネントが持つ状態から引く。新しい保存先は作らない。
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const root = document.documentElement;
+      document.getElementById("theme-toggle").addEventListener("click", () => {
+        root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      });
+    </script>
+  </body>
+</html>

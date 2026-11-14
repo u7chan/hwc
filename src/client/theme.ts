@@ -167,6 +167,12 @@ export function themeGroups(): {
   };
 }
 
+// 一覧の行に出す短い名前。端末に追従する選択も、ほかのテーマと同じ 1 語で並べる。
+export function themeLabel(preference: ThemePreference): string {
+  if (preference === "system") return "システム";
+  return THEMES.find((theme) => theme.id === preference)?.label ?? "";
+}
+
 const THEME_IDS = new Set<string>(THEMES.map((theme) => theme.id));
 
 export const THEME_STORAGE_KEY = "hwc-theme";

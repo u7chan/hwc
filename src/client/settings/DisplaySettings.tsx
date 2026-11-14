@@ -8,8 +8,7 @@ type DisplaySettingsProps = {
 
 export function DisplaySettings(props: DisplaySettingsProps) {
   return (
-    <section class="hwc-section">
-      <h3 class="hwc-section-title">表示</h3>
+    <section>
       <ThemePicker value={props.theme} onChange={props.onThemeChange} />
       <p class="hwc-section-note">システムは端末の外観設定に合わせます。</p>
     </section>
