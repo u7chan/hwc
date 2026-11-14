@@ -8,6 +8,10 @@ export const SIDEBAR_STEP = 16;
 // app.css の @media (min-width: 900px) と同じ境目。片方を変えたらもう片方も変える。
 export const WIDE_LAYOUT_QUERY = "(min-width: 900px)";
 
+// 設定でカテゴリを左に常設する幅。ペイン一覧（既定 352）とカテゴリ列（260）を引いても、
+// 内容にスマホ相当（390）が残る幅にする。狭ければ 1 カラムの一覧に戻す。
+export const SETTINGS_SIDE_QUERY = "(min-width: 1080px)";
+
 export function clampSidebarWidth(width: number, viewportWidth = Number.POSITIVE_INFINITY): number {
   if (!Number.isFinite(width)) return SIDEBAR_DEFAULT_WIDTH;
   const max = Math.max(

@@ -1,6 +1,8 @@
 import { useState } from "preact/hooks";
+import { useMediaQuery } from "../app/use-media-query";
 import type { ConnectionStatus } from "../connection";
 import { ChevronLeftIcon } from "../icons";
+import { SETTINGS_SIDE_QUERY } from "../layout";
 import type { ThemePreference } from "../theme";
 import { BuildSettings } from "./BuildSettings";
 import { ConnectionSettings } from "./ConnectionSettings";
@@ -48,6 +50,9 @@ function section(
 
 export function Settings(props: SettingsProps) {
   const [opened, setOpened] = useState<SettingsCategoryId | null>(null);
+  // ペイン一覧のぶんを引いても内容が読める幅のときだけ、カテゴリを左に常設する。
+  const roomy = useMediaQuery(SETTINGS_SIDE_QUERY);
+  const sideBySide = props.wide && roomy;
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   // 保存で一覧の現在値が変わる。詳細を開いたままでも引き直せるよう、番号を進める。
   const [summaryKey, setSummaryKey] = useState(0);
@@ -84,7 +89,7 @@ export function Settings(props: SettingsProps) {
   // 作り直されて下書きが消える。広い画面の要素は hidden で隠すだけにする。
   return (
     <div class="hwc-detail-inner">
-      <header class="hwc-detail-bar" hidden={props.wide}>
+      <header class="hwc-detail-bar" hidden={sideBySide}>
         {/* 狭い画面では一覧ごと隠れるので、設定を閉じる道をここに残す。 */}
         <button
           type="button"
@@ -100,12 +105,12 @@ export function Settings(props: SettingsProps) {
       </header>
 
       <div class="hwc-settings-wide">
-        <div class="hwc-settings-side" hidden={!props.wide}>
-          {props.wide ? index("side", shown) : null}
+        <div class="hwc-settings-side" hidden={!sideBySide}>
+          {sideBySide ? index("side", shown) : null}
         </div>
 
         <div class="hwc-settings-scroll">
-          {opened === null && !props.wide ? (
+          {opened === null && !sideBySide ? (
             index("page", null)
           ) : (
             <div class="hwc-settings">
