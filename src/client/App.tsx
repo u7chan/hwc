@@ -42,6 +42,7 @@ import {
   parseAppState,
   removeWorktree,
   sendInput,
+  startAgent,
   stopAgent,
   syncWorkspace,
 } from "./api";
@@ -92,8 +93,8 @@ import {
 } from "./split-view";
 import { pendingReadAfter, shouldFocusOnLeave } from "./scope";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
-import { type StartingPane, paneStarting } from "./starting";
-import { workingMs } from "./time";
+import { type LaunchIntent, type PaneLaunch, type PaneLaunchView, launchPhase } from "./starting";
+import { serverClockNow, workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -182,9 +183,12 @@ export function App() {
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
-  // 作ったばかりのペイン。エージェントが画面を引き継ぐまで、hwc からの入力を閉じる。
-  // 開いているペインを切り替えても残す（選び直しでガードを外させない）。
-  const [starting, setStarting] = useState<StartingPane | null>(null);
+  // 起動を頼んだペイン。ダイアログで選んだ内容だけを持ち、起動したかはスナップショットで決める。
+  // 起動が終わるまでに別のペインも作れるので、ペイン id ごとに持つ。
+  const [launches, setLaunches] = useState<ReadonlyMap<string, PaneLaunch>>(() => new Map());
+  // 要求済みの記録。再試行で記録が置き換わっても、前の要求の完了が新しい要求の
+  // 番人を消さないよう、ペイン id ではなく記録そのもので覚える。
+  const launchRequests = useRef(new Set<PaneLaunch>());
   const closeInFlight = useRef(false);
   const removeInFlight = useRef(false);
   const closeSpaceInFlight = useRef(false);
@@ -583,6 +587,117 @@ export function App() {
     if (paneId === undefined) return;
     closeMenu();
     setCreating({ paneId, worktreeWorkspaceId: workspace.id, start: false });
+  };
+
+  // ダイアログが決めた起動の指定を預かる。新しいペインはスナップショットに現れてから、
+  // ペインごとに 1 回だけ起動を頼む。起動したかどうかの正はスナップショットに置く。
+  const beginLaunch = (paneId: string, intent: LaunchIntent | null) => {
+    setLaunches((current) => {
+      const next = new Map(current);
+      if (intent === null) {
+        next.delete(paneId);
+      } else {
+        next.set(paneId, {
+          paneId,
+          at: serverClockNow(Date.now(), skew.current),
+          agent: intent.agent,
+          model: intent.model,
+          effort: intent.effort,
+          request: intent.started ? "started" : "waiting",
+          waitForShell: intent.waitForShell,
+          error: null,
+        });
+      }
+      return next;
+    });
+  };
+
+  const runLaunch = async (launch: PaneLaunch) => {
+    const result = await startAgent(launch.paneId, {
+      agent: launch.agent,
+      model: launch.model,
+      effort: launch.effort,
+      waitForShell: launch.waitForShell,
+    });
+    launchRequests.current.delete(launch);
+    setLaunches((current) => {
+      // 再試行で別の記録に置き換わっていたら、遅れて返った結果で上書きしない。
+      if (current.get(launch.paneId) !== launch) return current;
+      // 別の経路で起動済みなら待ちを続ける。起動したかはスナップショットが決める。
+      if (result.ok || result.error === "pane_not_shell") {
+        return new Map(current).set(launch.paneId, {
+          ...launch,
+          request: "started",
+          at: serverClockNow(Date.now(), skew.current),
+          error: null,
+        });
+      }
+      return new Map(current).set(launch.paneId, {
+        ...launch,
+        request: "failed",
+        at: serverClockNow(Date.now(), skew.current),
+        error: result.error,
+      });
+    });
+  };
+
+  // 分割の応答より先に Herdr の状態が届かないことがあり、その間は BFF もペインを知らない。
+  // スナップショットに現れてから頼む。
+  useEffect(() => {
+    if (state === null) return;
+    for (const launch of launches.values()) {
+      if (launch.request !== "waiting") continue;
+      if (launchRequests.current.has(launch)) continue;
+      if (findPane(state, launch.paneId) === null) continue;
+      launchRequests.current.add(launch);
+      void runLaunch(launch);
+    }
+  }, [state, launches]);
+
+  // 起動が終わった記録は捨てる。残すと、後で /exit してシェルに戻ったときに
+  // 「起動を確認できませんでした」が蘇る。
+  useEffect(() => {
+    if (launches.size === 0 || state === null) return;
+    setLaunches((current) => {
+      let next: Map<string, PaneLaunch> | null = null;
+      for (const [paneId, launch] of current) {
+        const pane = findPane(state, paneId);
+        if (pane === null) {
+          // 新しいペインは、応答より先に記録だけができていることがある。届くまで残す。
+          if (launch.request === "waiting") continue;
+          next ??= new Map(current);
+          next.delete(paneId);
+          continue;
+        }
+        if (launchPhase(launch, pane, now) !== "ready") continue;
+        next ??= new Map(current);
+        next.delete(paneId);
+      }
+      return next ?? current;
+    });
+  }, [state, launches, now]);
+
+  // 起動に失敗したペインから、同じ指定でもう一度頼む。
+  const retryLaunch = (paneId: string) => {
+    const launch = launches.get(paneId);
+    if (launch === undefined) return;
+    beginLaunch(paneId, {
+      agent: launch.agent,
+      model: launch.model,
+      effort: launch.effort,
+      waitForShell: launch.waitForShell,
+      started: false,
+    });
+  };
+
+  // 起動を諦め、残ったシェルとして使う。入力欄もシェルの形に戻る。
+  const useShell = (paneId: string) => {
+    setLaunches((current) => {
+      if (!current.has(paneId)) return current;
+      const next = new Map(current);
+      next.delete(paneId);
+      return next;
+    });
   };
 
   // タブから外す操作は、対象のタブが縮むアニメーションを見せてから履歴に反映する。
@@ -1011,53 +1126,69 @@ export function App() {
   const menuCanCloseSpace =
     state !== null && menuWorkspace !== null && canCloseDuplicateSpace(state, menuWorkspace.id);
 
-  const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => (
-    <PaneDetail
-      key={item.id}
-      pane={item}
-      context={where}
-      compact={compact}
-      scheme={scheme}
-      // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
-      labeled={splitCells}
-      // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
-      showSpace={splitCells && multiSpaceTabs}
-      // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
-      // 値そのものは常に渡す。
-      branch={where.branch}
-      // 上流との差はワークスペースの属性。セルが並ぶときは同じ値が並ぶので出さない。
-      sync={splitCells ? null : where.sync}
-      workspaceMenuOpen={
-        menu?.open === true &&
-        menu.target.kind === "workspace" &&
-        menu.target.id === where.workspaceId
-      }
-      // 広い画面でも PR のチップは見出しに出す。ブランチだけを隠す。
-      showBranch={!wide}
-      waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
-      running={processes.get(item.id)?.running === true}
-      sending={inputsInFlight.current.has(item.id)}
-      starting={paneStarting(starting, item, now)}
-      dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
-      confirmationAttempts={confirmationAttempts.current}
-      onConfirmFolderTrust={(id) => void confirmPaneFolderTrust(item.id, id)}
-      onDismissConfirmation={(id) =>
-        setDismissedConfirmations((current) => ({ ...current, [item.id]: id }))
-      }
-      menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
-      outputRef={(handle) => {
-        if (handle === null) outputHandles.current.delete(item.id);
-        else outputHandles.current.set(item.id, handle);
-      }}
-      onOpenMenu={openPaneMenu}
-      onOpenWorkspaceMenu={openWorkspaceMenu}
-      onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
-      onStop={() => stopPane(item.id)}
-      onStartAgent={() => openStartAgentDialog(item.id)}
-      onOpenImage={(url, name) => setViewer({ url, name })}
-      onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
-    />
-  );
+  const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => {
+    const launch = launches.get(item.id) ?? null;
+    const phase = launchPhase(launch, item, now);
+    const launchView: PaneLaunchView | null =
+      launch === null || phase === null
+        ? null
+        : {
+            phase,
+            agent: launch.agent,
+            model: launch.model,
+            effort: launch.effort,
+            error: launch.request === "failed" ? launch.error : null,
+          };
+    return (
+      <PaneDetail
+        key={item.id}
+        pane={item}
+        context={where}
+        compact={compact}
+        scheme={scheme}
+        // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
+        labeled={splitCells}
+        // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
+        showSpace={splitCells && multiSpaceTabs}
+        // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
+        // 値そのものは常に渡す。
+        branch={where.branch}
+        // 上流との差はワークスペースの属性。セルが並ぶときは同じ値が並ぶので出さない。
+        sync={splitCells ? null : where.sync}
+        workspaceMenuOpen={
+          menu?.open === true &&
+          menu.target.kind === "workspace" &&
+          menu.target.id === where.workspaceId
+        }
+        // 広い画面でも PR のチップは見出しに出す。ブランチだけを隠す。
+        showBranch={!wide}
+        waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
+        running={processes.get(item.id)?.running === true}
+        sending={inputsInFlight.current.has(item.id)}
+        launch={launchView}
+        dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
+        confirmationAttempts={confirmationAttempts.current}
+        onConfirmFolderTrust={(id) => void confirmPaneFolderTrust(item.id, id)}
+        onDismissConfirmation={(id) =>
+          setDismissedConfirmations((current) => ({ ...current, [item.id]: id }))
+        }
+        menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
+        outputRef={(handle) => {
+          if (handle === null) outputHandles.current.delete(item.id);
+          else outputHandles.current.set(item.id, handle);
+        }}
+        onOpenMenu={openPaneMenu}
+        onOpenWorkspaceMenu={openWorkspaceMenu}
+        onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
+        onStop={() => stopPane(item.id)}
+        onStartAgent={() => openStartAgentDialog(item.id)}
+        onRetryLaunch={() => retryLaunch(item.id)}
+        onUseShell={() => useShell(item.id)}
+        onOpenImage={(url, name) => setViewer({ url, name })}
+        onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
+      />
+    );
+  };
 
   // ドラッグ中のプレビューの文言。中央は木の中なら入れ替え、外のタブなら置換。
   const dropLabel = (zone: DropZone, moving: string | null): string => {
@@ -1190,8 +1321,7 @@ export function App() {
     creating,
     setCreating,
     setPendingSelect,
-    setStarting,
-    skew,
+    beginLaunch,
     viewer,
     setViewer,
   };

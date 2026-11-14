@@ -53,6 +53,8 @@ export type StartRequest = {
   agent: AgentKind;
   model: AgentModel | null;
   effort: string | null;
+  // 分割直後の起動だけ true。シェルが agent.start を受け付けるまで待つ。
+  waitForShell: boolean;
 };
 
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
@@ -169,7 +171,12 @@ export function parseStartBody(body: unknown): Parsed<StartRequest> {
   const selection = parseAgentSelection(record, agent);
   if (!selection.ok) return selection;
 
-  return { ok: true, value: { agent, ...selection.value } };
+  const waitForShell = record.waitForShell ?? false;
+  if (typeof waitForShell !== "boolean") {
+    return { ok: false, status: 400, error: "waitForShell must be a boolean" };
+  }
+
+  return { ok: true, value: { agent, ...selection.value, waitForShell } };
 }
 
 // モデルと effort の整合は、分割で作る場合と既存のシェルで起動する場合で同じ。

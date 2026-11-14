@@ -337,6 +337,29 @@ test("POST /api/panes/:id/agent starts in the existing shell pane without splitt
   expect(store.refreshCount()).toBe(0);
 });
 
+test("POST /api/panes/:id/agent can wait for a freshly split shell", async () => {
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    panes: {
+      startAgent: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+
+  const response = await postAgent(app, "w1:p1", { agent: "pi", waitForShell: true });
+
+  expect(response.status).toBe(200);
+  // 待つのは Herdr 側の既定。既存のシェルと同じ経路で、明示の false を渡さない。
+  expect(seen).toEqual([
+    {
+      paneId: "w1:p1",
+      kind: "pi",
+      name: expect.stringMatching(/^hwc-w1-p1-[0-9a-z]{4}$/),
+    },
+  ]);
+});
+
 test("POST /api/panes/:id/agent refuses a pane that already has an agent", async () => {
   const calls: string[] = [];
   const { app } = createTestApp({

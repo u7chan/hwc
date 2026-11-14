@@ -719,6 +719,8 @@ export type StartAgentRequest = {
   agent: AgentKind;
   model: AgentModel | null;
   effort: string | null;
+  // 分割直後のペインは、シェルが起動を受け付けるまで agent.start が busy を返す。
+  waitForShell: boolean;
 };
 
 export type StartAgentFailure =
@@ -894,7 +896,7 @@ export async function createPane(
 }
 
 // 既存のシェルペインでエージェントを起動する。分割は無いが、起動の待ちとモデル指定時の
-// 再検証を含むので、作成と同じ期限で待つ。
+// 再検証を含むので、作成と同じ期限で待つ。分割直後は waitForShell でシェルの準備も待つ。
 export async function startAgent(
   paneId: string,
   request: StartAgentRequest,

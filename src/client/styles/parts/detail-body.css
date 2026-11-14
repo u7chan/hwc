@@ -231,7 +231,7 @@
 
 .hwc-confirmation-note,
 .hwc-terminal-note,
-.hwc-starting {
+.hwc-launch-note {
   color: var(--color-secondary);
   font-size: var(--text-secondary);
 }
@@ -247,32 +247,58 @@
   border-top: 1px solid var(--color-line);
 }
 
-/* 入力欄の代わりに置く起動待ち。起動が終わったときに入力欄が同じ位置へ入るよう、
-   入力欄と同じ高さを取る。compact は 1 行の入力欄に合わせる。 */
-.hwc-starting {
-  flex: none;
+/* 起動待ちと起動失敗の行。入力欄の中の先頭に置く。面は入力欄と共有する。 */
+.hwc-launch-note {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  min-height: calc(
-    max(16px, var(--text-body)) * var(--line-body) + var(--space-2) * 2 + var(--space-3) +
-      var(--tap) + var(--space-1) + var(--space-3) * 2 + 1px
-  );
-  margin: 0;
-  padding: var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
-  border-top: 1px solid var(--color-line);
+  margin: 0 0 var(--space-2);
 }
 
-.hwc-starting[data-compact="true"] {
-  min-height: calc(var(--tap) + var(--space-2) * 2 + 1px);
+.hwc-launch-note[data-tone="attention"] {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-attention);
+  border-radius: var(--radius-control);
+  background: var(--color-attention-bg);
+  color: var(--color-attention);
 }
 
-/* 回転する記号は文字ではない。折り返しても行の中央に置く。 */
-.hwc-starting-mark {
+/* compact は起動中の説明を出さない（JSX 側で読み上げ用の文に切り替える）。 */
+.hwc-launch-mark {
   flex: none;
-  align-self: center;
   display: grid;
   place-items: center;
+}
+
+.hwc-launch-text {
+  min-width: 0;
+}
+
+.hwc-launch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.hwc-launch-action {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hwc-launch-action:hover {
+  background: var(--color-raised);
+}
+
+.hwc-launch-action:active {
+  opacity: 0.72;
 }
 
 .hwc-output-wrap {

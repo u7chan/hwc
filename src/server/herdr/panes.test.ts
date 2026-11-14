@@ -852,12 +852,17 @@ test("a long command line is cut before it reaches the tab", () => {
 test("parseStartBody keeps the agent and its model selection without a name", () => {
   expect(parseStartBody({ agent: "pi" })).toEqual({
     ok: true,
-    value: { agent: "pi", model: null, effort: null },
+    value: { agent: "pi", model: null, effort: null, waitForShell: false },
   });
   const model = { provider: "example", id: "beam" };
   expect(parseStartBody({ agent: "codex", model, effort: "low" })).toEqual({
     ok: true,
-    value: { agent: "codex", model, effort: "low" },
+    value: { agent: "codex", model, effort: "low", waitForShell: false },
+  });
+  // 分割直後のペインだけ、シェルの準備待ちを含める。
+  expect(parseStartBody({ agent: "pi", waitForShell: true })).toEqual({
+    ok: true,
+    value: { agent: "pi", model: null, effort: null, waitForShell: true },
   });
 });
 
@@ -866,6 +871,7 @@ test.each([
   { body: { agent: null } },
   { body: { agent: "gemini" } },
   { body: { name: "実装" } },
+  { body: { agent: "pi", waitForShell: "yes" } },
   { body: null },
   { body: [] },
   { body: "pi" },
