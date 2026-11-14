@@ -6,8 +6,12 @@ import {
   MAX_ATTACHMENTS,
   MAX_PREVIEW_FILE_BYTES,
 } from "../shared/attachments";
-import { messageFileKindFromName, previewContentType } from "../shared/message-files";
-import type { ChatFile, ChatMessage, ChatSnapshot } from "./chat/contract";
+import {
+  messageFileKindFromName,
+  messageLinkKindFromName,
+  previewContentType,
+} from "../shared/message-files";
+import type { ChatFile, ChatLink, ChatMessage, ChatSnapshot } from "./chat/contract";
 
 // 1 通の本文から試す候補の上限。実在確認は候補ごとに fs を叩くので、本文が長くても止まるようにする。
 const MAX_CANDIDATES = 20;
@@ -73,8 +77,8 @@ function trimToMessageFileName(token: string): string | null {
   const body = cutLeadingProse(token);
   for (let end = body.length; end > 0; end -= 1) {
     const candidate = body.slice(0, end);
-    // 見せられる形式の一覧は 1 か所から引く。
-    if (messageFileKindFromName(candidate) !== null) return candidate;
+    // 見せられる形式の一覧は 1 か所から引く。本文のリンクから開けるテキストも候補にする。
+    if (messageLinkKindFromName(candidate) !== null) return candidate;
     if (/[A-Za-z0-9/\\]/.test(body.charAt(end - 1))) return null;
   }
   return null;
@@ -93,6 +97,9 @@ export type MessagePathCandidate = {
   path: string;
   // 画像記法の destination として現れた表記。本文のその位置に描くための照合キーになる。
   imageRefs: string[];
+  // 画像以外のリンクの destination として現れた表記。本文のその位置をリンクにするための
+  // 照合キーになる。
+  linkRefs: string[];
 };
 
 // 本文に書かれたファイルパスの候補。実在するかはここでは見ない。
@@ -102,14 +109,20 @@ export function messagePathCandidates(text: string): MessagePathCandidate[] {
   // 描画位置は、本文を解析する側と同じくコードスパンの中を見ない。中身を同じ長さの
   // 空白に置き換えて、候補の抽出と同じ本文を行ごと使えるようにする。
   const imageRefs = new Set<string>();
+  const linkRefs = new Set<string>();
   const masked = source.replace(INLINE_CODE, (match) => " ".repeat(match.length));
   for (const match of masked.matchAll(MARKDOWN_LINK)) {
     const destination = match[1];
-    if (destination === undefined || !(match[0] ?? "").startsWith("!")) continue;
-    // `\![x](a.png)` は画像ではなく文字列として読まれる。描画位置にしない。
-    if (masked.charAt((match.index ?? 0) - 1) === "\\") continue;
+    if (destination === undefined) continue;
+    const image = (match[0] ?? "").startsWith("!");
+    const before = masked.charAt((match.index ?? 0) - 1);
+    // `\![x](a)` は画像ではなくリンク。`\[x](a)` は記法ごとエスケープされているので、
+    // リンクにもしない。
+    if (before === "\\" && !image) continue;
     // 本文の表記とそのまま一致するものだけを照合キーにする。
-    if (trimToken(destination) === destination) imageRefs.add(destination);
+    if (trimToken(destination) !== destination) continue;
+    if (image && before !== "\\") imageRefs.add(destination);
+    else linkRefs.add(destination);
   }
   const body = source
     .replace(INLINE_CODE, (_match, code: string) => ` ${code} `)
@@ -118,15 +131,19 @@ export function messagePathCandidates(text: string): MessagePathCandidate[] {
   for (const token of body.split(/\s+/u)) {
     const path = trimToken(token);
     if (path === null) continue;
-    const refs = imageRefs.has(path) ? [path] : [];
     const current = candidates.get(path);
     if (current !== undefined) {
-      // 裸パスと画像記法の両方に出ても、画像記法の位置で描けるように印を残す。
-      for (const ref of refs) if (!current.imageRefs.includes(ref)) current.imageRefs.push(ref);
+      // 裸パスと記法の両方に出ても、記法の位置で描けるように印を残す。
+      if (imageRefs.has(path) && !current.imageRefs.includes(path)) current.imageRefs.push(path);
+      if (linkRefs.has(path) && !current.linkRefs.includes(path)) current.linkRefs.push(path);
       continue;
     }
     if (candidates.size >= MAX_CANDIDATES) break;
-    candidates.set(path, { path, imageRefs: refs });
+    candidates.set(path, {
+      path,
+      imageRefs: imageRefs.has(path) ? [path] : [],
+      linkRefs: linkRefs.has(path) ? [path] : [],
+    });
   }
   return [...candidates.values()];
 }
@@ -194,6 +211,8 @@ export async function collectMessageFiles(text: string, root: string): Promise<M
 
 type CollectedFiles = {
   files: MessageFile[];
+  // 本文の相対パスのリンク。実在を確かめられたものだけが入る。
+  links: ChatLink[];
   // 根の外に実在したファイル名。最初の 1 件だけ持つ（画面は 1 行しか出さない）。
   outsideFile?: string;
 };
@@ -227,12 +246,14 @@ async function collectAgainstRoots(
   rootsReal: readonly (string | null)[],
   labels: readonly (string | undefined)[] = [],
 ): Promise<CollectedFiles> {
-  if (text === "" || rootsReal.length === 0) return { files: [] };
+  if (text === "" || rootsReal.length === 0) return { files: [], links: [] };
   const candidates = messagePathCandidates(text);
-  if (candidates.length === 0) return { files: [] };
+  if (candidates.length === 0) return { files: [], links: [] };
 
   const files: MessageFile[] = [];
   const byKey = new Map<string, MessageFile>();
+  const links: ChatLink[] = [];
+  const byHref = new Set<string>();
   let outsideFile: string | undefined;
   for (const candidate of candidates) {
     let resolved: ResolvedFile | null = null;
@@ -242,7 +263,7 @@ async function collectAgainstRoots(
       resolved = await resolveAgainstRoot(
         rootReal,
         candidate.path,
-        (name) => messageFileKindFromName(name) !== null,
+        (name) => messageLinkKindFromName(name) !== null,
         root,
       );
       if (resolved !== null) break;
@@ -252,6 +273,24 @@ async function collectAgainstRoots(
       if (outsideFile === undefined)
         outsideFile = (await outsideRootFile(candidate.path, rootsReal)) ?? undefined;
       continue;
+    }
+    const rootLabel = labels[resolved.root];
+    // リンクは本文でリンク記法の destination として書かれた候補だけ。裸のパスを
+    // リンクにすると、本文の見た目がそのままで押せる範囲が変わってしまう。
+    const linkKind = messageLinkKindFromName(resolved.name);
+    if (linkKind !== null) {
+      for (const href of candidate.linkRefs) {
+        if (byHref.has(href)) continue;
+        byHref.add(href);
+        links.push({
+          href,
+          name: resolved.name,
+          version: resolved.version,
+          kind: linkKind,
+          root: resolved.root,
+          ...(rootLabel === undefined ? {} : { rootLabel }),
+        });
+      }
     }
     const kind = messageFileKindFromName(resolved.name);
     if (kind === null) continue;
@@ -266,7 +305,6 @@ async function collectAgainstRoots(
     }
     // 枠が埋まっても走査は止めない。根の外の案内は、配るファイルが 4 件揃った後ろの候補にもある。
     if (files.length >= MAX_ATTACHMENTS) continue;
-    const rootLabel = labels[resolved.root];
     const file: MessageFile = {
       name: resolved.name,
       version: resolved.version,
@@ -280,7 +318,7 @@ async function collectAgainstRoots(
     byKey.set(key, file);
     files.push(file);
   }
-  return outsideFile === undefined ? { files } : { files, outsideFile };
+  return outsideFile === undefined ? { files, links } : { files, links, outsideFile };
 }
 
 // プレビューで配信するファイル。html と同じディレクトリの css / js / 画像も、
@@ -354,6 +392,10 @@ function withFileVersions(etag: string, messages: readonly ChatMessage[]): strin
     for (const file of message.files ?? []) {
       parts.push(`${file.root}:${file.name}@${file.version}`);
     }
+    // リンクは本文の表記と結び付いている。同じ名前の別ファイルに変わっても URL が変わる。
+    for (const link of message.links ?? []) {
+      parts.push(`link:${link.root}:${link.name}:${link.href}@${link.version}`);
+    }
     // 根の外のファイルが現れる・消えるのは本文が変わらないまま起きる。
     if (message.outsideFile !== undefined) parts.push(`outside:${message.outsideFile}`);
   }
@@ -392,10 +434,12 @@ export async function attachMessageFiles(
       // 失敗の行はプロバイダの文言で、エージェントの発話ではない。
       if (message.role !== "agent" || message.text === "") return message;
       const files = await collectAgainstRoots(message.text, rootsReal, labels);
-      if (files.files.length === 0 && files.outsideFile === undefined) return message;
+      if (files.files.length === 0 && files.links.length === 0 && files.outsideFile === undefined)
+        return message;
       return {
         ...message,
         ...(files.files.length === 0 ? {} : { files: files.files }),
+        ...(files.links.length === 0 ? {} : { links: files.links }),
         ...(files.outsideFile === undefined ? {} : { outsideFile: files.outsideFile }),
       };
     }),

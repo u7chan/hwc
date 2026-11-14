@@ -1,22 +1,26 @@
 import { createContext, Fragment, type ComponentChildren } from "preact";
 import { useContext, useMemo, useState } from "preact/hooks";
-import type { MessageImageSource } from "./chat";
+import type { ChatFile } from "../server/chat/contract";
+import type { MessageImageSource, MessageLinkSource } from "./chat";
 import { useCopy } from "./copy";
 import { CopyGlyph } from "./icons";
 import { imageOnlyNodes, inlineText, parseInline } from "./markdown/inline";
 import { MARKDOWN_MAX_LENGTH, parseMarkdown } from "./markdown/parse";
-import type { MdBlock, MdImage, MdInline, MdListItem } from "./markdown/types";
+import type { MdBlock, MdImage, MdInline, MdLink, MdListItem } from "./markdown/types";
+import { messageFileLabel } from "../shared/message-files";
 
 const HEADING_TAGS = ["h3", "h4", "h5", "h6"] as const;
 
-type ImageContextValue = {
+type InlineContextValue = {
   images?: ReadonlyMap<string, MessageImageSource>;
+  links?: ReadonlyMap<string, MessageLinkSource>;
   onOpenImage?: (url: string, name: string) => void;
+  onOpenPreview?: (file: ChatFile) => void;
 };
 
-// 本文の深さをそのまま関数の引数で渡すと、絵を使わない入れ子のすべてに同じ値を配る
-// ことになる。画像記法の描画にだけ要る値なので、本文の解析結果を受ける側でまとめて配る。
-const ImageContext = createContext<ImageContextValue>({});
+// 本文の深さをそのまま関数の引数で渡すと、絵やリンクを使わない入れ子のすべてに同じ値を配る
+// ことになる。本文の解析結果を受ける側でまとめて配る。
+const InlineContext = createContext<InlineContextValue>({});
 
 type MdGroup =
   | { kind: "block"; block: MdBlock }
@@ -51,12 +55,16 @@ export function Markdown({
   text,
   taskScope,
   images,
+  links,
   onOpenImage,
+  onOpenPreview,
 }: {
   text: string;
   taskScope?: string;
   images?: ReadonlyMap<string, MessageImageSource>;
+  links?: ReadonlyMap<string, MessageLinkSource>;
   onOpenImage?: (url: string, name: string) => void;
+  onOpenPreview?: (file: ChatFile) => void;
 }) {
   if (text.length > MARKDOWN_MAX_LENGTH) {
     return (
@@ -68,11 +76,11 @@ export function Markdown({
   // タスクの通し番号は Markdown の描画ごとに 0 から数える。メッセージをまたぐ一意性は taskScope が担う。
   const taskCounter = { value: 0 };
   return (
-    <ImageContext.Provider value={{ images, onOpenImage }}>
+    <InlineContext.Provider value={{ images, links, onOpenImage, onOpenPreview }}>
       <div class="hwc-md">
         <MarkdownBlocks text={text} taskScope={taskScope} taskCounter={taskCounter} />
       </div>
-    </ImageContext.Provider>
+    </InlineContext.Provider>
   );
 }
 
@@ -108,7 +116,7 @@ function MarkdownBlocks({
 }
 
 function ImageRow({ nodes }: { nodes: MdImage[] }) {
-  const context = useContext(ImageContext);
+  const context = useContext(InlineContext);
   return (
     <div class="hwc-md-image-row">
       {nodes.map((node, index) => (
@@ -326,11 +334,11 @@ function CodeBlock({ lang, text }: { lang: string | null; text: string }) {
 
 function InlineSource({ source }: { source: string }) {
   const nodes = useMemo(() => parseInline(source), [source]);
-  const images = useContext(ImageContext);
+  const images = useContext(InlineContext);
   return <>{inlineChildren(nodes, images)}</>;
 }
 
-function inlineChildren(nodes: MdInline[], context: ImageContextValue): ComponentChildren[] {
+function inlineChildren(nodes: MdInline[], context: InlineContextValue): ComponentChildren[] {
   return nodes.map((node) => {
     switch (node.kind) {
       case "text":
@@ -346,16 +354,7 @@ function inlineChildren(nodes: MdInline[], context: ImageContextValue): Componen
       case "code":
         return <code>{node.text}</code>;
       case "link":
-        return (
-          <a
-            href={node.href}
-            title={node.title ?? undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {inlineChildren(node.children, context)}
-          </a>
-        );
+        return linkNode(node, context);
       case "image":
         return imageNode(node, context);
       case "break":
@@ -364,8 +363,48 @@ function inlineChildren(nodes: MdInline[], context: ImageContextValue): Componen
   });
 }
 
+// 相対パスは、BFF が実在を確かめた表記と一致したときだけリンクにする（ADR 0084）。
+// 一致しなければ今までどおり原文を等幅で出す。
+function linkNode(node: MdLink, context: InlineContextValue) {
+  const children = inlineChildren(node.children, context);
+  const title = node.title ?? undefined;
+  const target = context.links?.get(node.href);
+  if (target === undefined) {
+    if (node.raw !== undefined) return <code class="hwc-md-literal">{node.raw}</code>;
+    return (
+      <a href={node.href} title={title} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    );
+  }
+  if (target.kind === "text") {
+    return (
+      <a href={target.url} title={title} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    );
+  }
+  // チップと同じ行き先にする。修飾キー付きのクリックはブラウザに任せ、新しいタブでも開ける。
+  const onClick = (event: MouseEvent) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey) return;
+    if (target.kind === "image" && context.onOpenImage !== undefined) {
+      event.preventDefault();
+      const alt = inlineText(node.children).trim();
+      context.onOpenImage(target.url, alt === "" ? messageFileLabel(target.file.name) : alt);
+    } else if (target.kind === "html" && context.onOpenPreview !== undefined) {
+      event.preventDefault();
+      context.onOpenPreview(target.file);
+    }
+  };
+  return (
+    <a href={target.url} title={title} onClick={onClick}>
+      {children}
+    </a>
+  );
+}
+
 // 実在を確認したファイルだけを絵にする。決まらない記法は原文のまま残す。
-function imageNode(node: MdImage, context: ImageContextValue) {
+function imageNode(node: MdImage, context: InlineContextValue) {
   const image = context.images?.get(node.href);
   const open = context.onOpenImage;
   if (image === undefined || open === undefined) {

@@ -5,6 +5,7 @@ import type {
   ChatCompaction,
   ChatContext,
   ChatFile,
+  ChatLink,
   ChatMessage,
   ChatSnapshot,
   ChatUsage,
@@ -206,6 +207,33 @@ function toChatFiles(value: unknown): ChatFile[] | undefined {
   return files.length === 0 ? undefined : files;
 }
 
+// 本文の相対パスのリンク。href は本文の表記との照合キーで、そのまま URL にはしない。
+function toChatLinks(value: unknown): ChatLink[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const links: ChatLink[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue;
+    const link = item as Partial<ChatLink>;
+    if (typeof link.href !== "string" || link.href === "") continue;
+    if (typeof link.name !== "string" || typeof link.version !== "string") continue;
+    if (link.kind !== "image" && link.kind !== "html" && link.kind !== "text") continue;
+    // 根の番号は配信 URL の一部になる。負数や小数は捨てる。
+    if (typeof link.root !== "number" || !Number.isInteger(link.root) || link.root < 0) continue;
+    if (link.name === "" || link.name.startsWith("/")) continue;
+    if (link.name.split("/").includes("..")) continue;
+    const rootLabel = toRootLabel(link.rootLabel);
+    links.push({
+      href: link.href,
+      name: link.name,
+      version: link.version,
+      kind: link.kind,
+      root: link.root,
+      ...(rootLabel === undefined ? {} : { rootLabel }),
+    });
+  }
+  return links.length === 0 ? undefined : links;
+}
+
 function toChatMessage(value: unknown): ChatMessage | null {
   if (typeof value !== "object" || value === null) return null;
   const message = value as Partial<ChatMessage>;
@@ -217,6 +245,7 @@ function toChatMessage(value: unknown): ChatMessage | null {
   if (typeof message.at !== "number") return null;
   const attachments = toChatAttachments(message.attachments);
   const files = toChatFiles(message.files);
+  const links = toChatLinks(message.links);
   const outsideFile = toOutsideFile(message.outsideFile);
   const count = message.role === "error" ? toRetryCount(message.count) : undefined;
   return {
@@ -227,6 +256,7 @@ function toChatMessage(value: unknown): ChatMessage | null {
     ...(count === undefined ? {} : { count }),
     ...(attachments === undefined ? {} : { attachments }),
     ...(files === undefined ? {} : { files }),
+    ...(links === undefined ? {} : { links }),
     ...(outsideFile === undefined ? {} : { outsideFile }),
   };
 }
@@ -287,7 +317,7 @@ export function chatFileUrl(paneId: string, file: ChatFile): string {
 
 // パス形式にするのは、HTML の中の相対参照（`./app.css`）をそのまま解決させるため。
 // 先頭の根の番号もパスに入れて、相対参照が別の根へずれないようにする。
-export function previewUrl(paneId: string, file: ChatFile): string {
+export function previewUrl(paneId: string, file: { root: number; name: string }): string {
   const encoded = file.name.split("/").map(encodeURIComponent).join("/");
   return `/api/panes/${encodeURIComponent(paneId)}/preview/${file.root}/${encoded}`;
 }

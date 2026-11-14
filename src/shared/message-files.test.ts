@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { previewWarning } from "./message-files";
+import { messageLinkKindFromName, previewContentType, previewWarning } from "./message-files";
 
 // 案内を出すのは、iframe の中で白くなる原因の 1 つ目（配信できない script）だけ。
 const page = (script: string) => `<!doctype html><html><body>${script}</body></html>`;
@@ -59,4 +59,23 @@ test("ignores tags other than script", () => {
   expect(previewWarning(page('<link rel="stylesheet" href="./app.css">'))).toBeNull();
   expect(previewWarning(page('<img src="./shot.tsx">'))).toBeNull();
   expect(previewWarning("")).toBeNull();
+});
+
+// 本文の相対パスのリンクから開ける形式（ADR 0084）。拡張子の一覧はここ 1 か所。
+test("links text files by an explicit extension list", () => {
+  expect(messageLinkKindFromName("docs/notes.md")).toBe("text");
+  expect(messageLinkKindFromName("data/report.csv")).toBe("text");
+  expect(messageLinkKindFromName("src/app.ts")).toBe("text");
+  expect(messageLinkKindFromName("docs/README.MD")).toBe("text");
+  // 画像と HTML はチップと同じ見せ方のまま。
+  expect(messageLinkKindFromName("docs/shot.png")).toBe("image");
+  expect(messageLinkKindFromName("docs/mock.html")).toBe("html");
+  // 拡張子で選ぶので、`.env` や拡張子の無い名前は入らない。
+  expect(messageLinkKindFromName("docs/.env")).toBeNull();
+  expect(messageLinkKindFromName("docs/secrets.env")).toBeNull();
+  expect(messageLinkKindFromName("docs/settings")).toBeNull();
+  expect(messageLinkKindFromName("docs/archive.zip")).toBeNull();
+  // 実行させたくないので、テキストは必ず text/plain で配る。
+  expect(previewContentType("src/app.ts")).toBe("text/plain; charset=utf-8");
+  expect(previewContentType("docs/notes.md")).toBe("text/plain; charset=utf-8");
 });

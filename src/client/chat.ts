@@ -3,13 +3,14 @@ import type {
   ChatCompaction,
   ChatContext,
   ChatFile,
+  ChatLink,
   ChatMessage,
   ChatSnapshot,
   ChatUsage,
 } from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
-import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, chatFileUrl, readChat } from "./api";
+import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, chatFileUrl, previewUrl, readChat } from "./api";
 import { MARKDOWN_MAX_LENGTH, markdownImageHrefs } from "./markdown/parse";
 
 // 返答が届いている間は短く、動いていない間は長く。隠れている間に読んでも見る人はいない。
@@ -22,6 +23,41 @@ export function chatPollDelay(
 }
 
 export type PollChange = "load" | "ignore";
+
+// 本文の相対パスのリンク 1 つの行き先。text は新しいタブ、html はプレビュー、image は
+// 拡大ダイアログで、html と image はチップと同じ行き先になる（ADR 0084）。
+export type MessageLinkSource =
+  | { kind: "text"; url: string }
+  | { kind: "html"; url: string; file: ChatFile }
+  | { kind: "image"; url: string; file: ChatFile };
+
+// 本文の表記（href）から行き先を引く。一致しないリンクは原文のまま描かれる。
+export function messageLinks(
+  paneId: string,
+  links: readonly ChatLink[] | undefined,
+): ReadonlyMap<string, MessageLinkSource> | undefined {
+  if (links === undefined || links.length === 0) return undefined;
+  const sources = new Map<string, MessageLinkSource>();
+  for (const link of links) {
+    if (link.kind === "text") {
+      sources.set(link.href, { kind: "text", url: previewUrl(paneId, link) });
+      continue;
+    }
+    const file: ChatFile = {
+      name: link.name,
+      version: link.version,
+      kind: link.kind,
+      root: link.root,
+      ...(link.rootLabel === undefined ? {} : { rootLabel: link.rootLabel }),
+    };
+    sources.set(link.href, {
+      kind: link.kind,
+      url: link.kind === "image" ? chatFileUrl(paneId, file) : previewUrl(paneId, file),
+      file,
+    });
+  }
+  return sources;
+}
 
 // 状態が変わったら、予約を待たずに 1 回読む。間隔を張り直すだけでは、待っている最中の変化に
 // 追いつけない（idle の 5 秒待機中にターンが始まると、最初の取得が最大 5 秒遅れる）。

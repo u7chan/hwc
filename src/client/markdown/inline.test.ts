@@ -78,12 +78,16 @@ test("リンクは URL とタイトルを持つ", () => {
   ]);
 });
 
-test("相対パスのリンクは配信先が無いため原文に落とす", () => {
+test("相対パスのリンクは、配信先が決まるまでリンクにしない", () => {
+  // 原文を保つ。BFF の対応表に載らなければ、この原文をそのまま等幅で出す（ADR 0084）。
   assert.deepEqual(parseInline("[相対](/docs/README.md)"), [
-    { kind: "literal", text: "[相対](/docs/README.md)" },
-  ]);
-  assert.deepEqual(parseInline("[ファイル](notes/a.md)"), [
-    { kind: "literal", text: "[ファイル](notes/a.md)" },
+    {
+      kind: "link",
+      href: "/docs/README.md",
+      title: null,
+      raw: "[相対](/docs/README.md)",
+      children: [{ kind: "text", text: "相対" }],
+    },
   ]);
   assert.deepEqual(parseInline("[プロトコル相対](//example.com/a)"), [
     { kind: "literal", text: "[プロトコル相対](//example.com/a)" },

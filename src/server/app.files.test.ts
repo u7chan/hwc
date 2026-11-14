@@ -433,6 +433,8 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     await writeFile(join(root, "preview", "app.js"), "export const ready = true;");
     await writeFile(join(root, "preview", "shot.png"), pngBytes);
     await writeFile(join(root, "preview", "notes.txt"), "text");
+    await writeFile(join(root, "preview", ".env"), "TOKEN=1");
+    await writeFile(join(root, "preview", "secrets.env"), "TOKEN=1");
     const app = createFilesApp(root);
 
     const css = await app.request("/api/panes/w1:p1/preview/0/preview/app.css");
@@ -445,8 +447,14 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     const image = await app.request("/api/panes/w1:p1/preview/0/preview/shot.png");
     expect(image.headers.get("content-type")).toBe("image/png");
 
-    // 一覧に無い形式は配信しない。
-    expect((await app.request("/api/panes/w1:p1/preview/0/preview/notes.txt")).status).toBe(404);
+    // 本文のリンクから開くテキストは、実行させないよう必ず text/plain で返す（ADR 0084）。
+    const text = await app.request("/api/panes/w1:p1/preview/0/preview/notes.txt");
+    expect(text.status).toBe(200);
+    expect(text.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+
+    // 一覧に無い形式は配信しない。拡張子を持たない `.env` も対象外。
+    expect((await app.request("/api/panes/w1:p1/preview/0/preview/secrets.env")).status).toBe(404);
+    expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env")).status).toBe(404);
   });
 });
 
