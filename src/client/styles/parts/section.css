@@ -92,6 +92,12 @@
   min-height: 0;
 }
 
+/* 幅をまたいでも要素を作り直さないので、使わない側は hidden で隠す。 */
+.hwc-settings-wide .hwc-settings-side[hidden],
+.hwc-detail-inner > .hwc-detail-bar[hidden] {
+  display: none;
+}
+
 .hwc-settings-side {
   flex: none;
   display: flex;

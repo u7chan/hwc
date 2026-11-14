@@ -52,6 +52,11 @@ export function Settings(props: SettingsProps) {
   // 保存で一覧の現在値が変わる。詳細を開いたままでも引き直せるよう、番号を進める。
   const [summaryKey, setSummaryKey] = useState(0);
   const refreshSummary = () => setSummaryKey((key) => key + 1);
+
+  // 狭い画面は一覧から始め、開いたカテゴリだけを出す。広い画面はカテゴリを左に
+  // 常設するので、何も開いていなければ先頭を出す。
+  const shown = opened ?? "display";
+
   // 画面を移るときは編集中の見出しを捨てる。詳細を離れるとフォームごと閉じるため。
   const open = (id: SettingsCategoryId) => {
     setEditingTitle(null);
@@ -75,28 +80,11 @@ export function Settings(props: SettingsProps) {
     />
   );
 
-  if (props.wide) {
-    const shown = opened ?? "display";
-    return (
-      <div class="hwc-detail-inner">
-        <div class="hwc-settings-wide">
-          {index("side", shown)}
-          <div class="hwc-settings-scroll">
-            <div class="hwc-settings">
-              {section(shown, props, {
-                onEditingTitleChange: setEditingTitle,
-                onSaved: refreshSummary,
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // 幅をまたいでも中身を組み替えない。組み替えると、入力途中のフォームが
+  // 作り直されて下書きが消える。広い画面の要素は hidden で隠すだけにする。
   return (
     <div class="hwc-detail-inner">
-      <header class="hwc-detail-bar">
+      <header class="hwc-detail-bar" hidden={props.wide}>
         {/* 狭い画面では一覧ごと隠れるので、設定を閉じる道をここに残す。 */}
         <button
           type="button"
@@ -111,17 +99,23 @@ export function Settings(props: SettingsProps) {
         </h2>
       </header>
 
-      <div class="hwc-settings-scroll">
-        {opened === null ? (
-          index("page", null)
-        ) : (
-          <div class="hwc-settings">
-            {section(opened, props, {
-              onEditingTitleChange: setEditingTitle,
-              onSaved: refreshSummary,
-            })}
-          </div>
-        )}
+      <div class="hwc-settings-wide">
+        <div class="hwc-settings-side" hidden={!props.wide}>
+          {props.wide ? index("side", shown) : null}
+        </div>
+
+        <div class="hwc-settings-scroll">
+          {opened === null && !props.wide ? (
+            index("page", null)
+          ) : (
+            <div class="hwc-settings">
+              {section(shown, props, {
+                onEditingTitleChange: setEditingTitle,
+                onSaved: refreshSummary,
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
