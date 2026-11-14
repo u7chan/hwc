@@ -567,9 +567,10 @@
   cursor: default;
 }
 
-/* 送信中・停止中もボタンの面は残す。押せないが処理中であることが見えるように。 */
+/* 送信中・停止中・起動待ちもボタンの面は残す。押せないが処理中であることが見えるように。 */
 .hwc-send[data-sending="true"]:disabled,
-.hwc-send[data-stopping="true"]:disabled {
+.hwc-send[data-stopping="true"]:disabled,
+.hwc-send[data-launching="true"]:disabled {
   background: var(--color-accent);
   color: var(--color-on-accent);
 }

@@ -23,7 +23,6 @@ import {
   toAgentModels,
   toAgentEfforts,
   MODEL_CREATE_TIMEOUT_MS,
-  MODEL_CREATE_WORKTREE_TIMEOUT_MS,
   CREATE_WORKTREE_TIMEOUT_MS,
   canRetryWorktree,
   toCreatedWorktree,
@@ -671,8 +670,8 @@ test("the created worktree ids are read from the response", () => {
 
 test("a worktree error keeps the ids only when the checkout already exists", () => {
   expect(
-    toWorktreeError({ error: "agent_start_failed", workspaceId: "w2", paneId: "w2:p1" }),
-  ).toEqual({ error: "agent_start_failed", workspaceId: "w2", paneId: "w2:p1" });
+    toWorktreeError({ error: "pane_rename_failed", workspaceId: "w2", paneId: "w2:p1" }),
+  ).toEqual({ error: "pane_rename_failed", workspaceId: "w2", paneId: "w2:p1" });
   expect(toWorktreeError({ error: "worktree_open_failed" })).toEqual({
     error: "worktree_open_failed",
     workspaceId: null,
@@ -706,7 +705,6 @@ test("only an explicit creation failure or a busy checkout can be retried", () =
   expect(canRetryWorktree("workspace_not_found")).toBe(false);
 });
 
-test("the worktree timeout covers the creation and the agent start", () => {
+test("the worktree timeout covers the worktree creation", () => {
   expect(CREATE_WORKTREE_TIMEOUT_MS).toBeGreaterThan(90_000);
-  expect(MODEL_CREATE_WORKTREE_TIMEOUT_MS).toBeGreaterThan(CREATE_WORKTREE_TIMEOUT_MS + 50_000);
 });

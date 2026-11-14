@@ -57,7 +57,7 @@ export async function startAgentInPane(
     paneId,
     { name: null, agent: request.agent, model: request.model, effort: request.effort },
     models,
-    { agentName: restartAgentName(paneId), waitForShell: false },
+    { agentName: restartAgentName(paneId), waitForShell: request.waitForShell },
   );
 }
 

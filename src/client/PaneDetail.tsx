@@ -87,6 +87,7 @@ import { ChatLog } from "./pane/chat-log";
 import { OutputEmpty, OutputSkeleton } from "./pane/empty";
 import { AgentInfoHint, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
+import { LaunchNote } from "./pane/launch-note";
 import { useAttachments } from "./pane/use-attachments";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
 import { useDraft } from "./pane/use-draft";
@@ -108,6 +109,7 @@ import {
 import { SelectionToolbar } from "./SelectionToolbar";
 import { selectionCopyText } from "./selection-copy";
 import { Spinner } from "./Spinner";
+import { type PaneLaunchView } from "./starting";
 
 const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
@@ -134,8 +136,8 @@ type PaneDetailProps = {
   // シェルの前景プロセスが動いているか。停止ボタンの出し分けにだけ使う。
   running: boolean;
   sending: boolean;
-  // 作ったばかりで、まだエージェントが端末を引き継いでいない。入力欄を閉じる。
-  starting: boolean;
+  // 作ったばかりで起動を頼んだペイン。入力欄の形と送信の可否を決める。
+  launch: PaneLaunchView | null;
   dismissedConfirmation: string | null;
   confirmationAttempts: ReadonlyMap<string, ConfirmationAttempt>;
   onConfirmFolderTrust: (id: string) => void;
@@ -149,6 +151,10 @@ type PaneDetailProps = {
   onStop: () => Promise<boolean>;
   // シェルのペインでエージェントを起動する。
   onStartAgent: () => void;
+  // 起動に失敗したペインで、同じ指定でもう一度頼む。
+  onRetryLaunch: () => void;
+  // 起動を諦め、残ったシェルとして使う。
+  onUseShell: () => void;
   // 拡大はダイアログで行う。セルの中に置くと containment の内側に閉じる。
   onOpenImage: (url: string, name: string) => void;
   // HTML のプレビューは、タブの 1 つとして会話の外に出す。
@@ -170,7 +176,7 @@ export function PaneDetail(props: PaneDetailProps) {
     waitingMs,
     running,
     sending,
-    starting,
+    launch,
     dismissedConfirmation,
     confirmationAttempts,
     onConfirmFolderTrust,
@@ -266,9 +272,11 @@ export function PaneDetail(props: PaneDetailProps) {
   // /new のマスク中は空の表示用スナップショットなので、比較させない。渡すと
   // マスクが解けて元の会話へ戻るときに末尾の返答を追記と誤認する。
   const reveal = useMessageReveal(resetting || body.kind !== "chat" ? null : body.snapshot);
-  // 起動待ちの間は、端末に届いている途中の画面（シェルの起動コマンド、TUI の描画中、
-  // 空の会話）を出さない。何が届いていてもスケルトンに置き換える。
-  const launching = starting && !readOnly;
+  // 起動を頼んだペインは、スナップショットがエージェントを示す前でもエージェント仕様で扱う。
+  // 起動中は送信・添付・コマンドを受け付けず、準備ができたら送信を開ける。
+  const launchPending = launch !== null && launch.phase !== "ready";
+  const launching = launch?.phase === "launching" && !readOnly;
+  const launchBlocked = launchPending && !readOnly;
   const confirmation =
     view === "confirm" && interaction?.kind === "folder-trust" ? interaction : null;
   const output = read?.text ?? null;
@@ -298,7 +306,11 @@ export function PaneDetail(props: PaneDetailProps) {
     !replying;
   const empty =
     !launching && (body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty);
-  const info = agentInfo(snapshot);
+  const info =
+    agentInfo(snapshot) ??
+    (launch === null || (launch.model === null && launch.effort === null)
+      ? null
+      : { model: launch.model === null ? null : launch.model.id, effort: launch.effort });
   // モデルと effort が無くても、コンテキストの材料があれば行を出す。
   const meter = contextMeter(snapshot?.context ?? null);
   const content = body.kind === "chat" ? body.snapshot.messages : output;
@@ -318,7 +330,7 @@ export function PaneDetail(props: PaneDetailProps) {
     frame,
   });
 
-  const shell = isShellPane(pane);
+  const shell = isShellPane(pane) && launch === null;
   // シェルには会話のコマンドが無い。エージェントを終了したときにチップが残っていても、
   // シェルの入力欄では見せず、送信も本文として扱う。
   const activeChip = shell ? null : chip;
@@ -327,8 +339,9 @@ export function PaneDetail(props: PaneDetailProps) {
   // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
   // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
   // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
+  // 起動中も出すと、選んだ時点で下書きがチップに変わり消える。準備ができるまで出さない。
   const candidates =
-    attachments.length === 0 && compactionRun === null
+    !launchBlocked && attachments.length === 0 && compactionRun === null
       ? commandCandidates(pane, draft, snapshot)
       : [];
   const uploading = attachments.some((item) => item.name === null);
@@ -358,6 +371,13 @@ export function PaneDetail(props: PaneDetailProps) {
     if (!shell) return;
     setChip((current) => (current === null ? current : null));
   }, [shell]);
+
+  // 作ったペインは、閉じたダイアログの続きでそのまま打ち始められるように焦点を移す。
+  // iOS は非同期の後にキーボードを出さないことがあるので、焦点だけを合わせる。
+  useEffect(() => {
+    if (launch === null || launch.phase !== "launching") return;
+    input.current?.focus();
+  }, [launch === null ? null : launch.phase]);
 
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
@@ -523,7 +543,9 @@ export function PaneDetail(props: PaneDetailProps) {
   }, [pending]);
 
   // 候補を選ぶとチップになり、入力欄の /... は消える。送信はもう一度 Enter。
+  // 起動中は候補を出さないが、古い描画からのクリックでも下書きを消さない。
   const pick = (id: CommandId) => {
+    if (launchBlocked) return;
     setChip(id);
     setDraft("");
     // タップでキーボードが閉じないよう、入力欄へ焦点を戻す。
@@ -540,7 +562,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // （引用に続く本文として送り、/compact には戻さない。ADR 0016 / 0062）。
   const quoteSelection = () => {
     // 送信中に足すと、成功時のクリアで新しい引用まで消える。送っている間は受け付けない。
-    if (sending) return;
+    if (sending || launchBlocked) return;
     const text = selectionToolbar?.anchor.text ?? "";
     if (text === "") return;
     const next = appendQuote(draft, text);
@@ -601,6 +623,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // 貼ったファイルを見たらコマンドではなく本文を書く。書きかけの draft は捨てない。
   // 上限を超えるものは送る前に弾く。
   const addFiles = (files: File[]) => {
+    if (launchBlocked) return;
     const room = MAX_ATTACHMENTS - attachments.length;
     if (room <= 0) {
       setNotice(ATTACHMENT_LIMIT_NOTICE);
@@ -678,7 +701,7 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   const sendText = async () => {
-    if (readOnly || !sendable || sending) return;
+    if (readOnly || launchBlocked || !sendable || sending) return;
     const names = attachments
       .map((item) => item.name)
       .filter((name): name is string => name !== null);
@@ -750,7 +773,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // /new は user 発話を残さないので、送信中バブルを積むと最大 60 秒残る。
   // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
-    if (readOnly || sending || replying || compactionRun !== null) return;
+    if (readOnly || launchBlocked || sending || replying || compactionRun !== null) return;
     if (id === "compact" && compactDone) {
       setNotice(COMPACTED_NOTICE);
       return;
@@ -770,7 +793,11 @@ export function PaneDetail(props: PaneDetailProps) {
   // メニューからはコマンド文字列だけを送る。書きかけの draft・添付は次の
   // メッセージのために残す（チップのように draft を指示には使わない）。
   const menuCommandAvailable = (id: CommandId): boolean =>
-    !readOnly && !sending && compactionRun === null && commandAvailable(id, pane, snapshot);
+    !readOnly &&
+    !launchBlocked &&
+    !sending &&
+    compactionRun === null &&
+    commandAvailable(id, pane, snapshot);
 
   const runMenuCommand = async (id: CommandId) => {
     if (!menuCommandAvailable(id)) return;
@@ -814,7 +841,7 @@ export function PaneDetail(props: PaneDetailProps) {
     : null;
 
   const submit = () => {
-    if (readOnly) return;
+    if (readOnly || launchBlocked) return;
     // 添付中は候補にもチップにも流さない。
     if (attachments.length === 0) {
       if (activeChip !== null) {
@@ -1005,7 +1032,7 @@ export function PaneDetail(props: PaneDetailProps) {
         )}
         <SelectionToolbar
           state={selectionToolbar}
-          canQuote={!readOnly && !starting && pane.chat}
+          canQuote={!readOnly && !launchBlocked && pane.chat}
           onQuote={quoteSelection}
           onCopy={() => {
             const selection = document.getSelection();
@@ -1046,15 +1073,6 @@ export function PaneDetail(props: PaneDetailProps) {
             この画面は閲覧のみです。操作は Herdr のターミナルで行ってください。
           </p>
         ) : null
-      ) : starting ? (
-        // 起動が終わるまで入力欄を出さない。相手がまだシェルだと、書いた文字が
-        // そのまま端末へ届く。Spinner はこの行に 1 つだけ置く。
-        <p class="hwc-starting" role="status" data-compact={compact}>
-          <span class="hwc-starting-mark">
-            <Spinner size={14} />
-          </span>
-          エージェントを起動しています。準備ができるまでメッセージは送れません。
-        </p>
       ) : (
         <form
           class="hwc-input"
@@ -1066,7 +1084,7 @@ export function PaneDetail(props: PaneDetailProps) {
             submit();
           }}
           onDragEnter={(event) => {
-            if (!pane.chat || fileTransfer(event.dataTransfer) === null) return;
+            if (launchBlocked || !pane.chat || fileTransfer(event.dataTransfer) === null) return;
             dragDepth.current += 1;
             setDropping(true);
           }}
@@ -1076,7 +1094,7 @@ export function PaneDetail(props: PaneDetailProps) {
             // 添付を受け付けないペインでもファイルを開かせない。ただし落とせる場所では
             // ないので、copy のカーソルは出さない。
             event.preventDefault();
-            transfer.dropEffect = pane.chat ? "copy" : "none";
+            transfer.dropEffect = pane.chat && !launchBlocked ? "copy" : "none";
           }}
           onDragLeave={() => {
             if (dragDepth.current === 0) return;
@@ -1090,10 +1108,18 @@ export function PaneDetail(props: PaneDetailProps) {
             event.preventDefault();
             dragDepth.current = 0;
             setDropping(false);
-            if (!pane.chat) return;
+            if (!pane.chat || launchBlocked) return;
             takeFiles(dropActionFrom(transfer.files));
           }}
         >
+          {launchPending ? (
+            <LaunchNote
+              launch={launch}
+              compact={compact}
+              onRetry={props.onRetryLaunch}
+              onUseShell={props.onUseShell}
+            />
+          ) : null}
           <label class="hwc-visually-hidden" for={`hwc-input-${pane.id}`}>
             {context.workspaceLabel} / {context.tabLabel} のペインへ送る
           </label>
@@ -1217,8 +1243,8 @@ export function PaneDetail(props: PaneDetailProps) {
                     fit(field, expanded);
                     return;
                   }
-                  // 添付を受け付けるのは会話を持つペインだけ。
-                  if (!pane.chat) return;
+                  // 添付を受け付けるのは会話を持つペインだけ。起動中はテキストだけ。
+                  if (!pane.chat || launchBlocked) return;
                   const action = pasteActionFrom(event.clipboardData?.items);
                   // テキストだけの貼り付けは入力欄の既定動作のままにする。
                   if (action.kind === "default") return;
@@ -1243,13 +1269,13 @@ export function PaneDetail(props: PaneDetailProps) {
             </span>
             <div class="hwc-input-actions">
               {/* 入口を出すのはシェルだけ。会話を読めないエージェント（Claude など）は chat が
-                  false になるので、chat ではなくペインの種類で分ける。 */}
+                false になるので、chat ではなくペインの種類で分ける。 */}
               {compact ? null : shell ? (
                 <button type="button" class="hwc-agent-start" onClick={startAgent}>
                   <AgentIcon size={16} />
                   エージェントを起動
                 </button>
-              ) : pane.chat ? (
+              ) : pane.chat && !launchBlocked ? (
                 <ComposerAdd
                   full={attachments.length >= MAX_ATTACHMENTS}
                   commands={composerCommands}
@@ -1279,11 +1305,23 @@ export function PaneDetail(props: PaneDetailProps) {
                   class="hwc-send"
                   data-sending={sending}
                   data-stopping={stopping}
-                  aria-label={stopping ? "停止中" : sending ? "送信中" : stop ? "停止" : "送信"}
-                  disabled={busy || (!stop && !sendable)}
+                  data-launching={launching}
+                  aria-label={
+                    launching
+                      ? "起動中"
+                      : stopping
+                        ? "停止中"
+                        : sending
+                          ? "送信中"
+                          : stop
+                            ? "停止"
+                            : "送信"
+                  }
+                  aria-busy={launching || undefined}
+                  disabled={busy || launchBlocked || (!stop && !sendable)}
                   onClick={stop && !busy ? stopWorking : undefined}
                 >
-                  {busy ? <Spinner /> : stop ? <StopIcon /> : <SendIcon />}
+                  {busy || launching ? <Spinner /> : stop ? <StopIcon /> : <SendIcon />}
                 </button>
               </span>
             </div>

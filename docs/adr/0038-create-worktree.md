@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-07
+- Amended by: [ADR 0084](0084-launch-after-create.md)
 
 ## Context
 

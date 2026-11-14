@@ -14,8 +14,7 @@ import { Menu } from "../Menu";
 import { PaneMenu } from "../PaneMenu";
 import { RemoveWorktreeConfirm } from "../RemoveWorktreeConfirm";
 import type { PaneRow } from "../select";
-import type { StartingPane } from "../starting";
-import { serverClockNow } from "../time";
+import type { LaunchIntent } from "../starting";
 import { WorkspaceGitActions } from "../WorkspaceGitActions";
 import { WorkspaceMenuHead } from "../WorkspaceMenuHead";
 import type {
@@ -70,8 +69,7 @@ export type AppOverlaysProps = {
   creating: CreatingPane | null;
   setCreating: (value: CreatingPane | null) => void;
   setPendingSelect: (value: string | null) => void;
-  setStarting: (value: StartingPane | null) => void;
-  skew: { current: number };
+  beginLaunch: (paneId: string, intent: LaunchIntent | null) => void;
   viewer: { url: string; name: string } | null;
   setViewer: (value: { url: string; name: string } | null) => void;
 };
@@ -120,8 +118,7 @@ export function AppOverlays(props: AppOverlaysProps) {
     creating,
     setCreating,
     setPendingSelect,
-    setStarting,
-    skew,
+    beginLaunch,
     viewer,
     setViewer,
   } = props;
@@ -302,10 +299,9 @@ export function AppOverlays(props: AppOverlaysProps) {
           paneId={creating.paneId}
           worktreeWorkspaceId={creating.worktreeWorkspaceId}
           start={creating.start}
-          onCreated={(paneId, agent) => {
+          onCreated={(paneId, launch) => {
             setPendingSelect(paneId);
-            // エージェントを起動しなかった（シェル・起動失敗）ペインは、すぐに入力できる。
-            setStarting(agent ? { paneId, at: serverClockNow(Date.now(), skew.current) } : null);
+            beginLaunch(paneId, launch);
           }}
           onClose={() => setCreating(null)}
         />

@@ -14,15 +14,14 @@ import {
   type CreatePaneRequest,
   type CreatePaneOutcome,
   type CreateWorktreeOutcome,
-  type StartAgentFailure,
-  startAgent,
 } from "./api";
-import { worktreeFailureNotice, worktreePartialNotice } from "./worktree-create";
+import { worktreeFailureNotice } from "./worktree-create";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
 import { AgentGlyphIcon, AgentIcon, TerminalIcon } from "./icons";
 import { CreatePaneModel } from "./CreatePaneModel";
 import { CreatePaneEffort } from "./CreatePaneEffort";
+import type { LaunchIntent } from "./starting";
 
 type CreatePaneProps = {
   // 分割して作る場合は追加先のペイン。ワークツリーを作る場合はモデル一覧の取得元。
@@ -31,8 +30,9 @@ type CreatePaneProps = {
   worktreeWorkspaceId: string | null;
   // 既存のシェルペイン（paneId）で起動する。ペインを作らないので名前と種類の切り替えは出さない。
   start: boolean;
-  // エージェントの起動を頼んだか。起動が終わるまで入力を閉じる側で使う。
-  onCreated: (paneId: string, agent: boolean) => void;
+  // エージェントの起動を頼む内容。シェルだけを作る場合は null。起動そのものは
+  // ダイアログを閉じた後に App が行う。
+  onCreated: (paneId: string, launch: LaunchIntent | null) => void;
   onClose: () => void;
 };
 
@@ -56,56 +56,13 @@ function failureMessage(error: CreatePaneFailure): string {
   }
 }
 
-// 分割は成功したが、その後の起動かリネームで失敗した場合。ペインは既にある。
-function partialMessage(error: CreatePaneFailure): string {
-  return error === "agent_start_failed"
-    ? "ペインは作成しましたが、エージェントを起動できませんでした。ペインはシェルとして残っています。"
-    : "ペインは作成しましたが、設定を完了できませんでした。";
-}
-
 function paneFailureView(result: Extract<CreatePaneOutcome, { ok: false }>): FailureView {
-  // ペインができているなら、再送ではなく確認に倒す。
-  if (result.paneId !== null) return { message: partialMessage(result.error), retry: false };
   return { message: failureMessage(result.error), retry: result.error !== "timeout" };
 }
 
 function worktreeFailureView(result: Extract<CreateWorktreeOutcome, { ok: false }>): FailureView {
-  // 部分成功ではワークツリーができているので、閉じるだけにする。
-  if (result.paneId !== null) return { message: worktreePartialNotice(result.error), retry: false };
+  // ペインができている場合は起動へ進むので、ここへは来ない。
   return worktreeFailureNotice(result.error);
-}
-
-// 既存のペインで起動する場合、ペインができているかの分岐はない。再試行できるかだけを分ける。
-function startFailureView(error: StartAgentFailure): FailureView {
-  switch (error) {
-    case "timeout":
-      return {
-        message:
-          "起動できたか確認できませんでした。ペインの状態を見てから、必要ならもう一度お試しください。",
-        retry: false,
-      };
-    case "pane_busy":
-      return {
-        message: "コマンドが動いています。停止してからもう一度お試しください。",
-        retry: true,
-      };
-    case "pane_not_shell":
-      return { message: "このペインではすでにエージェントが動いています。", retry: false };
-    case "pane_not_found":
-      return { message: "ペインが見つかりませんでした。", retry: false };
-    case "invalid_request":
-      return { message: "入力内容を確認してください。", retry: false };
-    case "agent_start_failed":
-      return {
-        message: "エージェントを起動できませんでした。ペインはシェルのまま残っています。",
-        retry: true,
-      };
-    default:
-      return {
-        message: "エージェントを起動できませんでした。もう一度お試しください。",
-        retry: true,
-      };
-  }
 }
 
 export function CreatePane(props: CreatePaneProps) {
@@ -128,58 +85,63 @@ export function CreatePane(props: CreatePaneProps) {
     setOpen(false);
   };
 
+  const intent = (waitForShell: boolean): LaunchIntent | null =>
+    mode === "agent" ? { agent, model, effort, waitForShell } : null;
+
   const submit = async () => {
     if (busy || !open) return;
+
+    // 既存のシェルで起動する場合は、待たずに閉じる。起動は App が裏で行う。
+    if (start) {
+      setBusy(true);
+      props.onCreated(props.paneId, intent(false));
+      setOpen(false);
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
-    if (start) {
-      const result = await startAgent(props.paneId, { agent, model, effort });
-      if (result.ok) {
-        props.onCreated(props.paneId, true);
+    const request: CreatePaneRequest = {
+      name: name.trim() === "" ? null : name.trim(),
+      // エージェントの起動は作成の応答を待たない。ここでは名前付きのシェルを作る。
+      agent: null,
+      model: null,
+      effort: null,
+    };
+
+    if (props.worktreeWorkspaceId !== null) {
+      // ワークツリーは root pane ができるまで待つ。起動は分割と同じく、ペインが
+      // スナップショットに現れてから App が頼む。
+      const result = await createWorktree(props.worktreeWorkspaceId, { name: request.name });
+      // 名前の付け直しだけ失敗しても、ワークツリーと root pane はできている。
+      const paneId = result.paneId;
+      if (paneId !== null) {
+        props.onCreated(paneId, intent(true));
         setOpen(false);
         return;
       }
-      const view = startFailureView(result.error);
+      if (result.ok) return;
       setBusy(false);
+      const view = worktreeFailureView(result);
       setSettled(!view.retry);
       setError(view.message);
       return;
     }
 
-    const request: CreatePaneRequest = {
-      name: name.trim() === "" ? null : name.trim(),
-      agent: mode === "agent" ? agent : null,
-      model: mode === "agent" ? model : null,
-      effort: mode === "agent" ? effort : null,
-    };
-
-    const created = (paneId: string) => {
-      props.onCreated(paneId, mode === "agent");
+    const result = await createPane(props.paneId, request);
+    // 名前の付け直しだけ失敗しても、ペインはできている。起動は止めない。
+    const paneId = result.paneId;
+    if (paneId !== null) {
+      props.onCreated(paneId, intent(true));
       setOpen(false);
-    };
-
-    let paneId: string | null;
-    let view: FailureView;
-    if (props.worktreeWorkspaceId !== null) {
-      const result = await createWorktree(props.worktreeWorkspaceId, request);
-      if (result.ok) return created(result.paneId);
-      paneId = result.paneId;
-      view = worktreeFailureView(result);
-    } else {
-      const result = await createPane(props.paneId, request);
-      if (result.ok) return created(result.paneId);
-      paneId = result.paneId;
-      view = paneFailureView(result);
+      return;
     }
-
+    if (result.ok) return;
     setBusy(false);
-    setSettled(paneId !== null || !view.retry);
+    const view = paneFailureView(result);
+    setSettled(!view.retry);
     setError(view.message);
-    // ペインができていれば、理由を見せたまま新しいペインへ移る。部分成功では入力を閉じない。
-    // 起動に失敗していればシェル、リネームだけ失敗していればエージェントの起動は済んでいる
-    // （両方失敗した場合は起動失敗を優先する）。
-    if (paneId !== null) props.onCreated(paneId, false);
   };
 
   return (

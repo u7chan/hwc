@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-12
 - Amends: [ADR 0074](0074-created-pane-starting.md)
+- Amended by: [ADR 0084](0084-launch-after-create.md)
 
 ## Context
 

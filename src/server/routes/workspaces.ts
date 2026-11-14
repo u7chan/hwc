@@ -1,5 +1,5 @@
 import { createWorktree } from "../create-worktree";
-import { parseSplitBody } from "../herdr/panes";
+import { parseWorktreeBody } from "../herdr/panes";
 import { parseMoveWorkspacesBody } from "../herdr/workspaces";
 import { placeOf } from "../../shared/place";
 import { HerdrError } from "../herdr/socket";
@@ -11,12 +11,10 @@ export function createWorkspacesHandlers(ctx: AppContext) {
     panes,
     worktrees,
     workspaces,
-    models,
     pullRequests,
     git,
     restartSettings,
     current,
-    launchModels,
     worktreeFailure,
     workspaceFailure,
     closeSpaceFailure,
@@ -124,9 +122,9 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       return c.json({ ok: true });
     },
     createWorktree: async (c: IdContext) => {
-      // 作成後のエージェント起動まで同じ指定を使う。body 無しは不正。
+      // ここでは root ペインと名前まで。エージェントの起動はクライアントが後から頼む。
       const body = await c.req.json().catch(() => null);
-      const request = parseSplitBody(body);
+      const request = parseWorktreeBody(body);
       if (!request.ok) return c.json({ error: request.error }, request.status);
 
       const state = await current();
@@ -142,11 +140,7 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       }
 
       try {
-        const result = await createWorktree(worktrees, panes, workspaceId, request.value, models);
-        // 分割 API と同じく、名前の付け直しに失敗してもエージェントは起動している。
-        if ((result.ok || result.error === "pane_rename_failed") && request.value.model != null) {
-          launchModels.remember(result.paneId, request.value.model, request.value.effort ?? null);
-        }
+        const result = await createWorktree(worktrees, panes, workspaceId, request.value);
         if (!result.ok) {
           // ワークツリーと root シェルは残っている。クライアントは理由を見せて閉じるだけにする。
           return c.json(

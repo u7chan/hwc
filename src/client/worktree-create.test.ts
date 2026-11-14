@@ -1,9 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  worktreeFailureNotice,
-  worktreeOutcomeUnknown,
-  worktreePartialNotice,
-} from "./worktree-create";
+import { worktreeFailureNotice, worktreeOutcomeUnknown } from "./worktree-create";
 
 const UNKNOWN = "作成できたか確認できませんでした";
 
@@ -44,9 +40,4 @@ test("a source the server refuses is reported without a retry", () => {
     expect(worktreeOutcomeUnknown(error)).toBe(false);
     expect(worktreeFailureNotice(error).retry).toBe(false);
   }
-});
-
-test("a partial success says what is left behind", () => {
-  expect(worktreePartialNotice("agent_start_failed")).toContain("シェルとして残って");
-  expect(worktreePartialNotice("pane_rename_failed")).toContain("ペイン名を設定できませんでした");
 });
