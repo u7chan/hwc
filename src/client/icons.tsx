@@ -193,6 +193,17 @@ export function NewSessionIcon({ size = 16 }: IconProps) {
   );
 }
 
+// 定型文。吹き出しに短い行を添え、会話のコマンド（吹き出し + 記号）と区別する。
+export function TemplateIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M4 5h16v11H9l-5 4z" />
+      <path d="M8 9h8" />
+      <path d="M8 12.5h5" />
+    </Svg>
+  );
+}
+
 export function ReplyIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

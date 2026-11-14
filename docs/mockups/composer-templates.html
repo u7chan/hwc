@@ -1,0 +1,2650 @@
+<!doctype html>
+<html lang="ja" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>定型文 — デザインモック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Nerd Symbols Mono";
+        src: url("../../src/client/assets/fonts/NerdSymbolsMono.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      :root {
+        color-scheme: light;
+
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-content: #ffffff;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-accent: #255cd6;
+        --color-on-accent: #ffffff;
+        --color-selected: #e9f0ff;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-active: #4f5f73;
+        --color-active-bg: #eef1f5;
+        --color-attention: #a34c0a;
+        --color-attention-bg: #fff0da;
+        --color-success: #216549;
+        --color-success-bg: #e6f3ed;
+        --color-neutral: #5d6878;
+        --color-neutral-bg: #eef0f3;
+        --color-danger: #b3333c;
+
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+
+        --radius-sm: 8px;
+        --radius-icon: 10px;
+        --radius-control: 12px;
+        --radius-panel: 16px;
+
+        --text-body: 1.0625rem;
+        --text-secondary: 0.8125rem;
+        --line-body: 1.5;
+        --tap: 44px;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-content: #131619;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-accent: #94baff;
+        --color-on-accent: #101215;
+        --color-selected: #23334e;
+        --color-line: #32373f;
+        --color-control-line: #606976;
+        --color-active: #8db8ff;
+        --color-active-bg: #2b3038;
+        --color-attention: #f6c57f;
+        --color-attention-bg: #352b1e;
+        --color-success: #8fdbb1;
+        --color-success-bg: #20392e;
+        --color-neutral: #b6becb;
+        --color-neutral-bg: #2b2f36;
+        --color-danger: #ff9ca4;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      /* アイコンは stroke で描く。symbol 側に属性を書かず、use へ継承させる。 */
+      svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        line-height: var(--line-body);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 24px 96px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 32px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.5rem;
+        font-weight: 600;
+        line-height: 1.3;
+        letter-spacing: -0.02em;
+      }
+
+      .hero p {
+        max-width: 74ch;
+        margin: 0 0 8px;
+        color: var(--color-secondary);
+      }
+
+      .small-note {
+        font-size: 13px;
+        color: var(--color-secondary);
+      }
+
+      .theme-toggle {
+        flex: none;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .mock-banner {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        margin: 0 0 32px;
+        padding: 12px 16px;
+        border: 1px solid var(--color-attention);
+        border-radius: var(--radius-panel);
+        background: var(--color-attention-bg);
+        color: var(--color-text);
+        font-size: 14px;
+      }
+
+      .mock-banner strong {
+        flex: none;
+        color: var(--color-attention);
+        font-weight: 600;
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 32px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .toc a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 12px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        color: var(--color-text);
+        font-size: 14px;
+        text-decoration: none;
+      }
+
+      .toc a:hover {
+        background: var(--color-raised);
+      }
+
+      .flow {
+        display: grid;
+        gap: 8px;
+        margin: 0 0 8px;
+        padding: 0;
+        list-style: none;
+        counter-reset: step;
+      }
+
+      .flow li {
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .flow li::before {
+        counter-increment: step;
+        content: counter(step);
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: var(--color-raised);
+        color: var(--color-text);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .flow b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      .pattern {
+        margin-top: 56px;
+        padding-top: 24px;
+        border-top: 1px solid var(--color-line);
+      }
+
+      .pattern-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.125rem;
+        font-weight: 600;
+      }
+
+      .badge {
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        background: var(--color-selected);
+        color: var(--color-accent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .pattern-note {
+        max-width: 82ch;
+        margin: 0 0 24px;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .frames {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 24px;
+      }
+
+      .frame {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .caption {
+        max-width: 390px;
+        color: var(--color-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .caption b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      /* ---- 端末の枠 ---- */
+
+      .phone {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: 390px;
+        height: 640px;
+        border: 1px solid var(--color-line);
+        border-radius: 28px;
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      .desktop {
+        display: flex;
+        width: 1040px;
+        max-width: 100%;
+        height: 640px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      /* ---- ペイン ---- */
+
+      .chat-header {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 52px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-bg);
+        font-size: 13px;
+      }
+
+      .agent-mark {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: var(--color-raised);
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .branch {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--color-text);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pr {
+        flex: none;
+        color: var(--color-accent);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-decoration: none;
+      }
+
+      .pane-id {
+        flex: none;
+        margin-left: auto;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .icon-button {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+      }
+
+      .icon-button:hover {
+        background: var(--color-raised);
+      }
+
+      .chat-body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        overflow-y: auto;
+      }
+
+      .msg {
+        max-width: 86%;
+        padding: 8px 12px;
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+        font-size: 15px;
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+      }
+
+      .msg[data-mine="true"] {
+        align-self: flex-end;
+        background: var(--color-selected);
+      }
+
+      .msg .who {
+        display: block;
+        margin-bottom: 2px;
+        color: var(--color-secondary);
+        font-size: 11px;
+      }
+
+      .composer {
+        flex: none;
+        padding: 12px;
+        border-top: 1px solid var(--color-line);
+        background: var(--color-surface);
+      }
+
+      .chip-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 32px;
+        padding: 0 4px 0 10px;
+        border-radius: var(--radius-sm);
+        background: var(--color-raised);
+        color: var(--color-text);
+        font-size: 13px;
+      }
+
+      .chip button {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--color-secondary);
+      }
+
+      .input-frame {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 8px;
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-content);
+      }
+
+      .input-frame[data-focus="true"] {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 2px;
+      }
+
+      .input-text {
+        flex: 1;
+        min-width: 0;
+        max-height: 30dvh;
+        resize: none;
+        padding: 4px 0;
+        overflow-y: auto;
+        font-size: 16px;
+        line-height: var(--line-body);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .input-placeholder {
+        color: var(--color-secondary);
+      }
+
+      .input-toggle {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--color-secondary);
+      }
+
+      .input-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .add {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: var(--color-raised);
+        color: var(--color-text);
+        cursor: pointer;
+      }
+
+      .add:hover {
+        background: var(--color-selected);
+      }
+
+      .input-tail {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-left: auto;
+        min-width: 0;
+      }
+
+      .meter {
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .send {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+      }
+
+      .send[data-disabled="true"] {
+        background: var(--color-raised);
+        color: var(--color-secondary);
+      }
+
+      /* ---- + メニュー ---- */
+
+      .menu {
+        position: absolute;
+        left: 12px;
+        /* 実際は + の上（入力欄に重なる位置）に開く。項目と入力欄を同時に見せるため、
+           このモックでは入力欄の上へずらしている。 */
+        bottom: 126px;
+        width: 276px;
+        max-width: calc(100% - 24px);
+        padding: 8px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+        box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+      }
+
+      .menu[hidden] {
+        display: none;
+      }
+
+      .menu-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        width: 100%;
+        min-height: var(--tap);
+        padding: 4px 8px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: 15px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .menu-item:hover:not(:disabled) {
+        background: var(--color-raised);
+      }
+
+      .menu-item > svg {
+        flex: none;
+        margin-top: 2px;
+      }
+
+      .menu-item:disabled {
+        color: var(--color-secondary);
+        opacity: 0.45;
+        cursor: default;
+      }
+
+      .menu-item-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .menu-hint {
+        color: var(--color-secondary);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .menu-sep {
+        height: 0;
+        margin: 4px 0;
+        border: 0;
+        border-top: 1px solid var(--color-line);
+      }
+
+      /* ---- 定型文ダイアログ ---- */
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: rgb(0 0 0 / 0.5);
+      }
+
+      .overlay[hidden] {
+        display: none;
+      }
+
+      .dialog {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 358px;
+        /* 高さは固定する。札を切り替えるたびにダイアログが伸び縮みすると、
+           選び直すたびに位置が動いて押しにくい。 */
+        height: min(560px, 100%);
+        min-height: 0;
+        padding: 20px;
+        overflow: hidden;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+      }
+
+      .dialog-title {
+        margin: 0 0 4px;
+        font-size: 17px;
+        font-weight: 600;
+      }
+
+      .dialog-note {
+        margin: 0 0 12px;
+        color: var(--color-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .search {
+        flex: none;
+        min-height: var(--tap);
+        padding: 0 12px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-bg);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 16px;
+      }
+
+      .search:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 2px;
+      }
+
+      .template-chips {
+        flex: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-height: 148px;
+        margin: 12px -4px 0;
+        padding: 4px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+
+      .template-chip {
+        min-height: var(--tap);
+        max-width: 100%;
+        padding: 0 12px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: 15px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .template-chip:hover {
+        background: var(--color-raised);
+      }
+
+      .template-chip[aria-checked="true"] {
+        border-color: var(--color-accent);
+        background: var(--color-selected);
+        color: var(--color-accent);
+        font-weight: 600;
+      }
+
+      .template-chip:focus-visible {
+        outline: 3px solid var(--color-accent);
+        outline-offset: 2px;
+      }
+
+      .preview {
+        display: flex;
+        flex: 1 1 0;
+        flex-direction: column;
+        min-height: 80px;
+        margin-top: 12px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      .preview-body {
+        flex: 1;
+        min-height: 0;
+        margin: 0;
+        padding: 12px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        font-family: inherit;
+        font-size: 15px;
+        line-height: 1.65;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .preview-body[hidden] {
+        display: none;
+      }
+
+      .preview-empty {
+        display: grid;
+        place-items: center;
+        flex: 1;
+        padding: 16px;
+        color: var(--color-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+        text-align: center;
+      }
+
+      .preview-empty[hidden] {
+        display: none;
+      }
+
+      .preview-foot {
+        flex: none;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 4px 12px;
+        border-top: 1px solid var(--color-line);
+        color: var(--color-secondary);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* 一致なしは札とプレビューを出さず、領域ごと理由に使う。 */
+      .no-match {
+        display: flex;
+        flex: 1 1 0;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-height: 120px;
+        margin-top: 12px;
+        padding: 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-content);
+        font-size: 15px;
+        line-height: 1.5;
+        text-align: center;
+      }
+
+      .no-match-hint {
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 13px;
+      }
+
+      .dialog-actions {
+        flex: none;
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .dialog-actions .button {
+        flex: 1;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: var(--tap);
+        padding: 0 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: 15px;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .button:hover:not(:disabled) {
+        border-color: var(--color-control-line);
+      }
+
+      .button:focus-visible,
+      .menu-item:focus-visible,
+      .add:focus-visible,
+      .send:focus-visible,
+      .icon-button:focus-visible,
+      .template-row:focus-visible,
+      .setting-row:focus-visible,
+      .side-row:focus-visible,
+      .input-toggle:focus-visible {
+        outline: 3px solid var(--color-accent);
+        outline-offset: 2px;
+      }
+
+      .button:disabled {
+        border-color: var(--color-line);
+        background: var(--color-raised);
+        color: var(--color-secondary);
+        cursor: default;
+      }
+
+      .button[data-variant="primary"] {
+        flex: 1;
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+        font-weight: 600;
+      }
+
+      .button[data-variant="primary"]:disabled {
+        border-color: var(--color-line);
+        background: var(--color-raised);
+        color: var(--color-secondary);
+      }
+
+      /* 設定の保存は、画面内で強い塗りの主操作を競合させないよう輪郭のアクセントにする。 */
+      .button[data-variant="save"] {
+        border-color: var(--color-accent);
+        color: var(--color-accent);
+        font-weight: 600;
+      }
+
+      .button[data-variant="danger"] {
+        color: var(--color-danger);
+      }
+
+      .button[data-variant="ghost"] {
+        border-color: transparent;
+        color: var(--color-secondary);
+      }
+
+      .demo-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .demo-status {
+        min-height: 20px;
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      /* ---- 設定 ---- */
+
+      .sidebar {
+        flex: none;
+        width: 352px;
+        padding: 12px 0;
+        background: var(--color-bg);
+        border-right: 1px solid var(--color-line);
+        overflow: hidden;
+      }
+
+      .sidebar-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 16px 12px;
+        color: var(--color-secondary);
+        font-size: 13px;
+      }
+
+      .scope {
+        display: flex;
+        gap: 4px;
+        padding: 2px;
+        border-radius: var(--radius-sm);
+        background: var(--color-raised);
+        font-size: 12px;
+      }
+
+      .scope span {
+        padding: 2px 8px;
+        border-radius: 6px;
+      }
+
+      .scope span[data-on="true"] {
+        background: var(--color-surface);
+        color: var(--color-text);
+      }
+
+      .side-group {
+        margin-bottom: 8px;
+      }
+
+      .side-group-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .side-group-head svg {
+        flex: none;
+        color: var(--color-secondary);
+      }
+
+      .side-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 44px;
+        padding: 4px 16px;
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: 14px;
+        text-align: left;
+      }
+
+      .side-row[data-current="true"] {
+        background: var(--color-selected);
+        color: var(--color-accent);
+        font-weight: 600;
+      }
+
+      .side-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .side-state {
+        flex: none;
+        margin-left: auto;
+        color: var(--color-secondary);
+        font-size: 12px;
+        font-weight: 400;
+      }
+
+      .detail {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+        background: var(--color-bg);
+      }
+
+      .detail-bar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 56px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-bg);
+      }
+
+      .detail-title {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .settings-scroll {
+        flex: 1;
+        min-height: 0;
+        padding: 0 16px 32px;
+        overflow-y: auto;
+        background: var(--color-bg);
+      }
+
+      .settings {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+        max-width: 560px;
+        margin: 0 auto;
+        padding-top: 24px;
+      }
+
+      .section-title {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        margin: 0 0 12px;
+        padding: 8px 0;
+        background: var(--color-bg);
+        color: var(--color-secondary);
+        font-size: 13px;
+        font-weight: 400;
+      }
+
+      .section-note {
+        margin: 12px 0 0;
+        color: var(--color-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .setting-group {
+        background: var(--color-surface);
+        border-radius: var(--radius-panel);
+        overflow: hidden;
+      }
+
+      .setting-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        min-height: 64px;
+        padding: 16px;
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        font-size: 15px;
+        text-align: left;
+      }
+
+      .setting-row + .setting-row {
+        border-top: 1px solid var(--color-line);
+      }
+
+      .setting-value {
+        flex: none;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .template-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        min-height: 64px;
+        padding: 12px 16px;
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        text-align: left;
+      }
+
+      .template-row:hover {
+        background: var(--color-raised);
+      }
+
+      .template-row + .template-row {
+        border-top: 1px solid var(--color-line);
+      }
+
+      .template-row-text {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .template-row-name {
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .template-row-preview {
+        overflow: hidden;
+        color: var(--color-secondary);
+        font-size: 13px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .template-row > svg {
+        flex: none;
+        margin-left: auto;
+        color: var(--color-secondary);
+      }
+
+      .setting-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .form {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .field-label {
+        color: var(--color-secondary);
+        font-size: 13px;
+      }
+
+      .field {
+        width: 100%;
+        min-height: var(--tap);
+        padding: 10px 12px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-bg);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 16px;
+      }
+
+      .field:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: -2px;
+      }
+
+      textarea.field {
+        min-height: 168px;
+        line-height: 1.6;
+        resize: none;
+      }
+
+      .counter {
+        color: var(--color-secondary);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 32px 16px;
+        background: var(--color-surface);
+        border-radius: var(--radius-panel);
+        text-align: center;
+      }
+
+      .empty-mark {
+        display: grid;
+        place-items: center;
+        width: 64px;
+        height: 64px;
+        margin-bottom: 8px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-mark);
+        color: var(--color-secondary);
+      }
+
+      .empty-title {
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .empty-note {
+        max-width: 30ch;
+        color: var(--color-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      /* 狭い画面の本文は 17px。枠の中だけ本文サイズへ戻す。 */
+      .phone .menu-item,
+      .phone .template-chip,
+      .phone .preview-body,
+      .phone .no-match,
+      .phone .dialog-title,
+      .phone .button,
+      .phone .search,
+      .phone .field,
+      .phone .setting-row,
+      .phone .template-row-name,
+      .phone .empty-title {
+        font-size: 17px;
+      }
+
+      .phone .menu-hint {
+        font-size: 13px;
+      }
+
+      .phone .msg {
+        font-size: 16px;
+      }
+
+      .phone .meter {
+        font-size: 12px;
+      }
+
+      /* 枠の中では viewport の 30% ではなく、端末の高さの 30% に合わせる。 */
+      .phone .input-text {
+        max-height: 192px;
+        font-size: 17px;
+      }
+
+      /* ---- 仕様メモ ---- */
+
+      .spec {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 8px 20px;
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .spec dt {
+        color: var(--color-secondary);
+      }
+
+      .spec dd {
+        margin: 0;
+      }
+
+      .open-questions {
+        margin: 0;
+        padding-left: 20px;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .open-questions li {
+        margin-bottom: 6px;
+      }
+
+      .open-questions b {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      /* 枠は中身の幅で広がるので、狭い画面では枠自体を縮められるようにする。 */
+      .frame {
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      @media (max-width: 1100px) {
+        .desktop {
+          width: 100%;
+          height: auto;
+          flex-direction: column;
+        }
+
+        .sidebar {
+          width: 100%;
+          border-right: 0;
+          border-bottom: 1px solid var(--color-line);
+        }
+
+        .detail {
+          min-height: 640px;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .page {
+          padding: 24px 16px 64px;
+        }
+
+        .hero {
+          flex-direction: column;
+        }
+
+        .phone {
+          width: 100%;
+          max-width: 390px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <symbol id="i-plus" viewBox="0 0 24 24">
+            <path d="M12 5v14M5 12h14" />
+          </symbol>
+          <symbol id="i-file" viewBox="0 0 24 24">
+            <path d="M6 3h8l4 4v14H6z" />
+            <path d="M14 3v4h4" />
+          </symbol>
+          <symbol id="i-repo" viewBox="0 0 24 24">
+            <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+            <path d="M4 7.5l8 4.5 8-4.5M12 12v9" />
+          </symbol>
+          <symbol id="i-new" viewBox="0 0 24 24">
+            <path d="M4 5h16v11H9l-5 4z" />
+            <path d="M12 8.5v4M10 10.5h4" />
+          </symbol>
+          <symbol id="i-collapse" viewBox="0 0 24 24">
+            <path d="M4 9h5V4M20 15h-5v5" />
+          </symbol>
+          <symbol id="i-template" viewBox="0 0 24 24">
+            <path d="M4 5h16v11H9l-5 4z" />
+            <path d="M8 9h8M8 12.5h5" />
+          </symbol>
+          <symbol id="i-send" viewBox="0 0 24 24">
+            <path d="M12 19V5M6 11l6-6 6 6" />
+          </symbol>
+          <symbol id="i-chevron-down" viewBox="0 0 24 24">
+            <path d="M6 9l6 6 6-6" />
+          </symbol>
+          <symbol id="i-chevron-left" viewBox="0 0 24 24">
+            <path d="M15 5l-7 7 7 7" />
+          </symbol>
+          <symbol id="i-chevron-right" viewBox="0 0 24 24">
+            <path d="M9 5l7 7-7 7" />
+          </symbol>
+          <symbol id="i-copy" viewBox="0 0 24 24">
+            <rect x="9" y="9" width="11" height="11" rx="2" />
+            <path d="M15 5H6a1 1 0 0 0-1 1v9" />
+          </symbol>
+          <symbol id="i-more" viewBox="0 0 24 24">
+            <circle cx="5" cy="12" r="1.2" fill="currentColor" />
+            <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+            <circle cx="19" cy="12" r="1.2" fill="currentColor" />
+          </symbol>
+          <symbol id="i-close" viewBox="0 0 24 24">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </symbol>
+          <symbol id="i-trash" viewBox="0 0 24 24">
+            <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+          </symbol>
+        </g>
+      </defs>
+    </svg>
+
+    <main class="page">
+      <header class="hero">
+        <div>
+          <h1>定型文 — デザインモック</h1>
+          <p>
+            設定で登録した定型文を、入力欄の + メニューから選んで本文へ入れる機能です。
+            一覧は名前の札で並べ、札をタップすると本文プレビューが出ます。入れるのは
+            「本文に入れる」を押したときだけで、送信はしません。
+          </p>
+          <p class="small-note">
+            静的モックです。保存・送信・読み込みは行いません（札の選択と本文への挿入だけ再現）。
+            データは架空（acme-dashboard / rapid-harbor）。右上のボタンでライト /
+            ダークを切り替えられます。
+          </p>
+        </div>
+        <button class="theme-toggle" type="button" id="theme-toggle">ライト / ダーク</button>
+      </header>
+
+      <div class="mock-banner">
+        <strong>モック</strong>
+        <span>
+          画面内の「本文に入れる」は、下の入力欄へ文字を入れるところまでです。BFF
+          への保存、ダイアログの読み込み、送信は実装時に配線します。
+        </span>
+      </div>
+
+      <ul class="toc">
+        <li><a href="#flow">流れ</a></li>
+        <li><a href="#settings">A: 設定</a></li>
+        <li><a href="#menu">B: + メニュー</a></li>
+        <li><a href="#dialog">C: 定型文ダイアログ</a></li>
+        <li><a href="#insert">D: 挿入後</a></li>
+        <li><a href="#spec">仕様メモ</a></li>
+      </ul>
+
+      <section class="pattern" id="flow">
+        <div class="pattern-head">
+          <h2>流れ</h2>
+        </div>
+        <ol class="flow">
+          <li><b>設定</b>で名前と本文を登録する（30 件・本文 2000 文字まで）</li>
+          <li><b>+</b> を押して「定型文を入れる」を選ぶ</li>
+          <li><b>札</b>をタップすると、下に本文プレビューが出る（まだ何も入らない）</li>
+          <li><b>本文に入れる</b>で、カーソル位置へ本文が入る（送信はしない）</li>
+          <li>必要なら直してから、いつもどおり送信する</li>
+        </ol>
+      </section>
+
+      <section class="pattern" id="settings">
+        <div class="pattern-head">
+          <h2>A: 設定「定型文」</h2>
+        </div>
+        <p class="pattern-note">
+          設定は「表示」の次に置きます。行をタップすると編集フォームが開き、削除はフォームの中に置きます。
+          行に「編集」「削除」を並べると、390px では名前と本文プレビューの幅が足りません。
+          行は名前と本文の 1 行目だけで、本文の全文は編集フォームで読みます。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <h3 class="detail-title">設定</h3>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <h4 class="section-title">表示</h4>
+                    <div class="setting-group">
+                      <button class="setting-row" type="button">
+                        <span>テーマ</span>
+                        <span class="setting-value">ダーク</span>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section>
+                    <h4 class="section-title">定型文</h4>
+                    <div class="setting-group">
+                      <button class="template-row" type="button">
+                        <span class="template-row-text">
+                          <span class="template-row-name">続けて</span>
+                          <span class="template-row-preview"
+                            >続けてください。止まった理由が分からなければ…</span
+                          >
+                        </span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="template-row" type="button">
+                        <span class="template-row-text">
+                          <span class="template-row-name">テストを流して直す</span>
+                          <span class="template-row-preview"
+                            >テストを流して、失敗したものを直してください。</span
+                          >
+                        </span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                      <button class="template-row" type="button">
+                        <span class="template-row-text">
+                          <span class="template-row-name">コミットして</span>
+                          <span class="template-row-preview"
+                            >変更を確認して、Why を書いたコミットメッセージで…</span
+                          >
+                        </span>
+                        <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </div>
+                    <div class="setting-actions">
+                      <button class="button" type="button">
+                        <svg width="16" height="16"><use href="#i-plus" /></svg>
+                        定型文を追加
+                      </button>
+                    </div>
+                    <p class="section-note">
+                      入力欄の + から選んで本文に入れます。30 件・本文 2000 文字まで。
+                    </p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              >モバイル: 設定の「表示」の次に「定型文」。行は名前と本文の 1
+              行目だけにして、全文はタップ後のフォームで読む。この下に通知・再起動が続く。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <h3 class="detail-title">設定</h3>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <h4 class="section-title">定型文</h4>
+                    <div class="setting-group">
+                      <div class="form" style="padding: 16px">
+                        <label class="field-label" for="mock-name">名前</label>
+                        <input
+                          class="field"
+                          id="mock-name"
+                          type="text"
+                          value="テストを流して直す"
+                          maxlength="40"
+                        />
+                        <label class="field-label" for="mock-body">本文</label>
+                        <textarea class="field" id="mock-body" maxlength="2000">
+テストを流して、失敗したものを直してください。
+
+1. 失敗したテスト名と原因を 1 行でまとめる
+2. 修正する
+3. もう一度流して緑にする
+
+通らないものがあれば、勝手にスキップせずに理由を報告してください。</textarea>
+                        <span class="counter">133 / 2000</span>
+                      </div>
+                    </div>
+                    <div class="setting-actions">
+                      <button class="button" data-variant="save" type="button">保存</button>
+                      <button class="button" type="button">キャンセル</button>
+                      <button class="button" data-variant="danger" type="button">
+                        <svg width="16" height="16"><use href="#i-trash" /></svg>
+                        削除
+                      </button>
+                    </div>
+                    <p class="section-note">
+                      削除は確認ダイアログを挟みます。保存は一覧まるごと BFF へ送ります。
+                    </p>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              >編集フォーム。行から開き、保存・削除もここで行う。削除は確認ダイアログを挟む。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="detail-bar">
+                <button class="icon-button" type="button" aria-label="戻る">
+                  <svg width="20" height="20"><use href="#i-chevron-left" /></svg>
+                </button>
+                <h3 class="detail-title">設定</h3>
+              </div>
+              <div class="settings-scroll">
+                <div class="settings">
+                  <section>
+                    <h4 class="section-title">定型文</h4>
+                    <div class="empty-state">
+                      <span class="empty-mark">
+                        <svg width="32" height="32"><use href="#i-template" /></svg>
+                      </span>
+                      <span class="empty-title">まだ定型文がありません</span>
+                      <span class="empty-note">
+                        よく送る指示を登録すると、入力欄の + から選べます。
+                      </span>
+                      <button class="button" type="button">
+                        <svg width="16" height="16"><use href="#i-plus" /></svg>
+                        定型文を追加
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              ><b>0 件</b>。この状態では +
+              メニューの「定型文を入れる」が無効になり、「設定で登録できます」と添える。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="desktop">
+              <aside class="sidebar">
+                <div class="sidebar-head">
+                  <span>一覧</span>
+                  <span class="scope"
+                    ><span data-on="true">すべて</span><span>アクティブ</span></span
+                  >
+                </div>
+                <div class="side-group">
+                  <div class="side-group-head">
+                    <svg width="14" height="14"><use href="#i-repo" /></svg>
+                    <span>acme-dashboard</span>
+                  </div>
+                  <button class="side-row" type="button">
+                    <span class="side-name">feat/templates</span>
+                    <span class="side-state">待機</span>
+                  </button>
+                  <button class="side-row" type="button">
+                    <span class="side-name">fix/composer-height</span>
+                    <span class="side-state">待機</span>
+                  </button>
+                </div>
+                <div class="side-group">
+                  <div class="side-group-head">
+                    <svg width="14" height="14"><use href="#i-repo" /></svg>
+                    <span>rapid-harbor</span>
+                  </div>
+                  <button class="side-row" type="button">
+                    <span class="side-name">chore/deps</span>
+                    <span class="side-state">待機</span>
+                  </button>
+                </div>
+                <div class="side-group">
+                  <button class="side-row" type="button" data-current="true">
+                    <span class="side-name">設定</span>
+                  </button>
+                </div>
+              </aside>
+              <div class="detail">
+                <div class="detail-bar">
+                  <h3 class="detail-title">設定</h3>
+                </div>
+                <div class="settings-scroll">
+                  <div class="settings">
+                    <section>
+                      <h4 class="section-title">表示</h4>
+                      <div class="setting-group">
+                        <button class="setting-row" type="button">
+                          <span>テーマ</span>
+                          <span class="setting-value">ダーク</span>
+                        </button>
+                      </div>
+                    </section>
+                    <section>
+                      <h4 class="section-title">定型文</h4>
+                      <div class="setting-group">
+                        <button class="template-row" type="button">
+                          <span class="template-row-text">
+                            <span class="template-row-name">続けて</span>
+                            <span class="template-row-preview"
+                              >続けてください。止まった理由が分からなければ…</span
+                            >
+                          </span>
+                          <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                        </button>
+                        <button class="template-row" type="button">
+                          <span class="template-row-text">
+                            <span class="template-row-name">テストを流して直す</span>
+                            <span class="template-row-preview"
+                              >テストを流して、失敗したものを直してください。</span
+                            >
+                          </span>
+                          <svg width="16" height="16"><use href="#i-chevron-right" /></svg>
+                        </button>
+                      </div>
+                      <div class="setting-actions">
+                        <button class="button" type="button">
+                          <svg width="16" height="16"><use href="#i-plus" /></svg>
+                          定型文を追加
+                        </button>
+                      </div>
+                      <p class="section-note">
+                        入力欄の + から選んで本文に入れます。30 件・本文 2000 文字まで。
+                      </p>
+                    </section>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              >PC: 一覧を残したまま、詳細側に設定を出す。内容の最大幅は 560px
+              で、横に引き伸ばさない。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="menu">
+        <div class="pattern-head">
+          <h2>B: + メニュー</h2>
+        </div>
+        <p class="pattern-note">
+          「本文に足すもの」の先頭に「定型文を入れる」を置きます。会話コマンド（新しい会話・会話を圧縮）の
+          区切りより下なので、実行系の操作と混ざりません。押せるのは会話を持つペインだけで、シェルと
+          1 行に畳んだ分割セルには + 自体を出しません（ADR 0055）。 メニューは実際には +
+          の上に開くため、入力欄とチップ行に重なります。ここでは項目と入力欄の状態を
+          同時に見せるため、入力欄の上へずらして描いています。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone" data-menu-frame>
+              <div class="chat-header">
+                <span class="agent-mark">pi</span>
+                <span class="branch">feat/templates</span>
+                <a class="pr" href="#">#312</a>
+                <span class="pane-id">wBE:p1</span>
+                <button class="icon-button" type="button" aria-label="ペイン ID をコピー">
+                  <svg width="14" height="14"><use href="#i-copy" /></svg>
+                </button>
+                <button class="icon-button" type="button" aria-label="ペインメニュー">
+                  <svg width="16" height="16"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="chat-body">
+                <div class="msg">
+                  <span class="who">pi</span>テストは通っています。次は何をしますか？
+                </div>
+                <div class="msg" data-mine="true">
+                  <span class="who">あなた</span>変更点を要約して
+                </div>
+                <div class="msg">
+                  <span class="who">pi</span>入力欄の + に「定型文を入れる」を足しました。
+                </div>
+              </div>
+              <div class="composer">
+                <div class="input-frame">
+                  <div class="input-text input-placeholder">メッセージを入力…</div>
+                  <button class="input-toggle" type="button" aria-label="入力を広げる">
+                    <svg width="16" height="16"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <div class="input-actions">
+                  <button class="add" type="button" aria-label="入力欄の操作" data-menu-trigger>
+                    <svg width="20" height="20"><use href="#i-plus" /></svg>
+                  </button>
+                  <span class="input-tail">
+                    <span class="meter">18.2k / 200k</span>
+                    <button class="send" type="button" aria-label="送信" data-disabled="true">
+                      <svg width="20" height="20"><use href="#i-send" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+
+              <div class="menu" role="menu" aria-label="入力欄の操作">
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-new" /></svg>
+                  <span class="menu-item-text">
+                    <span>新しい会話</span>
+                    <span class="menu-hint">このペインで会話を始め直す</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-collapse" /></svg>
+                  <span class="menu-item-text">
+                    <span>会話を圧縮</span>
+                    <span class="menu-hint">履歴を要約して縮める</span>
+                  </span>
+                </button>
+                <hr class="menu-sep" />
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-template" /></svg>
+                  <span class="menu-item-text">
+                    <span>定型文を入れる</span>
+                    <span class="menu-hint">登録した文を入力欄へ入れる</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-file" /></svg>
+                  <span class="menu-item-text">
+                    <span>ファイルを追加</span>
+                    <span class="menu-hint">画像 10 MB / ファイル 25 MB</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-repo" /></svg>
+                  <span class="menu-item-text">
+                    <span>プロジェクトを選ぶ</span>
+                    <span class="menu-hint">このディレクトリ配下から探す</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><b>定型文 3 件以上</b>。区切りの下の先頭に置き、補助文は
+              「登録した文を入力欄へ入れる」。+ を押すと開閉します（この枠だけ動作）。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="chat-header">
+                <span class="agent-mark">pi</span>
+                <span class="branch">chore/deps</span>
+                <span class="pane-id">wBE:p2</span>
+                <button class="icon-button" type="button" aria-label="ペイン ID をコピー">
+                  <svg width="14" height="14"><use href="#i-copy" /></svg>
+                </button>
+                <button class="icon-button" type="button" aria-label="ペインメニュー">
+                  <svg width="16" height="16"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="chat-body">
+                <div class="msg"><span class="who">pi</span>依存の更新は終わりました。</div>
+              </div>
+              <div class="composer">
+                <div class="input-frame">
+                  <div class="input-text input-placeholder">メッセージを入力…</div>
+                  <button class="input-toggle" type="button" aria-label="入力を広げる">
+                    <svg width="16" height="16"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <div class="input-actions">
+                  <button class="add" type="button" aria-label="入力欄の操作">
+                    <svg width="20" height="20"><use href="#i-plus" /></svg>
+                  </button>
+                  <span class="input-tail">
+                    <span class="meter">6.1k / 200k</span>
+                    <button class="send" type="button" aria-label="送信" data-disabled="true">
+                      <svg width="20" height="20"><use href="#i-send" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+
+              <div class="menu" role="menu" aria-label="入力欄の操作">
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-new" /></svg>
+                  <span class="menu-item-text">
+                    <span>新しい会話</span>
+                    <span class="menu-hint">このペインで会話を始め直す</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-collapse" /></svg>
+                  <span class="menu-item-text">
+                    <span>会話を圧縮</span>
+                    <span class="menu-hint">履歴を要約して縮める</span>
+                  </span>
+                </button>
+                <hr class="menu-sep" />
+                <button class="menu-item" type="button" role="menuitem" disabled>
+                  <svg width="18" height="18"><use href="#i-template" /></svg>
+                  <span class="menu-item-text">
+                    <span>定型文を入れる</span>
+                    <span class="menu-hint">設定で登録できます</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-file" /></svg>
+                  <span class="menu-item-text">
+                    <span>ファイルを追加</span>
+                    <span class="menu-hint">画像 10 MB / ファイル 25 MB</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-repo" /></svg>
+                  <span class="menu-item-text">
+                    <span>プロジェクトを選ぶ</span>
+                    <span class="menu-hint">このディレクトリ配下から探す</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><b>0 件</b
+              >。項目は消さずに無効にし、理由を補助文に出す。空のダイアログを開かせない。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="chat-header">
+                <span class="agent-mark">pi</span>
+                <span class="branch">feat/templates</span>
+                <span class="pane-id">wBE:p1</span>
+                <button class="icon-button" type="button" aria-label="ペイン ID をコピー">
+                  <svg width="14" height="14"><use href="#i-copy" /></svg>
+                </button>
+                <button class="icon-button" type="button" aria-label="ペインメニュー">
+                  <svg width="16" height="16"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="chat-body">
+                <div class="msg"><span class="who">pi</span>圧縮の指示を入力してください。</div>
+              </div>
+              <div class="composer">
+                <div class="chip-row">
+                  <span class="chip">
+                    会話を圧縮
+                    <button type="button" aria-label="チップを外す">
+                      <svg width="14" height="14"><use href="#i-close" /></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="input-frame">
+                  <div class="input-text input-placeholder">圧縮の指示（任意）</div>
+                  <button class="input-toggle" type="button" aria-label="入力を広げる">
+                    <svg width="16" height="16"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <div class="input-actions">
+                  <button class="add" type="button" aria-label="入力欄の操作">
+                    <svg width="20" height="20"><use href="#i-plus" /></svg>
+                  </button>
+                  <span class="input-tail">
+                    <span class="meter">18.2k / 200k</span>
+                    <button class="send" type="button" aria-label="送信">
+                      <svg width="20" height="20"><use href="#i-send" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+
+              <div class="menu" role="menu" aria-label="入力欄の操作" style="bottom: 176px">
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-new" /></svg>
+                  <span class="menu-item-text">
+                    <span>新しい会話</span>
+                    <span class="menu-hint">このペインで会話を始め直す</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-collapse" /></svg>
+                  <span class="menu-item-text">
+                    <span>会話を圧縮</span>
+                    <span class="menu-hint">履歴を要約して縮める</span>
+                  </span>
+                </button>
+                <hr class="menu-sep" />
+                <button class="menu-item" type="button" role="menuitem" disabled>
+                  <svg width="18" height="18"><use href="#i-template" /></svg>
+                  <span class="menu-item-text">
+                    <span>定型文を入れる</span>
+                    <span class="menu-hint">圧縮の指示には使えません</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-file" /></svg>
+                  <span class="menu-item-text">
+                    <span>ファイルを追加</span>
+                    <span class="menu-hint">画像 10 MB / ファイル 25 MB</span>
+                  </span>
+                </button>
+                <button class="menu-item" type="button" role="menuitem">
+                  <svg width="18" height="18"><use href="#i-repo" /></svg>
+                  <span class="menu-item-text">
+                    <span>プロジェクトを選ぶ</span>
+                    <span class="menu-hint">このディレクトリ配下から探す</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><b>会話を圧縮のチップ中</b
+              >は無効。入力欄が圧縮の指示になるため、長い定型文を入れる先ではない。
+              ここではチップを見せるため、メニューをチップ行より上にずらしている。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="dialog">
+        <div class="pattern-head">
+          <h2>C: 定型文ダイアログ</h2>
+          <span class="badge">推奨</span>
+        </div>
+        <p class="pattern-note">
+          名前の札を並べ、タップした札の本文を下に出す。札のタップは選択だけで、入れるのは
+          「本文に入れる」を押したとき。似た名前の定型文を、札を切り替えながら読み比べられる。
+          検索欄は自動フォーカスしない（キーボードがプレビューを潰すため）。
+        </p>
+
+        <div class="frames">
+          <div class="frame" id="demo-dialog">
+            <div class="phone">
+              <div class="chat-header">
+                <span class="agent-mark">pi</span>
+                <span class="branch">feat/templates</span>
+                <a class="pr" href="#">#312</a>
+                <span class="pane-id">wBE:p1</span>
+                <button class="icon-button" type="button" aria-label="ペイン ID をコピー">
+                  <svg width="14" height="14"><use href="#i-copy" /></svg>
+                </button>
+                <button class="icon-button" type="button" aria-label="ペインメニュー">
+                  <svg width="16" height="16"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="chat-body">
+                <div class="msg"><span class="who">pi</span>テストは通っています。</div>
+                <div class="msg" data-mine="true">
+                  <span class="who">あなた</span>変更点を要約して
+                </div>
+              </div>
+              <div class="composer">
+                <div class="input-frame">
+                  <textarea class="input-text" rows="1" aria-label="メッセージ">
+変更点を要約して</textarea>
+                  <button class="input-toggle" type="button" aria-label="入力を広げる">
+                    <svg width="16" height="16"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <div class="input-actions">
+                  <button class="add" type="button" aria-label="入力欄の操作">
+                    <svg width="20" height="20"><use href="#i-plus" /></svg>
+                  </button>
+                  <span class="input-tail">
+                    <span class="meter">18.2k / 200k</span>
+                    <button class="send" type="button" aria-label="送信">
+                      <svg width="20" height="20"><use href="#i-send" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+
+              <div class="overlay">
+                <div
+                  class="dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="mock-dialog-title"
+                >
+                  <h3 class="dialog-title" id="mock-dialog-title">定型文を入れる</h3>
+                  <p class="dialog-note">
+                    札を選ぶと本文が出ます。入れるまで下書きは変わりません。
+                  </p>
+                  <input
+                    class="search"
+                    type="search"
+                    placeholder="名前で絞り込む"
+                    aria-label="定型文を名前で絞り込む"
+                    autocomplete="off"
+                  />
+
+                  <div class="template-chips" role="radiogroup" aria-label="定型文">
+                    <button
+                      class="template-chip"
+                      type="button"
+                      role="radio"
+                      aria-checked="false"
+                      data-body="続けてください。止まった理由が分からなければ、まず直近のログを読んで原因を特定してから進めてください。"
+                    >
+                      続けて
+                    </button>
+                    <button
+                      class="template-chip"
+                      type="button"
+                      role="radio"
+                      aria-checked="true"
+                      data-body="テストを流して、失敗したものを直してください。
+
+1. 失敗したテスト名と原因を 1 行でまとめる
+2. 修正する
+3. もう一度流して緑にする
+
+通らないものがあれば、勝手にスキップせずに理由を報告してください。"
+                    >
+                      テストを流して直す
+                    </button>
+                    <button
+                      class="template-chip"
+                      type="button"
+                      role="radio"
+                      aria-checked="false"
+                      data-body="変更を確認して、Why を書いたコミットメッセージでコミットしてください。push はしないでください。"
+                    >
+                      コミットして
+                    </button>
+                    <button
+                      class="template-chip"
+                      type="button"
+                      role="radio"
+                      aria-checked="false"
+                      data-body="ここまでの変更点を、触ったファイルごとに 1 行で要約してください。テストの有無も書いてください。"
+                    >
+                      変更点を要約
+                    </button>
+                    <button
+                      class="template-chip"
+                      type="button"
+                      role="radio"
+                      aria-checked="false"
+                      data-body="レビューの指摘に対応してください。
+
+- 指摘ごとに、直した / 直さない を明示する
+- 直さない場合は理由を書く
+- 対応後に検証コマンドを流す
+- 変更したファイルを列挙する
+
+対応が終わったら、指摘ごとの対応表をコメントで返してください。"
+                    >
+                      レビュー指摘に対応
+                    </button>
+                    <button
+                      class="template-chip"
+                      type="button"
+                      role="radio"
+                      aria-checked="false"
+                      data-body="調べた内容を、再現手順・原因・直し方の 3 つに分けて書いてください。"
+                    >
+                      調査メモ
+                    </button>
+                  </div>
+
+                  <div class="preview">
+                    <pre class="preview-body">
+テストを流して、失敗したものを直してください。
+
+1. 失敗したテスト名と原因を 1 行でまとめる
+2. 修正する
+3. もう一度流して緑にする
+
+通らないものがあれば、勝手にスキップせずに理由を報告してください。</pre>
+                    <div class="preview-empty" hidden>札を選ぶと、本文がここに出ます。</div>
+                    <div class="preview-foot">
+                      <span>本文</span>
+                      <span data-count>110 文字</span>
+                    </div>
+                  </div>
+
+                  <div class="dialog-actions">
+                    <button class="button" data-variant="primary" type="button" data-insert>
+                      本文に入れる
+                    </button>
+                    <button class="button" type="button" data-close>閉じる</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="demo-controls">
+              <button class="button" type="button" id="demo-open">ダイアログを開く</button>
+              <button class="button" type="button" id="demo-reset">元に戻す</button>
+            </div>
+            <p class="demo-status" data-status role="status"></p>
+            <span class="caption"
+              ><b>動作する枠</b
+              >。札をタップするとプレビューが切り替わり、「本文に入れる」で入力欄の末尾へ
+              入れて閉じます。矢印キーでも札を移動できます。実際の保存・送信はしません。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="chat-header">
+                <span class="agent-mark">pi</span>
+                <span class="branch">feat/templates</span>
+                <span class="pane-id">wBE:p1</span>
+              </div>
+              <div class="chat-body">
+                <div class="msg"><span class="who">pi</span>レビューの指摘が 4 件あります。</div>
+              </div>
+              <div class="composer">
+                <div class="input-frame">
+                  <div class="input-text input-placeholder">メッセージを入力…</div>
+                  <button class="input-toggle" type="button" aria-label="入力を広げる">
+                    <svg width="16" height="16"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <div class="input-actions">
+                  <button class="add" type="button" aria-label="入力欄の操作">
+                    <svg width="20" height="20"><use href="#i-plus" /></svg>
+                  </button>
+                  <span class="input-tail">
+                    <span class="meter">31.4k / 200k</span>
+                    <button class="send" type="button" aria-label="送信" data-disabled="true">
+                      <svg width="20" height="20"><use href="#i-send" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+
+              <div class="overlay">
+                <div
+                  class="dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="mock-dialog-title-2"
+                >
+                  <h3 class="dialog-title" id="mock-dialog-title-2">定型文を入れる</h3>
+                  <p class="dialog-note">
+                    札を選ぶと本文が出ます。入れるまで下書きは変わりません。
+                  </p>
+                  <input
+                    class="search"
+                    type="search"
+                    placeholder="名前で絞り込む"
+                    aria-label="定型文を名前で絞り込む"
+                    autocomplete="off"
+                  />
+                  <div class="template-chips" role="radiogroup" aria-label="定型文">
+                    <button class="template-chip" type="button" role="radio" aria-checked="false">
+                      続けて
+                    </button>
+                    <button class="template-chip" type="button" role="radio" aria-checked="false">
+                      テストを流して直す
+                    </button>
+                    <button class="template-chip" type="button" role="radio" aria-checked="false">
+                      コミットして
+                    </button>
+                    <button class="template-chip" type="button" role="radio" aria-checked="false">
+                      変更点を要約
+                    </button>
+                    <button class="template-chip" type="button" role="radio" aria-checked="true">
+                      レビュー指摘に対応
+                    </button>
+                    <button class="template-chip" type="button" role="radio" aria-checked="false">
+                      調査メモ
+                    </button>
+                  </div>
+                  <div class="preview">
+                    <pre class="preview-body">
+レビューの指摘に対応してください。
+
+- 指摘ごとに、直した / 直さない を明示する
+- 直さない場合は理由を書く
+- 対応後に検証コマンドを流す
+- 変更したファイルを列挙する
+
+対応が終わったら、指摘ごとの対応表をコメントで返してください。</pre>
+                    <div class="preview-empty" hidden>札を選ぶと、本文がここに出ます。</div>
+                    <div class="preview-foot">
+                      <span>本文</span>
+                      <span>148 文字</span>
+                    </div>
+                  </div>
+                  <div class="dialog-actions">
+                    <button class="button" data-variant="primary" type="button">
+                      本文に入れる
+                    </button>
+                    <button class="button" type="button">閉じる</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              ><b>長い本文</b>。プレビューは枠内でスクロールし、文字数を右下に出す。ダイアログ全体は
+              伸びず、札の領域も 3 行ぶんで止める。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="chat-header">
+                <span class="agent-mark">pi</span>
+                <span class="branch">feat/templates</span>
+                <span class="pane-id">wBE:p1</span>
+              </div>
+              <div class="chat-body">
+                <div class="msg"><span class="who">pi</span>何を調べますか？</div>
+              </div>
+              <div class="composer">
+                <div class="input-frame">
+                  <div class="input-text input-placeholder">メッセージを入力…</div>
+                  <button class="input-toggle" type="button" aria-label="入力を広げる">
+                    <svg width="16" height="16"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <div class="input-actions">
+                  <button class="add" type="button" aria-label="入力欄の操作">
+                    <svg width="20" height="20"><use href="#i-plus" /></svg>
+                  </button>
+                  <span class="input-tail">
+                    <span class="meter">9.8k / 200k</span>
+                    <button class="send" type="button" aria-label="送信" data-disabled="true">
+                      <svg width="20" height="20"><use href="#i-send" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+
+              <div class="overlay">
+                <div
+                  class="dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="mock-dialog-title-3"
+                >
+                  <h3 class="dialog-title" id="mock-dialog-title-3">定型文を入れる</h3>
+                  <p class="dialog-note">
+                    札を選ぶと本文が出ます。入れるまで下書きは変わりません。
+                  </p>
+                  <input
+                    class="search"
+                    type="search"
+                    value="デプロイ"
+                    aria-label="定型文を名前で絞り込む"
+                    autocomplete="off"
+                  />
+                  <div class="no-match">
+                    <p>「デプロイ」に一致する定型文がありません。</p>
+                    <p class="no-match-hint">検索語を短くするか、設定で登録してください。</p>
+                  </div>
+                  <div class="dialog-actions">
+                    <button class="button" data-variant="primary" type="button" disabled>
+                      本文に入れる
+                    </button>
+                    <button class="button" type="button">閉じる</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              ><b>一致なし</b
+              >。札の領域に理由を出し、プレビューは空の案内、主操作は無効。検索語は消さない。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="insert">
+        <div class="pattern-head">
+          <h2>D: 挿入後</h2>
+        </div>
+        <p class="pattern-note">
+          入れた本文は普通の下書きで、チップにはしない。送る内容が見えたまま編集でき、取り消しも
+          文字の削除だけで済む（ADR 0056 の「本文の一部にする」と同じ扱い）。入力欄は 30dvh
+          で止まり、 長い本文は枠内でスクロールする。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="phone">
+              <div class="chat-header">
+                <span class="agent-mark">pi</span>
+                <span class="branch">feat/templates</span>
+                <a class="pr" href="#">#312</a>
+                <span class="pane-id">wBE:p1</span>
+                <button class="icon-button" type="button" aria-label="ペイン ID をコピー">
+                  <svg width="14" height="14"><use href="#i-copy" /></svg>
+                </button>
+                <button class="icon-button" type="button" aria-label="ペインメニュー">
+                  <svg width="16" height="16"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="chat-body">
+                <div class="msg"><span class="who">pi</span>テストは通っています。</div>
+                <div class="msg" data-mine="true">
+                  <span class="who">あなた</span>変更点を要約して
+                </div>
+                <div class="msg">
+                  <span class="who">pi</span>入力欄の +
+                  に「定型文を入れる」を足しました。札を選ぶと本文が出ます。
+                </div>
+              </div>
+              <div class="composer">
+                <div class="input-frame" data-focus="true">
+                  <div class="input-text">
+                    テストを流して、失敗したものを直してください。 1. 失敗したテスト名と原因を 1
+                    行でまとめる 2. 修正する 3. もう一度流して緑にする
+                    通らないものがあれば、勝手にスキップせずに理由を報告してください。
+                  </div>
+                  <button class="input-toggle" type="button" aria-label="入力を広げる">
+                    <svg width="16" height="16"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <div class="input-actions">
+                  <button class="add" type="button" aria-label="入力欄の操作">
+                    <svg width="20" height="20"><use href="#i-plus" /></svg>
+                  </button>
+                  <span class="input-tail">
+                    <span class="meter">18.2k / 200k</span>
+                    <button class="send" type="button" aria-label="送信">
+                      <svg width="20" height="20"><use href="#i-send" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              ><b>空の下書きへ挿入</b
+              >。本文がそのまま入り、カーソルは末尾。送信ボタンは通常どおり押せる。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="phone">
+              <div class="chat-header">
+                <span class="agent-mark">pi</span>
+                <span class="branch">fix/composer-height</span>
+                <span class="pane-id">wBE:p2</span>
+                <button class="icon-button" type="button" aria-label="ペイン ID をコピー">
+                  <svg width="14" height="14"><use href="#i-copy" /></svg>
+                </button>
+                <button class="icon-button" type="button" aria-label="ペインメニュー">
+                  <svg width="16" height="16"><use href="#i-more" /></svg>
+                </button>
+              </div>
+              <div class="chat-body">
+                <div class="msg">
+                  <span class="who">pi</span>修正しました。ほかに直すところはありますか？
+                </div>
+              </div>
+              <div class="composer">
+                <div class="input-frame" data-focus="true">
+                  <div class="input-text">
+                    入力欄の高さは 30dvh で止めて。 変更を確認して、Why
+                    を書いたコミットメッセージでコミットしてください。push はしないでください。
+                  </div>
+                  <button class="input-toggle" type="button" aria-label="入力を広げる">
+                    <svg width="16" height="16"><use href="#i-chevron-down" /></svg>
+                  </button>
+                </div>
+                <div class="input-actions">
+                  <button class="add" type="button" aria-label="入力欄の操作">
+                    <svg width="20" height="20"><use href="#i-plus" /></svg>
+                  </button>
+                  <span class="input-tail">
+                    <span class="meter">22.7k / 200k</span>
+                    <button class="send" type="button" aria-label="送信">
+                      <svg width="20" height="20"><use href="#i-send" /></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+            </div>
+            <span class="caption"
+              ><b>書きかけへ挿入</b>。カーソル位置（末尾）に入れ、前の行とは空行 1
+              つで区切る。下書きは消さない。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="spec">
+        <div class="pattern-head">
+          <h2>仕様メモ</h2>
+        </div>
+
+        <dl class="spec">
+          <dt>ダイアログ</dt>
+          <dd>
+            幅は最大 420px（狭い画面は画面幅 − 32px）。高さは
+            <code>min(560px, 100dvh − 32px)</code>。中は縦 flex で、プレビューだけが伸縮する。
+          </dd>
+          <dt>札</dt>
+          <dd>
+            最小高 44px、角丸 12px、名前だけ。選択中は枠と面と文字色をアクセントにし、<code
+              >role="radiogroup"</code
+            >
+            / <code>role="radio"</code> と <code>aria-checked</code> で表す。矢印キーで移動。
+          </dd>
+          <dt>札の領域</dt>
+          <dd>
+            折り返し、最大 148px（44px の札 3
+            行）で内部スクロール。件数が増えてもプレビューを押し出さない。
+          </dd>
+          <dt>プレビュー</dt>
+          <dd>
+            残りの高さ、最小 80px。本文は
+            <code>pre-wrap</code>・折り返しあり・枠内スクロール。右下に文字数。読み上げのため
+            <code>aria-live</code> にはしない（本文全体を毎回読ませない）。
+          </dd>
+          <dt>検索</dt>
+          <dd>
+            名前の部分一致。自動フォーカスしない。絞り込みで選択中の札が消えたら選択解除（プレビューは空の案内へ）。
+          </dd>
+          <dt>主操作</dt>
+          <dd>
+            「本文に入れる」はフッター固定。選択なし・一致なし・読み込み失敗では無効。押すとダイアログを閉じ、本文へフォーカスを戻してカーソルを挿入末尾へ置く。
+          </dd>
+          <dt>挿入</dt>
+          <dd>
+            カーソル位置（選択範囲は置換）へ入れる。直前が改行でなければ改行を 1
+            つ、直後が改行でなければ改行を 1
+            つ足す。チップは付けない。下書き・添付・引用はそのまま。
+          </dd>
+          <dt>+ メニュー</dt>
+          <dd>
+            区切りの下の先頭。会話を持つペインだけ。0
+            件は無効＋「設定で登録できます」。会話を圧縮のチップ中も無効＋「圧縮の指示には使えません」。
+          </dd>
+          <dt>保存</dt>
+          <dd>
+            BFF の <code>templates.json</code>（<code>GET</code> /
+            <code>PUT /api/templates</code>、一覧まるごと置き換え）。上限は 30 件・名前 40
+            文字・本文 2000 文字。
+          </dd>
+          <dt>空・失敗</dt>
+          <dd>
+            読み込み中は「読み込み中…」、失敗は理由と「再試行」。0 件と一致なしを同じ文言にしない。
+          </dd>
+          <dt>アイコン</dt>
+          <dd>仮。既存の <code>ReplyIcon</code> を使うか、24 × 24・線幅 1.7 で新規に 1 つ足す。</dd>
+        </dl>
+
+        <h3 style="margin: 32px 0 8px; font-size: 15px">未決</h3>
+        <ul class="open-questions">
+          <li><b>文字数</b>をプレビューに出すか（モックでは出す。長さの判断が早い）</li>
+          <li><b>検索欄</b>を残すか（モックでは残す・自動フォーカスなし。30 件上限なら省ける）</li>
+          <li>
+            <b>設定の行</b>は「行タップでフォーム」か、行内に「編集」「削除」を並べるか（390px
+            では前者を推奨）
+          </li>
+          <li>札の<b>並び順</b>は登録順のまま。並べ替えは持たない</li>
+        </ul>
+
+        <p class="section-note" style="margin-top: 24px">
+          確認: このモックは 390 × 640 の枠と、1040px 幅の設定で見ています。実機 iOS
+          のキーボード表示時、文字サイズ 200%、強制カラーは未確認です。
+        </p>
+      </section>
+    </main>
+
+    <script>
+      const root = document.documentElement;
+      document.getElementById("theme-toggle").addEventListener("click", () => {
+        root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      });
+
+      // 整形ツールが <pre> の開始直後に改行を入れるため、本文の先頭の空行だけ落とす。
+      document.querySelectorAll(".preview-body").forEach((node) => {
+        node.textContent = node.textContent.replace(/^\n/, "");
+      });
+
+      // + メニューの開閉。枠の中だけの見た目の再現。
+      document.querySelectorAll("[data-menu-trigger]").forEach((trigger) => {
+        const frame = trigger.closest("[data-menu-frame]");
+        const menu = frame?.querySelector(".menu");
+        if (!menu) return;
+        menu.hidden = false;
+        trigger.setAttribute("aria-expanded", "true");
+        trigger.addEventListener("click", () => {
+          menu.hidden = !menu.hidden;
+          trigger.setAttribute("aria-expanded", String(!menu.hidden));
+        });
+      });
+
+      // 定型文ダイアログ。選択と挿入だけを再現する。
+      const demo = document.getElementById("demo-dialog");
+      if (demo) {
+        const chips = [...demo.querySelectorAll(".template-chip")];
+        const body = demo.querySelector(".preview-body");
+        const empty = demo.querySelector(".preview-empty");
+        const count = demo.querySelector("[data-count]");
+        const insert = demo.querySelector("[data-insert]");
+        const overlay = demo.querySelector(".overlay");
+        const textarea = demo.querySelector("textarea");
+        const status = demo.querySelector("[data-status]");
+        const initial = textarea.value;
+
+        const countText = (text) => `${[...text.replace(/\s/g, "")].length} 文字`;
+
+        // 本番の入力欄は入力量に合わせて伸びる。デモでも同じ見え方にする。
+        const fit = () => {
+          textarea.style.height = "auto";
+          textarea.style.height = `${Math.min(textarea.scrollHeight, 192)}px`;
+        };
+        fit();
+
+        const select = (chip) => {
+          chips.forEach((item) => item.setAttribute("aria-checked", String(item === chip)));
+          body.textContent = chip.dataset.body;
+          body.hidden = false;
+          empty.hidden = true;
+          count.textContent = countText(chip.dataset.body);
+          insert.disabled = false;
+          body.scrollTop = 0;
+        };
+
+        chips.forEach((chip, index) => {
+          chip.addEventListener("click", () => select(chip));
+          chip.addEventListener("keydown", (event) => {
+            const step =
+              event.key === "ArrowRight" || event.key === "ArrowDown"
+                ? 1
+                : event.key === "ArrowLeft" || event.key === "ArrowUp"
+                  ? -1
+                  : 0;
+            if (step === 0) return;
+            event.preventDefault();
+            const next = chips[(index + step + chips.length) % chips.length];
+            next.focus();
+            select(next);
+          });
+        });
+
+        insert.addEventListener("click", () => {
+          const selected = chips.find((chip) => chip.getAttribute("aria-checked") === "true");
+          if (!selected) return;
+          const current = textarea.value.trim();
+          textarea.value =
+            current === ""
+              ? selected.dataset.body
+              : `${textarea.value.replace(/\n+$/, "")}\n\n${selected.dataset.body}`;
+          textarea.scrollTop = textarea.scrollHeight;
+          fit();
+          overlay.hidden = true;
+          status.textContent = "本文に入れました（静的モック）。送信はしていません。";
+        });
+
+        demo.querySelector("[data-close]").addEventListener("click", () => {
+          overlay.hidden = true;
+          status.textContent = "閉じました。入力欄は変わっていません。";
+        });
+
+        document.getElementById("demo-open").addEventListener("click", () => {
+          overlay.hidden = false;
+          status.textContent = "";
+        });
+
+        document.getElementById("demo-reset").addEventListener("click", () => {
+          textarea.value = initial;
+          fit();
+          overlay.hidden = false;
+          chips.forEach((chip, index) => chip.setAttribute("aria-checked", String(index === 1)));
+          select(chips[1]);
+          status.textContent = "";
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -369,6 +369,7 @@ export type TestAppOptions = {
     | "restartSettings"
     | "restart"
     | "restartDelayMs"
+    | "templates"
   >
 >;
 

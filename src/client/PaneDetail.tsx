@@ -89,6 +89,7 @@ import { AgentInfoHint, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
 import { LaunchNote } from "./pane/launch-note";
 import { useAttachments } from "./pane/use-attachments";
+import { useTemplates } from "./pane/use-templates";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
 import { useDraft } from "./pane/use-draft";
 import { useOutputFollow } from "./pane/use-output-follow";
@@ -107,6 +108,8 @@ import {
   type PaneContext,
 } from "./select";
 import { SelectionToolbar } from "./SelectionToolbar";
+import { TemplateDialog } from "./TemplateDialog";
+import { insertTemplate } from "./templates";
 import { selectionCopyText } from "./selection-copy";
 import { Spinner } from "./Spinner";
 import { type PaneLaunchView } from "./starting";
@@ -206,9 +209,17 @@ export function PaneDetail(props: PaneDetailProps) {
   // メニューからの /new だけ、送る前に確認する。
   const [confirmNew, setConfirmNew] = useState(false);
   const attachments = useAttachments(pane.id);
+  // + メニューの「定型文を入れる」を押せるかだけに使う。読めなければ押せる側に倒す。
+  const templates = useTemplates(pane.chat);
   // プロジェクトのダイアログは閉じるアニメーションの間も残す。caret は選んだ直後に
   // 入力欄へ戻す位置で、閉じただけ（キャンセル）のときは null のまま。
   const [projectDialog, setProjectDialog] = useState<{
+    open: boolean;
+    caret: number | null;
+  } | null>(null);
+  // 定型文のダイアログも、閉じるアニメーションの間は残す。caret は選んだ直後に
+  // 入力欄へ戻す位置で、閉じただけのときは null のまま。
+  const [templateDialog, setTemplateDialog] = useState<{
     open: boolean;
     caret: number | null;
   } | null>(null);
@@ -364,6 +375,8 @@ export function PaneDetail(props: PaneDetailProps) {
   const busy = sending || stopping;
   const placeholder =
     activeChip === "compact" ? "圧縮の指示（任意）" : shell ? "コマンドを入力" : "メッセージを入力";
+  // 圧縮のチップ中は入力欄が指示になる。長い定型文を入れる先ではない。
+  const templateBlock = activeChip === "compact" ? "圧縮の指示には使えません" : null;
 
   // シェルに戻ったら、会話のコマンドチップは持ち越さない。残すと、シェルへ
   // /compact を送ってしまい、次の会話に圧縮の控えが並ぶ。
@@ -594,6 +607,36 @@ export function PaneDetail(props: PaneDetailProps) {
   const projectsExited = () => {
     const caret = projectDialog?.caret ?? null;
     setProjectDialog(null);
+    if (caret === null) return;
+    const field = input.current;
+    if (field === null) return;
+    field.focus();
+    field.setSelectionRange(caret, caret);
+    fit(field, expanded);
+  };
+
+  const openTemplates = () => setTemplateDialog({ open: true, caret: null });
+
+  const closeTemplates = () =>
+    setTemplateDialog((current) => (current === null ? null : { ...current, open: false }));
+
+  // 選んだ本文はカーソル位置へ入れる。チップは文字を打ったときと同じ規則で、
+  // new は解除し、compact の指示は残す。
+  const pickTemplate = (body: string) => {
+    const field = input.current;
+    const start = field?.selectionStart ?? draft.length;
+    const end = field?.selectionEnd ?? start;
+    const next = insertTemplate(draft, start, end, body);
+    setDraft(next.text);
+    setChip(chipOnInput(activeChip));
+    setTemplateDialog({ open: false, caret: next.caret });
+  };
+
+  // キャンセル時は DialogShell が開く前の要素（+ ボタン）へ戻す。選んだときだけ、
+  // 閉じるアニメーションの後に本文へフォーカスを移す。
+  const templatesExited = () => {
+    const caret = templateDialog?.caret ?? null;
+    setTemplateDialog(null);
     if (caret === null) return;
     const field = input.current;
     if (field === null) return;
@@ -1279,8 +1322,11 @@ export function PaneDetail(props: PaneDetailProps) {
                 <ComposerAdd
                   full={attachments.length >= MAX_ATTACHMENTS}
                   commands={composerCommands}
+                  templateCount={templates === null ? null : templates.length}
+                  templateBlock={templateBlock}
                   onFiles={(files) => takeFiles(dropActionFrom(files))}
                   onProjects={openProjects}
+                  onTemplates={openTemplates}
                 />
               ) : null}
               <span class="hwc-input-tail">
@@ -1335,6 +1381,14 @@ export function PaneDetail(props: PaneDetailProps) {
           onClose={closeProjects}
           onExited={projectsExited}
           onPick={pickProject}
+        />
+      )}
+      {templateDialog === null ? null : (
+        <TemplateDialog
+          open={templateDialog.open}
+          onClose={closeTemplates}
+          onExited={templatesExited}
+          onPick={pickTemplate}
         />
       )}
       {confirmNew

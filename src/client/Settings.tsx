@@ -3,6 +3,7 @@ import type { ConnectionStatus } from "./connection";
 import { ChevronLeftIcon } from "./icons";
 import { NotificationSettings } from "./NotificationSettings";
 import { RestartSettings } from "./RestartSettings";
+import { TemplateSettings } from "./TemplateSettings";
 import { ThemePicker } from "./ThemePicker";
 import type { ThemePreference } from "./theme";
 
@@ -37,6 +38,8 @@ export function Settings(props: SettingsProps) {
             <ThemePicker value={props.theme} onChange={props.onThemeChange} />
             <p class="hwc-section-note">システムは端末の外観設定に合わせます。</p>
           </section>
+
+          <TemplateSettings />
 
           <NotificationSettings />
 
