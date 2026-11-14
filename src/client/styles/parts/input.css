@@ -420,8 +420,16 @@
   transition-delay: 0s;
 }
 
-.hwc-hint-title {
+/* 注記は常時出さず、タイトル行の (i) で開く。 */
+.hwc-hint-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   margin-bottom: var(--space-1);
+}
+
+.hwc-hint-title {
   font-weight: 600;
 }
 
@@ -450,7 +458,7 @@
 }
 
 /* 記号は小さく保ち、触れる範囲だけ 44px に広げる。 */
-.hwc-model-copy {
+.hwc-hint-icon-button {
   position: relative;
   flex: none;
   display: grid;
@@ -467,13 +475,13 @@
   -webkit-user-select: none;
 }
 
-.hwc-model-copy::after {
+.hwc-hint-icon-button::after {
   content: "";
   position: absolute;
   inset: calc((var(--space-6) - var(--tap)) / 2);
 }
 
-.hwc-model-copy:hover {
+.hwc-hint-icon-button:hover {
   background: var(--color-raised);
   color: var(--color-text);
 }
@@ -483,8 +491,12 @@
   color: var(--color-success);
 }
 
+.hwc-hint-note-toggle[data-open="true"] {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
 .hwc-hint-note {
-  margin-top: var(--space-1);
   color: var(--color-secondary);
 }
 

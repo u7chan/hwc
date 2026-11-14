@@ -237,6 +237,17 @@ export function CopyGlyph({ copied, size = 16 }: IconProps & { copied: boolean }
   );
 }
 
+// 補足を開く印。開閉のシェブロンと違い、i を囲む丸で「説明がある」ことを示す。
+export function InfoIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 8h.01" />
+    </Svg>
+  );
+}
+
 export function TabIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
