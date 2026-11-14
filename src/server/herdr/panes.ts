@@ -122,12 +122,7 @@ export type PaneClient = {
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; status: 400 | 413; error: string };
 
-export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    return { ok: false, status: 400, error: "body must be an object" };
-  }
-
-  const record = body as Record<string, unknown>;
+function parsePaneName(record: Record<string, unknown>): Parsed<string | null> {
   const rawName = record.name;
   if (rawName !== undefined && rawName !== null && typeof rawName !== "string") {
     return { ok: false, status: 400, error: "name must be a string" };
@@ -136,6 +131,17 @@ export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
   if ([...name].length > MAX_PANE_NAME) {
     return { ok: false, status: 400, error: `name must be at most ${MAX_PANE_NAME} characters` };
   }
+  return { ok: true, value: name === "" ? null : name };
+}
+
+export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, status: 400, error: "body must be an object" };
+  }
+
+  const record = body as Record<string, unknown>;
+  const name = parsePaneName(record);
+  if (!name.ok) return name;
 
   const rawAgent = record.agent;
   if (rawAgent !== undefined && rawAgent !== null && !isAgentKind(rawAgent)) {
@@ -149,11 +155,21 @@ export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
   return {
     ok: true,
     value: {
-      name: name === "" ? null : name,
+      name: name.value,
       agent,
       ...selection.value,
     },
   };
+}
+
+// ワークツリーの作成は root ペインに名前を付けるだけ。起動するエージェントは
+// ペインができた後に /agent で指定する（ADR 0084）。
+export function parseWorktreeBody(body: unknown): Parsed<{ name: string | null }> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, status: 400, error: "body must be an object" };
+  }
+  const name = parsePaneName(body as Record<string, unknown>);
+  return name.ok ? { ok: true, value: { name: name.value } } : name;
 }
 
 // 既存のシェルペインで起動する要求。名前は付け直さないので受け取らない。

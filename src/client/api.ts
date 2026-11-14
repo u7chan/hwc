@@ -862,12 +862,9 @@ export const CREATE_TIMEOUT_MS = 65_000;
 // モデル指定時は cwd と候補を確認し、effort 指定なら対応段階も再取得する。
 export const MODEL_CREATE_TIMEOUT_MS = 120_000;
 
-// ワークツリー作成は 1 リクエストで worktree.create とエージェント起動を行う。ここを短く
-// すると、作成済みのワークツリーを見失って再送してしまう。
+// ワークツリー作成は worktree.create の待ちを含む。ここを短くすると、作成済みの
+// ワークツリーを見失って再送してしまう。エージェントの起動はこの応答に含めない。
 export const CREATE_WORKTREE_TIMEOUT_MS = 120_000;
-
-// モデル指定時は root pane の cwd で候補・effort を再検証する。
-export const MODEL_CREATE_WORKTREE_TIMEOUT_MS = 180_000;
 
 export async function createPane(
   paneId: string,
@@ -917,7 +914,6 @@ export async function startAgent(
 }
 
 export type CreateWorktreeFailure =
-  | "agent_start_failed"
   | "pane_rename_failed"
   | "worktree_create_failed"
   | "worktree_open_failed"
@@ -935,7 +931,6 @@ export type CreateWorktreeOutcome =
   | { ok: false; error: CreateWorktreeFailure; workspaceId: string | null; paneId: string | null };
 
 const WORKTREE_FAILURES: readonly CreateWorktreeFailure[] = [
-  "agent_start_failed",
   "pane_rename_failed",
   "worktree_create_failed",
   "worktree_open_failed",
@@ -984,13 +979,13 @@ export function canRetryWorktree(error: CreateWorktreeFailure): boolean {
   return error === "worktree_create_failed" || error === "worktree_operation_in_progress";
 }
 
+export type CreateWorktreeRequest = { name: string | null };
+
 export async function createWorktree(
   workspaceId: string,
-  request: CreatePaneRequest,
+  request: CreateWorktreeRequest,
 ): Promise<CreateWorktreeOutcome> {
-  const signal = AbortSignal.timeout(
-    request.model === null ? CREATE_WORKTREE_TIMEOUT_MS : MODEL_CREATE_WORKTREE_TIMEOUT_MS,
-  );
+  const signal = AbortSignal.timeout(CREATE_WORKTREE_TIMEOUT_MS);
   try {
     const input = { ...workspaceParam(workspaceId), json: request };
     const response = await client.api.workspaces[":id"]["create-worktree"].$post(input, {

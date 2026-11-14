@@ -38,10 +38,3 @@ export function worktreeFailureNotice(error: CreateWorktreeFailure): {
   if (worktreeOutcomeUnknown(error)) return { message: UNKNOWN_NOTICE, retry: false };
   return { message: knownFailureMessage(error), retry: canRetryWorktree(error) };
 }
-
-// ワークツリーと root シェルは残っている。黙って閉じず、何が残ったかを伝える。
-export function worktreePartialNotice(error: CreateWorktreeFailure): string {
-  return error === "agent_start_failed"
-    ? "ワークツリーは作成しましたが、エージェントを起動できませんでした。最初のペインはシェルとして残っています。"
-    : "ワークツリーは作成しましたが、ペイン名を設定できませんでした。";
-}

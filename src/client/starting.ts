@@ -22,13 +22,12 @@ export type PaneLaunch = {
 export type LaunchPhase = "launching" | "ready" | "failed" | "unknown";
 
 // ダイアログが作った起動の指定。要求そのものは App が、ペインがスナップショットに
-// 現れてから出す。started はサーバーが既に起動を終えている場合（ワークツリーの作成）。
+// 現れてから出す。
 export type LaunchIntent = {
   agent: AgentKind;
   model: AgentModel | null;
   effort: string | null;
   waitForShell: boolean;
-  started: boolean;
 };
 
 export type PaneLaunchView = {

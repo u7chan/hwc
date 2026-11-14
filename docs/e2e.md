@@ -108,7 +108,7 @@ URL が下線付きで新しいタブに開くことを目視できる（[ADR 00
 
 OpenCode の未起動表示は、架空の `<root>/opencode/service.json` だけを一時退避してダイアログを開き、「OpenCode サービス未起動」と出ることを確認する。モデル欄は無効でもデフォルト起動は選べ、サービスの自動起動は行わない。接続情報を戻してダイアログを開き直すとモデル一覧が復帰することも確かめる。
 
-effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。`@demo/start-fails` は起動に失敗するモデルで、`agent.start` が `agent_spawn_failed` を返す。新しいペインの起動失敗（シェルを残してペイン内に行を出す）や、ワークツリーの部分成功（シェルを残してダイアログに理由を出す）を、実 CLI に触れずに確かめるために使う。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
+effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。`@demo/start-fails` は起動に失敗するモデルで、`agent.start` が `agent_spawn_failed` を返す。新しいペインとワークツリーの起動失敗（シェルを残してペイン内に行を出す）を、実 CLI に触れずに確かめるために使う。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
 
 Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。初期化後の `config/read` / `model/list` / `thread/read` / `thread/turns/list` にだけ応答する。モデル指定した新規ペインは、そのモデルを架空の thread に記録する。入力は本番と同じ Herdr の `pane.send_input` 経由で受け、架空の user と assistant の item を追加する。チャット表示、送信後の確定、起動時のモデル引数を、実 Codex や実会話へ触れずに確認する。
 
@@ -300,18 +300,17 @@ fixture の `sandbox` は同じ場所を指す 2 スペースで、どちらも�
 1. `acme-dashboard`（リポジトリ本体）の見出しの先頭アイコンを押してメニューを開き、「新しいワークツリー」を選ぶ。
    ダイアログの見出しが「新しいワークツリー」で、ブランチ名と保存先が Herdr 任せである旨が出る。
 2. そのまま「作成して起動」を押すと、架空 Herdr にリンクされたスペースが 1 つ増え、hwc が
-   その root pane を開く。ダイアログはワークツリーの作成と起動が終わるまで閉じない。開いた直後は本文が
-   スケルトン、入力欄はエージェント仕様で送信ボタンがスピナーのまま、入力を待つ。シェルの起動コマンドや
-   Pi の TUI の途中、空状態は出ない。数秒で入力欄と会話（空状態を含む）に一度で切り替わる
-   （[ADR 0074](adr/0074-created-pane-starting.md)、[ADR 0078](adr/0078-starting-pane-mask.md)、[ADR 0084](adr/0084-launch-after-create.md)）。
+   その root pane を開く。ダイアログはワークツリーと root pane ができるまでで閉じ、起動は裏で続く。
+   開いた直後は本文がスケルトン、入力欄はエージェント仕様で送信ボタンがスピナーのまま、入力を待つ。
+   シェルの起動コマンドや Pi の TUI の途中、空状態は出ない。数秒で入力欄と会話（空状態を含む）に
+   一度で切り替わる（[ADR 0074](adr/0074-created-pane-starting.md)、[ADR 0078](adr/0078-starting-pane-mask.md)、[ADR 0084](adr/0084-launch-after-create.md)）。
    入力欄のモデル表示は起動時の指定で補われる（[ADR 0033](adr/0033-launch-model-before-first-message.md)）。
 3. linked worktree（`acme-dashboard (docs)`）の見出しのメニューには「新しいワークツリー」が無い。
 4. 4 ペインのタブを持つスペースでも、「新しいペイン」だけが無効で「新しいワークツリー」は押せる。
    4 枚のタブは既存のダイアログで 2 枚追加して用意してよい。
-5. 部分成功は、モデルに `@demo/start-fails` を選んで作成すると確かめられる。ワークツリーと
-   root pane は残り、ダイアログに起動失敗の理由と「閉じる」だけが出る。閉じると新しい root pane
-   が表示され、入力欄は待ちを入れずにその場で使える（残ったのはシェルなので、ADR 0074 の待ちは
-   入れない）。
+5. 起動失敗は、モデルに `@demo/start-fails` を選んで作成すると確かめられる。ワークツリーと
+   root pane は残り、ペインの入力欄の上に起動失敗の行と「再試行」「シェルとして使う」が出る。
+   下書きは残り、「シェルとして使う」で `$ コマンドを入力` のシェルに切り替わる。
 6. `worktree_open_failed`（結果不明）はブラウザのリクエスト差し替えで
    `/api/workspaces/:id/create-worktree` に 502 を返して確かめる。再送のボタンは出ず、「閉じる」だけになる。
 

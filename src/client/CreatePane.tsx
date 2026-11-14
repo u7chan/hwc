@@ -15,7 +15,7 @@ import {
   type CreatePaneOutcome,
   type CreateWorktreeOutcome,
 } from "./api";
-import { worktreeFailureNotice, worktreePartialNotice } from "./worktree-create";
+import { worktreeFailureNotice } from "./worktree-create";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
 import { AgentGlyphIcon, AgentIcon, TerminalIcon } from "./icons";
@@ -61,8 +61,7 @@ function paneFailureView(result: Extract<CreatePaneOutcome, { ok: false }>): Fai
 }
 
 function worktreeFailureView(result: Extract<CreateWorktreeOutcome, { ok: false }>): FailureView {
-  // 部分成功ではワークツリーができているので、閉じるだけにする。
-  if (result.paneId !== null) return { message: worktreePartialNotice(result.error), retry: false };
+  // ペインができている場合は起動へ進むので、ここへは来ない。
   return worktreeFailureNotice(result.error);
 }
 
@@ -86,8 +85,8 @@ export function CreatePane(props: CreatePaneProps) {
     setOpen(false);
   };
 
-  const intent = (waitForShell: boolean, started: boolean): LaunchIntent | null =>
-    mode === "agent" ? { agent, model, effort, waitForShell, started } : null;
+  const intent = (waitForShell: boolean): LaunchIntent | null =>
+    mode === "agent" ? { agent, model, effort, waitForShell } : null;
 
   const submit = async () => {
     if (busy || !open) return;
@@ -95,7 +94,7 @@ export function CreatePane(props: CreatePaneProps) {
     // 既存のシェルで起動する場合は、待たずに閉じる。起動は App が裏で行う。
     if (start) {
       setBusy(true);
-      props.onCreated(props.paneId, intent(false, false));
+      props.onCreated(props.paneId, intent(false));
       setOpen(false);
       return;
     }
@@ -112,24 +111,21 @@ export function CreatePane(props: CreatePaneProps) {
     };
 
     if (props.worktreeWorkspaceId !== null) {
-      // ワークツリーは root pane ができるまで待つ。起動はサーバーが済ませるので、
-      // 起動の指定は started として渡す。
-      const result = await createWorktree(props.worktreeWorkspaceId, {
-        ...request,
-        agent: mode === "agent" ? agent : null,
-        model: mode === "agent" ? model : null,
-        effort: mode === "agent" ? effort : null,
-      });
-      if (result.ok) {
-        props.onCreated(result.paneId, intent(false, true));
+      // ワークツリーは root pane ができるまで待つ。起動は分割と同じく、ペインが
+      // スナップショットに現れてから App が頼む。
+      const result = await createWorktree(props.worktreeWorkspaceId, { name: request.name });
+      // 名前の付け直しだけ失敗しても、ワークツリーと root pane はできている。
+      const paneId = result.paneId;
+      if (paneId !== null) {
+        props.onCreated(paneId, intent(true));
         setOpen(false);
         return;
       }
+      if (result.ok) return;
       setBusy(false);
       const view = worktreeFailureView(result);
-      setSettled(result.paneId !== null || !view.retry);
+      setSettled(!view.retry);
       setError(view.message);
-      if (result.paneId !== null) props.onCreated(result.paneId, null);
       return;
     }
 
@@ -137,7 +133,7 @@ export function CreatePane(props: CreatePaneProps) {
     // 名前の付け直しだけ失敗しても、ペインはできている。起動は止めない。
     const paneId = result.paneId;
     if (paneId !== null) {
-      props.onCreated(paneId, intent(true, false));
+      props.onCreated(paneId, intent(true));
       setOpen(false);
       return;
     }

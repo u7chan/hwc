@@ -603,7 +603,7 @@ export function App() {
           agent: intent.agent,
           model: intent.model,
           effort: intent.effort,
-          request: intent.started ? "started" : "waiting",
+          request: "waiting",
           waitForShell: intent.waitForShell,
           error: null,
         });
@@ -686,7 +686,6 @@ export function App() {
       model: launch.model,
       effort: launch.effort,
       waitForShell: launch.waitForShell,
-      started: false,
     });
   };
 

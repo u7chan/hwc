@@ -1,22 +1,12 @@
 import { expect, test } from "bun:test";
 import { createApp } from "./app";
-import type { PaneClient } from "./herdr/panes";
 import { HerdrError } from "./herdr/socket";
-import type { AppState } from "./herdr/state";
 import {
   state,
   worktreeState,
   hostWorktreeState,
   unmanagedHostState,
-  twoChatPanesState,
   fourPaneState,
-  otherSessionPath,
-  createFakeStore,
-  createFakeChat,
-  emptyChat,
-  createFakePanes,
-  createFakeWorktrees,
-  createFakeWorkspaces,
   createTestApp,
 } from "./app.test-helpers";
 
@@ -32,76 +22,35 @@ function postCreateWorktree(
   });
 }
 
-// 新しい root pane（w1:p2）を状態に持つアプリ。起動したペインの会話を読めるようにする。
-function createWorktreeApp(options: { panes?: Partial<PaneClient> } = {}) {
-  const hostState: AppState = {
-    ...twoChatPanesState,
-    workspaces: [
-      {
-        ...twoChatPanesState.workspaces[0]!,
-        worktree: {
-          repoName: "hwc",
-          repoRoot: "/project",
-          checkoutPath: "/project",
-          isLinkedWorktree: false,
-          managed: true,
-        },
-      },
-    ],
-  };
-  const store = createFakeStore(hostState);
-  store.setChatSource("w1:p2", { agent: "pi", path: otherSessionPath });
-  const app = createApp({
-    store,
-    chat: createFakeChat(),
-    worktrees: createFakeWorktrees({
-      create: async () => ({ workspaceId: "w2", paneId: "w1:p2" }),
-    }),
-    workspaces: createFakeWorkspaces(),
-    panes: createFakePanes({
-      startAgent: async () => {},
-      rename: async () => {},
-      ...options.panes,
-    }),
-    models: {
-      list: async () => [],
-      efforts: async () => [],
-      startArgs: async () => ["--model", "example/beam"],
-    },
-  });
-  return app;
-}
-
-test("POST /api/workspaces/:id/create-worktree starts the agent in the new root pane", async () => {
-  const seen: unknown[] = [];
+test("POST /api/workspaces/:id/create-worktree creates the worktree and names the root pane", async () => {
+  const created: unknown[] = [];
   const renamed: unknown[] = [];
   const { app } = createTestApp({
     state: hostWorktreeState,
     worktrees: {
       create: async (options) => {
-        seen.push(options);
+        created.push(options);
         return { workspaceId: "w2", paneId: "w2:p1" };
       },
     },
     panes: {
-      startAgent: async (options) => {
-        seen.push(options);
+      startAgent: async () => {
+        throw new Error("Must not start the agent in the creation request");
       },
       rename: async (options) => {
         renamed.push(options);
       },
     },
   });
-  const response = await postCreateWorktree(app, "w1", { name: " 実装 ", agent: "pi" });
+  const response = await postCreateWorktree(app, "w1", { name: " 実装 " });
 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ workspaceId: "w2", paneId: "w2:p1" });
-  expect(seen).toEqual([{ workspaceId: "w1" }, { paneId: "w2:p1", kind: "pi", name: "hwc-w2-p1" }]);
+  expect(created).toEqual([{ workspaceId: "w1" }]);
   expect(renamed).toEqual([{ paneId: "w2:p1", label: "実装" }]);
 });
 
 test("create-worktree does not apply the split tab limit", async () => {
-  const seen: unknown[] = [];
   const { app } = createTestApp({
     state: {
       ...fourPaneState,
@@ -128,16 +77,12 @@ test("create-worktree does not apply the split tab limit", async () => {
       split: async () => {
         throw new Error("Must not split");
       },
-      startAgent: async (options) => {
-        seen.push(options);
-      },
     },
   });
-  const response = await postCreateWorktree(app, "w1", { agent: "pi" });
+  const response = await postCreateWorktree(app, "w1");
 
   // 4 枚上限はタブ単位。ワークツリー作成は新しいタブを Herdr が作るので、枚数を見ない。
   expect(response.status).toBe(200);
-  expect(seen).toMatchObject([{ paneId: "w2:p1", kind: "pi" }]);
 });
 
 test("create-worktree requires application/json", async () => {
@@ -262,108 +207,24 @@ test.each([
   },
 );
 
-test("create-worktree keeps the worktree and reports the failed agent start", async () => {
-  const renamed: unknown[] = [];
+test("create-worktree keeps the worktree and reports the failed rename", async () => {
   const { app } = createTestApp({
     state: hostWorktreeState,
     worktrees: {
       create: async () => ({ workspaceId: "w2", paneId: "w2:p1" }),
     },
-    panes: {
-      startAgent: async () => {
-        throw new HerdrError("agent_spawn_failed", "pi is not installed");
-      },
-      rename: async (options) => {
-        renamed.push(options);
-      },
-    },
-  });
-  const response = await postCreateWorktree(app, "w1", { name: "実装", agent: "pi" });
-
-  expect(response.status).toBe(502);
-  expect(await response.json()).toEqual({
-    error: "agent_start_failed",
-    workspaceId: "w2",
-    paneId: "w2:p1",
-  });
-  // 名前はまだ付ける。ワークツリーと root シェルは残す。
-  expect(renamed).toEqual([{ paneId: "w2:p1", label: "実装" }]);
-});
-
-test("create-worktree counts an agent waiting at its prompt as a created pane", async () => {
-  const { app } = createTestApp({
-    state: hostWorktreeState,
-    worktrees: {
-      create: async () => ({ workspaceId: "w2", paneId: "w2:p1" }),
-    },
-    panes: {
-      startAgent: async () => {
-        throw new HerdrError("agent_not_ready", "waiting for trust");
-      },
-    },
-  });
-  const response = await postCreateWorktree(app, "w1", { agent: "claude" });
-
-  expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ workspaceId: "w2", paneId: "w2:p1" });
-});
-
-test("create-worktree shows the chosen model until the session records one", async () => {
-  const app = createWorktreeApp();
-  const response = await postCreateWorktree(app, "w1", {
-    agent: "pi",
-    model: { provider: "example", id: "beam" },
-    effort: "low",
-  });
-  expect(response.status).toBe(200);
-
-  const chat = await app.request("/api/panes/w1:p2/chat");
-  expect(await chat.json()).toEqual({
-    ...emptyChat,
-    etag: "etag-1+launch",
-    model: "beam",
-    effort: "low",
-  });
-});
-
-test("create-worktree shows the chosen model even when the rename fails", async () => {
-  const app = createWorktreeApp({
     panes: {
       rename: async () => {
-        throw new HerdrError("pane_not_found", "no pane w1:p2");
+        throw new HerdrError("pane_not_found", "no pane w2:p1");
       },
     },
   });
-  const response = await postCreateWorktree(app, "w1", {
-    name: "実装",
-    agent: "pi",
-    model: { provider: "example", id: "beam" },
-  });
+  const response = await postCreateWorktree(app, "w1", { name: "実装" });
+
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({
     error: "pane_rename_failed",
     workspaceId: "w2",
-    paneId: "w1:p2",
+    paneId: "w2:p1",
   });
-
-  const chat = await app.request("/api/panes/w1:p2/chat");
-  expect(await chat.json()).toEqual({ ...emptyChat, etag: "etag-1+launch", model: "beam" });
-});
-
-test("create-worktree does not show a model when the agent cannot start", async () => {
-  const app = createWorktreeApp({
-    panes: {
-      startAgent: async () => {
-        throw new HerdrError("agent_spawn_failed", "pi is not installed");
-      },
-    },
-  });
-  const response = await postCreateWorktree(app, "w1", {
-    agent: "pi",
-    model: { provider: "example", id: "beam" },
-  });
-  expect(response.status).toBe(502);
-
-  const chat = await app.request("/api/panes/w1:p2/chat");
-  expect(await chat.json()).toEqual(emptyChat);
 });
