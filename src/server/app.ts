@@ -6,6 +6,7 @@ import { createFilesHandlers } from "./routes/files";
 import { createNotificationsHandlers } from "./routes/notifications";
 import { createPanesHandlers } from "./routes/panes";
 import { createRestartHandlers } from "./routes/restart";
+import { createTemplatesHandlers } from "./routes/templates";
 import { createStateHandlers } from "./routes/state";
 import { createWorkspacesHandlers } from "./routes/workspaces";
 
@@ -28,6 +29,7 @@ export function createApp(options: CreateAppOptions) {
   const notificationsHandlers = createNotificationsHandlers(ctx);
   const panesHandlers = createPanesHandlers(ctx);
   const restartHandlers = createRestartHandlers(ctx);
+  const templatesHandlers = createTemplatesHandlers(ctx);
   const stateHandlers = createStateHandlers(ctx);
   const workspacesHandlers = createWorkspacesHandlers(ctx);
 
@@ -38,6 +40,8 @@ export function createApp(options: CreateAppOptions) {
       .put("/api/restart", requireJson, restartHandlers.put)
       // 応答を返してから起動する。実行できたかは起動前の判定までで、終了は待たない。
       .post("/api/restart", requireJson, restartHandlers.run)
+      .get("/api/templates", templatesHandlers.get)
+      .put("/api/templates", requireJson, templatesHandlers.put)
       .get("/api/notifications", notificationsHandlers.get)
       .put("/api/notifications", requireJson, notificationsHandlers.put)
       .put("/api/notifications/discord", requireJson, notificationsHandlers.putDiscord)

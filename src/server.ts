@@ -22,6 +22,7 @@ import {
   createNotificationSettingsStore,
 } from "./server/notifications";
 import { createRestartSettingsFile, createRestartSettingsStore } from "./server/restart";
+import { createTemplatesFile, createTemplatesStore } from "./server/templates";
 import index from "../index.html";
 
 const stateRoot = defaultStateRoot();
@@ -43,6 +44,7 @@ const discordSender = createDiscordSender({
   sinkPath: process.env.HWC_E2E_DISCORD_WEBHOOK_SINK ?? null,
 });
 const restartSettings = createRestartSettingsStore(createRestartSettingsFile(stateRoot));
+const templates = createTemplatesStore(createTemplatesFile(stateRoot));
 
 // 通知は状態の publish を購読する。startStateSync より先に張り、購読後の最初の publish を
 // 「送らない基準」として受け取る。
@@ -78,6 +80,7 @@ const app = createApp({
   notificationSettings,
   discordSender,
   restartSettings,
+  templates,
 });
 
 // Herdr の応答を待つルート（ワークツリー作成・削除・モデル指定の作成）は数十秒返さない。

@@ -37,6 +37,7 @@ import {
 } from "../shared/notifications";
 import { parsePullRequest, type PullRequest } from "../shared/pull-request";
 import { parseRestartSettings, type RestartSettings } from "../shared/restart";
+import { parseTemplates, type Template } from "../shared/templates";
 
 // BFF 側の期限: Herdr ソケット 8 秒、エージェント起動 30 秒、worktree 60 秒、git 60 秒。
 // クライアントの期限はこれを目安に置く。
@@ -1141,5 +1142,39 @@ export async function runRestart(): Promise<RunRestartResult> {
     return "unreachable";
   } catch {
     return "unreachable";
+  }
+}
+
+export async function fetchTemplates(signal?: AbortSignal): Promise<Template[] | null> {
+  try {
+    const response = await client.api.templates.$get({}, { init: { signal } });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { templates?: unknown };
+    return parseTemplates(body.templates);
+  } catch {
+    return null;
+  }
+}
+
+export type TemplateSaveResult =
+  | { ok: true; templates: Template[] }
+  | { ok: false; error: string | null };
+
+export async function saveTemplates(templates: Template[]): Promise<TemplateSaveResult> {
+  try {
+    const response = await client.api.templates.$put({ json: { templates } });
+    const body: unknown = await response.json().catch(() => null);
+    if (response.ok) {
+      const parsed =
+        typeof body === "object" && body !== null
+          ? parseTemplates((body as { templates?: unknown }).templates)
+          : null;
+      return parsed === null ? { ok: false, error: null } : { ok: true, templates: parsed };
+    }
+    const error =
+      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
+    return { ok: false, error: typeof error === "string" ? error : null };
+  } catch {
+    return { ok: false, error: null };
   }
 }

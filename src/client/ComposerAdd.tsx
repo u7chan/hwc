@@ -6,7 +6,7 @@ import {
   MAX_FILE_ATTACHMENT_BYTES,
   MAX_IMAGE_ATTACHMENT_BYTES,
 } from "../shared/attachments";
-import { CollapseIcon, FileIcon, NewSessionIcon, PlusIcon, RepoIcon } from "./icons";
+import { CollapseIcon, FileIcon, NewSessionIcon, PlusIcon, RepoIcon, TemplateIcon } from "./icons";
 import { Menu } from "./Menu";
 
 export const ADD_MENU_ID = "hwc-add-menu";
@@ -20,10 +20,15 @@ export type ComposerCommand = {
 
 type ComposerAddProps = {
   full: boolean;
-  // コマンドを持たない agent では null。画像とプロジェクトだけの + メニューになる。
+  // コマンドを持たない agent では null。定型文・画像・プロジェクトだけの + メニューになる。
   commands: { newSession: ComposerCommand; compact: ComposerCommand } | null;
+  // 読めていないときは null。押せる側に倒し、ダイアログが読み直して失敗を出す。
+  templateCount: number | null;
+  // 定型文を入れられない理由。件数以外の理由（圧縮の指示中）を 1 つだけ出す。
+  templateBlock: string | null;
   onFiles: (files: File[]) => void;
   onProjects: () => void;
+  onTemplates: () => void;
 };
 
 // 入力欄の下から、本文に足すものと会話への操作を選ぶ。画像は既存のアップロード経路へ流し、
@@ -35,6 +40,11 @@ export function ComposerAdd(props: ComposerAddProps) {
   const file = useRef<HTMLInputElement>(null);
 
   const close = () => setOpen(false);
+
+  const templatesFull = props.templateCount === 0;
+  const templateHint = templatesFull
+    ? "設定で登録できます"
+    : (props.templateBlock ?? "登録した文を入力欄へ入れる");
 
   const command = (item: ComposerCommand, icon: ComponentChild) => (
     <button
@@ -99,6 +109,22 @@ export function ComposerAdd(props: ComposerAddProps) {
               <hr class="hwc-menu-separator" />
             </>
           )}
+          <button
+            type="button"
+            role="menuitem"
+            class="hwc-menu-item hwc-add-item"
+            disabled={templatesFull || props.templateBlock !== null}
+            onClick={() => {
+              close();
+              props.onTemplates();
+            }}
+          >
+            <TemplateIcon size={18} />
+            <span class="hwc-add-item-text">
+              <span>定型文を入れる</span>
+              <span class="hwc-add-item-hint">{templateHint}</span>
+            </span>
+          </button>
           <button
             type="button"
             role="menuitem"

@@ -40,6 +40,7 @@ import {
   type RestartRunner,
   type RestartSettingsStore,
 } from "../restart";
+import { createTemplatesStore, type TemplatesStore } from "../templates";
 import { defaultPreviewRoots } from "../message-files";
 import type { AgentModelsClient } from "../agent-models";
 import { HerdrError } from "../herdr/socket";
@@ -90,6 +91,8 @@ export type CreateAppOptions = {
   restartSettings?: RestartSettingsStore;
   restart?: RestartRunner;
   restartDelayMs?: number;
+  // 定型文の保存先。テストでは実ファイルへ書かないよう差し替える。
+  templates?: TemplatesStore;
 };
 
 export function createAppContext(options: CreateAppOptions) {
@@ -114,6 +117,7 @@ export function createAppContext(options: CreateAppOptions) {
     restartSettings = createRestartSettingsStore({ read: () => null, write: () => {} }),
     restart = createRestartRunner(),
     restartDelayMs = RESTART_DELAY_MS,
+    templates = createTemplatesStore({ read: () => null, write: () => {} }),
   } = options;
 
   // 「今」は状態ではなく送信時に決める。状態に持たせると、キャッシュされた状態に古い時刻が
@@ -380,6 +384,7 @@ export function createAppContext(options: CreateAppOptions) {
     discordSender,
     restartSettings,
     restart,
+    templates,
     stateMessage,
     current,
     rootsFor,
