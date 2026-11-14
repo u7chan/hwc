@@ -10,7 +10,8 @@ export type MessageFileKind = "image" | "html";
 export type ChatLinkKind = MessageFileKind | "text";
 
 // リンクから開けるテキストの拡張子。`env` のような設定ファイルの名前は入れない。
-// `.env` はドット始まりで拡張子を持たない扱いになり、ここに無ければ配らない。
+// ドット始まりの名前（`.env` `.secrets.md`）も配らない。中身を見せない前提の名前を
+// 拡張子だけで通さないため（ADR 0084）。
 const TEXT_EXT: ReadonlySet<string> = new Set([
   "md",
   "txt",
@@ -60,10 +61,11 @@ export function messageFileKindFromName(name: string): MessageFileKind | null {
   return isHtmlName(name) ? "html" : null;
 }
 
-// ファイル名のドット以降。`.env` のように名前がドットで始まるものは拡張子なしとして扱う。
-// 拡張子を持たないファイルは、リンクからもプレビューからも配らない。
+// ファイル名のドット以降。ドット始まりの名前は拡張子を持たない扱いにする。
+// 拡張子の無いファイルは、リンクからもプレビューからも配らない。
 function textExtOf(name: string): string {
   const base = name.slice(name.lastIndexOf("/") + 1);
+  if (base.startsWith(".")) return "";
   const dot = base.lastIndexOf(".");
   return dot <= 0 ? "" : base.slice(dot + 1).toLowerCase();
 }

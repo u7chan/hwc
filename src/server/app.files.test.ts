@@ -447,14 +447,23 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     const image = await app.request("/api/panes/w1:p1/preview/0/preview/shot.png");
     expect(image.headers.get("content-type")).toBe("image/png");
 
-    // 本文のリンクから開くテキストは、実行させないよう必ず text/plain で返す（ADR 0084）。
-    const text = await app.request("/api/panes/w1:p1/preview/0/preview/notes.txt");
+    // 本文のリンクから開くテキストは、実行させないよう text/plain で返す（ADR 0084）。
+    const text = await app.request("/api/panes/w1:p1/preview/0/preview/notes.txt?raw=1");
     expect(text.status).toBe(200);
     expect(text.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+
+    // .js は HTML のアセットとしては実行可能な型のまま。リンクから開くときだけ raw で上書きする。
+    const asset = await app.request("/api/panes/w1:p1/preview/0/preview/app.js");
+    expect(asset.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+    const rawScript = await app.request("/api/panes/w1:p1/preview/0/preview/app.js?raw=1");
+    expect(rawScript.headers.get("content-type")).toBe("text/plain; charset=utf-8");
 
     // 一覧に無い形式は配信しない。拡張子を持たない `.env` も対象外。
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/secrets.env")).status).toBe(404);
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env")).status).toBe(404);
+    // ドット始まりの名前は、拡張子が一覧にあっても配らない。
+    expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env.yaml")).status).toBe(404);
+    expect((await app.request("/api/panes/w1:p1/preview/0/preview/.secrets.md")).status).toBe(404);
   });
 });
 

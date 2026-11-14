@@ -73,6 +73,11 @@ test("links text files by an explicit extension list", () => {
   // 拡張子で選ぶので、`.env` や拡張子の無い名前は入らない。
   expect(messageLinkKindFromName("docs/.env")).toBeNull();
   expect(messageLinkKindFromName("docs/secrets.env")).toBeNull();
+  // ドット始まりの名前は、拡張子が一覧にあっても対象外。
+  expect(messageLinkKindFromName("docs/.env.yaml")).toBeNull();
+  expect(messageLinkKindFromName("docs/.secrets.md")).toBeNull();
+  // ディレクトリがドット始まりでも、ファイル名が普通なら対象。
+  expect(messageLinkKindFromName(".github/workflows/ci.yml")).toBe("text");
   expect(messageLinkKindFromName("docs/settings")).toBeNull();
   expect(messageLinkKindFromName("docs/archive.zip")).toBeNull();
   // 実行させたくないので、テキストは必ず text/plain で配る。

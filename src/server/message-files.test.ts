@@ -110,8 +110,12 @@ test("ignores paths that are not local files", () => {
   expect(paths("https://example.com/a.png")).toEqual([]);
   expect(paths("[remote](https://example.com/a.png)")).toEqual([]);
   expect(paths("data:image/png;base64,AAAA")).toEqual([]);
-  // 本文のリンクから開けるテキストは候補になる。チップになるのは画像と HTML だけ。
-  expect(paths("docs/README.md と src/app.ts")).toEqual(["docs/README.md", "src/app.ts"]);
+  // 裸のパスはチップにもリンクにもならない。テキストはリンクの destination のときだけ候補になる。
+  expect(paths("docs/README.md と src/app.ts")).toEqual([]);
+  expect(paths("[設計](docs/README.md) と [実装](src/app.ts)")).toEqual([
+    "docs/README.md",
+    "src/app.ts",
+  ]);
 });
 
 test("keeps each path once and stops at the candidate limit", () => {
@@ -730,4 +734,30 @@ test("changes the etag when a linked file changes", async () => {
   const after = await attachMessageFiles(agentChat("[設計](docs/notes.md)"), root);
 
   expect(after.etag).not.toBe(before.etag);
+});
+
+test("bare text paths do not use up the file slots", async () => {
+  await write("docs/shot.png", png);
+  // 実在するかどうかより前に、候補の枠（20 件）で後ろの画像が落ちていた。
+  const bare = Array.from({ length: 20 }, (_, index) => `pkg/f${index}.ts`).join(" ");
+
+  const message = (await attachMessageFiles(agentChat(`${bare} docs/shot.png`), root)).messages[0];
+
+  expect(message?.files?.map((file) => file.name)).toEqual(["docs/shot.png"]);
+});
+
+test("links a dot file only when the extension list allows it", async () => {
+  await write("docs/.env.yaml", new TextEncoder().encode("token: 1"));
+  await write("docs/.secrets.md", new TextEncoder().encode("# secret"));
+  await write(".github/workflows/ci.yml", new TextEncoder().encode("on: push"));
+
+  const hidden = (
+    await attachMessageFiles(agentChat("[a](docs/.env.yaml) [b](docs/.secrets.md)"), root)
+  ).messages[0];
+  expect(hidden?.links).toBeUndefined();
+
+  // ディレクトリがドット始まりでも、ファイル名が普通なら対象。
+  const nested = (await attachMessageFiles(agentChat("[ci](.github/workflows/ci.yml)"), root))
+    .messages[0];
+  expect(nested?.links?.map((link) => link.name)).toEqual([".github/workflows/ci.yml"]);
 });

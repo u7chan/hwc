@@ -131,6 +131,9 @@ export function messagePathCandidates(text: string): MessagePathCandidate[] {
   for (const token of body.split(/\s+/u)) {
     const path = trimToken(token);
     if (path === null) continue;
+    // テキストは、本文のリンクの destination として書かれたときだけ候補にする。裸のパスまで
+    // 候補にすると、チップの枠（MAX_CANDIDATES）を食って後ろの画像が消える（ADR 0084）。
+    if (messageFileKindFromName(path) === null && !linkRefs.has(path)) continue;
     const current = candidates.get(path);
     if (current !== undefined) {
       // 裸パスと記法の両方に出ても、記法の位置で描けるように印を残す。

@@ -322,6 +322,13 @@ export function previewUrl(paneId: string, file: { root: number; name: string })
   return `/api/panes/${encodeURIComponent(paneId)}/preview/${file.root}/${encoded}`;
 }
 
+// 本文のリンクから開くテキストは、新しいタブで生の中身を読む。同じ URL を HTML のアセット
+// としても使うため、.js / .css は実行可能な型で返る。text のときだけ raw を付けて
+// text/plain にしてもらう（ADR 0084）。
+export function previewTextUrl(paneId: string, file: { root: number; name: string }): string {
+  return `${previewUrl(paneId, file)}?raw=1`;
+}
+
 // iframe に出す前に、配信できないスクリプトを読み込む HTML かをヘッダーだけで確かめる。
 // hc は HEAD を出せないので、この 1 本だけ素の fetch を使う。親ページと同じオリジンから
 // 送るので、sandbox の iframe とは別経路でヘッダーを読める。失敗と期限切れは案内を出さない。

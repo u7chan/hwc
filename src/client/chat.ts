@@ -10,7 +10,14 @@ import type {
 } from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
-import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, chatFileUrl, previewUrl, readChat } from "./api";
+import {
+  CHAT_POLL_ACTIVE_MS,
+  CHAT_POLL_IDLE_MS,
+  chatFileUrl,
+  previewTextUrl,
+  previewUrl,
+  readChat,
+} from "./api";
 import { MARKDOWN_MAX_LENGTH, markdownImageHrefs } from "./markdown/parse";
 
 // 返答が届いている間は短く、動いていない間は長く。隠れている間に読んでも見る人はいない。
@@ -40,7 +47,7 @@ export function messageLinks(
   const sources = new Map<string, MessageLinkSource>();
   for (const link of links) {
     if (link.kind === "text") {
-      sources.set(link.href, { kind: "text", url: previewUrl(paneId, link) });
+      sources.set(link.href, { kind: "text", url: previewTextUrl(paneId, link) });
       continue;
     }
     const file: ChatFile = {

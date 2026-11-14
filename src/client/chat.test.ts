@@ -584,7 +584,7 @@ test("maps a resolved link to the same destination as the chip", () => {
   // テキストは本文のリンクから新しいタブで開く。
   expect(links?.get("src/app.ts")).toEqual({
     kind: "text",
-    url: "/api/panes/w1%3Ap1/preview/0/src/app.ts",
+    url: "/api/panes/w1%3Ap1/preview/0/src/app.ts?raw=1",
   });
   expect(messageLinks("w1:p1", undefined)).toBeUndefined();
   expect(messageLinks("w1:p1", [])).toBeUndefined();
