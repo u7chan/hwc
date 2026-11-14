@@ -1270,3 +1270,32 @@ html:not([data-input-modality="pointer"])
     min-height: 120px;
   }
 }
+
+/* さらに低い画面では、札とプレビューを同時に確保できない。本文を潰す代わりに
+   ダイアログの中身を 1 つのスクロールにし、札はすべて見せて本文はその下に置く。 */
+@media (max-height: 380px) {
+  .hwc-template-content {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .hwc-template-chips {
+    flex: none;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .hwc-template-preview {
+    flex: none;
+    min-height: 0;
+  }
+
+  .hwc-template-preview-text {
+    flex: none;
+    overflow: visible;
+  }
+
+  .hwc-template-preview-empty {
+    min-height: 96px;
+  }
+}
