@@ -612,50 +612,53 @@ export function App() {
     });
   };
 
-  const runLaunch = async (launch: PaneLaunch) => {
-    const result = await startAgent(launch.paneId, {
-      agent: launch.agent,
-      model: launch.model,
-      effort: launch.effort,
-      waitForShell: launch.waitForShell,
-    });
-    launchRequests.current.delete(launch);
-    setLaunches((current) => {
-      // 再試行で別の記録に置き換わっていたら、遅れて返った結果で上書きしない。
-      if (current.get(launch.paneId) !== launch) return current;
-      // 別の経路で起動済みなら待ちを続ける。起動したかはスナップショットが決める。
-      if (result.ok || result.error === "pane_not_shell") {
-        return new Map(current).set(launch.paneId, {
-          ...launch,
-          request: "started",
-          at: serverClockNow(Date.now(), skew.current),
-          error: null,
-        });
-      }
-      return new Map(current).set(launch.paneId, {
-        ...launch,
-        request: "failed",
-        at: serverClockNow(Date.now(), skew.current),
-        error: result.error,
-      });
-    });
-  };
-
   // 分割の応答より先に Herdr の状態が届かないことがあり、その間は BFF もペインを知らない。
-  // スナップショットに現れてから頼む。
+  // スナップショットに現れてから頼む。要求の結果は記録の同一性で照合し、起動したかは
+  // スナップショットに決めさせる。
   useEffect(() => {
     if (state === null) return;
+
+    const run = async (launch: PaneLaunch) => {
+      const result = await startAgent(launch.paneId, {
+        agent: launch.agent,
+        model: launch.model,
+        effort: launch.effort,
+        waitForShell: launch.waitForShell,
+      });
+      launchRequests.current.delete(launch);
+      setLaunches((current) => {
+        // 再試行で別の記録に置き換わっていたら、遅れて返った結果で上書きしない。
+        if (current.get(launch.paneId) !== launch) return current;
+        // 別の経路で起動済みなら待ちを続ける。起動したかはスナップショットが決める。
+        if (result.ok || result.error === "pane_not_shell") {
+          return new Map(current).set(launch.paneId, {
+            ...launch,
+            request: "started",
+            at: serverClockNow(Date.now(), skew.current),
+            error: null,
+          });
+        }
+        return new Map(current).set(launch.paneId, {
+          ...launch,
+          request: "failed",
+          at: serverClockNow(Date.now(), skew.current),
+          error: result.error,
+        });
+      });
+    };
+
     for (const launch of launches.values()) {
       if (launch.request !== "waiting") continue;
       if (launchRequests.current.has(launch)) continue;
       if (findPane(state, launch.paneId) === null) continue;
       launchRequests.current.add(launch);
-      void runLaunch(launch);
+      void run(launch);
     }
   }, [state, launches]);
 
-  // 起動が終わった記録は捨てる。残すと、後で /exit してシェルに戻ったときに
-  // 「起動を確認できませんでした」が蘇る。
+  // 起動が終わった記録は、スナップショットが起動完了を示した時点で捨てる。記録は起動中だけの
+  // 一時的なもので、残すと後で /exit してシェルに戻ったときに「起動を確認できませんでした」が
+  // 蘇る。now は settle と上限の経過を見るために必要。
   useEffect(() => {
     if (launches.size === 0 || state === null) return;
     setLaunches((current) => {

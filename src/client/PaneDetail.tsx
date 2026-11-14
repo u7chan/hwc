@@ -374,11 +374,8 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 作ったペインは、閉じたダイアログの続きでそのまま打ち始められるように焦点を移す。
   // iOS は非同期の後にキーボードを出さないことがあるので、焦点だけを合わせる。
-  const focusedLaunch = useRef(false);
   useEffect(() => {
-    if (focusedLaunch.current) return;
     if (launch === null || launch.phase !== "launching") return;
-    focusedLaunch.current = true;
     input.current?.focus();
   }, [launch === null ? null : launch.phase]);
 
