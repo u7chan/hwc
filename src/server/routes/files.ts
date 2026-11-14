@@ -5,7 +5,7 @@ import {
   resolveMessageFile,
   resolvePreviewFile,
 } from "../message-files";
-import { isHtmlName, previewWarning } from "../../shared/message-files";
+import { isHtmlName, isTextName, previewWarning } from "../../shared/message-files";
 import type { AppContext, IdContext, PreviewContext } from "./context";
 
 const PREVIEW_CSP = "sandbox allow-scripts";
@@ -97,7 +97,10 @@ export function createFilesHandlers(ctx: AppContext) {
       const bytes = file === null ? null : await readMessageFile(file);
       if (file === null || bytes === null) return previewNotFound(c, requested);
 
-      const headers = previewHeaders(file.contentType);
+      // 本文のリンクから開くテキストは、ブラウザに生の中身を見せる。HTML のアセットにも
+      // 同じ URL を使うので、raw が付いたときだけ text/plain に固定する（ADR 0084）。
+      const raw = c.req.query("raw") === "1" && isTextName(file.name);
+      const headers = previewHeaders(raw ? "text/plain; charset=utf-8" : file.contentType);
       // 配信で読んだバイト列をそのまま見る。HTML を書き換えずに、白紙の理由だけを知らせる。
       if (isHtmlName(file.name)) {
         const warning = previewWarning(new TextDecoder().decode(bytes));

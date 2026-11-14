@@ -62,25 +62,25 @@ test("finds a path in inline code with no spaces around it", () => {
 
 test("marks only image notation as a drawing position", () => {
   expect(messagePathCandidates("![モック](docs/mock.png)")).toEqual([
-    { path: "docs/mock.png", imageRefs: ["docs/mock.png"] },
+    { path: "docs/mock.png", imageRefs: ["docs/mock.png"], linkRefs: [] },
   ]);
-  // インラインコード、リンク、裸のパスは末尾の一覧に残す。
+  // インラインコード、リンク、裸のパスは末尾の一覧に残す。リンクは行き先の表記を覚える。
   expect(messagePathCandidates("`docs/mock.png` [x](docs/mock.png) docs/other.png")).toEqual([
-    { path: "docs/mock.png", imageRefs: [] },
-    { path: "docs/other.png", imageRefs: [] },
+    { path: "docs/mock.png", imageRefs: [], linkRefs: ["docs/mock.png"] },
+    { path: "docs/other.png", imageRefs: [], linkRefs: [] },
   ]);
   // 裸のパスと画像記法の両方に出ても、描画位置は残す。
   expect(messagePathCandidates("docs/mock.png\n\n![モック](docs/mock.png)")).toEqual([
-    { path: "docs/mock.png", imageRefs: ["docs/mock.png"] },
+    { path: "docs/mock.png", imageRefs: ["docs/mock.png"], linkRefs: [] },
   ]);
-  // エスケープした `!` は画像記法として読まれない。
+  // エスケープした `!` は画像記法として読まれない。リンクとしては読まれる。
   expect(messagePathCandidates("\\![モック](docs/mock.png)")).toEqual([
-    { path: "docs/mock.png", imageRefs: [] },
+    { path: "docs/mock.png", imageRefs: [], linkRefs: ["docs/mock.png"] },
   ]);
   // フェンスとインラインコードの中は描画位置にしない。
   expect(messagePathCandidates("```\n![モック](docs/mock.png)\n```")).toEqual([]);
   expect(messagePathCandidates("`![モック](docs/mock.png)`")).toEqual([
-    { path: "docs/mock.png", imageRefs: [] },
+    { path: "docs/mock.png", imageRefs: [], linkRefs: [] },
   ]);
 });
 
@@ -106,11 +106,16 @@ test("does not look inside fenced code", () => {
   expect(paths("~~~\n![x](a.png)\n~~~\n`b.png`")).toEqual(["b.png"]);
 });
 
-test("ignores paths that are not local images", () => {
+test("ignores paths that are not local files", () => {
   expect(paths("https://example.com/a.png")).toEqual([]);
   expect(paths("[remote](https://example.com/a.png)")).toEqual([]);
   expect(paths("data:image/png;base64,AAAA")).toEqual([]);
+  // 裸のパスはチップにもリンクにもならない。テキストはリンクの destination のときだけ候補になる。
   expect(paths("docs/README.md と src/app.ts")).toEqual([]);
+  expect(paths("[設計](docs/README.md) と [実装](src/app.ts)")).toEqual([
+    "docs/README.md",
+    "src/app.ts",
+  ]);
 });
 
 test("keeps each path once and stops at the candidate limit", () => {
@@ -279,6 +284,7 @@ test("serves the HTML and the files it references from the same root", async () 
   // svg はモックの装飾に使う。単体で開いても CSP の sandbox が効く。
   await write("preview/logo.svg", new TextEncoder().encode("<svg/>"));
   await write("preview/notes.txt", new TextEncoder().encode("text"));
+  await write("preview/secrets.env", new TextEncoder().encode("TOKEN=1"));
 
   expect((await resolvePreviewFile({ root, path: "preview/index.html" }))?.contentType).toBe(
     "text/html; charset=utf-8",
@@ -295,8 +301,13 @@ test("serves the HTML and the files it references from the same root", async () 
   expect((await resolvePreviewFile({ root, path: "preview/logo.svg" }))?.contentType).toBe(
     "image/svg+xml",
   );
-  // 一覧に無い形式は配信しない。
-  expect(await resolvePreviewFile({ root, path: "preview/notes.txt" })).toBeNull();
+  // 本文のリンクから開くテキストは配るが、必ず text/plain（ADR 0084）。
+  expect((await resolvePreviewFile({ root, path: "preview/notes.txt" }))?.contentType).toBe(
+    "text/plain; charset=utf-8",
+  );
+  // 一覧に無い形式と、拡張子の無い `.env` は配信しない。
+  expect(await resolvePreviewFile({ root, path: "preview/secrets.env" })).toBeNull();
+  expect(await resolvePreviewFile({ root, path: "preview/.env" })).toBeNull();
 });
 
 test("serves an absolute path only from the root it was given", async () => {
@@ -649,4 +660,104 @@ test("keeps the root of a same-named file so delivery cannot swap it", async () 
   } finally {
     await rm(extra, { recursive: true, force: true });
   }
+});
+
+// 本文のリンクから開く相対パス。ADR 0084。
+function agentChat(text: string): ChatSnapshot {
+  return { ...snapshot, messages: [{ id: "a1", role: "agent", text, at: 1 }] };
+}
+
+test("resolves a relative link to a text file and leaves a bare path as text", async () => {
+  await write("docs/notes.md", new TextEncoder().encode("# notes"));
+
+  const message = (
+    await attachMessageFiles(
+      agentChat("[設計](docs/notes.md) と docs/notes.md を見てください。"),
+      root,
+    )
+  ).messages[0];
+
+  expect(message?.links?.map((link) => [link.href, link.kind, link.name, link.root])).toEqual([
+    ["docs/notes.md", "text", "docs/notes.md", 0],
+  ]);
+  // テキストはチップにしない。本文のリンクからだけ開ける。
+  expect(message?.files).toBeUndefined();
+});
+
+test("does not link a file without an allowed extension", async () => {
+  await write("docs/.env", new TextEncoder().encode("TOKEN=1"));
+  await write("docs/secrets.env", new TextEncoder().encode("TOKEN=1"));
+  await write("docs/settings", new TextEncoder().encode("token=1"));
+
+  const message = (
+    await attachMessageFiles(
+      agentChat("[a](docs/.env) [b](docs/secrets.env) [c](docs/settings)"),
+      root,
+    )
+  ).messages[0];
+
+  // 拡張子の無い `.env`、一覧に無い `env`、拡張子の無いファイルは、どれもリンクにしない。
+  expect(message?.links).toBeUndefined();
+  expect(message?.files).toBeUndefined();
+});
+
+test("keeps the chip and the link for the same HTML file", async () => {
+  await write("docs/mock.html", new TextEncoder().encode("<!doctype html>"));
+
+  const message = (await attachMessageFiles(agentChat("[モック](docs/mock.html)"), root))
+    .messages[0];
+
+  expect(message?.files?.map((file) => file.name)).toEqual(["docs/mock.html"]);
+  expect(message?.links?.map((link) => [link.href, link.kind])).toEqual([
+    ["docs/mock.html", "html"],
+  ]);
+});
+
+test("does not link an absolute URL or a file outside the root", async () => {
+  const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
+  await writeFile(join(outside, "notes.md"), "# notes");
+
+  try {
+    const text = `[web](https://example.com/a.md) [外](${join(outside, "notes.md")})`;
+    const message = (await attachMessageFiles(agentChat(text), root)).messages[0];
+    expect(message?.links).toBeUndefined();
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("changes the etag when a linked file changes", async () => {
+  await write("docs/notes.md", new TextEncoder().encode("# notes"));
+
+  const before = await attachMessageFiles(agentChat("[設計](docs/notes.md)"), root);
+  await write("docs/notes.md", new TextEncoder().encode("# notes\n\n追記"));
+  const after = await attachMessageFiles(agentChat("[設計](docs/notes.md)"), root);
+
+  expect(after.etag).not.toBe(before.etag);
+});
+
+test("bare text paths do not use up the file slots", async () => {
+  await write("docs/shot.png", png);
+  // 実在するかどうかより前に、候補の枠（20 件）で後ろの画像が落ちていた。
+  const bare = Array.from({ length: 20 }, (_, index) => `pkg/f${index}.ts`).join(" ");
+
+  const message = (await attachMessageFiles(agentChat(`${bare} docs/shot.png`), root)).messages[0];
+
+  expect(message?.files?.map((file) => file.name)).toEqual(["docs/shot.png"]);
+});
+
+test("links a dot file only when the extension list allows it", async () => {
+  await write("docs/.env.yaml", new TextEncoder().encode("token: 1"));
+  await write("docs/.secrets.md", new TextEncoder().encode("# secret"));
+  await write(".github/workflows/ci.yml", new TextEncoder().encode("on: push"));
+
+  const hidden = (
+    await attachMessageFiles(agentChat("[a](docs/.env.yaml) [b](docs/.secrets.md)"), root)
+  ).messages[0];
+  expect(hidden?.links).toBeUndefined();
+
+  // ディレクトリがドット始まりでも、ファイル名が普通なら対象。
+  const nested = (await attachMessageFiles(agentChat("[ci](.github/workflows/ci.yml)"), root))
+    .messages[0];
+  expect(nested?.links?.map((link) => link.name)).toEqual([".github/workflows/ci.yml"]);
 });

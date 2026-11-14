@@ -31,9 +31,14 @@ export type MdInline =
   | { kind: "em"; children: MdInline[] }
   | { kind: "del"; children: MdInline[] }
   | { kind: "code"; text: string }
-  | { kind: "link"; href: string; title: string | null; children: MdInline[] }
+  /**
+   * raw は相対パスのリンクの原文。BFF の対応表に載っていないときに原文へ戻すために持つ。
+   * 絶対 URL のリンクは持たない。
+   */
+  | { kind: "link"; href: string; title: string | null; raw?: string; children: MdInline[] }
   /** 画像記法。href は描画先が決まったときにだけ使う照合キーで、そのまま src にはしない */
   | { kind: "image"; href: string; title: string | null; children: MdInline[]; raw: string }
   | { kind: "break" };
 
 export type MdImage = Extract<MdInline, { kind: "image" }>;
+export type MdLink = Extract<MdInline, { kind: "link" }>;

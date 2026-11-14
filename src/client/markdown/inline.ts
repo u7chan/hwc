@@ -287,7 +287,7 @@ function findClose(
 }
 
 /**
- * http / https / mailto だけをリンクにする。相対パスは配信先が無いため通さず、
+ * http / https / mailto だけをそのままリンクにする。相対パスは配信先が決まっていないので通さず、
  * プロトコル相対 (`//host`) も scheme が無いものとして落とす。
  */
 function safeUrl(raw: string): string | null {
@@ -299,6 +299,12 @@ function safeUrl(raw: string): string | null {
   const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):/.exec(value);
   if (scheme === null) return null;
   return SAFE_SCHEMES.has(scheme[1].toLowerCase()) ? value : null;
+}
+
+/** 相対パスのリンクの候補。BFF が実在を確かめた表記と一致したときだけリンクになる (ADR 0084) */
+function isRelativeUrl(value: string): boolean {
+  if (value === "" || value.startsWith("//")) return false;
+  return !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value);
 }
 
 function readLink(
@@ -349,7 +355,23 @@ function readLink(
     };
   }
   const href = safeUrl(destination.url);
-  if (href === null) return { node: { kind: "literal", text: raw }, end: end + 1 };
+  if (href === null) {
+    // 相対パスは、BFF が実在を確かめた表記と一致したときだけリンクになる (ADR 0084)。
+    // 一致しなければ描画側が原文へ戻す。`//host` と読めない scheme は今までどおり literal。
+    if (!isRelativeUrl(destination.url)) {
+      return { node: { kind: "literal", text: raw }, end: end + 1 };
+    }
+    return {
+      node: {
+        kind: "link",
+        href: destination.url,
+        title: destination.title,
+        raw,
+        children: scanInline(text.slice(labelStart, labelEnd), state, depth + 1, false),
+      },
+      end: end + 1,
+    };
+  }
   const label = text.slice(labelStart, labelEnd);
   return {
     node: {

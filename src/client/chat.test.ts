@@ -22,6 +22,7 @@ import {
   isPendingConfirmed,
   latestUserAt,
   messageFileDisplayName,
+  messageLinks,
   messageFileKindLabel,
   newSessionPending,
   newSessionReset,
@@ -562,4 +563,29 @@ test("a running compaction echo stays after the messages and before later echoes
     at: 50,
   };
   expect(echoInsertIndex(chatRows(messages, [anchored]), 10)).toBe(3);
+});
+
+test("maps a resolved link to the same destination as the chip", () => {
+  const links = messageLinks("w1:p1", [
+    { href: "docs/mock.html", name: "docs/mock.html", version: "1-2", kind: "html", root: 0 },
+    { href: "./shot.png", name: "docs/shot.png", version: "3-4", kind: "image", root: 1 },
+    { href: "src/app.ts", name: "src/app.ts", version: "5-6", kind: "text", root: 0 },
+  ]);
+
+  // HTML はチップと同じプレビュー。画像はチップと同じ拡大ダイアログの配信 URL。
+  expect(links?.get("docs/mock.html")).toEqual({
+    kind: "html",
+    url: "/api/panes/w1%3Ap1/preview/0/docs/mock.html",
+    file: { name: "docs/mock.html", version: "1-2", kind: "html", root: 0 },
+  });
+  expect(links?.get("./shot.png")?.url).toBe(
+    `/api/panes/w1%3Ap1/files?root=1&path=${encodeURIComponent("docs/shot.png")}&v=3-4`,
+  );
+  // テキストは本文のリンクから新しいタブで開く。
+  expect(links?.get("src/app.ts")).toEqual({
+    kind: "text",
+    url: "/api/panes/w1%3Ap1/preview/0/src/app.ts?raw=1",
+  });
+  expect(messageLinks("w1:p1", undefined)).toBeUndefined();
+  expect(messageLinks("w1:p1", [])).toBeUndefined();
 });

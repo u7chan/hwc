@@ -5,6 +5,31 @@ import { attachmentContentTypeFromName } from "./attachments";
 
 export type MessageFileKind = "image" | "html";
 
+// 本文の相対パスのリンクから開くファイル。text はプレビューではなく、生の中身を新しいタブで
+// 見せる（ADR 0084）。
+export type ChatLinkKind = MessageFileKind | "text";
+
+// リンクから開けるテキストの拡張子。`env` のような設定ファイルの名前は入れない。
+// ドット始まりの名前（`.env` `.secrets.md`）も配らない。中身を見せない前提の名前を
+// 拡張子だけで通さないため（ADR 0084）。
+const TEXT_EXT: ReadonlySet<string> = new Set([
+  "md",
+  "txt",
+  "csv",
+  "ts",
+  "tsx",
+  "jsx",
+  "js",
+  "mjs",
+  "json",
+  "css",
+  "yaml",
+  "yml",
+  "toml",
+  "sh",
+  "py",
+]);
+
 // HTML のプレビューが読み込む副次ファイル。html と同じ場所に置かれた css / js / 画像を
 // 相対参照で解決させるために、この一覧だけを配信する。画像の 3 形式は添付の表から引く。
 const CONTENT_TYPE_BY_EXT: ReadonlyMap<string, string> = new Map([
@@ -36,9 +61,34 @@ export function messageFileKindFromName(name: string): MessageFileKind | null {
   return isHtmlName(name) ? "html" : null;
 }
 
+// ファイル名のドット以降。ドット始まりの名前は拡張子を持たない扱いにする。
+// 拡張子の無いファイルは、リンクからもプレビューからも配らない。
+function textExtOf(name: string): string {
+  const base = name.slice(name.lastIndexOf("/") + 1);
+  if (base.startsWith(".")) return "";
+  const dot = base.lastIndexOf(".");
+  return dot <= 0 ? "" : base.slice(dot + 1).toLowerCase();
+}
+
+export function isTextName(name: string): boolean {
+  return TEXT_EXT.has(textExtOf(name));
+}
+
+// 本文のリンクから開けるなら、その見せ方を返す。テキストは実行させたくないので、
+// 配信の型は previewContentType が text/plain を返す。
+export function messageLinkKindFromName(name: string): ChatLinkKind | null {
+  const kind = messageFileKindFromName(name);
+  if (kind !== null) return kind;
+  return isTextName(name) ? "text" : null;
+}
+
 // プレビューで配信してよい形式だけ型を返す。ここに無い拡張子は配信しない。
 export function previewContentType(name: string): string | null {
-  return attachmentContentTypeFromName(name) ?? CONTENT_TYPE_BY_EXT.get(extOf(name)) ?? null;
+  return (
+    attachmentContentTypeFromName(name) ??
+    CONTENT_TYPE_BY_EXT.get(extOf(name)) ??
+    (isTextName(name) ? "text/plain; charset=utf-8" : null)
+  );
 }
 
 // 画面に出す名前。パスではなくファイル名だけを出し、パスは読み上げと title に回す。
@@ -59,7 +109,9 @@ function isDeliverableScript(src: string): boolean {
   if (url === "" || url.startsWith("//") || URL_SCHEME.test(url)) return true;
   // クエリとハッシュは配信の対象外。拡張子だけを見る。
   const path = url.split(/[?#]/, 1)[0] ?? "";
-  return previewContentType(path) !== null;
+  // テキストとして配る拡張子（.ts / .tsx など）は、ブラウザがモジュールとして実行しない。
+  // 実行できる型で配るものだけを、読み込めるスクリプトとして数える（ADR 0084）。
+  return previewContentType(path) === "text/javascript; charset=utf-8";
 }
 
 type HtmlTag = { name: string; closing: boolean; attrs: Map<string, string>; end: number };

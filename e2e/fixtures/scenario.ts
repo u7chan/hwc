@@ -111,6 +111,11 @@ export async function createScenario(root: string): Promise<Scenario> {
       ),
     ),
   );
+  // 本文のリンクから開くテキスト。リンクと原文（literal）の違いを並べて見せる。
+  await writeFile(
+    join(dashboard, "docs", "notes.md"),
+    "# 空状態の設計メモ\n\n見出しと本文の間隔は 24px にそろえる。\n",
+  );
 
   // 添付チップは保存済みファイルの実バイト数を出す。会話の注記は basename しか使わないが、
   // 大きさを出すために実ファイルを状態ディレクトリへ置く。
@@ -786,7 +791,7 @@ const sessionEntries = [
       content: [
         {
           type: "text",
-          text: "空状態のモックを HTML で作りました。`docs/preview/mock.html` で確認できます。",
+          text: "空状態のモックを HTML で作りました。[モック](docs/preview/mock.html) で確認できます。\n\n設計メモは [notes.md](docs/notes.md)、スクショは [app-icon.png](docs/preview/app-icon.png) にあります。\n\n同じパスを裸で書いた docs/notes.md は押せません。",
         },
       ],
       model: "claude-sonnet-4-5",

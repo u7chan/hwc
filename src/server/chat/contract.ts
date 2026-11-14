@@ -1,4 +1,4 @@
-import type { MessageFileKind } from "../../shared/message-files";
+import type { ChatLinkKind, MessageFileKind } from "../../shared/message-files";
 
 export type ChatFile = {
   // 配信の根（ワークスペースのチェックアウト、またはプレビュー用の追加根）からの
@@ -16,6 +16,19 @@ export type ChatFile = {
   // 本文の画像記法の destination として一致した表記。この位置に描くための照合キーで、
   // 配信 URL には使わない。裸のパスだけで拾った画像は持たない。
   imageRefs?: string[];
+};
+
+// 本文に書かれた相対パスのリンク 1 件。href は本文の destination の表記そのもので、配信 URL
+// ではない。この表記と一致したリンクだけをクライアントがリンクにする。
+export type ChatLink = {
+  href: string;
+  // 配信の根からの相対パス。絶対パスは渡さない（ChatFile と同じく）。
+  name: string;
+  version: string;
+  // 見せ方。html と image はチップと同じで、text は生の中身を新しいタブで開く。
+  kind: ChatLinkKind;
+  root: number;
+  rootLabel?: string;
 };
 
 // ユーザーが送った添付 1 件。name は保存名で、絶対パスは渡さない。
@@ -36,6 +49,9 @@ export type ChatMessage = {
   attachments?: ChatAttachment[];
   // エージェントの本文が指していたファイル。ユーザーの添付とは別の一覧。
   files?: ChatFile[];
+  // 本文の相対パスのリンクとして書かれたファイル。files とは別に持ち、描画中のリンクと
+  // destination の表記で照合する。
+  links?: ChatLink[];
   // 本文が指していたが、配信の根（チェックアウトと追加根）の外にあったファイル名。
   // プレビューできないことを 1 行で伝えるためだけに持つ。絶対パスは渡さない。
   outsideFile?: string;

@@ -451,18 +451,13 @@ test("a message keeps its attachments as saved names and sizes, images or not", 
 });
 
 test("a preview url keeps the root and the path separators", () => {
-  expect(
-    previewUrl("w1:p2", {
-      name: "docs/モック.html",
-      version: "1-2",
-      kind: "html",
-      root: 1,
-    }),
-  ).toBe(`/api/panes/w1%3Ap2/preview/1/docs/${encodeURIComponent("モック.html")}`);
+  expect(previewUrl("w1:p2", { name: "docs/モック.html", root: 1 })).toBe(
+    `/api/panes/w1%3Ap2/preview/1/docs/${encodeURIComponent("モック.html")}`,
+  );
   // 区切りは残す。相対参照がそのまま効く。
-  expect(
-    previewUrl("w1:p1", { name: "preview/index.html", version: "1-2", kind: "html", root: 0 }),
-  ).toBe("/api/panes/w1%3Ap1/preview/0/preview/index.html");
+  expect(previewUrl("w1:p1", { name: "preview/index.html", root: 0 })).toBe(
+    "/api/panes/w1%3Ap1/preview/0/preview/index.html",
+  );
 });
 
 test("a file keeps the root label only as a display string", () => {

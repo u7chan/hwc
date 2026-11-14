@@ -9,7 +9,7 @@ import type {
 import { attachmentExtFromName, formatFileSize } from "../../shared/attachments";
 import { messageFileLabel } from "../../shared/message-files";
 import { attachmentUrl, chatFileUrl } from "../api";
-import { compactionLabel, messageFileKindLabel, splitInlineImages } from "../chat";
+import { compactionLabel, messageFileKindLabel, messageLinks, splitInlineImages } from "../chat";
 import { ChevronRightIcon, EyeIcon, StatusMark } from "../icons";
 import { Markdown } from "../Markdown";
 import { formatClock, formatElapsed } from "../time";
@@ -132,6 +132,7 @@ export function AgentMessage(props: {
   onOpenPreview: (file: ChatFile) => void;
 }) {
   const { images, rest } = splitInlineImages(props.paneId, props.message.text, props.message.files);
+  const links = messageLinks(props.paneId, props.message.links);
   const complete = props.complete !== false;
   return (
     <>
@@ -139,7 +140,9 @@ export function AgentMessage(props: {
         text={props.message.text}
         taskScope={props.taskScope}
         images={images}
+        links={links}
         onOpenImage={props.onOpenImage}
+        onOpenPreview={props.onOpenPreview}
       />
       {!complete || rest.length === 0 ? null : (
         <MessageFiles
