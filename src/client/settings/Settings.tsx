@@ -55,10 +55,6 @@ export function Settings(props: SettingsProps) {
   const [summaryKey, setSummaryKey] = useState(0);
   const refreshSummary = () => setSummaryKey((key) => key + 1);
 
-  // 選び直したときは中身を作り直す。セクションが持つ編集中の状態と、バーに出す名前を
-  // 同じ操作で初期化するため（写しが残ると「定型文」と編集フォームが食い違う）。
-  const [visit, setVisit] = useState(0);
-
   // カテゴリを左に常設できるかは、詳細に実際に残っている幅で決める。ペイン一覧の
   // 幅は変えられるので、ウィンドウ幅だけでは足りない。
   const { ref: frameRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
@@ -70,10 +66,14 @@ export function Settings(props: SettingsProps) {
 
   // 選んでいるカテゴリをもう一度押しても何もしない。作り直すと、入力途中のフォームが
   // 確認なしに消える。
+  // いま出しているカテゴリ。広い画面は何も開いていなくても先頭を出している。
+  const active = sideBySide ? shown : opened;
+
+  // 出しているカテゴリをもう一度押しても何もしない。作り直すと、入力途中のフォームが
+  // 確認なしに消える。移るときは、編集中の名前も同じ操作で初期化する。
   const open = (id: SettingsCategoryId) => {
-    if (id === opened) return;
+    if (id === active) return;
     setEditingTitle(null);
-    setVisit((count) => count + 1);
     setOpened(id);
     // カテゴリを移るついでに一覧の値も読み直す。前回の読み込みが失敗していても、
     // 保存するまで空のままにならない。
@@ -129,7 +129,7 @@ export function Settings(props: SettingsProps) {
           {opened === null && !sideBySide ? (
             index("page", null)
           ) : (
-            <div class="hwc-settings" key={visit}>
+            <div class="hwc-settings">
               {section(shown, props, {
                 onEditingTitleChange: setEditingTitle,
                 onSaved: refreshSummary,
