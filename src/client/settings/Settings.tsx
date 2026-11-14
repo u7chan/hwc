@@ -64,8 +64,6 @@ export function Settings(props: SettingsProps) {
   // 常設するので、何も開いていなければ先頭を出す。
   const shown = opened ?? "display";
 
-  // 選んでいるカテゴリをもう一度押しても何もしない。作り直すと、入力途中のフォームが
-  // 確認なしに消える。
   // いま出しているカテゴリ。広い画面は何も開いていなくても先頭を出している。
   const active = sideBySide ? shown : opened;
 
