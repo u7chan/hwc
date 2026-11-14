@@ -21,18 +21,22 @@ export function useSettingsSummary(refreshKey: number): SettingsSummary {
       if (!signal.aborted) setSummary((current) => ({ ...current, ...patch }));
     };
 
-    fetchTemplates(signal).then((templates) => {
-      if (templates !== null) apply({ templates: templates.length });
-    }, noop);
-    fetchNotifications(signal).then((view) => apply({ notifications: view.enabled }), noop);
-    fetchRestartSettings(signal).then((view) => apply({ restart: view.command !== null }), noop);
+    // 読めなかった値は消す。古い値を残すと、詳細で変えたあとに食い違ったままになる。
+    fetchTemplates(signal).then(
+      (templates) => apply({ templates: templates === null ? null : templates.length }),
+      () => apply({ templates: null }),
+    );
+    fetchNotifications(signal).then(
+      (view) => apply({ notifications: view.enabled }),
+      () => apply({ notifications: null }),
+    );
+    fetchRestartSettings(signal).then(
+      (view) => apply({ restart: view.command !== null }),
+      () => apply({ restart: null }),
+    );
 
     return () => controller.abort();
   }, [refreshKey]);
 
   return summary;
-}
-
-function noop() {
-  // 読めない値は行に出さない。詳細を開けば理由が出る。
 }

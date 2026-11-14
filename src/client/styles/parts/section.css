@@ -67,6 +67,15 @@
   font-size: var(--text-secondary);
 }
 
+/* 接続のように、値そのものが状態の行だけ色を付ける。 */
+.hwc-settings-nav-value[data-status="live"] {
+  color: var(--color-success);
+}
+
+.hwc-settings-nav-value[data-status="unavailable"] {
+  color: var(--color-danger);
+}
+
 .hwc-settings-nav > svg {
   flex: none;
   color: var(--color-secondary);
@@ -112,8 +121,8 @@
 .hwc-settings-side-title {
   margin: 0 0 var(--space-2);
   padding: 0 var(--space-2);
-  font-size: var(--text-body);
-  font-weight: 600;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
 }
 
 /* 左の列は面を持たない。選択中の行だけ面と色を付ける。 */
@@ -144,14 +153,15 @@
 }
 
 .hwc-settings-side .hwc-settings-group-label {
-  margin-top: var(--space-4);
+  margin-top: var(--space-6);
   padding-left: var(--space-2);
 }
 
-.hwc-settings-wide .hwc-settings-scroll {
+/* 左右にカテゴリを置くときだけ、内容の左右と上を広く取る。 */
+.hwc-settings-wide[data-side="true"] .hwc-settings-scroll {
   padding: 0 var(--space-8) var(--space-8);
 }
 
-.hwc-settings-wide .hwc-settings {
+.hwc-settings-wide[data-side="true"] .hwc-settings {
   padding-top: var(--space-8);
 }

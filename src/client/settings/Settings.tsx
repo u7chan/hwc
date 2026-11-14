@@ -1,8 +1,8 @@
 import { useState } from "preact/hooks";
-import { useMediaQuery } from "../app/use-media-query";
+import { useElementWidth } from "../app/use-element-width";
 import type { ConnectionStatus } from "../connection";
 import { ChevronLeftIcon } from "../icons";
-import { SETTINGS_SIDE_QUERY } from "../layout";
+import { SETTINGS_SIDE_MIN_WIDTH } from "../layout";
 import type { ThemePreference } from "../theme";
 import { BuildSettings } from "./BuildSettings";
 import { ConnectionSettings } from "./ConnectionSettings";
@@ -50,21 +50,27 @@ function section(
 
 export function Settings(props: SettingsProps) {
   const [opened, setOpened] = useState<SettingsCategoryId | null>(null);
-  // ペイン一覧のぶんを引いても内容が読める幅のときだけ、カテゴリを左に常設する。
-  const roomy = useMediaQuery(SETTINGS_SIDE_QUERY);
-  const sideBySide = props.wide && roomy;
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   // 保存で一覧の現在値が変わる。詳細を開いたままでも引き直せるよう、番号を進める。
   const [summaryKey, setSummaryKey] = useState(0);
   const refreshSummary = () => setSummaryKey((key) => key + 1);
 
+  // 選び直したときは中身を作り直す。セクションが持つ編集中の状態と、バーに出す名前を
+  // 同じ操作で初期化するため（写しが残ると「定型文」と編集フォームが食い違う）。
+  const [visit, setVisit] = useState(0);
+
+  // カテゴリを左に常設できるかは、詳細に実際に残っている幅で決める。ペイン一覧の
+  // 幅は変えられるので、ウィンドウ幅だけでは足りない。
+  const { ref: frameRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
+  const sideBySide = props.wide && frameWidth !== null && frameWidth >= SETTINGS_SIDE_MIN_WIDTH;
+
   // 狭い画面は一覧から始め、開いたカテゴリだけを出す。広い画面はカテゴリを左に
   // 常設するので、何も開いていなければ先頭を出す。
   const shown = opened ?? "display";
 
-  // 画面を移るときは編集中の見出しを捨てる。詳細を離れるとフォームごと閉じるため。
   const open = (id: SettingsCategoryId) => {
     setEditingTitle(null);
+    setVisit((count) => count + 1);
     setOpened(id);
   };
   const back = () => {
@@ -85,15 +91,15 @@ export function Settings(props: SettingsProps) {
     />
   );
 
-  // 幅をまたいでも中身を組み替えない。組み替えると、入力途中のフォームが
-  // 作り直されて下書きが消える。広い画面の要素は hidden で隠すだけにする。
+  // 幅をまたいでも中身を組み替えない。組み替えると、入力途中のフォームが作り直されて
+  // 下書きが消える。広い画面の要素は hidden で隠すだけにする。
   return (
     <div class="hwc-detail-inner">
       <header class="hwc-detail-bar" hidden={sideBySide}>
         {/* 狭い画面では一覧ごと隠れるので、設定を閉じる道をここに残す。 */}
         <button
           type="button"
-          class="hwc-icon-button hwc-back"
+          class="hwc-icon-button"
           aria-label={opened === null ? "設定を閉じる" : "設定の一覧へ戻る"}
           onClick={back}
         >
@@ -104,16 +110,18 @@ export function Settings(props: SettingsProps) {
         </h2>
       </header>
 
-      <div class="hwc-settings-wide">
+      <div class="hwc-settings-wide" data-side={sideBySide} ref={frameRef}>
         <div class="hwc-settings-side" hidden={!sideBySide}>
           {sideBySide ? index("side", shown) : null}
         </div>
 
         <div class="hwc-settings-scroll">
+          {/* カテゴリを左に常設している間はバーを隠すので、見出しは本文の側に置く。 */}
+          {sideBySide ? <h2 class="hwc-visually-hidden">{settingsCategoryLabel(shown)}</h2> : null}
           {opened === null && !sideBySide ? (
             index("page", null)
           ) : (
-            <div class="hwc-settings">
+            <div class="hwc-settings" key={visit}>
               {section(shown, props, {
                 onEditingTitleChange: setEditingTitle,
                 onSaved: refreshSummary,

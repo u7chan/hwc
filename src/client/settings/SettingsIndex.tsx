@@ -48,6 +48,7 @@ function CategoryIcon(props: { id: SettingsCategoryId }) {
 function CategoryRow(props: {
   category: SettingsCategory;
   value: string | null;
+  status: string | null;
   current: boolean;
   onOpen: () => void;
 }) {
@@ -62,7 +63,11 @@ function CategoryRow(props: {
         <CategoryIcon id={props.category.id} />
       </span>
       <span class="hwc-settings-nav-label">{props.category.label}</span>
-      {props.value === null ? null : <span class="hwc-settings-nav-value">{props.value}</span>}
+      {props.value === null ? null : (
+        <span class="hwc-settings-nav-value" data-status={props.status ?? undefined}>
+          {props.value}
+        </span>
+      )}
       <ChevronRightIcon size={16} />
     </button>
   );
@@ -86,6 +91,7 @@ export function SettingsIndex(props: SettingsIndexProps) {
         key={category.id}
         category={category}
         value={settingsCategoryValue(category.id, values)}
+        status={props.variant === "page" && category.id === "connection" ? props.connection : null}
         current={props.current === category.id}
         onOpen={() => props.onOpen(category.id)}
       />
