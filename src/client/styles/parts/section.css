@@ -17,6 +17,44 @@
   padding-top: var(--space-6);
 }
 
+/* 出ていく側を残さず、切り替えを待たずに次の画面を操作できるようにする。 */
+.hwc-settings-index {
+  animation: hwc-settings-in-left 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hwc-settings-detail {
+  animation: hwc-settings-in-detail 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* animation-name を切り替えると、幅をまたぐたびに本文の入場が再生される。 */
+.hwc-settings-wide[data-side="true"] .hwc-settings-detail {
+  --hwc-settings-entry-transform: none;
+}
+
+@keyframes hwc-settings-in-left {
+  from {
+    opacity: 0.35;
+    transform: translateX(calc(var(--space-3) * -1));
+  }
+}
+
+@keyframes hwc-settings-in-detail {
+  from {
+    opacity: 0.35;
+    transform: var(--hwc-settings-entry-transform, translateX(var(--space-3)));
+  }
+}
+
+.hwc-settings-title {
+  animation: hwc-settings-in-title 180ms ease-out;
+}
+
+@keyframes hwc-settings-in-title {
+  from {
+    opacity: 0;
+  }
+}
+
 /* 一覧の行。行全体を操作領域にし、名前の右に現在値と矢印を置く。 */
 .hwc-settings-nav {
   display: flex;
@@ -129,6 +167,15 @@
   min-height: var(--tap);
   padding: 0 var(--space-2) 0 var(--space-3);
   border-radius: var(--radius-control);
+  /* 選んだ行が移るときは、面と文字の色だけを本文の入れ替わりに合わせて移す。 */
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+/* アイコンは補助文字の色を持つので、行の色だけでは追従しない。 */
+.hwc-settings-side .hwc-settings-nav-icon {
+  transition: color 120ms ease;
 }
 
 .hwc-settings-side .hwc-settings-nav + .hwc-settings-nav {
@@ -163,4 +210,18 @@
 
 .hwc-settings-wide[data-side="true"] .hwc-settings {
   padding-top: var(--space-8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-app[data-view="settings"] .hwc-detail-inner,
+  .hwc-settings-index,
+  .hwc-settings-detail,
+  .hwc-settings-title {
+    animation: none;
+  }
+
+  .hwc-settings-side .hwc-settings-nav,
+  .hwc-settings-side .hwc-settings-nav-icon {
+    transition: none;
+  }
 }

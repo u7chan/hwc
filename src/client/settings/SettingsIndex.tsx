@@ -109,7 +109,7 @@ export function SettingsIndex(props: SettingsIndexProps) {
   }
 
   return (
-    <div class="hwc-settings">
+    <div class="hwc-settings hwc-settings-index">
       <section>
         <div class="hwc-setting-group">{rows("settings")}</div>
       </section>
