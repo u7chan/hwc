@@ -115,9 +115,7 @@ export function Settings(props: SettingsProps) {
       </header>
 
       <div class="hwc-settings-wide" data-side={sideBySide} ref={frameRef}>
-        <div class="hwc-settings-side" hidden={!sideBySide}>
-          {sideBySide ? index("side", shown) : null}
-        </div>
+        {sideBySide ? index("side", shown) : null}
 
         <div class="hwc-settings-scroll">
           {/* カテゴリを左に常設している間はバーを隠すので、見出しは本文の側に置く。 */}

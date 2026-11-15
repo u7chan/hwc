@@ -101,8 +101,7 @@
   min-height: 0;
 }
 
-/* 幅をまたいでも要素を作り直さないので、使わない側は hidden で隠す。 */
-.hwc-settings-wide .hwc-settings-side[hidden],
+/* 幅をまたいでも本文の木は作り直さないので、使わない側は hidden で隠す。 */
 .hwc-detail-inner > .hwc-detail-bar[hidden] {
   display: none;
 }
