@@ -5,7 +5,7 @@ import { PaneDetail } from "./PaneDetail";
 import { attachmentStore } from "./attachment-store";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
-import { Settings } from "./Settings";
+import { Settings } from "./settings/Settings";
 import type {
   Closing,
   ClosingSpace,

@@ -496,3 +496,313 @@
     opacity: 0;
   }
 }
+
+/* ペイン作成・ワークツリー作成と、プロジェクト選択のダイアログ。枠とボタンは上の
+   共通部品をそのまま使い、ここでは中の並びだけを決める。 */
+
+.hwc-create-field {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+.hwc-create-label {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-create-input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font: inherit;
+  font-size: max(16px, 1em);
+}
+
+.hwc-create-input:disabled {
+  color: var(--color-secondary);
+  cursor: default;
+}
+
+.hwc-create-input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.hwc-create-select {
+  display: grid;
+}
+
+.hwc-create-select > * {
+  grid-area: 1 / 1;
+}
+
+.hwc-create-select .hwc-create-input[data-loading="true"] {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.hwc-create-select .hwc-create-input[data-loading="false"] {
+  animation: hwc-create-select-in 200ms ease-out both;
+}
+
+.hwc-create-skeleton {
+  align-self: center;
+  width: 42%;
+  height: 14px;
+  margin-left: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-control-line);
+  pointer-events: none;
+  animation: hwc-create-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes hwc-create-select-in {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes hwc-create-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-create-select .hwc-create-input[data-loading="false"],
+  .hwc-create-skeleton {
+    animation: none;
+  }
+
+  .hwc-create-skeleton {
+    opacity: 0.4;
+  }
+}
+
+.hwc-create-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  margin-bottom: var(--space-3);
+  padding: 2px;
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+}
+
+.hwc-create-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+  border: 0;
+  border-radius: calc(var(--radius-control) - 2px);
+  background: transparent;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-create-mode[aria-checked="true"] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.hwc-create-mode:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-create-mode:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hwc-create-note {
+  margin: var(--space-3) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+}
+
+.hwc-create-model,
+.hwc-create-effort {
+  margin-top: var(--space-4);
+}
+
+.hwc-create-model .hwc-create-field,
+.hwc-create-effort .hwc-create-field {
+  margin-bottom: 0;
+}
+
+.hwc-create-actions {
+  margin-top: var(--space-4);
+}
+
+.hwc-project-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+  max-height: min(560px, calc(100dvh - var(--space-4) * 2));
+  overflow: hidden;
+}
+
+.hwc-project-dialog .hwc-dialog-title,
+.hwc-project-dialog .hwc-dialog-text {
+  flex: none;
+}
+
+.hwc-project-dialog .hwc-dialog-text {
+  margin-bottom: var(--space-3);
+}
+
+.hwc-project-search {
+  display: block;
+  flex: none;
+  margin-bottom: var(--space-2);
+}
+
+.hwc-project-list {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  margin: 0 calc(var(--space-1) * -1);
+  padding: 0 var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hwc-project-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-project-row:hover {
+  background: var(--color-raised);
+}
+
+.hwc-project-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hwc-project-path {
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.hwc-project-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.hwc-project-retry {
+  min-height: var(--tap);
+  padding: 0 var(--space-1);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hwc-project-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.hwc-project-footer {
+  display: flex;
+  flex: none;
+  margin-top: var(--space-3);
+}
+
+.hwc-project-footer .hwc-dialog-button {
+  flex: 1;
+}
+
+/* 広い画面はフォームに幅を使える。狭い画面の縦積みとタップ領域の寸法は変えない。 */
+@media (min-width: 900px) {
+  .hwc-create-dialog {
+    max-width: 480px;
+    padding: var(--space-6);
+  }
+
+  .hwc-create-dialog .hwc-dialog-title {
+    font-size: var(--text-page);
+  }
+
+  .hwc-create-dialog .hwc-dialog-actions {
+    justify-content: flex-end;
+  }
+
+  .hwc-create-dialog .hwc-dialog-button {
+    flex: 0 0 auto;
+    /* ルート文字サイズを上げた環境でも、2 つのボタンが行幅を超えないようにする。 */
+    min-width: min(9rem, calc((100% - var(--space-2)) / 2));
+    padding-inline: var(--space-4);
+  }
+}
+
+.hwc-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: var(--space-1);
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: hwc-spin 700ms linear infinite;
+  vertical-align: -2px;
+}
+
+@keyframes hwc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-spinner {
+    animation-duration: 2s;
+  }
+}

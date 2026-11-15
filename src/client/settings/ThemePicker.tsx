@@ -1,8 +1,8 @@
 import { useState } from "preact/hooks";
-import { ChoiceCard } from "./ChoiceCard";
-import { ChevronRightIcon, SendIcon, StatusMark } from "./icons";
-import { StatusIcon } from "./StatusLabel";
-import { THEMES, themeGroups, type ThemeMeta, type ThemePreference } from "./theme";
+import { ChoiceCard } from "../ChoiceCard";
+import { ChevronRightIcon, SendIcon, StatusMark } from "../icons";
+import { StatusIcon } from "../StatusLabel";
+import { THEMES, themeGroups, type ThemeMeta, type ThemePreference } from "../theme";
 
 type ThemePickerProps = {
   value: ThemePreference;

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "preact/hooks";
-import type { RestartSettings } from "../shared/restart";
+import type { RestartSettings } from "../../shared/restart";
 import {
   fetchRestartSettings,
   runRestart,
   saveRestartSettings,
   type RestartSaveResult,
   type RunRestartResult,
-} from "./api";
+} from "../api";
 
 type LoadState = "loading" | "ready" | "failed";
 

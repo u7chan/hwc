@@ -5,11 +5,11 @@ import {
   MAX_TEMPLATE_BODY_LENGTH,
   MAX_TEMPLATE_TITLE_LENGTH,
   type Template,
-} from "../shared/templates";
-import { fetchTemplates, saveTemplates, type TemplateSaveResult } from "./api";
-import { Confirm } from "./Confirm";
-import { ChevronRightIcon, PlusIcon, TemplateIcon } from "./icons";
-import { newTemplateId, templatePreview } from "./templates";
+} from "../../shared/templates";
+import { fetchTemplates, saveTemplates, type TemplateSaveResult } from "../api";
+import { Confirm } from "../Confirm";
+import { ChevronRightIcon, PlusIcon, TemplateIcon } from "../icons";
+import { newTemplateId, templatePreview } from "../templates";
 
 type LoadState = "loading" | "ready" | "failed";
 

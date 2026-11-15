@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import type { NotificationScope, NotificationView } from "../shared/notifications";
+import type { NotificationScope, NotificationView } from "../../shared/notifications";
 import {
   fetchNotifications,
   removeDiscordWebhook,
@@ -8,15 +8,15 @@ import {
   testDiscordWebhook,
   type NotificationSaveResult,
   type NotificationTestResult,
-} from "./api";
-import { Confirm } from "./Confirm";
-import { DiscordIcon } from "./icons";
+} from "../api";
+import { Confirm } from "../Confirm";
+import { DiscordIcon } from "../icons";
 import {
   canRegisterWebhook,
   saveNotificationText,
   testNotificationText,
   webhookHintText,
-} from "./notifications";
+} from "../notifications";
 
 type LoadState = "loading" | "ready" | "failed";
 

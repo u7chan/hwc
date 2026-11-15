@@ -722,3 +722,215 @@
     transition: none;
   }
 }
+
+/* 入力欄の + から開く定型文のダイアログ。名前の一覧とプレビューの高さを固定し、
+   選び直しても位置が動かないようにする。 */
+
+.hwc-template-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 420px;
+  height: min(560px, calc(100dvh - var(--space-4) * 2));
+  overflow: hidden;
+}
+
+.hwc-template-dialog .hwc-dialog-title,
+.hwc-template-dialog .hwc-dialog-text {
+  flex: none;
+}
+
+.hwc-template-dialog .hwc-dialog-text {
+  margin-bottom: var(--space-3);
+}
+
+.hwc-template-dialog .hwc-dialog-actions {
+  flex: none;
+  /* プレビューの枠に接すると、本文の一部のように見えて押し間違える。 */
+  margin-top: var(--space-5);
+}
+
+.hwc-template-search {
+  display: block;
+  flex: none;
+  margin-bottom: var(--space-3);
+}
+
+.hwc-template-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.hwc-template-chips {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: 0;
+  max-height: 148px;
+  margin: 0 calc(var(--space-1) * -1);
+  padding: var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hwc-template-chip {
+  min-height: var(--tap);
+  max-width: 100%;
+  padding: 0 var(--space-3);
+  /* 上限いっぱいの名前でもボタンの外へはみ出さない。 */
+  overflow-wrap: anywhere;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-template-chip:hover {
+  background: var(--color-raised);
+}
+
+.hwc-template-chip[aria-checked="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-selected);
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.hwc-template-chip:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.hwc-template-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-content);
+  overflow: hidden;
+}
+
+.hwc-template-preview-text {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: var(--space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.hwc-template-preview-empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  text-align: center;
+}
+
+.hwc-template-preview-foot {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--color-line);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hwc-template-state {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  text-align: center;
+}
+
+.hwc-template-retry {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* 横向きやキーボード表示で画面が低いときは、名前の一覧を 2 行までに抑えて
+   本文プレビューへ読める高さを残す。注記は省き、余白も詰める。 */
+@media (max-height: 520px) {
+  .hwc-template-dialog {
+    padding: var(--space-4);
+  }
+
+  .hwc-template-dialog .hwc-dialog-text {
+    display: none;
+  }
+
+  .hwc-template-dialog .hwc-dialog-actions {
+    margin-top: var(--space-2);
+  }
+
+  .hwc-template-chips {
+    max-height: 92px;
+  }
+
+  .hwc-template-preview {
+    min-height: 120px;
+  }
+}
+
+/* さらに低い画面では、名前の一覧とプレビューを同時に確保できない。本文を潰す代わりに
+   ダイアログの中身を 1 つのスクロールにし、名前はすべて見せて本文はその下に置く。 */
+@media (max-height: 380px) {
+  .hwc-template-content {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .hwc-template-chips {
+    flex: none;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .hwc-template-preview {
+    flex: none;
+    min-height: 0;
+  }
+
+  .hwc-template-preview-text {
+    flex: none;
+    overflow: visible;
+  }
+
+  .hwc-template-preview-empty {
+    min-height: 96px;
+  }
+}
