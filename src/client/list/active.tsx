@@ -218,6 +218,8 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
         <section
           key={group.workspace.id}
           class="hwc-active-group"
+          // 先頭へ移動したとき、束と行を動かす前の位置から滑らせる目印（PaneList）。
+          data-order-key={group.workspace.id}
           aria-labelledby={bandId(group.workspace.id)}
           data-removal={
             props.removal?.workspaceId === group.workspace.id ? props.removal.phase : undefined

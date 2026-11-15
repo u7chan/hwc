@@ -40,6 +40,20 @@ export function dropAnchor(rects: readonly UnitRect[], y: number): string | null
   return null;
 }
 
+// メニューの「先頭へ移動」。動かす単位はドラッグと同じリポジトリ束で、落とし先は
+// 先頭ブロックの先頭 id の前。既に先頭なら送らない。
+export function moveToTopPlan(
+  units: readonly OrderUnit[],
+  workspaceId: string,
+): { ids: readonly string[]; beforeWorkspaceId: string } | null {
+  const unit = units.find((item) => item.ids.includes(workspaceId));
+  const first = units[0];
+  const anchor = first?.ids[0];
+  if (unit === undefined || first === undefined || anchor === undefined) return null;
+  if (unit.key === first.key) return null;
+  return { ids: unit.ids, beforeWorkspaceId: anchor };
+}
+
 export function dropBeforeId(units: readonly OrderUnit[], beforeKey: string | null): string | null {
   if (beforeKey === null) return null;
   return units.find((unit) => unit.key === beforeKey)?.ids[0] ?? null;

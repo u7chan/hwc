@@ -35,10 +35,18 @@ export type PaneListProps = {
     workspaceIds: readonly string[],
     beforeWorkspaceId: string | null,
   ) => Promise<boolean>;
+  // メニューの「先頭へ移動」。token が変わるたびに 1 回だけ処理する。
+  moveToTop: { workspaceId: string; token: number } | null;
+  onMoveToTopHandled: () => void;
   workingSince: ReadonlyMap<string, number>;
   finishedAt: ReadonlyMap<string, number>;
   pullRequests: ReadonlyMap<string, PullRequest | null>;
   now: number;
 };
 
-export type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onOpen">;
+export type ListFeedback = {
+  onNotice: (text: string | null) => void;
+  onAnnounce: (text: string) => void;
+};
+
+export type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onOpen"> & ListFeedback;

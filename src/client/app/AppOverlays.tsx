@@ -8,7 +8,7 @@ import { CloseConfirm } from "../CloseConfirm";
 import { CloseSpaceConfirm } from "../CloseSpaceConfirm";
 import { CreatePane } from "../CreatePane";
 import { DragGhost } from "../DragGhost";
-import { ChevronRightIcon, GitHubIcon, PlusIcon, TrashIcon } from "../icons";
+import { ArrowUpIcon, ChevronRightIcon, GitHubIcon, PlusIcon, TrashIcon } from "../icons";
 import { ImageViewer } from "../ImageViewer";
 import { Menu } from "../Menu";
 import { PaneMenu } from "../PaneMenu";
@@ -41,6 +41,7 @@ export type AppOverlaysProps = {
   menuGitBusy: "fetch" | "pull" | null;
   menuGitFailed: { action: "fetch" | "pull"; error: GitSyncFailure } | null;
   menuCanCloseSpace: boolean;
+  menuCanMoveToTop: boolean;
   canCreateWorktree: boolean;
   dismissMenu: () => void;
   closeMenu: () => void;
@@ -51,6 +52,7 @@ export type AppOverlaysProps = {
   openCreateWorktreeDialog: () => void;
   openRemoveWorktreeConfirm: () => void;
   openCloseSpaceConfirm: () => void;
+  moveWorkspaceToTop: () => void;
   runGitSync: (workspaceId: string, action: "fetch" | "pull") => Promise<void>;
   closing: Closing | null;
   closingPane: PaneState | null;
@@ -90,6 +92,7 @@ export function AppOverlays(props: AppOverlaysProps) {
     menuGitBusy,
     menuGitFailed,
     menuCanCloseSpace,
+    menuCanMoveToTop,
     canCreateWorktree,
     dismissMenu,
     closeMenu,
@@ -100,6 +103,7 @@ export function AppOverlays(props: AppOverlaysProps) {
     openCreateWorktreeDialog,
     openRemoveWorktreeConfirm,
     openCloseSpaceConfirm,
+    moveWorkspaceToTop,
     runGitSync,
     closing,
     closingPane,
@@ -210,6 +214,20 @@ export function AppOverlays(props: AppOverlaysProps) {
                 failed={menuGitFailed}
                 onRun={(action) => void runGitSync(menuWorkspace.id, action)}
               />
+              {menuCanMoveToTop ? (
+                <>
+                  <hr class="hwc-menu-separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    class="hwc-menu-item"
+                    onClick={moveWorkspaceToTop}
+                  >
+                    <ArrowUpIcon size={14} />
+                    先頭へ移動
+                  </button>
+                </>
+              ) : null}
               {canCreateWorktree ? (
                 <>
                   <hr class="hwc-menu-separator" />

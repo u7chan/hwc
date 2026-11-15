@@ -1,10 +1,12 @@
-import { useLayoutEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { ActivePaneList, NoPanes, spaceId } from "./list/active";
+import type { ListFeedback } from "./list/types";
+import { moveToTopPlan, orderUnits } from "./order";
 import { ScopeBar } from "./list/scope";
 import { TreePaneList } from "./list/tree";
 import type { PaneListProps } from "./list/types";
 import { activeGroups, type ActiveGroup, type ListScope } from "./scope";
-import { countPanes } from "./select";
+import { countPanes, groupWorkspaces } from "./select";
 
 // 一覧の上端は行の途中で止めない。位置を決め直したときに行が半分だけ見えると、
 // 見出しのアイコンや案内線が切れて、壊れて見える。指で動かしている間は触らない。
@@ -30,6 +32,120 @@ export function PaneList(props: PaneListProps) {
   const scroll = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const positions = useRef(new Map<ListScope, number>());
+
+  // 一覧の知らせは両方のスコープで 1 か所に出す。並べ替えの失敗も先頭移動の失敗も
+  // 同じ面に落とす。ツリーはドラッグから、ここはメニューから書く。
+  const [notice, setNotice] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const feedback: ListFeedback = { onNotice: setNotice, onAnnounce: setAnnouncement };
+
+  // メニューの「先頭へ移動」で、状態が新しい順序で描かれる前の位置を控える。
+  const pendingMove = useRef<{
+    order: string;
+    workspaceId: string;
+    offsets: ReadonlyMap<string, number>;
+  } | null>(null);
+  const handledMove = useRef(0);
+  const orderKey = props.state.workspaces.map((workspace) => workspace.id).join("\n");
+
+  const readOffsets = (): ReadonlyMap<string, number> => {
+    const offsets = new Map<string, number>();
+    for (const node of scroll.current?.querySelectorAll<HTMLElement>("[data-order-key]") ?? []) {
+      const key = node.dataset.orderKey;
+      if (key !== undefined) offsets.set(key, node.offsetTop);
+    }
+    return offsets;
+  };
+
+  // 送る単位はドラッグと同じリポジトリ束。メニューはワークスペースを指すが、
+  // 1 つだけ動かすと「すべて」の束が割れる。
+  useLayoutEffect(() => {
+    const request = props.moveToTop;
+    if (request === null || handledMove.current === request.token) return;
+    handledMove.current = request.token;
+    const plan = moveToTopPlan(
+      orderUnits(groupWorkspaces(props.state.workspaces), props.state.workspaces),
+      request.workspaceId,
+    );
+    if (plan === null) {
+      props.onMoveToTopHandled();
+      return;
+    }
+    const label =
+      props.state.workspaces.find((workspace) => workspace.id === request.workspaceId)?.label ?? "";
+    pendingMove.current = {
+      order: orderKey,
+      workspaceId: request.workspaceId,
+      offsets: readOffsets(),
+    };
+    // 要求は 1 回で使い切る。一覧が作り直されたときに、古い要求で動かさない。
+    props.onMoveToTopHandled();
+    setNotice(null);
+    void props.onMoveWorkspaces(plan.ids, plan.beforeWorkspaceId).then(
+      (ok) => {
+        if (ok) setAnnouncement(`${label} を先頭に移動しました`);
+        else {
+          pendingMove.current = null;
+          setNotice("並べ替えを保存できませんでした。");
+        }
+      },
+      () => {
+        pendingMove.current = null;
+        setNotice("並べ替えを保存できませんでした。");
+      },
+    );
+  }, [props.moveToTop]);
+
+  // 先頭へ動いた束を、動く前の位置から新しい位置へ滑らせる。行と同じく、
+  // 位置は offsetTop なのでスクロール位置に影響されない。
+  useLayoutEffect(() => {
+    const pending = pendingMove.current;
+    if (pending === null || pending.order === orderKey) return;
+    pendingMove.current = null;
+    const node = scroll.current;
+    const bodyNode = body.current;
+    if (node === null || bodyNode === null) return;
+
+    const sections = Array.from(node.querySelectorAll<HTMLElement>("[data-order-key]"));
+    const first = sections[0];
+    // メニューを押した帯があれば、そのカードを浮かせる。ツリーでは動いたブロックが先頭。
+    const liftedNode =
+      sections.find((section) => section.dataset.orderKey === pending.workspaceId) ?? first;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // 先頭へ移った束は、スクロールしていると画面の外に残る。先頭に寄せて結果を見せる。
+    if (first !== undefined && first.offsetTop < node.scrollTop) {
+      const padding = Number.parseFloat(getComputedStyle(bodyNode).paddingTop) || 0;
+      node.scrollTo({
+        top: Math.max(0, first.offsetTop - padding),
+        behavior: reduced ? "auto" : "smooth",
+      });
+    }
+    if (reduced) return;
+
+    for (const section of sections) {
+      const key = section.dataset.orderKey;
+      const before = key === undefined ? undefined : pending.offsets.get(key);
+      if (before === undefined) continue;
+      const delta = before - section.offsetTop;
+      if (Math.abs(delta) < 1 || typeof section.animate !== "function") continue;
+
+      const lifted = section === liftedNode;
+      section.style.position = "relative";
+      section.style.zIndex = lifted ? "2" : "1";
+      if (lifted) section.dataset.reorderLifted = "true";
+      const cleanup = () => {
+        section.style.position = "";
+        section.style.zIndex = "";
+        delete section.dataset.reorderLifted;
+      };
+      const animation = section.animate(
+        [{ transform: `translateY(${delta}px)` }, { transform: "none" }],
+        { duration: 220, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+      );
+      animation.onfinish = cleanup;
+      animation.oncancel = cleanup;
+    }
+  });
 
   const changeScope = (next: ListScope) => {
     if (scroll.current) positions.current.set(props.scope, scroll.current.scrollTop);
@@ -127,7 +243,15 @@ export function PaneList(props: PaneListProps) {
       <ScopeBar scope={props.scope} count={groups.length} onScope={changeScope} />
       <div class="hwc-list-scroll" ref={scroll}>
         <div class="hwc-list-body" ref={body}>
-          {renderList({ ...props, onRevealWorkspace: revealWorkspace }, groups)}
+          {notice === null ? null : (
+            <p class="hwc-list-notice" role="alert">
+              {notice}
+            </p>
+          )}
+          <p class="hwc-visually-hidden" role="status">
+            {announcement}
+          </p>
+          {renderList({ ...props, onRevealWorkspace: revealWorkspace }, groups, feedback)}
         </div>
       </div>
     </>
@@ -135,11 +259,11 @@ export function PaneList(props: PaneListProps) {
 }
 
 // 並べ方の分岐はここ 1 か所。active の行はツリーと前提が違う。
-function renderList(props: PaneListProps, groups: readonly ActiveGroup[]) {
+function renderList(props: PaneListProps, groups: readonly ActiveGroup[], feedback: ListFeedback) {
   switch (props.scope) {
     case "active":
       return <ActivePaneList {...props} groups={groups} />;
     case "all":
-      return <TreePaneList {...props} />;
+      return <TreePaneList {...props} {...feedback} />;
   }
 }

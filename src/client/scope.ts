@@ -40,30 +40,22 @@ export function activePanes(state: AppState): readonly ActivePane[] {
   return rows;
 }
 
-// 束の中の順位。上から「自分が動く番 → 読む番 → 待つ番」。待機と不明を最後にまとめ、
-// 動いている行や未読の完了を押し下げない。
-const RANKS: Readonly<Record<AgentStatus, number>> = {
-  blocked: 0,
-  done: 1,
-  working: 2,
-  idle: 3,
-  unknown: 4,
-};
-
 export type ActiveGroup = {
   workspace: WorkspaceState;
-  // 並びは表示順。束の中は親ペインが先頭、残りは RANKS の昇順。同順位は state の並び。
+  // 並びは表示順。束の中は親ペインが先頭、残りは state の並び。
   rows: readonly PaneRow[];
   // 帯に出す件数。表示している行を状態で数える。待機と不明は 0 のまま。
   counts: Readonly<Record<ActiveStatus, number>>;
 };
 
-// アクティブの行をワークスペース単位で束ねる。同じワークツリーの行が状態順で散らばると、
+// アクティブの行をワークスペース単位で束ねる。同じワークツリーの行が散らばると、
 // どれが同じ場所かを目で追えないため。束の中は親ペイン（ADR 0054）を状態に関わらず
 // 先頭に固定する。王冠は状態ではなく役割の印で、位置が状態で動くと戻り先を探すコストと
-// 押し間違いにつながる。束の順は、親を含めた最も緊急な行の順位。同順位は state の並び。
+// 押し間違いにつながる。
+//
+// 並びは state の順で固定する。状態で入れ替えると、働き始め・終わり・既読のたびに
+// 行や束が指の下から動き、位置でペインを覚えられない。状態は行の記号と時刻、帯の件数で読む。
 export function activeGroups(state: AppState): readonly ActiveGroup[] {
-  const order = new Map(state.workspaces.map((workspace, index) => [workspace.id, index]));
   const buckets = new Map<string, { workspace: WorkspaceState; rows: PaneRow[] }>();
   for (const row of activePanes(state)) {
     const bucket = buckets.get(row.workspace.id);
@@ -74,27 +66,15 @@ export function activeGroups(state: AppState): readonly ActiveGroup[] {
     }
   }
 
-  return [...buckets.values()]
-    .map((bucket) => {
-      const parentId = parentPaneOf(bucket.workspace)?.id ?? null;
-      const rows = [...bucket.rows].sort(
-        (a, b) =>
-          Number(b.pane.id === parentId) - Number(a.pane.id === parentId) ||
-          RANKS[a.pane.agentStatus] - RANKS[b.pane.agentStatus],
-      );
-      // 先頭は親なので、束の順位は先頭行ではなく全行の最小値で決める。
-      const rank = Math.min(...rows.map((row) => RANKS[row.pane.agentStatus]));
-      return { workspace: bucket.workspace, rows, counts: countRows(rows), rank };
-    })
-    .sort(
-      (a, b) =>
-        a.rank - b.rank || (order.get(a.workspace.id) ?? 0) - (order.get(b.workspace.id) ?? 0),
-    )
-    .map((group) => ({
-      workspace: group.workspace,
-      rows: group.rows,
-      counts: group.counts,
-    }));
+  // bucket は state を先頭から走査して作るので、挿入順がそのままワークスペース順になる。
+  // 並べ替えは持たない。親を先頭にする分だけ、安定ソートで残りの state 順を保つ。
+  return [...buckets.values()].map((bucket) => {
+    const parentId = parentPaneOf(bucket.workspace)?.id ?? null;
+    const rows = [...bucket.rows].sort(
+      (a, b) => Number(b.pane.id === parentId) - Number(a.pane.id === parentId),
+    );
+    return { workspace: bucket.workspace, rows, counts: countRows(rows) };
+  });
 }
 
 function countRows(rows: readonly PaneRow[]): Record<ActiveStatus, number> {

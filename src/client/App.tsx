@@ -62,6 +62,7 @@ import {
   findPane,
   findPaneContext,
   findPaneRow,
+  groupWorkspaces,
   markedParentPaneIds,
   tabDisplayName,
   type PaneContext,
@@ -94,6 +95,7 @@ import {
   type SplitView,
 } from "./split-view";
 import { pendingReadAfter, shouldFocusOnLeave } from "./scope";
+import { moveToTopPlan, orderUnits } from "./order";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import { type LaunchIntent, type PaneLaunch, type PaneLaunchView, launchPhase } from "./starting";
 import { serverClockNow, workingMs } from "./time";
@@ -160,6 +162,9 @@ export function App() {
   // 同じ場所を何度も開けるよう、token で 1 回ずつ処理する。
   const [reveal, setReveal] = useState<{ workspaceId: string; token: number } | null>(null);
   const revealSeq = useRef(0);
+  // メニューの「先頭へ移動」。一覧がアニメーションを 1 度だけ起こせるよう、token で示す。
+  const [moveToTop, setMoveToTop] = useState<{ workspaceId: string; token: number } | null>(null);
+  const moveToTopSeq = useRef(0);
   const { scope, changeScope } = useListScope(() => setReveal(null));
   // メニューと確認はセルの外（App 直下）に 1 つだけ出す。セルは container-type を持ち、
   // 内側の fixed はセル基準になる。同時には 1 つだけ出し、Esc の購読を重ねない。
@@ -1196,6 +1201,21 @@ export function App() {
   const canCreateWorktree = menuWorktree?.managed === true && !menuWorktree.isLinkedWorktree;
   const menuCanCloseSpace =
     state !== null && menuWorkspace !== null && canCloseDuplicateSpace(state, menuWorkspace.id);
+  // 並びの正は Herdr。メニューはその移動を 1 タップで呼ぶだけで、hwc 側に順序は持たない。
+  // 既に先頭の束には項目を出さない。
+  const menuCanMoveToTop =
+    state !== null &&
+    menuWorkspace !== null &&
+    moveToTopPlan(
+      orderUnits(groupWorkspaces(state.workspaces), state.workspaces),
+      menuWorkspace.id,
+    ) !== null;
+  const moveWorkspaceToTop = () => {
+    if (menuWorkspace === null) return;
+    moveToTopSeq.current += 1;
+    setMoveToTop({ workspaceId: menuWorkspace.id, token: moveToTopSeq.current });
+    closeMenu();
+  };
 
   const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => {
     const launch = launches.get(item.id) ?? null;
@@ -1364,6 +1384,7 @@ export function App() {
     menuGitBusy,
     menuGitFailed,
     menuCanCloseSpace,
+    menuCanMoveToTop,
     canCreateWorktree,
     dismissMenu,
     closeMenu,
@@ -1374,6 +1395,7 @@ export function App() {
     openCreateWorktreeDialog,
     openRemoveWorktreeConfirm,
     openCloseSpaceConfirm,
+    moveWorkspaceToTop,
     runGitSync,
     closing,
     closingPane,
@@ -1429,6 +1451,8 @@ export function App() {
               onWorkspaceMenu={(workspaceId, trigger) =>
                 openWorkspaceMenu(workspaceId, trigger, true)
               }
+              moveToTop={moveToTop}
+              onMoveToTopHandled={() => setMoveToTop(null)}
               onMoveWorkspaces={(workspaceIds, beforeWorkspaceId) =>
                 moveWorkspaceBlock(workspaceIds, beforeWorkspaceId)
               }
