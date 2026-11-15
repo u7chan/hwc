@@ -1030,16 +1030,18 @@ p.hwc-compaction,
   flex-shrink: 0;
 }
 
-/* 返答待ちの 3 点。行の高さを保って、返答が来たときに跳ねないようにする。 */
+/* 返答待ちの 3 点。行の高さを保って、返答が来たときに跳ねないようにする。
+   単独の状態点（6×6）をそのまま 3 つ並べると、直径に対して間隔が広く、独立した
+   箇条書きの点に見える。直径を 1px 上げて間隔を 1px 詰め、ひとまとまりに見せる。 */
 .hwc-typing {
   display: inline-flex;
-  gap: 5px;
+  gap: var(--space-1);
   padding: var(--space-2) 0;
 }
 
 .hwc-typing span {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--color-secondary);
   animation: hwc-typing 1s ease-in-out infinite;
@@ -1053,11 +1055,13 @@ p.hwc-compaction,
   animation-delay: 300ms;
 }
 
+/* 待機中の点を 0.35 で止める。0.25 では暗い地で 2 点がほぼ消え、1 点だけが
+   光っているように見える。 */
 @keyframes hwc-typing {
   0%,
   60%,
   100% {
-    opacity: 0.25;
+    opacity: 0.35;
     transform: translateY(0);
   }
 
