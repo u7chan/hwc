@@ -87,6 +87,7 @@ const createEditApp = (
     markerTarget?: string;
     noMarker?: boolean;
     messages?: ChatMessage[];
+    snapshotMessages?: () => ChatMessage[];
   } = {},
 ) => {
   const sent: string[] = [];
@@ -95,7 +96,7 @@ const createEditApp = (
     chat: createFakeChat({
       snapshot: async () => ({
         ...emptyChat,
-        messages: options.messages ?? messages,
+        messages: options.snapshotMessages?.() ?? options.messages ?? messages,
         canRewind: options.canRewind ?? true,
       }),
     }),
@@ -171,6 +172,22 @@ test("the same request is idempotent and the text is not sent twice", async () =
   expect(sent).toEqual(["/hwc-rewind u2 req-1", "edited"]);
 });
 
+test("a replaced session does not reuse the old marker", async () => {
+  let current = messages;
+  const { app, sent, store } = createEditApp({ snapshotMessages: () => current });
+  await post(app, { messageId: "u2", requestId: "req-1", text: "edited" });
+
+  const otherPath = join(dir, "other.jsonl");
+  await writeFile(otherPath, `${header}\n`);
+  store.setChatSource("w1:p1", { agent: "pi", path: otherPath });
+  current = [];
+  const retry = await post(app, { messageId: "u2", requestId: "req-1", text: "again" });
+
+  expect(retry.status).toBe(409);
+  expect(await retry.json()).toEqual({ error: "not_editable" });
+  expect(sent).toEqual(["/hwc-rewind u2 req-1", "edited"]);
+});
+
 test("a restarted BFF finds the marker and text in the session tail", async () => {
   const first = createEditApp();
   await post(first.app, { messageId: "u2", requestId: "req-1", text: "edited" });
@@ -188,6 +205,20 @@ test("an existing marker skips the rewind command and only sends the text", asyn
 
   expect(response.status).toBe(200);
   expect(sent).toEqual(["edited"]);
+});
+
+test("the text limit applies when the requestId is already known", async () => {
+  await appendFile(sessionPath, `${markerLine("req-1")}\n`);
+  const { app, sent } = createEditApp();
+  const response = await post(app, {
+    messageId: "u2",
+    requestId: "req-1",
+    text: "x".repeat(20_000),
+  });
+
+  expect(response.status).toBe(413);
+  expect(await response.json()).toEqual({ error: "text_too_long" });
+  expect(sent).toEqual([]);
 });
 
 test("a marker without matching text sends the text and reports a failed send after rewinding", async () => {

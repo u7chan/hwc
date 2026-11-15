@@ -35,7 +35,7 @@ pi のセッションは `id` / `parentId` の木で、`ctx.navigateTree(targetI
 - 第 1 相: `panes.send({ paneId, text: "/hwc-rewind <entryId> <requestId>", submit: true })` を送る。mypi は対象の親へ戻り、`customType: "hwc-rewind"` のエントリ `{ v: 1, requestId, targetId, leafId }` を追記する。`leafId` は移動後の葉（対象の親、先頭なら null）で、marker の `parentId` と一致する
 - 第 2 相: marker を確認してから、編集後の本文を通常の `panes.send({ submit: true })` で送る。marker は chat reader と共有せず、独立したハンドルでコマンド送信前のファイルサイズから追記分だけを読む。100ms 間隔で最大 10 秒待つ。未完行は消費せず、次回に持ち越す。ファイルが縮んだり置き換わったりしたときは末尾 256KB を読み直し、それでも無ければ `edit_failed` にする
 - marker を既に知っているとき（同一プロセスの再送）は、`sentText` が今回の本文と一致すれば成功、一致しなければ本文だけを送る。プロセス再起動後の再送に備え、初回はセッション末尾 256KB も走査する。`sentText` は marker の後に現れた最初の user メッセージの本文
-- ペインごとに `Map<requestId, { marker, sentText }>` を持ち、末尾走査で見つけた marker も登録する。Map はペインごとに 64 件までとし、古い要求から落とす。marker はコマンド送信前のサイズから読むため、通常の chat 取得と offset を競合しない
+- ペインごとの `Map<requestId, { path, marker, sentText }>` を持ち、末尾走査で見つけた marker も登録する。requestId はセッション path と組で引き、`/new` 後の別セッションへ古い marker を流用しない。Map はペインごとに 64 件までとし、古い要求から落とす。marker はコマンド送信前のサイズから読むため、通常の chat 取得と offset を競合しない
 - 本文を送る直前にペインの状態を取り直し、`agentStatus === "working"` なら送らない。marker まで進んで本文を送れなかった場合は `502 { error: "send_failed", rewound: true }`、marker を確認できなければ `502 { error: "edit_failed" }`、対象外は `409 { error: "not_editable" }`、同時実行は `409 { error: "edit_in_flight" }`、フォルダ信頼確認中は `409 { error: "confirmation_pending" }` を返す
 
 ### 契約の正
@@ -52,7 +52,7 @@ pi のセッションは `id` / `parentId` の木で、`ctx.navigateTree(targetI
 - `send_failed` で `rewound: true` を受け取った後、編集を × でやめると、会話は戻した先（対象の親）に残る。編集前の枝はファイルにあるが、hwc の会話には戻らない。元の枝へ戻す操作は hwc には無い
 - `sentText` は marker の直後の user メッセージだけを見る。本文を送った後にセッションが 256KB 以上育つと、再起動後の再送で sentText を見つけられず、対象が active branch に無いため `not_editable` になることがある。requestId は編集ごとに作り直すので、通常の操作では起きにくい
 - marker の走査は requestId だけで照合する。同じ requestId を別の対象に再利用すると、別の枝の marker を拾う可能性がある。クライアントは編集を始めるたびに新しい requestId を作る
-- BFF の Map はペイン id ごとで、セッションの差し替え（`/new`）を跨ぐ。同じ requestId を新しいセッションで再利用すると、古い marker を成功と誤認する可能性がある。クライアントは編集状態をセッション差し替えで持ち越さない
+- BFF の Map はセッション path を含めて引く。`/new` でセッションが変わった後に同じ requestId を再利用しても、古い marker を新しいセッションの成功として扱わない。クライアントは編集状態を残すことがあるが、対象が新しいセッションに無ければ `not_editable` になる
 - marker は custom entry なので、LLM の文脈と会話表示には出ない。TUI の `/tree` には見える
 - コマンド文字列は ID の形を検証してから組み立てるため、改行や空白を注入できない。`requestId` はクライアントが作るが、BFF が形を検証する
 

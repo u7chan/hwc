@@ -1,6 +1,5 @@
 import type { ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
-import { REWIND_ID_PATTERN } from "../shared/rewind";
 import type { ChatRow } from "./chat";
 
 export type EditSession = {
@@ -14,10 +13,6 @@ export type EditSession = {
 // templates と同じく時刻と乱数から作る。
 export function newRequestId(now = Date.now(), random = Math.random()): string {
   return `r-${now.toString(36)}-${random.toString(36).slice(2, 10)}`;
-}
-
-export function isRequestId(value: string): boolean {
-  return REWIND_ID_PATTERN.test(value);
 }
 
 export type EditEligibility = {

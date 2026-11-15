@@ -9,7 +9,7 @@ import type { AppContext, IdContext } from "./context";
 const TAIL_SNIFF_BYTES = 256 * 1024;
 const MARKER_POLL_MS = 100;
 
-type Known = { marker: RewindMarker; sentText: string | null };
+type Known = { path: string; marker: RewindMarker; sentText: string | null };
 
 type Parsed = { ok: true; value: EditMessageBody } | { ok: false };
 
@@ -30,17 +30,20 @@ export function createEditMessageHandlers(ctx: AppContext) {
   // ペインごとの requestId。同じ再送で marker を二度探さず、本文送信済みも判定する。
   const known = new Map<string, Map<string, Known>>();
 
-  const knownFor = (paneId: string, requestId: string): Known | undefined =>
-    known.get(paneId)?.get(requestId);
+  const knownFor = (paneId: string, requestId: string, path: string): Known | undefined => {
+    const found = known.get(paneId)?.get(requestId);
+    return found?.path === path ? found : undefined;
+  };
 
   const remember = (
     paneId: string,
     requestId: string,
+    path: string,
     marker: RewindMarker,
     sentText: string | null,
   ) => {
     const byRequest = known.get(paneId) ?? new Map<string, Known>();
-    byRequest.set(requestId, { marker, sentText });
+    byRequest.set(requestId, { path, marker, sentText });
     // ペインを長く使っても Map が増え続けないように、古い要求から落とす。
     while (byRequest.size > 64) {
       const oldest = byRequest.keys().next().value;
@@ -84,6 +87,8 @@ export function createEditMessageHandlers(ctx: AppContext) {
 
       const source = store.chatSource(paneId);
       if (source === null || source.agent !== "pi") return c.json({ error: "no_chat" }, 404);
+      // 初回だけでなく、marker 既知の再送でも通常入力と同じ上限を守る。
+      if (exceedsTextLimit(text)) return c.json({ error: "text_too_long" }, 413);
 
       inFlight.add(paneId);
       try {
@@ -111,7 +116,7 @@ export function createEditMessageHandlers(ctx: AppContext) {
         const size = beforeFile?.size ?? 0;
 
         // 同じ requestId の再送。BFF の Map を先に引き、無ければセッション末尾を見る。
-        let existing = knownFor(paneId, requestId);
+        let existing = knownFor(paneId, requestId, source.path);
         if (existing === undefined) {
           try {
             const scanned = await readRewindMarker(
@@ -121,8 +126,8 @@ export function createEditMessageHandlers(ctx: AppContext) {
               inode,
             );
             if (scanned.marker !== null) {
-              remember(paneId, requestId, scanned.marker, scanned.sentText);
-              existing = knownFor(paneId, requestId);
+              remember(paneId, requestId, source.path, scanned.marker, scanned.sentText);
+              existing = knownFor(paneId, requestId, source.path);
             }
           } catch {
             // reader の失敗は、これから送るコマンドの待ちで改めて見る。
@@ -150,8 +155,6 @@ export function createEditMessageHandlers(ctx: AppContext) {
         ) {
           return c.json({ error: "not_editable" }, 409);
         }
-        if (exceedsTextLimit(text)) return c.json({ error: "text_too_long" }, 413);
-
         try {
           await panes.send({
             paneId,
@@ -172,7 +175,7 @@ export function createEditMessageHandlers(ctx: AppContext) {
             offset = read.offset;
             inode = read.inode;
             marker = read.marker;
-            if (marker !== null) remember(paneId, requestId, marker, read.sentText);
+            if (marker !== null) remember(paneId, requestId, source.path, marker, read.sentText);
           } catch {
             // 読み取りの一時失敗は期限まで再試行する。
           }
@@ -181,7 +184,7 @@ export function createEditMessageHandlers(ctx: AppContext) {
         if (marker === null) return c.json({ error: "edit_failed" }, 502);
         if (marker.targetId !== messageId) return c.json({ error: "edit_failed" }, 502);
 
-        const currentKnown = knownFor(paneId, requestId);
+        const currentKnown = knownFor(paneId, requestId, source.path);
         if (currentKnown?.sentText?.trim() === text.trim()) return c.json({ ok: true });
         if (!(await sendText(paneId, text, source.path))) {
           return c.json({ error: "send_failed", rewound: true }, 502);
