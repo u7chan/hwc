@@ -47,5 +47,5 @@ test("rows are split into the settings you change and the app state you read", (
 
 test("the screen title uses the row label", () => {
   expect(settingsCategoryLabel("templates")).toBe("定型文");
-  expect(settingsCategoryLabel("build")).toBe("このビルド");
+  expect(settingsCategoryLabel("build")).toBe("バージョン");
 });

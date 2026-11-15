@@ -22,7 +22,7 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   { id: "notifications", label: "通知", group: "settings" },
   { id: "restart", label: "再起動", group: "settings" },
   { id: "connection", label: "接続", group: "app" },
-  { id: "build", label: "このビルド", group: "app" },
+  { id: "build", label: "バージョン", group: "app" },
 ];
 
 export function settingsCategoryLabel(id: SettingsCategoryId): string {
