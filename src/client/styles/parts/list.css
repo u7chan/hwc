@@ -642,7 +642,10 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 
 /* セル見出しのスペース名。複数スペースのペインが並ぶときだけ出す。 */
 .hwc-pane-head-space {
-  flex: none;
+  /* 分割セルが狭いときは、ペイン名が 0 になってもここが残る。省略できるように
+     縮む側へ倒し、見出しの右端（メニュー）をセルの外へ押し出さない。 */
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 10em;
   overflow: hidden;
   color: var(--color-secondary);
