@@ -7,6 +7,7 @@ import {
   isOrderChange,
   moveToTopPlan,
   orderUnits,
+  unitIndex,
   type OrderUnit,
 } from "./order";
 import { groupWorkspaces } from "./select";
@@ -155,4 +156,13 @@ test("moveToTopPlan has nothing to do at the top or for an unknown workspace", (
   expect(moveToTopPlan(units, "w1")).toBeNull();
   expect(moveToTopPlan(units, "missing")).toBeNull();
   expect(moveToTopPlan([], "w1")).toBeNull();
+});
+
+test("unitIndex tells whether the pending move already landed", () => {
+  const units = unitsOf([workspace("w1"), workspace("w2"), workspace("w3")]);
+
+  // 0 は先頭、正の値はまだ下、null は消えたワークスペース。
+  expect(unitIndex(units, "w1")).toBe(0);
+  expect(unitIndex(units, "w3")).toBe(2);
+  expect(unitIndex(units, "missing")).toBeNull();
 });

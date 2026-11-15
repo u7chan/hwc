@@ -40,18 +40,22 @@ export function dropAnchor(rects: readonly UnitRect[], y: number): string | null
   return null;
 }
 
+// そのワークスペースが属する束の位置。0 が先頭、null は見つからない。
+export function unitIndex(units: readonly OrderUnit[], workspaceId: string): number | null {
+  const index = units.findIndex((unit) => unit.ids.includes(workspaceId));
+  return index < 0 ? null : index;
+}
+
 // メニューの「先頭へ移動」。動かす単位はドラッグと同じリポジトリ束で、落とし先は
 // 先頭ブロックの先頭 id の前。既に先頭なら送らない。
 export function moveToTopPlan(
   units: readonly OrderUnit[],
   workspaceId: string,
 ): { ids: readonly string[]; beforeWorkspaceId: string } | null {
-  const unit = units.find((item) => item.ids.includes(workspaceId));
-  const first = units[0];
-  const anchor = first?.ids[0];
-  if (unit === undefined || first === undefined || anchor === undefined) return null;
-  if (unit.key === first.key) return null;
-  return { ids: unit.ids, beforeWorkspaceId: anchor };
+  const index = unitIndex(units, workspaceId);
+  const anchor = units[0]?.ids[0];
+  if (index === null || index === 0 || anchor === undefined) return null;
+  return { ids: units[index].ids, beforeWorkspaceId: anchor };
 }
 
 export function dropBeforeId(units: readonly OrderUnit[], beforeKey: string | null): string | null {

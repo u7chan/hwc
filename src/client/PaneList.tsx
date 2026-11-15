@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { ActivePaneList, NoPanes, spaceId } from "./list/active";
 import type { ListFeedback } from "./list/types";
-import { moveToTopPlan, orderUnits } from "./order";
+import { moveToTopPlan, orderUnits, unitIndex } from "./order";
 import { ScopeBar } from "./list/scope";
 import { TreePaneList } from "./list/tree";
 import type { PaneListProps } from "./list/types";
@@ -101,6 +101,20 @@ export function PaneList(props: PaneListProps) {
   useLayoutEffect(() => {
     const pending = pendingMove.current;
     if (pending === null || pending.order === orderKey) return;
+
+    const units = orderUnits(groupWorkspaces(props.state.workspaces), props.state.workspaces);
+    const index = unitIndex(units, pending.workspaceId);
+    // 移動した束が消えたら、もう動かせない。保留を捨てる。
+    if (index === null) {
+      pendingMove.current = null;
+      return;
+    }
+    // まだ先頭でないなら、作成・削除など別の変化で順序が変わっただけ。ここで保留を
+    // 消すと、同じ移動の結果が届いたときに FLIP が出ない。位置を控え直して待つ。
+    if (index > 0) {
+      pendingMove.current = { ...pending, order: orderKey, offsets: readOffsets() };
+      return;
+    }
     pendingMove.current = null;
     const node = scroll.current;
     const bodyNode = body.current;
