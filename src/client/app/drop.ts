@@ -1,4 +1,4 @@
-import { canDrop, canSwapTabs, type DropZone, type SplitView } from "../split-view";
+import { canDrop, tabDropMode, type DropZone, type SplitView } from "../split-view";
 import type { DropTarget } from "./types";
 
 // ポインタがセルのどこにあるか。親の分割軸と直交する向きだけを返す。
@@ -36,11 +36,29 @@ export function dropTargetAt(
     const zone = dropZoneAt(cell, x, y);
     return canDrop(view, source, pane, zone, wide) ? { kind: "cell", pane, zone } : null;
   }
-  // 固定ゾーンのタブはセルの中央と同じ入れ替えを受け付ける（ADR 0064）。
-  // プレビュー中は TabBar が data-drop-tab を出さないので、ここへは来ない。
+  // タブは、分割では固定ゾーンの入れ替え、1 枚表示では差し込みを受け付ける
+  // （ADR 0064 / 0086）。プレビュー中は TabBar が data-drop-tab を出さないので、
+  // ここへは来ない。
   const tab = element?.closest("[data-drop-tab]");
-  if (!(tab instanceof HTMLElement)) return null;
-  const pane = tab.dataset.dropTab;
-  if (pane === undefined) return null;
-  return canSwapTabs(view, source, pane, wide) ? { kind: "tab", pane, zone: "center" } : null;
+  if (tab instanceof HTMLElement) {
+    const pane = tab.dataset.dropTab;
+    if (pane === undefined || tabDropMode(view, source, pane, wide) === null) return null;
+    const rect = tab.getBoundingClientRect();
+    return { kind: "tab", pane, side: x < rect.left + rect.width / 2 ? "before" : "after" };
+  }
+  // タブの隙間と列の余白も差し込みの落とし先にする。1 枚表示でだけ意味がある。
+  // 分割では入れ替えなので、タブの外は受け付けない。プレビュー中は TabBar が
+  // data-drop-tab を外すので、ここで候補が空になり、禁止を迂回しない。
+  const list = element?.closest("[data-tab-list]");
+  if (!(list instanceof HTMLElement)) return null;
+  const tabs = [...list.querySelectorAll<HTMLElement>("[data-drop-tab]")];
+  // 左端がポインタより右にある最初のタブ。その前に入れる。余白と右端は末尾の後ろ。
+  const before = tabs.find((tab) => {
+    const rect = tab.getBoundingClientRect();
+    return x < rect.left + rect.width / 2;
+  });
+  const target = before ?? tabs[tabs.length - 1];
+  const pane = target?.dataset.tabPane;
+  if (pane === undefined || tabDropMode(view, source, pane, wide) !== "insert") return null;
+  return { kind: "tab", pane, side: before === undefined ? "after" : "before" };
 }

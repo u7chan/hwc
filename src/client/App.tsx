@@ -79,6 +79,7 @@ import {
   clearCurrent,
   dropOnPane,
   leafPanes,
+  moveTab,
   multiSpace,
   nextTabPane,
   openPane,
@@ -86,6 +87,7 @@ import {
   removeTab,
   startsPaneDrag,
   syncSplitView,
+  tabDropMode,
   tabPanes,
   type DropZone,
   type SplitNode,
@@ -146,8 +148,11 @@ export function App() {
   // SSE の購読は 1 度しか張らないので、タブを外したあとの反映に使う一覧の
   // 開閉状態も ref から読む。
   const expandedRef = useRef<ReadonlySet<string>>(NO_GROUPS);
-  // ドロップの前後で位置を比べるための控え（ADR 0061）。
+  // ドロップの前後で位置を比べるための控え（ADR 0061）。タブはタブ列の
+  // スクロールを含めた位置で持ち、選択タブへの自動スクロールと競合させない
+  // （ADR 0086）。
   const flipRects = useRef<Map<string, DOMRect> | null>(null);
+  const flipTabRects = useRef<Map<string, { left: number; top: number }> | null>(null);
   // ドラッグ後の pointerup で click が成立しても、タブの選択を動かさない。
   const draggedSincePress = useRef(false);
   const { openGroups, rememberOpen } = useOpenGroups();
@@ -350,9 +355,32 @@ export function App() {
   // フェードで入れる。初回表示とウィンドウのリサイズでは動かさない（ADR 0061）。
   useLayoutEffect(() => {
     const before = flipRects.current;
+    const beforeTabs = flipTabRects.current;
     flipRects.current = null;
-    if (before === null || before.size === 0) return;
+    flipTabRects.current = null;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const tabList = document.querySelector<HTMLElement>("[data-tab-list]");
+    if (tabList !== null && beforeTabs !== null && beforeTabs.size > 0) {
+      // タブはタブ列のスクロールを含めた位置で比べる。選択タブへの自動スクロールが
+      // 同じフレームで動いても、滑る距離が変わらない。
+      const listRect = tabList.getBoundingClientRect();
+      for (const item of tabList.querySelectorAll<HTMLElement>("[data-tab-pane]")) {
+        // 外すアニメーション中のタブは幅を動かしている。同じ要素を動かさない。
+        if (item.dataset.leaving === "true") continue;
+        const pane = item.dataset.tabPane;
+        const previous = pane === undefined ? undefined : beforeTabs.get(pane);
+        if (previous === undefined) continue;
+        const rect = item.getBoundingClientRect();
+        const dx = previous.left - (rect.left - listRect.left + tabList.scrollLeft);
+        const dy = previous.top - (rect.top - listRect.top);
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+        item.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
+          duration: 200,
+          easing: "cubic-bezier(.2, 0, 0, 1)",
+        });
+      }
+    }
+    if (before === null || before.size === 0) return;
     for (const cell of document.querySelectorAll<HTMLElement>("[data-drop-pane]")) {
       const paneId = cell.dataset.dropPane;
       if (paneId === undefined) continue;
@@ -713,6 +741,8 @@ export function App() {
     }
     leavingTabRef.current = null;
     setLeavingTab(null);
+    // 縮み終わってからタブ順が変わる。残ったタブをその位置から滑らせる。
+    captureFlip();
     setView({
       split: removeTab(splitRef.current, target.paneId, target.successor, wide),
       expanded: expandedRef.current,
@@ -996,8 +1026,20 @@ export function App() {
           paneTabName(draggedRow.pane, processes.get(draggedRow.pane.id) ?? null),
           draggedRow.workspace,
         );
+  // タブの落とし先。分割では枠、1 枚表示では差し込みの線で示す（ADR 0064 / 0086）。
+  const tabDrop =
+    dragging?.target?.kind === "tab"
+      ? {
+          pane: dragging.target.pane,
+          side:
+            tabDropMode(split, dragging.paneId, dragging.target.pane, wide) === "insert"
+              ? dragging.target.side
+              : null,
+        }
+      : null;
 
-  // ドラッグの適用先。タブとセルの両方から掴むので、最新の状態を持つ関数を ref に置く。
+  // 変更の直前にセルとタブの位置を控える。セルは画面座標、タブは列のスクロールを
+  // 含めた位置で比べる（ADR 0061 / 0086）。
   const captureFlip = () => {
     const rects = new Map<string, DOMRect>();
     for (const cell of document.querySelectorAll<HTMLElement>("[data-drop-pane]")) {
@@ -1005,13 +1047,40 @@ export function App() {
       if (paneId !== undefined) rects.set(paneId, cell.getBoundingClientRect());
     }
     flipRects.current = rects;
+    const tabRects = new Map<string, { left: number; top: number }>();
+    const tabList = document.querySelector<HTMLElement>("[data-tab-list]");
+    if (tabList !== null) {
+      const listRect = tabList.getBoundingClientRect();
+      for (const item of tabList.querySelectorAll<HTMLElement>("[data-tab-pane]")) {
+        const paneId = item.dataset.tabPane;
+        if (paneId === undefined) continue;
+        const rect = item.getBoundingClientRect();
+        tabRects.set(paneId, {
+          left: rect.left - listRect.left + tabList.scrollLeft,
+          top: rect.top - listRect.top,
+        });
+      }
+    }
+    flipTabRects.current = tabRects;
   };
 
+  // ドラッグの適用先。タブとセルの両方から掴むので、最新の状態を持つ関数を ref に置く。
   // 落としたときの選択はレイアウト操作。一覧の行を開いたわけではないので、既読の
   // 保留は作らない（タブからのドラッグと同じ。ADR 0017 / 0061）。
   const applyDrop = (paneId: string, target: DropTarget) => {
     // ドラッグは広い画面だけで始まる。途中で幅が変わっても開始時の分割として扱う。
-    const next = dropOnPane(split, paneId, target.pane, target.zone, true);
+    const mode = target.kind === "tab" ? tabDropMode(split, paneId, target.pane, true) : null;
+    if (target.kind === "tab" && mode === null) return;
+    const next =
+      target.kind === "tab" && mode === "insert"
+        ? moveTab(split, paneId, target.pane, target.side)
+        : dropOnPane(
+            split,
+            paneId,
+            target.pane,
+            target.kind === "tab" ? "center" : target.zone,
+            true,
+          );
     if (next === split) return;
     captureFlip();
     setView({ split: next, expanded });
@@ -1463,7 +1532,8 @@ export function App() {
                 onClosePreview={closePreview}
                 onBack={back}
                 onDragStart={startPaneDrag}
-                dropTargetPaneId={dragging?.target?.kind === "tab" ? dragging.target.pane : null}
+                canReorder={wide && layoutPanes.length <= 1}
+                tabDrop={tabDrop}
               />
               <div class="hwc-detail-body" data-leaving={detailLeaving ? "true" : undefined}>
                 {previewing && preview !== null ? (

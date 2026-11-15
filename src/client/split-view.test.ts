@@ -3,10 +3,10 @@ import {
   EMPTY_SPLIT_VIEW,
   MAX_LEAVES,
   canDrop,
-  canSwapTabs,
   clearCurrent,
   dropOnPane,
   leafPanes,
+  moveTab,
   multiSpace,
   nextTabPane,
   normalizeSplitView,
@@ -18,6 +18,7 @@ import {
   startSplitView,
   startsPaneDrag,
   syncSplitView,
+  tabDropMode,
   tabPanes,
   type SplitNode,
   type SplitView,
@@ -316,18 +317,38 @@ test("a split along the parent axis is rejected", () => {
   expect(dropOnPane(shown, "w1:p1", "w1:p2", "right")).toBe(shown);
 });
 
-test("swapping tabs only accepts two panes in the fixed zone", () => {
+test("a tab drop swaps fixed tabs and inserts in one pane", () => {
   const shown = view(["w1:p1", "w1:p2", "w1:p9"], "w1:p1", row(leaf("w1:p1"), leaf("w1:p2")));
-  expect(canSwapTabs(shown, "w1:p1", "w1:p2", true)).toBe(true);
+  expect(tabDropMode(shown, "w1:p1", "w1:p2", true)).toBe("swap");
   // 木の外のタブは、固定タブとしても、掴む側としても受け付けない。
-  expect(canSwapTabs(shown, "w1:p1", "w1:p9", true)).toBe(false);
-  expect(canSwapTabs(shown, "w1:p9", "w1:p2", true)).toBe(false);
+  expect(tabDropMode(shown, "w1:p1", "w1:p9", true)).toBe(null);
+  expect(tabDropMode(shown, "w1:p9", "w1:p2", true)).toBe(null);
   // 自身と、広くない画面も対象にしない。
-  expect(canSwapTabs(shown, "w1:p1", "w1:p1", true)).toBe(false);
-  expect(canSwapTabs(shown, "w1:p1", "w1:p2", false)).toBe(false);
-  // 1 枚表示でも wide なら data-slot は付くが、固定ゾーンのタブは 1 枚なので落ちる。
-  const single = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
-  expect(canSwapTabs(single, "w1:p1", "w1:p1", true)).toBe(false);
+  expect(tabDropMode(shown, "w1:p1", "w1:p1", true)).toBe(null);
+  expect(tabDropMode(shown, "w1:p1", "w1:p2", false)).toBe(null);
+  // 1 枚表示では、開いているすべてのタブを差し込みの対象にする。
+  const single = view(["w1:p1", "w1:p2"], "w1:p1", leaf("w1:p1"));
+  expect(tabDropMode(single, "w1:p1", "w1:p2", true)).toBe("insert");
+  expect(tabDropMode(single, "w1:p2", "w1:p1", true)).toBe("insert");
+  // 開いていないペインはタブに差し込めない。一覧から開く経路と混ざる。
+  expect(tabDropMode(single, "w1:p9", "w1:p1", true)).toBe(null);
+});
+
+test("moving a tab inserts it before or after the target", () => {
+  const shown = view(["a", "b", "c"], "a", leaf("a"));
+  expect(moveTab(shown, "a", "c", "after").openTabs).toEqual(["b", "c", "a"]);
+  expect(moveTab(shown, "c", "a", "before").openTabs).toEqual(["c", "a", "b"]);
+  expect(moveTab(shown, "a", "b", "after").openTabs).toEqual(["b", "a", "c"]);
+  // 選択・木・MRU は動かさない。recent は選択履歴で、並びの正ではない。
+  const moved = moveTab(shown, "a", "c", "after");
+  expect(moved.current).toBe("a");
+  expect(moved.layout).toEqual(leaf("a"));
+  expect(moved.recent).toEqual(["a", "b", "c"]);
+  // 並びが変わらないときは同じ値を返し、保存と再描画を起こさない。
+  expect(moveTab(shown, "a", "b", "before")).toBe(shown);
+  expect(moveTab(shown, "a", "a", "after")).toBe(shown);
+  expect(moveTab(shown, "a", "z", "after")).toBe(shown);
+  expect(moveTab(shown, "z", "a", "after")).toBe(shown);
 });
 
 test("the layout stops at four panes", () => {

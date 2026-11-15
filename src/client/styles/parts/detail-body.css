@@ -81,6 +81,26 @@
   box-shadow: inset 0 0 0 1px var(--slot-color);
 }
 
+/* 1 枚表示の並べ替えは、掴んだタブの差し込み位置を縦線で示す（ADR 0086）。
+   スロット色のバーより後に描くため、::before ではなく ::after に置く。 */
+.hwc-tab-item[data-insert]::after {
+  content: "";
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-text);
+}
+
+.hwc-tab-item[data-insert="before"]::after {
+  left: 0;
+}
+
+.hwc-tab-item[data-insert="after"]::after {
+  right: 0;
+}
+
 .hwc-tab-close {
   flex: none;
   display: grid;

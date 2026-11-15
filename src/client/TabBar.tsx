@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneProcess } from "../shared/panes";
+import type { TabSide } from "./split-view";
 import { ChevronLeftIcon, CloseIcon, EyeIcon } from "./icons";
 import { ParentMark } from "./ParentMark";
 import { paneTabName } from "./process";
@@ -32,8 +33,11 @@ type TabBarProps = {
   onBack: () => void;
   // タブからのドラッグ。移動量で開始を判定するので、押した時点で位置だけ渡す。
   onDragStart: (event: PointerEvent, paneId: string) => void;
-  // ドラッグ中の落とし先が固定ゾーンのタブのとき、そのペイン。枠を出すためだけに使う。
-  dropTargetPaneId: string | null;
+  // 1 枚表示のとき、すべてのタブを並べ替えの落とし先にする（ADR 0086）。
+  canReorder: boolean;
+  // ドラッグ中の落とし先がタブのとき、そのペインと差し込み位置。side が null なら
+  // 分割の入れ替えなので、枠を出す（ADR 0064）。
+  tabDrop: { pane: string; side: TabSide | null } | null;
 };
 
 // 中クリックはブラウザのタブと同じく、その画面から外す操作にする。
@@ -49,8 +53,12 @@ const removeOnAuxClick =
 export function TabBar(props: TabBarProps) {
   const tabList = useRef<HTMLDivElement>(null);
 
-  // 選択中のタブが隠れていたら見える位置まで送る。プレビューを選んだときも送る。
+  // 選択中のタブが隠れていたら見える位置まで送る。プレビューを選んだときも、
+  // 並べ替えて選択タブが画面外へ出たときも送る（ADR 0086）。並べ替えられるのは
+  // PC の 1 枚表示だけなので、それ以外ではタブ順を依存に加えない。モバイルで
+  // 未選択のタブを外しただけでスクロール位置を失わないため。
   const previewing = props.preview?.selected === true;
+  const tabOrder = props.canReorder ? props.tabs.map((item) => item.pane.id).join(" ") : "";
   useLayoutEffect(() => {
     const list = tabList.current;
     const selected = list?.querySelector<HTMLElement>('[data-selected="true"]');
@@ -63,7 +71,7 @@ export function TabBar(props: TabBarProps) {
     else if (right > list.scrollLeft + list.clientWidth) {
       list.scrollLeft = right - list.clientWidth + 8;
     }
-  }, [props.currentPaneId, previewing]);
+  }, [props.currentPaneId, previewing, tabOrder]);
 
   // 外すタブは幅を詰めながら淡く消す。state への反映は App が完了後に 1 回だけ行う。
   const leaveFinished = useRef(props.onLeaveFinished);
@@ -115,7 +123,13 @@ export function TabBar(props: TabBarProps) {
       >
         <ChevronLeftIcon />
       </button>
-      <div class="hwc-tabs" role="tablist" aria-label="開いているペイン" ref={tabList}>
+      <div
+        class="hwc-tabs"
+        role="tablist"
+        aria-label="開いているペイン"
+        data-tab-list="true"
+        ref={tabList}
+      >
         {props.tabs.map((item) => {
           const selected = !previewing && item.pane.id === props.currentPaneId;
           const leaving = item.pane.id === props.leavingPaneId;
@@ -132,19 +146,21 @@ export function TabBar(props: TabBarProps) {
           const space = `${item.workspace.label} · ${item.tab.label || item.tab.id}`;
           const description = `${space}、${item.pane.id}、${statusLabel(item.pane.agentStatus)}`;
           const slot = props.slots.indexOf(item.pane.id);
-          // 固定ゾーンのタブはドロップの落とし先になる（ADR 0064）。プレビュー中は
-          // グリッドが見えないので、レイアウトを変える落とし先にしない（ADR 0058）。
-          const droppable = slot >= 0 && !previewing;
+          // 分割では固定ゾーンのタブ、1 枚表示ではすべてのタブが落とし先になる
+          // （ADR 0064 / 0086）。プレビュー中はグリッドが見えないので、レイアウトを
+          // 変える落とし先にしない（ADR 0058）。
+          const droppable = !previewing && (slot >= 0 || props.canReorder);
+          const drop = droppable && props.tabDrop?.pane === item.pane.id ? props.tabDrop : null;
           return (
             <div
               class="hwc-tab-item"
               key={item.pane.id}
+              data-tab-pane={item.pane.id}
               data-selected={selected}
               data-slot={slot >= 0 ? slot + 1 : undefined}
               data-drop-tab={droppable ? item.pane.id : undefined}
-              data-drop-target={
-                droppable && props.dropTargetPaneId === item.pane.id ? "true" : undefined
-              }
+              data-drop-target={drop !== null && drop.side === null ? "true" : undefined}
+              data-insert={drop?.side ?? undefined}
               data-leaving={leaving ? "true" : undefined}
               inert={leaving}
             >

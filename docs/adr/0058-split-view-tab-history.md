@@ -9,6 +9,7 @@
 - Revises: 2026-11-11 にレイアウトを方向つきの二分木へ変え、常設の追加帯と空きスロットを廃止した（[ADR 0061](0061-split-view-directional-tree.md)）
 - Revises: 2026-11-11 にタブ順をセルの読み順と MRU に変更した（[ADR 0063](0063-tab-order-by-pane-layout.md)）
 - Revises: 2026-11-11 に固定ゾーンのタブをドロップの落とし先にした（[ADR 0064](0064-tab-strip-swap.md)）
+- Revises: 2026-11-15 に 1 枚表示のタブをドラッグで並べ替えられるようにした（[ADR 0086](0086-tab-reorder-single-pane.md)）
 - Revises: 2026-11-11 に一覧のスロット色を、現在行からグリッドに出ているすべての行へ広げた（[ADR 0061](0061-split-view-directional-tree.md)）
 
 ## Context

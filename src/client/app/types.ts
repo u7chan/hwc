@@ -1,7 +1,7 @@
 import type { ChatFile } from "../../server/chat/contract";
 import type { PaneCloseAction } from "../../shared/pane-close";
 import type { GitSyncFailure } from "../api";
-import type { DropZone, SplitView } from "../split-view";
+import type { DropZone, SplitView, TabSide } from "../split-view";
 
 export type View = { split: SplitView; expanded: ReadonlySet<string> };
 
@@ -26,8 +26,11 @@ export type OperationMenu = {
 };
 
 // ドラッグの落とし先。中央は入れ替え、端はその方向への分割（ADR 0061）。
-// kind は落とし先がセルか固定ゾーンのタブか。枠を出す側を分けるために持つ（ADR 0064）。
-export type DropTarget = { kind: "cell" | "tab"; pane: string; zone: DropZone };
+// kind は落とし先がセルかタブか。枠を出す側を分けるために持つ（ADR 0064）。
+// タブの side は差し込み位置。2 枚以上の分割では入れ替えなので使わない（ADR 0086）。
+export type DropTarget =
+  | { kind: "cell"; pane: string; zone: DropZone }
+  | { kind: "tab"; pane: string; side: TabSide };
 
 // メニューを閉じても続く操作。busy はメニューの外に置き、開き直しても実行中を出す。
 export type GitAction =

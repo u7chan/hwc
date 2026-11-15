@@ -11,9 +11,17 @@ export type SplitNode =
 
 export type DropZone = "center" | "top" | "bottom" | "left" | "right";
 
+// タブへの差し込み位置。対象タブの左半分なら前、右半分なら後ろ（ADR 0086）。
+export type TabSide = "before" | "after";
+
+// タブへのドロップの意味。2 枚以上の分割では固定ゾーンの入れ替え、
+// 1 枚表示ではタブの並べ替え（ADR 0064 / 0086）。
+export type TabDropMode = "swap" | "insert";
+
 export type SplitView = {
-  // 開いた順。全スペースを跨ぎ、一意で、実在するペインだけ。
-  // モバイルと 1 枚表示のタブ順に使う（ADR 0063 tab-order-by-pane-layout）。
+  // タブの並び。全スペースを跨ぎ、一意で、実在するペインだけ。新しいタブは末尾に
+  // 足す。モバイルと 1 枚表示のタブ順に使い、1 枚表示では手で並べ替えられる
+  // （ADR 0063 tab-order-by-pane-layout / 0086 tab-reorder-single-pane）。
   openTabs: readonly string[];
   // 最後に選んだ順。openTabs と同じ集合の並べ替えで、先頭が current。
   // PC の 2 枚以上の分割で、固定ゾーンの外に出たタブの順に使う
@@ -97,8 +105,8 @@ export function readingOrder(node: SplitNode | null): string[] {
 }
 
 // タブバーの表示順。PC の 2 枚以上の分割だけ、固定ゾーンをセルの読み順にし、
-// 残りを recent の新しい順に置く。モバイルと 1 枚表示は開いた順のまま
-// （ADR 0063 tab-order-by-pane-layout）。
+// 残りを recent の新しい順に置く。モバイルと 1 枚表示は openTabs の並びのまま
+// （ADR 0063 tab-order-by-pane-layout / 0086 tab-reorder-single-pane）。
 export function tabPanes(view: SplitView, wide: boolean): string[] {
   const fixed = readingOrder(view.layout);
   if (!wide || fixed.length < 2) return [...view.openTabs];
@@ -309,21 +317,40 @@ export function canDrop(
   return parentDirOf(base, target) !== zoneDir(zone);
 }
 
-// 固定ゾーンのタブへ落とせるか。意味はセルの中央へ落とすのと同じ入れ替えで、
-// 起点がタブ・セル見出し・一覧の行のどれでも結果を変えない（ADR 0064）。
-// 固定ゾーンの外のタブは落とせない。並びを手で変えると recent の意味が壊れる。
+// タブへ落としたときの意味。2 枚以上の分割では固定ゾーンの中だけで入れ替え、
+// 1 枚表示では開いているタブを自由に差し替える（ADR 0064 / 0086）。
+// 分割で固定ゾーンの外のタブを手で並べ替えることはできない。並びを変えると
+// recent の意味が壊れる。1 枚表示ではセルが動かないので、挿入で並べ替えてよい。
 // 固定ゾーンは wide かつ葉が 2 枚以上のときだけ出る（tabPanes）。
 // 1 枚表示でも data-slot は付くので、葉の数でも対象を絞る。
-export function canSwapTabs(
+export function tabDropMode(
   view: SplitView,
   source: string,
   target: string,
   wide: boolean,
-): boolean {
-  if (!wide || source === target) return false;
+): TabDropMode | null {
+  if (!wide || source === target) return null;
+  if (!view.openTabs.includes(source) || !view.openTabs.includes(target)) return null;
   const fixed = readingOrder(view.layout);
-  if (fixed.length < 2) return false;
-  return fixed.includes(source) && fixed.includes(target);
+  if (fixed.length < 2) return "insert";
+  return fixed.includes(source) && fixed.includes(target) ? "swap" : null;
+}
+
+// 1 枚表示のタブを差し替える。掴んだタブを外した列の、対象の前か後ろへ入れる。
+// recent は選択履歴なので触らない。並びが変わらないときは同じ値を返す。
+export function moveTab(view: SplitView, source: string, target: string, side: TabSide): SplitView {
+  if (source === target) return view;
+  if (!view.openTabs.includes(source) || !view.openTabs.includes(target)) return view;
+  const rest = view.openTabs.filter((id) => id !== source);
+  const at = rest.indexOf(target);
+  if (at < 0) return view;
+  const openTabs = [
+    ...rest.slice(0, side === "before" ? at : at + 1),
+    source,
+    ...rest.slice(side === "before" ? at : at + 1),
+  ];
+  if (openTabs.every((id, index) => id === view.openTabs[index])) return view;
+  return { openTabs, recent: view.recent, current: view.current, layout: view.layout };
 }
 
 // ドロップを適用する。中央は入れ替え（木の外のタブなら置換）、端は分割。

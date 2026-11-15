@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-11
 - Revises: [ADR 0058](0058-split-view-tab-history.md) のドラッグの落とし先、[ADR 0061](0061-split-view-directional-tree.md) の状態遷移表とプレビュー、[ADR 0063](0063-tab-order-by-pane-layout.md) のタブ順の変え方
+- Revises: 2026-11-15 に 1 枚表示のタブを差し込みで並べ替え、タブの移動を滑らせるようにした（[ADR 0086](0086-tab-reorder-single-pane.md)）
 
 ## Context
 
