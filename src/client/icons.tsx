@@ -249,6 +249,16 @@ export function CopyGlyph({ copied, size = 16 }: IconProps & { copied: boolean }
 }
 
 // 補足を開く印。開閉のシェブロンと違い、i を囲む丸で「説明がある」ことを示す。
+// 発言を書き直す。鉛筆は線の太さを他と揃え、本文の下の小さな操作に収める。
+export function PencilIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M4 20l4.6-1 9.8-9.8a2.1 2.1 0 0 0-3-3L5.6 16 4 20z" />
+      <path d="M13.7 6.3l3 3" />
+    </Svg>
+  );
+}
+
 export function InfoIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>

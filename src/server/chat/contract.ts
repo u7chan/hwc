@@ -88,6 +88,8 @@ export type ChatSnapshot = {
   context: ChatContext | null;
   usage?: ChatUsage;
   compaction: ChatCompaction | null;
+  // pi 拡張が hwc-capabilities を残したペインだけ true。他のエージェントは未設定。
+  canRewind?: boolean;
 };
 
 // BFF がペイン id から解決した会話の読み取り口。セッション id や path はクライアントへ渡さない。

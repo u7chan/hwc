@@ -21,6 +21,7 @@ GUI で意味のあるのは、ピッカーを開かず、即時実行される�
 
 ## Decision
 
+- Web からのメッセージ編集だけは候補に加えず、BFF が `/hwc-rewind` を直接送る（[ADR 0089](0089-pi-message-edit.md)）。
 - 入力契約は「hwc は入力欄の文字列を解釈しない」のままにする。例外は hwc が存在を知っている `/new` と `/compact` だけで、送信経路は通常の文字列送信と同じ（BFF と Herdr の変更なし）
 - Codex のフォルダ信頼確認は通常入力から切り離し、[ADR 0032](0032-codex-folder-trust.md) の確認ビューと専用の回答経路を使う。任意のキーを送る機能には広げない
 - 送る文字列の基底は `src/client/commands.ts` の 1 つの表に固定し、`commands.test.ts` が文字列そのものを見張る。`/compact` だけは入力欄の文字列を後ろに付けて組み立てる純関数（`commandSendText()`）を通す

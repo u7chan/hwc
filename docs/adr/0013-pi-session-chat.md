@@ -24,7 +24,7 @@ pi は会話を v3 の JSONL で保存している。`user` / `assistant` のメ
 ## Decision
 
 - 会話履歴の正は pi のセッション JSONL とし、SQLite などの二次ストアを持たない
-- ペインとセッションは 1:1 とみなす。Web は現在のセッションの active branch を映すだけで、セッション選択・分岐・過去セッション一覧は持たない
+- ペインとセッションは 1:1 とみなす。Web は現在のセッションの active branch を映すだけで、セッション選択・分岐・過去セッション一覧は持たない。ただし過去の発言を編集するための rewind は [ADR 0089](0089-pi-message-edit.md) で扱う
 - BFF がペイン id からセッション path を解決し、path はクライアントへ渡さない。クライアントから path も受け取らない
 - path ごとに増分リーダーを持ち、要求時にスナップショット（`etag` / `messages` / `model` / `effort` / `truncated` / `context` / `usage` / `compaction`）を返す。バックグラウンド監視はしない。`messages` の user は `attachments?: string[]`（ペイン配下のファイル名のみ）を持ち、本文へ貼った `<attached_files>` 注記は BFF が strip して返す（[ADR 0018](0018-pasted-image-attachments.md)）
 - スナップショットに直近の compaction（`at` / `tokensBefore` / `summary` / `index`）を含める。`messages` はその compaction の `firstKeptEntryId` 以降に限り、圧縮より前の会話は返さない。モデルの実際の文脈（要約 + kept 分）と表示を一致させるため

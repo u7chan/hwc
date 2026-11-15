@@ -11,28 +11,30 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - ×: 非対応（端末出力で操作する）
 - –: そのエージェントに概念がない
 
-| 機能                                     | Pi           | Claude | Codex         | OpenCode          |
-| ---------------------------------------- | ------------ | ------ | ------------- | ----------------- |
-| 起動（新規ペイン / ワークツリー / 名前） | ○            | ○      | ○             | ○                 |
-| 起動時のモデル指定                       | ○            | ×      | ○             | ○（サービス必要） |
-| 起動時の effort 指定                     | ○            | ×      | ○             | ○（サービス必要） |
-| Web での会話表示                         | ○            | ×      | ○（hwc 起動） | ○                 |
-| 送信・停止                               | ○            | ○      | ○             | ○                 |
-| モデル・effort の表示                    | ○            | ×      | ○             | ○                 |
-| コンテキスト使用量・usage                | ○            | ×      | ×             | ○                 |
-| 圧縮の区切り                             | ○            | ×      | ×             | ○                 |
-| 添付ファイル（画像以外も可）             | ○            | ×      | △             | △                 |
-| メッセージ内の画像プレビュー             | ○            | ×      | ○             | ○                 |
-| 引用返信                                 | ○            | ×      | ○             | ○                 |
-| `/new` `/compact` の候補                 | ○            | △      | △             | △                 |
-| 起動時の信頼確認                         | ○            | ×      | ○             | –                 |
-| ライブ activity                          | △（pi 拡張） | ×      | ×             | ×                 |
+| 機能                                     | Pi             | Claude | Codex         | OpenCode          |
+| ---------------------------------------- | -------------- | ------ | ------------- | ----------------- |
+| 起動（新規ペイン / ワークツリー / 名前） | ○              | ○      | ○             | ○                 |
+| 起動時のモデル指定                       | ○              | ×      | ○             | ○（サービス必要） |
+| 起動時の effort 指定                     | ○              | ×      | ○             | ○（サービス必要） |
+| Web での会話表示                         | ○              | ×      | ○（hwc 起動） | ○                 |
+| 送信・停止                               | ○              | ○      | ○             | ○                 |
+| モデル・effort の表示                    | ○              | ×      | ○             | ○                 |
+| コンテキスト使用量・usage                | ○              | ×      | ×             | ○                 |
+| 圧縮の区切り                             | ○              | ×      | ×             | ○                 |
+| 添付ファイル（画像以外も可）             | ○              | ×      | △             | △                 |
+| メッセージ内の画像プレビュー             | ○              | ×      | ○             | ○                 |
+| 引用返信                                 | ○              | ×      | ○             | ○                 |
+| 過去の発言の編集                         | ○（mypi 拡張） | ×      | ×             | ×                 |
+| `/new` `/compact` の候補                 | ○              | △      | △             | △                 |
+| 起動時の信頼確認                         | ○              | ×      | ○             | –                 |
+| ライブ activity                          | △（pi 拡張）   | ×      | ×             | ×                 |
 
 - 添付ファイルの UI 自体は会話を持つペインで使えるが、hwc は実体を CLI へ渡さず、本文に `<attached_files>` のパス注記を足すだけ。Pi はこの経路を前提にしている（[ADR 0018](adr/0018-pasted-image-attachments.md)、[ADR 0080](adr/0080-file-attachments.md)）。Codex と OpenCode は、それぞれの CLI がそのパスを読めるか次第（[ADR 0028](adr/0028-opencode-chat.md)、[ADR 0031](adr/0031-codex-chat.md)）。
 - Pi と Codex のフォルダ信頼確認は、専用ビューで「信頼して続行」だけを回答できる（[ADR 0032](adr/0032-codex-folder-trust.md)、[ADR 0044](adr/0044-pi-project-trust.md)）。それ以外の選択肢は端末で行う。
 - Claude の起動時の信頼確認は hwc では操作しない。応答は端末で行う。`blocked` 中も入力欄は有効なので、確認画面へ Enter を送らないよう注意する。
 - Codex の会話表示は、hwc が `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインだけ。既に起動している Codex や hwc 外で起動した Codex は端末出力になる（[ADR 0031](adr/0031-codex-chat.md)）。
 - ライブ activity は pi 拡張がセッションの隣に sidecar を書く場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）。拡張が無いペインでは表示されない。
+- 過去の発言の編集は、mypi がセッションに `hwc-capabilities` を残した pi ペインだけ。対象はテキストだけの発言で、添付付き・最後の発言は編集できない（[ADR 0089](adr/0089-pi-message-edit.md)）。
 - コマンド候補のガードは会話スナップショットに依存する。Claude はスナップショットが無いため会話状態のガードが効かず、実行中以外は候補になる。Codex は context と compaction が無いため、履歴の小ささと圧縮済みの判定が効かない。OpenCode は圧縮済みの判定がほぼ効かない（[ADR 0013](adr/0013-pi-session-chat.md)）。
 
 ## エージェント別の要点
@@ -65,21 +67,23 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - プロジェクトの `Trust project folder?` は、既定の `Trust` だけを専用ビューで回答する。`.pi` や `.agents/skills` など信頼対象のリソースがあるフォルダでは、起動がこの確認で止まる。他の選択肢は端末で行う（[ADR 0044](adr/0044-pi-project-trust.md)）。hwc は `--approve` を渡さない
 - Herdr は Pi の信頼確認を `blocked` としないため、一覧の行は `idle` のまま。確認ビューは、開いているペインの画面から出す
 - ライブ activity は pi 拡張の sidecar がある場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）
+- 過去の自分の発言は、mypi の `/hwc-rewind` と `hwc-capabilities` があるセッションだけ鉛筆で編集できる。押した時点では戻さず、送信時に会話を対象の親へ戻して本文を送り直す（[ADR 0089](adr/0089-pi-message-edit.md)）
 
 ## 実装の入口
 
-| 項目                                    | 場所                                                                |
-| --------------------------------------- | ------------------------------------------------------------------- |
-| エージェント種別、モデル・effort の対応 | `src/shared/agents.ts`                                              |
-| 会話の読み取り口の解決                  | `src/server/herdr/state.ts` の `ChatSource`                         |
-| 各 CLI の会話 reader                    | `src/server/chat/pi.ts`、`codex.ts`、`opencode.ts`                  |
-| 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`           |
-| 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts` |
-| コマンド候補とガード                    | `src/client/commands.ts`                                            |
-| ライブ activity                         | `src/server/chat/activity.ts`                                       |
-| フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`          |
-| 添付・引用・activity の UI 分岐         | `src/client/PaneDetail.tsx`                                         |
-| E2E の架空データ                        | `e2e/fixtures/scenario.ts`、`e2e/fake-*.ts`、[docs/e2e.md](e2e.md)  |
+| 項目                                    | 場所                                                                              |
+| --------------------------------------- | --------------------------------------------------------------------------------- |
+| エージェント種別、モデル・effort の対応 | `src/shared/agents.ts`                                                            |
+| 会話の読み取り口の解決                  | `src/server/herdr/state.ts` の `ChatSource`                                       |
+| 各 CLI の会話 reader                    | `src/server/chat/pi.ts`、`codex.ts`、`opencode.ts`                                |
+| 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`                         |
+| 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts`               |
+| コマンド候補とガード                    | `src/client/commands.ts`                                                          |
+| ライブ activity                         | `src/server/chat/activity.ts`                                                     |
+| フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`                        |
+| 過去の発言の編集                        | `src/server/routes/edit-message.ts`、`src/client/edit.ts`、`src/shared/rewind.ts` |
+| 添付・引用・activity の UI 分岐         | `src/client/PaneDetail.tsx`                                                       |
+| E2E の架空データ                        | `e2e/fixtures/scenario.ts`、`e2e/fake-*.ts`、[docs/e2e.md](e2e.md)                |
 
 ## 更新のしかた
 

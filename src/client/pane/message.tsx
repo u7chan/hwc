@@ -169,6 +169,7 @@ export function UserMessage(props: {
   paneId: string;
   message: ChatMessage;
   copyButton: ComponentChildren;
+  editButton?: ComponentChildren;
   onOpenImage: (url: string, name: string) => void;
   pending?: boolean;
 }) {
@@ -236,6 +237,7 @@ export function UserMessage(props: {
         )}
       </div>
       <div class="hwc-msg-meta">
+        {props.editButton}
         {props.copyButton}
         <span class="hwc-msg-time">{props.pending ? "送信中" : formatClock(props.message.at)}</span>
       </div>

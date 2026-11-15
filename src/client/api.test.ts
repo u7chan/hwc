@@ -273,12 +273,19 @@ const chatBody = {
   truncated: false,
   context: null,
   compaction: null,
+  canRewind: true,
 };
 
 test("a chat body is accepted as the contract describes it", () => {
   expect(toChatSnapshot(chatBody)).toEqual(chatBody);
   expect(toChatSnapshot({ ...chatBody, messages: [] })).toEqual({ ...chatBody, messages: [] });
   expect(toChatSnapshot({ ...chatBody, model: null })).toEqual({ ...chatBody, model: null });
+});
+
+test("canRewind is kept only when it is true", () => {
+  expect(toChatSnapshot(chatBody)?.canRewind).toBe(true);
+  expect(toChatSnapshot({ ...chatBody, canRewind: false })?.canRewind).toBe(false);
+  expect(toChatSnapshot({ ...chatBody, canRewind: "yes" })?.canRewind).toBe(false);
 });
 
 test("a failed turn is read as an error row", () => {

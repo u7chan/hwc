@@ -811,6 +811,40 @@ const sessionEntries = [
       },
     },
   },
+  // 編集の E2E 用に、添付の無い古い user 発言を 1 つ置く。
+  {
+    type: "message",
+    id: "u3",
+    parentId: "a7-preview",
+    timestamp: "2026-01-01T09:00:13.000Z",
+    message: {
+      role: "user",
+      content: "編集の動作を確認します。",
+      timestamp: Date.parse("2026-01-01T09:00:13.000Z"),
+    },
+  },
+  {
+    type: "message",
+    id: "a8",
+    parentId: "u3",
+    timestamp: "2026-01-01T09:00:14.000Z",
+    message: {
+      role: "assistant",
+      content: [{ type: "text", text: "わかりました。編集の確認をします。" }],
+      model: "claude-sonnet-4-5",
+      provider: "anthropic",
+      timestamp: Date.parse("2026-01-01T09:00:14.000Z"),
+    },
+  },
+  // hwc の編集 capability。mypi の拡張がセッション開始時に 1 回だけ追記する形を模す。
+  {
+    type: "custom",
+    id: "cap-1",
+    parentId: "a8",
+    timestamp: "2026-01-01T09:00:15.000Z",
+    customType: "hwc-capabilities",
+    data: { v: 1, rewind: true },
+  },
 ];
 
 const sessionLines = [sessionHeader, ...sessionEntries].map((line) => JSON.stringify(line));

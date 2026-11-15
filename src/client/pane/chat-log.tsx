@@ -1,7 +1,13 @@
 import { Fragment } from "preact";
 import type { ChatFile, ChatMessage, ChatSnapshot } from "../../server/chat/contract";
-import { chatRows, compactionInsertIndex, echoInsertIndex, type PendingMessage } from "../chat";
-import { CopyGlyph } from "../icons";
+import {
+  chatRows,
+  compactionInsertIndex,
+  echoInsertIndex,
+  type ChatRow,
+  type PendingMessage,
+} from "../chat";
+import { CopyGlyph, PencilIcon } from "../icons";
 import { type MessageReveal } from "../reveal";
 import { ChatEmpty } from "./empty";
 import { AgentMessage, CommandEcho, Compaction, ErrorMessage, UserMessage } from "./message";
@@ -18,6 +24,8 @@ export function ChatLog(props: {
   compactionDurationMs: number | null;
   compactionEcho: { text: string; at: number; completedAt: number | null } | null;
   onCopy: (id: string, text: string) => void;
+  canEdit: (row: ChatRow, rows: readonly ChatRow[]) => boolean;
+  onEdit: (message: ChatMessage) => void;
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
   pending: readonly PendingMessage[];
@@ -40,6 +48,16 @@ export function ChatLog(props: {
   // 画像だけのメッセージは本文が無い。空文字をコピーさせない。
   const userCopyButton = (message: ChatMessage) =>
     message.text === "" ? null : copyButton(message);
+  const editButton = (message: ChatMessage) => (
+    <button
+      type="button"
+      class="hwc-msg-edit"
+      aria-label="このメッセージを編集"
+      onClick={() => props.onEdit(message)}
+    >
+      <PencilIcon size={14} />
+    </button>
+  );
 
   // ツール実行だけのターンは会話に残らない。返答待ちの表示だけが動いていることを示す。
   const rows = chatRows(props.snapshot.messages, props.pending);
@@ -122,6 +140,7 @@ export function ChatLog(props: {
                     paneId={props.paneId}
                     message={row.message}
                     copyButton={userCopyButton(row.message)}
+                    editButton={props.canEdit(row, rows) ? editButton(row.message) : null}
                     onOpenImage={props.onOpenImage}
                     pending={row.echo === "pending"}
                   />

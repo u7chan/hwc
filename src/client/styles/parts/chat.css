@@ -112,7 +112,8 @@ p.hwc-compaction,
   justify-content: flex-end;
 }
 
-.hwc-msg-copy {
+.hwc-msg-copy,
+.hwc-msg-edit {
   display: grid;
   place-items: center;
   width: var(--space-6);
@@ -125,7 +126,8 @@ p.hwc-compaction,
   cursor: pointer;
 }
 
-.hwc-msg-copy:hover {
+.hwc-msg-copy:hover,
+.hwc-msg-edit:hover {
   background: var(--color-raised);
   color: var(--color-text);
 }

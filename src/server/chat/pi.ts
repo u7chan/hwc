@@ -10,6 +10,7 @@ import type {
   SessionChatClient,
 } from "./contract";
 import { stripAttachedFiles } from "../../shared/attachments";
+import { isRewindCapability, parseRewindMarker, type RewindMarker } from "../../shared/rewind";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
 import { loadPiModelWindows, type PiModelWindow } from "./pi-models";
@@ -72,6 +73,8 @@ export type ChatReader = {
   headerId: string | null;
   inode: number | null;
   generation: number;
+  // セッション内のどこかに hwc-capabilities があれば true。枝を跨いでも保持する。
+  canRewind: boolean;
   etagPrefix: string;
 };
 
@@ -85,6 +88,7 @@ function createReader(path: string): ChatReader {
     headerId: null,
     inode: null,
     generation: 0,
+    canRewind: false,
     // path のハッシュだけでなく、BFF の起動ごとに変わる id を混ぜる。
     // 再起動後に古い ETag と一致させないため。
     etagPrefix: `${hashPath(path)}-${randomUUID()}`,
@@ -294,6 +298,7 @@ function applyLine(reader: ChatReader, line: string): void {
   }
 
   // 捨てる種類のエントリも木には残す。parentId の鎖が切れると active branch を辿れない。
+  if (isRewindCapability(record)) reader.canRewind = true;
   reader.entries.set(entry.id, entry);
   reader.leafId = entry.id;
 }
@@ -546,6 +551,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
     context: foldContext(tokens, windowTokens),
     ...(usage === null ? {} : { usage }),
     compaction: compacted === null ? null : { ...compacted.compaction, index: compactionIndex },
+    canRewind: reader.canRewind,
   };
 }
 
@@ -741,6 +747,7 @@ function clear(reader: ChatReader): void {
   reader.pending = new Uint8Array(0);
   reader.entries.clear();
   reader.leafId = null;
+  reader.canRewind = false;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -750,6 +757,84 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function nonEmptyText(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
+}
+
+const REWIND_SCAN_BYTES = 256 * 1024;
+
+export type RewindRead = {
+  marker: RewindMarker | null;
+  sentText: string | null;
+  // 次回はここから読む。未完行は消費しない。
+  offset: number;
+  inode: number | null;
+};
+
+// 編集待ち専用の tail reader。chat reader の offset / pending を共有しない。
+// marker は移動後の葉を親に持ち、その後に送った本文が続く。
+export async function readRewindMarker(
+  path: string,
+  offset: number,
+  requestId: string,
+  expectedInode: number | null = null,
+): Promise<RewindRead> {
+  let start = Math.max(0, offset);
+  let handle: FileHandle;
+  try {
+    handle = await open(path, "r");
+  } catch (error) {
+    if (isEnoent(error)) {
+      return { marker: null, sentText: null, offset: start, inode: null };
+    }
+    throw error;
+  }
+
+  try {
+    const info = await handle.stat();
+    const size = info.size;
+    // ファイルが書き換わったときは、40MB を読み直さず末尾だけを見る。
+    if (size < start || (expectedInode !== null && info.ino !== expectedInode)) {
+      start = Math.max(0, size - REWIND_SCAN_BYTES);
+    }
+    const length = Math.min(size - start, REWIND_SCAN_BYTES);
+    if (length <= 0) return { marker: null, sentText: null, offset: start, inode: info.ino };
+
+    const buffer = Buffer.allocUnsafe(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, start);
+    const chunk = buffer.subarray(0, bytesRead);
+    const lastNewline = chunk.lastIndexOf(0x0a);
+    if (lastNewline < 0) {
+      return { marker: null, sentText: null, offset: start, inode: info.ino };
+    }
+
+    let marker: RewindMarker | null = null;
+    let sentText: string | null = null;
+    for (const line of chunk.subarray(0, lastNewline).toString("utf8").split("\n")) {
+      if (line.trim() === "") continue;
+      let raw: unknown;
+      try {
+        raw = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const record = asRecord(raw);
+      if (record === null) continue;
+      if (marker === null) {
+        const parsed = parseRewindMarker(record);
+        if (parsed !== null && parsed.requestId === requestId) marker = parsed;
+        continue;
+      }
+      if (sentText !== null || record.type !== "message") continue;
+      const message = asRecord(record.message);
+      if (message?.role !== "user") continue;
+      const text = userText(message.content).trim();
+      if (text !== "") sentText = text;
+    }
+    return { marker, sentText, offset: start + lastNewline + 1, inode: info.ino };
+  } finally {
+    await handle.close().catch(() => {
+      // 読み取りは終わっている。閉じ損ねても次の要求で開き直せる。
+    });
+  }
 }
 
 function isEnoent(error: unknown): boolean {
