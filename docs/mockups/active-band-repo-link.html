@@ -1,0 +1,1715 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>アクティブ帯のリポジトリリンク — デザインモック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Nerd Symbols Mono";
+        src: url("../../src/client/assets/fonts/NerdSymbolsMono.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      :root {
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-content: #131619;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-accent: #94baff;
+        --color-selected: #23334e;
+        --color-line: #32373f;
+        --color-control-line: #606976;
+        --color-attention: #f6c57f;
+        --color-attention-bg: #352b1e;
+        --color-success: #8fdbb1;
+        --color-success-bg: #20392e;
+        --color-danger: #ff9ca4;
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+        --radius-sm: 8px;
+        --radius-icon: 10px;
+        --radius-control: 12px;
+        --radius-panel: 16px;
+        --text-body: 1.0625rem;
+        --text-secondary: 0.8125rem;
+        --line-tight: 1.2;
+        --line-body: 1.5;
+        --tap: 44px;
+        --row-head: 56px;
+        --row-pane: 64px;
+        --icon-frame: 32px;
+      }
+
+      :root[data-theme="light"] {
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-content: #ffffff;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-accent: #255cd6;
+        --color-selected: #e9f0ff;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-attention: #a34c0a;
+        --color-attention-bg: #fff0da;
+        --color-success: #216549;
+        --color-success-bg: #e6f3ed;
+        --color-danger: #b3333c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: var(--text-body);
+        line-height: var(--line-body);
+      }
+
+      a {
+        color: var(--color-accent);
+      }
+
+      .page {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 40px 32px 80px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 24px;
+      }
+
+      .hero h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.25;
+      }
+
+      .hero p {
+        max-width: 760px;
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 15px;
+      }
+
+      .theme-toggle {
+        flex: none;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 40px;
+        padding: 0;
+        list-style: none;
+      }
+
+      .toc a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid var(--color-line);
+        border-radius: 999px;
+        color: var(--color-secondary);
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      .toc a:hover {
+        color: var(--color-text);
+        background: var(--color-surface);
+      }
+
+      .pattern {
+        margin-bottom: 56px;
+        scroll-margin-top: 24px;
+      }
+
+      .pattern-head {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .pattern-head h2 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.3;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--color-success-bg);
+        color: var(--color-success);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .badge.neutral {
+        background: var(--color-raised);
+        color: var(--color-secondary);
+      }
+
+      .badge.notice {
+        background: var(--color-attention-bg);
+        color: var(--color-attention);
+      }
+
+      .pattern-note {
+        max-width: 880px;
+        margin: 0 0 20px;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      .frames {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 28px;
+      }
+
+      .frame {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .caption {
+        max-width: 420px;
+        color: var(--color-secondary);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .caption strong {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      .group {
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+      }
+
+      /* ---- アプリの .hwc-active-band をそのまま持ってくる ---- */
+
+      .hwc-active-band {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        min-height: var(--row-head);
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        background: var(--color-raised);
+        box-shadow: inset 0 -1px 0 var(--color-line);
+      }
+
+      .hwc-space-icon {
+        position: relative;
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        margin: 0 -6px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .hwc-space-icon:hover,
+      .hwc-space-icon[data-open="true"] {
+        background: var(--color-surface);
+        color: var(--color-text);
+      }
+
+      .hwc-space-icon:hover .hwc-active-band-icon {
+        color: var(--color-text);
+      }
+
+      .hwc-active-band-icon {
+        display: grid;
+        place-items: center;
+        width: var(--icon-frame);
+        height: var(--icon-frame);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-icon);
+        color: var(--color-secondary);
+      }
+
+      .hwc-active-band-main {
+        flex: 1;
+        min-width: 0;
+        container-type: inline-size;
+      }
+
+      .hwc-active-band-title {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        min-width: 0;
+      }
+
+      .hwc-active-band-name {
+        min-width: 0;
+        margin: 0;
+        overflow: hidden;
+        font-size: var(--text-body);
+        font-weight: 600;
+        line-height: var(--line-tight);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .hwc-active-band-pr {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        min-height: 32px;
+        padding: 0 var(--space-1);
+        border-radius: var(--radius-sm);
+        color: var(--color-accent);
+        font-variant-numeric: tabular-nums;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: background-color 140ms ease;
+      }
+
+      .hwc-active-band-pr:hover {
+        background: var(--color-surface);
+      }
+
+      .hwc-active-band-pr:active {
+        background: var(--color-line);
+      }
+
+      .hwc-active-band-pr[data-state="merged"] {
+        color: var(--color-success);
+      }
+
+      .hwc-active-band-line {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-width: 0;
+        margin: 0;
+      }
+
+      .hwc-active-band-place {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        gap: var(--space-2);
+        min-width: 0;
+      }
+
+      .hwc-active-band-repo-group,
+      .hwc-active-band-repo-link {
+        flex: 0 1 auto;
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        min-width: 0;
+      }
+
+      .hwc-active-band-repo {
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--color-text);
+        font-size: var(--text-secondary);
+        font-weight: 600;
+        line-height: var(--line-tight);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .hwc-active-band-remote {
+        flex: none;
+        display: grid;
+        place-items: center;
+        color: var(--color-secondary);
+      }
+
+      .hwc-active-band-branch {
+        flex: 1 1 0;
+        min-width: 0;
+        margin: 0;
+        overflow: hidden;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: var(--text-secondary);
+        line-height: var(--line-tight);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      @container (max-width: 250px) {
+        .hwc-active-band-branch {
+          display: none;
+        }
+      }
+
+      .hwc-git-count {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .hwc-git-count-part[data-tone="ahead"] {
+        color: var(--color-success);
+      }
+
+      .hwc-git-count-part[data-tone="behind"] {
+        color: var(--color-attention);
+      }
+
+      .hwc-active-band-counts {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .hwc-active-count {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+
+      .hwc-active-count[data-tone="attention"] {
+        color: var(--color-attention);
+      }
+
+      .hwc-active-count[data-tone="success"] {
+        color: var(--color-success);
+      }
+
+      .hwc-active-count[data-tone="active"] {
+        color: var(--color-active);
+      }
+
+      .hwc-active-band-jump {
+        position: relative;
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--space-8);
+        height: var(--space-8);
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .hwc-active-band-jump::after {
+        content: "";
+        position: absolute;
+        inset: calc((var(--space-8) - var(--tap)) / 2);
+      }
+
+      .hwc-active-band-jump:hover {
+        background: var(--color-surface);
+        color: var(--color-accent);
+      }
+
+      /* ---- 案: リポジトリ名（記号込み）をリンクにする ---- */
+
+      a.hwc-active-band-repo-link {
+        position: relative;
+        margin: 0 calc(-1 * var(--space-1));
+        padding: 0 var(--space-1);
+        border-radius: var(--radius-sm);
+        color: var(--color-text);
+        text-decoration: none;
+        transition:
+          background-color 140ms ease,
+          color 140ms ease;
+      }
+
+      /* 見た目の高さは行のまま。タップ領域だけ 32px に広げ、帯の高さは変えない。
+         下は帯の下端で止まり、上はタイトル行の下側に 8px だけ重なる。 */
+      a.hwc-active-band-repo-link::after {
+        content: "";
+        position: absolute;
+        inset: -8px calc(-1 * var(--space-1));
+      }
+
+      a.hwc-active-band-repo-link:hover,
+      .is-hover .hwc-active-band-repo-link {
+        background: var(--color-surface);
+        color: var(--color-accent);
+      }
+
+      a.hwc-active-band-repo-link:active,
+      .is-active .hwc-active-band-repo-link {
+        background: var(--color-line);
+        color: var(--color-accent);
+      }
+
+      a.hwc-active-band-repo-link:focus-visible,
+      .is-focus .hwc-active-band-repo-link {
+        outline: 3px solid var(--color-accent);
+        outline-offset: -3px;
+      }
+
+      /* ---- 比較用の行。帯の下でタップ領域がどこまで来るかを見る ---- */
+
+      .hwc-active-rows {
+        position: relative;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .hwc-active-rows::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: calc(var(--row-pane) / 2);
+        left: calc(var(--space-4) + var(--icon-frame) / 2);
+        width: 1px;
+        background: var(--color-line);
+        pointer-events: none;
+      }
+
+      .hwc-active-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        min-height: var(--row-pane);
+        padding: var(--space-3) var(--space-2) var(--space-3)
+          calc(var(--space-4) + var(--icon-frame) / 2 + var(--space-6));
+        border-top: 1px solid var(--color-line);
+        color: var(--color-text);
+        font-size: var(--text-body);
+      }
+
+      .hwc-active-row:last-child {
+        border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+      }
+
+      .hwc-active-row .time {
+        margin-left: auto;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .hwc-active-row .more {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--space-8);
+        height: var(--space-8);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+      }
+
+      .status {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--space-4);
+        height: var(--space-4);
+        color: var(--color-success);
+      }
+
+      /* ---- タップ領域の図 ---- */
+
+      .hit-32 .hwc-active-band-repo-link::after {
+        outline: 1px dashed var(--color-success);
+        outline-offset: 0;
+      }
+
+      .hit-44 .hwc-active-band-repo-link::after {
+        inset: -14px calc(-1 * var(--space-1));
+        outline: 1px dashed var(--color-attention);
+        outline-offset: 0;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin: 0 0 16px;
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .legend i {
+        display: inline-block;
+        width: 28px;
+        height: 18px;
+        border: 1px dashed currentColor;
+        border-radius: 4px;
+      }
+
+      .legend .is-32 {
+        color: var(--color-success);
+      }
+
+      .legend .is-44 {
+        color: var(--color-attention);
+      }
+
+      /* 44px の的が下のペイン行にかかる範囲。図では橙の帯で塗る。 */
+      .hit-44 .hwc-active-rows::after {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 4px;
+        background: color-mix(in srgb, var(--color-attention) 22%, transparent);
+        border-bottom: 1px dashed var(--color-attention);
+        pointer-events: none;
+      }
+
+      /* ---- メモ ---- */
+
+      .notes {
+        display: grid;
+        gap: 12px;
+        max-width: 880px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-size: 14px;
+      }
+
+      .notes li {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 8px;
+        align-items: start;
+        color: var(--color-secondary);
+      }
+
+      .notes b {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: var(--color-raised);
+        color: var(--color-text);
+        font-size: 12px;
+      }
+
+      .notes strong {
+        color: var(--color-text);
+      }
+
+      .table {
+        width: 100%;
+        max-width: 880px;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      .table th,
+      .table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--color-line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .table th {
+        color: var(--color-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .table td strong {
+        color: var(--color-text);
+      }
+
+      .width-frame {
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        overflow: hidden;
+      }
+
+      /* 見た目の候補。通常時の違いだけを見る。 */
+      .look-accent .hwc-active-band-repo {
+        color: var(--color-accent);
+      }
+
+      .look-underline .hwc-active-band-repo {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      /* モックは固定幅の帯を並べる。狭い画面でもキャプションを読めるよう、
+         帯だけを横スクロールさせ、注記は幅に収める。 */
+      @media (max-width: 899px) {
+        .page {
+          padding: 24px 16px 64px;
+        }
+
+        .hero {
+          flex-direction: column;
+        }
+
+        .frame {
+          max-width: 100%;
+          overflow-x: auto;
+        }
+
+        .caption {
+          max-width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-worktree" viewBox="0 0 24 24">
+        <g
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="6" cy="6" r="2.2" />
+          <circle cx="6" cy="18" r="2.2" />
+          <path d="M6 8.2v7.6" />
+          <path d="M6 11h3.5a3 3 0 0 0 3-3V7.4" />
+          <circle cx="12.5" cy="5.2" r="1.8" />
+          <rect x="13.5" y="13" width="7" height="7" rx="1.8" />
+        </g>
+      </symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24">
+        <g
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h13" />
+          <path d="M12.5 6.5L19 12l-6.5 5.5" />
+        </g>
+      </symbol>
+      <symbol id="i-more" viewBox="0 0 24 24">
+        <g fill="currentColor">
+          <circle cx="12" cy="5.5" r="1.6" />
+          <circle cx="12" cy="12" r="1.6" />
+          <circle cx="12" cy="18.5" r="1.6" />
+        </g>
+      </symbol>
+      <symbol id="i-status-success" viewBox="0 0 12 12">
+        <path
+          d="M2.5 6.4l2.2 2.2 4.8-5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </symbol>
+      <symbol id="i-github" viewBox="0 0 16 16">
+        <path
+          fill="currentColor"
+          d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+        />
+      </symbol>
+    </svg>
+
+    <main class="page">
+      <div class="hero">
+        <div>
+          <h1>アクティブ帯のリポジトリ名をリンクにする</h1>
+          <p>
+            帯の2段目、GitHub 記号とリポジトリ名をまとめて <code>repoUrl</code> へのリンクにします。
+            PR チップと同じく1タップで GitHub を開けます。リンクになるのは GitHub
+            のリモートがあるときだけで、 帯の高さは今のまま（56px／PR
+            チップがあるときは約64px）です。
+          </p>
+        </div>
+        <button class="theme-toggle" id="theme-toggle" type="button">テーマ切替</button>
+      </div>
+
+      <nav>
+        <ul class="toc">
+          <li><a href="#pattern-a">案</a></li>
+          <li><a href="#looks">見た目</a></li>
+          <li><a href="#states">状態</a></li>
+          <li><a href="#compare">現状との比較</a></li>
+          <li><a href="#hit">タップ領域</a></li>
+          <li><a href="#widths">幅</a></li>
+          <li><a href="#notes">判断メモ</a></li>
+        </ul>
+      </nav>
+
+      <section class="pattern" id="pattern-a">
+        <div class="pattern-head">
+          <h2>案: GitHub 記号＋リポジトリ名を1つのリンクにする</h2>
+          <span class="badge">推奨</span>
+        </div>
+        <p class="pattern-note">
+          記号だけをリンクにすると、押せる範囲が 13px の絵になり、名前を押しても反応しません。
+          記号と名前を1つのリンクにまとめ、押下・ホバー・フォーカスでは PR
+          チップと同じ背景を出します。 アクセント色は帯に3つ目の青が増えるため、常時は付けません。
+        </p>
+
+        <div class="frames">
+          <div class="frame">
+            <div class="group" style="width: 480px">
+              <div class="hwc-active-band">
+                <button
+                  class="hwc-space-icon"
+                  type="button"
+                  aria-label="acme-dashboard のメニュー"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                >
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2
+                      class="hwc-active-band-name"
+                      title="Add the repository link to the active band"
+                    >
+                      Add the repository link to the active band
+                    </h2>
+                    <a class="hwc-active-band-pr" href="#pattern-a" aria-label="PR #123 を開く"
+                      >#123</a
+                    >
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/acme-dashboard"
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="acme-dashboard を GitHub で開く"
+                        title="acme-dashboard"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">acme-dashboard</span>
+                      </a>
+                      <span class="hwc-active-band-branch" title="feat/repo-link"
+                        >feat/repo-link</span
+                      >
+                    </span>
+                    <span class="hwc-git-count" role="img" aria-label="1 個進んでいます">
+                      <span class="hwc-git-count-part" data-tone="ahead">↑1</span>
+                    </span>
+                    <span class="hwc-active-band-counts">
+                      <span class="hwc-active-count" data-tone="success" aria-label="完了 2 件">
+                        <span aria-hidden="true"
+                          ><svg width="13" height="13" class="status">
+                            <use href="#i-status-success" /></svg
+                        ></span>
+                        <span aria-hidden="true">2</span>
+                      </span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="acme-dashboard をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>通常</strong>は今と同じ見た目。リポジトリ名は
+              <code>--color-text</code> のまま。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="group is-hover" style="width: 480px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="acme-dashboard のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name">Add the repository link to the active band</h2>
+                    <a class="hwc-active-band-pr" href="#pattern-a">#123</a>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/acme-dashboard"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">acme-dashboard</span>
+                      </a>
+                      <span class="hwc-active-band-branch">feat/repo-link</span>
+                    </span>
+                    <span class="hwc-git-count"
+                      ><span class="hwc-git-count-part" data-tone="ahead">↑1</span></span
+                    >
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="acme-dashboard をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>ホバー（PC）</strong>。背景を
+              <code>--color-surface</code>
+              に変える。名前の色は動かさず、帯の読みやすさを保つ。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="group is-active" style="width: 480px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="acme-dashboard のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name">Add the repository link to the active band</h2>
+                    <a class="hwc-active-band-pr" href="#pattern-a">#123</a>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/acme-dashboard"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">acme-dashboard</span>
+                      </a>
+                      <span class="hwc-active-band-branch">feat/repo-link</span>
+                    </span>
+                    <span class="hwc-git-count"
+                      ><span class="hwc-git-count-part" data-tone="ahead">↑1</span></span
+                    >
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="acme-dashboard をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>押下（モバイル）</strong>。指を置いた瞬間に背景が
+              <code>--color-line</code> に沈む。押せることが押下で分かる。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="group" style="width: 480px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="local-only のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name">Keep the band readable</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <span class="hwc-active-band-repo-group">
+                        <span class="hwc-active-band-repo" title="local-only">local-only</span>
+                      </span>
+                      <span class="hwc-active-band-branch">main</span>
+                    </span>
+                    <span class="hwc-active-band-counts">
+                      <span class="hwc-active-count" data-tone="attention" aria-label="要対応 1 件">
+                        <span aria-hidden="true">●</span>
+                        <span aria-hidden="true">1</span>
+                      </span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="local-only をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>GitHub のリモートがない</strong
+              >ときは今までどおり文字だけ。記号もリンクも出さない。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="looks">
+        <div class="pattern-head">
+          <h2>見た目の候補（通常時）</h2>
+          <span class="badge neutral">比較</span>
+        </div>
+        <p class="pattern-note">
+          タップできると分かる手掛かりをどこまで出すか。3
+          案とも押下・ホバー・フォーカスの反応は同じです。
+          色や下線を常時付けると、帯を読む面としての静けさが変わります。
+        </p>
+        <div class="frames">
+          <div class="frame">
+            <div class="width-frame" style="width: 358px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="skill-stash のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name" title="skill-stash">skill-stash</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/skill-stash"
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="skill-stash を GitHub で開く"
+                        title="skill-stash"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">skill-stash</span>
+                      </a>
+                      <span class="hwc-active-band-branch" title="main">main</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="skill-stash をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>A（推奨）: 色を変えない。</strong
+              >押下で背景が沈む。帯は静かなままだが、触るまでリンクだと分からない。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="width-frame look-accent" style="width: 358px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="skill-stash のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name" title="skill-stash">skill-stash</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/skill-stash"
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="skill-stash を GitHub で開く"
+                        title="skill-stash"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">skill-stash</span>
+                      </a>
+                      <span class="hwc-active-band-branch" title="main">main</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="skill-stash をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>B: 常時アクセント色。</strong
+              >リンクだとすぐ分かるが、帯に青が増え、タイトルと PR チップが弱くなる。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="width-frame look-underline" style="width: 358px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="skill-stash のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name" title="skill-stash">skill-stash</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/skill-stash"
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="skill-stash を GitHub で開く"
+                        title="skill-stash"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">skill-stash</span>
+                      </a>
+                      <span class="hwc-active-band-branch" title="main">main</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="skill-stash をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>C: 常時下線。</strong
+              >リンクだと分かるが、行が騒がしくなり、省略記号の位置でも下線が途切れて見える。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="states">
+        <div class="pattern-head">
+          <h2>状態の対応</h2>
+          <span class="badge neutral">仕様</span>
+        </div>
+        <p class="pattern-note">
+          見た目の高さは行のまま、押下とフォーカスの反応だけ PR チップに揃えます。
+        </p>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>状態</th>
+              <th>背景</th>
+              <th>文字・記号</th>
+              <th>備考</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>通常</strong></td>
+              <td>なし</td>
+              <td><code>--color-text</code> / 記号は <code>--color-secondary</code></td>
+              <td>帯にアクセント色を増やさない</td>
+            </tr>
+            <tr>
+              <td><strong>ホバー（PC）</strong></td>
+              <td><code>--color-surface</code></td>
+              <td>変わらない</td>
+              <td>背景だけで押せると示す</td>
+            </tr>
+            <tr>
+              <td><strong>押下</strong></td>
+              <td><code>--color-line</code></td>
+              <td>変わらない</td>
+              <td>モバイルで押せることが分かる唯一の手掛かり</td>
+            </tr>
+            <tr>
+              <td><strong>フォーカス</strong></td>
+              <td>なし</td>
+              <td><code>--color-accent</code> の枠（内側）</td>
+              <td>キーボードで次の PR チップへ進める</td>
+            </tr>
+            <tr>
+              <td><strong>GitHub リモートなし</strong></td>
+              <td>なし</td>
+              <td>文字だけ（今と同じ）</td>
+              <td>リンクにも記号にもしない</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="pattern" id="compare">
+        <div class="pattern-head">
+          <h2>現状との比較（390px の帯 = 358px）</h2>
+          <span class="badge neutral">比較</span>
+        </div>
+        <p class="pattern-note">
+          幅は 390px のスマホで一覧の左右 16px を引いた 358px。左が現状、右が案。
+          見た目の位置は変わらず、押せる範囲だけが増えます。
+        </p>
+        <div class="frames">
+          <div class="frame">
+            <div class="width-frame" style="width: 358px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="skill-stash のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name" title="skill-stash">skill-stash</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <span class="hwc-active-band-repo-group">
+                        <span
+                          class="hwc-active-band-remote"
+                          role="img"
+                          aria-label="GitHub リモートあり"
+                        >
+                          <svg width="13" height="13"><use href="#i-github" /></svg>
+                        </span>
+                        <span class="hwc-active-band-repo" title="skill-stash">skill-stash</span>
+                      </span>
+                      <span class="hwc-active-band-branch" title="main">main</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="skill-stash をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>現状</strong>: 記号は印だけ。リポジトリ名を押しても何も起きない。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="width-frame" style="width: 358px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="skill-stash のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name" title="skill-stash">skill-stash</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/skill-stash"
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="skill-stash を GitHub で開く"
+                        title="skill-stash"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">skill-stash</span>
+                      </a>
+                      <span class="hwc-active-band-branch" title="main">main</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="skill-stash をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>案</strong>: 記号と名前が1つのリンク。文字の位置は現状と同じ。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="hit">
+        <div class="pattern-head">
+          <h2>タップ領域: 32px と 44px</h2>
+          <span class="badge notice">判断点</span>
+        </div>
+        <p class="pattern-note">
+          帯は 56px（PR チップがあると約64px）。2段目は約16pxしかないため、44px
+          の操作領域は帯の中に収まらず、
+          タイトル行と下のペイン行にはみ出します。破線はリンクの操作領域です。
+        </p>
+        <div class="legend">
+          <span class="is-32"><i></i>32px（PR チップと同じ）</span>
+          <span class="is-44"><i></i>44px（帯に収まらない）</span>
+        </div>
+        <div class="frames">
+          <div class="frame">
+            <div class="group hit-32" style="width: 480px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="acme-dashboard のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name">Add the repository link to the active band</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/acme-dashboard"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">acme-dashboard</span>
+                      </a>
+                      <span class="hwc-active-band-branch">feat/repo-link</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="acme-dashboard をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+              <ul class="hwc-active-rows">
+                <li class="hwc-active-row">
+                  <span class="status"
+                    ><svg width="13" height="13"><use href="#i-status-success" /></svg
+                  ></span>
+                  <span>review the band</span>
+                  <span class="time">12:40</span>
+                  <span class="more"
+                    ><svg width="16" height="16"><use href="#i-more" /></svg
+                  ></span>
+                </li>
+              </ul>
+            </div>
+            <span class="caption"
+              ><strong>32px（推奨）</strong>: 上へ 8px
+              広がり、タイトル行の下側に少し重なる。下は帯の内側で止まり、ペイン行には出ない。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="group hit-44" style="width: 480px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="acme-dashboard のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name">Add the repository link to the active band</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/acme-dashboard"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">acme-dashboard</span>
+                      </a>
+                      <span class="hwc-active-band-branch">feat/repo-link</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="acme-dashboard をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+              <ul class="hwc-active-rows">
+                <li class="hwc-active-row">
+                  <span class="status"
+                    ><svg width="13" height="13"><use href="#i-status-success" /></svg
+                  ></span>
+                  <span>review the band</span>
+                  <span class="time">12:40</span>
+                  <span class="more"
+                    ><svg width="16" height="16"><use href="#i-more" /></svg
+                  ></span>
+                </li>
+              </ul>
+            </div>
+            <span class="caption"
+              ><strong>44px</strong>:
+              帯の内側には収まらない。上はタイトル行の大半を覆い、下は最初のペイン行の上端に数 px
+              重なる。スクロールの指止まりが遷移になる。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="widths">
+        <div class="pattern-head">
+          <h2>幅と長いリポジトリ名</h2>
+          <span class="badge neutral">確認</span>
+        </div>
+        <p class="pattern-note">
+          320px の端末（帯 288px）ではブランチが先に消え、リポジトリ名は省略記号で切れます。
+          長い名前でも記号は残り、押せる範囲は名前の右端までです。狭い画面では帯だけを横にスクロールできます。
+        </p>
+        <div class="frames">
+          <div class="frame">
+            <div class="group" style="width: 288px">
+              <div class="hwc-active-band">
+                <button
+                  class="hwc-space-icon"
+                  type="button"
+                  aria-label="acme-dashboard-observability のメニュー"
+                >
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name">Long repository name</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/acme-dashboard-observability"
+                        target="_blank"
+                        rel="noreferrer"
+                        title="acme-dashboard-observability"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">acme-dashboard-observability</span>
+                      </a>
+                      <span class="hwc-active-band-branch">feat/repo-link</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="acme-dashboard-observability をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>288px</strong>（320px
+              端末）。ブランチは消え、リポジトリ名は途中で切れる。フルは
+              <code>title</code> で読める。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="group" style="width: 398px">
+              <div class="hwc-active-band">
+                <button
+                  class="hwc-space-icon"
+                  type="button"
+                  aria-label="acme-dashboard-observability のメニュー"
+                >
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name">Long repository name</h2>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/acme-dashboard-observability"
+                        target="_blank"
+                        rel="noreferrer"
+                        title="acme-dashboard-observability"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">acme-dashboard-observability</span>
+                      </a>
+                      <span class="hwc-active-band-branch">feat/repo-link</span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="acme-dashboard-observability をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>398px</strong>（430px
+              端末）。ブランチが残る幅では、ブランチだけが縮む。</span
+            >
+          </div>
+
+          <div class="frame">
+            <div class="group" style="width: 620px">
+              <div class="hwc-active-band">
+                <button class="hwc-space-icon" type="button" aria-label="acme-dashboard のメニュー">
+                  <span class="hwc-active-band-icon"
+                    ><svg width="16" height="16"><use href="#i-worktree" /></svg
+                  ></span>
+                </button>
+                <div class="hwc-active-band-main">
+                  <div class="hwc-active-band-title">
+                    <h2 class="hwc-active-band-name">Add the repository link to the active band</h2>
+                    <a class="hwc-active-band-pr" href="#widths">#123</a>
+                  </div>
+                  <p class="hwc-active-band-line">
+                    <span class="hwc-active-band-place">
+                      <a
+                        class="hwc-active-band-repo-link"
+                        href="https://github.com/example/acme-dashboard"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <span class="hwc-active-band-remote" aria-hidden="true"
+                          ><svg width="13" height="13"><use href="#i-github" /></svg
+                        ></span>
+                        <span class="hwc-active-band-repo">acme-dashboard</span>
+                      </a>
+                      <span class="hwc-active-band-branch">feat/repo-link</span>
+                    </span>
+                    <span class="hwc-git-count"
+                      ><span class="hwc-git-count-part" data-tone="ahead">↑1</span></span
+                    >
+                    <span class="hwc-active-band-counts">
+                      <span class="hwc-active-count" data-tone="attention" aria-label="要対応 1 件">
+                        <span aria-hidden="true">●</span><span aria-hidden="true">1</span>
+                      </span>
+                    </span>
+                  </p>
+                </div>
+                <button
+                  class="hwc-active-band-jump"
+                  type="button"
+                  aria-label="acme-dashboard をすべての一覧で開く"
+                >
+                  <svg width="16" height="16"><use href="#i-arrow-right" /></svg>
+                </button>
+              </div>
+            </div>
+            <span class="caption"
+              ><strong>620px</strong>（PC のサイドバー）。PR
+              チップがあると帯は約64px。リンクを足しても高さは変わらない。</span
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="pattern" id="notes">
+        <div class="pattern-head">
+          <h2>判断メモ</h2>
+        </div>
+        <ul class="notes">
+          <li>
+            <b>1</b>
+            <span
+              ><strong>記号と名前を1つのリンクにする。</strong>記号だけをリンクにすると 13px
+              の絵が的になり、名前を押しても反応しない。リンクの読み上げは「acme-dashboard を GitHub
+              で開く」にし、記号は <code>aria-hidden</code> にする。</span
+            >
+          </li>
+          <li>
+            <b>2</b>
+            <span
+              ><strong>帯の高さは変えない。</strong>2段目に 32px の箱を置くと、帯は 56→68px（PR
+              ありは 64→80px）に伸びる。sticky の帯が太ると一覧が狭くなる。見た目は行のまま、<code
+                >::after</code
+              >
+              で 32px の的だけを取る。</span
+            >
+          </li>
+          <li>
+            <b>3</b>
+            <span
+              ><strong>44px は採らない。</strong
+              >帯の内側に収まらず、タイトル行と最初のペイン行に重なる。タイトルは読むだけの面なので、押したときに
+              GitHub が開くのは驚きになる。32px は PR
+              チップと同じ扱いで、下のペイン行には出ない。</span
+            >
+          </li>
+          <li>
+            <b>4</b>
+            <span
+              ><strong>アクセント色は常時付けない。</strong>帯に3つ目の青が増え、タイトルと PR
+              チップが弱くなる。押下・ホバー・フォーカスでは背景を変え、押せたことを返す。</span
+            >
+          </li>
+          <li>
+            <b>5</b>
+            <span
+              ><strong>リンクは <code>repoUrl</code> があるときだけ。</strong>ローカルのみ・GitHub
+              以外のリモート・git
+              管理外は今までどおり文字だけ。リンク先はリポジトリのトップ（ブランチページは未 push で
+              404 になる）。</span
+            >
+          </li>
+          <li>
+            <b>6</b>
+            <span
+              ><strong>ADR 0083 の改訂が必要。</strong
+              >「記号は読む面であって入口ではない」を撤回し、ADR 0017 の帯の記述も合わせる。E2E
+              は架空 git の
+              <code>repoUrl</code> で、リンク先・新しいタブ・リモートなしの帯を確認する。</span
+            >
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <script>
+      const root = document.documentElement;
+      const toggle = document.getElementById("theme-toggle");
+      toggle.addEventListener("click", () => {
+        root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      });
+    </script>
+  </body>
+</html>
