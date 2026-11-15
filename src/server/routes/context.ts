@@ -95,6 +95,8 @@ export type CreateAppOptions = {
   restartSettings?: RestartSettingsStore;
   restart?: RestartRunner;
   restartDelayMs?: number;
+  // 編集の rewind marker を待つ期限。テストでは短く差し替える。
+  editMarkerTimeoutMs?: number;
   // 定型文の保存先。テストでは実ファイルへ書かないよう差し替える。
   templates?: TemplatesStore;
 };
@@ -121,6 +123,7 @@ export function createAppContext(options: CreateAppOptions) {
     restartSettings = createRestartSettingsStore({ read: () => null, write: () => {} }),
     restart = createRestartRunner(),
     restartDelayMs = RESTART_DELAY_MS,
+    editMarkerTimeoutMs = 10_000,
     templates = createTemplatesStore({ read: () => null, write: () => {} }),
     loadPiDefaults: readPiDefaults = loadPiDefaults,
   } = options;
@@ -391,6 +394,7 @@ export function createAppContext(options: CreateAppOptions) {
     discordSender,
     restartSettings,
     restart,
+    editMarkerTimeoutMs,
     templates,
     stateMessage,
     current,

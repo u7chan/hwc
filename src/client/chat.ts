@@ -197,6 +197,7 @@ export function newSessionSnapshot(snapshot: ChatSnapshot | null): ChatSnapshot 
     truncated: false,
     context: null,
     compaction: null,
+    ...(snapshot?.canRewind === true ? { canRewind: true } : {}),
   };
 }
 

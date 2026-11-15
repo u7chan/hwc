@@ -47,8 +47,14 @@ export function createHandle(
     setAgentStatus,
     refreshAggregates,
   } = workspaces;
-  const { activityEpochs, appendCompaction, appendUserEntry, clearPiActivity, startPiActivity } =
-    pi;
+  const {
+    activityEpochs,
+    appendCompaction,
+    appendRewindMarker,
+    appendUserEntry,
+    clearPiActivity,
+    startPiActivity,
+  } = pi;
   const { layout, splitPane } = paneLayouts;
 
   const handle = async (socket: net.Socket, line: string) => {
@@ -177,6 +183,15 @@ export function createHandle(
         if (text.trim() === "/blocked") {
           send(socket, { id, result: { type: "ok" } });
           setAgentStatus(paneId, "blocked");
+          return;
+        }
+        const rewind = text.includes(ATTACHED_FILES_OPEN)
+          ? null
+          : /^\/hwc-rewind (\S+) (\S+)$/.exec(text.trim());
+        if (rewind !== null) {
+          send(socket, { id, result: { type: "ok" } });
+          await appendRewindMarker(paneId, rewind[1]!, rewind[2]!);
+          broadcast("pane.updated", { pane_id: paneId });
           return;
         }
         const compact =

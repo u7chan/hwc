@@ -6,6 +6,7 @@ import {
   type ChatReader,
   ChatUnavailableError,
   createChatClient as createRealChatClient,
+  readRewindMarker,
 } from "./pi";
 
 function createChatClient(options: Parameters<typeof createRealChatClient>[0] = {}) {
@@ -1565,4 +1566,86 @@ test("concurrent sessions share catalog reads and only changed files are read ag
   expect(updated.map((snapshot) => snapshot.context?.window)).toEqual([300_000, 300_000]);
   expect(reads).toHaveLength(3);
   expect(reads.at(-1)).toBe(join(agent, "models.json"));
+});
+
+test("canRewind comes from hwc-capabilities anywhere in the session", async () => {
+  const withCapability = await writeSession(
+    header(),
+    user("u1", null, "one"),
+    entry("custom", "c1", "u1", {
+      customType: "hwc-capabilities",
+      data: { v: 1, rewind: true },
+    }),
+    assistant("a1", "u1", text("old branch")),
+  );
+  const without = await writeSession(
+    header(),
+    user("u1", null, "one"),
+    assistant("a1", "u1", text("hi")),
+  );
+  const invalid = await writeSession(
+    header(),
+    user("u1", null, "one"),
+    entry("custom", "c1", "u1", { customType: "hwc-capabilities", data: { v: 2, rewind: true } }),
+  );
+
+  expect((await createChatClient().snapshot(withCapability)).canRewind).toBe(true);
+  expect((await createChatClient().snapshot(without)).canRewind).toBe(false);
+  expect((await createChatClient().snapshot(invalid)).canRewind).toBe(false);
+});
+
+test("readRewindMarker returns the marker and the user text after it", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "one"),
+    assistant("a1", "u1", text("answer")),
+    user("u2", "a1", "edit me"),
+    assistant("a2", "u2", text("old answer")),
+    entry("custom", "m1", "a1", {
+      customType: "hwc-rewind",
+      data: { v: 1, requestId: "req-1", targetId: "u2", leafId: "a1" },
+    }),
+    user("u3", "m1", "edited"),
+  );
+
+  const read = await readRewindMarker(path, 0, "req-1");
+  expect(read.marker).toEqual({ v: 1, requestId: "req-1", targetId: "u2", leafId: "a1" });
+  expect(read.sentText).toBe("edited");
+  expect(await readRewindMarker(path, 0, "other")).toMatchObject({ marker: null, sentText: null });
+});
+
+test("readRewindMarker does not consume an incomplete line", async () => {
+  fileCount += 1;
+  const path = join(dir, `session-${fileCount}.jsonl`);
+  const marker = entry("custom", "m1", "a1", {
+    customType: "hwc-rewind",
+    data: { v: 1, requestId: "req-1", targetId: "u2", leafId: "a1" },
+  });
+  await writeFile(
+    path,
+    [header(), user("u1", null, "one"), assistant("a1", "u1", text("hi"))].join("\n") +
+      "\n" +
+      marker,
+  );
+  const first = await readRewindMarker(path, 0, "req-1");
+  expect(first.marker).toBeNull();
+  expect(first.offset).toBeGreaterThan(0);
+
+  await writeFile(path, `${await readFile(path, "utf8")}\n${user("u2", "m1", "edited")}\n`);
+  const second = await readRewindMarker(path, first.offset, "req-1");
+  expect(second.marker?.targetId).toBe("u2");
+  expect(second.sentText).toBe("edited");
+});
+
+test("readRewindMarker rejects a marker whose parent does not match leafId", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "one"),
+    assistant("a1", "u1", text("hi")),
+    entry("custom", "m1", "u1", {
+      customType: "hwc-rewind",
+      data: { v: 1, requestId: "req-1", targetId: "u2", leafId: "a1" },
+    }),
+  );
+  expect((await readRewindMarker(path, 0, "req-1")).marker).toBeNull();
 });

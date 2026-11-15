@@ -298,6 +298,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     context: toChatContext(snapshot.context),
     ...(usage === undefined ? {} : { usage }),
     compaction: toChatCompaction(snapshot.compaction),
+    canRewind: snapshot.canRewind === true,
   };
 }
 
@@ -598,6 +599,41 @@ export async function syncWorkspace(
     return { ok: false, error: "failed" };
   } catch {
     return { ok: false, error: "failed" };
+  }
+}
+
+export const EDIT_TIMEOUT_MS = 15_000;
+
+export type EditMessageResult = { ok: true } | { ok: false; error: string; rewound: boolean };
+
+function editRequest(paneId: string, messageId: string, requestId: string, text: string) {
+  return { ...paneParam(paneId), json: { messageId, requestId, text } };
+}
+
+// 編集は rewind の marker 待ち（BFF で最大 10 秒）を含むので、送信より長く待つ。
+export async function editMessage(
+  paneId: string,
+  messageId: string,
+  requestId: string,
+  text: string,
+): Promise<EditMessageResult> {
+  try {
+    const response = await client.api.panes[":id"]["edit-message"].$post(
+      editRequest(paneId, messageId, requestId, text),
+      { init: { signal: AbortSignal.timeout(EDIT_TIMEOUT_MS) } },
+    );
+    if (response.ok) return { ok: true };
+    const body = (await response.json().catch(() => null)) as {
+      error?: unknown;
+      rewound?: unknown;
+    } | null;
+    return {
+      ok: false,
+      error: typeof body?.error === "string" ? body.error : "edit_failed",
+      rewound: body?.rewound === true,
+    };
+  } catch {
+    return { ok: false, error: "network", rewound: false };
   }
 }
 

@@ -6,7 +6,7 @@ import type { FakeContext } from "./context";
 import type { SetAgentStatus } from "./workspaces";
 
 // 会話を残さない（または履歴を置き換える）コマンドは、user メッセージとして追記しない。
-const COMMAND_TEXT = /^\/(?:new|compact)(?: |$)/;
+const COMMAND_TEXT = /^\/(?:new|compact|hwc-rewind)(?: |$)/;
 
 export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   const { root, pendingPiSessions, findPane, later } = ctx;
@@ -47,6 +47,45 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
         .map((item) => `${JSON.stringify(item)}\n`)
         .join(""),
     );
+  };
+
+  // BFF の編集契約を模す。対象メッセージの親へ戻したことにし、marker を追記する。
+  // 実 mypi と同じく、後から送る本文はこの marker の子になる。
+  const appendRewindMarker = async (
+    paneId: string,
+    targetId: string,
+    requestId: string,
+  ): Promise<void> => {
+    const session = findPane(paneId)?.agent_session ?? null;
+    const path = session?.agent === "pi" && session.kind === "path" ? session.value : null;
+    if (path === null) return;
+    let raw: string;
+    try {
+      raw = await readFile(path, "utf8");
+    } catch {
+      return;
+    }
+    let parentId: string | null = null;
+    for (const line of raw.split("\n")) {
+      if (line.trim() === "") continue;
+      try {
+        const entry = JSON.parse(line) as { id?: unknown; parentId?: unknown };
+        if (entry.id !== targetId) continue;
+        parentId = typeof entry.parentId === "string" ? entry.parentId : null;
+        break;
+      } catch {
+        // 壊れた行は無視する。
+      }
+    }
+    const marker = {
+      type: "custom",
+      id: `rewind-${requestId}`,
+      parentId,
+      timestamp: new Date().toISOString(),
+      customType: "hwc-rewind",
+      data: { v: 1, requestId, targetId, leafId: parentId },
+    };
+    await appendFile(path, `${JSON.stringify(marker)}\n`);
   };
 
   // 送った本文を架空セッションの user メッセージとして追記する。E2E で確定後の送信カードを
@@ -209,6 +248,7 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   return {
     activityEpochs,
     writePiSessionHeader,
+    appendRewindMarker,
     appendUserEntry,
     piActivityPath,
     clearPiActivity,

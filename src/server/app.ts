@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { createAppContext, type CreateAppOptions } from "./routes/context";
 import { createChatHandlers } from "./routes/chat";
+import { createEditMessageHandlers } from "./routes/edit-message";
 import { createFilesHandlers } from "./routes/files";
 import { createNotificationsHandlers } from "./routes/notifications";
 import { createPanesHandlers } from "./routes/panes";
@@ -25,6 +26,7 @@ const requireJson = createMiddleware(async (c, next) => {
 export function createApp(options: CreateAppOptions) {
   const ctx = createAppContext(options);
   const chatHandlers = createChatHandlers(ctx);
+  const editMessageHandlers = createEditMessageHandlers(ctx);
   const filesHandlers = createFilesHandlers(ctx);
   const notificationsHandlers = createNotificationsHandlers(ctx);
   const panesHandlers = createPanesHandlers(ctx);
@@ -55,6 +57,7 @@ export function createApp(options: CreateAppOptions) {
       .post("/api/workspaces/:id/git", requireJson, workspacesHandlers.git)
       .post("/api/workspaces/move", requireJson, workspacesHandlers.move)
       .get("/api/panes/:id/chat", chatHandlers.chat)
+      .post("/api/panes/:id/edit-message", requireJson, editMessageHandlers.edit)
       .get("/api/panes/:id/default-model", chatHandlers.defaultModel)
       .get("/api/panes/:id/activity", chatHandlers.activity)
       // マニフェストがあるディレクトリを、ペインの cwd から下だけ列挙する。

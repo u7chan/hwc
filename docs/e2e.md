@@ -121,7 +121,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 `frontend` の user メッセージの 1 通は `<attached_files>` 注記を持ち、`empty-state-reference.zip` が履歴のチップに出る。大きさは fixture が `<root>/attachments/w1:p1/` に置いた 2MB の実ファイルから BFF が `stat` で引くので、チップは `2.0MB` になる。
 
-`pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。セッションがまだ無いペインでは、この追記の前にヘッダと `model_change` / `thinking_level_change` を書く。
+`pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。`frontend` の架空セッションには末尾に `hwc-capabilities` を置き、`/hwc-rewind <entryId> <requestId>` は user メッセージではなく、対象メッセージの親を `leafId` にした `hwc-rewind` の marker を追記する。その後に送る編集後の本文は marker の子になる。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。セッションがまだ無いペインでは、この追記の前にヘッダと `model_change` / `thinking_level_change` を書く。
 
 `frontend` の架空セッションは、最後のターンが失敗した状態（`stopReason: "error"` と `errorMessage`、本文は空）で終わる。同じ失敗をリトライの回数だけ並べてあり、Web では 1 行に畳まれて「3 回」と出る。その行が圧縮後の usage を変えないことも確かめる（[ADR 0039](adr/0039-chat-error-rows.md)）。
 
@@ -147,6 +147,7 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 - text が空、または空白だけの送信
 - 添付注記（`<attached_files>`）の無い `/new` と `/compact`（`/compact <指示>` を含む）。会話を残さないか、履歴を置き換える
 - 同じく添付注記の無い `/reload`。実 Pi と同じくセッションに何も書かず、`agent_status` も `working` にしない。hwc は控えを履歴に残す（[ADR 0045](adr/0045-pending-echo-turn-grace.md)）
+- 添付注記の無い `/hwc-rewind <entryId> <requestId>`。専用の marker を追記し、本文としては残さない
 
 添付を持つペインで `Enter` が送信になるときは、常に本文の送信になる（[ADR 0018](adr/0018-pasted-image-attachments.md)）。タッチ端末では `Enter` が改行になる（[ADR 0037](adr/0037-enter-newline-on-touch.md)）。`/compact` と打っても添付と一緒に送れば本文として扱われるので、注記があるときはコマンドではなく通常本文として追記する。
 
@@ -162,6 +163,15 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 6. `web` を選ぶとダイアログが閉じ、本文に `./packages/web/` が入り、入力欄にフォーカスが戻る。`Escape` で閉じた場合は + にフォーカスが戻り、本文は変わらない。
 7. 会話を持つペインを選び、分割セルで入力欄が 1 行に畳まれる幅にすると + は出ない。2 つのコマンドは `/` と打ったときの候補だけになる。狭い画面でも送信ボタンは右端に残り、モデル名だけが省略される。
 8. 空表示と取得失敗は、ブラウザのリクエスト差し替えで確かめる。`frontend` の `/api/panes/w1:p1/projects` を `{"projects":[],"truncated":false}` にすると「このディレクトリ配下に他のプロジェクトはありません。」、502 にすると再試行が出る。
+
+## 過去の発言の編集
+
+pi のセッションに `hwc-capabilities` があるときだけ、ユーザーメッセージのメタ行に鉛筆が出る（[ADR 0089](adr/0089-pi-message-edit.md)）。`frontend` の架空セッションには capability を置いてある。
+
+1. `frontend` は最初 `working` なので、入力欄から短い本文（例: `あとで確認します`）を送り、6 秒ほどで待機に戻す。`編集の動作を確認します。` の吹き出しの下に鉛筆が出る。入力欄に下書き（例: `下書き`）を入れてから鉛筆を押すと、入力欄がその本文に変わり、「編集中」のチップが出る。下書きは消えない。
+2. チップの × を押すと入力欄が `下書き` に戻る。もう一度 `編集の動作を確認します。` の鉛筆を押し、本文を `編集後の本文` に書き換えて送信する。架空 Herdr が `/hwc-rewind` の marker を追記し、BFF が編集後の本文を送る。会話は対象の親まで戻り、編集後の本文が新しい枝として出る。`下書き` は入力欄に残る。
+3. `review`（Codex）や `new`（空の会話）には鉛筆が出ない。添付付きの発言と最後の発言にも出ない。実行中は出ない。
+4. 失敗は `/api/panes/w1:p1/edit-message` の応答を差し替えて確かめる。`{"error":"send_failed","rewound":true}` の 502 では「会話は戻りましたが、送信できませんでした。もう一度送信してください」が出て、編集チップと本文が残る。同じ `requestId` で再送すると成功する。`{"error":"edit_failed"}` の 502 では「編集を開始できませんでした。もう一度お試しください」が出る。
 
 ## 定型文
 
