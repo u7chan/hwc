@@ -267,16 +267,13 @@
   border-top: 1px solid var(--color-line);
 }
 
-/* 起動待ちと起動失敗の行。入力欄の中の先頭に置く。面は入力欄と共有する。 */
+/* 起動失敗の行。入力欄の中の先頭に置く。面は入力欄と共有する。 */
 .hwc-launch-note {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin: 0 0 var(--space-2);
-}
-
-.hwc-launch-note[data-tone="attention"] {
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-attention);
   border-radius: var(--radius-control);
@@ -284,7 +281,6 @@
   color: var(--color-attention);
 }
 
-/* compact は起動中の説明を出さない（JSX 側で読み上げ用の文に切り替える）。 */
 .hwc-launch-mark {
   flex: none;
   display: grid;
