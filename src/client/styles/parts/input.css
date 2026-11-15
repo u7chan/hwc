@@ -706,8 +706,9 @@
   flex: 1 1 100%;
 }
 
-/* 540px を切ると、バーの 48px が入力欄を圧迫する。バーを隠して数値を優先する。 */
-@container hwc-cell (max-width: 540px) {
+/* 600px を切ると、バーの 48px が入力欄を圧迫する。バーを隠して数値を優先する。
+   1440px 幅で分割したセル（約 550px）はここに落ちる。 */
+@container hwc-cell (max-width: 600px) {
   .hwc-context-bar {
     display: none;
   }

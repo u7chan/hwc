@@ -445,6 +445,10 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 
 .hwc-detail {
   flex: 1;
+  /* 既定の min-width: auto だと、タブを増やしたときのタブ列の実幅が詳細の自動最小幅になり、
+     詳細が画面幅を超える。分割セルはその半分になるので、右のセルがウィンドウの外で切れる。
+     タブ列自身は overflow-x でスクロールするので、ここで内容幅から切り離す。 */
+  min-width: 0;
   min-height: 0;
   display: flex;
 }
