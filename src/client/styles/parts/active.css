@@ -133,12 +133,47 @@
 }
 
 /* リポジトリは場所の所属。見出しが PR タイトルになるため、ここでしか読めない。 */
-.hwc-active-band-repo-group {
+.hwc-active-band-repo-group,
+a.hwc-active-band-repo-link {
   flex: 0 1 auto;
   display: flex;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
+}
+
+/* GitHub のリモートがあるときは、記号とリポジトリ名を 1 つのリンクにする。
+   押下とホバーは PR チップと同じ背景で返し、名前の色は動かさない。常時の
+   アクセント色や下線は、帯を読む面としての静けさを崩すため採らない（ADR 0083）。 */
+a.hwc-active-band-repo-link {
+  position: relative;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  text-decoration: none;
+  transition: background-color 140ms ease;
+}
+
+/* 見た目の高さは行のまま、タップ領域だけ 32px に広げる。左右はリンクの箱で止め、
+   スペースメニューの 44px のタップ領域に重ねない。下は帯の内側で止まり、上は
+   タイトル行の下側に 8px 重なる。44px にすると最初のペイン行にかかる。 */
+a.hwc-active-band-repo-link::after {
+  content: "";
+  position: absolute;
+  inset: -8px 0;
+}
+
+a.hwc-active-band-repo-link:hover {
+  background: var(--color-surface);
+}
+
+a.hwc-active-band-repo-link:active {
+  background: var(--color-line);
+}
+
+a.hwc-active-band-repo-link:focus-visible {
+  outline-offset: -3px;
 }
 
 .hwc-active-band-repo {
@@ -186,7 +221,12 @@
   min-width: 0;
 }
 
+/* リポジトリ名のリンクはタップ領域を上へ 8px 広げる。チップの下端がその下に
+   入らないよう、チップだけをリンクより上に描く。タイトル行ごと上げると、
+   リンクの上側 8px がチップのない範囲まで取られて 32px に届かない。 */
 .hwc-active-band-pr {
+  position: relative;
+  z-index: 3;
   flex: none;
   display: inline-flex;
   align-items: center;

@@ -96,9 +96,10 @@ function ActiveBand(props: {
   const repoName = workspace.worktree?.repoName ?? null;
   const pullRequest = props.pullRequest;
   const sync = workspace.sync ?? null;
-  // GitHub のリモートがあるかは、リポジトリ名の左の記号で示す。ローカルのみの
-  // リポジトリと非 git は記号を持たない（ADR 0083）。
-  const hasGitHubRemote = sync?.repoUrl != null;
+  // GitHub のリモートがあるときは、記号とリポジトリ名をまとめてリポジトリのリンクに
+  // する。リンクにできないローカルのみのリポジトリと非 git は名前だけを出す（ADR 0083）。
+  // リンクの読み上げが GitHub を名乗るため、記号は印にしない。
+  const repoUrl = sync?.repoUrl ?? null;
   // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば
   // タイトルを先頭に置き、名前は矢印の読み上げとツリーに残す。
   const heading = pullRequest?.title ?? workspace.label;
@@ -148,22 +149,26 @@ function ActiveBand(props: {
         {branch === null ? null : (
           <p class="hwc-active-band-line">
             <span class="hwc-active-band-place">
-              {repoName === null ? null : (
+              {repoName === null ? null : repoUrl === null ? (
                 <span class="hwc-active-band-repo-group">
-                  {hasGitHubRemote ? (
-                    <span
-                      class="hwc-active-band-remote"
-                      role="img"
-                      aria-label="GitHub リモートあり"
-                      title="GitHub リモートあり"
-                    >
-                      <GitHubIcon size={13} />
-                    </span>
-                  ) : null}
                   <span class="hwc-active-band-repo" title={repoName}>
                     {repoName}
                   </span>
                 </span>
+              ) : (
+                <a
+                  class="hwc-active-band-repo-link"
+                  href={repoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`${repoName} を GitHub で開く`}
+                  title={repoName}
+                >
+                  <span class="hwc-active-band-remote" aria-hidden="true">
+                    <GitHubIcon size={13} />
+                  </span>
+                  <span class="hwc-active-band-repo">{repoName}</span>
+                </a>
               )}
               <span class="hwc-active-band-branch" title={branch}>
                 {branchLabel}
