@@ -155,12 +155,13 @@ a.hwc-active-band-repo-link {
   transition: background-color 140ms ease;
 }
 
-/* 見た目の高さは行のまま、タップ領域だけ 32px に広げる。下は帯の内側で止まり、
-   上はタイトル行の下側に 8px 重なる。44px にすると最初のペイン行にかかる。 */
+/* 見た目の高さは行のまま、タップ領域だけ 32px に広げる。左右はリンクの箱で止め、
+   スペースメニューの 44px のタップ領域に重ねない。下は帯の内側で止まり、上は
+   タイトル行の下側に 8px 重なる。44px にすると最初のペイン行にかかる。 */
 a.hwc-active-band-repo-link::after {
   content: "";
   position: absolute;
-  inset: -8px calc(-1 * var(--space-1));
+  inset: -8px 0;
 }
 
 a.hwc-active-band-repo-link:hover {
@@ -212,19 +213,20 @@ a.hwc-active-band-repo-link:focus-visible {
   }
 }
 
-/* 名前と同じ行に置く。チップは移動の入口ではないので、帯の矢印とは別に押せる。
-   リポジトリ名のリンクはタップ領域を上へ 8px 広げるため、PR チップの下端が
-   その下に入らないよう、タイトル行をリンクより上に描く。 */
+/* 名前と同じ行に置く。チップは移動の入口ではないので、帯の矢印とは別に押せる。 */
 .hwc-active-band-title {
-  position: relative;
-  z-index: 2;
   display: flex;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
 }
 
+/* リポジトリ名のリンクはタップ領域を上へ 8px 広げる。チップの下端がその下に
+   入らないよう、チップだけをリンクより上に描く。タイトル行ごと上げると、
+   リンクの上側 8px がチップのない範囲まで取られて 32px に届かない。 */
 .hwc-active-band-pr {
+  position: relative;
+  z-index: 3;
   flex: none;
   display: inline-flex;
   align-items: center;

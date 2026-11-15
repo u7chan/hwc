@@ -295,8 +295,6 @@
       }
 
       .hwc-active-band-title {
-        position: relative;
-        z-index: 2;
         display: flex;
         align-items: center;
         gap: var(--space-1);
@@ -315,6 +313,8 @@
       }
 
       .hwc-active-band-pr {
+        position: relative;
+        z-index: 3;
         flex: none;
         display: inline-flex;
         align-items: center;
@@ -500,7 +500,7 @@
       a.hwc-active-band-repo-link::after {
         content: "";
         position: absolute;
-        inset: -8px calc(-1 * var(--space-1));
+        inset: -8px 0;
       }
 
       a.hwc-active-band-repo-link:hover,
@@ -594,7 +594,7 @@
       }
 
       .hit-44 .hwc-active-band-repo-link::after {
-        inset: -14px calc(-1 * var(--space-1));
+        inset: -14px 0;
         outline: 1px dashed var(--color-attention);
         outline-offset: 0;
       }
