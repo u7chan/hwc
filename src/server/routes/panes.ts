@@ -25,6 +25,7 @@ export function createPanesHandlers(ctx: AppContext) {
     current,
     folderTrust,
     launchModels,
+    piDefaults,
     paneFailure,
     requestClose,
     findPaneTab,
@@ -220,7 +221,7 @@ export function createPanesHandlers(ctx: AppContext) {
       if (tab.panes.length >= MAX_PANES_PER_TAB) return c.json({ error: "pane_limit" }, 409);
 
       try {
-        const result = await createPane(panes, paneId, request.value, models);
+        const result = await createPane(panes, paneId, request.value, models, piDefaults);
         // 名前の付け直しに失敗してもエージェントは起動している。起動できた場合だけ、
         // 選んだモデルを会話に載るまでの表示に使う。
         if ((result.ok || result.error === "pane_rename_failed") && request.value.model != null) {
@@ -253,7 +254,7 @@ export function createPanesHandlers(ctx: AppContext) {
       if (pane.agent !== null) return c.json({ error: "pane_not_shell" }, 409);
 
       try {
-        const failure = await startAgentInPane(panes, paneId, request.value, models);
+        const failure = await startAgentInPane(panes, paneId, request.value, models, piDefaults);
         if (failure !== null) return c.json({ error: failure }, 502);
         // 分割 API と同じく、最初のメッセージを送るまでのモデル表示に使う。
         if (request.value.model != null) {

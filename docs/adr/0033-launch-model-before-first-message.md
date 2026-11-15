@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-06
+- Amended by: [ADR 0087](0087-default-model-display.md)
 
 ## Context
 

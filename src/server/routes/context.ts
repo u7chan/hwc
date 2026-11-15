@@ -14,6 +14,7 @@ import { createPaneCloser } from "../close-pane";
 import { createExitCleanup } from "../exit-cleanup";
 import { createFolderTrust } from "../folder-trust";
 import { createLaunchModels } from "../launch-models";
+import { createPiDefaults, loadPiDefaults, type PiDefaultsReader } from "../pi-defaults";
 import type { PaneCloseAction } from "../../shared/pane-close";
 import { isInvalidRequest, isPaneNotFound, type PaneClient } from "../herdr/panes";
 import { type AppState, findPane, type StateStore, type TabState } from "../herdr/state";
@@ -71,6 +72,9 @@ export type CreateAppOptions = {
   opencode?: SessionChatClient;
   codex?: SessionChatClient;
   models?: AgentModelsClient;
+  // pi の既定モデルは、チャット画面を開いたときに読む。テストでは実プロセスを
+  // 起動しないよう差し替える。
+  loadPiDefaults?: PiDefaultsReader;
   // PR は gh の起動を伴うので、状態の取得経路には載せない。求めたときだけ引く。
   pullRequests?: PullRequestReader;
   // fetch / pull は状態を変えるので、状態の取得とは別の口から呼ぶ。
@@ -118,6 +122,7 @@ export function createAppContext(options: CreateAppOptions) {
     restart = createRestartRunner(),
     restartDelayMs = RESTART_DELAY_MS,
     templates = createTemplatesStore({ read: () => null, write: () => {} }),
+    loadPiDefaults: readPiDefaults = loadPiDefaults,
   } = options;
 
   // 「今」は状態ではなく送信時に決める。状態に持たせると、キャッシュされた状態に古い時刻が
@@ -162,6 +167,7 @@ export function createAppContext(options: CreateAppOptions) {
 
   const folderTrust = createFolderTrust(panes);
   const launchModels = createLaunchModels();
+  const piDefaults = createPiDefaults(readPiDefaults);
 
   const paneFailure = (c: Context, error: unknown) => {
     if (isPaneNotFound(error)) return c.json({ error: "pane_not_found" }, 404);
@@ -229,6 +235,7 @@ export function createAppContext(options: CreateAppOptions) {
       if (result === "missing") return c.json({ error: "pane_not_found" }, 404);
       if (result === "changed") return c.json({ error: "pane_action_changed" }, 409);
       launchModels.forget(paneId);
+      piDefaults.forget(paneId);
       // シェルに戻ったのを観測してから、終了したエージェントの画面を消す
       // （ADR 0073 clear-exited-agent-screen）。
       if (action === "exit") exitCleanup(paneId);
@@ -390,6 +397,7 @@ export function createAppContext(options: CreateAppOptions) {
     rootsFor,
     folderTrust,
     launchModels,
+    piDefaults,
     paneFailure,
     worktreeFailure,
     workspaceFailure,

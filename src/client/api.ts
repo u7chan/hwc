@@ -490,6 +490,34 @@ export async function readActivity(
   return parsePaneActivity(body.activity);
 }
 
+// 既定モデルで起動した pi のペインで、会話にモデルが載るまでの表示に使う。
+// 値が無い場合と失敗は同じ null に畳む（表示だけの補い。ADR 0087）。
+export type DefaultModel = { model: string; effort: string | null };
+
+export function toDefaultModel(value: unknown): DefaultModel | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { model, effort } = value as { model?: unknown; effort?: unknown };
+  if (typeof model !== "string" || model.trim() === "" || /\p{Cc}/u.test(model)) return null;
+  if (effort === null || effort === undefined) return { model, effort: null };
+  if (!isAgentEffort(effort)) return null;
+  return { model, effort };
+}
+
+export async function readDefaultModel(
+  paneId: string,
+  signal: AbortSignal,
+): Promise<DefaultModel | null> {
+  try {
+    const response = await client.api.panes[":id"]["default-model"].$get(paneParam(paneId), {
+      init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
+    });
+    if (!response.ok) return null;
+    return toDefaultModel(await response.json());
+  } catch {
+    return null;
+  }
+}
+
 // プロジェクト候補は、入力欄から選ぶときにだけ読む。失敗は候補なしではなく
 // ダイアログの再試行に回すため、null に畳んで返す。
 export async function readProjects(

@@ -65,6 +65,11 @@ export const STARTUP_MODELS = [
   },
 ];
 
+// モデルを指定せずに pi を起動したときの既定。架空 Herdr の agent.start と、
+// 既定モデルを遅延して読む架空 pi の get_state で同じ値を使う。
+export const DEFAULT_PI_MODEL = STARTUP_MODELS[0]!;
+export const DEFAULT_PI_EFFORT = "high";
+
 // 実在のユーザー名・リポジトリ名・パスを fixture に写さない。E2E のスクリーンショットは
 // ここで作ったデータだけを見せる。
 export async function createScenario(root: string): Promise<Scenario> {

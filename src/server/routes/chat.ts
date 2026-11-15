@@ -19,6 +19,7 @@ export function createChatHandlers(ctx: AppContext) {
     attachmentsRoot,
     current,
     launchModels,
+    piDefaults,
     paneFailure,
     matchesEtag,
   } = ctx;
@@ -74,10 +75,10 @@ export function createChatHandlers(ctx: AppContext) {
       if (client === undefined) return c.json({ error: "chat_unavailable" }, 502);
 
       try {
-        const snapshot = launchModels.apply(
-          paneId,
-          await client.snapshot(source.agent === "pi" ? source.path : source.sessionId),
-        );
+        const live = await client.snapshot(source.agent === "pi" ? source.path : source.sessionId);
+        // セッションにモデルが載ったら、既定モデルで補う理由は無くなる。
+        piDefaults.forgetRecorded(paneId, live.model);
+        const snapshot = launchModels.apply(paneId, live);
         // 添付のチップに出すサイズは保存済みファイルの実バイト数。名前から引く。
         const withSizes = await attachAttachmentSizes(snapshot, {
           root: attachmentsRoot,
@@ -96,6 +97,30 @@ export function createChatHandlers(ctx: AppContext) {
         return c.json(withFiles);
       } catch {
         return c.json({ error: "chat_unavailable" }, 502);
+      }
+    },
+    defaultModel: async (c: IdContext) => {
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      const pane = findPane(state, paneId);
+      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      // 既定モデルは pi の起動直後だけに意味がある。シェルや他のエージェントには出さない。
+      if (pane.agent !== "pi" || !pane.chat) return c.json({ model: null, effort: null });
+
+      let directory: string;
+      try {
+        directory = await panes.directory({ paneId });
+      } catch (error) {
+        return paneFailure(c, error);
+      }
+      // 表示だけの補い。読めなくても会話は止めず、何も出さない（ADR 0087）。
+      c.header("cache-control", "no-store");
+      try {
+        return c.json((await piDefaults.read(paneId, directory)) ?? { model: null, effort: null });
+      } catch {
+        return c.json({ error: "default_model_unavailable" }, 502);
       }
     },
     activity: async (c: IdContext) => {
