@@ -88,7 +88,6 @@
   /* 詳細はカードにしない。一覧の右をそのまま使う。 */
   .hwc-settings-scroll {
     background: var(--color-content);
-    --settings-bg: var(--color-content);
   }
 
   .hwc-detail-inner {

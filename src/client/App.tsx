@@ -1430,6 +1430,7 @@ export function App() {
               onThemeChange={changeTheme}
               revision={revision}
               connection={connection}
+              wide={wide}
               onClose={() => setSettingsOpen(false)}
             />
           ) : state === null ? (
