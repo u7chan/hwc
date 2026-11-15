@@ -54,9 +54,11 @@ export function TabBar(props: TabBarProps) {
   const tabList = useRef<HTMLDivElement>(null);
 
   // 選択中のタブが隠れていたら見える位置まで送る。プレビューを選んだときも、
-  // 並べ替えて選択タブが画面外へ出たときも送る（ADR 0086）。
+  // 並べ替えて選択タブが画面外へ出たときも送る（ADR 0086）。並べ替えられるのは
+  // PC の 1 枚表示だけなので、それ以外ではタブ順を依存に加えない。モバイルで
+  // 未選択のタブを外しただけでスクロール位置を失わないため。
   const previewing = props.preview?.selected === true;
-  const tabOrder = props.tabs.map((item) => item.pane.id).join(" ");
+  const tabOrder = props.canReorder ? props.tabs.map((item) => item.pane.id).join(" ") : "";
   useLayoutEffect(() => {
     const list = tabList.current;
     const selected = list?.querySelector<HTMLElement>('[data-selected="true"]');

@@ -47,10 +47,11 @@ export function dropTargetAt(
     return { kind: "tab", pane, side: x < rect.left + rect.width / 2 ? "before" : "after" };
   }
   // タブの隙間と列の余白も差し込みの落とし先にする。1 枚表示でだけ意味がある。
-  // 分割では入れ替えなので、タブの外は受け付けない。
+  // 分割では入れ替えなので、タブの外は受け付けない。プレビュー中は TabBar が
+  // data-drop-tab を外すので、ここで候補が空になり、禁止を迂回しない。
   const list = element?.closest("[data-tab-list]");
   if (!(list instanceof HTMLElement)) return null;
-  const tabs = [...list.querySelectorAll<HTMLElement>("[data-tab-pane]")];
+  const tabs = [...list.querySelectorAll<HTMLElement>("[data-drop-tab]")];
   // 左端がポインタより右にある最初のタブ。その前に入れる。余白と右端は末尾の後ろ。
   const before = tabs.find((tab) => {
     const rect = tab.getBoundingClientRect();
