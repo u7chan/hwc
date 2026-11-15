@@ -6,6 +6,7 @@ import {
   worktreeState,
   hostWorktreeState,
   unmanagedHostState,
+  unmanagedLinkedState,
   fourPaneState,
   createTestApp,
 } from "./app.test-helpers";
@@ -126,28 +127,31 @@ test("create-worktree refuses a workspace that is not in git", async () => {
   expect(seen).toEqual([]);
 });
 
-test("create-worktree refuses a git checkout that herdr does not manage", async () => {
-  const seen: string[] = [];
+test("create-worktree accepts a repository without Herdr worktree provenance", async () => {
+  const created: unknown[] = [];
   const { app } = createTestApp({
     state: unmanagedHostState,
     worktrees: {
-      create: async () => {
-        seen.push("create");
+      create: async (options) => {
+        created.push(options);
         return { workspaceId: "w2", paneId: "w2:p1" };
       },
     },
   });
   const response = await postCreateWorktree(app, "w1");
 
-  expect(response.status).toBe(409);
-  expect(await response.json()).toEqual({ error: "not_git_worktree" });
-  expect(seen).toEqual([]);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ workspaceId: "w2", paneId: "w2:p1" });
+  expect(created).toEqual([{ workspaceId: "w1" }]);
 });
 
-test("create-worktree refuses a linked worktree as the source", async () => {
+test.each([
+  ["Herdr", worktreeState],
+  ["git", unmanagedLinkedState],
+] as const)("create-worktree refuses a linked source discovered by %s", async (_source, state) => {
   const seen: string[] = [];
   const { app } = createTestApp({
-    state: worktreeState,
+    state,
     worktrees: {
       create: async () => {
         seen.push("create");

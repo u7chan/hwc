@@ -28,7 +28,7 @@ export type WorktreeState = {
   repoRoot: string | null;
   checkoutPath: string | null;
   isLinkedWorktree: boolean;
-  // Herdr がワークツリーとして登録しているか。作成・削除は登録済みのスペースでしか行えない。
+  // git の判定では Herdr の削除 API とグループ管理に必要な登録情報を代替できない。
   managed: boolean;
 };
 

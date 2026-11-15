@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import type { HerdrPane, HerdrTab, HerdrWorkspace } from "../../src/server/herdr/contract";
 import type { FakeContext } from "./context";
 
@@ -179,8 +179,19 @@ export function createWorkspaces(ctx: FakeContext) {
     workspaceId: string,
   ): Promise<{ workspace: HerdrWorkspace; tab: HerdrTab; rootPane: HerdrPane } | null> => {
     const source = (snapshot.workspaces ?? []).find((item) => item.workspace_id === workspaceId);
-    const sourceWorktree = source?.worktree ?? null;
-    if (source === undefined || sourceWorktree === null) return null;
+    if (source === undefined) return null;
+    let sourceWorktree = source.worktree ?? null;
+    if (sourceWorktree === null) {
+      const cwd = snapshot.panes?.find((pane) => pane.workspace_id === workspaceId)?.cwd;
+      const repos = JSON.parse(await readFile(join(root, "git-state.json"), "utf8"));
+      if (cwd == null || !Object.hasOwn(repos, cwd)) return null;
+      sourceWorktree = {
+        repo_name: basename(cwd),
+        repo_root: cwd,
+        checkout_path: cwd,
+        is_linked_worktree: false,
+      };
+    }
     worktreeCount += 1;
     const number =
       Math.max(
@@ -231,6 +242,10 @@ export function createWorkspaces(ctx: FakeContext) {
     snapshot.panes = [...(snapshot.panes ?? []), rootPane];
     outputs.set(rootPane.pane_id, "$ ");
     revisions.set(rootPane.pane_id, 0);
+    if (source.worktree == null) {
+      source.worktree = sourceWorktree;
+      broadcast("workspace.updated", { workspace_id: workspaceId });
+    }
     // focus: true を送っているので、実 Herdr と同じく新しいスペースへ移る。
     focus(rootPane.pane_id);
     return { workspace, tab, rootPane };

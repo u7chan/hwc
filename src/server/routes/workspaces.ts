@@ -133,8 +133,8 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       const workspaceId = c.req.param("id");
       const workspace = state.workspaces.find((item) => item.id === workspaceId);
       if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
-      // 起点はリポジトリ本体に限る。Herdr が管理していないスペースも worktree.create を拒否する。
-      if (workspace.worktree?.managed !== true) return c.json({ error: "not_git_worktree" }, 409);
+      // Herdr は未登録でも cwd から起点を解決する。linked worktree からの作成は受け付けない。
+      if (workspace.worktree === null) return c.json({ error: "not_git_worktree" }, 409);
       if (workspace.worktree.isLinkedWorktree) {
         return c.json({ error: "linked_worktree_source" }, 409);
       }
