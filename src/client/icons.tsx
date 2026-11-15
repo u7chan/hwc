@@ -403,6 +403,15 @@ export function ArrowDownIcon({ size = 20 }: IconProps) {
   );
 }
 
+export function ArrowUpIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M12 19V5" />
+      <path d="M6 11l6-6 6 6" />
+    </Svg>
+  );
+}
+
 export function CloseIcon({ size = 20 }: IconProps) {
   return (
     <Svg size={size}>

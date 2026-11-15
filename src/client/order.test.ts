@@ -5,7 +5,9 @@ import {
   dropAnchor,
   dropBeforeId,
   isOrderChange,
+  moveToTopPlan,
   orderUnits,
+  unitIndex,
   type OrderUnit,
 } from "./order";
 import { groupWorkspaces } from "./select";
@@ -123,4 +125,44 @@ test("adjacentBeforeKey moves one block at a time", () => {
 
   expect(adjacentBeforeKey(units, "w1", -1)).toBeUndefined();
   expect(adjacentBeforeKey(units, "w3", 1)).toBeUndefined();
+});
+
+test("moveToTopPlan moves the block of the workspace before the first block", () => {
+  const units = unitsOf([workspace("w1"), workspace("w2"), workspace("w3")]);
+
+  expect(moveToTopPlan(units, "w3")).toEqual({
+    ids: ["w3"],
+    beforeWorkspaceId: "w1",
+  });
+});
+
+test("moveToTopPlan moves the whole repository block, whichever member is picked", () => {
+  const units = unitsOf([
+    workspace("w1"),
+    workspace("w2", { repo: "acme" }),
+    workspace("w3", { repo: "acme", linked: true }),
+  ]);
+
+  // 1 つだけ動かすと、すべてのリポジトリ束が割れる。members をまとめて先頭へ。
+  expect(moveToTopPlan(units, "w3")).toEqual({
+    ids: ["w2", "w3"],
+    beforeWorkspaceId: "w1",
+  });
+});
+
+test("moveToTopPlan has nothing to do at the top or for an unknown workspace", () => {
+  const units = unitsOf([workspace("w1"), workspace("w2")]);
+
+  expect(moveToTopPlan(units, "w1")).toBeNull();
+  expect(moveToTopPlan(units, "missing")).toBeNull();
+  expect(moveToTopPlan([], "w1")).toBeNull();
+});
+
+test("unitIndex tells whether the pending move already landed", () => {
+  const units = unitsOf([workspace("w1"), workspace("w2"), workspace("w3")]);
+
+  // 0 は先頭、正の値はまだ下、null は消えたワークスペース。
+  expect(unitIndex(units, "w1")).toBe(0);
+  expect(unitIndex(units, "w3")).toBe(2);
+  expect(unitIndex(units, "missing")).toBeNull();
 });

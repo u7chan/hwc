@@ -61,7 +61,17 @@ function PullRequestSummary(props: { pullRequest: PullRequest | null; fallback: 
 }
 
 export function TreePaneList(props: TreePaneListProps) {
-  const { state, selectedPaneId, expanded, onSelect, onToggle, workingSince, now } = props;
+  const {
+    state,
+    selectedPaneId,
+    expanded,
+    onSelect,
+    onToggle,
+    workingSince,
+    now,
+    onNotice,
+    onAnnounce,
+  } = props;
 
   // ブランチはワークスペースの属性。行ごとに引き直さず、先にペイン id へ配る。
   const branchOf = new Map<string, string | null>();
@@ -78,8 +88,6 @@ export function TreePaneList(props: TreePaneListProps) {
   const units = orderUnits(groups, state.workspaces);
   const unitByKey = new Map(units.map((unit) => [unit.key, unit]));
 
-  const [notice, setNotice] = useState<string | null>(null);
-  const [announcement, setAnnouncement] = useState("");
   const [dropGuide, setDropGuide] = useState<{ top: number } | null>(null);
   const moving = useRef(false);
   const pendingAnimation = useRef<{
@@ -114,19 +122,19 @@ export function TreePaneList(props: TreePaneListProps) {
       offsets: offsets ?? readOffsets(),
     };
     moving.current = true;
-    setNotice(null);
+    onNotice(null);
     void props.onMoveWorkspaces(unit.ids, dropBeforeId(units, beforeKey)).then(
       (ok) => {
-        if (ok) setAnnouncement(`${unit.label} を ${to + 1} 番目に移動しました`);
+        if (ok) onAnnounce(`${unit.label} を ${to + 1} 番目に移動しました`);
         else {
           pendingAnimation.current = null;
-          setNotice("並べ替えを保存できませんでした。");
+          onNotice("並べ替えを保存できませんでした。");
         }
         moving.current = false;
       },
       () => {
         pendingAnimation.current = null;
-        setNotice("並べ替えを保存できませんでした。");
+        onNotice("並べ替えを保存できませんでした。");
         moving.current = false;
       },
     );
@@ -552,14 +560,6 @@ export function TreePaneList(props: TreePaneListProps) {
 
   return (
     <>
-      {notice === null ? null : (
-        <p class="hwc-list-notice" role="alert">
-          {notice}
-        </p>
-      )}
-      <p class="hwc-visually-hidden" role="status">
-        {announcement}
-      </p>
       {groups.map((group) => {
         const order = unitByKey.get(group.key);
         if (group.place !== null) return renderPlaceGroup(group, order);

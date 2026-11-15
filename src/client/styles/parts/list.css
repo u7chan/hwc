@@ -62,7 +62,8 @@
 }
 
 /* 落とした直後、動く束を一瞬浮かせる。他のカードとの重なりを見分けやすくする。 */
-.hwc-group-block[data-reorder-lifted="true"] {
+.hwc-group-block[data-reorder-lifted="true"],
+.hwc-active-group[data-reorder-lifted="true"] {
   box-shadow: 0 14px 30px color-mix(in srgb, var(--color-text) 18%, transparent);
 }
 

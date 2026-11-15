@@ -211,15 +211,14 @@ test("the parent stays at the top and the rest follow the state order", () => {
 
   const [group] = activeGroups(state);
 
-  // 親 (p1) は待機でも先頭。残りは要対応 → 完了 → 実行中 → 待機 → 不明の順。
-  // p6 は親以外の待機。p5 (不明) より前に残ることで、待機の順位も確かめる。
+  // 親 (p1) だけ先頭へ移す。残りは状態で並べ替えず、state の順のまま。
   expect(group?.rows.map((row) => row.pane.id)).toEqual([
     "w1:p1",
+    "w1:p2",
     "w1:p3",
     "w1:p4",
-    "w1:p2",
-    "w1:p6",
     "w1:p5",
+    "w1:p6",
   ]);
 });
 
@@ -238,36 +237,22 @@ test("the parent skips a shell, so the first agent leads the group", () => {
   expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p2", "w1:p3"]);
 });
 
-test("pinning the parent does not hide the urgency of the group", () => {
-  const state = app(
-    // 親が待機でも、子の要対応で束は先頭に来る。
-    workspace("w1", [pane("w1:p1", "pi", "idle"), pane("w1:p2", "pi", "blocked")]),
-    // 親が完了、子が実行中なら、束は完了の順位。
-    workspace("w2", [pane("w2:p1", "pi", "done"), pane("w2:p2", "pi", "working")]),
-    workspace("w3", [pane("w3:p1", "pi", "working"), pane("w3:p2", "pi", "idle")]),
+test("a group keeps its place when the statuses change or a done row is read", () => {
+  const before = app(
+    workspace("w1", [pane("w1:p1", "pi", "idle")]),
+    workspace("w2", [pane("w2:p1", "pi", "blocked")]),
+    workspace("w3", [pane("w3:p1", "pi", "done")]),
   );
-
-  // 束の順位は親を含めた最も緊急な行。先頭に固定した親の状態では決めない。
-  expect(activeGroups(state).map((group) => group.workspace.id)).toEqual(["w1", "w2", "w3"]);
-});
-
-test("groups come in the rank of their most urgent row, then the state order", () => {
-  const state = app(
-    workspace("w1", [pane("w1:p1", "pi", "working")]),
-    workspace("w2", [pane("w2:p1", "pi", "done")]),
+  const after = app(
+    // 要対応は実行中へ、完了は既読で待機へ、待機は完了へ。
+    workspace("w1", [pane("w1:p1", "pi", "done")]),
+    workspace("w2", [pane("w2:p1", "pi", "working")]),
     workspace("w3", [pane("w3:p1", "pi", "idle")]),
-    workspace("w4", [pane("w4:p1", "pi", "working")]),
-    workspace("w5", [pane("w5:p1", "pi", "blocked")]),
   );
 
-  // 要対応 (0) → 完了 (1) → 実行中 (2) → 待機 (3)。同順位は state の並び。
-  expect(activeGroups(state).map((group) => group.workspace.id)).toEqual([
-    "w5",
-    "w2",
-    "w1",
-    "w4",
-    "w3",
-  ]);
+  // 束の順は state の並び。状態が変わっても入れ替えない。
+  expect(activeGroups(before).map((group) => group.workspace.id)).toEqual(["w1", "w2", "w3"]);
+  expect(activeGroups(after).map((group) => group.workspace.id)).toEqual(["w1", "w2", "w3"]);
 });
 
 test("a group carries the tab of each row and the counts of what it shows", () => {
@@ -280,7 +265,8 @@ test("a group carries the tab of each row and the counts of what it shows", () =
 
   const [group] = activeGroups(state);
 
-  expect(group?.rows.map((row) => row.tab.id)).toEqual(["w1:t1", "w1:t2", "w1:t1", "w1:t2"]);
+  // 行はタブをまたいでも state の順。状態では並べ替えない。
+  expect(group?.rows.map((row) => row.tab.id)).toEqual(["w1:t1", "w1:t1", "w1:t2", "w1:t2"]);
   // 待機の行は並ぶが、どの件数にも入らない。
   expect(group?.counts).toEqual({ blocked: 1, working: 1, done: 1 });
 });
