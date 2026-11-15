@@ -134,7 +134,7 @@ export function RestartSettings(props: { onSaved?: () => void }) {
               autocomplete="off"
               spellcheck={false}
               aria-label="再起動コマンドのパス"
-              placeholder="/usr/local/bin/restart-hwc"
+              placeholder="/home/user/.local/bin/restart-hwc"
               value={shown}
               disabled={busy}
               onInput={(event) => setDraft(event.currentTarget.value)}
@@ -159,7 +159,8 @@ export function RestartSettings(props: { onSaved?: () => void }) {
           </form>
 
           <p class="hwc-section-note">
-            実行ファイルの絶対パスを、シェルを介さずに起動します。プル成功後に実行すると、マージの反映と再起動をまとめて行えます。対象のリポジトリを絞るときは、コマンド側で
+            実行ファイルの絶対パスを、シェルを介さずに起動します。<code>~</code>{" "}
+            は展開しないので、ホームディレクトリを含めて絶対パスで指定してください。プル成功後に実行すると、マージの反映と再起動をまとめて行えます。対象のリポジトリを絞るときは、コマンド側で
             <code>git rev-parse --show-toplevel</code> などを見て判定してください。
           </p>
 
