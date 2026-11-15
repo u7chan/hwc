@@ -1096,6 +1096,9 @@ export function App() {
   // タブ・セル・一覧の行の押下だけを控え、動き始めてからドラッグにする。クリックとの
   // 競合を移動量で分ける（一覧の並べ替えと同じ判定）。
   const startPaneDrag = (event: PointerEvent, paneId: string, listStart = false) => {
+    // 幅の変更でドラッグが始まらない画面でも、抑止は押下のたびに解除する。
+    // 前のドラッグの抑止が残ると、一覧へ戻った最初の選択が 1 回無視される。
+    draggedSincePress.current = false;
     if (!wide || event.button !== 0) return;
     paneDrag.current = {
       paneId,
@@ -1104,7 +1107,6 @@ export function App() {
       active: false,
       listStart,
     };
-    draggedSincePress.current = false;
   };
 
   const startListPaneDrag = (event: PointerEvent, paneId: string) => {
