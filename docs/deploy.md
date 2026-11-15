@@ -6,12 +6,17 @@ PR をマージしたあと、常駐している開発サーバーへどう反�
 
 設定画面の「再起動」に、HWC を起動し直すコマンドの**絶対パス**を入れる。BFF はシェルを介さず、その実行ファイルを直接起動する。
 
+作業機では `~/.local/bin/restart-hwc` に次を置いている。
+
 ```sh
 #!/bin/sh
-# ~/.local/bin/restart-hwc
-[ "$(git rev-parse --show-toplevel)" = "$HOME/workspace/hwc" ] || exit 0
+# HWC のチェックアウトを pull したときだけ、HWC を再起動する。
+# コマンドは pull したチェックアウトを cwd として起動される（ADR 0079）。
+[ "$(git rev-parse --show-toplevel 2>/dev/null)" = "$HOME/workspace/hwc" ] || exit 0
 systemctl --user restart hwc
 ```
+
+置いたら `chmod +x` で実行権限を付ける。無いと設定画面は 409 `command_not_executable` を返す。
 
 どのリポジトリで実行するかを絞るのはコマンド側の責務。コマンドは **pull したチェックアウトをカレントディレクトリとして**起動する（設定画面の「今すぐ再起動」では、BFF が動いているチェックアウト）。上のガードが無いと、ほかのスペースで pull しても HWC が落ちる。
 
@@ -64,3 +69,34 @@ curl -s "http://localhost:30000$B" | grep -c isUserScrollDuringGrowth
 ```
 
 数はその関数の呼び出し箇所で変わる。定義が無いのに名前だけが出てくる、が古いバンドルの目印。
+
+## マシンを作り直すとき
+
+次はリポジトリに無いので、新しい作業機では作り直す。
+
+- `~/.local/bin/restart-hwc` — 上のスクリプト。`chmod +x` を忘れない
+- `~/.config/systemd/user/hwc.service` — 常駐の unit。控えを下に置く
+- `HWC_STATE_DIR/restart.json`（既定は `~/.local/state/hwc/restart.json`）— 設定画面の値。設定画面から入れ直す
+
+unit の控え。mise で入れた bun を使う前提。
+
+```ini
+[Unit]
+Description=hwc (Herdr web UI, LAN)
+# 短時間の連続失敗で failed に落ち、再開されなくなるのを避ける。
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=%h/workspace/hwc
+# HWC は pi / gh / git / codex を子プロセスで起動するので、対話シェルと同じ解決順を渡す。
+Environment="PATH=%h/.local/share/mise/shims:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%h/.local/share/mise/shims/bun --watch src/server.ts
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+```
+
+置いたら `systemctl --user daemon-reload` してから `systemctl --user enable --now hwc`。
