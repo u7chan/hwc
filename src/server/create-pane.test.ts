@@ -347,3 +347,76 @@ test("a failed start on an existing shell reports the failure without retrying",
   ).toBe("agent_start_failed");
   expect(panes.startAgent).toHaveBeenCalledTimes(1);
 });
+
+function createFakeDefaults() {
+  const calls: string[] = [];
+  return {
+    calls,
+    defaults: {
+      remember: (paneId: string) => calls.push(`remember ${paneId}`),
+      forget: (paneId: string) => calls.push(`forget ${paneId}`),
+    },
+  };
+}
+
+test("a pi launch with no model is remembered before the agent can appear", async () => {
+  const { panes, calls } = createFakePanes();
+  const defaults = createFakeDefaults();
+
+  await createPane(panes, "w1:p1", { name: "実装", agent: "pi" }, undefined, defaults.defaults);
+
+  // 起動後に置くと、名前の付け直しを待つ間の最初の会話取得が預かりより先に届く。
+  expect(defaults.calls).toEqual(["remember w1:p3"]);
+  expect(calls).toEqual(["layout", "split", "start", "rename"]);
+});
+
+test("only pi launches without a model are remembered", async () => {
+  const { panes } = createFakePanes();
+  const explicit = createFakeDefaults();
+  const models = {
+    list: async () => [],
+    efforts: async () => [],
+    startArgs: async () => ["--model", "example/beam"],
+  };
+
+  await createPane(
+    panes,
+    "w1:p1",
+    { name: null, agent: "pi", model: { provider: "example", id: "beam" }, effort: null },
+    models,
+    explicit.defaults,
+  );
+  const codex = createFakeDefaults();
+  await createPane(
+    panes,
+    "w1:p1",
+    { name: null, agent: "codex", model: null },
+    undefined,
+    codex.defaults,
+  );
+
+  expect(explicit.calls).toEqual([]);
+  expect(codex.calls).toEqual([]);
+});
+
+test("a failed start drops the remembered default before the shell remains", async () => {
+  const { panes } = createFakePanes();
+  panes.startAgent.mockRejectedValue(new HerdrError("agent_spawn_failed", "cannot start"));
+  const defaults = createFakeDefaults();
+
+  expect(
+    await createPane(panes, "w1:p1", { name: null, agent: "pi" }, undefined, defaults.defaults),
+  ).toEqual({ ok: false, error: "agent_start_failed", paneId: "w1:p3" });
+  expect(defaults.calls).toEqual(["remember w1:p3", "forget w1:p3"]);
+});
+
+test("an agent waiting at its startup prompt keeps the remembered default", async () => {
+  const { panes } = createFakePanes();
+  panes.startAgent.mockRejectedValue(new HerdrError("agent_not_ready", "waiting for trust"));
+  const defaults = createFakeDefaults();
+
+  expect(
+    await createPane(panes, "w1:p1", { name: null, agent: "pi" }, undefined, defaults.defaults),
+  ).toEqual({ ok: true, paneId: "w1:p3" });
+  expect(defaults.calls).toEqual(["remember w1:p3"]);
+});

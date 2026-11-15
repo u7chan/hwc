@@ -370,6 +370,7 @@ export type TestAppOptions = {
     | "restart"
     | "restartDelayMs"
     | "templates"
+    | "loadPiDefaults"
   >
 >;
 

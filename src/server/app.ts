@@ -55,6 +55,7 @@ export function createApp(options: CreateAppOptions) {
       .post("/api/workspaces/:id/git", requireJson, workspacesHandlers.git)
       .post("/api/workspaces/move", requireJson, workspacesHandlers.move)
       .get("/api/panes/:id/chat", chatHandlers.chat)
+      .get("/api/panes/:id/default-model", chatHandlers.defaultModel)
       .get("/api/panes/:id/activity", chatHandlers.activity)
       // マニフェストがあるディレクトリを、ペインの cwd から下だけ列挙する。
       // 兄弟プロジェクトは、このペインから相対パスで届く範囲に無いものとして扱う。

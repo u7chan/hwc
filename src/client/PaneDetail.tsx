@@ -85,12 +85,13 @@ import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
 import { OutputEmpty, OutputSkeleton } from "./pane/empty";
-import { AgentInfoHint, CommandBadge, ContextMeter } from "./pane/info";
+import { AgentInfoHint, AgentInfoSkeleton, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
 import { LaunchNote } from "./pane/launch-note";
 import { useAttachments } from "./pane/use-attachments";
 import { useTemplates } from "./pane/use-templates";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
+import { useDefaultModel } from "./pane/use-default-model";
 import { useDraft } from "./pane/use-draft";
 import { useOutputFollow } from "./pane/use-output-follow";
 import { useOutputVersion } from "./pane/use-output-version";
@@ -317,11 +318,24 @@ export function PaneDetail(props: PaneDetailProps) {
     !replying;
   const empty =
     !launching && (body.kind === "chat" ? chatEmpty : body.kind === "output" && outputEmpty);
-  const info =
-    agentInfo(snapshot) ??
-    (launch === null || (launch.model === null && launch.effort === null)
+  const launchInfo =
+    launch === null || (launch.model === null && launch.effort === null)
       ? null
-      : { model: launch.model === null ? null : launch.model.id, effort: launch.effort });
+      : { model: launch.model === null ? null : launch.model.id, effort: launch.effort };
+  // 既定モデルで起動した pi は、会話にモデルが載るまで何も出せない。チャット画面を
+  // 開いている間だけ既定を読み、スケルトンで待ちを示す（ADR 0087）。
+  const defaultInfo = useDefaultModel(
+    pane.id,
+    pane.agent === "pi" &&
+      pane.chat &&
+      !readOnly &&
+      body.kind === "chat" &&
+      snapshot !== null &&
+      agentInfo(snapshot) === null &&
+      launchInfo === null,
+  );
+  const info = agentInfo(snapshot) ?? launchInfo ?? defaultInfo.info;
+  const infoLoading = info === null && defaultInfo.loading;
   // モデルと effort が無くても、コンテキストの材料があれば行を出す。
   const meter = contextMeter(snapshot?.context ?? null);
   const content = body.kind === "chat" ? body.snapshot.messages : output;
@@ -1330,12 +1344,16 @@ export function PaneDetail(props: PaneDetailProps) {
                 />
               ) : null}
               <span class="hwc-input-tail">
-                {info === null && meter === null ? null : (
+                {info === null && !infoLoading && meter === null ? null : (
                   <span class="hwc-input-info">
                     <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
                       <AgentGlyphIcon agent={pane.agent} size={14} />
                     </span>
-                    {info === null ? null : <AgentInfoHint info={info} />}
+                    {infoLoading ? (
+                      <AgentInfoSkeleton />
+                    ) : info === null ? null : (
+                      <AgentInfoHint info={info} />
+                    )}
                     {meter === null || snapshot?.context == null ? null : (
                       <ContextMeter
                         key={pane.id}

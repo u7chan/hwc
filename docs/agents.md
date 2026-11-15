@@ -61,23 +61,25 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 - 会話はセッション JSONL の active branch から読む（[ADR 0013](adr/0013-pi-session-chat.md)）
 - モデル・effort・context・usage・圧縮・添付ファイル・引用の基準実装
+- デフォルトモデルで起動したペインは、チャット画面を開いたときに pi の既定モデルと effort を読む。起動時にモデルを指定したペインと、hwc 以外から起動したペインは対象外（[ADR 0087](adr/0087-default-model-display.md)）
 - プロジェクトの `Trust project folder?` は、既定の `Trust` だけを専用ビューで回答する。`.pi` や `.agents/skills` など信頼対象のリソースがあるフォルダでは、起動がこの確認で止まる。他の選択肢は端末で行う（[ADR 0044](adr/0044-pi-project-trust.md)）。hwc は `--approve` を渡さない
 - Herdr は Pi の信頼確認を `blocked` としないため、一覧の行は `idle` のまま。確認ビューは、開いているペインの画面から出す
 - ライブ activity は pi 拡張の sidecar がある場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）
 
 ## 実装の入口
 
-| 項目                                    | 場所                                                               |
-| --------------------------------------- | ------------------------------------------------------------------ |
-| エージェント種別、モデル・effort の対応 | `src/shared/agents.ts`                                             |
-| 会話の読み取り口の解決                  | `src/server/herdr/state.ts` の `ChatSource`                        |
-| 各 CLI の会話 reader                    | `src/server/chat/pi.ts`、`codex.ts`、`opencode.ts`                 |
-| 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`          |
-| コマンド候補とガード                    | `src/client/commands.ts`                                           |
-| ライブ activity                         | `src/server/chat/activity.ts`                                      |
-| フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`         |
-| 添付・引用・activity の UI 分岐         | `src/client/PaneDetail.tsx`                                        |
-| E2E の架空データ                        | `e2e/fixtures/scenario.ts`、`e2e/fake-*.ts`、[docs/e2e.md](e2e.md) |
+| 項目                                    | 場所                                                                |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| エージェント種別、モデル・effort の対応 | `src/shared/agents.ts`                                              |
+| 会話の読み取り口の解決                  | `src/server/herdr/state.ts` の `ChatSource`                         |
+| 各 CLI の会話 reader                    | `src/server/chat/pi.ts`、`codex.ts`、`opencode.ts`                  |
+| 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`           |
+| 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts` |
+| コマンド候補とガード                    | `src/client/commands.ts`                                            |
+| ライブ activity                         | `src/server/chat/activity.ts`                                       |
+| フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`          |
+| 添付・引用・activity の UI 分岐         | `src/client/PaneDetail.tsx`                                         |
+| E2E の架空データ                        | `e2e/fixtures/scenario.ts`、`e2e/fake-*.ts`、[docs/e2e.md](e2e.md)  |
 
 ## 更新のしかた
 

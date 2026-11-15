@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { STARTUP_MODELS } from "./fixtures/scenario";
+import { DEFAULT_PI_EFFORT, DEFAULT_PI_MODEL, STARTUP_MODELS } from "./fixtures/scenario";
 
 const args = process.argv.slice(2);
 if (args.join(" ") === "--offline --list-models") {
@@ -11,10 +11,13 @@ if (args.join(" ") === "--offline --list-models") {
   process.exit(0);
 }
 if (args.slice(0, 4).join(" ") !== "--offline --mode rpc --no-session") process.exit(2);
-const model =
-  args[4] === "--model"
-    ? STARTUP_MODELS.find((item) => `${item.provider}/${item.id}` === args[5])
-    : undefined;
+const requested = args[4] === "--model" ? args[5] : undefined;
+const selected =
+  requested === undefined
+    ? undefined
+    : STARTUP_MODELS.find((item) => `${item.provider}/${item.id}` === requested);
+if (requested !== undefined && selected === undefined) process.exit(2);
+const model = selected ?? DEFAULT_PI_MODEL;
 for await (const line of createInterface({ input: process.stdin })) {
   const message = JSON.parse(line) as { type: string };
   let data: unknown;
@@ -28,13 +31,13 @@ for await (const line of createInterface({ input: process.stdin })) {
       };
       break;
     case "get_state":
-      if (!model) process.exit(2);
       data = {
         model: { provider: model.provider, id: model.id, reasoning: model.efforts.pi.length > 0 },
+        // モデル未指定の起動では、実際の起動と同じ既定の effort を返す。
+        ...(selected === undefined ? { thinkingLevel: DEFAULT_PI_EFFORT } : {}),
       };
       break;
     case "get_available_thinking_levels":
-      if (!model) process.exit(2);
       data = { levels: model.efforts.pi.length ? model.efforts.pi : ["off"] };
       break;
     default:

@@ -22,6 +22,7 @@ import {
   toPaneRead,
   toAgentModels,
   toAgentEfforts,
+  toDefaultModel,
   MODEL_CREATE_TIMEOUT_MS,
   CREATE_WORKTREE_TIMEOUT_MS,
   canRetryWorktree,
@@ -51,6 +52,25 @@ test("model candidates keep only their provider and id", () => {
 test("model candidates with namespaced @ IDs remain selectable", () => {
   const model = { provider: "cloudflare-workers-ai", id: "@cf/meta/llama-3.2-3b-instruct" };
   expect(toAgentModels({ models: [model] })).toEqual([model]);
+});
+
+test("the lazy default model keeps only a model and a non-empty effort", () => {
+  expect(toDefaultModel({ model: "beam", effort: "high" })).toEqual({
+    model: "beam",
+    effort: "high",
+  });
+  expect(toDefaultModel({ model: "beam" })).toEqual({ model: "beam", effort: null });
+  expect(toDefaultModel({ model: "beam", effort: null })).toEqual({ model: "beam", effort: null });
+  for (const body of [
+    null,
+    {},
+    { model: "" },
+    { model: 1 },
+    { model: "beam", effort: 3 },
+    { model: "beam", effort: "high\nexit" },
+  ]) {
+    expect(toDefaultModel(body)).toBeNull();
+  }
 });
 
 test("model lookup distinguishes an unstarted OpenCode service from generic failures", () => {

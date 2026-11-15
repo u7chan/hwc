@@ -10,6 +10,10 @@ import {
 import { planSplit } from "./herdr/split";
 import { supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
+import type { PiDefaultsStore } from "./pi-defaults";
+
+// 起動の前後でだけ預かりを置き引きする。表示の解決は既定モデルの口が持つ。
+export type DefaultLaunchTracker = Pick<PiDefaultsStore, "remember" | "forget">;
 
 type CreationClient = Pick<PaneClient, "layout" | "split" | "startAgent" | "rename" | "directory">;
 
@@ -32,13 +36,14 @@ export async function createPane(
   paneId: string,
   request: SplitRequest,
   models?: AgentModelsClient,
+  piDefaults?: DefaultLaunchTracker,
 ): Promise<CreatePaneResult> {
   const layout = await panes.layout({ paneId });
   const plan = planSplit(layout.cells);
   if (plan === null) return { ok: false, error: "pane_limit" };
 
   const created = await panes.split(plan);
-  const error = await setupPane(panes, created.paneId, request, models);
+  const error = await setupPane(panes, created.paneId, request, models, piDefaults);
 
   return error === null
     ? { ok: true, paneId: created.paneId }
@@ -51,12 +56,14 @@ export async function startAgentInPane(
   paneId: string,
   request: StartRequest,
   models?: AgentModelsClient,
+  piDefaults?: DefaultLaunchTracker,
 ): Promise<PaneSetupFailure | null> {
   return setupPane(
     panes,
     paneId,
     { name: null, agent: request.agent, model: request.model, effort: request.effort },
     models,
+    piDefaults,
     { agentName: restartAgentName(paneId), waitForShell: request.waitForShell },
   );
 }
@@ -67,11 +74,16 @@ export async function setupPane(
   paneId: string,
   request: SplitRequest,
   models?: AgentModelsClient,
+  piDefaults?: DefaultLaunchTracker,
   options: SetupOptions = { agentName: agentNameForPane(paneId), waitForShell: true },
 ): Promise<PaneSetupFailure | null> {
   let error: PaneSetupFailure | null = null;
 
   if (request.agent !== null) {
+    // 既定モデルの預かりは、エージェントが検出されて会話の取得が始まる前に置く。
+    // 起動後に置くと、名前の付け直しを待つ間の最初の取得が預かりより先に届く。
+    const defaultLaunch = request.agent === "pi" && request.model == null;
+    if (defaultLaunch) piDefaults?.remember(paneId);
     try {
       let args: string[] | undefined;
       if (request.model != null) {
@@ -100,6 +112,7 @@ export async function setupPane(
       });
     } catch (failure) {
       // 既存のシェルで前景のコマンドが動いている。呼び出し側が 409 として返せるようにする。
+      if (defaultLaunch && !isAgentNotReady(failure)) piDefaults?.forget(paneId);
       if (!options.waitForShell && isAgentPaneBusy(failure)) throw failure;
       // 初回の trust / login 待ちでもエージェント自体は起動している。
       if (!isAgentNotReady(failure)) error = "agent_start_failed";

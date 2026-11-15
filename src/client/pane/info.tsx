@@ -137,3 +137,14 @@ export function AgentInfoHint(props: { info: AgentInfo }) {
     </span>
   );
 }
+
+// 今は値を出せないが、読み込めば出る場所を示す。幅はモデル名と effort の札に合わせ、
+// 値が届いたときに右の使用量と送信を大きく押し出さない。
+export function AgentInfoSkeleton() {
+  return (
+    <span class="hwc-agent-hint hwc-agent-hint-pending" aria-hidden="true">
+      <span class="hwc-info-skeleton hwc-info-skeleton-model" />
+      <span class="hwc-info-skeleton hwc-info-skeleton-effort" />
+    </span>
+  );
+}

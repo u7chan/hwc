@@ -2,7 +2,13 @@ import type net from "node:net";
 import { join } from "node:path";
 import { isAgentKind } from "../../src/shared/agents";
 import { ATTACHED_FILES_OPEN } from "../../src/shared/attachments";
-import { START_FAILS_MODEL_ID, STARTUP_MODELS, writeCodexThread } from "../fixtures/scenario";
+import {
+  DEFAULT_PI_EFFORT,
+  DEFAULT_PI_MODEL,
+  START_FAILS_MODEL_ID,
+  STARTUP_MODELS,
+  writeCodexThread,
+} from "../fixtures/scenario";
 import type { FakeContext } from "./context";
 import type { Layout } from "./layout";
 import type { Pi } from "./pi";
@@ -356,15 +362,15 @@ export function createHandle(
         outputs.set(paneId, `$ ${kind}${args.length === 0 ? "" : ` ${args.join(" ")}`}\n`);
         const modelIndex = args.indexOf("--model");
         const model =
-          modelIndex < 0 ? STARTUP_MODELS[0]!.id : (args[modelIndex + 1] ?? STARTUP_MODELS[0]!.id);
+          modelIndex < 0 ? DEFAULT_PI_MODEL.id : (args[modelIndex + 1] ?? DEFAULT_PI_MODEL.id);
         if (kind === "pi") {
           const thinkingIndex = args.indexOf("--thinking");
-          const effort = thinkingIndex < 0 ? "high" : args[thinkingIndex + 1];
+          const effort = thinkingIndex < 0 ? DEFAULT_PI_EFFORT : args[thinkingIndex + 1];
           const directory = join(root, "agent", "sessions", paneId.replaceAll(":", "_"));
           const path = join(directory, "session.jsonl");
           const selected =
             STARTUP_MODELS.find((item) => `${item.provider}/${item.id}` === model) ??
-            STARTUP_MODELS[0]!;
+            DEFAULT_PI_MODEL;
           pendingPiSessions.set(paneId, {
             path,
             cwd: pane.cwd ?? null,
