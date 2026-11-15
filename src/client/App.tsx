@@ -614,7 +614,7 @@ export function App() {
   const openCreateWorktreeDialog = () => {
     if (menu === null || menu.target.kind !== "workspace" || state === null) return;
     const workspace = state.workspaces.find((item) => item.id === menu.target.id);
-    if (workspace === undefined || workspace.worktree?.managed !== true) return;
+    if (workspace === undefined || workspace.worktree === null) return;
     if (workspace.worktree.isLinkedWorktree) return;
     const paneId = workspace.tabs.flatMap((tab) => tab.panes)[0]?.id;
     if (paneId === undefined) return;
@@ -1200,7 +1200,7 @@ export function App() {
       : null;
   // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする（ADR 0038）。
   const menuWorktree = menuWorkspace?.worktree ?? null;
-  const canCreateWorktree = menuWorktree?.managed === true && !menuWorktree.isLinkedWorktree;
+  const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
   const menuCanCloseSpace =
     state !== null && menuWorkspace !== null && canCloseDuplicateSpace(state, menuWorkspace.id);
   // 並びの正は Herdr。メニューはその移動を 1 タップで呼ぶだけで、hwc 側に順序は持たない。

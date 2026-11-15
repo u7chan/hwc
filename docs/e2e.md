@@ -57,9 +57,10 @@ bun run e2e:serve
 
 `pane.clear` は架空の端末出力を最後の 1 行だけにして、実 Herdr の画面・スクロールバックのクリアを模す。`pane.close` はスナップショットからペインを消して `pane.closed` を流す。`worktree.remove` は
 linked worktree のスペースをスナップショットから取り除き、`workspace.closed` を流す（実際の
-チェックアウトのフォルダには触らない）。`worktree.create` は起点スペースの worktree 情報から
-架空のチェックアウトパスを決め、リンクされたスペース・タブ・root pane をスナップショットに
+チェックアウトのフォルダには触らない）。`worktree.create` は起点スペースの worktree 情報、
+または cwd と架空 git に登録したリポジトリから、リンクされたスペース・タブ・root pane をスナップショットに
 足して `workspace.created` / `pane.created` を流す（実際の `git worktree add` はしない）。
+起点に worktree 情報が無ければ補い、`workspace.updated` も流す。
 `pane.split` は
 `target_pane_id` のタブにシェルペインを 1 枚足し、`pane_info` を返して `pane.created` を流す。
 `pane.layout` はそのタブのセルを等幅のグリッドとして返す（E2E 用の固定形で、実際の分割方向は
@@ -337,6 +338,10 @@ fixture の `sandbox` は同じ場所を指す 2 スペースで、どちらも�
    下書きは残り、「シェルとして使う」で `$ コマンドを入力` のシェルに切り替わる。
 6. `worktree_open_failed`（結果不明）はブラウザのリクエスト差し替えで
    `/api/workspaces/:id/create-worktree` に 502 を返して確かめる。再送のボタンは出ず、「閉じる」だけになる。
+7. Herdr の worktree 情報を持たない `plain-checkout` でも、メニューに「新しいワークツリー」が出る。
+   シェルを選んで作成すると root pane が開き、一覧には `plain-checkout` の配下に新しいワークツリーが増える。
+   起点の登録情報は架空 Herdr が補い、BFF の状態では `managed: true` に変わる。事前登録の操作は挟まない。
+   非 git の `scratch` と linked worktree のメニューには作成項目が出ない。
 
 ## 分割ビューとタブ履歴
 

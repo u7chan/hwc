@@ -481,13 +481,9 @@ export function createHandle(
           send(socket, { id, error: { code: "linked_worktree_source", message: workspaceId } });
           return;
         }
-        if (workspace.worktree == null) {
-          send(socket, { id, error: { code: "not_git_worktree", message: workspaceId } });
-          return;
-        }
         const created = await createWorktree(workspaceId);
         if (created === null) {
-          send(socket, { id, error: { code: "worktree_create_failed", message: workspaceId } });
+          send(socket, { id, error: { code: "not_git_worktree", message: workspaceId } });
           return;
         }
         // 端点の指定（branch / path / base）は受けない。hwc は focus だけを送る。

@@ -109,7 +109,7 @@ export const hostWorktreeState: AppState = {
   ],
 };
 
-// git でリポジトリと分かっただけのスペース。Herdr のワークツリー操作は受け付けない。
+// Herdr の登録情報は無いが、git でリポジトリ本体と分かっていれば作成できる。
 export const unmanagedHostState: AppState = {
   ...hostWorktreeState,
   workspaces: [
