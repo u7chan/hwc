@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useElementWidth } from "../app/use-element-width";
 import type { ConnectionStatus } from "../connection";
 import { ChevronLeftIcon } from "../icons";
@@ -67,6 +67,14 @@ export function Settings(props: SettingsProps) {
   // いま出しているカテゴリ。広い画面は何も開いていなくても先頭を出している。
   const active = sideBySide ? shown : opened;
 
+  const title = opened === null ? "設定" : (editingTitle ?? settingsCategoryLabel(opened));
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const target = scrollRef.current;
+    if (target !== null) target.scrollTop = 0;
+  }, [active]);
+
   // 出しているカテゴリをもう一度押しても何もしない。作り直すと、入力途中のフォームが
   // 確認なしに消える。移るときは、編集中の名前も同じ操作で初期化する。
   const open = (id: SettingsCategoryId) => {
@@ -109,15 +117,15 @@ export function Settings(props: SettingsProps) {
         >
           <ChevronLeftIcon />
         </button>
-        <h2 class="hwc-detail-title">
-          {opened === null ? "設定" : (editingTitle ?? settingsCategoryLabel(opened))}
+        <h2 class="hwc-detail-title hwc-settings-title" key={title}>
+          {title}
         </h2>
       </header>
 
       <div class="hwc-settings-wide" data-side={sideBySide} ref={frameRef}>
         {sideBySide ? index("side", shown) : null}
 
-        <div class="hwc-settings-scroll">
+        <div class="hwc-settings-scroll" ref={scrollRef}>
           {/* カテゴリを左に常設している間はバーを隠すので、見出しは本文の側に置く。 */}
           {sideBySide ? (
             <h2 class="hwc-visually-hidden">{editingTitle ?? settingsCategoryLabel(shown)}</h2>
@@ -125,7 +133,7 @@ export function Settings(props: SettingsProps) {
           {opened === null && !sideBySide ? (
             index("page", null)
           ) : (
-            <div class="hwc-settings">
+            <div class="hwc-settings hwc-settings-detail" key={shown}>
               {section(shown, props, {
                 onEditingTitleChange: setEditingTitle,
                 onSaved: refreshSummary,
