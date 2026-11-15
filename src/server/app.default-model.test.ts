@@ -12,6 +12,7 @@ import {
   sessionPath,
   state,
   twoChatPanesState,
+  waitFor,
 } from "./app.test-helpers";
 
 function post(app: ReturnType<typeof createApp>, path: string, body: unknown) {
@@ -194,4 +195,67 @@ test("closing the pane drops the remembered default", async () => {
     model: null,
     effort: null,
   });
+});
+
+test("a delayed default from a previous launch cannot replace the new launch", async () => {
+  const settles: {
+    resolve: (value: { model: string; effort: string | null }) => void;
+    reject: (error: Error) => void;
+  }[] = [];
+  let loads = 0;
+  const store = createFakeStore(twoChatPanesState);
+  const shellState: AppState = {
+    ...twoChatPanesState,
+    workspaces: twoChatPanesState.workspaces.map((workspace) => ({
+      ...workspace,
+      tabs: workspace.tabs.map((tab) => ({
+        ...tab,
+        panes: tab.panes.map((pane) =>
+          pane.id === "w1:p2"
+            ? { ...pane, agent: null, agentStatus: "idle" as const, chat: false }
+            : pane,
+        ),
+      })),
+    })),
+  };
+  const { app } = createTestApp({
+    store,
+    panes: {
+      split: async () => ({ paneId: "w1:p2" }),
+      startAgent: async () => {
+        store.push(twoChatPanesState, true);
+      },
+    },
+    loadPiDefaults: () => {
+      loads += 1;
+      return new Promise((resolve, reject) => settles.push({ resolve, reject }));
+    },
+  });
+
+  // 1 回目の既定起動と、その既定値の解決を始める。
+  expect((await post(app, "/api/panes/w1:p1/split", { agent: "pi" })).status).toBe(200);
+  const previous = app.request("/api/panes/w1:p2/default-model");
+  await waitFor(() => loads === 1);
+
+  // 終了して同じペインで既定起動し直す。
+  expect((await post(app, "/api/panes/w1:p2/close", {})).status).toBe(200);
+  store.push(shellState, true);
+  expect((await post(app, "/api/panes/w1:p2/agent", { agent: "pi", model: null })).status).toBe(
+    200,
+  );
+  const current = app.request("/api/panes/w1:p2/default-model");
+  await waitFor(() => loads === 2);
+
+  // 新しい起動を先に解決し、その後に古い問い合わせを返す。
+  settles[1]!.resolve({ model: "beam-current", effort: "low" });
+  expect(await (await current).json()).toEqual({ model: "beam-current", effort: "low" });
+  settles[0]!.resolve({ model: "beam-previous", effort: "high" });
+  expect(await (await previous).json()).toEqual({ model: "beam-previous", effort: "high" });
+
+  // 古い問い合わせは、新しい起動のキャッシュを上書きしない。
+  expect(await (await app.request("/api/panes/w1:p2/default-model")).json()).toEqual({
+    model: "beam-current",
+    effort: "low",
+  });
+  expect(loads).toBe(2);
 });

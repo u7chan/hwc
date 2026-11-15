@@ -61,6 +61,59 @@ test("the defaults are read once per pane and only after its launch expects them
   expect(seen).toEqual(["/project"]);
 });
 
+test("a delayed lookup from a previous launch cannot replace the new launch", async () => {
+  const resolves: ((value: { model: string; effort: string | null }) => void)[] = [];
+  let loads = 0;
+  const settings = createPiDefaults(() => {
+    loads += 1;
+    return new Promise((resolve) => resolves.push(resolve));
+  });
+
+  settings.remember("w1:p1");
+  const previous = settings.read("w1:p1", "/previous");
+  settings.forget("w1:p1");
+  settings.remember("w1:p1");
+  const current = settings.read("w1:p1", "/current");
+
+  resolves[1]!({ model: "beam-current", effort: "low" });
+  await expect(current).resolves.toEqual({ model: "beam-current", effort: "low" });
+  resolves[0]!({ model: "beam-previous", effort: "high" });
+  await expect(previous).resolves.toEqual({ model: "beam-previous", effort: "high" });
+
+  expect(await settings.read("w1:p1", "/another")).toEqual({
+    model: "beam-current",
+    effort: "low",
+  });
+  expect(loads).toBe(2);
+});
+
+test("a stale rejection does not clear the current launch's pending lookup", async () => {
+  const settles: {
+    resolve: (value: { model: string; effort: string | null }) => void;
+    reject: (error: Error) => void;
+  }[] = [];
+  let loads = 0;
+  const settings = createPiDefaults(() => {
+    loads += 1;
+    return new Promise((resolve, reject) => settles.push({ resolve, reject }));
+  });
+
+  settings.remember("w1:p1");
+  const previous = settings.read("w1:p1", "/previous");
+  settings.forget("w1:p1");
+  settings.remember("w1:p1");
+  const current = settings.read("w1:p1", "/current");
+  void settings.read("w1:p1", "/current");
+
+  settles[0]!.reject(new Error("late failure"));
+  await previous.catch(() => null);
+  void settings.read("w1:p1", "/current");
+  expect(loads).toBe(2);
+
+  settles[1]!.resolve({ model: "beam-current", effort: "low" });
+  await expect(current).resolves.toEqual({ model: "beam-current", effort: "low" });
+});
+
 test("a failed lookup is not kept and the next read retries", async () => {
   let calls = 0;
   const settings = createPiDefaults(async () => {

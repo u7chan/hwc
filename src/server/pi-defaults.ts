@@ -47,9 +47,13 @@ export type PiDefaultsStore = {
 // 既定モデルで起動したペインだけ、チャット画面を開いたときに既定を読む。起動時には
 // 何も聞かない。同じペインの同時要求は 1 つに畳み、成功した値だけを預かる（ADR 0087）。
 export function createPiDefaults(readDefaults: PiDefaultsReader = loadPiDefaults): PiDefaultsStore {
-  const expected = new Set<string>();
-  const resolved = new Map<string, PiDefaultModel>();
-  const loading = new Map<string, Promise<PiDefaultModel>>();
+  // ペイン id ごとの起動世代。値と解決中の問い合わせは、この世代に属するものだけを
+  // 有効にする。/exit して同じペインで起動し直したとき、前の問い合わせが遅れて返っても
+  // 新しい起動の値は変えない。
+  let nextGeneration = 0;
+  const expected = new Map<string, number>();
+  const resolved = new Map<string, { generation: number; value: PiDefaultModel }>();
+  const loading = new Map<string, { generation: number; promise: Promise<PiDefaultModel> }>();
 
   const forget = (paneId: string): void => {
     expected.delete(paneId);
@@ -59,7 +63,7 @@ export function createPiDefaults(readDefaults: PiDefaultsReader = loadPiDefaults
 
   return {
     remember(paneId) {
-      expected.add(paneId);
+      expected.set(paneId, ++nextGeneration);
       resolved.delete(paneId);
       loading.delete(paneId);
     },
@@ -69,26 +73,31 @@ export function createPiDefaults(readDefaults: PiDefaultsReader = loadPiDefaults
       if (model !== null) forget(paneId);
     },
     async read(paneId, directory) {
-      if (!expected.has(paneId)) return null;
+      const generation = expected.get(paneId);
+      if (generation === undefined) return null;
       const cached = resolved.get(paneId);
-      if (cached !== undefined) return cached;
-      let pending = loading.get(paneId);
-      if (pending === undefined) {
-        pending = readDefaults(directory).then(
-          (value) => {
-            loading.delete(paneId);
-            // 解決中に閉じた・会話に載ったペインへ、後から値を預けない。
-            if (expected.has(paneId)) resolved.set(paneId, value);
-            return value;
-          },
-          (error) => {
-            loading.delete(paneId);
-            throw error;
-          },
-        );
-        loading.set(paneId, pending);
-      }
-      return pending;
+      if (cached !== undefined && cached.generation === generation) return cached.value;
+      const pending = loading.get(paneId);
+      if (pending !== undefined && pending.generation === generation) return pending.promise;
+
+      let promise: Promise<PiDefaultModel>;
+      promise = readDefaults(directory).then(
+        (value) => {
+          // 解決中に終了・再起動した場合、前の世代の値は預けない。loading も新しい
+          // 世代のものと取り違えないよう、自分の登録だけを消す。
+          if (expected.get(paneId) === generation) {
+            resolved.set(paneId, { generation, value });
+            if (loading.get(paneId)?.promise === promise) loading.delete(paneId);
+          }
+          return value;
+        },
+        (error) => {
+          if (loading.get(paneId)?.promise === promise) loading.delete(paneId);
+          throw error;
+        },
+      );
+      loading.set(paneId, { generation, promise });
+      return promise;
     },
   };
 }
