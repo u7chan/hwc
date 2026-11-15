@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-10
-- Amended by: [ADR 0078](0078-starting-pane-mask.md), [ADR 0084](0084-launch-after-create.md)
+- Amended by: [ADR 0078](0078-starting-pane-mask.md), [ADR 0084](0084-launch-after-create.md), [ADR 0088](0088-launching-note-sr-only.md)
 
 ## Context
 

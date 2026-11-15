@@ -1172,7 +1172,6 @@ export function PaneDetail(props: PaneDetailProps) {
           {launchPending ? (
             <LaunchNote
               launch={launch}
-              compact={compact}
               onRetry={props.onRetryLaunch}
               onUseShell={props.onUseShell}
             />
