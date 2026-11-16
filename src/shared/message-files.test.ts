@@ -67,7 +67,7 @@ test("ignores tags other than script", () => {
 });
 
 // 本文の相対パスのリンクから開ける形式（ADR 0084）。拡張子の一覧はここ 1 か所。
-test("links text files by an explicit extension list and extensionless names", () => {
+test("links text files by extension, extensionless names, and dotfiles", () => {
   expect(messageLinkKindFromName("docs/notes.md")).toBe("text");
   expect(messageLinkKindFromName("data/report.csv")).toBe("text");
   expect(messageLinkKindFromName("src/app.ts")).toBe("text");
@@ -75,17 +75,22 @@ test("links text files by an explicit extension list and extensionless names", (
   // 画像と HTML はチップと同じ見せ方のまま。
   expect(messageLinkKindFromName("docs/shot.png")).toBe("image");
   expect(messageLinkKindFromName("docs/mock.html")).toBe("html");
-  // 拡張子の一覧に無いものと、ドット始まりは入らない。
-  expect(messageLinkKindFromName("docs/.env")).toBeNull();
+  // 拡張子の一覧に無いものは入らない。
   expect(messageLinkKindFromName("docs/secrets.env")).toBeNull();
   // 拡張子の無いファイルは開ける。中身がテキストかは配信するときに確かめる。
   expect(messageLinkKindFromName("LICENSE")).toBe("text");
   expect(messageLinkKindFromName("Makefile")).toBe("text");
   expect(messageLinkKindFromName("docs/settings")).toBe("text");
-  // ドット始まりの名前は、拡張子が一覧にあっても対象外。
+  // ドットファイルも開ける。ブラックリストは `.env` とその派生だけ。
+  expect(messageLinkKindFromName("docs/.gitignore")).toBe("text");
+  expect(messageLinkKindFromName("docs/.oxfmtrc.json")).toBe("text");
+  expect(messageLinkKindFromName("docs/.secrets.md")).toBe("text");
+  expect(messageLinkKindFromName("docs/.LICENSE")).toBe("text");
+  expect(messageLinkKindFromName("docs/.env")).toBeNull();
+  expect(messageLinkKindFromName("docs/.env.local")).toBeNull();
   expect(messageLinkKindFromName("docs/.env.yaml")).toBeNull();
-  expect(messageLinkKindFromName("docs/.secrets.md")).toBeNull();
-  expect(messageLinkKindFromName("docs/.LICENSE")).toBeNull();
+  expect(messageLinkKindFromName("docs/.env.example")).toBeNull();
+  expect(messageLinkKindFromName("docs/.ENV")).toBeNull();
   // ディレクトリがドット始まりでも、ファイル名が普通なら対象。
   expect(messageLinkKindFromName(".github/workflows/ci.yml")).toBe("text");
   expect(messageLinkKindFromName("docs/archive.zip")).toBeNull();
@@ -93,6 +98,8 @@ test("links text files by an explicit extension list and extensionless names", (
   expect(previewContentType("src/app.ts")).toBe("text/plain; charset=utf-8");
   expect(previewContentType("docs/notes.md")).toBe("text/plain; charset=utf-8");
   expect(previewContentType("LICENSE")).toBe("text/plain; charset=utf-8");
+  expect(previewContentType(".gitignore")).toBe("text/plain; charset=utf-8");
+  expect(previewContentType(".env")).toBeNull();
 });
 
 test("treats a NUL in the head as binary", () => {
