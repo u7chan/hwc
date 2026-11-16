@@ -8,7 +8,7 @@ import {
 } from "../../shared/file-tree";
 import { previewTextUrl, previewUrl } from "../api";
 import type { FileTreeView } from "../file-tree-store";
-import { ChevronDownIcon, ChevronRightIcon } from "../icons";
+import { ChevronRightIcon } from "../icons";
 import { Spinner } from "../Spinner";
 
 type FileTreeProps = {
@@ -89,15 +89,17 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
 
   if (entry.kind === "dir") {
     const expanded = tree.view.expanded.has(entry.path);
+    // 一度読んだディレクトリは、折りたたみ中も子を DOM に残す。再展開で取り直さず、
+    // 高さのアニメーションだけを走らせる。
+    const loaded = tree.view.dirs.has(entry.path);
+    const failed = tree.view.failed.has(entry.path);
     const content = (
       <>
         <span class="hwc-tree-mark">
           {entry.expandable ? (
-            expanded ? (
-              <ChevronDownIcon size={16} />
-            ) : (
+            <span class="hwc-tree-chevron" data-open={expanded}>
               <ChevronRightIcon size={16} />
-            )
+            </span>
           ) : null}
         </span>
         <span class="hwc-tree-name">{entry.name}</span>
@@ -124,8 +126,15 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
         >
           {content}
         </button>
-        {expanded ? (
-          <ul class="hwc-tree-group">{renderChildren(tree, entry.path, depth + 1)}</ul>
+        {expanded || loaded || failed ? (
+          <div
+            class="hwc-tree-slot"
+            // 読み込みが終わるまでは 0fr のまま。届いたら開いて高さを動かす。
+            data-open={expanded && (loaded || failed) ? "true" : undefined}
+            inert={!expanded}
+          >
+            <ul class="hwc-tree-group">{renderChildren(tree, entry.path, depth + 1)}</ul>
+          </div>
         ) : null}
       </li>
     );

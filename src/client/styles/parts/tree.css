@@ -62,6 +62,42 @@
   margin: 0;
 }
 
+/* フォルダの開閉。高さは grid の 0fr / 1fr で動かし、子は折りたたみ中も
+   クリップして保持する（再展開で取り直さない）。 */
+.hwc-tree-slot {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.hwc-tree-slot[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.hwc-tree-slot > .hwc-tree-group {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hwc-tree-chevron {
+  display: grid;
+  place-items: center;
+  width: var(--space-4);
+  height: var(--space-4);
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.hwc-tree-chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-tree-slot,
+  .hwc-tree-chevron {
+    transition: none;
+  }
+}
+
 /* 行はボタン・リンク・開けない行の 3 種で同じ形にする。左の字下げだけ inline で
    深さに合わせ、右端の大きさを揃える。 */
 .hwc-tree-row {
