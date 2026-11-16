@@ -18,7 +18,6 @@ export type FileTreeFile = {
   name: string;
   path: string;
   open: ChatLinkKind | null;
-  size: number;
   version: string;
 };
 
@@ -56,10 +55,8 @@ function toEntry(value: unknown): FileTreeEntry | null {
 
   const open = value.open;
   if (open !== null && open !== "image" && open !== "html" && open !== "text") return null;
-  const size = value.size;
-  if (typeof size !== "number" || !Number.isFinite(size) || size < 0) return null;
   if (typeof value.version !== "string") return null;
-  return { kind: "file", name, path, open, size, version: value.version };
+  return { kind: "file", name, path, open, version: value.version };
 }
 
 export function parseFileTree(value: unknown): FileTreeListing | null {

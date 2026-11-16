@@ -17,7 +17,6 @@ const docsListing: FileTreeListing = {
       name: "mock.html",
       path: "docs/mock.html",
       open: "html",
-      size: 3,
       version: "1-3",
     },
   ],

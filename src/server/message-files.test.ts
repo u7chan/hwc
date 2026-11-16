@@ -791,7 +791,7 @@ test("lists a directory with dirs first and the kind each file opens with", asyn
   expect(byName.get("src")).toMatchObject({ kind: "dir", path: "src", expandable: true });
   expect(byName.get("app.ts")).toBeUndefined();
   expect(byName.get("docs")).toMatchObject({ kind: "dir", path: "docs" });
-  expect(byName.get("empty.md")).toMatchObject({ kind: "file", open: null, size: 0 });
+  expect(byName.get("empty.md")).toMatchObject({ kind: "file", open: null });
   expect(byName.get("Makefile")).toMatchObject({ kind: "file", open: null });
   expect(byName.get(".gitignore")).toMatchObject({ kind: "file", open: null });
 
@@ -838,7 +838,7 @@ test("keeps a symlink outside the root as a name that cannot be opened", async (
     // 根の外を指すディレクトリは名前だけ残し、展開させない。
     expect(byName.get("outside-dir")).toMatchObject({ kind: "dir", expandable: false });
     expect(byName.get("outside.md")).toMatchObject({ kind: "file", open: null });
-    expect(byName.get("broken.md")).toMatchObject({ kind: "file", open: null, size: 0 });
+    expect(byName.get("broken.md")).toMatchObject({ kind: "file", open: null });
   } finally {
     await rm(outside, { recursive: true, force: true });
   }

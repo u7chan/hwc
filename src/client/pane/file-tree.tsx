@@ -1,6 +1,5 @@
 import type { ComponentChildren } from "preact";
 import type { ChatFile } from "../../server/chat/contract";
-import { formatFileSize } from "../../shared/attachments";
 import {
   FILE_TREE_LIMIT,
   type FileTreeEntry,
@@ -136,7 +135,6 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
     <>
       <span class="hwc-tree-mark" aria-hidden="true" />
       <span class="hwc-tree-name">{entry.name}</span>
-      <span class="hwc-tree-size">{formatFileSize(entry.size)}</span>
     </>
   );
 

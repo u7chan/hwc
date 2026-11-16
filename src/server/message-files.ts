@@ -379,7 +379,7 @@ function compareEntries(a: FileTreeEntry, b: FileTreeEntry): number {
 }
 
 // 開けないファイルも行としては返す。ツリーに穴を空けないため、open を null にして
-// 名前と大きさだけを持たせる。
+// 名前だけを持たせる。大きさはツリーには出さない。
 function treeFile(name: string, path: string, info: Stats, escaped: boolean): FileTreeFile {
   const size = info.size;
   const open =
@@ -389,13 +389,12 @@ function treeFile(name: string, path: string, info: Stats, escaped: boolean): Fi
     name,
     path,
     open,
-    size,
     version: `${Math.trunc(info.mtimeMs)}-${size}`,
   };
 }
 
 function unreadableFile(name: string, path: string): FileTreeFile {
-  return { kind: "file", name, path, open: null, size: 0, version: "" };
+  return { kind: "file", name, path, open: null, version: "" };
 }
 
 // 1 エントリを調べる。symlink は実体を確かめ、根の外を指すものは名前だけ残して
