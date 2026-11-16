@@ -594,6 +594,17 @@ a.hwc-pane-head-repo:focus-visible {
   }
 }
 
+/* セルが狭いとラベルがブランチと競合する。文字だけ先に落とし、アイコンは残す。 */
+@container hwc-cell (max-width: 480px) {
+  .hwc-pane-head .hwc-pane-files {
+    padding: 0 var(--space-1);
+  }
+
+  .hwc-pane-head .hwc-pane-files-label {
+    display: none;
+  }
+}
+
 /* 分割セルが狭いときも同じ。画面幅は広くてもセルは 300px を切るので、画面幅では
    なくセルの幅で判定する。ID の幅が残るとメニューがセルの外へ出て押せなくなる。 */
 @container hwc-cell (max-width: 340px) {

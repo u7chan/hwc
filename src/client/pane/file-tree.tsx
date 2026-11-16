@@ -15,6 +15,8 @@ import { Spinner } from "../Spinner";
 type FileTreeProps = {
   paneId: string;
   view: FileTreeView;
+  // 広いセルでは会話の左、狭いセルでは会話の上に重ねる。見た目だけの違い。
+  side: boolean;
   onToggle: (path: string) => void;
   onRetry: (path: string) => void;
   onOpenPreview: (file: ChatFile) => void;
@@ -185,7 +187,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
 // 根の行は出さない。ペイン見出しにリポジトリ名があり、直下から並べた方が浅く読める。
 export function FileTree(props: FileTreeProps) {
   return (
-    <div class="hwc-tree-view">
+    <div class="hwc-tree-view" data-side={props.side ? "true" : undefined}>
       <ul class="hwc-tree" aria-label="ファイルツリー">
         {renderChildren(props, "", 0)}
       </ul>
