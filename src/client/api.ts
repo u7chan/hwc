@@ -12,6 +12,7 @@ import type {
 } from "../server/chat/contract";
 import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
+import { parseFileTree, type FileTreeListing } from "../shared/file-tree";
 import { parsePaneActivity, type PaneActivity } from "../shared/activity";
 import {
   type AgentKind,
@@ -329,6 +330,25 @@ export function previewUrl(paneId: string, file: { root: number; name: string })
 // text/plain にしてもらう（ADR 0084）。
 export function previewTextUrl(paneId: string, file: { root: number; name: string }): string {
   return `${previewUrl(paneId, file)}?raw=1`;
+}
+
+// ツリーの 1 ディレクトリ。path は根からの相対パスで、空なら根。
+// 取得できない理由（根が無い・根の外）は区別せず、画面は 1 行の失敗表示にする。
+export async function readFileTree(
+  paneId: string,
+  path: string,
+  signal: AbortSignal,
+): Promise<FileTreeListing | null> {
+  try {
+    const input = { ...paneParam(paneId), query: { path } };
+    const response = await client.api.panes[":id"].tree.$get(input, {
+      init: { signal },
+    });
+    if (!response.ok) return null;
+    return parseFileTree(await response.json());
+  } catch {
+    return null;
+  }
 }
 
 // iframe に出す前に、配信できないスクリプトを読み込む HTML かをヘッダーだけで確かめる。

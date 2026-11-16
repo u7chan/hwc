@@ -1,0 +1,158 @@
+import type { FileTreeListing } from "../shared/file-tree";
+import { readFileTree } from "./api";
+
+// ツリーの開閉・展開・取得済みの子。PaneDetail はペイン切り替えやプレビューで
+// アンマウントされるので、コンポーネントの寿命から切り離す。正はこの store だけにし、
+// 表示側は購読して描く（添付チップと同じ扱い）。
+// ツリーを閉じたら捨てる。開き直しがそのまま取り直しになる。
+
+export type FileTreeView = {
+  open: boolean;
+  // 展開しているディレクトリ。根は常に開いているので含めない（"" は常に取得する）。
+  expanded: ReadonlySet<string>;
+  // 取得済みのディレクトリ。キーは ""（根）と根からの相対パス。
+  dirs: ReadonlyMap<string, FileTreeListing>;
+  loading: ReadonlySet<string>;
+  failed: ReadonlySet<string>;
+};
+
+const CLOSED: FileTreeView = {
+  open: false,
+  expanded: new Set(),
+  dirs: new Map(),
+  loading: new Set(),
+  failed: new Set(),
+};
+
+export type FileTreeReader = (
+  paneId: string,
+  path: string,
+  signal: AbortSignal,
+) => Promise<FileTreeListing | null>;
+
+export type FileTreeStore = {
+  view: (paneId: string) => FileTreeView;
+  subscribe: (paneId: string, listener: () => void) => () => void;
+  open: (paneId: string) => void;
+  close: (paneId: string) => void;
+  toggle: (paneId: string, path: string) => void;
+  retry: (paneId: string, path: string) => void;
+  // アンマウント後に開き直したとき、取得できていないディレクトリを取り直す。
+  ensure: (paneId: string) => void;
+  prune: (isAlive: (paneId: string) => boolean) => void;
+};
+
+type PaneTree = {
+  view: FileTreeView;
+  controller: AbortController;
+};
+
+export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
+  const panes = new Map<string, PaneTree>();
+  // 購読はペインごと。表示中のセルだけが購読するので、他のペインの変更を配り直さない。
+  const listeners = new Map<string, Set<() => void>>();
+
+  const notify = (paneId: string) => {
+    for (const listener of new Set(listeners.get(paneId) ?? [])) listener();
+  };
+
+  const view = (paneId: string): FileTreeView => panes.get(paneId)?.view ?? CLOSED;
+
+  const subscribe = (paneId: string, listener: () => void) => {
+    const set = listeners.get(paneId) ?? new Set<() => void>();
+    set.add(listener);
+    listeners.set(paneId, set);
+    return () => {
+      set.delete(listener);
+      if (set.size === 0) listeners.delete(paneId);
+    };
+  };
+
+  const update = (paneId: string, next: (current: FileTreeView) => FileTreeView) => {
+    const pane = panes.get(paneId);
+    if (pane === undefined) return;
+    pane.view = next(pane.view);
+    notify(paneId);
+  };
+
+  const load = (paneId: string, path: string) => {
+    const pane = panes.get(paneId);
+    if (pane === undefined || !pane.view.open) return;
+    if (pane.view.dirs.has(path) || pane.view.loading.has(path) || pane.view.failed.has(path))
+      return;
+
+    const signal = pane.controller.signal;
+    update(paneId, (current) => ({ ...current, loading: new Set(current.loading).add(path) }));
+    void read(paneId, path, signal).then((listing) => {
+      // 閉じて開き直した後・ペインが消えた後に届いた結果は捨てる。
+      if (signal.aborted || panes.get(paneId) !== pane) return;
+      update(paneId, (current) => {
+        const loading = new Set(current.loading);
+        loading.delete(path);
+        if (listing === null) {
+          return { ...current, loading, failed: new Set(current.failed).add(path) };
+        }
+        return { ...current, loading, dirs: new Map(current.dirs).set(path, listing) };
+      });
+    });
+  };
+
+  const ensure = (paneId: string) => {
+    const pane = panes.get(paneId);
+    if (pane === undefined || !pane.view.open) return;
+    load(paneId, "");
+    for (const path of pane.view.expanded) load(paneId, path);
+  };
+
+  const open = (paneId: string) => {
+    if (panes.get(paneId)?.view.open === true) return;
+    const pane: PaneTree = {
+      view: { ...CLOSED, open: true, expanded: new Set(), dirs: new Map() },
+      controller: new AbortController(),
+    };
+    panes.get(paneId)?.controller.abort();
+    panes.set(paneId, pane);
+    notify(paneId);
+    ensure(paneId);
+  };
+
+  const close = (paneId: string) => {
+    const pane = panes.get(paneId);
+    if (pane === undefined) return;
+    pane.controller.abort();
+    panes.delete(paneId);
+    notify(paneId);
+  };
+
+  const toggle = (paneId: string, path: string) => {
+    const pane = panes.get(paneId);
+    if (pane === undefined || !pane.view.open) return;
+    const expanded = new Set(pane.view.expanded);
+    if (expanded.has(path)) expanded.delete(path);
+    else expanded.add(path);
+    update(paneId, (current) => ({ ...current, expanded }));
+    ensure(paneId);
+  };
+
+  const retry = (paneId: string, path: string) => {
+    const pane = panes.get(paneId);
+    if (pane === undefined || !pane.view.open || !pane.view.failed.has(path)) return;
+    const failed = new Set(pane.view.failed);
+    failed.delete(path);
+    update(paneId, (current) => ({ ...current, failed }));
+    load(paneId, path);
+  };
+
+  const prune = (isAlive: (paneId: string) => boolean) => {
+    // Map の反復中に現在の要素を消しても、次へ進む。
+    for (const paneId of panes.keys()) {
+      if (isAlive(paneId)) continue;
+      close(paneId);
+    }
+  };
+
+  return { view, subscribe, open, close, toggle, retry, ensure, prune };
+}
+
+// アプリ全体で 1 つ。ペインを切り替えても同じ store を読む。
+export const fileTreeStore = createFileTreeStore(readFileTree);

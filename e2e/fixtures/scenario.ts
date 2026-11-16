@@ -122,6 +122,17 @@ export async function createScenario(root: string): Promise<Scenario> {
     "# 空状態の設計メモ\n\n見出しと本文の間隔は 24px にそろえる。\n",
   );
 
+  // ファイルツリー。ドットファイルと開けないファイルも名前だけ出ることを確かめる。
+  // .git はチェックアウトの外に見える構造ではないので、ツリーには出ない。
+  await mkdir(join(dashboard, "src"), { recursive: true });
+  await Promise.all([
+    writeFile(join(dashboard, "README.md"), "# acme-dashboard\n"),
+    writeFile(join(dashboard, "package.json"), '{ "name": "acme-dashboard" }\n'),
+    writeFile(join(dashboard, ".gitignore"), "node_modules\n"),
+    writeFile(join(dashboard, "bun.lock"), "lockfile\n"),
+    writeFile(join(dashboard, "src", "main.ts"), "export const ready = true;\n"),
+  ]);
+
   // 添付チップは保存済みファイルの実バイト数を出す。会話の注記は basename しか使わないが、
   // 大きさを出すために実ファイルを状態ディレクトリへ置く。
   const attachmentDir = join(root, "attachments", "w1:p1");

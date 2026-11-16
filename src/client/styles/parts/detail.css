@@ -536,6 +536,52 @@ a.hwc-pane-head-repo:focus-visible {
   }
 }
 
+/* ファイルツリーの開閉。ペイン ID の左、ブランチ・PR の右に置く。
+   広い画面では文字を添え、狭い画面とセルではアイコンだけにする。 */
+.hwc-pane-files {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: var(--space-8);
+  height: var(--space-8);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.hwc-pane-files-label {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .hwc-pane-files {
+    padding: 0 var(--space-2);
+  }
+
+  .hwc-pane-files-label {
+    display: inline;
+  }
+}
+
+.hwc-pane-files:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.hwc-pane-files[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
 /* 狭い画面では ID とコピーをメニューに任せ、見出しの幅をブランチに回す。 */
 @media (max-width: 899px) {
   .hwc-pane-head .hwc-pane-id {
@@ -548,10 +594,30 @@ a.hwc-pane-head-repo:focus-visible {
   }
 }
 
+/* セルが狭いとラベルがブランチと競合する。文字だけ先に落とし、アイコンは残す。 */
+@container hwc-cell (max-width: 480px) {
+  .hwc-pane-head .hwc-pane-files {
+    padding: 0 var(--space-1);
+  }
+
+  .hwc-pane-head .hwc-pane-files-label {
+    display: none;
+  }
+}
+
 /* 分割セルが狭いときも同じ。画面幅は広くてもセルは 300px を切るので、画面幅では
    なくセルの幅で判定する。ID の幅が残るとメニューがセルの外へ出て押せなくなる。 */
 @container hwc-cell (max-width: 340px) {
   .hwc-pane-head .hwc-pane-id {
+    display: none;
+  }
+
+  /* 見出しが狭いときは文字を落とし、アイコンのタップ領域だけ残す。 */
+  .hwc-pane-head .hwc-pane-files {
+    padding: 0;
+  }
+
+  .hwc-pane-head .hwc-pane-files-label {
     display: none;
   }
 

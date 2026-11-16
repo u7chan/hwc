@@ -68,6 +68,9 @@ export function createApp(options: CreateAppOptions) {
       // エージェントが本文で示した画像を返す。根はチェックアウトと追加根で、
       // realpath で解決した実体がその配下にあるときだけ返す。root は根の番号。
       .get("/api/panes/:id/files", filesHandlers.files)
+      // ワークスペースのチェックアウトを 1 階層ずつ返す。ツリーの子は開いたときに
+      // だけ取りに来る。根の外を指す symlink は名前だけ返す。
+      .get("/api/panes/:id/tree", filesHandlers.tree)
       // エージェントが書いた HTML と、そこから相対参照されるファイル。パス形式にして、
       // `<link href="./app.css">` のような参照をそのまま解決させる。先頭の番号は根の番号で、
       // 相対参照でも保たれる（同名ファイルが別の根にあっても取り違えない）。

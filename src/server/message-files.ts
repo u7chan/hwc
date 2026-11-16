@@ -1,11 +1,18 @@
 import { createHash } from "node:crypto";
-import { readFile, realpath, stat } from "node:fs/promises";
-import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import type { Dirent, Stats } from "node:fs";
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   attachmentContentTypeFromName,
   MAX_ATTACHMENTS,
   MAX_PREVIEW_FILE_BYTES,
 } from "../shared/attachments";
+import {
+  FILE_TREE_LIMIT,
+  type FileTreeEntry,
+  type FileTreeFile,
+  type FileTreeListing,
+} from "../shared/file-tree";
 import {
   messageFileKindFromName,
   messageLinkKindFromName,
@@ -348,6 +355,125 @@ export async function resolvePreviewFile(options: {
   const contentType = previewContentType(file.name);
   if (contentType === null) return null;
   return { name: file.name, path: file.path, contentType };
+}
+
+// ツリーは名前順に並べる。localeCompare は環境のロケールで結果が変わるので使わない。
+// 大文字小文字を無視し、同じなら元の表記で決める。
+function compareNames(a: string, b: string): number {
+  const left = a.toLowerCase();
+  const right = b.toLowerCase();
+  if (left !== right) return left < right ? -1 : 1;
+  return a === b ? 0 : a < b ? -1 : 1;
+}
+
+function compareDirents(a: Dirent, b: Dirent): number {
+  const left = a.isDirectory() ? 0 : 1;
+  const right = b.isDirectory() ? 0 : 1;
+  return left !== right ? left - right : compareNames(a.name, b.name);
+}
+
+function compareEntries(a: FileTreeEntry, b: FileTreeEntry): number {
+  const left = a.kind === "dir" ? 0 : 1;
+  const right = b.kind === "dir" ? 0 : 1;
+  return left !== right ? left - right : compareNames(a.name, b.name);
+}
+
+// 開けないファイルも行としては返す。ツリーに穴を空けないため、open を null にして
+// 名前だけを持たせる。大きさはツリーには出さない。
+function treeFile(name: string, path: string, info: Stats, escaped: boolean): FileTreeFile {
+  const size = info.size;
+  const open =
+    escaped || size === 0 || size > MAX_PREVIEW_FILE_BYTES ? null : messageLinkKindFromName(name);
+  return {
+    kind: "file",
+    name,
+    path,
+    open,
+    version: `${Math.trunc(info.mtimeMs)}-${size}`,
+  };
+}
+
+function unreadableFile(name: string, path: string): FileTreeFile {
+  return { kind: "file", name, path, open: null, version: "" };
+}
+
+// 1 エントリを調べる。symlink は実体を確かめ、根の外を指すものは名前だけ残して
+// 展開・open をさせない。壊れたリンクも名前だけ残す。
+async function listEntry(
+  rootReal: string,
+  parentReal: string,
+  parentPath: string,
+  dirent: Dirent,
+): Promise<FileTreeEntry> {
+  const name = dirent.name;
+  const path = parentPath === "" ? name : `${parentPath}/${name}`;
+  const target = join(parentReal, name);
+
+  if (dirent.isSymbolicLink()) {
+    let real: string;
+    try {
+      real = await realpath(target);
+    } catch {
+      return unreadableFile(name, path);
+    }
+    const escaped = real !== rootReal && !real.startsWith(rootReal + sep);
+    let info: Stats;
+    try {
+      info = await stat(real);
+    } catch {
+      return unreadableFile(name, path);
+    }
+    if (info.isDirectory()) return { kind: "dir", name, path, expandable: !escaped };
+    return treeFile(name, path, info, escaped);
+  }
+
+  if (dirent.isDirectory()) return { kind: "dir", name, path, expandable: true };
+
+  let info: Stats;
+  try {
+    info = await stat(target);
+  } catch {
+    return unreadableFile(name, path);
+  }
+  return treeFile(name, path, info, false);
+}
+
+// チェックアウトの 1 ディレクトリを返す。path は根からの相対パスで、空なら根。
+// 子は開いたときにだけ取りに来る前提で、ここでは 1 階層しか読まない。
+export async function listDirectory(options: {
+  root: string;
+  path: string;
+}): Promise<FileTreeListing | null> {
+  if (isAbsolute(options.path)) return null;
+  const segments = options.path.split("/");
+  // 親参照は受け付けない。realpath の配下判定と二重にしておく。
+  if (segments.some((part) => part === "..")) return null;
+  const base = segments.filter((part) => part !== "" && part !== ".").join("/");
+
+  try {
+    const rootReal = await realpath(options.root);
+    const real = await realpath(base === "" ? rootReal : resolve(rootReal, base));
+    if (real !== rootReal && !real.startsWith(rootReal + sep)) return null;
+    const info = await stat(real);
+    if (!info.isDirectory()) return null;
+
+    // `.git` だけは中身がリポジトリの構造ではないので、階層のどこでも出さない。
+    const dirents = (await readdir(real, { withFileTypes: true })).filter(
+      (item) => item.name !== ".git",
+    );
+    const total = dirents.length;
+    // symlink は dir か file か分からないので file 側に並べる。実体の確認は上限で
+    // 切った後だけ行い、巨大なディレクトリでも stat の回数を上限に抑える。
+    const selected = [...dirents].sort(compareDirents).slice(0, FILE_TREE_LIMIT);
+    const entries = await Promise.all(
+      selected.map((item) => listEntry(rootReal, real, base, item)),
+    );
+    // symlink の解決で dir に変わったものがあるので、dirs first で並べ直す。
+    entries.sort(compareEntries);
+    return { entries, total, truncated: total > FILE_TREE_LIMIT };
+  } catch {
+    return null;
+  }
 }
 
 // エージェントは使い捨てのモックを /tmp に書く。TMPDIR ではなく literal を見る。

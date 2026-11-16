@@ -12,6 +12,7 @@ import {
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
+import { fileTreeStore } from "./file-tree-store";
 import { OutputText } from "./OutputText";
 import {
   ATTACHMENT_LIMIT_NOTICE,
@@ -74,6 +75,7 @@ import {
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
+  FolderIcon,
   MoreIcon,
   PaneIcon,
   PencilIcon,
@@ -83,13 +85,17 @@ import {
 } from "./icons";
 import { GitCount } from "./GitCount";
 import { MENU_ID } from "./Menu";
+import { useElementWidth } from "./app/use-element-width";
+import { TREE_SIDE_MIN_WIDTH } from "./layout";
 import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
 import { OutputEmpty, OutputSkeleton } from "./pane/empty";
+import { FileTree } from "./pane/file-tree";
 import { AgentInfoHint, AgentInfoSkeleton, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
 import { LaunchNote } from "./pane/launch-note";
 import { useAttachments } from "./pane/use-attachments";
+import { useFileTree } from "./pane/use-file-tree";
 import { useTemplates } from "./pane/use-templates";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
 import { useDefaultModel } from "./pane/use-default-model";
@@ -197,6 +203,21 @@ export function PaneDetail(props: PaneDetailProps) {
     onOpenPreview,
   } = props;
   const repoUrl = sync?.repoUrl ?? null;
+  // ツリーの状態は store に持つ。プレビューでこのセルが外れても開閉を保つ。
+  const fileTree = useFileTree(pane.id);
+  // ツリーを横に並べるかは、ウィンドウではなく実際のセル幅で決める。狭いセルでは
+  // 会話の上に重ねる（ADR 0090）。
+  const { ref: widthRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
+
+  // チャットを持たないペインには配信先が無い。store の後始末より先に描かない。
+  const treeOpen = pane.chat && fileTree.open;
+  const sideBySide = treeOpen && frameWidth !== null && frameWidth >= TREE_SIDE_MIN_WIDTH;
+  const treeOverlay = treeOpen && !sideBySide;
+
+  // チャットが消えたペインは配信の根を持たない。開いたままにしない。
+  useEffect(() => {
+    if (!pane.chat) fileTreeStore.close(pane.id);
+  }, [pane.chat, pane.id]);
   const shownPaneName = shortenPaneName(
     paneName(pane),
     context.workspaceLabel,
@@ -1020,6 +1041,19 @@ export function PaneDetail(props: PaneDetailProps) {
   const liveTokPerSecond =
     compacting || compact || activity === null ? null : activity.tokPerSecond;
 
+  // 広いセルでは会話の左、狭いセルでは会話の上に重ねる。同じ要素をどちらか一方にだけ置く。
+  const treeView = treeOpen ? (
+    <FileTree
+      paneId={pane.id}
+      view={fileTree}
+      side={sideBySide}
+      onToggle={(path) => fileTreeStore.toggle(pane.id, path)}
+      onRetry={(path) => fileTreeStore.retry(pane.id, path)}
+      onOpenPreview={onOpenPreview}
+      onOpenImage={onOpenImage}
+    />
+  ) : null;
+
   return (
     <>
       <div class="hwc-pane-head" data-bare={!labeled}>
@@ -1085,6 +1119,22 @@ export function PaneDetail(props: PaneDetailProps) {
             #{pullRequest.number}
           </a>
         )}
+        {/* 開くファイルは会話のペインと同じ配信経路を使う。チャットを持たない
+            シェルのペインには出さない（開いても配信できないため）。 */}
+        {pane.chat ? (
+          <button
+            type="button"
+            class="hwc-pane-files"
+            aria-label={fileTree.open ? "ファイルツリーを閉じる" : "ファイルツリーを開く"}
+            aria-pressed={fileTree.open}
+            onClick={() =>
+              fileTree.open ? fileTreeStore.close(pane.id) : fileTreeStore.open(pane.id)
+            }
+          >
+            <FolderIcon size={16} />
+            <span class="hwc-pane-files-label">ファイル</span>
+          </button>
+        ) : null}
         <span class="hwc-pane-id" data-copied={copied}>
           <span class="hwc-pane-id-text">{pane.id}</span>
           <button
@@ -1109,425 +1159,447 @@ export function PaneDetail(props: PaneDetailProps) {
           <MoreIcon />
         </button>
       </div>
-      <div class="hwc-output-wrap" ref={frame}>
-        <div class="hwc-output-scroll" data-empty={empty} ref={scroller} onScroll={onScroll}>
-          {confirmation !== null ? (
-            <PaneConfirmation
-              key={confirmation.id}
-              confirmation={confirmation}
-              attempt={confirmationAttempts.get(confirmation.id) ?? null}
-              onConfirm={() => onConfirmFolderTrust(confirmation.id)}
-              onDismiss={() => onDismissConfirmation(confirmation.id)}
-            />
-          ) : launching || body.kind === "skeleton" ? (
-            <OutputSkeleton />
-          ) : body.kind === "chat" ? (
-            <>
-              {body.snapshot.truncated ? (
-                <p class="hwc-output-notice">古い会話は省略されています</p>
-              ) : null}
-              <ChatLog
-                paneId={pane.id}
-                snapshot={body.snapshot}
-                replying={replying}
-                compacting={compacting}
-                copiedId={copiedId}
-                expandable={!compact}
-                compactionEcho={visibleCompactionEcho}
-                compactionDurationMs={
-                  compactionDuration !== null &&
-                  compactionDuration.at === body.snapshot.compaction?.at
-                    ? compactionDuration.ms
-                    : null
-                }
-                onCopy={copy}
-                canEdit={(row, rows) =>
-                  canEditMessage({
-                    row,
-                    rows,
-                    snapshot: body.snapshot,
-                    pane,
-                    sending: sending || stopping,
-                    editing: edit !== null,
-                  })
-                }
-                onEdit={startEdit}
-                onOpenImage={onOpenImage}
-                onOpenPreview={onOpenPreview}
-                pending={pendingMessages}
-                reveal={reveal}
-              />
-            </>
-          ) : (
-            <>
-              {read?.truncated ? (
-                <p class="hwc-output-notice">最新の {OUTPUT_LINES} 行を表示しています</p>
-              ) : null}
-              {failed ? (
-                <p class="hwc-output-notice" role="status">
-                  出力を取得できません。接続が戻ると自動で更新します。
-                </p>
-              ) : null}
-              {output === null ? (
-                failed ? null : (
+      <div class="hwc-pane-body" ref={widthRef} data-side={sideBySide ? "true" : undefined}>
+        {sideBySide ? treeView : null}
+        <div class="hwc-chat-column">
+          <div class="hwc-output-wrap">
+            {sideBySide ? null : treeView}
+            <div class="hwc-chat-view" ref={frame}>
+              <div
+                class="hwc-output-scroll"
+                data-empty={empty}
+                ref={scroller}
+                onScroll={onScroll}
+                aria-hidden={treeOverlay ? "true" : undefined}
+                inert={treeOverlay}
+              >
+                {confirmation !== null ? (
+                  <PaneConfirmation
+                    key={confirmation.id}
+                    confirmation={confirmation}
+                    attempt={confirmationAttempts.get(confirmation.id) ?? null}
+                    onConfirm={() => onConfirmFolderTrust(confirmation.id)}
+                    onDismiss={() => onDismissConfirmation(confirmation.id)}
+                  />
+                ) : launching || body.kind === "skeleton" ? (
                   <OutputSkeleton />
-                )
-              ) : outputEmpty ? (
-                <OutputEmpty />
-              ) : (
-                <pre class="hwc-output">
-                  <OutputText text={output} scheme={scheme} />
-                </pre>
+                ) : body.kind === "chat" ? (
+                  <>
+                    {body.snapshot.truncated ? (
+                      <p class="hwc-output-notice">古い会話は省略されています</p>
+                    ) : null}
+                    <ChatLog
+                      paneId={pane.id}
+                      snapshot={body.snapshot}
+                      replying={replying}
+                      compacting={compacting}
+                      copiedId={copiedId}
+                      expandable={!compact}
+                      compactionEcho={visibleCompactionEcho}
+                      compactionDurationMs={
+                        compactionDuration !== null &&
+                        compactionDuration.at === body.snapshot.compaction?.at
+                          ? compactionDuration.ms
+                          : null
+                      }
+                      onCopy={copy}
+                      canEdit={(row, rows) =>
+                        canEditMessage({
+                          row,
+                          rows,
+                          snapshot: body.snapshot,
+                          pane,
+                          sending: sending || stopping,
+                          editing: edit !== null,
+                        })
+                      }
+                      onEdit={startEdit}
+                      onOpenImage={onOpenImage}
+                      onOpenPreview={onOpenPreview}
+                      pending={pendingMessages}
+                      reveal={reveal}
+                    />
+                  </>
+                ) : (
+                  <>
+                    {read?.truncated ? (
+                      <p class="hwc-output-notice">最新の {OUTPUT_LINES} 行を表示しています</p>
+                    ) : null}
+                    {failed ? (
+                      <p class="hwc-output-notice" role="status">
+                        出力を取得できません。接続が戻ると自動で更新します。
+                      </p>
+                    ) : null}
+                    {output === null ? (
+                      failed ? null : (
+                        <OutputSkeleton />
+                      )
+                    ) : outputEmpty ? (
+                      <OutputEmpty />
+                    ) : (
+                      <pre class="hwc-output">
+                        <OutputText text={output} scheme={scheme} />
+                      </pre>
+                    )}
+                  </>
+                )}
+              </div>
+              {/* 逐次表示の先端を背景へ溶かす。読み返しで上へ離れたら出さない。 */}
+              {treeOverlay || reveal === null || !atBottom ? null : (
+                <div class="hwc-output-fade" aria-hidden="true" />
               )}
-            </>
-          )}
-        </div>
-        {/* 逐次表示の先端を背景へ溶かす。読み返しで上へ離れたら出さない。 */}
-        {reveal === null || !atBottom ? null : <div class="hwc-output-fade" aria-hidden="true" />}
-        {confirmation !== null ? null : (
-          <button
-            type="button"
-            class="hwc-jump"
-            data-visible={!atBottom}
-            aria-label="最新へ"
-            aria-hidden={atBottom}
-            tabIndex={atBottom ? -1 : 0}
-            onClick={jumpToLatest}
-          >
-            <ArrowDownIcon />
-          </button>
-        )}
-        <SelectionToolbar
-          state={selectionToolbar}
-          canQuote={!readOnly && !launchBlocked && pane.chat}
-          onQuote={quoteSelection}
-          onCopy={() => {
-            const selection = document.getSelection();
-            const element = scroller.current;
-            if (selection === null || selection.rangeCount === 0 || element === null) return "";
-            return selectionCopyText(element, selection.getRangeAt(0));
-          }}
-          onExited={closeToolbar}
-        />
-      </div>
+              {treeOverlay || confirmation !== null ? null : (
+                <button
+                  type="button"
+                  class="hwc-jump"
+                  data-visible={!atBottom}
+                  aria-label="最新へ"
+                  aria-hidden={atBottom}
+                  tabIndex={atBottom ? -1 : 0}
+                  onClick={jumpToLatest}
+                >
+                  <ArrowDownIcon />
+                </button>
+              )}
+              {treeOverlay ? null : (
+                <SelectionToolbar
+                  state={selectionToolbar}
+                  canQuote={!readOnly && !launchBlocked && pane.chat}
+                  onQuote={quoteSelection}
+                  onCopy={() => {
+                    const selection = document.getSelection();
+                    const element = scroller.current;
+                    if (selection === null || selection.rangeCount === 0 || element === null)
+                      return "";
+                    return selectionCopyText(element, selection.getRangeAt(0));
+                  }}
+                  onExited={closeToolbar}
+                />
+              )}
+            </div>
+          </div>
 
-      {body.kind === "chat" ? (
-        <LiveStatus
-          open={replying || compacting}
-          phase={livePhase}
-          thought={liveThought}
-          elapsedMs={compacting ? compactionElapsedMs : waitingMs}
-          compacting={compacting}
-          stopping={stopping}
-          showThought={!compact && activity !== null}
-          tokPerSecond={liveTokPerSecond}
-          onCancelCompaction={() => void cancelCompaction()}
-        />
-      ) : null}
-
-      {notice === null ? null : (
-        <p class="hwc-send-notice" role="status">
-          <span class="hwc-send-notice-mark">
-            <StatusMark tone="attention" size={12} />
-          </span>
-          {notice}
-        </p>
-      )}
-
-      {readOnly ? (
-        view === "terminal" ? (
-          <p class="hwc-terminal-note" role="status">
-            この画面は閲覧のみです。操作は Herdr のターミナルで行ってください。
-          </p>
-        ) : null
-      ) : (
-        <form
-          class="hwc-input"
-          data-expanded={expanded}
-          data-shell={shell}
-          data-drop={dropping}
-          onSubmit={(event) => {
-            event.preventDefault();
-            submit();
-          }}
-          onDragEnter={(event) => {
-            if (
-              launchBlocked ||
-              edit !== null ||
-              !pane.chat ||
-              fileTransfer(event.dataTransfer) === null
-            )
-              return;
-            dragDepth.current += 1;
-            setDropping(true);
-          }}
-          onDragOver={(event) => {
-            const transfer = fileTransfer(event.dataTransfer);
-            if (transfer === null) return;
-            // 添付を受け付けないペインでもファイルを開かせない。ただし落とせる場所では
-            // ないので、copy のカーソルは出さない。
-            event.preventDefault();
-            transfer.dropEffect = pane.chat && !launchBlocked && edit === null ? "copy" : "none";
-          }}
-          onDragLeave={() => {
-            if (dragDepth.current === 0) return;
-            dragDepth.current -= 1;
-            if (dragDepth.current === 0) setDropping(false);
-          }}
-          onDrop={(event) => {
-            const transfer = fileTransfer(event.dataTransfer);
-            if (transfer === null) return;
-            // ファイルはブラウザに開かせない。
-            event.preventDefault();
-            dragDepth.current = 0;
-            setDropping(false);
-            if (edit !== null || !pane.chat || launchBlocked) return;
-            takeFiles(dropActionFrom(transfer.files));
-          }}
-        >
-          {launchPending ? (
-            <LaunchNote
-              launch={launch}
-              onRetry={props.onRetryLaunch}
-              onUseShell={props.onUseShell}
+          {body.kind === "chat" ? (
+            <LiveStatus
+              open={replying || compacting}
+              phase={livePhase}
+              thought={liveThought}
+              elapsedMs={compacting ? compactionElapsedMs : waitingMs}
+              compacting={compacting}
+              stopping={stopping}
+              showThought={!compact && activity !== null}
+              tokPerSecond={liveTokPerSecond}
+              onCancelCompaction={() => void cancelCompaction()}
             />
           ) : null}
-          <label class="hwc-visually-hidden" for={`hwc-input-${pane.id}`}>
-            {context.workspaceLabel} / {context.tabLabel} のペインへ送る
-          </label>
-          <div class="hwc-input-frame">
-            {compact ? null : (
-              <button
-                type="button"
-                class="hwc-input-toggle"
-                aria-expanded={expanded}
-                aria-controls={`hwc-input-${pane.id}`}
-                aria-label={expanded ? "入力を折りたたむ" : "入力を広げる"}
-                onClick={toggleExpanded}
-              >
-                {expanded ? <CollapseIcon /> : <ExpandIcon />}
-              </button>
-            )}
-            {edit !== null ? (
-              <div class="hwc-commands" role="group" aria-label="編集中">
-                <span class="hwc-command" data-chip="true" data-edit="true">
-                  <PencilIcon size={14} />
-                  <span class="hwc-command-label">編集中</span>
-                  {editTarget === null ? null : (
-                    <span class="hwc-command-text">{formatClock(editTarget.at)}</span>
-                  )}
+
+          {notice === null ? null : (
+            <p class="hwc-send-notice" role="status">
+              <span class="hwc-send-notice-mark">
+                <StatusMark tone="attention" size={12} />
+              </span>
+              {notice}
+            </p>
+          )}
+
+          {readOnly ? (
+            view === "terminal" ? (
+              <p class="hwc-terminal-note" role="status">
+                この画面は閲覧のみです。操作は Herdr のターミナルで行ってください。
+              </p>
+            ) : null
+          ) : (
+            <form
+              class="hwc-input"
+              data-expanded={expanded}
+              data-shell={shell}
+              data-drop={dropping}
+              onSubmit={(event) => {
+                event.preventDefault();
+                submit();
+              }}
+              onDragEnter={(event) => {
+                if (
+                  launchBlocked ||
+                  edit !== null ||
+                  !pane.chat ||
+                  fileTransfer(event.dataTransfer) === null
+                )
+                  return;
+                dragDepth.current += 1;
+                setDropping(true);
+              }}
+              onDragOver={(event) => {
+                const transfer = fileTransfer(event.dataTransfer);
+                if (transfer === null) return;
+                // 添付を受け付けないペインでもファイルを開かせない。ただし落とせる場所では
+                // ないので、copy のカーソルは出さない。
+                event.preventDefault();
+                transfer.dropEffect =
+                  pane.chat && !launchBlocked && edit === null ? "copy" : "none";
+              }}
+              onDragLeave={() => {
+                if (dragDepth.current === 0) return;
+                dragDepth.current -= 1;
+                if (dragDepth.current === 0) setDropping(false);
+              }}
+              onDrop={(event) => {
+                const transfer = fileTransfer(event.dataTransfer);
+                if (transfer === null) return;
+                // ファイルはブラウザに開かせない。
+                event.preventDefault();
+                dragDepth.current = 0;
+                setDropping(false);
+                if (edit !== null || !pane.chat || launchBlocked) return;
+                takeFiles(dropActionFrom(transfer.files));
+              }}
+            >
+              {launchPending ? (
+                <LaunchNote
+                  launch={launch}
+                  onRetry={props.onRetryLaunch}
+                  onUseShell={props.onUseShell}
+                />
+              ) : null}
+              <label class="hwc-visually-hidden" for={`hwc-input-${pane.id}`}>
+                {context.workspaceLabel} / {context.tabLabel} のペインへ送る
+              </label>
+              <div class="hwc-input-frame">
+                {compact ? null : (
                   <button
                     type="button"
-                    class="hwc-command-clear"
-                    aria-label="編集をやめる"
-                    disabled={edit.sending}
-                    onClick={cancelEdit}
+                    class="hwc-input-toggle"
+                    aria-expanded={expanded}
+                    aria-controls={`hwc-input-${pane.id}`}
+                    aria-label={expanded ? "入力を折りたたむ" : "入力を広げる"}
+                    onClick={toggleExpanded}
                   >
-                    <CloseIcon size={14} />
+                    {expanded ? <CollapseIcon /> : <ExpandIcon />}
                   </button>
-                </span>
-              </div>
-            ) : attachments.length > 0 ? (
-              <div class="hwc-commands" role="group" aria-label="添付ファイル">
-                {attachments.map((item) => {
-                  const name = item.name;
-                  return (
-                    <span class="hwc-command hwc-attachment" data-chip="true" key={item.key}>
-                      {name === null ? (
-                        <span class="hwc-attachment-sending">送信中</span>
-                      ) : attachmentExtFromName(name) === null ? (
-                        // 画像以外は配信しない。名前だけを見せ、押しても何も開かない。
-                        <>
-                          <span class="hwc-attachment-name" title={name}>
-                            {name}
-                          </span>
-                          <span class="hwc-attachment-size">{formatFileSize(item.size)}</span>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          class="hwc-attachment-open"
-                          aria-label="添付画像を拡大"
-                          aria-haspopup="dialog"
-                          onClick={() => onOpenImage(attachmentUrl(pane.id, name), name)}
-                        >
-                          <img
-                            class="hwc-attachment-thumb"
-                            src={attachmentUrl(pane.id, name)}
-                            alt=""
-                          />
-                        </button>
+                )}
+                {edit !== null ? (
+                  <div class="hwc-commands" role="group" aria-label="編集中">
+                    <span class="hwc-command" data-chip="true" data-edit="true">
+                      <PencilIcon size={14} />
+                      <span class="hwc-command-label">編集中</span>
+                      {editTarget === null ? null : (
+                        <span class="hwc-command-text">{formatClock(editTarget.at)}</span>
                       )}
                       <button
                         type="button"
                         class="hwc-command-clear"
-                        aria-label="添付を外す"
-                        onClick={() => removeAttachment(item.key)}
+                        aria-label="編集をやめる"
+                        disabled={edit.sending}
+                        onClick={cancelEdit}
                       >
                         <CloseIcon size={14} />
                       </button>
                     </span>
-                  );
-                })}
-              </div>
-            ) : activeChip !== null ? (
-              <div class="hwc-commands">
-                <span class="hwc-command" data-chip="true">
-                  <CommandBadge id={activeChip} />
-                  <button
-                    type="button"
-                    class="hwc-command-clear"
-                    aria-label={`${commandText(activeChip)} を解除`}
-                    onClick={clearChip}
-                  >
-                    <CloseIcon size={14} />
-                  </button>
-                </span>
-              </div>
-            ) : candidates.length === 0 ? null : (
-              <div class="hwc-commands" role="group" aria-label="コマンド候補">
-                {candidates.map((id) => (
-                  <button type="button" class="hwc-command" key={id} onClick={() => pick(id)}>
-                    <CommandBadge id={id} />
-                  </button>
-                ))}
-              </div>
-            )}
-            <span class="hwc-input-line">
-              {/* 消えるときに幅が跳ねないよう、シェル以外でも置いたまま折りたたむ。 */}
-              <span
-                class="hwc-input-prompt"
-                aria-hidden="true"
-                data-hidden={shell ? undefined : "true"}
-              >
-                $
-              </span>
-              <textarea
-                id={`hwc-input-${pane.id}`}
-                ref={input}
-                class="hwc-input-field"
-                // 2 行ぶんの高さを初期値にすると、1 行のとき文字の下だけ空いて上に寄る。
-                // 高さは fit() が入力量に合わせて伸ばす。
-                rows={1}
-                disabled={edit?.sending === true}
-                value={inputText}
-                // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
-                {...(compact ? {} : { placeholder })}
-                onInput={(event) => {
-                  setInputText(event.currentTarget.value);
-                }}
-                onPaste={(event) => {
-                  // シェルは改行を受け取れない。末尾の改行だけなら落として差し込み、
-                  // 途中に改行が残るなら入力を変えずに断る。
-                  if (shell) {
-                    const raw = event.clipboardData?.getData("text/plain") ?? "";
-                    if (!/[\r\n]/.test(raw)) return;
-                    const text = raw.replace(/[\r\n]+$/, "");
-                    event.preventDefault();
-                    if (/[\r\n]/.test(text)) {
-                      setNotice(SHELL_NEWLINE_NOTICE);
-                      return;
-                    }
-                    const field = event.currentTarget;
-                    field.setRangeText(text, field.selectionStart, field.selectionEnd, "end");
-                    setDraft(field.value);
-                    fit(field, expanded);
-                    return;
-                  }
-                  // 添付を受け付けるのは会話を持つペインだけ。起動中はテキストだけ。
-                  if (edit !== null || !pane.chat || launchBlocked) return;
-                  const action = pasteActionFrom(event.clipboardData?.items);
-                  // テキストだけの貼り付けは入力欄の既定動作のままにする。
-                  if (action.kind === "default") return;
-                  if (takeFiles(action)) event.preventDefault();
-                }}
-                onKeyDown={(event) => {
-                  const composing = event.isComposing || event.keyCode === 229;
-                  if (event.key !== "Enter") return;
-                  if (composing) return;
-                  // シェルは改行を受け取れない。タッチ端末でも Enter で送る。
-                  const newline =
-                    event.shiftKey ||
-                    (!shell && enterInsertsNewline((query) => window.matchMedia(query).matches));
-                  if (newline) {
-                    if (shell) event.preventDefault();
-                    return;
-                  }
-                  event.preventDefault();
-                  submit();
-                }}
-              />
-            </span>
-            <div class="hwc-input-actions">
-              {/* 入口を出すのはシェルだけ。会話を読めないエージェント（Claude など）は chat が
-                false になるので、chat ではなくペインの種類で分ける。 */}
-              {compact ? null : shell ? (
-                <button type="button" class="hwc-agent-start" onClick={startAgent}>
-                  <AgentIcon size={16} />
-                  エージェントを起動
-                </button>
-              ) : pane.chat && !launchBlocked && edit === null ? (
-                <ComposerAdd
-                  full={attachments.length >= MAX_ATTACHMENTS}
-                  commands={composerCommands}
-                  templateCount={templates === null ? null : templates.length}
-                  templateBlock={templateBlock}
-                  onFiles={(files) => takeFiles(dropActionFrom(files))}
-                  onProjects={openProjects}
-                  onTemplates={openTemplates}
-                />
-              ) : null}
-              <span class="hwc-input-tail">
-                {info === null && !infoLoading && meter === null ? null : (
-                  <span class="hwc-input-info">
-                    <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
-                      <AgentGlyphIcon agent={pane.agent} size={14} />
+                  </div>
+                ) : attachments.length > 0 ? (
+                  <div class="hwc-commands" role="group" aria-label="添付ファイル">
+                    {attachments.map((item) => {
+                      const name = item.name;
+                      return (
+                        <span class="hwc-command hwc-attachment" data-chip="true" key={item.key}>
+                          {name === null ? (
+                            <span class="hwc-attachment-sending">送信中</span>
+                          ) : attachmentExtFromName(name) === null ? (
+                            // 画像以外は配信しない。名前だけを見せ、押しても何も開かない。
+                            <>
+                              <span class="hwc-attachment-name" title={name}>
+                                {name}
+                              </span>
+                              <span class="hwc-attachment-size">{formatFileSize(item.size)}</span>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              class="hwc-attachment-open"
+                              aria-label="添付画像を拡大"
+                              aria-haspopup="dialog"
+                              onClick={() => onOpenImage(attachmentUrl(pane.id, name), name)}
+                            >
+                              <img
+                                class="hwc-attachment-thumb"
+                                src={attachmentUrl(pane.id, name)}
+                                alt=""
+                              />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            class="hwc-command-clear"
+                            aria-label="添付を外す"
+                            onClick={() => removeAttachment(item.key)}
+                          >
+                            <CloseIcon size={14} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : activeChip !== null ? (
+                  <div class="hwc-commands">
+                    <span class="hwc-command" data-chip="true">
+                      <CommandBadge id={activeChip} />
+                      <button
+                        type="button"
+                        class="hwc-command-clear"
+                        aria-label={`${commandText(activeChip)} を解除`}
+                        onClick={clearChip}
+                      >
+                        <CloseIcon size={14} />
+                      </button>
                     </span>
-                    {infoLoading ? (
-                      <AgentInfoSkeleton />
-                    ) : info === null ? null : (
-                      <AgentInfoHint info={info} />
-                    )}
-                    {meter === null || snapshot?.context == null ? null : (
-                      <ContextMeter
-                        key={pane.id}
-                        view={meter}
-                        context={snapshot.context}
-                        usage={snapshot.usage}
-                      />
-                    )}
-                  </span>
+                  </div>
+                ) : candidates.length === 0 ? null : (
+                  <div class="hwc-commands" role="group" aria-label="コマンド候補">
+                    {candidates.map((id) => (
+                      <button type="button" class="hwc-command" key={id} onClick={() => pick(id)}>
+                        <CommandBadge id={id} />
+                      </button>
+                    ))}
+                  </div>
                 )}
-                <button
-                  type={stop && !busy ? "button" : "submit"}
-                  class="hwc-send"
-                  data-sending={sendingAny}
-                  data-stopping={stopping}
-                  data-launching={launching}
-                  aria-label={
-                    launching
-                      ? "起動中"
-                      : stopping
-                        ? "停止中"
-                        : sendingAny
-                          ? "送信中"
-                          : stop
-                            ? "停止"
-                            : edit !== null
-                              ? "編集を送信"
-                              : "送信"
-                  }
-                  aria-busy={launching || undefined}
-                  disabled={busy || launchBlocked || (!stop && !sendable)}
-                  onClick={stop && !busy ? stopWorking : undefined}
-                >
-                  {busy || launching ? <Spinner /> : stop ? <StopIcon /> : <SendIcon />}
-                </button>
-              </span>
-            </div>
-          </div>
-        </form>
-      )}
+                <span class="hwc-input-line">
+                  {/* 消えるときに幅が跳ねないよう、シェル以外でも置いたまま折りたたむ。 */}
+                  <span
+                    class="hwc-input-prompt"
+                    aria-hidden="true"
+                    data-hidden={shell ? undefined : "true"}
+                  >
+                    $
+                  </span>
+                  <textarea
+                    id={`hwc-input-${pane.id}`}
+                    ref={input}
+                    class="hwc-input-field"
+                    // 2 行ぶんの高さを初期値にすると、1 行のとき文字の下だけ空いて上に寄る。
+                    // 高さは fit() が入力量に合わせて伸ばす。
+                    rows={1}
+                    disabled={edit?.sending === true}
+                    value={inputText}
+                    // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
+                    {...(compact ? {} : { placeholder })}
+                    onInput={(event) => {
+                      setInputText(event.currentTarget.value);
+                    }}
+                    onPaste={(event) => {
+                      // シェルは改行を受け取れない。末尾の改行だけなら落として差し込み、
+                      // 途中に改行が残るなら入力を変えずに断る。
+                      if (shell) {
+                        const raw = event.clipboardData?.getData("text/plain") ?? "";
+                        if (!/[\r\n]/.test(raw)) return;
+                        const text = raw.replace(/[\r\n]+$/, "");
+                        event.preventDefault();
+                        if (/[\r\n]/.test(text)) {
+                          setNotice(SHELL_NEWLINE_NOTICE);
+                          return;
+                        }
+                        const field = event.currentTarget;
+                        field.setRangeText(text, field.selectionStart, field.selectionEnd, "end");
+                        setDraft(field.value);
+                        fit(field, expanded);
+                        return;
+                      }
+                      // 添付を受け付けるのは会話を持つペインだけ。起動中はテキストだけ。
+                      if (edit !== null || !pane.chat || launchBlocked) return;
+                      const action = pasteActionFrom(event.clipboardData?.items);
+                      // テキストだけの貼り付けは入力欄の既定動作のままにする。
+                      if (action.kind === "default") return;
+                      if (takeFiles(action)) event.preventDefault();
+                    }}
+                    onKeyDown={(event) => {
+                      const composing = event.isComposing || event.keyCode === 229;
+                      if (event.key !== "Enter") return;
+                      if (composing) return;
+                      // シェルは改行を受け取れない。タッチ端末でも Enter で送る。
+                      const newline =
+                        event.shiftKey ||
+                        (!shell &&
+                          enterInsertsNewline((query) => window.matchMedia(query).matches));
+                      if (newline) {
+                        if (shell) event.preventDefault();
+                        return;
+                      }
+                      event.preventDefault();
+                      submit();
+                    }}
+                  />
+                </span>
+                <div class="hwc-input-actions">
+                  {/* 入口を出すのはシェルだけ。会話を読めないエージェント（Claude など）は chat が
+                false になるので、chat ではなくペインの種類で分ける。 */}
+                  {compact ? null : shell ? (
+                    <button type="button" class="hwc-agent-start" onClick={startAgent}>
+                      <AgentIcon size={16} />
+                      エージェントを起動
+                    </button>
+                  ) : pane.chat && !launchBlocked && edit === null ? (
+                    <ComposerAdd
+                      full={attachments.length >= MAX_ATTACHMENTS}
+                      commands={composerCommands}
+                      templateCount={templates === null ? null : templates.length}
+                      templateBlock={templateBlock}
+                      onFiles={(files) => takeFiles(dropActionFrom(files))}
+                      onProjects={openProjects}
+                      onTemplates={openTemplates}
+                    />
+                  ) : null}
+                  <span class="hwc-input-tail">
+                    {info === null && !infoLoading && meter === null ? null : (
+                      <span class="hwc-input-info">
+                        <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
+                          <AgentGlyphIcon agent={pane.agent} size={14} />
+                        </span>
+                        {infoLoading ? (
+                          <AgentInfoSkeleton />
+                        ) : info === null ? null : (
+                          <AgentInfoHint info={info} />
+                        )}
+                        {meter === null || snapshot?.context == null ? null : (
+                          <ContextMeter
+                            key={pane.id}
+                            view={meter}
+                            context={snapshot.context}
+                            usage={snapshot.usage}
+                          />
+                        )}
+                      </span>
+                    )}
+                    <button
+                      type={stop && !busy ? "button" : "submit"}
+                      class="hwc-send"
+                      data-sending={sendingAny}
+                      data-stopping={stopping}
+                      data-launching={launching}
+                      aria-label={
+                        launching
+                          ? "起動中"
+                          : stopping
+                            ? "停止中"
+                            : sendingAny
+                              ? "送信中"
+                              : stop
+                                ? "停止"
+                                : edit !== null
+                                  ? "編集を送信"
+                                  : "送信"
+                      }
+                      aria-busy={launching || undefined}
+                      disabled={busy || launchBlocked || (!stop && !sendable)}
+                      onClick={stop && !busy ? stopWorking : undefined}
+                    >
+                      {busy || launching ? <Spinner /> : stop ? <StopIcon /> : <SendIcon />}
+                    </button>
+                  </span>
+                </div>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
       {projectDialog === null ? null : (
         <ProjectDialog
           paneId={pane.id}

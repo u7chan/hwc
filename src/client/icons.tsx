@@ -181,6 +181,15 @@ export function FileIcon({ size = 16 }: IconProps) {
   );
 }
 
+// ファイルツリー。書類 1 枚の FileIcon と区別できるよう、フォルダの形にする。
+export function FolderIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </Svg>
+  );
+}
+
 // 新しい会話。同じペインで会話だけを作り直すが、円を描き直す矢印は更新に見えるので、会話の吹き出しに + を添える。
 export function NewSessionIcon({ size = 16 }: IconProps) {
   return (

@@ -1,0 +1,187 @@
+/* ペイン内のファイルツリー。広いセルでは会話の左に並べ、狭いセルでは会話の上に
+   重ねる。どちらも入力欄は残す（ADR 0090）。 */
+
+.hwc-pane-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hwc-pane-body[data-side="true"] {
+  flex-direction: row;
+}
+
+.hwc-chat-column {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 会話の列。追従・ジャンプ・選択ツールバーの基準を、ツリーを含む胴ではなく会話に保つ。 */
+.hwc-chat-view {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.hwc-tree-view {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: auto;
+  padding: var(--space-2) 0 var(--space-6);
+  background: var(--color-content);
+  overscroll-behavior: contain;
+}
+
+/* 広いセルでは会話の左に並べる。幅は token、切り替えの閾値は layout.ts の
+   TREE_SIDE_MIN_WIDTH。 */
+.hwc-tree-view[data-side="true"] {
+  position: static;
+  z-index: auto;
+  flex: none;
+  width: var(--hwc-tree-width);
+  border-right: 1px solid var(--color-line);
+  padding-bottom: max(var(--space-6), env(safe-area-inset-bottom));
+}
+
+.hwc-tree,
+.hwc-tree-group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-tree-item {
+  margin: 0;
+}
+
+/* フォルダの開閉。高さは grid の 0fr / 1fr で動かし、子は折りたたみ中も
+   クリップして保持する（再展開で取り直さない）。 */
+.hwc-tree-slot {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.hwc-tree-slot[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.hwc-tree-slot > .hwc-tree-group {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hwc-tree-chevron {
+  display: grid;
+  place-items: center;
+  width: var(--space-4);
+  height: var(--space-4);
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.hwc-tree-chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-tree-slot,
+  .hwc-tree-chevron {
+    transition: none;
+  }
+}
+
+/* 行はボタン・リンク・開けない行の 3 種で同じ形にする。左の字下げだけ inline で
+   深さに合わせ、行の右端を揃える。 */
+.hwc-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--tap);
+  margin: 0;
+  padding: 0 var(--space-4) 0 var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  text-align: left;
+  text-decoration: none;
+}
+
+button.hwc-tree-row,
+a.hwc-tree-row {
+  cursor: pointer;
+}
+
+button.hwc-tree-row:hover,
+a.hwc-tree-row:hover {
+  background: var(--color-raised);
+}
+
+button.hwc-tree-row:active,
+a.hwc-tree-row:active {
+  background: var(--color-line);
+}
+
+.hwc-tree-row:focus-visible {
+  outline-offset: -3px;
+}
+
+/* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。 */
+.hwc-tree-row[data-blocked="true"] {
+  color: var(--color-secondary);
+  cursor: default;
+}
+
+.hwc-tree-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-4);
+  height: var(--space-4);
+  color: var(--color-secondary);
+}
+
+.hwc-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 読み込み中・空・打ち切り・失敗の 1 行。行の高さはツリーの行と揃える。 */
+.hwc-tree-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-4) 0 var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-tree-retry {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hwc-tree-retry:hover {
+  text-decoration: underline;
+}
