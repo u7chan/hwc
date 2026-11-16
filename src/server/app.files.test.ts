@@ -433,6 +433,8 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     await writeFile(join(root, "preview", "app.js"), "export const ready = true;");
     await writeFile(join(root, "preview", "shot.png"), pngBytes);
     await writeFile(join(root, "preview", "notes.txt"), "text");
+    await writeFile(join(root, "preview", "LICENSE"), "MIT License\n");
+    await writeFile(join(root, "preview", "binary"), new Uint8Array([0x01, 0x00, 0x02]));
     await writeFile(join(root, "preview", ".env"), "TOKEN=1");
     await writeFile(join(root, "preview", "secrets.env"), "TOKEN=1");
     const app = createFilesApp(root);
@@ -457,6 +459,17 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     expect(asset.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
     const rawScript = await app.request("/api/panes/w1:p1/preview/0/preview/app.js?raw=1");
     expect(rawScript.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+
+    // 拡張子の無いファイルも開ける。中身は配信するときに確かめる。
+    const license = await app.request("/api/panes/w1:p1/preview/0/preview/LICENSE?raw=1");
+    expect(license.status).toBe(200);
+    expect(license.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(await license.text()).toBe("MIT License\n");
+
+    // 拡張子の無いバイナリは、文字として配らずに断る。
+    const binary = await app.request("/api/panes/w1:p1/preview/0/preview/binary?raw=1");
+    expect(binary.status).toBe(415);
+    expect(await binary.text()).toContain("バイナリファイル");
 
     // 一覧に無い形式は配信しない。拡張子を持たない `.env` も対象外。
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/secrets.env")).status).toBe(404);

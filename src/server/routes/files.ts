@@ -6,7 +6,7 @@ import {
   resolveMessageFile,
   resolvePreviewFile,
 } from "../message-files";
-import { isHtmlName, isTextName, previewWarning } from "../../shared/message-files";
+import { isHtmlName, isTextName, looksBinary, previewWarning } from "../../shared/message-files";
 import type { AppContext, IdContext, PreviewContext } from "./context";
 
 const PREVIEW_CSP = "sandbox allow-scripts";
@@ -124,7 +124,16 @@ export function createFilesHandlers(ctx: AppContext) {
       // 本文のリンクから開くテキストは、ブラウザに生の中身を見せる。HTML のアセットにも
       // 同じ URL を使うので、raw が付いたときだけ text/plain に固定する（ADR 0084）。
       const raw = c.req.query("raw") === "1" && isTextName(file.name);
-      const headers = previewHeaders(raw ? "text/plain; charset=utf-8" : file.contentType);
+      const contentType = raw ? "text/plain; charset=utf-8" : file.contentType;
+      // 拡張子の無いファイルは、開くまでテキストかバイナリか分からない。文字として配る
+      // 経路だけ、先頭に NUL が無いことを確かめる（ADR 0084）。
+      if (contentType === "text/plain; charset=utf-8" && looksBinary(new Uint8Array(bytes))) {
+        return new Response("バイナリファイルのため表示できません。", {
+          status: 415,
+          headers: previewHeaders(contentType),
+        });
+      }
+      const headers = previewHeaders(contentType);
       // 配信で読んだバイト列をそのまま見る。HTML を書き換えずに、白紙の理由だけを知らせる。
       if (isHtmlName(file.name)) {
         const warning = previewWarning(new TextDecoder().decode(bytes));

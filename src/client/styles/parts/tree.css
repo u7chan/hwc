@@ -137,9 +137,10 @@ a.hwc-tree-row:active {
   outline-offset: -3px;
 }
 
-/* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。 */
+/* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。
+   gitignore された行と同じく、地の色相から外したグレーにする。 */
 .hwc-tree-row[data-blocked="true"] {
-  color: var(--color-secondary);
+  color: var(--color-muted);
   cursor: default;
 }
 

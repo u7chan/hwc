@@ -685,21 +685,31 @@ test("resolves a relative link to a text file and leaves a bare path as text", a
   expect(message?.files).toBeUndefined();
 });
 
-test("does not link a file without an allowed extension", async () => {
+test("does not link a dot file or a file without an allowed extension", async () => {
   await write("docs/.env", new TextEncoder().encode("TOKEN=1"));
   await write("docs/secrets.env", new TextEncoder().encode("TOKEN=1"));
-  await write("docs/settings", new TextEncoder().encode("token=1"));
 
   const message = (
-    await attachMessageFiles(
-      agentChat("[a](docs/.env) [b](docs/secrets.env) [c](docs/settings)"),
-      root,
-    )
+    await attachMessageFiles(agentChat("[a](docs/.env) [b](docs/secrets.env)"), root)
   ).messages[0];
 
-  // 拡張子の無い `.env`、一覧に無い `env`、拡張子の無いファイルは、どれもリンクにしない。
+  // ドット始まりの `.env` と、一覧に無い `env` はリンクにしない。
   expect(message?.links).toBeUndefined();
   expect(message?.files).toBeUndefined();
+});
+
+test("links an extensionless file as text", async () => {
+  await write("LICENSE", new TextEncoder().encode("MIT License\n"));
+
+  const message = (await attachMessageFiles(agentChat("[ライセンス](LICENSE)"), root)).messages[0];
+
+  expect(message?.links?.map((link) => [link.href, link.kind, link.name])).toEqual([
+    ["LICENSE", "text", "LICENSE"],
+  ]);
+  // 裸の語は、実在してもリンクにしない。
+  expect(
+    (await attachMessageFiles(agentChat("LICENSE を読んでください。"), root)).messages[0]?.links,
+  ).toBeUndefined();
 });
 
 test("keeps the chip and the link for the same HTML file", async () => {
@@ -792,7 +802,7 @@ test("lists a directory with dirs first and the kind each file opens with", asyn
   expect(byName.get("app.ts")).toBeUndefined();
   expect(byName.get("docs")).toMatchObject({ kind: "dir", path: "docs" });
   expect(byName.get("empty.md")).toMatchObject({ kind: "file", open: null });
-  expect(byName.get("Makefile")).toMatchObject({ kind: "file", open: null });
+  expect(byName.get("Makefile")).toMatchObject({ kind: "file", open: "text" });
   expect(byName.get(".gitignore")).toMatchObject({ kind: "file", open: null });
 
   const src = await listDirectory({ root, path: "src" });

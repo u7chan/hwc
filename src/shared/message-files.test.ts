@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { messageLinkKindFromName, previewContentType, previewWarning } from "./message-files";
+import {
+  looksBinary,
+  messageLinkKindFromName,
+  previewContentType,
+  previewWarning,
+} from "./message-files";
 
 // 案内を出すのは、iframe の中で白くなる原因の 1 つ目（配信できない script）だけ。
 const page = (script: string) => `<!doctype html><html><body>${script}</body></html>`;
@@ -62,7 +67,7 @@ test("ignores tags other than script", () => {
 });
 
 // 本文の相対パスのリンクから開ける形式（ADR 0084）。拡張子の一覧はここ 1 か所。
-test("links text files by an explicit extension list", () => {
+test("links text files by an explicit extension list and extensionless names", () => {
   expect(messageLinkKindFromName("docs/notes.md")).toBe("text");
   expect(messageLinkKindFromName("data/report.csv")).toBe("text");
   expect(messageLinkKindFromName("src/app.ts")).toBe("text");
@@ -70,17 +75,31 @@ test("links text files by an explicit extension list", () => {
   // 画像と HTML はチップと同じ見せ方のまま。
   expect(messageLinkKindFromName("docs/shot.png")).toBe("image");
   expect(messageLinkKindFromName("docs/mock.html")).toBe("html");
-  // 拡張子で選ぶので、`.env` や拡張子の無い名前は入らない。
+  // 拡張子の一覧に無いものと、ドット始まりは入らない。
   expect(messageLinkKindFromName("docs/.env")).toBeNull();
   expect(messageLinkKindFromName("docs/secrets.env")).toBeNull();
+  // 拡張子の無いファイルは開ける。中身がテキストかは配信するときに確かめる。
+  expect(messageLinkKindFromName("LICENSE")).toBe("text");
+  expect(messageLinkKindFromName("Makefile")).toBe("text");
+  expect(messageLinkKindFromName("docs/settings")).toBe("text");
   // ドット始まりの名前は、拡張子が一覧にあっても対象外。
   expect(messageLinkKindFromName("docs/.env.yaml")).toBeNull();
   expect(messageLinkKindFromName("docs/.secrets.md")).toBeNull();
+  expect(messageLinkKindFromName("docs/.LICENSE")).toBeNull();
   // ディレクトリがドット始まりでも、ファイル名が普通なら対象。
   expect(messageLinkKindFromName(".github/workflows/ci.yml")).toBe("text");
-  expect(messageLinkKindFromName("docs/settings")).toBeNull();
   expect(messageLinkKindFromName("docs/archive.zip")).toBeNull();
   // 実行させたくないので、テキストは必ず text/plain で配る。
   expect(previewContentType("src/app.ts")).toBe("text/plain; charset=utf-8");
   expect(previewContentType("docs/notes.md")).toBe("text/plain; charset=utf-8");
+  expect(previewContentType("LICENSE")).toBe("text/plain; charset=utf-8");
+});
+
+test("treats a NUL in the head as binary", () => {
+  expect(looksBinary(new TextEncoder().encode("MIT License\n"))).toBe(false);
+  expect(looksBinary(new Uint8Array([0x4c, 0x49, 0x43, 0x00, 0x4e]))).toBe(true);
+  // 先頭 8000 バイトより後ろの NUL は見ない。巨大なバイナリを読み切らないため。
+  const lateNul = new Uint8Array(9000).fill(0x41);
+  lateNul[8500] = 0;
+  expect(looksBinary(lateNul)).toBe(false);
 });

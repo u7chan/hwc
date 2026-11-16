@@ -11,7 +11,8 @@ export type ChatLinkKind = MessageFileKind | "text";
 
 // リンクから開けるテキストの拡張子。`env` のような設定ファイルの名前は入れない。
 // ドット始まりの名前（`.env` `.secrets.md`）も配らない。中身を見せない前提の名前を
-// 拡張子だけで通さないため（ADR 0084）。
+// 拡張子だけで通さないため（ADR 0084）。拡張子の無い名前は、この一覧ではなく
+// isExtensionlessName で扱う。
 const TEXT_EXT: ReadonlySet<string> = new Set([
   "md",
   "txt",
@@ -62,7 +63,6 @@ export function messageFileKindFromName(name: string): MessageFileKind | null {
 }
 
 // ファイル名のドット以降。ドット始まりの名前は拡張子を持たない扱いにする。
-// 拡張子の無いファイルは、リンクからもプレビューからも配らない。
 function textExtOf(name: string): string {
   const base = name.slice(name.lastIndexOf("/") + 1);
   if (base.startsWith(".")) return "";
@@ -70,8 +70,27 @@ function textExtOf(name: string): string {
   return dot <= 0 ? "" : base.slice(dot + 1).toLowerCase();
 }
 
+// 拡張子を持たない普通のファイル名（LICENSE、Makefile など）。ドット始まりは除く。
+// 中身がテキストかバイナリかは、配信するときに先頭のバイト列で確かめる（looksBinary）。
+function isExtensionlessName(name: string): boolean {
+  const base = name.slice(name.lastIndexOf("/") + 1);
+  return base !== "" && !base.startsWith(".") && !base.includes(".");
+}
+
 export function isTextName(name: string): boolean {
-  return TEXT_EXT.has(textExtOf(name));
+  return TEXT_EXT.has(textExtOf(name)) || isExtensionlessName(name);
+}
+
+// 拡張子で中身を判断できないファイルを、ブラウザへ文字として流してよいか。
+// UTF-8 のテキストには NUL が現れないので、先頭だけを見てバイナリを弾く。
+const BINARY_SNIFF_BYTES = 8000;
+
+export function looksBinary(bytes: Uint8Array): boolean {
+  const end = Math.min(bytes.length, BINARY_SNIFF_BYTES);
+  for (let index = 0; index < end; index += 1) {
+    if (bytes[index] === 0) return true;
+  }
+  return false;
 }
 
 // 本文のリンクから開けるなら、その見せ方を返す。テキストは実行させたくないので、
@@ -83,6 +102,7 @@ export function messageLinkKindFromName(name: string): ChatLinkKind | null {
 }
 
 // プレビューで配信してよい形式だけ型を返す。ここに無い拡張子は配信しない。
+// 拡張子の無いファイルは text/plain として返し、バイナリかどうかは配信時に確かめる。
 export function previewContentType(name: string): string | null {
   return (
     attachmentContentTypeFromName(name) ??
