@@ -890,3 +890,13 @@ test("caps a directory at 200 rows and reports the total", async () => {
   expect(listing?.entries[0]?.name).toBe("f000.md");
   expect(listing?.entries.at(-1)?.name).toBe("f199.md");
 });
+
+test("lists a POSIX file name that contains a backslash", async () => {
+  await write("docs/back\\slash.md", new TextEncoder().encode("text"));
+
+  const listing = await listDirectory({ root, path: "docs" });
+
+  expect(listing?.entries).toMatchObject([
+    { kind: "file", name: "back\\slash.md", path: "docs/back\\slash.md", open: "text" },
+  ]);
+});
