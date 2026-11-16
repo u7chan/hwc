@@ -158,20 +158,24 @@ p.hwc-compaction,
   }
 }
 
-.hwc-msg-copy:focus-visible {
+.hwc-msg-copy:focus-visible,
+.hwc-msg-edit:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
 
 /* 掴める画面では、行をなぞったときだけ出す。常に並ぶと騒がしい。 */
 @media (hover: hover) {
-  .hwc-msg-copy {
+  .hwc-msg-copy,
+  .hwc-msg-edit {
     opacity: 0;
     transition: opacity 140ms ease;
   }
 
   .hwc-msg:hover .hwc-msg-copy,
-  .hwc-msg:focus-within .hwc-msg-copy {
+  .hwc-msg:hover .hwc-msg-edit,
+  .hwc-msg:focus-within .hwc-msg-copy,
+  .hwc-msg:focus-within .hwc-msg-edit {
     opacity: 1;
   }
 }
