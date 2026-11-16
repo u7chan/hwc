@@ -536,6 +536,33 @@ a.hwc-pane-head-repo:focus-visible {
   }
 }
 
+/* ファイルツリーの開閉。ペイン ID の左、ブランチ・PR の右に置く。 */
+.hwc-pane-files {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.hwc-pane-files:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.hwc-pane-files[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
 /* 狭い画面では ID とコピーをメニューに任せ、見出しの幅をブランチに回す。 */
 @media (max-width: 899px) {
   .hwc-pane-head .hwc-pane-id {

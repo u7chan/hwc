@@ -1,0 +1,117 @@
+/* ペイン内のファイルツリー。会話の上に重ね、入力欄は残す。 */
+
+.hwc-tree-view {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: auto;
+  padding: var(--space-2) 0 var(--space-6);
+  background: var(--color-content);
+  overscroll-behavior: contain;
+}
+
+.hwc-tree,
+.hwc-tree-group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-tree-item {
+  margin: 0;
+}
+
+/* 行はボタン・リンク・開けない行の 3 種で同じ形にする。左の字下げだけ inline で
+   深さに合わせ、右端の大きさを揃える。 */
+.hwc-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--tap);
+  margin: 0;
+  padding: 0 var(--space-4) 0 var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  text-align: left;
+  text-decoration: none;
+}
+
+button.hwc-tree-row,
+a.hwc-tree-row {
+  cursor: pointer;
+}
+
+button.hwc-tree-row:hover,
+a.hwc-tree-row:hover {
+  background: var(--color-raised);
+}
+
+button.hwc-tree-row:active,
+a.hwc-tree-row:active {
+  background: var(--color-line);
+}
+
+.hwc-tree-row:focus-visible {
+  outline-offset: -3px;
+}
+
+/* 開けないファイルと、根の外を指す symlink。名前と大きさだけ出し、押しても何もしない。 */
+.hwc-tree-row[data-blocked="true"] {
+  color: var(--color-secondary);
+  cursor: default;
+}
+
+.hwc-tree-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-4);
+  height: var(--space-4);
+  color: var(--color-secondary);
+}
+
+.hwc-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-tree-size {
+  flex: none;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 読み込み中・空・打ち切り・失敗の 1 行。行の高さはツリーの行と揃える。 */
+.hwc-tree-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  padding: 0 var(--space-4) 0 var(--space-4);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-tree-retry {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hwc-tree-retry:hover {
+  text-decoration: underline;
+}

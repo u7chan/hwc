@@ -12,6 +12,7 @@ import {
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
+import { fileTreeStore } from "./file-tree-store";
 import { OutputText } from "./OutputText";
 import {
   ATTACHMENT_LIMIT_NOTICE,
@@ -74,6 +75,7 @@ import {
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
+  FileIcon,
   MoreIcon,
   PaneIcon,
   PencilIcon,
@@ -86,10 +88,12 @@ import { MENU_ID } from "./Menu";
 import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
 import { OutputEmpty, OutputSkeleton } from "./pane/empty";
+import { FileTree } from "./pane/file-tree";
 import { AgentInfoHint, AgentInfoSkeleton, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
 import { LaunchNote } from "./pane/launch-note";
 import { useAttachments } from "./pane/use-attachments";
+import { useFileTree } from "./pane/use-file-tree";
 import { useTemplates } from "./pane/use-templates";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
 import { useDefaultModel } from "./pane/use-default-model";
@@ -197,6 +201,15 @@ export function PaneDetail(props: PaneDetailProps) {
     onOpenPreview,
   } = props;
   const repoUrl = sync?.repoUrl ?? null;
+  // ツリーの状態は store に持つ。プレビューでこのセルが外れても開閉を保つ。
+  const fileTree = useFileTree(pane.id);
+  // チャットを持たないペインには配信先が無い。store の後始末より先に描かない。
+  const treeOpen = pane.chat && fileTree.open;
+
+  // チャットが消えたペインは配信の根を持たない。開いたままにしない。
+  useEffect(() => {
+    if (!pane.chat) fileTreeStore.close(pane.id);
+  }, [pane.chat, pane.id]);
   const shownPaneName = shortenPaneName(
     paneName(pane),
     context.workspaceLabel,
@@ -1085,6 +1098,21 @@ export function PaneDetail(props: PaneDetailProps) {
             #{pullRequest.number}
           </a>
         )}
+        {/* 開くファイルは会話のペインと同じ配信経路を使う。チャットを持たない
+            シェルのペインには出さない（開いても配信できないため）。 */}
+        {pane.chat ? (
+          <button
+            type="button"
+            class="hwc-pane-files"
+            aria-label={fileTree.open ? "ファイルツリーを閉じる" : "ファイルツリーを開く"}
+            aria-pressed={fileTree.open}
+            onClick={() =>
+              fileTree.open ? fileTreeStore.close(pane.id) : fileTreeStore.open(pane.id)
+            }
+          >
+            <FileIcon size={16} />
+          </button>
+        ) : null}
         <span class="hwc-pane-id" data-copied={copied}>
           <span class="hwc-pane-id-text">{pane.id}</span>
           <button
@@ -1110,7 +1138,16 @@ export function PaneDetail(props: PaneDetailProps) {
         </button>
       </div>
       <div class="hwc-output-wrap" ref={frame}>
-        <div class="hwc-output-scroll" data-empty={empty} ref={scroller} onScroll={onScroll}>
+        {/* ツリーを開いている間も会話は生かしたまま上に重ねる。スクロール位置と追従を
+            捨てず、戻ったときに読んでいた場所へそのまま帰れる。 */}
+        <div
+          class="hwc-output-scroll"
+          data-empty={empty}
+          ref={scroller}
+          onScroll={onScroll}
+          aria-hidden={treeOpen ? "true" : undefined}
+          inert={treeOpen}
+        >
           {confirmation !== null ? (
             <PaneConfirmation
               key={confirmation.id}
@@ -1183,8 +1220,10 @@ export function PaneDetail(props: PaneDetailProps) {
           )}
         </div>
         {/* 逐次表示の先端を背景へ溶かす。読み返しで上へ離れたら出さない。 */}
-        {reveal === null || !atBottom ? null : <div class="hwc-output-fade" aria-hidden="true" />}
-        {confirmation !== null ? null : (
+        {treeOpen || reveal === null || !atBottom ? null : (
+          <div class="hwc-output-fade" aria-hidden="true" />
+        )}
+        {treeOpen || confirmation !== null ? null : (
           <button
             type="button"
             class="hwc-jump"
@@ -1197,18 +1236,30 @@ export function PaneDetail(props: PaneDetailProps) {
             <ArrowDownIcon />
           </button>
         )}
-        <SelectionToolbar
-          state={selectionToolbar}
-          canQuote={!readOnly && !launchBlocked && pane.chat}
-          onQuote={quoteSelection}
-          onCopy={() => {
-            const selection = document.getSelection();
-            const element = scroller.current;
-            if (selection === null || selection.rangeCount === 0 || element === null) return "";
-            return selectionCopyText(element, selection.getRangeAt(0));
-          }}
-          onExited={closeToolbar}
-        />
+        {treeOpen ? null : (
+          <SelectionToolbar
+            state={selectionToolbar}
+            canQuote={!readOnly && !launchBlocked && pane.chat}
+            onQuote={quoteSelection}
+            onCopy={() => {
+              const selection = document.getSelection();
+              const element = scroller.current;
+              if (selection === null || selection.rangeCount === 0 || element === null) return "";
+              return selectionCopyText(element, selection.getRangeAt(0));
+            }}
+            onExited={closeToolbar}
+          />
+        )}
+        {treeOpen ? (
+          <FileTree
+            paneId={pane.id}
+            view={fileTree}
+            onToggle={(path) => fileTreeStore.toggle(pane.id, path)}
+            onRetry={(path) => fileTreeStore.retry(pane.id, path)}
+            onOpenPreview={onOpenPreview}
+            onOpenImage={onOpenImage}
+          />
+        ) : null}
       </div>
 
       {body.kind === "chat" ? (

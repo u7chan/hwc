@@ -8,6 +8,7 @@ import {
   attachMessageFiles,
   collectMessageFiles,
   defaultPreviewRoots,
+  listDirectory,
   messagePathCandidates,
   previewRootLabel,
   resolveMessageFile,
@@ -760,4 +761,132 @@ test("links a dot file only when the extension list allows it", async () => {
   const nested = (await attachMessageFiles(agentChat("[ci](.github/workflows/ci.yml)"), root))
     .messages[0];
   expect(nested?.links?.map((link) => link.name)).toEqual([".github/workflows/ci.yml"]);
+});
+
+test("lists a directory with dirs first and the kind each file opens with", async () => {
+  await write("src/app.ts", new TextEncoder().encode("export {}"));
+  await write("docs/mock.png", png);
+  await write("docs/mock.html", new TextEncoder().encode("<!doctype html>"));
+  await write(".gitignore", new TextEncoder().encode("node_modules\n"));
+  await write("Makefile", new TextEncoder().encode("all:\n"));
+  await write("empty.md", new Uint8Array());
+  await write("z.txt", new TextEncoder().encode("z"));
+  await write(".git/HEAD", new TextEncoder().encode("ref: refs/heads/main"));
+
+  const listing = await listDirectory({ root, path: "" });
+
+  expect(listing).not.toBeNull();
+  expect(listing?.total).toBe(6);
+  expect(listing?.truncated).toBe(false);
+  expect(listing?.entries.map((entry) => [entry.kind, entry.name])).toEqual([
+    ["dir", "docs"],
+    ["dir", "src"],
+    ["file", ".gitignore"],
+    ["file", "empty.md"],
+    ["file", "Makefile"],
+    ["file", "z.txt"],
+  ]);
+
+  const byName = new Map(listing?.entries.map((entry) => [entry.name, entry]));
+  expect(byName.get("src")).toMatchObject({ kind: "dir", path: "src", expandable: true });
+  expect(byName.get("app.ts")).toBeUndefined();
+  expect(byName.get("docs")).toMatchObject({ kind: "dir", path: "docs" });
+  expect(byName.get("empty.md")).toMatchObject({ kind: "file", open: null, size: 0 });
+  expect(byName.get("Makefile")).toMatchObject({ kind: "file", open: null });
+  expect(byName.get(".gitignore")).toMatchObject({ kind: "file", open: null });
+
+  const src = await listDirectory({ root, path: "src" });
+  expect(src?.entries).toMatchObject([
+    { kind: "file", name: "app.ts", path: "src/app.ts", open: "text" },
+  ]);
+  const docs = await listDirectory({ root, path: "docs" });
+  expect(docs?.entries.map((entry) => entry.name)).toEqual(["mock.html", "mock.png"]);
+  expect(docs?.entries.find((entry) => entry.name === "mock.html")).toMatchObject({
+    kind: "file",
+    path: "docs/mock.html",
+    open: "html",
+  });
+  expect(docs?.entries.find((entry) => entry.name === "mock.png")).toMatchObject({
+    kind: "file",
+    path: "docs/mock.png",
+    open: "image",
+  });
+});
+
+test("shows dot directories but never .git", async () => {
+  await write(".github/workflows/ci.yml", new TextEncoder().encode("on: push"));
+  await write(".git/config", new TextEncoder().encode("[core]"));
+
+  const rootListing = await listDirectory({ root, path: "" });
+  expect(rootListing?.entries.map((entry) => entry.name)).toEqual([".github"]);
+
+  const github = await listDirectory({ root, path: ".github" });
+  expect(github?.entries.map((entry) => entry.name)).toEqual(["workflows"]);
+});
+
+test("keeps a symlink outside the root as a name that cannot be opened", async () => {
+  const outside = await mkdtemp(join(tmpdir(), "hwc-tree-outside-"));
+  await mkdir(join(outside, "dir"), { recursive: true });
+  await writeFile(join(outside, "secret.md"), "secret");
+  await symlink(join(outside, "dir"), join(root, "outside-dir"));
+  await symlink(join(outside, "secret.md"), join(root, "outside.md"));
+  await symlink(join(outside, "missing.md"), join(root, "broken.md"));
+
+  try {
+    const listing = await listDirectory({ root, path: "" });
+    const byName = new Map(listing?.entries.map((entry) => [entry.name, entry]));
+    // 根の外を指すディレクトリは名前だけ残し、展開させない。
+    expect(byName.get("outside-dir")).toMatchObject({ kind: "dir", expandable: false });
+    expect(byName.get("outside.md")).toMatchObject({ kind: "file", open: null });
+    expect(byName.get("broken.md")).toMatchObject({ kind: "file", open: null, size: 0 });
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("follows a symlink inside the root and keeps the requested path", async () => {
+  await write("docs/mock.png", png);
+  await symlink(join(root, "docs"), join(root, "docs-link"));
+
+  const listing = await listDirectory({ root, path: "docs-link" });
+
+  expect(listing?.entries).toMatchObject([
+    { kind: "file", name: "mock.png", path: "docs-link/mock.png", open: "image" },
+  ]);
+});
+
+test("refuses a path outside the root, a file, and a missing directory", async () => {
+  await write("docs/mock.png", png);
+  const outside = await mkdtemp(join(tmpdir(), "hwc-tree-outside-"));
+
+  try {
+    for (const path of [
+      "../",
+      `../${basename(outside)}`,
+      outside,
+      "docs/mock.png",
+      "missing",
+      "docs/../docs",
+    ]) {
+      expect(await listDirectory({ root, path })).toBeNull();
+    }
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("caps a directory at 200 rows and reports the total", async () => {
+  await Promise.all(
+    Array.from({ length: 205 }, (_, index) =>
+      write(`bulk/f${String(index).padStart(3, "0")}.md`, new TextEncoder().encode("x")),
+    ),
+  );
+
+  const listing = await listDirectory({ root, path: "bulk" });
+
+  expect(listing?.entries).toHaveLength(200);
+  expect(listing?.total).toBe(205);
+  expect(listing?.truncated).toBe(true);
+  expect(listing?.entries[0]?.name).toBe("f000.md");
+  expect(listing?.entries.at(-1)?.name).toBe("f199.md");
 });

@@ -881,3 +881,66 @@ test("GET /api/panes/:id/chat fills in the saved size of each attachment", async
     ]);
   });
 });
+
+test("GET /api/panes/:id/tree lists one directory of the checkout", async () => {
+  await withCheckout(async (root) => {
+    await mkdir(join(root, "docs"), { recursive: true });
+    await writeFile(join(root, "docs", "mock.png"), pngBytes);
+    await writeFile(join(root, "README.md"), "# readme");
+    await mkdir(join(root, ".git"), { recursive: true });
+    await writeFile(join(root, ".git", "HEAD"), "ref: refs/heads/main");
+    const app = createFilesApp(root);
+
+    const response = await app.request("/api/panes/w1:p1/tree");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ total: 2, truncated: false });
+    const body = (await (await app.request("/api/panes/w1:p1/tree")).json()) as {
+      entries: { kind: string; name: string }[];
+    };
+    // .git は出さない。ディレクトリが先。
+    expect(body.entries.map((entry) => [entry.kind, entry.name])).toEqual([
+      ["dir", "docs"],
+      ["file", "README.md"],
+    ]);
+
+    const nested = (await (await app.request("/api/panes/w1:p1/tree?path=docs")).json()) as {
+      entries: unknown[];
+    };
+    expect(nested.entries[0]).toMatchObject({
+      kind: "file",
+      name: "mock.png",
+      path: "docs/mock.png",
+      open: "image",
+    });
+  });
+});
+
+test("GET /api/panes/:id/tree returns 404 without a checkout or outside the root", async () => {
+  await withCheckout(async (root) => {
+    await writeFile(join(root, "note.md"), "text");
+    const app = createFilesApp(root);
+
+    for (const query of ["path=missing", "path=..%2F", "path=note.md"]) {
+      const response = await app.request(`/api/panes/w1:p1/tree?${query}`);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+    }
+    expect((await app.request("/api/panes/unknown/tree")).status).toBe(404);
+  });
+
+  const noRoot = createFilesApp(null);
+  const response = await noRoot.request("/api/panes/w1:p1/tree");
+  expect(response.status).toBe(404);
+  expect(await response.json()).toEqual({ error: "no_checkout" });
+});
+
+test("GET /api/panes/:id/tree returns no_chat for a pane without a session", async () => {
+  await withCheckout(async (root) => {
+    await writeFile(join(root, "note.md"), "text");
+    const response = await createFilesApp(root, { state }).request("/api/panes/w1:p1/tree");
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "no_chat" });
+  });
+});

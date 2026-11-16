@@ -3,6 +3,7 @@ import type { AppState, PaneState } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
 import { PaneDetail } from "./PaneDetail";
 import { attachmentStore } from "./attachment-store";
+import { fileTreeStore } from "./file-tree-store";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./settings/Settings";
@@ -440,6 +441,8 @@ export function App() {
   useEffect(() => {
     if (state === null) return;
     attachmentStore.prune((paneId) => findPane(state, paneId) !== null);
+    // ツリーも同じ。閉じたペインの開閉と取得済みノードを残さない。
+    fileTreeStore.prune((paneId) => findPane(state, paneId) !== null);
   }, [state]);
   // 確認の文言は状態を開いた時点で固定しない。ダイアログ中に変わればその値で読む。
   // スナップショットから消えたペインはもう無いので、確認は出さない。

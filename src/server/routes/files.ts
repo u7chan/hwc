@@ -1,5 +1,6 @@
 import { findPane } from "../herdr/state";
 import {
+  listDirectory,
   messageFileContentType,
   readMessageFile,
   resolveMessageFile,
@@ -75,6 +76,29 @@ export function createFilesHandlers(ctx: AppContext) {
           "cache-control": "private, max-age=31536000, immutable",
         },
       });
+    },
+    // チェックアウトの 1 ディレクトリを、根からの相対パスで返す。ツリーは子を開いた
+    // ときにだけ取りに来る。絶対パスは返さない（ADR 0041）。
+    tree: async (c: IdContext) => {
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      const pane = findPane(state, paneId);
+      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      // ツリーから開くファイルは、会話と同じ /preview と /files の経路を使う。
+      // チャットを持たないペインには配信先が無いので、一覧も出さない。
+      if (!pane.chat) return c.json({ error: "no_chat" }, 404);
+
+      // 根はワークスペースのチェックアウト。プレビューの追加根（/tmp など）は出さない。
+      const root = store.workspaceRoot(paneId);
+      if (root === null) return c.json({ error: "no_checkout" }, 404);
+
+      const listing = await listDirectory({ root, path: c.req.query("path") ?? "" });
+      if (listing === null) return c.json({ error: "not_found" }, 404);
+
+      c.header("cache-control", "no-store");
+      return c.json(listing);
     },
     preview: async (c: PreviewContext) => {
       const state = await current();
