@@ -75,7 +75,7 @@ import {
   CollapseIcon,
   CopyGlyph,
   ExpandIcon,
-  FileIcon,
+  FolderIcon,
   MoreIcon,
   PaneIcon,
   PencilIcon,
@@ -1110,7 +1110,8 @@ export function PaneDetail(props: PaneDetailProps) {
               fileTree.open ? fileTreeStore.close(pane.id) : fileTreeStore.open(pane.id)
             }
           >
-            <FileIcon size={16} />
+            <FolderIcon size={16} />
+            <span class="hwc-pane-files-label">ファイル</span>
           </button>
         ) : null}
         <span class="hwc-pane-id" data-copied={copied}>
