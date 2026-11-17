@@ -104,6 +104,7 @@ import { useDraft } from "./pane/use-draft";
 import { canEditMessage, editFailureNotice, newRequestId, type EditSession } from "./edit";
 import { useOutputFollow } from "./pane/use-output-follow";
 import { useOutputVersion } from "./pane/use-output-version";
+import { usePreviewReplyBadge } from "./pane/use-preview-reply";
 import { useSelectionToolbar } from "./pane/use-selection-toolbar";
 import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
@@ -317,6 +318,10 @@ export function PaneDetail(props: PaneDetailProps) {
   const view = confirmationView({ pane, interaction, dismissedId: dismissedConfirmation, failed });
   const readOnly = view !== "normal";
   const body = readOnly ? { kind: "output" as const } : normalBody;
+  const previewHasNewReply = usePreviewReplyBadge(
+    previewOpen,
+    body.kind === "chat" ? body.snapshot.messages : null,
+  );
   // 新しく届いた返答を一度に描くと、長いときに先頭がスクロールの外へ流れる。
   // 演出は会話を出している間だけ。初期表示と入れ替えでは再生しない。
   // /new のマスク中は空の表示用スナップショットなので、比較させない。渡すと
@@ -1294,6 +1299,7 @@ export function PaneDetail(props: PaneDetailProps) {
                   key={previewPath}
                   paneId={pane.id}
                   path={previewPath}
+                  hasNewReply={previewHasNewReply}
                   hidden={treeOverlay}
                   onClose={() => fileTreeStore.clearPreview(pane.id)}
                 />

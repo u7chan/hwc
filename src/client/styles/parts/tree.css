@@ -214,6 +214,7 @@ button.hwc-tree-row:active {
 }
 
 .hwc-file-preview-back {
+  position: relative;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -235,6 +236,18 @@ button.hwc-tree-row:active {
 
 .hwc-file-preview-back:active {
   opacity: 0.72;
+}
+
+/* プレビュー中に届いた返答。ボタンの端に小さく出し、会話へ戻る入口を見失わせない。 */
+.hwc-file-preview-new {
+  position: absolute;
+  top: 7px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-surface);
 }
 
 .hwc-file-preview-name {

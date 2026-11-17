@@ -247,6 +247,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
    入力欄は、内容が入力欄の高さを超えたときだけスクロールするので、同じ見た目に揃える。 */
 .hwc-list-scroll,
 .hwc-output-scroll,
+.hwc-file-preview-body,
 .hwc-settings-scroll,
 .hwc-tree-view,
 .hwc-input-field {
@@ -257,6 +258,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 :is(
   .hwc-list-scroll,
   .hwc-output-scroll,
+  .hwc-file-preview-body,
   .hwc-settings-scroll,
   .hwc-tree-view,
   .hwc-tabs,
@@ -269,6 +271,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 :is(
   .hwc-list-scroll,
   .hwc-output-scroll,
+  .hwc-file-preview-body,
   .hwc-settings-scroll,
   .hwc-tree-view,
   .hwc-tabs,
@@ -280,6 +283,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 :is(
   .hwc-list-scroll,
   .hwc-output-scroll,
+  .hwc-file-preview-body,
   .hwc-settings-scroll,
   .hwc-tree-view,
   .hwc-tabs,
@@ -294,6 +298,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 :is(
     .hwc-list-scroll,
     .hwc-output-scroll,
+    .hwc-file-preview-body,
     .hwc-settings-scroll,
     .hwc-tree-view,
     .hwc-tabs,
@@ -305,6 +310,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 :is(
   .hwc-list-scroll,
   .hwc-output-scroll,
+  .hwc-file-preview-body,
   .hwc-settings-scroll,
   .hwc-tree-view,
   .hwc-tabs,

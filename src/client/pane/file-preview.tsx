@@ -54,6 +54,8 @@ async function readPreview(
 type FilePreviewProps = {
   paneId: string;
   path: string;
+  // プレビュー中に新しい返答が届いたか。会話に戻るボタンにバッジを付ける。
+  hasNewReply: boolean;
   // 狭いセルでツリーを重ねている間は、プレビューを入力と読み上げから外す。
   hidden: boolean;
   onClose: () => void;
@@ -76,9 +78,15 @@ export function FilePreview(props: FilePreviewProps) {
   return (
     <div class="hwc-file-preview" inert={props.hidden}>
       <div class="hwc-file-preview-head">
-        <button type="button" class="hwc-file-preview-back" onClick={props.onClose}>
+        <button
+          type="button"
+          class="hwc-file-preview-back"
+          aria-label={props.hasNewReply ? "会話に戻る。新しい応答があります" : "会話に戻る"}
+          onClick={props.onClose}
+        >
           <ChevronLeftIcon size={16} />
           <span>会話に戻る</span>
+          {props.hasNewReply ? <span class="hwc-file-preview-new" aria-hidden="true" /> : null}
         </button>
         <span class="hwc-file-preview-name" title={props.path}>
           {name}
