@@ -63,7 +63,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 - 会話はセッション JSONL の active branch から読む（[ADR 0013](adr/0013-pi-session-chat.md)）
 - モデル・effort・context・usage・圧縮・添付ファイル・引用の基準実装
-- デフォルトモデルで起動したペインは、チャット画面を開いたときに pi の既定モデルと effort を読む。起動時にモデルを指定したペインと、hwc 以外から起動したペインは対象外（[ADR 0087](adr/0087-default-model-display.md)）
+- デフォルトモデルで起動したペインは、チャット画面を開いたときと `/new` で会話が空に戻ったときに pi の既定モデルと effort を読む。モデルを指定して起動したペインは起動時の指定で補う。どちらも会話にモデルが載っている間はセッションの値を使う。hwc 以外から起動したペインは対象外（[ADR 0033](adr/0033-launch-model-before-first-message.md)、[ADR 0087](adr/0087-default-model-display.md)、[ADR 0091](adr/0091-empty-session-model-display.md)）
 - プロジェクトの `Trust project folder?` は、既定の `Trust` だけを専用ビューで回答する。`.pi` や `.agents/skills` など信頼対象のリソースがあるフォルダでは、起動がこの確認で止まる。他の選択肢は端末で行う（[ADR 0044](adr/0044-pi-project-trust.md)）。hwc は `--approve` を渡さない
 - Herdr は Pi の信頼確認を `blocked` としないため、一覧の行は `idle` のまま。確認ビューは、開いているペインの画面から出す
 - ライブ activity は pi 拡張の sidecar がある場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）

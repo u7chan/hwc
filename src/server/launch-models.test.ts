@@ -65,13 +65,20 @@ test("keeps the filled etag stable so unchanged clients can keep the snapshot", 
   expect(second).toBe(first);
 });
 
-test("yields to the session once it records a model and forgets the selection", () => {
+test("yields to the session and keeps the selection for the next empty conversation", () => {
   const launch = createLaunchModels();
   launch.remember("w1:p2", beam, "low");
   const recorded = { ...empty, etag: "etag-2", model: "beam-mini" };
 
+  // 会話にモデルが載っている間は、セッションの値だけを出す。
   expect(launch.apply("w1:p2", recorded)).toEqual(recorded);
-  expect(launch.apply("w1:p2", empty)).toEqual(empty);
+  // /new で会話が空に戻ったら、また起動時の指定で補う。
+  expect(launch.apply("w1:p2", empty)).toEqual({
+    ...empty,
+    etag: filledEtag,
+    model: "beam",
+    effort: "low",
+  });
 });
 
 test("stops filling a pane that was forgotten", () => {

@@ -135,11 +135,12 @@ test("a pi pane started in an existing shell resolves its default too", async ()
   });
 });
 
-test("recording a model in the session stops the default from being supplied", async () => {
+test("recording a model drops the resolved default so the next empty conversation resolves it again", async () => {
   let calls = 0;
+  let model: string | null = "beam-recorded";
   const app = defaultModelApp({
     chat: {
-      snapshot: async () => ({ ...emptyChat, model: "beam-recorded" }),
+      snapshot: async () => ({ ...emptyChat, model }),
     },
     load: async () => {
       calls += 1;
@@ -148,13 +149,20 @@ test("recording a model in the session stops the default from being supplied", a
   });
 
   expect((await post(app, "/api/panes/w1:p1/split", { agent: "pi" })).status).toBe(200);
-  expect((await app.request("/api/panes/w1:p2/chat")).status).toBe(200);
-
   expect(await (await app.request("/api/panes/w1:p2/default-model")).json()).toEqual({
-    model: null,
-    effort: null,
+    model: "beam",
+    effort: "high",
   });
-  expect(calls).toBe(0);
+
+  // 会話にモデルが載ると、解決済みの既定は捨てる。
+  expect((await app.request("/api/panes/w1:p2/chat")).status).toBe(200);
+  // /new でセッションが空に戻ったら、その時点の既定を取り直す。
+  model = null;
+  expect(await (await app.request("/api/panes/w1:p2/default-model")).json()).toEqual({
+    model: "beam",
+    effort: "high",
+  });
+  expect(calls).toBe(2);
 });
 
 test("a failed default lookup does not invent a model and does not fail the launch", async () => {

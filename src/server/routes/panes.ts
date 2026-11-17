@@ -223,9 +223,14 @@ export function createPanesHandlers(ctx: AppContext) {
       try {
         const result = await createPane(panes, paneId, request.value, models, piDefaults);
         // 名前の付け直しに失敗してもエージェントは起動している。起動できた場合だけ、
-        // 選んだモデルを会話に載るまでの表示に使う。
-        if ((result.ok || result.error === "pane_rename_failed") && request.value.model != null) {
-          launchModels.remember(result.paneId, request.value.model, request.value.effort ?? null);
+        // 選んだモデルを会話に載るまでの表示に使う。モデル未指定の起動では、同じペインに
+        // 残っている前回の選択を捨てる（`/new` が既定へ戻るため。ADR 0091）。
+        if (result.ok || result.error === "pane_rename_failed") {
+          if (request.value.model != null) {
+            launchModels.remember(result.paneId, request.value.model, request.value.effort ?? null);
+          } else {
+            launchModels.forget(result.paneId);
+          }
         }
         if (!result.ok) {
           if (result.error === "pane_limit") return c.json({ error: result.error }, 409);
@@ -256,9 +261,12 @@ export function createPanesHandlers(ctx: AppContext) {
       try {
         const failure = await startAgentInPane(panes, paneId, request.value, models, piDefaults);
         if (failure !== null) return c.json({ error: failure }, 502);
-        // 分割 API と同じく、最初のメッセージを送るまでのモデル表示に使う。
+        // 分割 API と同じく、最初のメッセージを送るまでのモデル表示に使う。モデル未指定の
+        // 起動では、同じペインに残っている前回の選択を捨てる（`/new` が既定へ戻るため）。
         if (request.value.model != null) {
           launchModels.remember(paneId, request.value.model, request.value.effort ?? null);
+        } else {
+          launchModels.forget(paneId);
         }
         // 取り直しは pane.updated に任せる。
         return c.json({ ok: true });

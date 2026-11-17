@@ -40,12 +40,13 @@ export async function loadPiDefaults(
 export type PiDefaultsStore = {
   remember: (paneId: string) => void;
   forget: (paneId: string) => void;
-  forgetRecorded: (paneId: string, model: string | null) => void;
+  dropResolved: (paneId: string, model: string | null) => void;
   read: (paneId: string, directory: string) => Promise<PiDefaultModel | null>;
 };
 
-// 既定モデルで起動したペインだけ、チャット画面を開いたときに既定を読む。起動時には
-// 何も聞かない。同じペインの同時要求は 1 つに畳み、成功した値だけを預かる（ADR 0087）。
+// 既定モデルで起動したペインだけ、チャット画面を開いたときと、/new でセッションが
+// 空に戻ったときに既定を読む。起動時には何も聞かない。同じペインの同時要求は 1 つに
+// 畳み、成功した値だけを預かる（ADR 0087・0091）。
 export function createPiDefaults(readDefaults: PiDefaultsReader = loadPiDefaults): PiDefaultsStore {
   // ペイン id ごとの起動世代。値と解決中の問い合わせは、この世代に属するものだけを
   // 有効にする。/exit して同じペインで起動し直したとき、前の問い合わせが遅れて返っても
@@ -68,9 +69,10 @@ export function createPiDefaults(readDefaults: PiDefaultsReader = loadPiDefaults
       loading.delete(paneId);
     },
     forget,
-    // 会話にモデルが載ったら、既定で補う理由が無くなる。閉じたペインの預かりも残さない。
-    forgetRecorded(paneId, model) {
-      if (model !== null) forget(paneId);
+    // 会話にモデルが載ったら、解決済みの値は捨てる。既定で起動した記録は残すので、
+    // /new でセッションが空に戻ったときに、その時点の既定を取り直せる（ADR 0091）。
+    dropResolved(paneId, model) {
+      if (model !== null) resolved.delete(paneId);
     },
     async read(paneId, directory) {
       const generation = expected.get(paneId);

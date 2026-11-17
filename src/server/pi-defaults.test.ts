@@ -128,7 +128,7 @@ test("a failed lookup is not kept and the next read retries", async () => {
   expect(calls).toBe(2);
 });
 
-test("a recorded session model or a forgotten pane stops supplying the default", async () => {
+test("a recorded session model drops the resolved value and keeps the launch record", async () => {
   let calls = 0;
   const settings = createPiDefaults(async () => {
     calls += 1;
@@ -137,15 +137,17 @@ test("a recorded session model or a forgotten pane stops supplying the default",
 
   settings.remember("w1:p1");
   expect(await settings.read("w1:p1", "/project")).toEqual({ model: "beam", effort: "high" });
-  settings.forgetRecorded("w1:p1", null);
+  // 会話にモデルが無い間の読み直しは、解決済みの値を使う。
+  settings.dropResolved("w1:p1", null);
   expect(await settings.read("w1:p1", "/project")).toEqual({ model: "beam", effort: "high" });
-  settings.forgetRecorded("w1:p1", "beam");
-  expect(await settings.read("w1:p1", "/project")).toBeNull();
   expect(calls).toBe(1);
+  // 会話にモデルが載ったら捨てる。/new で空に戻ったときは取り直す。
+  settings.dropResolved("w1:p1", "beam");
+  expect(await settings.read("w1:p1", "/project")).toEqual({ model: "beam", effort: "high" });
+  expect(calls).toBe(2);
 
-  settings.remember("w1:p2");
-  settings.forget("w1:p2");
-  expect(await settings.read("w1:p2", "/project")).toBeNull();
+  settings.forget("w1:p1");
+  expect(await settings.read("w1:p1", "/project")).toBeNull();
 });
 
 async function withFakePi(run: (command: string[], directory: string) => Promise<void>) {
