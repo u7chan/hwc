@@ -26,6 +26,7 @@ import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
 import { useFavicon } from "./app/hooks/use-favicon";
+import { useFileTreeSide } from "./app/hooks/use-file-tree-side";
 import { useListScope } from "./app/hooks/use-list-scope";
 import { useOpenGroups } from "./app/hooks/use-open-groups";
 import { useRevision } from "./app/hooks/use-revision";
@@ -335,6 +336,7 @@ export function App() {
   const revision = useRevision();
   const { theme, scheme, changeTheme } = useThemePreference();
   const { prefs: splitPrefs, change: changeSplitPrefs } = useSplitPreference();
+  const { side: treeSide, change: changeTreeSide } = useFileTreeSide();
   // 委譲の検知は「エージェントが付いたペインが前回のスナップショットに無かった」で行う。
   // シェルとして先に現れるペインを取りこぼさないよう、ペインではなくエージェントで覚える。
   const seenAgents = useRef<Set<string> | null>(null);
@@ -1319,6 +1321,7 @@ export function App() {
         context={where}
         compact={compact}
         scheme={scheme}
+        treeSide={treeSide}
         // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
         labeled={splitCells}
         // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
@@ -1616,6 +1619,8 @@ export function App() {
               onThemeChange={changeTheme}
               splitPrefs={splitPrefs}
               onSplitPrefsChange={changeSplitPrefs}
+              treeSide={treeSide}
+              onTreeSideChange={changeTreeSide}
               revision={revision}
               connection={connection}
               wide={wide}

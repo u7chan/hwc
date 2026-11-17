@@ -8,8 +8,9 @@ export const SIDEBAR_STEP = 16;
 // app.css の @media (min-width: 900px) と同じ境目。片方を変えたらもう片方も変える。
 export const WIDE_LAYOUT_QUERY = "(min-width: 900px)";
 
-// ファイルツリーを会話の左に並べる最小のセル幅。ツリーの 260px（--hwc-tree-width）を
-// 引いても、本文に 420px 残る幅。狭いセルでは会話の上に重ねる（ADR 0090）。
+// ファイルツリーを会話の左右どちらかに並べる最小のセル幅。ツリーの 260px
+// （--hwc-tree-width）を引いても、本文に 420px 残る幅。狭いセルでは会話の上に重ねる
+// （ADR 0090）。
 export const TREE_SIDE_MIN_WIDTH = 680;
 
 // 設定でカテゴリを左に常設するのに要る、詳細側の幅。カテゴリ列（260）と左右の余白（64）を

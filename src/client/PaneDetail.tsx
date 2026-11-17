@@ -13,6 +13,7 @@ import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
 import { fileTreeStore } from "./file-tree-store";
+import type { FileTreeSide } from "./file-tree-side";
 import { OutputText } from "./OutputText";
 import {
   ATTACHMENT_LIMIT_NOTICE,
@@ -142,6 +143,8 @@ type PaneDetailProps = {
   compact: boolean;
   // 端末出力の ANSI 色を補正する基準。テーマの解決結果を App から受け取る。
   scheme: "light" | "dark";
+  // 広いセルでツリーを会話の左右どちらに並べるか。狭いセルでは重ねるので効かない。
+  treeSide: FileTreeSide;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
   // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
@@ -191,6 +194,7 @@ export function PaneDetail(props: PaneDetailProps) {
     context,
     compact,
     scheme,
+    treeSide,
     labeled,
     showSpace,
     branch,
@@ -1134,7 +1138,8 @@ export function PaneDetail(props: PaneDetailProps) {
     filesButtonRef.current?.focus();
   };
 
-  // 広いセルでは会話の左、狭いセルでは会話の上に重ねる。同じ要素をどちらか一方にだけ置く。
+  // 広いセルでは会話の左右どちらか（設定で選ぶ）、狭いセルでは会話の上に重ねる。
+  // 同じ要素をどちらか一方にだけ置く。
   const treeView = treeOpen ? (
     <FileTree
       paneId={pane.id}
@@ -1156,15 +1161,28 @@ export function PaneDetail(props: PaneDetailProps) {
     />
   ) : null;
 
+  // 並べたツリーの見出し。空いている 260px を、選択中ファイルの在り処に使う。
+  // 未選択なら何も指していないので空のままにする。長さは CSS が列幅で詰め、
+  // 末尾のファイル名が残る。全文は title に置く。
+  const treeHead = sideBySide ? (
+    <span
+      class="hwc-pane-head-tree"
+      data-edge={treeSide}
+      data-shown={treeShown ? "true" : "false"}
+      data-closing={treeClosing ? "true" : undefined}
+    >
+      {previewPath === null ? null : (
+        <span class="hwc-pane-head-tree-path" title={previewPath}>
+          <bdi>{previewPath}</bdi>
+        </span>
+      )}
+    </span>
+  ) : null;
+
   return (
     <>
-      <div
-        class="hwc-pane-head"
-        data-bare={!labeled}
-        data-tree-side={sideBySide ? "true" : undefined}
-        data-tree-shown={treeShown ? "true" : "false"}
-        data-tree-closing={treeClosing ? "true" : undefined}
-      >
+      <div class="hwc-pane-head" data-bare={!labeled}>
+        {sideBySide && treeSide === "left" ? treeHead : null}
         <div class="hwc-pane-head-main">
           <div class="hwc-pane-head-content">
             <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
@@ -1275,9 +1293,15 @@ export function PaneDetail(props: PaneDetailProps) {
             </button>
           </div>
         </div>
+        {sideBySide && treeSide === "right" ? treeHead : null}
       </div>
-      <div class="hwc-pane-body" ref={widthRef} data-side={sideBySide ? "true" : undefined}>
-        {sideBySide ? treeView : null}
+      <div
+        class="hwc-pane-body"
+        ref={widthRef}
+        data-tree-split={sideBySide ? "true" : undefined}
+        data-tree-side={treeSide}
+      >
+        {sideBySide && treeSide === "left" ? treeView : null}
         <div class="hwc-chat-column">
           <div class="hwc-output-wrap">
             {sideBySide ? null : treeView}
@@ -1731,6 +1755,7 @@ export function PaneDetail(props: PaneDetailProps) {
             </form>
           )}
         </div>
+        {sideBySide && treeSide === "right" ? treeView : null}
       </div>
       {projectDialog === null ? null : (
         <ProjectDialog

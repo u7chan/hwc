@@ -269,12 +269,6 @@ html:not([data-input-modality="pointer"])
   }
 }
 
-.hwc-notify-subtitle {
-  margin: var(--space-6) 0 var(--space-2);
-  color: var(--color-secondary);
-  font-size: var(--text-secondary);
-}
-
 .hwc-notify-scopes {
   display: flex;
   flex-direction: column;

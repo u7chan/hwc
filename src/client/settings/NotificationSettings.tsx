@@ -156,7 +156,7 @@ export function NotificationSettings(props: { onSaved?: () => void }) {
             の状態を受け取った時点で判定します。
           </p>
 
-          <p class="hwc-notify-subtitle">完了通知の対象</p>
+          <p class="hwc-subtitle">完了通知の対象</p>
           <div class="hwc-notify-scopes" role="radiogroup" aria-label="完了通知の対象">
             {SCOPE_OPTIONS.map((option) => (
               <button
