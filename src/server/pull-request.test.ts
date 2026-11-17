@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createPullRequestReader } from "./pull-request";
+import { createPullRequestReader, pullRequestBranches } from "./pull-request";
 import type { PullRequest } from "../shared/pull-request";
 
 const pullRequest: PullRequest = {
@@ -25,6 +25,17 @@ function reader(
   });
   return { read, calls };
 }
+
+test("the candidate branches put the pushed branch first", () => {
+  expect(pullRequestBranches("worktree/silver-meadow", "feat/x")).toEqual([
+    "feat/x",
+    "worktree/silver-meadow",
+  ]);
+  // 同じ名前なら 1 つ。gh を同じブランチで 2 回起動しない。
+  expect(pullRequestBranches("feat/x", "feat/x")).toEqual(["feat/x"]);
+  // 上流が無い（push していない・上流を設定していない）ときはローカル名だけ。
+  expect(pullRequestBranches("worktree/silver-meadow", null)).toEqual(["worktree/silver-meadow"]);
+});
 
 test("the reader returns the latest pull request of the checkout", async () => {
   const { read, calls } = reader(async () => [pullRequest]);

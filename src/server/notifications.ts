@@ -16,7 +16,7 @@ import {
 import { parentPaneOf } from "../shared/parent-pane";
 import type { PullRequest } from "../shared/pull-request";
 import type { AppState, PaneState, StateStore, WorkspaceState } from "./herdr/state";
-import type { PullRequestReader } from "./pull-request";
+import { pullRequestBranches, type PullRequestReader } from "./pull-request";
 
 // 設定ファイルの読み書き。中身は JSON のまま扱い、解釈は parseNotificationSettings に任せる。
 export type NotificationSettingsFile = {
@@ -309,9 +309,7 @@ export function createNotificationDispatcher(options: {
     const checkoutPath = options.store.workspacePath(workspace.id);
     if (branch === null || checkoutPath === null || options.pullRequests === undefined) return null;
     // ペイン見出しと同じように、push 先の名前で引く（ADR 0043）。
-    const upstreamBranch = workspace.sync?.upstreamBranch ?? null;
-    const branches =
-      upstreamBranch === null || upstreamBranch === branch ? [branch] : [upstreamBranch, branch];
+    const branches = pullRequestBranches(branch, workspace.sync?.upstreamBranch ?? null);
     const pullRequest = await options
       .pullRequests({ checkoutPath, branches, refresh: true })
       .catch(() => null);

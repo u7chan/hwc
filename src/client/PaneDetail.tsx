@@ -153,6 +153,8 @@ type PaneDetailProps = {
   showBranch: boolean;
   // 1 枚表示のときだけ渡す。分割セルは同じ上流の差が並ぶので出さない。
   sync: GitSync | null;
+  // push 先のブランチ名。sync は分割セルで null になるが、PR を引く鍵はセルでも要る。
+  upstreamBranch: string | null;
   workspaceMenuOpen: boolean;
   waitingMs: number | null;
   // シェルの前景プロセスが動いているか。停止ボタンの出し分けにだけ使う。
@@ -194,6 +196,7 @@ export function PaneDetail(props: PaneDetailProps) {
     branch,
     showBranch,
     sync,
+    upstreamBranch,
     workspaceMenuOpen,
     waitingMs,
     running,
@@ -352,7 +355,7 @@ export function PaneDetail(props: PaneDetailProps) {
     pane.agentStatus,
   );
   // 分割セルも含め、見出しごとに引く。同じスペースのセルは同じ PR になる。
-  const pullRequest = usePullRequest(context.workspaceId, branch, sync?.upstreamBranch ?? null);
+  const pullRequest = usePullRequest(context.workspaceId, branch, upstreamBranch);
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
   const editTarget =

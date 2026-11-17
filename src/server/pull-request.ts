@@ -76,6 +76,15 @@ export function createPullRequestReader(
   };
 }
 
+// PR は push 先の head ブランチに属す。push 先を先に、ローカル名を後ろにした候補を作る。
+// 同じ名前なら 1 つ。呼び出し側ごとに規則を持たず、ここを正本にする。
+export function pullRequestBranches(
+  branch: string,
+  upstreamBranch: string | null,
+): readonly string[] {
+  return upstreamBranch === null || upstreamBranch === branch ? [branch] : [upstreamBranch, branch];
+}
+
 // 同じブランチを二度引かない。候補は push 先とローカル名で、通常はどちらか一方だけ。
 function candidateBranches(branches: readonly string[]): string[] {
   const candidates: string[] = [];
