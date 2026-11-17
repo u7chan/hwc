@@ -128,6 +128,13 @@ import { type PaneLaunchView } from "./starting";
 
 const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
+// ツリーを閉じるアニメーションの長さ。CSS の transition と揃える。
+const TREE_CLOSE_MS = 120;
+// CSS の transition は次のフレームから始まる。閉じ終える前に unmount しないよう、
+// 1 フレーム分だけ待つ。
+const TREE_CLOSE_SETTLE_MS = 20;
+
+const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 type PaneDetailProps = {
   pane: PaneState;
@@ -223,12 +230,73 @@ export function PaneDetail(props: PaneDetailProps) {
   // 会話は DOM に残してスクロール位置を保ち、表示だけを差し替える。
   const chatHidden = treeOverlay || previewOpen;
 
+  // 開閉の動きは開いた瞬間だけ。ペインを切り替えて戻ったときは store が開いたままでも
+  // 再生しないよう、初期値を store の開閉に合わせる。
+  const [treeShown, setTreeShown] = useState(fileTree.open);
+  const [treeClosing, setTreeClosing] = useState(false);
+  const treeCloseTimer = useRef<number | null>(null);
+
+  const cancelTreeClose = () => {
+    if (treeCloseTimer.current === null) return;
+    window.clearTimeout(treeCloseTimer.current);
+    treeCloseTimer.current = null;
+  };
+
+  // 面を 1 フレーム隠した状態で描いてから表示へ移し、CSS の transition を走らせる。
+  useEffect(() => {
+    if (!treeOpen || treeShown || treeClosing) return;
+    const frame = requestAnimationFrame(() => setTreeShown(true));
+    return () => cancelAnimationFrame(frame);
+  }, [treeOpen, treeShown, treeClosing]);
+
+  const openTree = () => {
+    cancelTreeClose();
+    setTreeClosing(false);
+    // 動きを減らす設定では待たずに出す。CSS も transition を持たない。
+    if (prefersReducedMotion()) setTreeShown(true);
+    fileTreeStore.open(pane.id);
+  };
+
+  // store の close はアニメーションの後。閉じている間は一覧を残したまま inert にし、
+  // 消えていく行を押せないようにする。
+  const closeTree = () => {
+    if (!fileTree.open) return;
+    cancelTreeClose();
+    if (prefersReducedMotion()) {
+      fileTreeStore.close(pane.id);
+      setTreeClosing(false);
+      setTreeShown(false);
+      return;
+    }
+    setTreeClosing(true);
+    setTreeShown(false);
+    treeCloseTimer.current = window.setTimeout(() => {
+      treeCloseTimer.current = null;
+      fileTreeStore.close(pane.id);
+      setTreeClosing(false);
+      setTreeShown(false);
+    }, TREE_CLOSE_MS + TREE_CLOSE_SETTLE_MS);
+  };
+
+  // 閉じる途中でセルが外れたら、保留した close を済ませて開いたままにしない。
+  useEffect(
+    () => () => {
+      if (treeCloseTimer.current === null) return;
+      window.clearTimeout(treeCloseTimer.current);
+      treeCloseTimer.current = null;
+      fileTreeStore.close(pane.id);
+    },
+    [pane.id],
+  );
+
   // チャットが消えたペインは配信の根を持たない。開いたままにしない。
   useEffect(() => {
-    if (!pane.chat) {
-      fileTreeStore.close(pane.id);
-      fileTreeStore.clearPreview(pane.id);
-    }
+    if (pane.chat) return;
+    cancelTreeClose();
+    fileTreeStore.close(pane.id);
+    fileTreeStore.clearPreview(pane.id);
+    setTreeClosing(false);
+    setTreeShown(false);
   }, [pane.chat, pane.id]);
   const shownPaneName = shortenPaneName(
     paneName(pane),
@@ -1069,6 +1137,8 @@ export function PaneDetail(props: PaneDetailProps) {
       paneId={pane.id}
       view={fileTree}
       side={sideBySide}
+      shown={treeShown}
+      closing={treeClosing}
       selectedPath={previewPath}
       onToggle={(path) => fileTreeStore.toggle(pane.id, path)}
       onRetry={(path) => fileTreeStore.retry(pane.id, path)}
@@ -1077,7 +1147,7 @@ export function PaneDetail(props: PaneDetailProps) {
         // 狭いセルではツリーが会話を覆う。選んだら閉じて、プレビューを見せる。
         // 同じファイルを選び直してもフォーカスが body に落ちないよう、選択ごとに要求する。
         setPreviewFocus({ focus: !sideBySide });
-        if (!sideBySide) fileTreeStore.close(pane.id);
+        if (!sideBySide) closeTree();
       }}
       onOpenImage={onOpenImage}
     />
@@ -1085,109 +1155,123 @@ export function PaneDetail(props: PaneDetailProps) {
 
   return (
     <>
-      <div class="hwc-pane-head" data-bare={!labeled}>
-        <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
-          {pane.agent ? <AgentGlyphIcon agent={pane.agent} size={14} /> : <PaneIcon size={14} />}
-        </span>
-        {labeled ? (
-          <span class="hwc-pane-head-name">{shownPaneName}</span>
-        ) : showBranch ? (
-          branch === null ? null : (
+      <div
+        class="hwc-pane-head"
+        data-bare={!labeled}
+        data-tree-side={sideBySide ? "true" : undefined}
+        data-tree-shown={treeShown ? "true" : "false"}
+        data-tree-closing={treeClosing ? "true" : undefined}
+      >
+        <div class="hwc-pane-head-main">
+          <div class="hwc-pane-head-content">
+            <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
+              {pane.agent ? (
+                <AgentGlyphIcon agent={pane.agent} size={14} />
+              ) : (
+                <PaneIcon size={14} />
+              )}
+            </span>
+            {labeled ? (
+              <span class="hwc-pane-head-name">{shownPaneName}</span>
+            ) : showBranch ? (
+              branch === null ? null : (
+                <button
+                  type="button"
+                  class="hwc-pane-head-branch-menu"
+                  aria-label={`${branch} のスペースメニュー${sync === null ? "" : `、${gitStatusLabel(sync)}`}`}
+                  aria-haspopup="menu"
+                  aria-expanded={workspaceMenuOpen}
+                  aria-controls={MENU_ID}
+                  data-open={workspaceMenuOpen}
+                  onClick={(event) => onOpenWorkspaceMenu(context.workspaceId, event.currentTarget)}
+                >
+                  <span class="hwc-pane-head-branch" title={branch}>
+                    {branch}
+                  </span>
+                  <GitCount sync={sync} />
+                  <span class="hwc-chevron-down">
+                    <ChevronDownIcon size={12} />
+                  </span>
+                </button>
+              )
+            ) : context.repoName === null ? null : repoUrl === null ? (
+              <span class="hwc-pane-head-repo" title={context.repoName}>
+                {context.repoName}
+              </span>
+            ) : (
+              <a
+                class="hwc-pane-head-repo"
+                href={repoUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`${context.repoName} を GitHub で開く`}
+                title={context.repoName}
+              >
+                {context.repoName}
+              </a>
+            )}
+            {labeled && showSpace && shownPaneName !== context.workspaceName ? (
+              <span
+                class="hwc-pane-head-space"
+                title={`${context.workspaceLabel} / ${context.tabLabel}`}
+              >
+                {context.workspaceName}
+              </span>
+            ) : null}
+            {labeled || showBranch ? null : <GitCount sync={sync} />}
+            {pullRequest === null || pullRequest.state !== "OPEN" ? null : (
+              <a
+                class="hwc-pane-head-pr"
+                href={pullRequest.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={pullRequestLabel(pullRequest)}
+              >
+                #{pullRequest.number}
+              </a>
+            )}
+            {/* 開くファイルは会話のペインと同じ配信経路を使う。チャットを持たない
+            シェルのペインには出さない（開いても配信できないため）。 */}
+            {pane.chat ? (
+              <button
+                ref={filesButtonRef}
+                type="button"
+                class="hwc-pane-files"
+                aria-label={
+                  treeOpen && !treeClosing ? "ファイルツリーを閉じる" : "ファイルツリーを開く"
+                }
+                aria-pressed={treeOpen && !treeClosing}
+                onClick={() => (treeOpen && !treeClosing ? closeTree() : openTree())}
+              >
+                <FolderIcon size={16} />
+                <span class="hwc-pane-files-label">ファイル</span>
+              </button>
+            ) : null}
+            <span class="hwc-pane-id" data-copied={copied}>
+              <span class="hwc-pane-id-text">{pane.id}</span>
+              <button
+                type="button"
+                class="hwc-pane-id-copy"
+                aria-label={copied ? "コピーしました" : "ペイン ID をコピー"}
+                onClick={copyId}
+              >
+                <CopyGlyph copied={copied} />
+              </button>
+            </span>
+            {/* ID の外に置く。中に入れると、hover できる端末で ID と一緒に隠れる。 */}
             <button
               type="button"
-              class="hwc-pane-head-branch-menu"
-              aria-label={`${branch} のスペースメニュー${sync === null ? "" : `、${gitStatusLabel(sync)}`}`}
+              class="hwc-pane-more"
+              aria-label={`${pane.id} のメニュー`}
               aria-haspopup="menu"
-              aria-expanded={workspaceMenuOpen}
+              aria-expanded={menuOpen}
               aria-controls={MENU_ID}
-              data-open={workspaceMenuOpen}
-              onClick={(event) => onOpenWorkspaceMenu(context.workspaceId, event.currentTarget)}
+              onClick={(event) => onOpenMenu(pane.id, event.currentTarget)}
             >
-              <span class="hwc-pane-head-branch" title={branch}>
-                {branch}
-              </span>
-              <GitCount sync={sync} />
-              <span class="hwc-chevron-down">
-                <ChevronDownIcon size={12} />
-              </span>
+              <MoreIcon />
             </button>
-          )
-        ) : context.repoName === null ? null : repoUrl === null ? (
-          <span class="hwc-pane-head-repo" title={context.repoName}>
-            {context.repoName}
-          </span>
-        ) : (
-          <a
-            class="hwc-pane-head-repo"
-            href={repoUrl}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`${context.repoName} を GitHub で開く`}
-            title={context.repoName}
-          >
-            {context.repoName}
-          </a>
-        )}
-        {labeled && showSpace && shownPaneName !== context.workspaceName ? (
-          <span
-            class="hwc-pane-head-space"
-            title={`${context.workspaceLabel} / ${context.tabLabel}`}
-          >
-            {context.workspaceName}
-          </span>
-        ) : null}
-        {labeled || showBranch ? null : <GitCount sync={sync} />}
-        {pullRequest === null || pullRequest.state !== "OPEN" ? null : (
-          <a
-            class="hwc-pane-head-pr"
-            href={pullRequest.url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={pullRequestLabel(pullRequest)}
-          >
-            #{pullRequest.number}
-          </a>
-        )}
-        {/* 開くファイルは会話のペインと同じ配信経路を使う。チャットを持たない
-            シェルのペインには出さない（開いても配信できないため）。 */}
-        {pane.chat ? (
-          <button
-            ref={filesButtonRef}
-            type="button"
-            class="hwc-pane-files"
-            aria-label={fileTree.open ? "ファイルツリーを閉じる" : "ファイルツリーを開く"}
-            aria-pressed={fileTree.open}
-            onClick={() =>
-              fileTree.open ? fileTreeStore.close(pane.id) : fileTreeStore.open(pane.id)
-            }
-          >
-            <FolderIcon size={16} />
-            <span class="hwc-pane-files-label">ファイル</span>
-          </button>
-        ) : null}
-        <span class="hwc-pane-id" data-copied={copied}>
-          <span class="hwc-pane-id-text">{pane.id}</span>
-          <button
-            type="button"
-            class="hwc-pane-id-copy"
-            aria-label={copied ? "コピーしました" : "ペイン ID をコピー"}
-            onClick={copyId}
-          >
-            <CopyGlyph copied={copied} />
-          </button>
-        </span>
-        {/* ID の外に置く。中に入れると、hover できる端末で ID と一緒に隠れる。 */}
-        <button
-          type="button"
-          class="hwc-pane-more"
-          aria-label={`${pane.id} のメニュー`}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          aria-controls={MENU_ID}
-          onClick={(event) => onOpenMenu(pane.id, event.currentTarget)}
-        >
-          <MoreIcon />
-        </button>
+          </div>
+        </div>
       </div>
       <div class="hwc-pane-body" ref={widthRef} data-side={sideBySide ? "true" : undefined}>
         {sideBySide ? treeView : null}
@@ -1313,7 +1397,7 @@ export function PaneDetail(props: PaneDetailProps) {
                   path={previewPath}
                   hasNewReply={previewHasNewReply}
                   focusRequest={previewFocus}
-                  hidden={treeOverlay}
+                  hidden={treeOverlay && !treeClosing}
                   onClose={closePreview}
                 />
               ) : null}

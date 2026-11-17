@@ -225,8 +225,7 @@
   background: var(--color-content);
 }
 
-/* 半分の幅になるので、見出しと入力欄の左右は詰める。 */
-.hwc-split-cell .hwc-pane-head,
+/* 半分の幅になるので、入力欄の左右は詰める。見出しは中身の側で詰める。 */
 .hwc-split-cell .hwc-input {
   padding-right: var(--space-4);
   padding-left: var(--space-4);
@@ -238,12 +237,47 @@
 .hwc-pane-head {
   flex: none;
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  align-items: stretch;
   min-height: calc(var(--space-8) + var(--space-2));
-  padding: 0 var(--space-4);
+  padding: 0;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
+}
+
+/* 見出しの中身。胴と同じ 2 列にしたとき、左のツリー列を空けて右の会話列に置く。
+   内側の content は幅が会話列になるので、--hwc-gutter が本文と同じ値になる。 */
+.hwc-pane-head-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.hwc-pane-head-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+}
+
+/* ツリーを並べるときは、見出しも胴と同じ 2 列にする。左を空けて区切り線を通し、
+   タブ帯の下から胴の下端までを 1 本の列の境目にする。 */
+.hwc-pane-head[data-tree-side="true"]::before {
+  content: "";
+  flex: none;
+  width: var(--hwc-tree-width);
+  border-right: 1px solid var(--color-line);
+  transition: border-color 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.hwc-pane-head[data-tree-side="true"][data-tree-shown="false"]::before {
+  border-right-color: transparent;
+}
+
+.hwc-pane-head[data-tree-side="true"][data-tree-closing="true"]::before {
+  transition: border-color 120ms ease-in;
 }
 
 .hwc-pane-head-icon {
@@ -640,6 +674,10 @@ a.hwc-pane-head-repo:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hwc-pane-head[data-tree-side="true"]::before {
+    transition: none;
+  }
+
   .hwc-pane-id[data-copied="true"] {
     animation: none;
   }
