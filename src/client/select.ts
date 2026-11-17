@@ -186,6 +186,8 @@ export type PaneContext = {
   workspaceLabel: string;
   // 狭い見出しに出すスペース名。前置きを落とした表示用で、フルは workspaceLabel に残す。
   workspaceName: string;
+  // ファイルプレビューのパスのコピーに使う。見出しには出さないので、表示用の名前とは別に持つ。
+  workspacePath: string | null;
   tabLabel: string;
   // ブランチはスペースの属性。同じスペースのペインは同じ値になる。
   branch: string | null;
@@ -202,6 +204,8 @@ export function findPaneContext(state: AppState, paneId: string | null): PaneCon
     workspaceId: row.workspace.id,
     workspaceLabel: row.workspace.label,
     workspaceName: shortenSpaceName(row.workspace),
+    // ファイルツリーの根と同じ場所。実際のファイルの絶対パスを組み立てるのに使う。
+    workspacePath: row.workspace.path ?? null,
     tabLabel: row.tab.label,
     branch: row.workspace.branch ?? null,
     sync: row.workspace.sync ?? null,

@@ -9,7 +9,8 @@ import {
 } from "../../shared/message-files";
 import { previewTextUrl, previewUrl } from "../api";
 import type { MessageImageSource, MessageLinkSource } from "../chat";
-import { ChevronLeftIcon } from "../icons";
+import { useCopy } from "../copy";
+import { ChevronLeftIcon, CodeIcon, CopyGlyph, EyeIcon } from "../icons";
 import { Markdown } from "../Markdown";
 import { markdownHrefs } from "../markdown/parse";
 import { Spinner } from "../Spinner";
@@ -70,6 +71,8 @@ async function readPreview(
 type FilePreviewProps = {
   paneId: string;
   path: string;
+  // パスのコピーに使うスペースの作業ディレクトリ。分からないときは根からの相対パスをコピーする。
+  workspacePath: string | null;
   // プレビュー中に新しい返答が届いたか。会話に戻るボタンにバッジを付ける。
   hasNewReply: boolean;
   // 狭いセルでツリーの行が消えるときだけ、この選択でここへフォーカスを移す。
@@ -125,9 +128,15 @@ export function FilePreview(props: FilePreviewProps) {
   const [body, setBody] = useState<PreviewBody>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [source, setSource] = useState(false);
+  const { copiedId, copy } = useCopy();
+  const copied = copiedId === "path";
   const backRef = useRef<HTMLButtonElement>(null);
   const markdown = isMarkdownPreviewPath(props.path);
   const showMarkdown = markdown && !source;
+  // コピーするのは、貼り付け先でそのまま使える絶対パス。ツリーの根はスペースの作業
+  // ディレクトリと同じなので、相対パスを足すだけでよい。
+  const copyPath =
+    props.workspacePath === null ? props.path : `${props.workspacePath}/${props.path}`;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -196,8 +205,18 @@ export function FilePreview(props: FilePreviewProps) {
           <span>会話に戻る</span>
           {props.hasNewReply ? <span class="hwc-file-preview-new" aria-hidden="true" /> : null}
         </button>
-        <span class="hwc-file-preview-name" title={props.path}>
-          {name}
+        <span class="hwc-file-preview-name">
+          <span class="hwc-file-preview-name-text" title={props.path}>
+            {name}
+          </span>
+          <button
+            type="button"
+            class="hwc-file-preview-copy"
+            aria-label={copied ? "コピーしました" : "ファイルのパスをコピー"}
+            onClick={() => copy("path", copyPath)}
+          >
+            <CopyGlyph copied={copied} />
+          </button>
         </span>
         {markdown ? (
           <button
@@ -206,7 +225,7 @@ export function FilePreview(props: FilePreviewProps) {
             aria-label={source ? "Markdown のプレビューを表示" : "Markdown のソースを表示"}
             onClick={() => setSource((current) => !current)}
           >
-            {source ? "プレビュー" : "ソース"}
+            {source ? <EyeIcon size={16} /> : <CodeIcon size={16} />}
           </button>
         ) : null}
       </div>

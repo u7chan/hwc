@@ -412,6 +412,16 @@ export function StopIcon({ size = 20 }: IconProps) {
   );
 }
 
+// Markdown のソース表示。プレビューの目と対になる山括弧で表す。
+export function CodeIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M9 8l-4 4 4 4" />
+      <path d="M15 8l4 4-4 4" />
+    </Svg>
+  );
+}
+
 // プレビューのタブ。
 export function EyeIcon({ size = 16 }: IconProps) {
   return (
