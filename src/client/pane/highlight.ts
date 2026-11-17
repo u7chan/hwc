@@ -616,7 +616,7 @@ const HTML_SPEC: LangSpec = {
     { kind: "com", re: /<!\[CDATA\[[\s\S]{0,4000}?\]\]>|<![A-Za-z][^>]{0,400}>/y },
     { kind: "key", re: /<\/?[A-Za-z][A-Za-z0-9-]*/y },
     { kind: "op", re: /\/?>/y },
-    { kind: "type", re: /[A-Za-z_:][A-Za-z0-9_:.-]*(?=\s*=)/y },
+    { kind: "type", re: /[A-Za-z_:][A-Za-z0-9_:.-]{0,32}(?=\s*=)/y },
     { kind: "str", re: /"[^"]{0,400}"|'[^']{0,400}'/y },
     { kind: "op", re: /=/y },
   ],

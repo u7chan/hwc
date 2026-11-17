@@ -178,6 +178,7 @@ test("pathological delimiter runs do not scan to the end of the input", () => {
   expect(highlightCode("9".repeat(256 * 1024), "md", budget)).toBeNull();
   expect(highlightCode("${".repeat(128 * 1024), "bash", budget)).toBeNull();
   expect(highlightCode("<!a ".repeat(64 * 1024), "html", budget)).toBeNull();
+  expect(highlightCode("ab.".repeat(85 * 1024), "html", budget)).not.toBeNull();
 });
 
 test("Object.prototype names are not languages", () => {
