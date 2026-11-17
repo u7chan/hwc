@@ -6,6 +6,7 @@
 - Revises: 2026-11-17 にテキストと HTML をチャット領域のプレーン表示で開く
 - Revises: 2026-11-17 に開閉の動きを付ける
 - Revises: 2026-11-17 にツリーを並べるときの見出しを 2 列にする
+- Revises: 2026-11-17 に Markdown を描画して開くようにした（[ADR 0093](0093-file-preview-markdown.md)）
 
 ## Context
 

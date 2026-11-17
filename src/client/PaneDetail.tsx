@@ -1401,6 +1401,8 @@ export function PaneDetail(props: PaneDetailProps) {
                   hasNewReply={previewHasNewReply}
                   focusRequest={previewFocus}
                   hidden={treeOverlay && !treeClosing}
+                  onOpenImage={onOpenImage}
+                  onOpenPreview={onOpenPreview}
                   onClose={closePreview}
                 />
               ) : null}

@@ -128,7 +128,36 @@ export async function createScenario(root: string): Promise<Scenario> {
   // .git はチェックアウトの外に見える構造ではないので、ツリーには出ない。
   await mkdir(join(dashboard, "src"), { recursive: true });
   await Promise.all([
-    writeFile(join(dashboard, "README.md"), "# acme-dashboard\n"),
+    // Markdown のツリーからのプレビュー。見出し・リスト・コード・表・画像・相対リンクを
+    // 1 ファイルに並べ、レンダリングとソース表示の両方を確かめられるようにする。
+    writeFile(
+      join(dashboard, "README.md"),
+      [
+        "# acme-dashboard",
+        "",
+        "空状態の画面を確認するためのチェックアウトです。",
+        "",
+        "## 開発",
+        "",
+        "- `bun install`",
+        "- `bun run dev`",
+        "- [x] 空状態の余白を 24px に揃える",
+        "",
+        "```ts",
+        "const ready = true;",
+        "```",
+        "",
+        "| 画面 | 状態 |",
+        "| --- | --- |",
+        "| 一覧 | 空 |",
+        "| 詳細 | 読み込み中 |",
+        "",
+        "![app icon](docs/preview/app-icon.png)",
+        "",
+        "設計メモは [notes](docs/notes.md) にあります。",
+        "",
+      ].join("\n"),
+    ),
     writeFile(join(dashboard, "package.json"), '{ "name": "acme-dashboard" }\n'),
     writeFile(join(dashboard, ".gitignore"), "node_modules\n"),
     writeFile(join(dashboard, "bun.lock"), "lockfile\n"),

@@ -22,32 +22,42 @@ export function parseMarkdown(text: string): MdBlock[] {
   return parseLines(text.replace(/\r\n?/g, "\n").split("\n"));
 }
 
-// 描画側が実際に image ノードにした destination を集める。BFF の表記の照合だけで
+export type MarkdownHrefs = {
+  images: Set<string>;
+  links: Set<string>;
+};
+
+// 描画側が実際に image / link ノードにした destination を集める。BFF の表記の照合だけで
 // 判定すると、フェンスの中や解析上限の外の記法まで「描いた」ことにしてしまう。
-export function markdownImageHrefs(text: string): Set<string> {
-  const hrefs = new Set<string>();
+export function markdownHrefs(text: string): MarkdownHrefs {
+  const hrefs: MarkdownHrefs = { images: new Set(), links: new Set() };
   if (text.length > MARKDOWN_MAX_LENGTH) return hrefs;
-  collectImageHrefs(parseMarkdown(text), hrefs);
+  collectHrefs(parseMarkdown(text), hrefs);
   return hrefs;
 }
 
-function collectImageHrefs(blocks: readonly MdBlock[], hrefs: Set<string>): void {
+// 本文の画像記法だけを引く。チップに残す画像を決める会話側が使う。
+export function markdownImageHrefs(text: string): Set<string> {
+  return markdownHrefs(text).images;
+}
+
+function collectHrefs(blocks: readonly MdBlock[], hrefs: MarkdownHrefs): void {
   for (const block of blocks) {
     switch (block.kind) {
       case "heading":
       case "paragraph":
-        collectInlineImageHrefs(block.source, hrefs);
+        collectInlineHrefs(block.source, hrefs);
         break;
       case "quote":
         // 引用とリスト項目は描画側と同じく、内側の本文をもう一度解析する。
-        collectImageHrefs(parseMarkdown(block.source), hrefs);
+        collectHrefs(parseMarkdown(block.source), hrefs);
         break;
       case "list":
-        for (const item of block.items) collectImageHrefs(parseMarkdown(item.source), hrefs);
+        for (const item of block.items) collectHrefs(parseMarkdown(item.source), hrefs);
         break;
       case "table":
-        for (const cell of block.header) collectInlineImageHrefs(cell, hrefs);
-        for (const row of block.rows) for (const cell of row) collectInlineImageHrefs(cell, hrefs);
+        for (const cell of block.header) collectInlineHrefs(cell, hrefs);
+        for (const row of block.rows) for (const cell of row) collectInlineHrefs(cell, hrefs);
         break;
       case "code":
       case "hr":
@@ -56,15 +66,16 @@ function collectImageHrefs(blocks: readonly MdBlock[], hrefs: Set<string>): void
   }
 }
 
-function collectInlineImageHrefs(source: string, hrefs: Set<string>): void {
+function collectInlineHrefs(source: string, hrefs: MarkdownHrefs): void {
   for (const node of parseInline(source)) collectInlineNode(node, hrefs);
 }
 
-function collectInlineNode(node: MdInline, hrefs: Set<string>): void {
+function collectInlineNode(node: MdInline, hrefs: MarkdownHrefs): void {
   if (node.kind === "image") {
-    hrefs.add(node.href);
+    hrefs.images.add(node.href);
     return;
   }
+  if (node.kind === "link") hrefs.links.add(node.href);
   if (node.kind === "strong" || node.kind === "em" || node.kind === "del" || node.kind === "link") {
     for (const child of node.children) collectInlineNode(child, hrefs);
   }
