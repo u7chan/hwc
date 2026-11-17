@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import {
   EMPTY_SPLIT_VIEW,
   MAX_LEAVES,
+  addTabOnly,
   canDrop,
   clearCurrent,
   dropOnPane,
+  insertDelegatedPane,
   leafPanes,
   moveTab,
   multiSpace,
@@ -552,4 +554,60 @@ test("tabs opened in several spaces keep their order", () => {
   expect(next.recent).toEqual(["w1:p2", "w3:p1", "w2:p1", "w1:p1"]);
   expect(multiSpace(["w1", "w2"])).toBe(true);
   expect(multiSpace(["w1", "w1"])).toBe(false);
+});
+
+test("a delegated pane grows right, then below, then below the other column", () => {
+  const first = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
+  const two = insertDelegatedPane(first, "w1:p2");
+  expect(two.layout).toEqual(row(leaf("w1:p1"), leaf("w1:p2")));
+  expect(two.current).toBe("w1:p1");
+
+  const three = insertDelegatedPane(two, "w1:p3");
+  // 3 枚目は左のセルを割って下へ。4 枚目が右の列へ入る余地を残す。
+  expect(three.layout).toEqual(row(col(leaf("w1:p1"), leaf("w1:p3")), leaf("w1:p2")));
+  expect(tabPanes(three, true)).toEqual(["w1:p1", "w1:p2", "w1:p3"]);
+
+  const four = insertDelegatedPane(three, "w1:p4");
+  expect(four.layout).toEqual(
+    row(col(leaf("w1:p1"), leaf("w1:p3")), col(leaf("w1:p2"), leaf("w1:p4"))),
+  );
+  expect(readingOrder(four.layout)).toEqual(["w1:p1", "w1:p2", "w1:p3", "w1:p4"]);
+});
+
+test("a pane already shown is not inserted again", () => {
+  // 表示中のシェルにエージェントが付くと、同じ ID が候補に戻ってくる。木は動かさない。
+  const shown = view(["w1:p1", "w1:p2"], "w1:p1", row(leaf("w1:p1"), leaf("w1:p2")));
+  expect(insertDelegatedPane(shown, "w1:p2")).toBe(shown);
+  expect(insertDelegatedPane(shown, "w1:p1")).toBe(shown);
+});
+
+test("a fifth pane becomes a tab instead of a cell", () => {
+  let next = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
+  for (const paneId of ["w1:p2", "w1:p3", "w1:p4"]) next = insertDelegatedPane(next, paneId);
+  const five = insertDelegatedPane(next, "w1:p5");
+  expect(leafPanes(five.layout)).toEqual(["w1:p1", "w1:p3", "w1:p2", "w1:p4"]);
+  expect(five.openTabs).toEqual(["w1:p1", "w1:p2", "w1:p3", "w1:p4", "w1:p5"]);
+  // 木の外のタブは末尾に並ぶ。MRU は触らない。
+  expect(five.recent).toEqual(next.recent);
+  expect(five.current).toBe("w1:p1");
+});
+
+test("a manually arranged layout still finds a free edge", () => {
+  // 上下 2 枚。右には広げられないので、右の列を割れる下側へ入る。
+  const stacked = view(["w1:p1", "w1:p2"], "w1:p1", col(leaf("w1:p1"), leaf("w1:p2")));
+  const next = insertDelegatedPane(stacked, "w1:p3");
+  expect(leafPanes(next.layout)).toEqual(["w1:p1", "w1:p3", "w1:p2"]);
+  expect(next.current).toBe("w1:p1");
+});
+
+test("a layout with no room leaves the cells alone", () => {
+  const full = view(
+    ["w1:p1", "w1:p2", "w1:p3", "w1:p4"],
+    "w1:p1",
+    row(col(leaf("w1:p1"), leaf("w1:p3")), col(leaf("w1:p2"), leaf("w1:p4"))),
+  );
+  expect(addTabOnly(full, "w1:p4")).toBe(full);
+  const five = insertDelegatedPane(full, "w1:p5");
+  expect(five.layout).toEqual(full.layout);
+  expect(five.openTabs).toEqual([...full.openTabs, "w1:p5"]);
 });

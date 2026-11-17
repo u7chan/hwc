@@ -58,7 +58,10 @@
    一覧の現在行と同じ色で結び付ける（ADR 0058 / 0061）。 */
 .hwc-split-cell {
   position: relative;
-  transition: opacity 180ms ease-out;
+  /* 委譲で増えたセルは、幅 0 から分割線を走らせて広げる（ADR 0092）。 */
+  transition:
+    opacity 180ms ease-out,
+    flex-grow var(--hwc-split-duration, 280ms) cubic-bezier(0.25, 0.72, 0.3, 1);
 }
 
 /* 外すペインのセルは、タブが縮む間に淡く消す。消えたあとは残りのセルが広がる。 */
@@ -81,6 +84,11 @@
 
 .hwc-split-cell[data-slot="4"] {
   --slot-color: var(--color-slot-4);
+}
+
+/* 委譲で増えたセルは幅 0 から広げる。分割線は既存セルとの 1px の隙間。 */
+.hwc-split-cell[data-split-enter="true"] {
+  flex-grow: 0;
 }
 
 /* outline は子の背景（出力欄・入力欄）の下に描かれ、左右と下辺が隠れる。セルの手前に
@@ -674,6 +682,11 @@ a.hwc-pane-head-repo:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* 動きを減らす設定は、アプリの「分割の動き」より優先する（ADR 0092）。 */
+  .hwc-split-cell {
+    transition: none;
+  }
+
   .hwc-pane-head[data-tree-side="true"]::before {
     transition: none;
   }

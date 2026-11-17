@@ -3,6 +3,7 @@ import { themeLabel, type ThemePreference } from "../theme";
 
 export type SettingsCategoryId =
   | "display"
+  | "split"
   | "templates"
   | "notifications"
   | "restart"
@@ -18,6 +19,7 @@ export type SettingsCategory = {
 // 操作する設定と、状態を見るだけの項目を分ける。並びは変える頻度の高い順。
 export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   { id: "display", label: "表示", group: "settings" },
+  { id: "split", label: "ペイン分割", group: "settings" },
   { id: "templates", label: "定型文", group: "settings" },
   { id: "notifications", label: "通知", group: "settings" },
   { id: "restart", label: "再起動", group: "settings" },
@@ -31,6 +33,7 @@ export function settingsCategoryLabel(id: SettingsCategoryId): string {
 
 export type SettingsCategoryValues = {
   theme: ThemePreference;
+  split: boolean | null;
   connection: ConnectionStatus;
   revision: string | null;
   templates: number | null;
@@ -47,6 +50,8 @@ export function settingsCategoryValue(
   switch (id) {
     case "display":
       return themeLabel(values.theme);
+    case "split":
+      return values.split === null ? null : values.split ? "オン" : "オフ";
     case "templates":
       return values.templates === null ? null : `${values.templates} 件`;
     case "notifications":

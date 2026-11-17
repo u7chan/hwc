@@ -4,6 +4,7 @@ import {
   ChevronRightIcon,
   CommitIcon,
   LinkIcon,
+  SplitIcon,
   ReloadIcon,
   TemplateIcon,
   ThemeIcon,
@@ -20,6 +21,7 @@ import { useSettingsSummary } from "./use-summary";
 
 type SettingsIndexProps = {
   theme: ThemePreference;
+  split: boolean;
   connection: ConnectionStatus;
   revision: string | null;
   current: SettingsCategoryId | null;
@@ -32,6 +34,8 @@ function CategoryIcon(props: { id: SettingsCategoryId }) {
   switch (props.id) {
     case "display":
       return <ThemeIcon size={20} />;
+    case "split":
+      return <SplitIcon size={20} />;
     case "templates":
       return <TemplateIcon size={20} />;
     case "notifications":
@@ -78,6 +82,7 @@ export function SettingsIndex(props: SettingsIndexProps) {
   const summary = useSettingsSummary(props.refreshKey);
   const values: SettingsCategoryValues = {
     theme: props.theme,
+    split: props.split,
     connection: props.connection,
     revision: props.revision,
     templates: summary.templates,
