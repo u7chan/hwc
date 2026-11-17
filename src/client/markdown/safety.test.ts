@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 const PARSER_DIR = fileURLToPath(new URL(".", import.meta.url));
 const COMPONENT_PATH = fileURLToPath(new URL("../Markdown.tsx", import.meta.url));
+const PANE_DIR = fileURLToPath(new URL("../pane/", import.meta.url));
+const PREVIEW_COMPONENT_PATH = fileURLToPath(new URL("../pane/file-preview.tsx", import.meta.url));
 
 /** DOM 文字列の生成・HTML のパース・DOM の直接操作 */
 const FORBIDDEN = [
@@ -33,11 +35,16 @@ const parserFiles = readdirSync(PARSER_DIR, { withFileTypes: true })
   )
   .map((entry) => source(join(PARSER_DIR, entry.name)));
 const componentFile = source(COMPONENT_PATH);
-const allFiles = [...parserFiles, componentFile];
+// ファイルプレビューは Markdown と同じく、本文を HTML 文字列にせず VNode へ組み立てる。
+const paneFiles = ["highlight.ts", "preview-text.ts"].map((name) => source(join(PANE_DIR, name)));
+const previewComponentFile = source(PREVIEW_COMPONENT_PATH);
+const allFiles = [...parserFiles, componentFile, ...paneFiles, previewComponentFile];
 
 test("走査対象のソースが空にならない", () => {
   assert.ok(parserFiles.length > 0);
+  assert.ok(paneFiles.length > 0);
   assert.ok(componentFile.code.length > 0);
+  assert.ok(previewComponentFile.code.length > 0);
 });
 
 test("DOM 文字列の生成と HTML のパースを使っていない", () => {
@@ -48,8 +55,8 @@ test("DOM 文字列の生成と HTML のパースを使っていない", () => {
   }
 });
 
-test("パーサは相対 import だけで完結する (Node のテストで検証できる)", () => {
-  for (const file of parserFiles) {
+test("純関数のモジュールは相対 import だけで完結する (Node のテストで検証できる)", () => {
+  for (const file of [...parserFiles, ...paneFiles]) {
     const imports = [...file.code.matchAll(/from\s+"([^"]+)"/g)].map((match) => match[1]);
     for (const specifier of imports) {
       assert.ok(specifier.startsWith("./"), `${file.path} が ${specifier} を import している`);

@@ -586,8 +586,8 @@ const BASH_SPEC: LangSpec = {
   rules: [
     { kind: "com", re: /#[^\n]*/y },
     { kind: "str", re: /"(?:\\[\s\S]|[^\\"]){0,4000}"/y },
-    { kind: "str", re: /'[^']*'/y },
-    { kind: "type", re: /\$(?:\{[^}]*\}|[A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!-])/y },
+    { kind: "str", re: /'[^']{0,400}'/y },
+    { kind: "type", re: /\$(?:\{[^}]{0,200}\}|[A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!-])/y },
     { kind: "num", re: /\d[\d_]*(?:\.\d+)?/y },
     { kind: "op", re: /--?[A-Za-z][A-Za-z0-9-]*/y },
     { kind: "op", re: /[|&;<>()=]+/y },
@@ -613,11 +613,11 @@ const CSS_SPEC: LangSpec = {
 const HTML_SPEC: LangSpec = {
   rules: [
     { kind: "com", re: /<!--[\s\S]{0,4000}?-->/y },
-    { kind: "com", re: /<!\[CDATA\[[\s\S]{0,4000}?\]\]>|<![A-Za-z][^>]*>/y },
+    { kind: "com", re: /<!\[CDATA\[[\s\S]{0,4000}?\]\]>|<![A-Za-z][^>]{0,400}>/y },
     { kind: "key", re: /<\/?[A-Za-z][A-Za-z0-9-]*/y },
     { kind: "op", re: /\/?>/y },
     { kind: "type", re: /[A-Za-z_:][A-Za-z0-9_:.-]*(?=\s*=)/y },
-    { kind: "str", re: /"[^"]*"|'[^']*'/y },
+    { kind: "str", re: /"[^"]{0,400}"|'[^']{0,400}'/y },
     { kind: "op", re: /=/y },
   ],
 };
@@ -625,10 +625,10 @@ const HTML_SPEC: LangSpec = {
 const MD_SPEC: LangSpec = {
   rules: [
     { kind: "com", re: /```[^\n]*/y },
-    { kind: "str", re: /`[^`\n]*`/y },
+    { kind: "str", re: /`[^`\n]{0,400}`/y },
     { kind: "key", re: /#{1,6}(?=\s)/y },
-    { kind: "type", re: /\[[^\]\n]*\]\([^)\n]*\)/y },
-    { kind: "op", re: /\*\*|__|~~|\*|_|\d+\. /y },
+    { kind: "type", re: /\[[^\]\n]{0,400}\]\([^)\n]{0,2000}\)/y },
+    { kind: "op", re: /\*\*|__|~~|\*|_|\d{1,9}\. /y },
   ],
 };
 
@@ -711,6 +711,10 @@ export function normalizeLang(lang: string | null): string | null {
   return Object.hasOwn(ALIASES, name) ? ALIASES[name] : null;
 }
 
+// 区切り文字が無い入力では、失敗した規則が行末・文末まで走査して二次関数的に遅くなる。
+// 規則側の量化子は有限にしてあるが、将来の追加に備えて連続する素の 1 文字と 1 文字語でも打ち切る。
+const PLAIN_RUN_LIMIT = 5_000;
+
 function tokenize(text: string, spec: LangSpec, maxTokens: number): Token[] | null {
   const tokens: Token[] = [];
   const push = (kind: TokenKind, value: string): boolean => {
@@ -723,6 +727,7 @@ function tokenize(text: string, spec: LangSpec, maxTokens: number): Token[] | nu
   };
 
   let at = 0;
+  let plainRun = 0;
   while (at < text.length) {
     let matched = false;
     for (const rule of spec.rules) {
@@ -731,6 +736,7 @@ function tokenize(text: string, spec: LangSpec, maxTokens: number): Token[] | nu
       if (match !== null && match[0].length > 0) {
         if (!push(rule.kind, match[0])) return null;
         at += match[0].length;
+        plainRun = 0;
         matched = true;
         break;
       }
@@ -746,10 +752,15 @@ function tokenize(text: string, spec: LangSpec, maxTokens: number): Token[] | nu
       });
       if (!push(kind ?? "plain", word[0])) return null;
       at += word[0].length;
+      // 1 文字の語が続く入力も、区切りの無い塊と同じく走査を繰り返す。
+      plainRun = word[0].length === 1 ? plainRun + 1 : 0;
+      if (plainRun > PLAIN_RUN_LIMIT) return null;
       continue;
     }
     if (!push("plain", text[at])) return null;
     at += 1;
+    plainRun += 1;
+    if (plainRun > PLAIN_RUN_LIMIT) return null;
   }
   return tokens;
 }

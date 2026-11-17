@@ -381,7 +381,7 @@ button.hwc-tree-row:active {
   color: var(--color-text);
 }
 
-/* 色は端末出力と同じ ANSI の 8 色を借りる。テーマごとにコード用の 7 色を足さず、
+/* 色は端末出力と同じ ANSI の 8 色を借りる。テーマごとにコード用の 6 色を足さず、
    明暗 2 系統で 4.5:1 を満たす既存の値を使う。--color-secondary は solarized-light と
    rose-pine-dawn で 4.2 前後になるため、コメントは --color-muted にする。 */
 .hwc-tok-key {

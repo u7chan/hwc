@@ -170,6 +170,16 @@ test("unknown languages and the token budget fall back to plain text", () => {
   expect(highlightCode("+a\n+b\n+c\n", "diff", 2)).toBeNull();
 });
 
+test("pathological delimiter runs do not scan to the end of the input", () => {
+  // 区切り文字の無い塊。規則の量化子を有限にしていないと、1 文字ごとに末尾まで走査して
+  // 二次関数的に遅くなる（256KB の md で 20 秒超）。ここでは打ち切りと上限で止まることを見る。
+  const budget = 20_000;
+  expect(highlightCode("[".repeat(256 * 1024), "md", budget)).toBeNull();
+  expect(highlightCode("9".repeat(256 * 1024), "md", budget)).toBeNull();
+  expect(highlightCode("${".repeat(128 * 1024), "bash", budget)).toBeNull();
+  expect(highlightCode("<!a ".repeat(64 * 1024), "html", budget)).toBeNull();
+});
+
 test("Object.prototype names are not languages", () => {
   for (const lang of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
     expect(highlightCode("const a = 1;", lang, 100_000)).toBeNull();

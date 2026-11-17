@@ -88,8 +88,12 @@ function contrast(a: string, b: string): number {
   return (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
 }
 
+function cssColor(block: string, token: string): string | null {
+  return new RegExp(`--${token}:\\s*(#[0-9a-fA-F]{6})`).exec(block)?.[1] ?? null;
+}
+
 function colorValue(block: string, token: string): string | null {
-  return new RegExp(`--color-${token}:\\s*(#[0-9a-fA-F]{6})`).exec(block)?.[1] ?? null;
+  return cssColor(block, `color-${token}`);
 }
 
 test("muted text keeps 4.5:1 on every content background", async () => {
@@ -114,6 +118,45 @@ test("muted text keeps 4.5:1 on every content background", async () => {
     }
     const ratio = contrast(muted, content);
     if (ratio < 4.5) weak.push(`${theme.id}: ${ratio.toFixed(2)}`);
+  }
+
+  expect(weak).toEqual([]);
+});
+
+// シンタックスハイライトの色（key / str / num / com / fn / type）も、各テーマの content
+// 背景で 4.5:1 を下回らない。ANSI と muted は明暗 2 系統なので、テーマの scheme で選ぶ。
+test("syntax colors keep 4.5:1 on every content background", async () => {
+  const css = await Bun.file("src/client/styles/tokens.css").text();
+  const light = /:root\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  const dark = /:root\[data-scheme="dark"\]\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  const weak: string[] = [];
+
+  for (const theme of THEMES) {
+    const selector = theme.id === "light" ? ":root {" : `:root[data-theme="${theme.id}"] {`;
+    const start = css.indexOf(selector);
+    const block = css.slice(start, css.indexOf("}", start));
+    const content = colorValue(block, "content");
+    if (content === null) {
+      weak.push(`${theme.id}: missing content`);
+      continue;
+    }
+    const palette = theme.scheme === "light" ? light : dark;
+    const colors: Record<string, string | null> = {
+      key: cssColor(palette, "ansi-5"),
+      str: cssColor(palette, "ansi-2"),
+      num: cssColor(palette, "ansi-3"),
+      com: cssColor(palette, "color-muted"),
+      fn: cssColor(palette, "ansi-4"),
+      type: cssColor(palette, "ansi-6"),
+    };
+    for (const [kind, value] of Object.entries(colors)) {
+      if (value === null) {
+        weak.push(`${theme.id}: missing ${kind}`);
+        continue;
+      }
+      const ratio = contrast(value, content);
+      if (ratio < 4.5) weak.push(`${theme.id}: ${kind} ${ratio.toFixed(2)}`);
+    }
   }
 
   expect(weak).toEqual([]);
