@@ -127,6 +127,7 @@ export async function createScenario(root: string): Promise<Scenario> {
   // ファイルツリー。ドットファイルと開けないファイルも名前だけ出ることを確かめる。
   // .git はチェックアウトの外に見える構造ではないので、ツリーには出ない。
   await mkdir(join(dashboard, "src"), { recursive: true });
+  await mkdir(join(dashboard, "bin"), { recursive: true });
   await Promise.all([
     // Markdown のツリーからのプレビュー。見出し・リスト・コード・表・画像・相対リンクを
     // 1 ファイルに並べ、レンダリングとソース表示の両方を確かめられるようにする。
@@ -161,6 +162,27 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeFile(join(dashboard, "package.json"), '{ "name": "acme-dashboard" }\n'),
     writeFile(join(dashboard, ".gitignore"), "node_modules\n"),
     writeFile(join(dashboard, "bun.lock"), "lockfile\n"),
+    // 拡張子で決まる YAML と、拡張子の無いスクリプトの shebang。どちらも色が付く。
+    writeFile(
+      join(dashboard, "docs", "ci.yml"),
+      [
+        "name: checks",
+        "on: push",
+        "jobs:",
+        "  test:",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - run: bun test",
+        "        env:",
+        "          CI: true",
+        "",
+      ].join("\n"),
+    ),
+    writeFile(
+      join(dashboard, "bin", "deploy"),
+      '#!/usr/bin/env bash\nset -euo pipefail\necho "deploying"\n',
+      { mode: 0o700 },
+    ),
     writeFile(join(dashboard, "src", "main.ts"), "export const ready = true;\n"),
   ]);
 
