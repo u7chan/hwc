@@ -137,7 +137,7 @@ test.each(["pi", "codex"] as const)(
   },
 );
 
-test("POST /api/panes/:id/split shows the chosen model until the session records one", async () => {
+test("POST /api/panes/:id/split keeps the chosen model across empty conversations", async () => {
   const store = createFakeStore(twoChatPanesState);
   store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
   store.setChatSource("w1:p2", { agent: "pi", path: otherSessionPath });
@@ -176,9 +176,16 @@ test("POST /api/panes/:id/split shows the chosen model until the session records
   recorded = { ...emptyChat, etag: "etag-2", model: "beam-mini" };
   const fromSession = await app.request("/api/panes/w1:p2/chat");
   expect(await fromSession.json()).toEqual(recorded);
+
+  // /new で会話が空に戻ったら、また起動時の指定で補う（ADR 0091）。
   recorded = emptyChat;
   const after = await app.request("/api/panes/w1:p2/chat");
-  expect(await after.json()).toEqual(emptyChat);
+  expect(await after.json()).toEqual({
+    ...emptyChat,
+    etag: "etag-1+launch",
+    model: "beam",
+    effort: "low",
+  });
 });
 
 test("a client that read the pane before the split is not pinned to the old snapshot", async () => {

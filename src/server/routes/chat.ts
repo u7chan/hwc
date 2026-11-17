@@ -76,8 +76,8 @@ export function createChatHandlers(ctx: AppContext) {
 
       try {
         const live = await client.snapshot(source.agent === "pi" ? source.path : source.sessionId);
-        // セッションにモデルが載ったら、既定モデルで補う理由は無くなる。
-        piDefaults.forgetRecorded(paneId, live.model);
+        // 解決済みの既定は捨てる。預かりは残すので、/new の後は読み直せる（ADR 0091）。
+        piDefaults.dropResolved(paneId, live.model);
         const snapshot = launchModels.apply(paneId, live);
         // 添付のチップに出すサイズは保存済みファイルの実バイト数。名前から引く。
         const withSizes = await attachAttachmentSizes(snapshot, {

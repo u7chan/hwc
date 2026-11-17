@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-15
 - Revises: [ADR 0033](0033-launch-model-before-first-message.md) の「モデル未指定の場合は預からない」と「最初のメッセージまでモデル名が出ない」
+- Amended by: [ADR 0091](0091-empty-session-model-display.md)
 
 ## Context
 
