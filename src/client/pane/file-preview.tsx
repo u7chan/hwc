@@ -83,9 +83,9 @@ export function FilePreview(props: FilePreviewProps) {
   // 選び直したときも store は通知しないので、選択ごとの要求で動かす。広いセルでは
   // ツリーにフォーカスを残し、続けてファイルを選べるようにする。
   useEffect(() => {
-    if (!props.focusRequest.focus) return;
+    if (!props.focusRequest.focus || props.hidden) return;
     backRef.current?.focus();
-  }, [props.focusRequest]);
+  }, [props.focusRequest, props.hidden]);
 
   const name = messageFileLabel(props.path);
   const numbers = useMemo(

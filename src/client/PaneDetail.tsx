@@ -130,6 +130,9 @@ const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
 // ツリーを閉じるアニメーションの長さ。CSS の transition と揃える。
 const TREE_CLOSE_MS = 120;
+// CSS の transition は次のフレームから始まる。閉じ終える前に unmount しないよう、
+// 1 フレーム分だけ待つ。
+const TREE_CLOSE_SETTLE_MS = 20;
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -272,7 +275,7 @@ export function PaneDetail(props: PaneDetailProps) {
       fileTreeStore.close(pane.id);
       setTreeClosing(false);
       setTreeShown(false);
-    }, TREE_CLOSE_MS);
+    }, TREE_CLOSE_MS + TREE_CLOSE_SETTLE_MS);
   };
 
   // 閉じる途中でセルが外れたら、保留した close を済ませて開いたままにしない。
@@ -1394,7 +1397,7 @@ export function PaneDetail(props: PaneDetailProps) {
                   path={previewPath}
                   hasNewReply={previewHasNewReply}
                   focusRequest={previewFocus}
-                  hidden={treeOverlay}
+                  hidden={treeOverlay && !treeClosing}
                   onClose={closePreview}
                 />
               ) : null}
