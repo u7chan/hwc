@@ -306,12 +306,19 @@
     border-color 120ms ease-in;
 }
 
-/* 末尾を残す省略は shortenPath の役目。ここは列幅からはみ出す分の保険。 */
+/* 文字数ではなく表示幅で先頭を省略する。direction: rtl で省略記号を左端へ寄せ、
+   中身の bdi で文字の並びは LTR のまま保つ。全角を含むパスでも末尾が残る。 */
 .hwc-pane-head-tree-path {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
+  text-align: left;
   text-overflow: ellipsis;
+  direction: rtl;
+}
+
+.hwc-pane-head-tree-path > bdi {
+  direction: ltr;
 }
 
 .hwc-pane-head-icon {
