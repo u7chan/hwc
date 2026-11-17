@@ -5,6 +5,7 @@ import {
   normalizePreviewText,
   previewLang,
   previewLineNumbers,
+  previewShebangLang,
   previewTokens,
   resolvePreviewReference,
 } from "./preview-text";
@@ -76,9 +77,11 @@ test("detects languages from the extension", () => {
     ["a.html", "html"],
     ["a.md", "md"],
     ["a.diff", "diff"],
+    ["a.yaml", "yaml"],
+    ["a.yml", "yaml"],
+    ["A.YML", "yaml"],
     ["Dockerfile", "bash"],
     ["dockerfile", "bash"],
-    ["a.yaml", null],
     ["a.toml", null],
     ["README", null],
     [".gitignore", null],
@@ -99,9 +102,37 @@ test("highlights a known file without changing the text", () => {
   expect(tokens?.some((token) => token.kind === "key")).toBe(true);
 });
 
+test("highlights yaml files", () => {
+  const source = "name: acme-dashboard\non: push\n";
+  const tokens = previewTokens(source, "docs/ci.yml");
+  expect(tokens?.map((token) => token.text).join("")).toBe(source);
+  expect(tokens?.filter((token) => token.kind === "key").map((token) => token.text)).toEqual([
+    "name",
+    "on",
+  ]);
+});
+
+test("reads the language of an extensionless script from its shebang", () => {
+  expect(previewShebangLang("#!/usr/bin/env bash\necho ok\n")).toBe("bash");
+  expect(previewShebangLang("#!/bin/sh -e\necho ok\n")).toBe("bash");
+  expect(previewShebangLang("#!/usr/bin/env -S node --experimental-strip-types\n")).toBe("ts");
+  expect(previewShebangLang("#!/usr/bin/env FOO=1 python3.12 -u\n")).toBe("python");
+  expect(previewShebangLang("\uFEFF#!/usr/bin/env dash\n")).toBe("bash");
+  // 1 行目だけを見る。対応表に無い解釈子は素のテキストにする。
+  expect(previewShebangLang("#!/usr/bin/env ruby\n")).toBeNull();
+  expect(previewShebangLang("# comment\n#!/usr/bin/env bash\n")).toBeNull();
+  expect(previewShebangLang("#!\n")).toBeNull();
+
+  const tokens = previewTokens("#!/usr/bin/env bash\necho $HOME\n", "bin/deploy");
+  expect(tokens?.some((token) => token.kind === "fn" && token.text === "echo")).toBe(true);
+  expect(previewTokens("echo $HOME\n", "bin/deploy")).toBeNull();
+  // 拡張子があれば shebang より拡張子を優先する。
+  expect(previewTokens("#!/usr/bin/env bash\necho $HOME\n", "bin/deploy.txt")).toBeNull();
+});
+
 test("falls back to plain text for unknown files and the token budget", () => {
   expect(previewTokens("x = 1", "README")).toBeNull();
-  expect(previewTokens("x = 1", "a.yaml")).toBeNull();
+  expect(previewTokens("x = 1", "a.toml")).toBeNull();
   expect(previewTokens("1;".repeat(PREVIEW_HIGHLIGHT_MAX_TOKENS), "a.ts")).toBeNull();
   expect(previewTokens("1;".repeat(10), "a.ts")).not.toBeNull();
 });

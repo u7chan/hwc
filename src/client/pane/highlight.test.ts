@@ -11,6 +11,7 @@ const SAMPLES: Record<string, string> = {
   go: 'package main\n\nimport "fmt"\n\nfunc main() {\n\tvalues := []int{1, 2, 3}\n\tfor i, v := range values {\n\t\tfmt.Println(i, v)\n\t}\n}\n',
   rust: "use std::collections::HashMap;\n\n/// 数を数える\nfn count(values: &[u32]) -> HashMap<u32, usize> {\n    let mut counts = HashMap::new();\n    for value in values {\n        *counts.entry(*value).or_insert(0) += 1;\n    }\n    counts\n}\n",
   json: '{\n  "name": "gui",\n  "count": 12,\n  "ok": true,\n  "none": null\n}\n',
+  yaml: '# 設定\nname: acme-dashboard\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    env:\n      CI: true\n      RETRIES: 3\n    script: |\n      echo "$HOME"\n      exit 0\n',
   bash: '# 実行\nbun test -- --test-name-pattern preview\ngit switch -c "feat/x"\necho $HOME > out.txt\n',
   python: 'import os\n\n\ndef main(x: int) -> str:\n    """doc"""\n    return f"{x}"  # 文字列\n',
   css: "/* テーマ */\n.md h1, #id .cls:hover {\n  color: var(--c-ink);\n  width: 12.5rem;\n}\n",
@@ -73,6 +74,86 @@ test("JSON tells keys from string values and highlights literals", () => {
     "null",
   ]);
   expect(tokensOf("str", tokens).map((token) => token.text)).toEqual(['"gui"']);
+});
+
+test("YAML tells keys from values and keeps block scalars whole", () => {
+  const tokens = highlightCode(SAMPLES.yaml, "yaml", 100_000);
+  expect(tokensOf("key", tokens).map((token) => token.text)).toEqual([
+    "name",
+    "on",
+    "jobs",
+    "build",
+    "runs-on",
+    "env",
+    "CI",
+    "RETRIES",
+    "script",
+  ]);
+  expect(tokensOf("str", tokens).map((token) => token.text)).toEqual([
+    "acme-dashboard",
+    "push",
+    "ubuntu-latest",
+    '|\n      echo "$HOME"\n      exit 0\n',
+  ]);
+  expect(tokensOf("com", tokens).map((token) => token.text)).toEqual(["# 設定"]);
+  expect(tokensOf("type", tokens).map((token) => token.text)).toEqual(["true"]);
+  expect(tokensOf("num", tokens).map((token) => token.text)).toEqual(["3"]);
+});
+
+test("YAML block scalars stop at the indentation of their first content line", () => {
+  const source = [
+    "jobs:",
+    "  check:",
+    "    steps:",
+    "      - name: Test",
+    "        run: |",
+    "          bun test",
+    "",
+    "          bun test --watch",
+    "      - name: Lint",
+    "        run: bunx oxlint",
+    "        env:",
+    "          CI: true",
+    "",
+  ].join("\n");
+  const tokens = highlightCode(source, "yaml", 100_000);
+  expect(tokens?.map((token) => token.text).join("")).toBe(source);
+  expect(tokensOf("key", tokens).map((token) => token.text)).toEqual([
+    "jobs",
+    "check",
+    "steps",
+    "name",
+    "run",
+    "name",
+    "run",
+    "env",
+    "CI",
+  ]);
+  expect(tokensOf("str", tokens).find((token) => token.text.startsWith("|"))).toEqual({
+    kind: "str",
+    text: "|\n          bun test\n\n          bun test --watch\n",
+  });
+  expect(tokensOf("type", tokens).map((token) => token.text)).toEqual(["true"]);
+});
+
+test("YAML quoted keys, anchors, tags and flow collections", () => {
+  const source =
+    'quoted: "a: b"\n"key: with colon": 1\nbase: &base\ntagged: !!str value\nflow: { a: 1, b: [x, y] }\nnulls: ~\n';
+  const tokens = highlightCode(source, "yaml", 100_000);
+  expect(tokens?.map((token) => token.text).join("")).toBe(source);
+  expect(tokensOf("key", tokens).map((token) => token.text)).toEqual([
+    "quoted",
+    '"key: with colon"',
+    "base",
+    "tagged",
+    "flow",
+    "a",
+    "b",
+    "nulls",
+  ]);
+  expect(tokensOf("str", tokens).map((token) => token.text)).toEqual(['"a: b"', "value", "x", "y"]);
+  expect(tokensOf("type", tokens).map((token) => token.text)).toEqual(["&base", "!!str", "~"]);
+  expect(tokensOf("num", tokens).map((token) => token.text)).toEqual(["1", "1"]);
 });
 
 test("bash colors the command at the line head and options", () => {
@@ -155,6 +236,7 @@ test("aliases resolve to the same rules", () => {
     highlightCode(rustSource, "rust", 100_000),
   );
   expect(normalizeLang("sh")).toBe("bash");
+  expect(normalizeLang("YML")).toBe("yaml");
   expect(normalizeLang("xml")).toBe("html");
   expect(normalizeLang("patch")).toBe("diff");
   expect(normalizeLang("markdown")).toBe("md");
@@ -179,6 +261,9 @@ test("pathological delimiter runs do not scan to the end of the input", () => {
   expect(highlightCode("${".repeat(128 * 1024), "bash", budget)).toBeNull();
   expect(highlightCode("<!a ".repeat(64 * 1024), "html", budget)).toBeNull();
   expect(highlightCode("ab.".repeat(85 * 1024), "html", budget)).not.toBeNull();
+  // YAML は句読点の連続を 1 回の op にまとめるので、1 文字ずつ積み上げない。
+  expect(highlightCode("[".repeat(256 * 1024), "yaml", budget)).not.toBeNull();
+  expect(highlightCode("|".repeat(256 * 1024), "yaml", budget)).not.toBeNull();
 });
 
 test("Object.prototype names are not languages", () => {

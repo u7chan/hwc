@@ -292,6 +292,42 @@ const JSON_SPEC: LangSpec = {
   classify: (word) => (word === "true" || word === "false" || word === "null" ? "key" : null),
 };
 
+// YAML。行頭の字下げと `key:` の形で構造が決まるので、キーは「直後が `:` の語」で拾い、
+// それ以外の裸の語は値として文字列にする。ブロックの本文は 1 つの文字列として飲む。
+const YAML_SPEC: LangSpec = {
+  rules: [
+    { kind: "com", re: /(?:^|[ \t])#[^\n]*/my },
+    // `key: |` の後ろに続く字下げされた行。最初の中身の行の字下げを基準にし、
+    // そこより浅い行（兄弟キー）からは普通の規則に戻る。
+    {
+      kind: "str",
+      re: /[|>][+-]?\d?[ \t]{0,80}(?:#[^\n]{0,400})?\n(?:\n){0,4000}(?=([ \t]+))(?:\1[^\n]*\n?|\n){1,4000}/y,
+    },
+    // クォートされたキーは、値の文字列より先にキーとして拾う。
+    { kind: "key", re: /"(?:\\[\s\S]|[^\\"\n]){0,4000}"[ \t]*(?=:)/y },
+    { kind: "key", re: /'(?:''|[^'\n]){0,4000}'[ \t]*(?=:)/y },
+    { kind: "str", re: /"(?:\\[\s\S]|[^\\"\n]){0,4000}"/y },
+    { kind: "str", re: /'(?:''|[^'\n]){0,4000}'/y },
+    // `https://` のように直後が空白でない `:` はキーの区切りにしない。
+    { kind: "key", re: /[A-Za-z_$][\w$./-]*(?=[ \t]*:(?:[ \t]|$))/my },
+    { kind: "key", re: /<<(?=[ \t]*:(?:[ \t]|$))/y },
+    { kind: "op", re: /^(?:---|\.\.\.)[ \t]*$/my },
+    { kind: "type", re: /[&*][A-Za-z_][\w.-]*/y },
+    { kind: "type", re: /![!A-Za-z][\w.!-]*/y },
+    { kind: "type", re: /~(?=[ \t]|$)/my },
+    { kind: "type", re: /(?:true|false|null)(?![A-Za-z0-9_-])/y },
+    {
+      kind: "num",
+      re: /-?(?:0[xX][0-9a-fA-F_]+|0o[0-7_]+|\d[\d_]*(?:\.[\d_]*)?(?:[eE][+-]?\d+)?)(?![A-Za-z0-9_])/y,
+    },
+    { kind: "op", re: /^[ \t]*-(?=[ \t])/my },
+    { kind: "op", re: /[{}[\],:]+/y },
+    { kind: "op", re: /[|>]+[+-]?/y },
+    // 裸の値。キーは上で拾っているので、残った語は値側として文字列にする。
+    { kind: "str", re: /[^\s#{}[\],:|>&*!~'"`]+/y },
+  ],
+};
+
 const PY_KEYWORDS = new Set([
   "and",
   "as",
@@ -640,6 +676,7 @@ const SPECS: Record<string, LangSpec> = {
   go: GO_SPEC,
   rust: RUST_SPEC,
   json: JSON_SPEC,
+  yaml: YAML_SPEC,
   python: PYTHON_SPEC,
   bash: BASH_SPEC,
   css: CSS_SPEC,
@@ -658,6 +695,8 @@ const ALIASES: Record<string, string> = {
   cjs: "ts",
   json: "json",
   jsonc: "json",
+  yaml: "yaml",
+  yml: "yaml",
   c: "c",
   h: "c",
   cpp: "cpp",
