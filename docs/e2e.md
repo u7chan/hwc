@@ -381,7 +381,7 @@ PR のチップは、1 枚表示と分割セルのペイン見出し、アクテ
 2. `#481` をタップすると `https://github.com/example/acme-dashboard/pull/481` が新しいタブで開く。
 3. `acme-dashboard (docs)` のペインは `docs/quickstart` だけで、チップは出ない（ペイン見出しに merged は出さない）。
 4. 広い画面にすると、見出しはブランチを出さず、`#481` だけを出す（一覧がブランチを持っている）。
-5. `acme-dashboard` のペインを 1 つ目のセルに、`acme-dashboard (checks)` の `review` を 2 つ目のセルに入れる。1 つ目のセルは `#481`、2 つ目は `#483` になり、それぞれの URL が開く。
+5. `acme-dashboard` のペインを 1 つ目のセルに、`acme-dashboard (checks)` の `review` を 2 つ目のセルに入れる。1 つ目のセルは `#481`、2 つ目は `#483` になり、それぞれの URL が開く。`checks` のチェックアウトはローカル名 `worktree/review-checks`、push 先は `feat/checks` で、PR は push 先の名前で引いている（ローカル名だけでは `#483` は出ない）。
 
 ## HTML のプレビュー
 

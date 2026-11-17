@@ -308,8 +308,12 @@ export function createNotificationDispatcher(options: {
     const branch = workspace.branch ?? null;
     const checkoutPath = options.store.workspacePath(workspace.id);
     if (branch === null || checkoutPath === null || options.pullRequests === undefined) return null;
+    // ペイン見出しと同じように、push 先の名前で引く（ADR 0043）。
+    const upstreamBranch = workspace.sync?.upstreamBranch ?? null;
+    const branches =
+      upstreamBranch === null || upstreamBranch === branch ? [branch] : [upstreamBranch, branch];
     const pullRequest = await options
-      .pullRequests({ checkoutPath, branch, refresh: true })
+      .pullRequests({ checkoutPath, branches, refresh: true })
       .catch(() => null);
     // 古い open が残っていても、最新が open でなければ送らない。
     if (pullRequest === null || pullRequest.state !== "OPEN") return null;

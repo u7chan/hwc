@@ -774,7 +774,8 @@ test("the PR scope sends only when the latest pull request is open", async () =>
       discordWebhookUrl: WEBHOOK,
     });
     const { sender, calls } = createSender({ ok: true });
-    const reads: Array<{ checkoutPath: string; branch: string; refresh?: boolean }> = [];
+    const reads: Array<{ checkoutPath: string; branches: readonly string[]; refresh?: boolean }> =
+      [];
     const { publish } = createHarness({
       initial: appState([workingSpace()]),
       settings: settings.store,
@@ -801,7 +802,7 @@ test("the PR scope sends only when the latest pull request is open", async () =>
   ]);
   // キャッシュを使わず、終わった時点の最新を引く。
   expect(open.reads).toEqual([
-    { checkoutPath: "/work/acme", branch: "feat/empty-state", refresh: true },
+    { checkoutPath: "/work/acme", branches: ["feat/empty-state"], refresh: true },
   ]);
 
   // 最新が merged / closed なら送らない。古い open が残っていても同じ。

@@ -53,6 +53,7 @@ const state: AppState = {
       branch: "feat/board",
       sync: {
         upstream: "origin/feat/board",
+        upstreamBranch: "feat/board",
         ahead: 1,
         behind: 0,
         hasRemote: true,
@@ -162,6 +163,7 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
     branch: "feat/board",
     sync: {
       upstream: "origin/feat/board",
+      upstreamBranch: "feat/board",
       ahead: 1,
       behind: 0,
       hasRemote: true,

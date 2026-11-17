@@ -691,6 +691,7 @@ test("a readable upstream ends up on the workspace", async () => {
         calls.push(options);
         return {
           upstream: "origin/feat/row",
+          upstreamBranch: "feat/row",
           ahead: 1,
           behind: 2,
           hasRemote: true,
@@ -708,6 +709,7 @@ test("a readable upstream ends up on the workspace", async () => {
 
   expect(state.workspaces[0]?.sync).toEqual({
     upstream: "origin/feat/row",
+    upstreamBranch: "feat/row",
     ahead: 1,
     behind: 2,
     hasRemote: true,

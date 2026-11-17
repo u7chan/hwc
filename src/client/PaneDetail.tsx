@@ -352,7 +352,7 @@ export function PaneDetail(props: PaneDetailProps) {
     pane.agentStatus,
   );
   // 分割セルも含め、見出しごとに引く。同じスペースのセルは同じ PR になる。
-  const pullRequest = usePullRequest(context.workspaceId, branch);
+  const pullRequest = usePullRequest(context.workspaceId, branch, sync?.upstreamBranch ?? null);
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
   const editTarget =

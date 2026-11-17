@@ -41,7 +41,12 @@ export function createWorkspacesHandlers(ctx: AppContext) {
         return c.json({ pullRequest: null });
       }
       const refresh = c.req.query("refresh") === "1";
-      const pullRequest = await pullRequests({ checkoutPath, branch, refresh }).catch(() => null);
+      // ワークツリーのブランチ名は Herdr の自動生成名で、PR の head は push 先の名前になる。
+      // push 先を先に引き、見つからなければローカル名も見る。
+      const upstreamBranch = workspace.sync?.upstreamBranch ?? null;
+      const branches =
+        upstreamBranch === null || upstreamBranch === branch ? [branch] : [upstreamBranch, branch];
+      const pullRequest = await pullRequests({ checkoutPath, branches, refresh }).catch(() => null);
       return c.json({ pullRequest });
     },
     git: async (c: IdContext) => {
