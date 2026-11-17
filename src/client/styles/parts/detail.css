@@ -252,7 +252,7 @@
   font-size: var(--text-secondary);
 }
 
-/* 見出しの中身。胴と同じ 2 列にしたとき、ツリーの側を空けて会話の列に置く。
+/* 見出しの中身。胴と同じ 2 列にしたとき、ツリーの列の隣に置く。
    内側の content は幅が会話列になるので、--hwc-gutter が本文と同じ値になる。 */
 .hwc-pane-head-main {
   flex: 1;
@@ -270,32 +270,48 @@
   padding: 0 var(--space-4);
 }
 
-/* ツリーを並べるときは、見出しも胴と同じ 2 列にする。ツリーの側を空けて区切り線を通し、
-   タブ帯の下から胴の下端までを 1 本の列の境目にする。 */
-.hwc-pane-head[data-tree-split="true"][data-tree-side="left"]::before,
-.hwc-pane-head[data-tree-split="true"][data-tree-side="right"]::after {
-  content: "";
+/* ツリーを並べるときは、見出しも胴と同じ 2 列にする。ツリーの側の 260px を、
+   選択中ファイルの在り処に使う。区切り線はタブ帯の下から胴の下端まで通し、
+   列の境目を全高で見せる。 */
+.hwc-pane-head-tree {
   flex: none;
+  display: flex;
+  align-items: center;
   width: var(--hwc-tree-width);
-  transition: border-color 160ms cubic-bezier(0.2, 0, 0, 1);
+  padding: 0 var(--space-4);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  transition:
+    opacity 160ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.hwc-pane-head[data-tree-split="true"][data-tree-side="left"]::before {
+.hwc-pane-head-tree[data-edge="left"] {
   border-right: 1px solid var(--color-line);
 }
 
-.hwc-pane-head[data-tree-split="true"][data-tree-side="right"]::after {
+.hwc-pane-head-tree[data-edge="right"] {
   border-left: 1px solid var(--color-line);
 }
 
-.hwc-pane-head[data-tree-split="true"][data-tree-shown="false"]::before,
-.hwc-pane-head[data-tree-split="true"][data-tree-shown="false"]::after {
+/* 開閉に合わせて、文字と区切り線をツリーと同じ長さで出入りさせる。 */
+.hwc-pane-head-tree[data-shown="false"] {
+  opacity: 0;
   border-color: transparent;
 }
 
-.hwc-pane-head[data-tree-split="true"][data-tree-closing="true"]::before,
-.hwc-pane-head[data-tree-split="true"][data-tree-closing="true"]::after {
-  transition: border-color 120ms ease-in;
+.hwc-pane-head-tree[data-closing="true"] {
+  transition:
+    opacity 120ms ease-in,
+    border-color 120ms ease-in;
+}
+
+/* 末尾を残す省略は shortenPath の役目。ここは列幅からはみ出す分の保険。 */
+.hwc-pane-head-tree-path {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .hwc-pane-head-icon {
@@ -697,8 +713,7 @@ a.hwc-pane-head-repo:focus-visible {
     transition: none;
   }
 
-  .hwc-pane-head[data-tree-split="true"]::before,
-  .hwc-pane-head[data-tree-split="true"]::after {
+  .hwc-pane-head-tree {
     transition: none;
   }
 

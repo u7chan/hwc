@@ -117,6 +117,7 @@ import {
   paneName,
   pullRequestLabel,
   shortenPaneName,
+  shortenPath,
   type PaneContext,
 } from "./select";
 import { SelectionToolbar } from "./SelectionToolbar";
@@ -134,6 +135,9 @@ const TREE_CLOSE_MS = 120;
 // CSS の transition は次のフレームから始まる。閉じ終える前に unmount しないよう、
 // 1 フレーム分だけ待つ。
 const TREE_CLOSE_SETTLE_MS = 20;
+// ツリー側の見出しに出すパスの長さ。260px の列から左右の余白を引いた幅に、
+// 13px のモノスペースで収まる文字数。切った全文は title に残す。
+const TREE_HEAD_PATH_LENGTH = 28;
 
 const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -1160,16 +1164,27 @@ export function PaneDetail(props: PaneDetailProps) {
     />
   ) : null;
 
+  // 並べたツリーの見出し。空いている 260px を、選択中ファイルの在り処に使う。
+  // 未選択なら何も指していないので空のままにする。
+  const treeHead = sideBySide ? (
+    <span
+      class="hwc-pane-head-tree"
+      data-edge={treeSide}
+      data-shown={treeShown ? "true" : "false"}
+      data-closing={treeClosing ? "true" : undefined}
+    >
+      {previewPath === null ? null : (
+        <span class="hwc-pane-head-tree-path" title={previewPath}>
+          {shortenPath(previewPath, TREE_HEAD_PATH_LENGTH)}
+        </span>
+      )}
+    </span>
+  ) : null;
+
   return (
     <>
-      <div
-        class="hwc-pane-head"
-        data-bare={!labeled}
-        data-tree-split={sideBySide ? "true" : undefined}
-        data-tree-side={sideBySide ? treeSide : undefined}
-        data-tree-shown={treeShown ? "true" : "false"}
-        data-tree-closing={treeClosing ? "true" : undefined}
-      >
+      <div class="hwc-pane-head" data-bare={!labeled}>
+        {sideBySide && treeSide === "left" ? treeHead : null}
         <div class="hwc-pane-head-main">
           <div class="hwc-pane-head-content">
             <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
@@ -1280,6 +1295,7 @@ export function PaneDetail(props: PaneDetailProps) {
             </button>
           </div>
         </div>
+        {sideBySide && treeSide === "right" ? treeHead : null}
       </div>
       <div
         class="hwc-pane-body"
