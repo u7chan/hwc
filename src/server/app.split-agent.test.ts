@@ -188,6 +188,81 @@ test("POST /api/panes/:id/split keeps the chosen model across empty conversation
   });
 });
 
+test("a new launch without a model drops the previous launch selection", async () => {
+  const store = createFakeStore(twoChatPanesState);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
+  store.setChatSource("w1:p2", { agent: "pi", path: otherSessionPath });
+  let recorded: ChatSnapshot = emptyChat;
+  let defaults = 0;
+  const app = createApp({
+    store,
+    chat: createFakeChat({
+      snapshot: async (path) => (path === otherSessionPath ? recorded : emptyChat),
+    }),
+    worktrees: createFakeWorktrees(),
+    workspaces: createFakeWorkspaces(),
+    panes: createFakePanes({
+      split: async () => ({ paneId: "w1:p2" }),
+      startAgent: async () => {
+        store.push(twoChatPanesState, true);
+      },
+    }),
+    models: {
+      list: async () => [],
+      efforts: async () => [],
+      startArgs: async () => ["--model", "example/beam"],
+    },
+    loadPiDefaults: async () => {
+      defaults += 1;
+      return { model: "beam-default", effort: "high" };
+    },
+  });
+
+  // モデル指定で起動し、セッションにモデルが載る。
+  expect(
+    (
+      await postSplit(app, "w1:p1", {
+        agent: "pi",
+        model: { provider: "example", id: "beam" },
+        effort: "low",
+      })
+    ).status,
+  ).toBe(200);
+  recorded = { ...emptyChat, etag: "etag-2", model: "beam-mini" };
+  expect(await (await app.request("/api/panes/w1:p2/chat")).json()).toEqual(recorded);
+
+  // hwc の /exit を通さず終了し、同じペインで既定モデルとして起動し直す。
+  store.push(
+    {
+      ...twoChatPanesState,
+      workspaces: twoChatPanesState.workspaces.map((workspace) => ({
+        ...workspace,
+        tabs: workspace.tabs.map((tab) => ({
+          ...tab,
+          panes: tab.panes.map((item) =>
+            item.id === "w1:p2" ? { ...item, agent: null, agentStatus: "idle", chat: false } : item,
+          ),
+        })),
+      })),
+    },
+    true,
+  );
+  expect((await postAgent(app, "w1:p2", { agent: "pi", model: null })).status).toBe(200);
+
+  // 最初のメッセージで既定がセッションに載り、/new で空に戻る。
+  recorded = { ...emptyChat, etag: "etag-3", model: "beam-default" };
+  expect(await (await app.request("/api/panes/w1:p2/chat")).json()).toEqual(recorded);
+  recorded = emptyChat;
+
+  // 前回の起動モデルで補わず、既定を読める状態に戻す。
+  expect(await (await app.request("/api/panes/w1:p2/chat")).json()).toEqual(emptyChat);
+  expect(await (await app.request("/api/panes/w1:p2/default-model")).json()).toEqual({
+    model: "beam-default",
+    effort: "high",
+  });
+  expect(defaults).toBe(1);
+});
+
 test("a client that read the pane before the split is not pinned to the old snapshot", async () => {
   const { app, split } = launchModelApp();
 
