@@ -57,6 +57,8 @@ type FilePreviewProps = {
   path: string;
   // プレビュー中に新しい返答が届いたか。会話に戻るボタンにバッジを付ける。
   hasNewReply: boolean;
+  // 狭いセルでツリーの行が消えるときだけ、開いた直後にここへフォーカスを移す。
+  focusOnOpen: boolean;
   // 狭いセルでツリーを重ねている間は、プレビューを入力と読み上げから外す。
   hidden: boolean;
   onClose: () => void;
@@ -76,11 +78,15 @@ export function FilePreview(props: FilePreviewProps) {
     return () => controller.abort();
   }, [props.paneId, props.path, attempt]);
 
-  // 狭いセルでは選択時にツリーの行が消える。フォーカスをプレビューへ移し、
-  // キーボードと読み上げが document の先頭へ戻らないようにする。
+  // 狭いセルでは選択時にツリーの行が消える。そのときだけフォーカスをプレビューへ
+  // 移し、キーボードと読み上げが document の先頭へ戻らないようにする。広いセルでは
+  // ツリーにフォーカスを残し、続けてファイルを選べるようにする。
+  const focusPending = useRef(props.focusOnOpen);
   useEffect(() => {
+    if (!focusPending.current || props.hidden) return;
+    focusPending.current = false;
     backRef.current?.focus();
-  }, []);
+  }, [props.hidden]);
 
   const name = messageFileLabel(props.path);
   const numbers = useMemo(

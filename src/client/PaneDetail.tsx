@@ -208,6 +208,9 @@ export function PaneDetail(props: PaneDetailProps) {
   // ツリーの状態は store に持つ。プレビューでこのセルが外れても開閉を保つ。
   const fileTree = useFileTree(pane.id);
   const previewPath = useFilePreview(pane.id);
+  const filesButtonRef = useRef<HTMLButtonElement>(null);
+  // 狭いセルで選択したときだけ、プレビューへフォーカスを移す。
+  const focusPreviewRef = useRef(false);
   // ツリーを横に並べるかは、ウィンドウではなく実際のセル幅で決める。狭いセルでは
   // 会話の上に重ねる（ADR 0090）。
   const { ref: widthRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
@@ -1054,6 +1057,13 @@ export function PaneDetail(props: PaneDetailProps) {
   const liveTokPerSecond =
     compacting || compact || activity === null ? null : activity.tokPerSecond;
 
+  const closePreview = () => {
+    focusPreviewRef.current = false;
+    fileTreeStore.clearPreview(pane.id);
+    // 閉じた後にフォーカスが body へ落ちないよう、ツリーの入口へ戻す。
+    filesButtonRef.current?.focus();
+  };
+
   // 広いセルでは会話の左、狭いセルでは会話の上に重ねる。同じ要素をどちらか一方にだけ置く。
   const treeView = treeOpen ? (
     <FileTree
@@ -1064,6 +1074,8 @@ export function PaneDetail(props: PaneDetailProps) {
       onToggle={(path) => fileTreeStore.toggle(pane.id, path)}
       onRetry={(path) => fileTreeStore.retry(pane.id, path)}
       onSelectFile={(path) => {
+        // 広いセルではツリーが残るので、行のフォーカスを奪わない。
+        focusPreviewRef.current = !sideBySide;
         fileTreeStore.selectFile(pane.id, path);
         // 狭いセルではツリーが会話を覆う。選んだら閉じて、プレビューを見せる。
         if (!sideBySide) fileTreeStore.close(pane.id);
@@ -1141,6 +1153,7 @@ export function PaneDetail(props: PaneDetailProps) {
             シェルのペインには出さない（開いても配信できないため）。 */}
         {pane.chat ? (
           <button
+            ref={filesButtonRef}
             type="button"
             class="hwc-pane-files"
             aria-label={fileTree.open ? "ファイルツリーを閉じる" : "ファイルツリーを開く"}
@@ -1300,8 +1313,9 @@ export function PaneDetail(props: PaneDetailProps) {
                   paneId={pane.id}
                   path={previewPath}
                   hasNewReply={previewHasNewReply}
+                  focusOnOpen={focusPreviewRef.current}
                   hidden={treeOverlay}
-                  onClose={() => fileTreeStore.clearPreview(pane.id)}
+                  onClose={closePreview}
                 />
               ) : null}
             </div>
