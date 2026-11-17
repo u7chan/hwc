@@ -2,7 +2,7 @@
 // 解析は例外を投げず、解釈できない行は段落 (原文) として残すことも固定する。
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { MARKDOWN_MAX_LENGTH, markdownImageHrefs, parseMarkdown } from "./parse";
+import { MARKDOWN_MAX_LENGTH, markdownHrefs, markdownImageHrefs, parseMarkdown } from "./parse";
 
 test("見出しはレベルと本文を持つ", () => {
   assert.deepEqual(parseMarkdown("## 実装方針\n###### 小見出し"), [
@@ -204,6 +204,31 @@ test("画像として描ける記法の destination だけを集める", () => {
 test("解析上限を超える本文からは画像を集めない", () => {
   const text = `![A](docs/a.png)\n${"x".repeat(MARKDOWN_MAX_LENGTH)}`;
   assert.equal(markdownImageHrefs(text).size, 0);
+});
+
+test("リンクとして描ける記法の destination だけを集める", () => {
+  const hrefs = markdownHrefs(
+    [
+      "[A](docs/a.md) と https://example.com/b",
+      "",
+      "- [B](../b.ts)",
+      "> [C](c.ts)",
+      "",
+      "| 画面 |\n| --- |\n| [D](d.md) ![E](docs/e.png) |",
+      "",
+      "```md\n[F](docs/f.md)\n```",
+      "",
+      "![G](docs/g.png)",
+    ].join("\n"),
+  );
+  assert.deepEqual([...hrefs.links].sort(), [
+    "../b.ts",
+    "c.ts",
+    "d.md",
+    "docs/a.md",
+    "https://example.com/b",
+  ]);
+  assert.deepEqual([...hrefs.images].sort(), ["docs/e.png", "docs/g.png"]);
 });
 
 test("壊れた入力でも例外を投げない", () => {

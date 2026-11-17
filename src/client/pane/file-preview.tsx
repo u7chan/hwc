@@ -1,10 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { ChatFile } from "../../server/chat/contract";
 import { formatFileSize } from "../../shared/attachments";
-import { looksBinary, messageFileLabel } from "../../shared/message-files";
-import { previewTextUrl } from "../api";
+import {
+  looksBinary,
+  messageFileLabel,
+  messageLinkKindFromName,
+  previewContentType,
+} from "../../shared/message-files";
+import { previewTextUrl, previewUrl } from "../api";
+import type { MessageImageSource, MessageLinkSource } from "../chat";
 import { ChevronLeftIcon } from "../icons";
+import { Markdown } from "../Markdown";
+import { markdownHrefs } from "../markdown/parse";
 import { Spinner } from "../Spinner";
-import { normalizePreviewText, previewLineNumbers, previewTokens } from "./preview-text";
+import {
+  isMarkdownPreviewPath,
+  normalizePreviewText,
+  previewLineNumbers,
+  previewTokens,
+  resolvePreviewReference,
+} from "./preview-text";
 
 // チャット領域に出すプレーン表示の上限。10MB のファイルをそのまま DOM に置くと、
 // スマホでスクロールが重くなる。全文は既存の raw リンクから開ける。
@@ -61,13 +76,58 @@ type FilePreviewProps = {
   focusRequest: { focus: boolean };
   // 狭いセルでツリーを重ねている間は、プレビューを入力と読み上げから外す。
   hidden: boolean;
+  onOpenImage: (url: string, name: string) => void;
+  onOpenPreview: (file: ChatFile) => void;
   onClose: () => void;
 };
+
+type PreviewRefs = {
+  images: Map<string, MessageImageSource>;
+  links: Map<string, MessageLinkSource>;
+};
+
+// Markdown の相対参照を、表示中のファイルの場所を基準に BFF の URL へ直す。実在は
+// 確かめない（会話のチップと違い、任意のファイルを開くための解決 API を通していない）。
+// 配信できない形式の画像は原文のまま残し、リンクは会話と同じ行き先にする。
+function previewRefs(paneId: string, path: string, text: string): PreviewRefs | undefined {
+  const hrefs = markdownHrefs(text);
+  if (hrefs.images.size === 0 && hrefs.links.size === 0) return undefined;
+  const images = new Map<string, MessageImageSource>();
+  const links = new Map<string, MessageLinkSource>();
+
+  for (const href of hrefs.images) {
+    const name = resolvePreviewReference(href, path);
+    if (name === null || !previewContentType(name)?.startsWith("image/")) continue;
+    images.set(href, {
+      url: previewUrl(paneId, { root: 0, name }),
+      label: messageFileLabel(name),
+    });
+  }
+
+  for (const href of hrefs.links) {
+    const name = resolvePreviewReference(href, path);
+    if (name === null) continue;
+    const kind = messageLinkKindFromName(name);
+    if (kind === null) continue;
+    if (kind === "text") {
+      links.set(href, { kind, url: previewTextUrl(paneId, { root: 0, name }) });
+      continue;
+    }
+    // 版は配信 URL に使わない（プレビューは no-store）。ChatFile の形に合わせて空にする。
+    const file: ChatFile = { name, version: "", kind, root: 0 };
+    links.set(href, { kind, url: previewUrl(paneId, file), file });
+  }
+
+  return images.size === 0 && links.size === 0 ? undefined : { images, links };
+}
 
 export function FilePreview(props: FilePreviewProps) {
   const [body, setBody] = useState<PreviewBody>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [source, setSource] = useState(false);
   const backRef = useRef<HTMLButtonElement>(null);
+  const markdown = isMarkdownPreviewPath(props.path);
+  const showMarkdown = markdown && !source;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,7 +151,7 @@ export function FilePreview(props: FilePreviewProps) {
   // 行番号と色付けは本文が届いたときに 1 回だけ作る。トークン列から VNode まで
   // 作っておき、新しい返答のバッジなど無関係な再描画で作り直さない。
   const code = useMemo(() => {
-    if (body.kind !== "text") return null;
+    if (body.kind !== "text" || showMarkdown) return null;
     const tokens = previewTokens(body.text, props.path);
     return {
       numbers: previewLineNumbers(body.text),
@@ -110,7 +170,13 @@ export function FilePreview(props: FilePreviewProps) {
               ),
             ),
     };
-  }, [body, props.path]);
+  }, [body, props.path, showMarkdown]);
+
+  // Markdown を描くときだけ、本文中の相対参照を URL へ直す。ソース表示では使わない。
+  const refs = useMemo(() => {
+    if (body.kind !== "text" || !showMarkdown) return undefined;
+    return previewRefs(props.paneId, props.path, body.text);
+  }, [body, props.paneId, props.path, showMarkdown]);
   return (
     <section
       class="hwc-file-preview"
@@ -133,6 +199,16 @@ export function FilePreview(props: FilePreviewProps) {
         <span class="hwc-file-preview-name" title={props.path}>
           {name}
         </span>
+        {markdown ? (
+          <button
+            type="button"
+            class="hwc-file-preview-mode"
+            aria-label={source ? "Markdown のプレビューを表示" : "Markdown のソースを表示"}
+            onClick={() => setSource((current) => !current)}
+          >
+            {source ? "プレビュー" : "ソース"}
+          </button>
+        ) : null}
       </div>
       <div class="hwc-file-preview-body" data-state={body.kind}>
         {body.kind === "loading" ? (
@@ -171,12 +247,25 @@ export function FilePreview(props: FilePreviewProps) {
                 </a>
               </p>
             ) : null}
-            <div class="hwc-file-preview-code">
-              <pre class="hwc-file-preview-lines" aria-hidden="true">
-                {code?.numbers}
-              </pre>
-              <pre class="hwc-file-preview-text">{code?.content}</pre>
-            </div>
+            {showMarkdown ? (
+              <div class="hwc-file-preview-md">
+                <Markdown
+                  text={body.text}
+                  taskScope={name}
+                  images={refs?.images}
+                  links={refs?.links}
+                  onOpenImage={props.onOpenImage}
+                  onOpenPreview={props.onOpenPreview}
+                />
+              </div>
+            ) : (
+              <div class="hwc-file-preview-code">
+                <pre class="hwc-file-preview-lines" aria-hidden="true">
+                  {code?.numbers}
+                </pre>
+                <pre class="hwc-file-preview-text">{code?.content}</pre>
+              </div>
+            )}
           </>
         )}
       </div>
