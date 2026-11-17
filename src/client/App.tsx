@@ -31,6 +31,7 @@ import { useOpenGroups } from "./app/hooks/use-open-groups";
 import { useRevision } from "./app/hooks/use-revision";
 import { useServerClock } from "./app/hooks/use-server-clock";
 import { useSidebarWidth } from "./app/hooks/use-sidebar-width";
+import { useSplitPreference } from "./app/hooks/use-split-preference";
 import { useThemePreference } from "./app/hooks/use-theme-preference";
 import {
   fetchState,
@@ -48,6 +49,8 @@ import {
   syncWorkspace,
 } from "./api";
 import { INITIAL_CONNECTION, connectionAfter, type ConnectionStatus } from "./connection";
+import { allAgentPaneIds, allPaneIds, applyDelegation, newAgentPanes } from "./delegation";
+import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
 import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
 import { Preview } from "./Preview";
@@ -313,17 +316,33 @@ export function App() {
       const decision = gateSnapshot(snapshotWriter.current, "stream");
       snapshotWriter.current = decision.writer;
       if (!decision.apply) return;
+      if (!live.current) resynced.current = true;
+      live.current = true;
       applyState(message.state);
       setConnection(connectionAfter("snapshot"));
     };
     events.addEventListener("unavailable", () => setConnection(connectionAfter("unavailable")));
     // 再接続はブラウザに任せる。ここでは表示だけを切り替える。
-    events.onerror = () => setConnection(connectionAfter("error"));
+    events.onerror = () => {
+      live.current = false;
+      setConnection(connectionAfter("error"));
+    };
     return () => events.close();
   }, []);
 
   const revision = useRevision();
   const { theme, scheme, changeTheme } = useThemePreference();
+  const { prefs: splitPrefs, change: changeSplitPrefs } = useSplitPreference();
+  // 委譲の検知は「エージェントが付いたペインが前回のスナップショットに無かった」で行う。
+  // シェルとして先に現れるペインを取りこぼさないよう、ペインではなくエージェントで覚える。
+  const seenAgents = useRef<Set<string> | null>(null);
+  // 再接続の最初のスナップショットは差分の基準にしない。切断中の増加を一斉に開かない。
+  const resynced = useRef(false);
+  const live = useRef(false);
+  // hwc から作ったペインは pendingSelect が開く。自動分割と二重に動かさない。
+  const selfCreated = useRef(new Set<string>());
+  // 分割で入ったセル。次の描画で分割線から広げる（ADR 0092）。
+  const [entering, setEntering] = useState<string | null>(null);
 
   // 時刻は BFF が持つ。描画のたびに一度だけ Map へ引き直し、表示側の型は変えない。
   const workingSince = toTimes(state?.times.workingSince);
@@ -545,6 +564,54 @@ export function App() {
     if (findPane(state, pendingSelect) === null) return;
     moveTo(pendingSelect);
   }, [state, pendingSelect, expanded]);
+
+  // 委譲でエージェントが増えたら、表示中のセルの隣へ差し込む（ADR 0092）。
+  // Herdr に委譲のイベントは無いので、前回のスナップショットとの差分で見る。
+  useEffect(() => {
+    if (state === null) return;
+    const present = allPaneIds(state);
+    for (const paneId of selfCreated.current) {
+      if (!present.has(paneId)) selfCreated.current.delete(paneId);
+    }
+    const seen = seenAgents.current;
+    seenAgents.current = allAgentPaneIds(state);
+    if (seen === null) return;
+    if (resynced.current) {
+      resynced.current = false;
+      return;
+    }
+    if (!wide || !splitPrefs.autoSplit) return;
+    const candidates = newAgentPanes(state, seen).filter((item) => {
+      if (!selfCreated.current.has(item.id)) return true;
+      // hwc が作ったペインは pendingSelect が開く。委譲として二重に動かさない。
+      selfCreated.current.delete(item.id);
+      return false;
+    });
+    if (candidates.length === 0) return;
+    // 木は毎回作り直されるので依存に入れず、イベント時点の最新を ref から読む。
+    const result = applyDelegation(state, splitRef.current, candidates);
+    if (result === null) return;
+    setEntering(result.entering);
+    setView({ split: result.split, expanded: expandedRef.current });
+  }, [state, wide, splitPrefs.autoSplit]);
+
+  // 新しいセルは分割線から広げる。最初の描画では幅 0 にしておき、次のフレームで
+  // flex-grow を戻すと、既存セルが縮みながら分割線が走る。
+  useLayoutEffect(() => {
+    if (entering === null) return;
+    const cell = document.querySelector<HTMLElement>(`[data-drop-pane="${entering}"]`);
+    if (cell === null) {
+      setEntering(null);
+      return;
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        cell.style.flexGrow = "1";
+        cell.removeAttribute("data-split-enter");
+        setEntering(null);
+      });
+    });
+  }, [entering]);
 
   const openPaneMenu = (paneId: string, trigger: HTMLElement, fromList = false) => {
     setMenu({ target: { kind: "pane", id: paneId }, trigger, fromList, open: true });
@@ -1346,6 +1413,7 @@ export function App() {
         data-current={item.id === pane?.id}
         data-drop-pane={item.id}
         data-drop-parent={parentDir ?? undefined}
+        data-split-enter={item.id === entering ? "true" : undefined}
         data-leaving={leavingTab?.paneId === item.id ? "true" : undefined}
         key={item.id}
         onPointerDown={(event) => {
@@ -1418,7 +1486,11 @@ export function App() {
     cancelCloseSpace,
     creating,
     setCreating,
-    setPendingSelect,
+    // hwc から作ったペインは、自動分割の対象にしない。
+    setPendingSelect: (paneId) => {
+      if (paneId !== null) selfCreated.current.add(paneId);
+      setPendingSelect(paneId);
+    },
     beginLaunch,
     viewer,
     setViewer,
@@ -1428,7 +1500,10 @@ export function App() {
     <div
       class="hwc-app"
       data-view={settingsOpen ? "settings" : pane ? "detail" : "list"}
-      style={{ "--hwc-sidebar-width": `${sidebarWidth}px` }}
+      style={{
+        "--hwc-sidebar-width": `${sidebarWidth}px`,
+        "--hwc-split-duration": `${splitMotionDuration(splitPrefs.motion)}ms`,
+      }}
     >
       <div class="hwc-body">
         <aside class="hwc-list" aria-label="ペイン一覧">
@@ -1526,6 +1601,8 @@ export function App() {
               key="settings"
               theme={theme}
               onThemeChange={changeTheme}
+              splitPrefs={splitPrefs}
+              onSplitPrefsChange={changeSplitPrefs}
               revision={revision}
               connection={connection}
               wide={wide}

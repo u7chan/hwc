@@ -405,6 +405,50 @@ export function openPane(view: SplitView, paneId: string): SplitView {
   return { openTabs, recent, current: paneId, layout };
 }
 
+// 仕事を始めたペインを、タブにだけ足す。葉には入れないので、セルは動かない。
+// 5 枚目以降をタブへ回すときに使う（ADR 0092）。
+export function addTabOnly(view: SplitView, paneId: string): SplitView {
+  if (view.openTabs.includes(paneId)) return view;
+  return { ...view, openTabs: [...view.openTabs, paneId] };
+}
+
+// 外から現れたペインをセルへ差し込む。選択は委譲元のまま動かさない。
+// 2 枚目は右、3 枚目は委譲元の下、4 枚目は右のセルの下へ積むと、2x2 へ素直に伸びる。
+// 手で組んだ木でも差し込める向きを探し、どこにも入らなければタブへ回す。
+export function insertDelegatedPane(view: SplitView, paneId: string): SplitView {
+  const leaves = leafPanes(view.layout);
+  if (leaves.length >= MAX_LEAVES) return addTabOnly(view, paneId);
+
+  const preferred =
+    leaves.length === 0
+      ? null
+      : leaves.length === 1
+        ? { target: leaves[0], zone: "right" as const }
+        : leaves.length === 2
+          ? { target: leaves[0], zone: "bottom" as const }
+          : { target: leaves[2], zone: "bottom" as const };
+
+  const insert = (target: string, zone: DropZone): SplitView | null => {
+    if (!canDrop(view, paneId, target, zone, true)) return null;
+    const next = dropOnPane(view, paneId, target, zone, true);
+    if (next === view) return null;
+    // 差し込んだだけで利用者は選んでいない。選択と MRU は動かさない。
+    return { ...next, recent: view.recent, current: view.current };
+  };
+
+  if (preferred !== null) {
+    const next = insert(preferred.target, preferred.zone);
+    if (next !== null) return next;
+  }
+  for (const target of leaves) {
+    for (const zone of ["right", "bottom"] as const) {
+      const next = insert(target, zone);
+      if (next !== null) return next;
+    }
+  }
+  return addTabOnly(view, paneId);
+}
+
 // 一覧へ戻す。開いたタブとレイアウトは残す。
 export function clearCurrent(view: SplitView): SplitView {
   return {

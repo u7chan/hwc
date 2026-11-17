@@ -3,6 +3,7 @@ import { useElementWidth } from "../app/use-element-width";
 import type { ConnectionStatus } from "../connection";
 import { ChevronLeftIcon } from "../icons";
 import { SETTINGS_SIDE_MIN_WIDTH } from "../layout";
+import type { SplitPrefs } from "../split-prefs";
 import type { ThemePreference } from "../theme";
 import { BuildSettings } from "./BuildSettings";
 import { ConnectionSettings } from "./ConnectionSettings";
@@ -10,12 +11,15 @@ import { DisplaySettings } from "./DisplaySettings";
 import { NotificationSettings } from "./NotificationSettings";
 import { RestartSettings } from "./RestartSettings";
 import { SettingsIndex } from "./SettingsIndex";
+import { SplitSettings } from "./SplitSettings";
 import { settingsCategoryLabel, type SettingsCategoryId } from "./categories";
 import { TemplateSettings } from "./TemplateSettings";
 
 type SettingsProps = {
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
+  splitPrefs: SplitPrefs;
+  onSplitPrefsChange: (prefs: SplitPrefs) => void;
   revision: string | null;
   connection: ConnectionStatus;
   wide: boolean;
@@ -30,6 +34,8 @@ function section(
   switch (id) {
     case "display":
       return <DisplaySettings theme={props.theme} onThemeChange={props.onThemeChange} />;
+    case "split":
+      return <SplitSettings prefs={props.splitPrefs} onChange={props.onSplitPrefsChange} />;
     case "templates":
       return (
         <TemplateSettings
@@ -94,6 +100,7 @@ export function Settings(props: SettingsProps) {
   const index = (variant: "page" | "side", active: SettingsCategoryId | null) => (
     <SettingsIndex
       theme={props.theme}
+      split={props.splitPrefs.autoSplit}
       connection={props.connection}
       revision={props.revision}
       current={active}

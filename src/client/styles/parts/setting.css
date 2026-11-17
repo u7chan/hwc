@@ -124,3 +124,53 @@
   justify-content: space-between;
   gap: var(--space-3);
 }
+
+/* ペイン分割の動き。4 段を等分する。選択の面は通知の対象と同じく枠で示す。 */
+.hwc-split-subtitle {
+  margin: var(--space-6) 0 var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-split-motions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+}
+
+.hwc-split-motion {
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: calc(var(--radius-control) - 1px);
+  background: transparent;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hwc-split-motion:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+.hwc-split-motion[data-selected="true"] {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+  color: var(--color-text);
+}
+
+.hwc-split-motion:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.hwc-split-motion:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}

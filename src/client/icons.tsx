@@ -375,6 +375,15 @@ export function TerminalIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function SplitIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <path d="M12 4v16" />
+    </Svg>
+  );
+}
+
 export function PaneIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
