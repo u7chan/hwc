@@ -4,7 +4,7 @@ import { looksBinary, messageFileLabel } from "../../shared/message-files";
 import { previewTextUrl } from "../api";
 import { ChevronLeftIcon } from "../icons";
 import { Spinner } from "../Spinner";
-import { normalizePreviewText, previewLineNumbers } from "./preview-text";
+import { normalizePreviewText, previewLineNumbers, previewTokens } from "./preview-text";
 
 // チャット領域に出すプレーン表示の上限。10MB のファイルをそのまま DOM に置くと、
 // スマホでスクロールが重くなる。全文は既存の raw リンクから開ける。
@@ -88,10 +88,29 @@ export function FilePreview(props: FilePreviewProps) {
   }, [props.focusRequest, props.hidden]);
 
   const name = messageFileLabel(props.path);
-  const numbers = useMemo(
-    () => (body.kind === "text" ? previewLineNumbers(body.text) : ""),
-    [body],
-  );
+  // 行番号と色付けは本文が届いたときに 1 回だけ作る。トークン列から VNode まで
+  // 作っておき、新しい返答のバッジなど無関係な再描画で作り直さない。
+  const code = useMemo(() => {
+    if (body.kind !== "text") return null;
+    const tokens = previewTokens(body.text, props.path);
+    return {
+      numbers: previewLineNumbers(body.text),
+      content:
+        tokens === null
+          ? body.text
+          : tokens.map((token, index) =>
+              // 演算子と句読点は色を分けない。数が多いわりに読みやすさへ寄与せず、
+              // span を減らすことがスマホの描画時間に効く。
+              token.kind === "plain" || token.kind === "op" ? (
+                token.text
+              ) : (
+                <span key={index} class={`hwc-tok-${token.kind}`}>
+                  {token.text}
+                </span>
+              ),
+            ),
+    };
+  }, [body, props.path]);
   return (
     <section
       class="hwc-file-preview"
@@ -154,9 +173,9 @@ export function FilePreview(props: FilePreviewProps) {
             ) : null}
             <div class="hwc-file-preview-code">
               <pre class="hwc-file-preview-lines" aria-hidden="true">
-                {numbers}
+                {code?.numbers}
               </pre>
-              <pre class="hwc-file-preview-text">{body.text}</pre>
+              <pre class="hwc-file-preview-text">{code?.content}</pre>
             </div>
           </>
         )}
