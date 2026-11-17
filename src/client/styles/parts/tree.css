@@ -98,7 +98,7 @@
   }
 }
 
-/* 行はボタン・リンク・開けない行の 3 種で同じ形にする。左の字下げだけ inline で
+/* 行はボタンと開けない行の 2 種で同じ形にする。左の字下げだけ inline で
    深さに合わせ、行の右端を揃える。 */
 .hwc-tree-row {
   display: flex;
@@ -118,23 +118,25 @@
   text-decoration: none;
 }
 
-button.hwc-tree-row,
-a.hwc-tree-row {
+button.hwc-tree-row {
   cursor: pointer;
 }
 
-button.hwc-tree-row:hover,
-a.hwc-tree-row:hover {
+button.hwc-tree-row:hover {
   background: var(--color-raised);
 }
 
-button.hwc-tree-row:active,
-a.hwc-tree-row:active {
+button.hwc-tree-row:active {
   background: var(--color-line);
 }
 
 .hwc-tree-row:focus-visible {
   outline-offset: -3px;
+}
+
+/* 選択中のファイル。会話のプレビューと同じ対象を示す。 */
+.hwc-tree-row[data-selected="true"] {
+  background: var(--color-selected);
 }
 
 /* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。
@@ -185,4 +187,122 @@ a.hwc-tree-row:active {
 
 .hwc-tree-retry:hover {
   text-decoration: underline;
+}
+
+/* チャット領域に重ねるファイルのプレーン表示。会話は下に残し、戻るとスクロール位置が
+   そのままになる（ADR 0090）。 */
+.hwc-file-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-content);
+}
+
+.hwc-file-preview-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--row-head);
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+
+.hwc-file-preview-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-file-preview-back:hover {
+  background: var(--color-raised);
+}
+
+.hwc-file-preview-back:active {
+  opacity: 0.72;
+}
+
+.hwc-file-preview-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-file-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4) var(--space-6);
+  overscroll-behavior: contain;
+}
+
+.hwc-file-preview-body[data-state="loading"],
+.hwc-file-preview-body[data-state="binary"],
+.hwc-file-preview-body[data-state="error"] {
+  display: grid;
+  place-items: center;
+}
+
+.hwc-file-preview-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-align: center;
+}
+
+.hwc-file-preview-retry {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hwc-file-preview-retry:hover {
+  text-decoration: underline;
+}
+
+.hwc-file-preview-more {
+  margin-left: var(--space-2);
+  color: var(--color-accent);
+}
+
+.hwc-file-preview-more:hover {
+  text-decoration: underline;
+}
+
+.hwc-file-preview-text {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  line-height: var(--line-body);
+  overflow-wrap: anywhere;
+  tab-size: 2;
+  white-space: pre-wrap;
 }

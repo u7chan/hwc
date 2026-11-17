@@ -90,12 +90,13 @@ import { TREE_SIDE_MIN_WIDTH } from "./layout";
 import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
 import { OutputEmpty, OutputSkeleton } from "./pane/empty";
+import { FilePreview } from "./pane/file-preview";
 import { FileTree } from "./pane/file-tree";
 import { AgentInfoHint, AgentInfoSkeleton, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
 import { LaunchNote } from "./pane/launch-note";
 import { useAttachments } from "./pane/use-attachments";
-import { useFileTree } from "./pane/use-file-tree";
+import { useFilePreview, useFileTree } from "./pane/use-file-tree";
 import { useTemplates } from "./pane/use-templates";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
 import { useDefaultModel } from "./pane/use-default-model";
@@ -205,6 +206,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const repoUrl = sync?.repoUrl ?? null;
   // ツリーの状態は store に持つ。プレビューでこのセルが外れても開閉を保つ。
   const fileTree = useFileTree(pane.id);
+  const previewPath = useFilePreview(pane.id);
   // ツリーを横に並べるかは、ウィンドウではなく実際のセル幅で決める。狭いセルでは
   // 会話の上に重ねる（ADR 0090）。
   const { ref: widthRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
@@ -213,10 +215,16 @@ export function PaneDetail(props: PaneDetailProps) {
   const treeOpen = pane.chat && fileTree.open;
   const sideBySide = treeOpen && frameWidth !== null && frameWidth >= TREE_SIDE_MIN_WIDTH;
   const treeOverlay = treeOpen && !sideBySide;
+  const previewOpen = pane.chat && previewPath !== null;
+  // 会話は DOM に残してスクロール位置を保ち、表示だけを差し替える。
+  const chatHidden = treeOverlay || previewOpen;
 
   // チャットが消えたペインは配信の根を持たない。開いたままにしない。
   useEffect(() => {
-    if (!pane.chat) fileTreeStore.close(pane.id);
+    if (!pane.chat) {
+      fileTreeStore.close(pane.id);
+      fileTreeStore.clearPreview(pane.id);
+    }
   }, [pane.chat, pane.id]);
   const shownPaneName = shortenPaneName(
     paneName(pane),
@@ -1047,9 +1055,14 @@ export function PaneDetail(props: PaneDetailProps) {
       paneId={pane.id}
       view={fileTree}
       side={sideBySide}
+      selectedPath={previewPath}
       onToggle={(path) => fileTreeStore.toggle(pane.id, path)}
       onRetry={(path) => fileTreeStore.retry(pane.id, path)}
-      onOpenPreview={onOpenPreview}
+      onSelectFile={(path) => {
+        fileTreeStore.selectFile(pane.id, path);
+        // 狭いセルではツリーが会話を覆う。選んだら閉じて、プレビューを見せる。
+        if (!sideBySide) fileTreeStore.close(pane.id);
+      }}
       onOpenImage={onOpenImage}
     />
   ) : null;
@@ -1170,8 +1183,8 @@ export function PaneDetail(props: PaneDetailProps) {
                 data-empty={empty}
                 ref={scroller}
                 onScroll={onScroll}
-                aria-hidden={treeOverlay ? "true" : undefined}
-                inert={treeOverlay}
+                aria-hidden={chatHidden ? "true" : undefined}
+                inert={chatHidden}
               >
                 {confirmation !== null ? (
                   <PaneConfirmation
@@ -1245,10 +1258,10 @@ export function PaneDetail(props: PaneDetailProps) {
                 )}
               </div>
               {/* 逐次表示の先端を背景へ溶かす。読み返しで上へ離れたら出さない。 */}
-              {treeOverlay || reveal === null || !atBottom ? null : (
+              {chatHidden || reveal === null || !atBottom ? null : (
                 <div class="hwc-output-fade" aria-hidden="true" />
               )}
-              {treeOverlay || confirmation !== null ? null : (
+              {chatHidden || confirmation !== null ? null : (
                 <button
                   type="button"
                   class="hwc-jump"
@@ -1261,7 +1274,7 @@ export function PaneDetail(props: PaneDetailProps) {
                   <ArrowDownIcon />
                 </button>
               )}
-              {treeOverlay ? null : (
+              {chatHidden ? null : (
                 <SelectionToolbar
                   state={selectionToolbar}
                   canQuote={!readOnly && !launchBlocked && pane.chat}
@@ -1276,6 +1289,15 @@ export function PaneDetail(props: PaneDetailProps) {
                   onExited={closeToolbar}
                 />
               )}
+              {previewOpen && previewPath !== null ? (
+                <FilePreview
+                  key={previewPath}
+                  paneId={pane.id}
+                  path={previewPath}
+                  hidden={treeOverlay}
+                  onClose={() => fileTreeStore.clearPreview(pane.id)}
+                />
+              ) : null}
             </div>
           </div>
 

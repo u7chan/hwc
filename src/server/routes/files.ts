@@ -121,9 +121,9 @@ export function createFilesHandlers(ctx: AppContext) {
       const bytes = file === null ? null : await readMessageFile(file);
       if (file === null || bytes === null) return previewNotFound(c, requested);
 
-      // 本文のリンクから開くテキストは、ブラウザに生の中身を見せる。HTML のアセットにも
-      // 同じ URL を使うので、raw が付いたときだけ text/plain に固定する（ADR 0084）。
-      const raw = c.req.query("raw") === "1" && isTextName(file.name);
+      // 本文のリンクから開くテキストと、ツリーのプレーン表示は raw を付ける。HTML の
+      // アセットにも同じ URL を使うので、raw が付いたときだけ text/plain に固定する（ADR 0084）。
+      const raw = c.req.query("raw") === "1" && (isTextName(file.name) || isHtmlName(file.name));
       const contentType = raw ? "text/plain; charset=utf-8" : file.contentType;
       // 拡張子の無いファイルは、開くまでテキストかバイナリか分からない。文字として配る
       // 経路だけ、先頭に NUL が無いことを確かめる（ADR 0084）。

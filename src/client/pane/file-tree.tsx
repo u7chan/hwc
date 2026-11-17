@@ -1,12 +1,6 @@
 import type { ComponentChildren } from "preact";
-import type { ChatFile } from "../../server/chat/contract";
-import {
-  FILE_TREE_LIMIT,
-  type FileTreeEntry,
-  type FileTreeFile,
-  type FileTreeListing,
-} from "../../shared/file-tree";
-import { previewTextUrl, previewUrl } from "../api";
+import { FILE_TREE_LIMIT, type FileTreeEntry, type FileTreeListing } from "../../shared/file-tree";
+import { previewUrl } from "../api";
 import type { FileTreeView } from "../file-tree-store";
 import { ChevronRightIcon } from "../icons";
 import { Spinner } from "../Spinner";
@@ -16,9 +10,10 @@ type FileTreeProps = {
   view: FileTreeView;
   // 広いセルでは会話の左、狭いセルでは会話の上に重ねる。見た目だけの違い。
   side: boolean;
+  selectedPath: string | null;
   onToggle: (path: string) => void;
   onRetry: (path: string) => void;
-  onOpenPreview: (file: ChatFile) => void;
+  onSelectFile: (path: string) => void;
   onOpenImage: (url: string, name: string) => void;
 };
 
@@ -26,17 +21,6 @@ type FileTreeProps = {
 // 12px は --space-3。深い階層でも名前に幅が残るよう、字下げは 1 段だけにする。
 function indent(depth: number) {
   return { paddingLeft: `calc(var(--space-4) + ${depth} * var(--space-3))` };
-}
-
-function openFile(props: FileTreeProps, entry: FileTreeFile): void {
-  // 画像もプレビューの配信 URL を使う。no-store なので版は要らず、画像ダイアログは
-  // この URL をそのまま img に使う。
-  if (entry.open === "image") {
-    props.onOpenImage(previewUrl(props.paneId, { root: 0, name: entry.path }), entry.name);
-    return;
-  }
-  if (entry.open !== "html") return;
-  props.onOpenPreview({ name: entry.path, version: entry.version, kind: "html", root: 0 });
 }
 
 function renderChildren(props: FileTreeProps, path: string, depth: number): ComponentChildren[] {
@@ -147,21 +131,22 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
     </>
   );
 
-  // テキストは既存の raw 配信を新しいタブで開く。リンクにしておくと、中クリックや
-  // URL のコピーもブラウザに任せられる。
-  if (entry.open === "text") {
+  // テキストと HTML は、この場でチャット領域に開く。画像だけは既存の拡大ダイアログに任せる。
+  if (entry.open === "text" || entry.open === "html") {
+    const selected = tree.selectedPath === entry.path;
     return (
       <li class="hwc-tree-item">
-        <a
+        <button
+          type="button"
           class="hwc-tree-row"
           style={style}
-          href={previewTextUrl(tree.paneId, { root: 0, name: entry.path })}
-          target="_blank"
-          rel="noopener noreferrer"
           title={entry.path}
+          data-selected={selected ? "true" : undefined}
+          aria-current={selected ? "true" : undefined}
+          onClick={() => tree.onSelectFile(entry.path)}
         >
           {content}
-        </a>
+        </button>
       </li>
     );
   }
@@ -183,7 +168,9 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
         class="hwc-tree-row"
         style={style}
         title={entry.path}
-        onClick={() => openFile(tree, entry)}
+        onClick={() =>
+          tree.onOpenImage(previewUrl(tree.paneId, { root: 0, name: entry.path }), entry.name)
+        }
       >
         {content}
       </button>

@@ -17,3 +17,18 @@ export function useFileTree(paneId: string): FileTreeView {
 
   return view;
 }
+
+// ツリーとは別に、選択中のファイルを購読する。同じ通知を使うが、一覧の取得状態が
+// 変わってもプレビューのパスは変わらない。
+export function useFilePreview(paneId: string): string | null {
+  const [path, setPath] = useState(() => fileTreeStore.preview(paneId));
+
+  useEffect(() => {
+    const update = () => setPath(fileTreeStore.preview(paneId));
+    const unsubscribe = fileTreeStore.subscribe(paneId, update);
+    update();
+    return unsubscribe;
+  }, [paneId]);
+
+  return path;
+}

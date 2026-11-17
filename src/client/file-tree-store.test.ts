@@ -130,6 +130,26 @@ test("ensure fetches the expanded directories that are still missing", async () 
   expect(requests).toEqual(["", "docs"]);
 });
 
+test("keeps the selected file when the tree closes and drops it with the pane", () => {
+  const store = createFileTreeStore(async () => rootListing);
+  store.open("w1:p1");
+  store.selectFile("w1:p1", "README.md");
+  expect(store.preview("w1:p1")).toBe("README.md");
+
+  // ツリーを閉じても、開いているファイルは残す。
+  store.close("w1:p1");
+  expect(store.preview("w1:p1")).toBe("README.md");
+  store.open("w1:p1");
+  expect(store.preview("w1:p1")).toBe("README.md");
+
+  store.clearPreview("w1:p1");
+  expect(store.preview("w1:p1")).toBeNull();
+
+  store.selectFile("w1:p2", "LICENSE");
+  store.prune((paneId) => paneId !== "w1:p2");
+  expect(store.preview("w1:p2")).toBeNull();
+});
+
 test("prune drops the trees of panes that no longer exist", () => {
   const store = createFileTreeStore(async () => rootListing);
   store.open("w1:p1");

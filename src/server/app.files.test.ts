@@ -423,6 +423,12 @@ test("GET /api/panes/:id/preview serves HTML that cannot reach the BFF origin", 
     // iframe 属性を外されても、直接開いても、同じオリジンには戻らない。
     expect(response.headers.get("content-security-policy")).toBe("sandbox allow-scripts");
     expect(await response.text()).toBe("<!doctype html><p>mock</p>");
+
+    // ツリーのプレーン表示は raw でソースを取る。HTML もレンダリングせずに返す。
+    const source = await app.request("/api/panes/w1:p1/preview/0/preview/index.html?raw=1");
+    expect(source.status).toBe(200);
+    expect(source.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(await source.text()).toBe("<!doctype html><p>mock</p>");
   });
 });
 

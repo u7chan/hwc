@@ -4,7 +4,8 @@ import { readFileTree } from "./api";
 // ツリーの開閉・展開・取得済みの子。PaneDetail はペイン切り替えやプレビューで
 // アンマウントされるので、コンポーネントの寿命から切り離す。正はこの store だけにし、
 // 表示側は購読して描く（添付チップと同じ扱い）。
-// ツリーを閉じたら捨てる。開き直しがそのまま取り直しになる。
+// ツリーを閉じたら一覧の状態は捨てる。開き直しがそのまま取り直しになる。
+// 選択中のファイルは一覧とは別に保ち、ツリーを閉じてもプレビューを残す。
 
 export type FileTreeView = {
   open: boolean;
@@ -39,6 +40,10 @@ export type FileTreeStore = {
   retry: (paneId: string, path: string) => void;
   // アンマウント後に開き直したとき、取得できていないディレクトリを取り直す。
   ensure: (paneId: string) => void;
+  // プレビュー中のファイル（根からの相対パス）。ツリーの開閉とは独立して持つ。
+  preview: (paneId: string) => string | null;
+  selectFile: (paneId: string, path: string) => void;
+  clearPreview: (paneId: string) => void;
   prune: (isAlive: (paneId: string) => boolean) => void;
 };
 
@@ -49,6 +54,7 @@ type PaneTree = {
 
 export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
   const panes = new Map<string, PaneTree>();
+  const previews = new Map<string, string>();
   // 購読はペインごと。表示中のセルだけが購読するので、他のペインの変更を配り直さない。
   const listeners = new Map<string, Set<() => void>>();
 
@@ -143,15 +149,43 @@ export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
     load(paneId, path);
   };
 
+  const preview = (paneId: string): string | null => previews.get(paneId) ?? null;
+
+  const selectFile = (paneId: string, path: string) => {
+    if (previews.get(paneId) === path) return;
+    previews.set(paneId, path);
+    notify(paneId);
+  };
+
+  const clearPreview = (paneId: string) => {
+    if (!previews.delete(paneId)) return;
+    notify(paneId);
+  };
+
   const prune = (isAlive: (paneId: string) => boolean) => {
     // Map の反復中に現在の要素を消しても、次へ進む。
     for (const paneId of panes.keys()) {
       if (isAlive(paneId)) continue;
       close(paneId);
     }
+    for (const paneId of previews.keys()) {
+      if (!isAlive(paneId)) previews.delete(paneId);
+    }
   };
 
-  return { view, subscribe, open, close, toggle, retry, ensure, prune };
+  return {
+    view,
+    subscribe,
+    open,
+    close,
+    toggle,
+    retry,
+    ensure,
+    preview,
+    selectFile,
+    clearPreview,
+    prune,
+  };
 }
 
 // アプリ全体で 1 つ。ペインを切り替えても同じ store を読む。
