@@ -285,6 +285,7 @@ test("serves the HTML and the files it references from the same root", async () 
   // svg はモックの装飾に使う。単体で開いても CSP の sandbox が効く。
   await write("preview/logo.svg", new TextEncoder().encode("<svg/>"));
   await write("preview/notes.txt", new TextEncoder().encode("text"));
+  await write("preview/.gitignore", new TextEncoder().encode("node_modules\n"));
   await write("preview/secrets.env", new TextEncoder().encode("TOKEN=1"));
 
   expect((await resolvePreviewFile({ root, path: "preview/index.html" }))?.contentType).toBe(
@@ -306,7 +307,11 @@ test("serves the HTML and the files it references from the same root", async () 
   expect((await resolvePreviewFile({ root, path: "preview/notes.txt" }))?.contentType).toBe(
     "text/plain; charset=utf-8",
   );
-  // 一覧に無い形式と、拡張子の無い `.env` は配信しない。
+  // ドットファイルも配る。`.env` 系だけがブラックリスト。
+  expect((await resolvePreviewFile({ root, path: "preview/.gitignore" }))?.contentType).toBe(
+    "text/plain; charset=utf-8",
+  );
+  // 一覧に無い形式と、ブラックリストの `.env` 系は配信しない。
   expect(await resolvePreviewFile({ root, path: "preview/secrets.env" })).toBeNull();
   expect(await resolvePreviewFile({ root, path: "preview/.env" })).toBeNull();
 });
@@ -685,21 +690,35 @@ test("resolves a relative link to a text file and leaves a bare path as text", a
   expect(message?.files).toBeUndefined();
 });
 
-test("does not link a file without an allowed extension", async () => {
+test("does not link .env or a file without an allowed extension", async () => {
   await write("docs/.env", new TextEncoder().encode("TOKEN=1"));
+  await write("docs/.env.local", new TextEncoder().encode("TOKEN=1"));
   await write("docs/secrets.env", new TextEncoder().encode("TOKEN=1"));
-  await write("docs/settings", new TextEncoder().encode("token=1"));
 
   const message = (
     await attachMessageFiles(
-      agentChat("[a](docs/.env) [b](docs/secrets.env) [c](docs/settings)"),
+      agentChat("[a](docs/.env) [b](docs/.env.local) [c](docs/secrets.env)"),
       root,
     )
   ).messages[0];
 
-  // 拡張子の無い `.env`、一覧に無い `env`、拡張子の無いファイルは、どれもリンクにしない。
+  // ブラックリストの `.env` 系と、一覧に無い `env` はリンクにしない。
   expect(message?.links).toBeUndefined();
   expect(message?.files).toBeUndefined();
+});
+
+test("links an extensionless file as text", async () => {
+  await write("LICENSE", new TextEncoder().encode("MIT License\n"));
+
+  const message = (await attachMessageFiles(agentChat("[ライセンス](LICENSE)"), root)).messages[0];
+
+  expect(message?.links?.map((link) => [link.href, link.kind, link.name])).toEqual([
+    ["LICENSE", "text", "LICENSE"],
+  ]);
+  // 裸の語は、実在してもリンクにしない。
+  expect(
+    (await attachMessageFiles(agentChat("LICENSE を読んでください。"), root)).messages[0]?.links,
+  ).toBeUndefined();
 });
 
 test("keeps the chip and the link for the same HTML file", async () => {
@@ -747,20 +766,25 @@ test("bare text paths do not use up the file slots", async () => {
   expect(message?.files?.map((file) => file.name)).toEqual(["docs/shot.png"]);
 });
 
-test("links a dot file only when the extension list allows it", async () => {
+test("links dot files except .env and its variants", async () => {
   await write("docs/.env.yaml", new TextEncoder().encode("token: 1"));
   await write("docs/.secrets.md", new TextEncoder().encode("# secret"));
+  await write(".gitignore", new TextEncoder().encode("node_modules\n"));
   await write(".github/workflows/ci.yml", new TextEncoder().encode("on: push"));
 
-  const hidden = (
-    await attachMessageFiles(agentChat("[a](docs/.env.yaml) [b](docs/.secrets.md)"), root)
+  const message = (
+    await attachMessageFiles(
+      agentChat(
+        "[a](docs/.env.yaml) [b](docs/.secrets.md) [c](.gitignore) [d](.github/workflows/ci.yml)",
+      ),
+      root,
+    )
   ).messages[0];
-  expect(hidden?.links).toBeUndefined();
-
-  // ディレクトリがドット始まりでも、ファイル名が普通なら対象。
-  const nested = (await attachMessageFiles(agentChat("[ci](.github/workflows/ci.yml)"), root))
-    .messages[0];
-  expect(nested?.links?.map((link) => link.name)).toEqual([".github/workflows/ci.yml"]);
+  expect(message?.links?.map((link) => link.name)).toEqual([
+    "docs/.secrets.md",
+    ".gitignore",
+    ".github/workflows/ci.yml",
+  ]);
 });
 
 test("lists a directory with dirs first and the kind each file opens with", async () => {
@@ -768,6 +792,7 @@ test("lists a directory with dirs first and the kind each file opens with", asyn
   await write("docs/mock.png", png);
   await write("docs/mock.html", new TextEncoder().encode("<!doctype html>"));
   await write(".gitignore", new TextEncoder().encode("node_modules\n"));
+  await write(".env", new TextEncoder().encode("TOKEN=1"));
   await write("Makefile", new TextEncoder().encode("all:\n"));
   await write("empty.md", new Uint8Array());
   await write("z.txt", new TextEncoder().encode("z"));
@@ -776,11 +801,12 @@ test("lists a directory with dirs first and the kind each file opens with", asyn
   const listing = await listDirectory({ root, path: "" });
 
   expect(listing).not.toBeNull();
-  expect(listing?.total).toBe(6);
+  expect(listing?.total).toBe(7);
   expect(listing?.truncated).toBe(false);
   expect(listing?.entries.map((entry) => [entry.kind, entry.name])).toEqual([
     ["dir", "docs"],
     ["dir", "src"],
+    ["file", ".env"],
     ["file", ".gitignore"],
     ["file", "empty.md"],
     ["file", "Makefile"],
@@ -792,8 +818,9 @@ test("lists a directory with dirs first and the kind each file opens with", asyn
   expect(byName.get("app.ts")).toBeUndefined();
   expect(byName.get("docs")).toMatchObject({ kind: "dir", path: "docs" });
   expect(byName.get("empty.md")).toMatchObject({ kind: "file", open: null });
-  expect(byName.get("Makefile")).toMatchObject({ kind: "file", open: null });
-  expect(byName.get(".gitignore")).toMatchObject({ kind: "file", open: null });
+  expect(byName.get("Makefile")).toMatchObject({ kind: "file", open: "text" });
+  expect(byName.get(".gitignore")).toMatchObject({ kind: "file", open: "text" });
+  expect(byName.get(".env")).toMatchObject({ kind: "file", open: null });
 
   const src = await listDirectory({ root, path: "src" });
   expect(src?.entries).toMatchObject([
@@ -842,6 +869,33 @@ test("keeps a symlink outside the root as a name that cannot be opened", async (
   } finally {
     await rm(outside, { recursive: true, force: true });
   }
+});
+
+test("never serves or lists anything under .git", async () => {
+  await write(
+    ".git/config",
+    new TextEncoder().encode("[remote]\n url = https://token@example.com/repo\n"),
+  );
+  await write(".git/logo.png", png);
+  await write(".gitignore", new TextEncoder().encode("node_modules\n"));
+  await symlink(join(root, ".git"), join(root, "git-link"));
+  await symlink(join(root, ".git", "config"), join(root, "config-link"));
+
+  expect(await resolvePreviewFile({ root, path: ".git/config" })).toBeNull();
+  expect(await resolvePreviewFile({ root, path: ".git" })).toBeNull();
+  expect(await resolvePreviewFile({ root, path: join(root, ".git", "config") })).toBeNull();
+  expect(await resolvePreviewFile({ root, path: "config-link" })).toBeNull();
+  expect(await resolveMessageFile({ root, path: ".git/logo.png" })).toBeNull();
+  expect(await listDirectory({ root, path: ".git" })).toBeNull();
+  expect(await listDirectory({ root, path: "git-link" })).toBeNull();
+
+  const listing = await listDirectory({ root, path: "" });
+  const byName = new Map(listing?.entries.map((entry) => [entry.name, entry]));
+  // `.git` そのものは出さず、そこへ向かうリンクも名前だけ残して開かせない。
+  expect(byName.get(".git")).toBeUndefined();
+  expect(byName.get("git-link")).toMatchObject({ kind: "dir", expandable: false });
+  expect(byName.get("config-link")).toMatchObject({ kind: "file", open: null });
+  expect(byName.get(".gitignore")).toMatchObject({ kind: "file", open: "text" });
 });
 
 test("follows a symlink inside the root and keeps the requested path", async () => {

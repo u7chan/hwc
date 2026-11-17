@@ -423,6 +423,12 @@ test("GET /api/panes/:id/preview serves HTML that cannot reach the BFF origin", 
     // iframe 属性を外されても、直接開いても、同じオリジンには戻らない。
     expect(response.headers.get("content-security-policy")).toBe("sandbox allow-scripts");
     expect(await response.text()).toBe("<!doctype html><p>mock</p>");
+
+    // ツリーのプレーン表示は raw でソースを取る。HTML もレンダリングせずに返す。
+    const source = await app.request("/api/panes/w1:p1/preview/0/preview/index.html?raw=1");
+    expect(source.status).toBe(200);
+    expect(source.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(await source.text()).toBe("<!doctype html><p>mock</p>");
   });
 });
 
@@ -433,7 +439,18 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     await writeFile(join(root, "preview", "app.js"), "export const ready = true;");
     await writeFile(join(root, "preview", "shot.png"), pngBytes);
     await writeFile(join(root, "preview", "notes.txt"), "text");
+    await writeFile(join(root, "preview", "LICENSE"), "MIT License\n");
+    await writeFile(join(root, "preview", ".gitignore"), "node_modules\n");
+    await writeFile(join(root, "preview", ".secrets.md"), "# secret\n");
+    await writeFile(join(root, "preview", ".oxfmtrc.json"), "{}\n");
+    await writeFile(join(root, "preview", "binary"), new Uint8Array([0x01, 0x00, 0x02]));
     await writeFile(join(root, "preview", ".env"), "TOKEN=1");
+    await writeFile(join(root, "preview", ".env.local"), "TOKEN=1");
+    await mkdir(join(root, ".git"), { recursive: true });
+    await writeFile(
+      join(root, ".git", "config"),
+      "[remote]\n url = https://token@example.com/repo\n",
+    );
     await writeFile(join(root, "preview", "secrets.env"), "TOKEN=1");
     const app = createFilesApp(root);
 
@@ -458,12 +475,36 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     const rawScript = await app.request("/api/panes/w1:p1/preview/0/preview/app.js?raw=1");
     expect(rawScript.headers.get("content-type")).toBe("text/plain; charset=utf-8");
 
-    // 一覧に無い形式は配信しない。拡張子を持たない `.env` も対象外。
+    // 拡張子の無いファイルも開ける。中身は配信するときに確かめる。
+    const license = await app.request("/api/panes/w1:p1/preview/0/preview/LICENSE?raw=1");
+    expect(license.status).toBe(200);
+    expect(license.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(await license.text()).toBe("MIT License\n");
+
+    // 拡張子の無いバイナリは、文字として配らずに断る。
+    const binary = await app.request("/api/panes/w1:p1/preview/0/preview/binary?raw=1");
+    expect(binary.status).toBe(415);
+    expect(await binary.text()).toContain("バイナリファイル");
+
+    // ドットファイルも開ける。`.env` 系だけがブラックリスト。
+    const gitignore = await app.request("/api/panes/w1:p1/preview/0/preview/.gitignore?raw=1");
+    expect(gitignore.status).toBe(200);
+    expect(await gitignore.text()).toBe("node_modules\n");
+    const secrets = await app.request("/api/panes/w1:p1/preview/0/preview/.secrets.md?raw=1");
+    expect(secrets.status).toBe(200);
+    const formatter = await app.request("/api/panes/w1:p1/preview/0/preview/.oxfmtrc.json?raw=1");
+    expect(formatter.status).toBe(200);
+    expect(formatter.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+
+    // 一覧に無い形式と、ブラックリストの `.env` 系は配信しない。
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/secrets.env")).status).toBe(404);
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env")).status).toBe(404);
-    // ドット始まりの名前は、拡張子が一覧にあっても配らない。
+    expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env.local")).status).toBe(404);
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env.yaml")).status).toBe(404);
-    expect((await app.request("/api/panes/w1:p1/preview/0/preview/.secrets.md")).status).toBe(404);
+
+    // `.git` は一覧にも配信にも出さない。直接 URL でも読めない。
+    expect((await app.request("/api/panes/w1:p1/preview/0/.git/config?raw=1")).status).toBe(404);
+    expect((await app.request("/api/panes/w1:p1/preview/0/.git")).status).toBe(404);
   });
 });
 

@@ -98,7 +98,7 @@
   }
 }
 
-/* 行はボタン・リンク・開けない行の 3 種で同じ形にする。左の字下げだけ inline で
+/* 行はボタンと開けない行の 2 種で同じ形にする。左の字下げだけ inline で
    深さに合わせ、行の右端を揃える。 */
 .hwc-tree-row {
   display: flex;
@@ -118,18 +118,15 @@
   text-decoration: none;
 }
 
-button.hwc-tree-row,
-a.hwc-tree-row {
+button.hwc-tree-row {
   cursor: pointer;
 }
 
-button.hwc-tree-row:hover,
-a.hwc-tree-row:hover {
+button.hwc-tree-row:hover {
   background: var(--color-raised);
 }
 
-button.hwc-tree-row:active,
-a.hwc-tree-row:active {
+button.hwc-tree-row:active {
   background: var(--color-line);
 }
 
@@ -137,9 +134,15 @@ a.hwc-tree-row:active {
   outline-offset: -3px;
 }
 
-/* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。 */
+/* 選択中のファイル。会話のプレビューと同じ対象を示す。 */
+.hwc-tree-row[data-selected="true"] {
+  background: var(--color-selected);
+}
+
+/* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。
+   gitignore された行と同じく、地の色相から外したグレーにする。 */
 .hwc-tree-row[data-blocked="true"] {
-  color: var(--color-secondary);
+  color: var(--color-muted);
   cursor: default;
 }
 
@@ -184,4 +187,166 @@ a.hwc-tree-row:active {
 
 .hwc-tree-retry:hover {
   text-decoration: underline;
+}
+
+/* チャット領域に重ねるファイルのプレーン表示。会話は下に残し、戻るとスクロール位置が
+   そのままになる（ADR 0090）。 */
+.hwc-file-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-content);
+}
+
+.hwc-file-preview-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--row-head);
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+
+.hwc-file-preview-back {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-file-preview-back:hover {
+  background: var(--color-raised);
+}
+
+.hwc-file-preview-back:active {
+  opacity: 0.72;
+}
+
+/* プレビュー中に届いた返答。ボタンの端に小さく出し、会話へ戻る入口を見失わせない。 */
+.hwc-file-preview-new {
+  position: absolute;
+  top: 7px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.hwc-file-preview-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-file-preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.hwc-file-preview-body[data-state="loading"],
+.hwc-file-preview-body[data-state="binary"],
+.hwc-file-preview-body[data-state="error"] {
+  display: grid;
+  place-items: center;
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+
+.hwc-file-preview-notice {
+  margin: var(--space-3) var(--space-4) 0;
+}
+
+.hwc-file-preview-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-align: center;
+}
+
+.hwc-file-preview-retry {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hwc-file-preview-retry:hover {
+  text-decoration: underline;
+}
+
+.hwc-file-preview-more {
+  margin-left: var(--space-2);
+  color: var(--color-accent);
+}
+
+.hwc-file-preview-more:hover {
+  text-decoration: underline;
+}
+
+/* 行番号と本文は、同じ文字寸法の 2 つの pre を横に並べる。行ごとの要素を作らずに
+   数万行でも軽く、折り返さないので 1 行 1 番号が揃う。 */
+.hwc-file-preview-code {
+  display: flex;
+  align-items: flex-start;
+  width: max-content;
+  min-width: 100%;
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+
+.hwc-file-preview-lines,
+.hwc-file-preview-text {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-mono);
+  line-height: var(--line-body);
+  tab-size: 2;
+  white-space: pre;
+}
+
+.hwc-file-preview-lines {
+  position: sticky;
+  left: 0;
+  flex: none;
+  padding-right: var(--space-3);
+  background: var(--color-content);
+  box-shadow: 1px 0 0 var(--color-line);
+  color: var(--color-secondary);
+  text-align: right;
+  user-select: none;
+}
+
+.hwc-file-preview-text {
+  flex: none;
+  padding-left: var(--space-3);
+  color: var(--color-text);
 }

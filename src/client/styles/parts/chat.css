@@ -835,6 +835,12 @@ p.hwc-compaction,
   position: relative;
 }
 
+/* ファイルプレビュー中だけ、推論の帯との境界を線で示す。通常会話では帯と本文が
+   同じ面に見える方が落ち着くので、線を出さない。 */
+.hwc-live-slot[data-divider="true"] {
+  border-top: 1px solid var(--color-line);
+}
+
 .hwc-live-slot[data-state="closing"] {
   height: 0;
 }

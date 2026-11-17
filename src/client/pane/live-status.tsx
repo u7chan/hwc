@@ -24,7 +24,9 @@ type LiveView = {
 // 実行中の段階と thinking の末尾。会話の外（入力欄の直上）に固定して出し、
 // 読み返している間も何が起きているかを見せる。入力欄の上なので、高さが変わっても
 // 入力欄の位置は動かない。
-export function LiveStatus(props: LiveView & { open: boolean; onCancelCompaction: () => void }) {
+export function LiveStatus(
+  props: LiveView & { open: boolean; divider: boolean; onCancelCompaction: () => void },
+) {
   const latest = useRef<LiveView | null>(null);
   const wasOpen = useRef(false);
   const [fading, setFading] = useState(false);
@@ -61,7 +63,11 @@ export function LiveStatus(props: LiveView & { open: boolean; onCancelCompaction
 
   const tok = shown.tokPerSecond === null ? null : formatTokPerSecond(shown.tokPerSecond);
   return (
-    <div class="hwc-live-slot" data-state={props.open ? "open" : "closing"}>
+    <div
+      class="hwc-live-slot"
+      data-state={props.open ? "open" : "closing"}
+      data-divider={props.divider ? "true" : undefined}
+    >
       {/* pi 以外や sidecar の無いペインでは、中身が経過時間だけになる。状態名を
           支援技術へも渡すため、名前は帯に持たせる。消える間は操作も読み上げも止める。 */}
       <div

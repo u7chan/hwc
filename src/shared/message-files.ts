@@ -10,8 +10,7 @@ export type MessageFileKind = "image" | "html";
 export type ChatLinkKind = MessageFileKind | "text";
 
 // リンクから開けるテキストの拡張子。`env` のような設定ファイルの名前は入れない。
-// ドット始まりの名前（`.env` `.secrets.md`）も配らない。中身を見せない前提の名前を
-// 拡張子だけで通さないため（ADR 0084）。
+// ドットファイルは開けるが、`.env` とその派生だけは isBlockedFileName で除く（ADR 0084）。
 const TEXT_EXT: ReadonlySet<string> = new Set([
   "md",
   "txt",
@@ -55,23 +54,50 @@ export function isHtmlName(name: string): boolean {
   return ext === "html" || ext === "htm";
 }
 
+// 中身を配らない名前。ドットファイルは設定を読めるようにするが、環境変数は秘密が
+// 入る前提なので、`.env` とその派生（`.env.local` など）だけを除く（ADR 0084）。
+function isBlockedFileName(name: string): boolean {
+  const base = name.slice(name.lastIndexOf("/") + 1).toLowerCase();
+  return base === ".env" || base.startsWith(".env.");
+}
+
 // 画像の判定は添付と同じ表に任せる。allowlist を 2 か所に分けない。
 export function messageFileKindFromName(name: string): MessageFileKind | null {
+  if (isBlockedFileName(name)) return null;
   if (attachmentContentTypeFromName(name) !== null) return "image";
   return isHtmlName(name) ? "html" : null;
 }
 
-// ファイル名のドット以降。ドット始まりの名前は拡張子を持たない扱いにする。
-// 拡張子の無いファイルは、リンクからもプレビューからも配らない。
+// ファイル名のドット以降。先頭のドットは拡張子の区切りではない。
 function textExtOf(name: string): string {
   const base = name.slice(name.lastIndexOf("/") + 1);
-  if (base.startsWith(".")) return "";
   const dot = base.lastIndexOf(".");
   return dot <= 0 ? "" : base.slice(dot + 1).toLowerCase();
 }
 
+// 拡張子を持たない普通のファイル名（LICENSE、Makefile、.gitignore など）。
+// 中身がテキストかバイナリかは、配信するときに先頭のバイト列で確かめる（looksBinary）。
+function isExtensionlessName(name: string): boolean {
+  const base = name.slice(name.lastIndexOf("/") + 1);
+  if (base === "") return false;
+  return base.lastIndexOf(".") <= 0;
+}
+
 export function isTextName(name: string): boolean {
-  return TEXT_EXT.has(textExtOf(name));
+  if (isBlockedFileName(name)) return false;
+  return TEXT_EXT.has(textExtOf(name)) || isExtensionlessName(name);
+}
+
+// 拡張子で中身を判断できないファイルを、ブラウザへ文字として流してよいか。
+// UTF-8 のテキストには NUL が現れないので、先頭だけを見てバイナリを弾く。
+const BINARY_SNIFF_BYTES = 8000;
+
+export function looksBinary(bytes: Uint8Array): boolean {
+  const end = Math.min(bytes.length, BINARY_SNIFF_BYTES);
+  for (let index = 0; index < end; index += 1) {
+    if (bytes[index] === 0) return true;
+  }
+  return false;
 }
 
 // 本文のリンクから開けるなら、その見せ方を返す。テキストは実行させたくないので、
@@ -83,7 +109,9 @@ export function messageLinkKindFromName(name: string): ChatLinkKind | null {
 }
 
 // プレビューで配信してよい形式だけ型を返す。ここに無い拡張子は配信しない。
+// 拡張子の無いファイルは text/plain として返し、バイナリかどうかは配信時に確かめる。
 export function previewContentType(name: string): string | null {
+  if (isBlockedFileName(name)) return null;
   return (
     attachmentContentTypeFromName(name) ??
     CONTENT_TYPE_BY_EXT.get(extOf(name)) ??

@@ -25,6 +25,10 @@
   --color-content: #ffffff;
   --color-text: #18212f;
   --color-secondary: #5d6878;
+  /* 開けない行・無効な項目の文字。テーマの色相に寄せず、gitignore された行と同じ
+     ニュートラルなグレーにする。暗い地の値は下の data-scheme で上書きする。
+     テーマごとの `--color-content` に対して 4.5:1 を満たすことは theme.test.ts で見る。 */
+  --color-muted: #69707c;
   --color-accent: #255cd6;
   --color-on-accent: #ffffff;
   --color-selected: #e9f0ff;
@@ -720,6 +724,10 @@
 }
 
 :root[data-scheme="dark"] {
+  /* 暗い地では、ライト用のグレーは沈みすぎる。もっとも暗い content（Nord）でも
+     4.5:1 を満たす値にする。 */
+  --color-muted: #8e97a1;
+
   --ansi-0: #5c6370;
   --ansi-1: #ff7b86;
   --ansi-2: #98c379;
