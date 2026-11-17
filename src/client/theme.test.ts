@@ -119,6 +119,28 @@ test("muted text keeps 4.5:1 on every content background", async () => {
   expect(weak).toEqual([]);
 });
 
+// 押下の面に使う accent と、その上の文字 on-accent の組。面の色を変えたときに
+// 一緒に動かし忘れないよう、文字の基準を全テーマで見る。
+test("on-accent keeps 4.5:1 on every accent background", async () => {
+  const css = await Bun.file("src/client/styles/tokens.css").text();
+  const weak: string[] = [];
+  for (const theme of THEMES) {
+    const selector = theme.id === "light" ? ":root {" : `:root[data-theme="${theme.id}"] {`;
+    const start = css.indexOf(selector);
+    const block = css.slice(start, css.indexOf("}", start));
+    const accent = colorValue(block, "accent");
+    const onAccent = colorValue(block, "on-accent");
+    if (accent === null || onAccent === null) {
+      weak.push(`${theme.id}: missing`);
+      continue;
+    }
+    const ratio = contrast(accent, onAccent);
+    if (ratio < 4.5) weak.push(`${theme.id}: ${ratio.toFixed(2)}`);
+  }
+
+  expect(weak).toEqual([]);
+});
+
 test("system follows the device and the rest is fixed", () => {
   expect(resolveTheme("system", true)).toBe("dark");
   expect(resolveTheme("system", false)).toBe("light");
