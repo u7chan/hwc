@@ -417,6 +417,8 @@ export function addTabOnly(view: SplitView, paneId: string): SplitView {
 // 手で組んだ木でも差し込める向きを探し、どこにも入らなければタブへ回す。
 export function insertDelegatedPane(view: SplitView, paneId: string): SplitView {
   const leaves = leafPanes(view.layout);
+  // 既にセルに出ているペイン（シェルに後からエージェントが付いた場合など）は動かさない。
+  if (leaves.includes(paneId)) return view;
   if (leaves.length >= MAX_LEAVES) return addTabOnly(view, paneId);
 
   const preferred =

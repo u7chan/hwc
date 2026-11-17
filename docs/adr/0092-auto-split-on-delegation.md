@@ -37,8 +37,8 @@ Herdr は委譲そのものをイベントにしない。`agent.prompt` はメ�
 
 ### 動き
 
-- 新しいセルの `flex-grow` を 0 から 1 へ戻し、既存セルを押し縮める。分割線が走って見える
-- 時間は `--hwc-split-duration`。セルの中身は既存の `hwc-view-in` で遅れて入る
+- 新しいセルの `flex-grow` を 0 から 1 へ戻し、既存セルを押し縮める。分割線が走って見える。中身はセルのマウント時に `hwc-view-in`（200ms）で入る
+- 時間は `--hwc-split-duration`
 - 端末の `prefers-reduced-motion` は設定より優先して止める
 
 ### 設定

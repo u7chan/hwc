@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { AppState, PaneState } from "../server/herdr/state";
-import { allPaneIds, applyDelegation, newAgentPanes, tabOfPane } from "./delegation";
+import { allAgentPaneIds, applyDelegation, newAgentPanes, tabOfPane } from "./delegation";
 import { EMPTY_SPLIT_VIEW, leafPanes, startSplitView, type SplitNode } from "./split-view";
 
 const leaf = (pane: string): SplitNode => ({ kind: "leaf", pane });
@@ -54,14 +54,29 @@ const view = (layout: SplitNode) => ({
 test("only agent panes count as delegation", () => {
   const before = stateWith([[pane("w1:p1", "pi")]]);
   const after = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", null), pane("w1:p3", "claude")]]);
-  expect(newAgentPanes(after, allPaneIds(before)).map((item) => item.id)).toEqual(["w1:p3"]);
+  expect(newAgentPanes(after, allAgentPaneIds(before)).map((item) => item.id)).toEqual(["w1:p3"]);
+});
+
+test("a pane that starts as a shell is delegated when its agent appears", () => {
+  const shell = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", null)]]);
+  const started = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", "claude")]]);
+  expect(newAgentPanes(started, allAgentPaneIds(shell)).map((item) => item.id)).toEqual(["w1:p2"]);
+});
+
+test("an agent in a cell that is already shown does not move the layout", () => {
+  const shell = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", null)]]);
+  const started = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", "claude")]]);
+  const shown = view(row(leaf("w1:p1"), leaf("w1:p2")));
+  expect(
+    applyDelegation(started, shown, newAgentPanes(started, allAgentPaneIds(shell))),
+  ).toBeNull();
 });
 
 test("a pane found in another tab is not opened", () => {
   const before = stateWith([[pane("w1:p1", "pi")]]);
   const after = stateWith([[pane("w1:p1", "pi")], [pane("w1:p9", "pi")]]);
   const split = view(leaf("w1:p1"));
-  expect(applyDelegation(after, split, newAgentPanes(after, allPaneIds(before)))).toBeNull();
+  expect(applyDelegation(after, split, newAgentPanes(after, allAgentPaneIds(before)))).toBeNull();
   expect(tabOfPane(after, "w1:p9")?.id).toBe("w1:t2");
 });
 
@@ -71,7 +86,7 @@ test("the second pane grows to the right and keeps the selection", () => {
   const result = applyDelegation(
     after,
     view(leaf("w1:p1")),
-    newAgentPanes(after, allPaneIds(before)),
+    newAgentPanes(after, allAgentPaneIds(before)),
   );
   expect(result?.entering).toBe("w1:p2");
   expect(result?.split.layout).toEqual(row(leaf("w1:p1"), leaf("w1:p2")));
@@ -86,7 +101,7 @@ test("three panes make a T, four make the 2x2 grid", () => {
   const result = applyDelegation(
     after,
     view(leaf("w1:p1")),
-    newAgentPanes(after, allPaneIds(before)),
+    newAgentPanes(after, allAgentPaneIds(before)),
   );
   expect(result?.entering).toBe("w1:p4");
   expect(result?.split.layout).toEqual(
@@ -108,7 +123,7 @@ test("panes beyond four join the tabs without moving the cells", () => {
   const result = applyDelegation(
     after,
     view(leaf("w1:p1")),
-    newAgentPanes(after, allPaneIds(before)),
+    newAgentPanes(after, allAgentPaneIds(before)),
   );
   expect(leafPanes(result?.split.layout ?? null)).toHaveLength(4);
   expect(result?.split.openTabs).toContain("w1:p5");

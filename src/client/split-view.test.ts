@@ -574,6 +574,13 @@ test("a delegated pane grows right, then below, then below the other column", ()
   expect(readingOrder(four.layout)).toEqual(["w1:p1", "w1:p2", "w1:p3", "w1:p4"]);
 });
 
+test("a pane already shown is not inserted again", () => {
+  // 表示中のシェルにエージェントが付くと、同じ ID が候補に戻ってくる。木は動かさない。
+  const shown = view(["w1:p1", "w1:p2"], "w1:p1", row(leaf("w1:p1"), leaf("w1:p2")));
+  expect(insertDelegatedPane(shown, "w1:p2")).toBe(shown);
+  expect(insertDelegatedPane(shown, "w1:p1")).toBe(shown);
+});
+
 test("a fifth pane becomes a tab instead of a cell", () => {
   let next = view(["w1:p1"], "w1:p1", leaf("w1:p1"));
   for (const paneId of ["w1:p2", "w1:p3", "w1:p4"]) next = insertDelegatedPane(next, paneId);

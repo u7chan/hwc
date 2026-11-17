@@ -300,6 +300,8 @@ export function App() {
         receive(message);
         const decision = gateSnapshot(snapshotWriter.current, "initial-fetch");
         snapshotWriter.current = decision.writer;
+        // 取得できた時点で最新の状態はある。最初の SSE スナップショットを再接続扱いにしない。
+        live.current = true;
         if (decision.apply) applyState(message.state);
       },
       () => undefined,
@@ -574,26 +576,34 @@ export function App() {
       if (!present.has(paneId)) selfCreated.current.delete(paneId);
     }
     const seen = seenAgents.current;
-    seenAgents.current = allAgentPaneIds(state);
-    if (seen === null) return;
-    if (resynced.current) {
+    const agents = allAgentPaneIds(state);
+    if (seen === null || resynced.current) {
       resynced.current = false;
+      seenAgents.current = agents;
       return;
     }
-    if (!wide || !splitPrefs.autoSplit) return;
+    // 見ない間の増加は開かない。設定を切っている間に増えた分も同じ扱いにする。
+    if (!wide || !splitPrefs.autoSplit) {
+      seenAgents.current = agents;
+      return;
+    }
+    // 作成直後のペインを開く pendingSelect と画面の更新が競合する。この回は見送り、
+    // seen を進めずに次のスナップショットで拾い直す。
+    if (pendingSelect !== null) return;
     const candidates = newAgentPanes(state, seen).filter((item) => {
       if (!selfCreated.current.has(item.id)) return true;
       // hwc が作ったペインは pendingSelect が開く。委譲として二重に動かさない。
       selfCreated.current.delete(item.id);
       return false;
     });
+    seenAgents.current = agents;
     if (candidates.length === 0) return;
     // 木は毎回作り直されるので依存に入れず、イベント時点の最新を ref から読む。
     const result = applyDelegation(state, splitRef.current, candidates);
     if (result === null) return;
     setEntering(result.entering);
     setView({ split: result.split, expanded: expandedRef.current });
-  }, [state, wide, splitPrefs.autoSplit]);
+  }, [state, wide, splitPrefs.autoSplit, pendingSelect]);
 
   // 新しいセルは分割線から広げる。最初の描画では幅 0 にしておき、次のフレームで
   // flex-grow を戻すと、既存セルが縮みながら分割線が走る。
