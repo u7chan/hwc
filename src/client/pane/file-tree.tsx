@@ -8,7 +8,8 @@ import { Spinner } from "../Spinner";
 type FileTreeProps = {
   paneId: string;
   view: FileTreeView;
-  // 広いセルでは会話の左、狭いセルでは会話の上に重ねる。見た目だけの違い。
+  // 広いセルでは会話の左右どちらか（設定で選ぶ）、狭いセルでは会話の上に重ねる。
+  // 見た目だけの違い。
   side: boolean;
   // 開閉のアニメーション。初回描画で開いているとき（ペインを切り替えて戻ったとき）は
   // shown が true のまま始まり、動かない。
