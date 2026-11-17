@@ -1,6 +1,6 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { parseGitHubRemote, parseUpstreamTrack, type GitSync } from "../shared/git";
+import { parseGitHubRemote, parseUpstream, type GitSync } from "../shared/git";
 
 // HEAD は "ref: refs/heads/<branch>"、detached なら sha。detached はブランチではないので出さない。
 export function parseBranchHead(text: string): string | null {
@@ -164,13 +164,14 @@ export function createGitClient(
         runRead(checkoutPath, ["remote", "-v"]),
         runRead(checkoutPath, [
           "for-each-ref",
-          "--format=%(upstream:short)\t%(upstream:track)",
+          // push 先の名前も同じ行で読む。PR はローカル名ではなくこの名前で引く。
+          "--format=%(upstream:short)\t%(upstream:track)\t%(upstream)\t%(upstream:remotename)",
           `refs/heads/${branch}`,
         ]),
       ]);
       const byName = parseRemoteUrls(remotes);
       sync = {
-        ...parseUpstreamTrack(refs),
+        ...parseUpstream(refs),
         hasRemote: byName.size > 0,
         repoUrl: pickGitHubRepoUrl(byName),
       };

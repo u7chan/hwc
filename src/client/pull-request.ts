@@ -6,9 +6,14 @@ import { isAbortError } from "./chat";
 
 // ブランチが変われば PR も変わる。見出しを開いたときに 1 回だけ引き、引けなければ何も出さない。
 // 引き直しの間隔は BFF のキャッシュが持つので、ここではポーリングしない。
-export function usePullRequest(workspaceId: string, branch: string | null): PullRequest | null {
+// push 先が分かった時点（push した時点）でも引き直す。PR は push 先の名前で作られる。
+export function usePullRequest(
+  workspaceId: string,
+  branch: string | null,
+  upstreamBranch: string | null,
+): PullRequest | null {
   const [entry, setEntry] = useState<{ key: string; pullRequest: PullRequest | null } | null>(null);
-  const key = branch === null ? null : `${workspaceId}\n${branch}`;
+  const key = branch === null ? null : `${workspaceId}\n${branch}\n${upstreamBranch ?? ""}`;
 
   useEffect(() => {
     if (key === null) return;
@@ -36,10 +41,10 @@ export function usePullRequest(workspaceId: string, branch: string | null): Pull
 export const PULL_REQUEST_REFRESH_MS = 30_000;
 
 type PullRequestEntry = { key: string; pullRequest: PullRequest | null };
-type PullRequestTarget = { workspaceId: string; branch: string };
+type PullRequestTarget = { workspaceId: string; branch: string; upstreamBranch: string | null };
 
 function targetKey(target: PullRequestTarget): string {
-  return `${target.workspaceId}\n${target.branch}`;
+  return `${target.workspaceId}\n${target.branch}\n${target.upstreamBranch ?? ""}`;
 }
 
 function pullRequestTargets(state: AppState | null): PullRequestTarget[] {
@@ -47,7 +52,13 @@ function pullRequestTargets(state: AppState | null): PullRequestTarget[] {
   return state.workspaces.flatMap((workspace) =>
     workspace.branch === null || workspace.branch === undefined
       ? []
-      : [{ workspaceId: workspace.id, branch: workspace.branch }],
+      : [
+          {
+            workspaceId: workspace.id,
+            branch: workspace.branch,
+            upstreamBranch: workspace.sync?.upstreamBranch ?? null,
+          },
+        ],
   );
 }
 

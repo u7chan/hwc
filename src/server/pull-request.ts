@@ -9,7 +9,8 @@ export const PULL_REQUEST_MISSING_TTL_MS = 120_000;
 
 export type PullRequestReader = (options: {
   checkoutPath: string;
-  branch: string;
+  // PR はリモートの head ブランチに属す。push 先の名前を先頭に、ローカル名を後ろに置く。
+  branches: readonly string[];
   // 一覧に戻ったときに、ブランチの状態変化を待たずに引き直すための口。
   refresh?: boolean;
 }) => Promise<PullRequest | null>;
@@ -31,9 +32,11 @@ export function createPullRequestReader(
   // セル数ぶん増やさない。
   const inFlight = new Map<string, Promise<PullRequest | null>>();
 
-  return async ({ checkoutPath, branch, refresh = false }) => {
-    // ブランチ切り替えのイベントは無いので、ブランチ名を鍵に含めて読み直す。
-    const key = `${checkoutPath}\n${branch}`;
+  return async ({ checkoutPath, branches, refresh = false }) => {
+    const candidates = candidateBranches(branches);
+    if (candidates.length === 0) return null;
+    // ブランチを切り替えても、push 先が変わっても PR は変わる。どちらも鍵に含めて読み直す。
+    const key = `${checkoutPath}\n${candidates.join("\n")}`;
     const at = now();
     if (!refresh) {
       const hit = cache.get(key);
@@ -44,11 +47,17 @@ export function createPullRequestReader(
 
     const lookup = (async () => {
       let pullRequest: PullRequest | null = null;
-      try {
-        pullRequest = parsePullRequestList(await run(checkoutPath, branch));
-      } catch {
-        // gh が無い・未認証・オフライン・期限切れは、PR が無い場合と同じ扱いにする。
-        // 表示はどちらもチップ無しなので、区別しても利用者に伝えることがない。
+      // push 先の名前で引く。Herdr の自動生成名のまま push されているとは限らず、
+      // PR の head は push した側の名前になる。見つからなければローカル名も見る。
+      for (const branch of candidates) {
+        try {
+          pullRequest = parsePullRequestList(await run(checkoutPath, branch));
+        } catch {
+          // gh が無い・未認証・オフライン・期限切れは、その候補で PR が無いのと同じに
+          // 扱い、次の候補へ進む。どの候補でも引けなければチップ無しになる。
+          pullRequest = null;
+        }
+        if (pullRequest !== null) break;
       }
       cache.set(key, {
         pullRequest,
@@ -65,6 +74,24 @@ export function createPullRequestReader(
       if (inFlight.get(key) === lookup) inFlight.delete(key);
     }
   };
+}
+
+// PR は push 先の head ブランチに属す。push 先を先に、ローカル名を後ろにした候補を作る。
+// 同じ名前なら 1 つ。呼び出し側ごとに規則を持たず、ここを正本にする。
+export function pullRequestBranches(
+  branch: string,
+  upstreamBranch: string | null,
+): readonly string[] {
+  return upstreamBranch === null || upstreamBranch === branch ? [branch] : [upstreamBranch, branch];
+}
+
+// 同じブランチを二度引かない。候補は push 先とローカル名で、通常はどちらか一方だけ。
+function candidateBranches(branches: readonly string[]): string[] {
+  const candidates: string[] = [];
+  for (const branch of branches) {
+    if (branch !== "" && !candidates.includes(branch)) candidates.push(branch);
+  }
+  return candidates;
 }
 
 async function listLatestPullRequests(checkoutPath: string, branch: string): Promise<unknown> {

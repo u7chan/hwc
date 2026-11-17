@@ -213,12 +213,13 @@ test("the sync reader parses the upstream and its divergence", async () => {
     runRead: async (_path, args) => {
       calls.push(args);
       if (args[0] === "remote") return GITHUB_REMOTE;
-      return "origin/main\t[ahead 1, behind 2]\n";
+      return "origin/main\t[ahead 1, behind 2]\trefs/remotes/origin/main\torigin\n";
     },
   });
 
   expect(await client.read({ checkoutPath: "/repo", branch: "main" })).toEqual({
     upstream: "origin/main",
+    upstreamBranch: "main",
     ahead: 1,
     behind: 2,
     hasRemote: true,
@@ -226,8 +227,32 @@ test("the sync reader parses the upstream and its divergence", async () => {
   });
   expect(calls).toEqual([
     ["remote", "-v"],
-    ["for-each-ref", "--format=%(upstream:short)\t%(upstream:track)", "refs/heads/main"],
+    [
+      "for-each-ref",
+      "--format=%(upstream:short)\t%(upstream:track)\t%(upstream)\t%(upstream:remotename)",
+      "refs/heads/main",
+    ],
   ]);
+});
+
+// PR はローカル名ではなく push 先の名前で作られることがある。ワークツリーの自動生成名の
+// ままでも、upstream から push 先の名前を読めるようにしておく（ADR 0043）。
+test("the sync reader reports the pushed branch even when the local name differs", async () => {
+  const client = createGitClient({
+    runRead: async (_path, args) =>
+      args[0] === "remote"
+        ? GITHUB_REMOTE
+        : "origin/feat/pushed\t\trefs/remotes/origin/feat/pushed\torigin\n",
+  });
+
+  expect(await client.read({ checkoutPath: "/repo", branch: "worktree/silver-meadow" })).toEqual({
+    upstream: "origin/feat/pushed",
+    upstreamBranch: "feat/pushed",
+    ahead: 0,
+    behind: 0,
+    hasRemote: true,
+    repoUrl: "https://github.com/o/r",
+  });
 });
 
 test("a branch without an upstream keeps the remote but has no counts", async () => {
@@ -237,6 +262,7 @@ test("a branch without an upstream keeps the remote but has no counts", async ()
 
   expect(await client.read({ checkoutPath: "/repo", branch: "feat/new" })).toEqual({
     upstream: null,
+    upstreamBranch: null,
     ahead: 0,
     behind: 0,
     hasRemote: true,
@@ -246,11 +272,13 @@ test("a branch without an upstream keeps the remote but has no counts", async ()
 
 test("a repo without a remote is still readable", async () => {
   const client = createGitClient({
-    runRead: async (_path, args) => (args[0] === "remote" ? "" : "origin/main\t\n"),
+    runRead: async (_path, args) =>
+      args[0] === "remote" ? "" : "origin/main\t\trefs/remotes/origin/main\torigin\n",
   });
 
   expect(await client.read({ checkoutPath: "/repo", branch: "main" })).toEqual({
     upstream: "origin/main",
+    upstreamBranch: "main",
     ahead: 0,
     behind: 0,
     hasRemote: false,
@@ -261,11 +289,14 @@ test("a repo without a remote is still readable", async () => {
 test("a non-GitHub remote keeps the remote but has no repository URL", async () => {
   const client = createGitClient({
     runRead: async (_path, args) =>
-      args[0] === "remote" ? "origin\thttps://gitlab.com/o/r.git (fetch)\n" : "origin/main\t\n",
+      args[0] === "remote"
+        ? "origin\thttps://gitlab.com/o/r.git (fetch)\n"
+        : "origin/main\t\trefs/remotes/origin/main\torigin\n",
   });
 
   expect(await client.read({ checkoutPath: "/repo", branch: "main" })).toEqual({
     upstream: "origin/main",
+    upstreamBranch: "main",
     ahead: 0,
     behind: 0,
     hasRemote: true,
@@ -281,7 +312,9 @@ test("the sync reader caches per checkout and branch", async () => {
     now: () => at,
     runRead: async (_path, args) => {
       reads += 1;
-      return args[0] === "remote" ? GITHUB_REMOTE : "origin/main\t[ahead 1]\n";
+      return args[0] === "remote"
+        ? GITHUB_REMOTE
+        : "origin/main\t[ahead 1]\trefs/remotes/origin/main\torigin\n";
     },
   });
 
@@ -329,7 +362,9 @@ test("a read that overlaps an invalidate does not cache its stale result", async
       if (args[0] === "remote") return GITHUB_REMOTE;
       // 最初の for-each-ref だけを遅らせ、読み取り中に invalidate を割り込ませる。
       if (reads === 2) await gate;
-      return reads <= 2 ? "origin/main\t[ahead 1, behind 2]\n" : "origin/main\t[ahead 1]\n";
+      return reads <= 2
+        ? "origin/main\t[ahead 1, behind 2]\trefs/remotes/origin/main\torigin\n"
+        : "origin/main\t[ahead 1]\trefs/remotes/origin/main\torigin\n";
     },
   });
 
@@ -341,6 +376,7 @@ test("a read that overlaps an invalidate does not cache its stale result", async
 
   expect(await pending).toEqual({
     upstream: "origin/main",
+    upstreamBranch: "main",
     ahead: 1,
     behind: 2,
     hasRemote: true,
@@ -348,6 +384,7 @@ test("a read that overlaps an invalidate does not cache its stale result", async
   });
   expect(await client.read({ checkoutPath: "/repo", branch: "main" })).toEqual({
     upstream: "origin/main",
+    upstreamBranch: "main",
     ahead: 1,
     behind: 0,
     hasRemote: true,

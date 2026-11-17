@@ -3,6 +3,7 @@ import { parseWorktreeBody } from "../herdr/panes";
 import { parseMoveWorkspacesBody } from "../herdr/workspaces";
 import { placeOf } from "../../shared/place";
 import { HerdrError } from "../herdr/socket";
+import { pullRequestBranches } from "../pull-request";
 import type { AppContext, IdContext, PlainContext } from "./context";
 
 export function createWorkspacesHandlers(ctx: AppContext) {
@@ -41,7 +42,10 @@ export function createWorkspacesHandlers(ctx: AppContext) {
         return c.json({ pullRequest: null });
       }
       const refresh = c.req.query("refresh") === "1";
-      const pullRequest = await pullRequests({ checkoutPath, branch, refresh }).catch(() => null);
+      // ワークツリーのブランチ名は Herdr の自動生成名で、PR の head は push 先の名前になる。
+      // push 先を先に引き、見つからなければローカル名も見る。
+      const branches = pullRequestBranches(branch, workspace.sync?.upstreamBranch ?? null);
+      const pullRequest = await pullRequests({ checkoutPath, branches, refresh }).catch(() => null);
       return c.json({ pullRequest });
     },
     git: async (c: IdContext) => {

@@ -1,5 +1,8 @@
 export type GitSync = {
   upstream: string | null;
+  // push 先のブランチ名。PR はローカル名ではなくこの名前で引く。表示用の upstream と
+  // 違って、リモートブランチが消えても（gone）名前を残す。
+  upstreamBranch: string | null;
   ahead: number;
   behind: number;
   hasRemote: boolean;
@@ -9,27 +12,44 @@ export type GitSync = {
 
 export type UpstreamTrack = {
   upstream: string | null;
+  upstreamBranch: string | null;
   ahead: number;
   behind: number;
 };
 
-// `git for-each-ref` の `%(upstream:short)` と `%(upstream:track)` を 1 行で受ける。
-// track は [ahead 1, behind 2] / [ahead 1] / [behind 2] / [gone] / 空のいずれか。
-export function parseUpstreamTrack(text: string): UpstreamTrack {
+// `git for-each-ref` の `%(upstream:short)` `%(upstream:track)` `%(upstream)`
+// `%(upstream:remotename)` をタブ区切りで受ける。track は [ahead 1, behind 2] /
+// [ahead 1] / [behind 2] / [gone] / 空のいずれか。
+export function parseUpstream(text: string): UpstreamTrack {
   const line = text.trim().split("\n")[0] ?? "";
-  if (line === "") return { upstream: null, ahead: 0, behind: 0 };
-  const tab = line.indexOf("\t");
-  const upstream = (tab === -1 ? line : line.slice(0, tab)).trim();
-  const track = tab === -1 ? "" : line.slice(tab + 1).trim();
+  if (line === "") return { upstream: null, upstreamBranch: null, ahead: 0, behind: 0 };
+  const fields = line.split("\t");
+  const upstream = (fields[0] ?? "").trim();
+  const track = (fields[1] ?? "").trim();
+  const upstreamBranch = upstreamBranchName((fields[2] ?? "").trim(), (fields[3] ?? "").trim());
   // 上流が消えている場合、リモートのブランチはもう無い。fetch だけを残す。
   if (upstream === "" || track.includes("gone")) {
-    return { upstream: null, ahead: 0, behind: 0 };
+    return { upstream: null, upstreamBranch, ahead: 0, behind: 0 };
   }
   return {
     upstream,
+    upstreamBranch,
     ahead: toCount(/ahead (\d+)/.exec(track)?.[1]),
     behind: toCount(/behind (\d+)/.exec(track)?.[1]),
   };
+}
+
+// `%(upstream)` はリモートを追うなら `refs/remotes/<remote>/<branch>`、ローカルを
+// 追うなら `refs/heads/<branch>`。リモート名に `/` が入っていても取り違えないよう、
+// 剥がす名前は `%(upstream:remotename)` の値を使う。
+function upstreamBranchName(full: string, remote: string): string | null {
+  const prefixes = remote === "" ? [] : [`refs/remotes/${remote}/`];
+  for (const prefix of [...prefixes, "refs/heads/"]) {
+    if (!full.startsWith(prefix)) continue;
+    const branch = full.slice(prefix.length);
+    return branch === "" ? null : branch;
+  }
+  return null;
 }
 
 const GITHUB_OWNER = /^[A-Za-z0-9._-]+$/;

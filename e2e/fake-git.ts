@@ -67,7 +67,14 @@ switch (args[0]) {
     process.exit(0);
   case "for-each-ref":
     if (entry?.upstream != null) {
-      process.stdout.write(`${entry.upstream}\t${track(entry)}\n`);
+      // BFF は upstream の短縮名・ahead/behind・フル ref・リモート名を 1 行で読む。
+      // ローカル名と push 先の名前が違う fixture でも、PR はこの名前で引かれる。
+      const slash = entry.upstream.indexOf("/");
+      const remote = slash < 0 ? "" : entry.upstream.slice(0, slash);
+      const branch = slash < 0 ? "" : entry.upstream.slice(slash + 1);
+      const fields =
+        remote === "" || branch === "" ? "" : `\trefs/remotes/${remote}/${branch}\t${remote}`;
+      process.stdout.write(`${entry.upstream}\t${track(entry)}${fields}\n`);
     }
     process.exit(0);
   case "fetch":

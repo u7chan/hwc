@@ -87,7 +87,9 @@ export async function createScenario(root: string): Promise<Scenario> {
   await Promise.all([
     writeBranch(dashboard, "feat/empty-state"),
     writeBranch(docs, "docs/quickstart"),
-    writeBranch(checks, "feat/checks"),
+    // ローカル名は Herdr の自動生成名のままで、push 先だけ "feat/checks"。PR はローカル名
+    // では引けないので、upstream の head 名で引くことをここで確かめる（ADR 0043）。
+    writeBranch(checks, "worktree/review-checks"),
     writeBranch(plain, "feat/plain"),
     mkdir(scratch, { recursive: true }),
     mkdir(sandbox, { recursive: true }),
@@ -898,7 +900,7 @@ const outputs: Record<string, string> = {
     "- 余白とテストは feat/empty-state の変更と揃っています",
     "",
   ].join("\n"),
-  "w4:p2": ["dev@example ~/work/acme-dashboard-checks  feat/checks ❯", ""].join("\n"),
+  "w4:p2": ["dev@example ~/work/acme-dashboard-checks  worktree/review-checks ❯", ""].join("\n"),
   "w3:p1": [
     "dev@example ~/work/scratch ❯ ls",
     "notes.md  todo.md",

@@ -18,7 +18,7 @@ const pullRequestState: AppState = {
 };
 
 test("GET /api/workspaces/:id/pull-request returns the latest pull request of the branch", async () => {
-  const calls: { checkoutPath: string; branch: string; refresh?: boolean }[] = [];
+  const calls: { checkoutPath: string; branches: readonly string[]; refresh?: boolean }[] = [];
   const pullRequest = {
     number: 123,
     url: "https://github.com/example/acme/pull/123",
@@ -38,11 +38,11 @@ test("GET /api/workspaces/:id/pull-request returns the latest pull request of th
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(await response.json()).toEqual({ pullRequest });
-  expect(calls).toEqual([{ checkoutPath, branch: "feat/empty-state", refresh: false }]);
+  expect(calls).toEqual([{ checkoutPath, branches: ["feat/empty-state"], refresh: false }]);
 });
 
 test("GET /api/workspaces/:id/pull-request passes refresh through to the reader", async () => {
-  const calls: { checkoutPath: string; branch: string; refresh?: boolean }[] = [];
+  const calls: { checkoutPath: string; branches: readonly string[]; refresh?: boolean }[] = [];
   const { app } = createTestApp({
     state: pullRequestState,
     pullRequests: async (options) => {
@@ -55,8 +55,41 @@ test("GET /api/workspaces/:id/pull-request passes refresh through to the reader"
   await app.request("/api/workspaces/w1/pull-request?refresh=0");
 
   expect(calls).toEqual([
-    { checkoutPath, branch: "feat/empty-state", refresh: true },
-    { checkoutPath, branch: "feat/empty-state", refresh: false },
+    { checkoutPath, branches: ["feat/empty-state"], refresh: true },
+    { checkoutPath, branches: ["feat/empty-state"], refresh: false },
+  ]);
+});
+
+test("GET /api/workspaces/:id/pull-request asks gh for the pushed branch before the local one", async () => {
+  const calls: { checkoutPath: string; branches: readonly string[]; refresh?: boolean }[] = [];
+  const { app } = createTestApp({
+    state: {
+      ...pullRequestState,
+      workspaces: [
+        {
+          ...pullRequestState.workspaces[0]!,
+          sync: {
+            upstream: "origin/feat/renamed",
+            upstreamBranch: "feat/renamed",
+            ahead: 0,
+            behind: 0,
+            hasRemote: true,
+            repoUrl: "https://github.com/example/acme-dashboard",
+          },
+        },
+      ],
+    },
+    pullRequests: async (options) => {
+      calls.push(options);
+      return null;
+    },
+  });
+
+  await app.request("/api/workspaces/w1/pull-request");
+
+  // Herdr のワークツリー名のままでは PR を引けない。push 先（upstream）の名前を先に引く。
+  expect(calls).toEqual([
+    { checkoutPath, branches: ["feat/renamed", "feat/empty-state"], refresh: false },
   ]);
 });
 
@@ -114,6 +147,7 @@ const syncState: AppState = {
       branch: "feat/empty-state",
       sync: {
         upstream: "origin/feat/empty-state",
+        upstreamBranch: "feat/empty-state",
         ahead: 1,
         behind: 2,
         hasRemote: true,
@@ -279,6 +313,7 @@ test("POST /api/workspaces/:id/git refuses a fetch without a remote", async () =
         ...syncState.workspaces[0]!,
         sync: {
           upstream: null,
+          upstreamBranch: null,
           ahead: 0,
           behind: 0,
           hasRemote: false,
@@ -312,6 +347,7 @@ test("POST /api/workspaces/:id/git refuses a pull without an upstream", async ()
         ...syncState.workspaces[0]!,
         sync: {
           upstream: null,
+          upstreamBranch: null,
           ahead: 0,
           behind: 0,
           hasRemote: true,

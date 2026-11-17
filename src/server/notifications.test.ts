@@ -774,7 +774,8 @@ test("the PR scope sends only when the latest pull request is open", async () =>
       discordWebhookUrl: WEBHOOK,
     });
     const { sender, calls } = createSender({ ok: true });
-    const reads: Array<{ checkoutPath: string; branch: string; refresh?: boolean }> = [];
+    const reads: Array<{ checkoutPath: string; branches: readonly string[]; refresh?: boolean }> =
+      [];
     const { publish } = createHarness({
       initial: appState([workingSpace()]),
       settings: settings.store,
@@ -801,7 +802,7 @@ test("the PR scope sends only when the latest pull request is open", async () =>
   ]);
   // キャッシュを使わず、終わった時点の最新を引く。
   expect(open.reads).toEqual([
-    { checkoutPath: "/work/acme", branch: "feat/empty-state", refresh: true },
+    { checkoutPath: "/work/acme", branches: ["feat/empty-state"], refresh: true },
   ]);
 
   // 最新が merged / closed なら送らない。古い open が残っていても同じ。
@@ -810,6 +811,45 @@ test("the PR scope sends only when the latest pull request is open", async () =>
   // PR が無い・gh で確認できないときも送らない。再試行もしない。
   expect((await run(null)).calls).toEqual([]);
   expect((await run(null, true)).calls).toEqual([]);
+});
+
+test("the PR scope asks for the pushed branch before the local one", async () => {
+  const settings = createSettings({
+    enabled: true,
+    scope: "pull-request",
+    discordWebhookUrl: WEBHOOK,
+  });
+  const { sender } = createSender({ ok: true });
+  const reads: Array<{ checkoutPath: string; branches: readonly string[] }> = [];
+  // ワークツリーの自動生成名のまま。PR の head は push 先の名前になる。
+  const pushed = workspace("w1", [pane("w1:p1", "pi", "done"), pane("w1:p2", "codex", "done")], {
+    branch: "worktree/silver-meadow",
+    sync: {
+      upstream: "origin/feat/empty-state",
+      upstreamBranch: "feat/empty-state",
+      ahead: 0,
+      behind: 0,
+      hasRemote: true,
+      repoUrl: "https://github.com/example/acme-dashboard",
+    },
+  });
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+    paths: { w1: "/work/acme" },
+    pullRequests: async (options) => {
+      reads.push({ checkoutPath: options.checkoutPath, branches: options.branches });
+      return openPullRequest();
+    },
+  });
+  publish(appState([workingSpace()]));
+  publish(appState([pushed]));
+  await Bun.sleep(0);
+
+  expect(reads).toEqual([
+    { checkoutPath: "/work/acme", branches: ["feat/empty-state", "worktree/silver-meadow"] },
+  ]);
 });
 
 test("the PR scope needs a branch and a checkout to ask gh", async () => {

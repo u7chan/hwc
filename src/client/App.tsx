@@ -1251,6 +1251,9 @@ export function App() {
         branch={where.branch}
         // 上流との差はワークスペースの属性。セルが並ぶときは同じ値が並ぶので出さない。
         sync={splitCells ? null : where.sync}
+        // 上流との差はセルでは出さないが、PR を引く鍵はセルでも要る。表示用の sync とは
+        // 別に渡し、分割表示のまま push してもチップが引き直せるようにする。
+        upstreamBranch={where.sync?.upstreamBranch ?? null}
         workspaceMenuOpen={
           menu?.open === true &&
           menu.target.kind === "workspace" &&
