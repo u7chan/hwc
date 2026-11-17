@@ -38,6 +38,34 @@
   padding: var(--space-2) 0 var(--space-6);
   background: var(--color-content);
   overscroll-behavior: contain;
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* 開閉の動き。面はフェードし、中身だけ左から 8px 収める。幅（260px）は補間しない。
+   本文が毎フレーム折り返して文字が揺れ、長い端末出力では重いため、レイアウトは
+   1 フレームで確定させる（ADR 0090）。 */
+.hwc-tree-view[data-shown="true"] {
+  opacity: 1;
+}
+
+.hwc-tree-view > .hwc-tree {
+  transform: translateX(-8px);
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.hwc-tree-view[data-shown="true"] > .hwc-tree {
+  transform: none;
+}
+
+/* 閉じるときだけ短く抜ける。閉じている間は行を押せないよう inert にしている。 */
+.hwc-tree-view[data-closing="true"] {
+  transition: opacity 120ms ease-in;
+}
+
+.hwc-tree-view[data-closing="true"] > .hwc-tree {
+  transform: translateX(-8px);
+  transition: transform 120ms ease-in;
 }
 
 /* 広いセルでは会話の左に並べる。幅は token、切り替えの閾値は layout.ts の
@@ -93,7 +121,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hwc-tree-slot,
-  .hwc-tree-chevron {
+  .hwc-tree-chevron,
+  .hwc-tree-view,
+  .hwc-tree-view > .hwc-tree {
     transition: none;
   }
 }

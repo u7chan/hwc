@@ -10,6 +10,10 @@ type FileTreeProps = {
   view: FileTreeView;
   // 広いセルでは会話の左、狭いセルでは会話の上に重ねる。見た目だけの違い。
   side: boolean;
+  // 開閉のアニメーション。初回描画で開いているとき（ペインを切り替えて戻ったとき）は
+  // shown が true のまま始まり、動かない。
+  shown: boolean;
+  closing: boolean;
   selectedPath: string | null;
   onToggle: (path: string) => void;
   onRetry: (path: string) => void;
@@ -181,7 +185,14 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
 // 根の行は出さない。ペイン見出しにリポジトリ名があり、直下から並べた方が浅く読める。
 export function FileTree(props: FileTreeProps) {
   return (
-    <div class="hwc-tree-view" data-side={props.side ? "true" : undefined}>
+    <div
+      class="hwc-tree-view"
+      data-side={props.side ? "true" : undefined}
+      data-shown={props.shown ? "true" : "false"}
+      data-closing={props.closing ? "true" : undefined}
+      inert={props.closing}
+      aria-hidden={props.closing ? "true" : undefined}
+    >
       <ul class="hwc-tree" aria-label="ファイルツリー">
         {renderChildren(props, "", 0)}
       </ul>

@@ -145,13 +145,13 @@
     padding-left: var(--hwc-gutter);
   }
 
-  /* 見出し・本文・入力は同じ列に揃える。分割セルはセル幅で同じ式を解くので、
-     読み幅に満たないセルでは下限の 24px になる。 */
-  .hwc-pane-head {
+  /* 見出しの中身・本文・入力は同じ列に揃える。見出しの中身は幅が会話列に
+     なるので、ツリーを開いても本文と同じ式で余白が決まる。分割セルは
+     セル幅で同じ式を解き、読み幅に満たないセルでは下限の 24px になる。 */
+  .hwc-pane-head-content {
     padding: 0 var(--hwc-gutter);
   }
 
-  .hwc-split-cell .hwc-pane-head,
   .hwc-split-cell .hwc-input,
   .hwc-split-cell .hwc-send-notice {
     padding-right: var(--hwc-gutter);
