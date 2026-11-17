@@ -50,6 +50,7 @@ const state: AppState = {
       agentStatus: "working",
       focused: true,
       worktree: null,
+      path: "/home/example/hwc",
       branch: "feat/board",
       sync: {
         upstream: "origin/feat/board",
@@ -111,6 +112,7 @@ const state: AppState = {
       agentStatus: "blocked",
       focused: false,
       worktree: null,
+      path: "/home/example/hwc-verify",
       tabs: [
         {
           id: "w2:t1",
@@ -159,6 +161,7 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
     workspaceId: "w1",
     workspaceLabel: "hwc",
     workspaceName: "hwc",
+    workspacePath: "/home/example/hwc",
     tabLabel: "main",
     branch: "feat/board",
     sync: {
@@ -176,6 +179,7 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
     workspaceId: "w2",
     workspaceLabel: "hwc-verify",
     workspaceName: "hwc-verify",
+    workspacePath: "/home/example/hwc-verify",
     tabLabel: "main",
     branch: null,
     sync: null,

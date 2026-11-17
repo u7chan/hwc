@@ -1398,6 +1398,7 @@ export function PaneDetail(props: PaneDetailProps) {
                   key={previewPath}
                   paneId={pane.id}
                   path={previewPath}
+                  workspacePath={props.context.workspacePath}
                   hasNewReply={previewHasNewReply}
                   focusRequest={previewFocus}
                   hidden={treeOverlay && !treeClosing}

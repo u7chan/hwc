@@ -272,8 +272,11 @@ button.hwc-tree-row:active {
    2 択のセグメントではなく 1 つのボタンにする。 */
 .hwc-file-preview-mode {
   flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
   min-height: var(--tap);
-  padding: 0 var(--space-2);
+  padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -306,12 +309,51 @@ button.hwc-tree-row:active {
 .hwc-file-preview-name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--color-text);
   font-family: var(--font-mono);
   font-size: var(--text-body);
+}
+
+.hwc-file-preview-name-text {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* パスのコピー。ファイル名の右端に置き、本文のコピーと取り違えないようにする。
+   記号はファイル名の並びに収め、触れる範囲だけ 44px に広げる。 */
+.hwc-file-preview-copy {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-file-preview-copy::after {
+  content: "";
+  position: absolute;
+  inset: calc((var(--space-6) - var(--tap)) / 2);
+}
+
+.hwc-file-preview-copy:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-file-preview-copy:active {
+  opacity: 0.72;
 }
 
 .hwc-file-preview-body {
