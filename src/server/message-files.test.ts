@@ -871,6 +871,33 @@ test("keeps a symlink outside the root as a name that cannot be opened", async (
   }
 });
 
+test("never serves or lists anything under .git", async () => {
+  await write(
+    ".git/config",
+    new TextEncoder().encode("[remote]\n url = https://token@example.com/repo\n"),
+  );
+  await write(".git/logo.png", png);
+  await write(".gitignore", new TextEncoder().encode("node_modules\n"));
+  await symlink(join(root, ".git"), join(root, "git-link"));
+  await symlink(join(root, ".git", "config"), join(root, "config-link"));
+
+  expect(await resolvePreviewFile({ root, path: ".git/config" })).toBeNull();
+  expect(await resolvePreviewFile({ root, path: ".git" })).toBeNull();
+  expect(await resolvePreviewFile({ root, path: join(root, ".git", "config") })).toBeNull();
+  expect(await resolvePreviewFile({ root, path: "config-link" })).toBeNull();
+  expect(await resolveMessageFile({ root, path: ".git/logo.png" })).toBeNull();
+  expect(await listDirectory({ root, path: ".git" })).toBeNull();
+  expect(await listDirectory({ root, path: "git-link" })).toBeNull();
+
+  const listing = await listDirectory({ root, path: "" });
+  const byName = new Map(listing?.entries.map((entry) => [entry.name, entry]));
+  // `.git` そのものは出さず、そこへ向かうリンクも名前だけ残して開かせない。
+  expect(byName.get(".git")).toBeUndefined();
+  expect(byName.get("git-link")).toMatchObject({ kind: "dir", expandable: false });
+  expect(byName.get("config-link")).toMatchObject({ kind: "file", open: null });
+  expect(byName.get(".gitignore")).toMatchObject({ kind: "file", open: "text" });
+});
+
 test("follows a symlink inside the root and keeps the requested path", async () => {
   await write("docs/mock.png", png);
   await symlink(join(root, "docs"), join(root, "docs-link"));

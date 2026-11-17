@@ -446,6 +446,11 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     await writeFile(join(root, "preview", "binary"), new Uint8Array([0x01, 0x00, 0x02]));
     await writeFile(join(root, "preview", ".env"), "TOKEN=1");
     await writeFile(join(root, "preview", ".env.local"), "TOKEN=1");
+    await mkdir(join(root, ".git"), { recursive: true });
+    await writeFile(
+      join(root, ".git", "config"),
+      "[remote]\n url = https://token@example.com/repo\n",
+    );
     await writeFile(join(root, "preview", "secrets.env"), "TOKEN=1");
     const app = createFilesApp(root);
 
@@ -496,6 +501,10 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env")).status).toBe(404);
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env.local")).status).toBe(404);
     expect((await app.request("/api/panes/w1:p1/preview/0/preview/.env.yaml")).status).toBe(404);
+
+    // `.git` は一覧にも配信にも出さない。直接 URL でも読めない。
+    expect((await app.request("/api/panes/w1:p1/preview/0/.git/config?raw=1")).status).toBe(404);
+    expect((await app.request("/api/panes/w1:p1/preview/0/.git")).status).toBe(404);
   });
 });
 

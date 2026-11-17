@@ -160,6 +160,11 @@ export function messagePathCandidates(text: string): MessagePathCandidate[] {
 
 type ResolvedFile = { name: string; version: string; path: string; root: number };
 
+// `.git` は一覧に出さず、配信の経路でも読ませない（ADR 0090）。
+function hasGitSegment(path: string): boolean {
+  return path.split(sep).includes(".git");
+}
+
 // 根の外を指すパスは realpath で落とす。受け入れる形式は呼び出し側が決める。
 // root は根の番号で、配信の URL と突き合わせるために結果へ残す。
 async function resolveAgainstRoot(
@@ -174,12 +179,14 @@ async function resolveAgainstRoot(
     const real = await realpath(target);
     if (real !== rootReal && !real.startsWith(rootReal + sep)) return null;
 
+    const name = relative(rootReal, real);
+    if (name === "" || isAbsolute(name) || name.startsWith("..")) return null;
+    if (hasGitSegment(name)) return null;
+
     const info = await stat(real);
     if (!info.isFile() || info.size === 0 || info.size > MAX_PREVIEW_FILE_BYTES) return null;
     if (!accept(real)) return null;
 
-    const name = relative(rootReal, real);
-    if (name === "" || isAbsolute(name) || name.startsWith("..")) return null;
     return {
       name: name.split(sep).join("/"),
       version: `${Math.trunc(info.mtimeMs)}-${info.size}`,
@@ -423,6 +430,12 @@ async function listEntry(
     } catch {
       return unreadableFile(name, path);
     }
+    // `.git` を指すリンクは名前だけ残し、展開・open をさせない。
+    if (hasGitSegment(relative(rootReal, real))) {
+      return info.isDirectory()
+        ? { kind: "dir", name, path, expandable: false }
+        : unreadableFile(name, path);
+    }
     if (info.isDirectory()) return { kind: "dir", name, path, expandable: !escaped };
     return treeFile(name, path, info, escaped);
   }
@@ -449,11 +462,14 @@ export async function listDirectory(options: {
   // 親参照は受け付けない。realpath の配下判定と二重にしておく。
   if (segments.some((part) => part === "..")) return null;
   const base = segments.filter((part) => part !== "" && part !== ".").join("/");
+  if (base !== "" && hasGitSegment(base)) return null;
 
   try {
     const rootReal = await realpath(options.root);
     const real = await realpath(base === "" ? rootReal : resolve(rootReal, base));
     if (real !== rootReal && !real.startsWith(rootReal + sep)) return null;
+    // symlink 経由で `.git` に入る経路も塞ぐ。
+    if (hasGitSegment(relative(rootReal, real))) return null;
     const info = await stat(real);
     if (!info.isDirectory()) return null;
 

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { formatFileSize } from "../../shared/attachments";
 import { looksBinary, messageFileLabel } from "../../shared/message-files";
 import { previewTextUrl } from "../api";
 import { ChevronLeftIcon } from "../icons";
 import { Spinner } from "../Spinner";
+import { normalizePreviewText, previewLineNumbers } from "./preview-text";
 
 // チャット領域に出すプレーン表示の上限。10MB のファイルをそのまま DOM に置くと、
 // スマホでスクロールが重くなる。全文は既存の raw リンクから開ける。
@@ -46,23 +47,9 @@ async function readPreview(
 
   return {
     kind: "text",
-    text: new TextDecoder()
-      .decode(bytes.subarray(0, PREVIEW_DISPLAY_BYTES))
-      .replace(/\r\n?/g, "\n"),
+    text: normalizePreviewText(new TextDecoder().decode(bytes.subarray(0, PREVIEW_DISPLAY_BYTES))),
     totalBytes: bytes.byteLength,
   };
-}
-
-// 行番号は撹げず、1 行ずつ改行で並べた 1 つの pre にする。行ごとの要素を作ると
-// 数万行のファイルで DOM が重くなる。
-function lineNumbers(text: string): string {
-  let count = 1;
-  for (let index = 0; index < text.length; index += 1) {
-    if (text.charCodeAt(index) === 10) count += 1;
-  }
-  const numbers: string[] = [];
-  for (let number = 1; number <= count; number += 1) numbers.push(String(number));
-  return numbers.join("\n");
 }
 
 type FilePreviewProps = {
@@ -78,6 +65,7 @@ type FilePreviewProps = {
 export function FilePreview(props: FilePreviewProps) {
   const [body, setBody] = useState<PreviewBody>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const backRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,12 +76,27 @@ export function FilePreview(props: FilePreviewProps) {
     return () => controller.abort();
   }, [props.paneId, props.path, attempt]);
 
+  // 狭いセルでは選択時にツリーの行が消える。フォーカスをプレビューへ移し、
+  // キーボードと読み上げが document の先頭へ戻らないようにする。
+  useEffect(() => {
+    backRef.current?.focus();
+  }, []);
+
   const name = messageFileLabel(props.path);
-  const numbers = useMemo(() => (body.kind === "text" ? lineNumbers(body.text) : ""), [body]);
+  const numbers = useMemo(
+    () => (body.kind === "text" ? previewLineNumbers(body.text) : ""),
+    [body],
+  );
   return (
-    <div class="hwc-file-preview" inert={props.hidden}>
+    <section
+      class="hwc-file-preview"
+      role="region"
+      aria-label={`${name} のプレビュー`}
+      inert={props.hidden}
+    >
       <div class="hwc-file-preview-head">
         <button
+          ref={backRef}
           type="button"
           class="hwc-file-preview-back"
           aria-label={props.hasNewReply ? "会話に戻る。新しい応答があります" : "会話に戻る"}
@@ -153,6 +156,6 @@ export function FilePreview(props: FilePreviewProps) {
           </>
         )}
       </div>
-    </div>
+    </section>
   );
 }

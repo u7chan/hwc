@@ -72,6 +72,53 @@ test("every palette defines the same colour tokens", async () => {
   expect(missing).toEqual([]);
 });
 
+// 文字色は 4.5:1 を下回らない。--color-muted はテーマ別ではなく明暗 2 系統なので、
+// すべての content 背景で確かめる。
+function luminance(hex: string): number {
+  const channel = (offset: number): number => {
+    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+function contrast(a: string, b: string): number {
+  const left = luminance(a);
+  const right = luminance(b);
+  return (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
+}
+
+function colorValue(block: string, token: string): string | null {
+  return new RegExp(`--color-${token}:\\s*(#[0-9a-fA-F]{6})`).exec(block)?.[1] ?? null;
+}
+
+test("muted text keeps 4.5:1 on every content background", async () => {
+  const css = await Bun.file("src/client/styles/tokens.css").text();
+  const light = /:root\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  const dark = /:root\[data-scheme="dark"\]\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  const lightMuted = colorValue(light, "muted");
+  const darkMuted = colorValue(dark, "muted");
+  expect(lightMuted).not.toBeNull();
+  expect(darkMuted).not.toBeNull();
+
+  const weak: string[] = [];
+  for (const theme of THEMES) {
+    const selector = theme.id === "light" ? ":root {" : `:root[data-theme="${theme.id}"] {`;
+    const start = css.indexOf(selector);
+    const block = css.slice(start, css.indexOf("}", start));
+    const content = colorValue(block, "content");
+    const muted = theme.scheme === "light" ? lightMuted : darkMuted;
+    if (content === null || muted === null) {
+      weak.push(`${theme.id}: missing`);
+      continue;
+    }
+    const ratio = contrast(muted, content);
+    if (ratio < 4.5) weak.push(`${theme.id}: ${ratio.toFixed(2)}`);
+  }
+
+  expect(weak).toEqual([]);
+});
+
 test("system follows the device and the rest is fixed", () => {
   expect(resolveTheme("system", true)).toBe("dark");
   expect(resolveTheme("system", false)).toBe("light");
