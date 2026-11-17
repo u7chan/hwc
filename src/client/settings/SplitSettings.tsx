@@ -33,14 +33,14 @@ export function SplitSettings(props: SplitSettingsProps) {
         枚を超えた分はタブに追加します。PC だけで働きます。
       </p>
 
-      <p class="hwc-split-subtitle">分割の動き</p>
-      <div class="hwc-split-motions" role="radiogroup" aria-label="分割の動き">
+      <p class="hwc-subtitle">分割の動き</p>
+      <div class="hwc-segmented" role="radiogroup" aria-label="分割の動き">
         {SPLIT_MOTIONS.map((option) => (
           <button
             key={option.id}
             type="button"
             role="radio"
-            class="hwc-split-motion"
+            class="hwc-segment"
             aria-checked={motion === option.id}
             data-selected={motion === option.id}
             disabled={!autoSplit}

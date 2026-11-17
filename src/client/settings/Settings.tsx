@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useElementWidth } from "../app/use-element-width";
 import type { ConnectionStatus } from "../connection";
+import type { FileTreeSide } from "../file-tree-side";
 import { ChevronLeftIcon } from "../icons";
 import { SETTINGS_SIDE_MIN_WIDTH } from "../layout";
 import type { SplitPrefs } from "../split-prefs";
@@ -20,6 +21,8 @@ type SettingsProps = {
   onThemeChange: (theme: ThemePreference) => void;
   splitPrefs: SplitPrefs;
   onSplitPrefsChange: (prefs: SplitPrefs) => void;
+  treeSide: FileTreeSide;
+  onTreeSideChange: (side: FileTreeSide) => void;
   revision: string | null;
   connection: ConnectionStatus;
   wide: boolean;
@@ -33,7 +36,14 @@ function section(
 ) {
   switch (id) {
     case "display":
-      return <DisplaySettings theme={props.theme} onThemeChange={props.onThemeChange} />;
+      return (
+        <DisplaySettings
+          theme={props.theme}
+          onThemeChange={props.onThemeChange}
+          treeSide={props.treeSide}
+          onTreeSideChange={props.onTreeSideChange}
+        />
+      );
     case "split":
       return <SplitSettings prefs={props.splitPrefs} onChange={props.onSplitPrefsChange} />;
     case "templates":

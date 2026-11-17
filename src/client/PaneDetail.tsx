@@ -13,6 +13,7 @@ import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
 import { fileTreeStore } from "./file-tree-store";
+import type { FileTreeSide } from "./file-tree-side";
 import { OutputText } from "./OutputText";
 import {
   ATTACHMENT_LIMIT_NOTICE,
@@ -142,6 +143,8 @@ type PaneDetailProps = {
   compact: boolean;
   // 端末出力の ANSI 色を補正する基準。テーマの解決結果を App から受け取る。
   scheme: "light" | "dark";
+  // 広いセルでツリーを会話の左右どちらに並べるか。狭いセルでは重ねるので効かない。
+  treeSide: FileTreeSide;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
   // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
@@ -191,6 +194,7 @@ export function PaneDetail(props: PaneDetailProps) {
     context,
     compact,
     scheme,
+    treeSide,
     labeled,
     showSpace,
     branch,
@@ -1161,7 +1165,8 @@ export function PaneDetail(props: PaneDetailProps) {
       <div
         class="hwc-pane-head"
         data-bare={!labeled}
-        data-tree-side={sideBySide ? "true" : undefined}
+        data-tree-split={sideBySide ? "true" : undefined}
+        data-tree-side={sideBySide ? treeSide : undefined}
         data-tree-shown={treeShown ? "true" : "false"}
         data-tree-closing={treeClosing ? "true" : undefined}
       >
@@ -1276,8 +1281,13 @@ export function PaneDetail(props: PaneDetailProps) {
           </div>
         </div>
       </div>
-      <div class="hwc-pane-body" ref={widthRef} data-side={sideBySide ? "true" : undefined}>
-        {sideBySide ? treeView : null}
+      <div
+        class="hwc-pane-body"
+        ref={widthRef}
+        data-tree-split={sideBySide ? "true" : undefined}
+        data-tree-side={treeSide}
+      >
+        {sideBySide && treeSide === "left" ? treeView : null}
         <div class="hwc-chat-column">
           <div class="hwc-output-wrap">
             {sideBySide ? null : treeView}
@@ -1731,6 +1741,7 @@ export function PaneDetail(props: PaneDetailProps) {
             </form>
           )}
         </div>
+        {sideBySide && treeSide === "right" ? treeView : null}
       </div>
       {projectDialog === null ? null : (
         <ProjectDialog

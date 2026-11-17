@@ -1,5 +1,5 @@
-/* ペイン内のファイルツリー。広いセルでは会話の左に並べ、狭いセルでは会話の上に
-   重ねる。どちらも入力欄は残す（ADR 0090）。 */
+/* ペイン内のファイルツリー。広いセルでは会話の左右どちらかに並べ（既定は左）、狭いセルでは
+   会話の上に重ねる。どちらも入力欄は残す（ADR 0090）。 */
 
 .hwc-pane-body {
   flex: 1;
@@ -7,10 +7,16 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* 並べるとき、中身をどちら側から収めるか。右に並べるときだけ向きを変える。 */
+  --hwc-tree-enter-x: -8px;
 }
 
-.hwc-pane-body[data-side="true"] {
+.hwc-pane-body[data-tree-split="true"] {
   flex-direction: row;
+}
+
+.hwc-pane-body[data-tree-side="right"] {
+  --hwc-tree-enter-x: 8px;
 }
 
 .hwc-chat-column {
@@ -42,7 +48,7 @@
   transition: opacity 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* 開閉の動き。面はフェードし、中身だけ左から 8px 収める。幅（260px）は補間しない。
+/* 開閉の動き。面はフェードし、中身だけ並べる側から 8px 収める。幅（260px）は補間しない。
    本文が毎フレーム折り返して文字が揺れ、長い端末出力では重いため、レイアウトは
    1 フレームで確定させる（ADR 0090）。 */
 .hwc-tree-view[data-shown="true"] {
@@ -50,7 +56,7 @@
 }
 
 .hwc-tree-view > .hwc-tree {
-  transform: translateX(-8px);
+  transform: translateX(var(--hwc-tree-enter-x));
   transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -64,19 +70,26 @@
 }
 
 .hwc-tree-view[data-closing="true"] > .hwc-tree {
-  transform: translateX(-8px);
+  transform: translateX(var(--hwc-tree-enter-x));
   transition: transform 120ms ease-in;
 }
 
-/* 広いセルでは会話の左に並べる。幅は token、切り替えの閾値は layout.ts の
-   TREE_SIDE_MIN_WIDTH。 */
+/* 広いセルでは会話の脇に並べる。幅は token、切り替えの閾値は layout.ts の
+   TREE_SIDE_MIN_WIDTH。区切り線は並べた側に引く。 */
 .hwc-tree-view[data-side="true"] {
   position: static;
   z-index: auto;
   flex: none;
   width: var(--hwc-tree-width);
-  border-right: 1px solid var(--color-line);
   padding-bottom: max(var(--space-6), env(safe-area-inset-bottom));
+}
+
+.hwc-pane-body[data-tree-side="left"] .hwc-tree-view[data-side="true"] {
+  border-right: 1px solid var(--color-line);
+}
+
+.hwc-pane-body[data-tree-side="right"] .hwc-tree-view[data-side="true"] {
+  border-left: 1px solid var(--color-line);
 }
 
 .hwc-tree,
