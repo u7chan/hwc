@@ -141,6 +141,12 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   color: var(--color-secondary);
 }
 
+/* 開いている間も「設定」のまま、面と色で現在地を示す。左のカテゴリ行と同じ組み合わせ。 */
+.hwc-foot-button[data-current="true"] {
+  background: var(--color-selected);
+  color: var(--color-accent);
+}
+
 .hwc-conn {
   display: inline-flex;
   align-items: center;

@@ -102,10 +102,10 @@ export function SettingsIndex(props: SettingsIndexProps) {
       />
     ));
 
+  // 見出しは上部バーが持つ。左の列は行だけで始め、グループの切れ目だけをラベルで示す。
   if (props.variant === "side") {
     return (
       <nav class="hwc-settings-side" aria-label="設定のカテゴリ">
-        <p class="hwc-settings-side-title">設定</p>
         {rows("settings")}
         <p class="hwc-settings-group-label">アプリ</p>
         {rows("app")}

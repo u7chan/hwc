@@ -102,6 +102,11 @@
     background: var(--color-content);
   }
 
+  /* 設定の上部バーは、下のカテゴリ列と左端を揃える。 */
+  .hwc-detail-bar.hwc-settings-bar {
+    padding: 0 var(--space-4);
+  }
+
   /* カードの外側の余白を外したので、タブバーの左端を本文と揃える。 */
   .hwc-tabbar {
     padding: var(--space-2) var(--space-6) var(--space-1);
