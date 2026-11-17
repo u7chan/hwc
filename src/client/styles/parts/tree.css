@@ -265,7 +265,6 @@ button.hwc-tree-row:active {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-3) var(--space-4) var(--space-6);
   overscroll-behavior: contain;
 }
 
@@ -274,6 +273,11 @@ button.hwc-tree-row:active {
 .hwc-file-preview-body[data-state="error"] {
   display: grid;
   place-items: center;
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+
+.hwc-file-preview-notice {
+  margin: var(--space-3) var(--space-4) 0;
 }
 
 .hwc-file-preview-center {
@@ -309,13 +313,40 @@ button.hwc-tree-row:active {
   text-decoration: underline;
 }
 
+/* 行番号と本文は、同じ文字寸法の 2 つの pre を横に並べる。行ごとの要素を作らずに
+   数万行でも軽く、折り返さないので 1 行 1 番号が揃う。 */
+.hwc-file-preview-code {
+  display: flex;
+  align-items: flex-start;
+  width: max-content;
+  min-width: 100%;
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+
+.hwc-file-preview-lines,
 .hwc-file-preview-text {
   margin: 0;
-  color: var(--color-text);
   font-family: var(--font-mono);
   font-size: var(--text-mono);
   line-height: var(--line-body);
-  overflow-wrap: anywhere;
   tab-size: 2;
-  white-space: pre-wrap;
+  white-space: pre;
+}
+
+.hwc-file-preview-lines {
+  position: sticky;
+  left: 0;
+  flex: none;
+  padding-right: var(--space-3);
+  background: var(--color-content);
+  box-shadow: 1px 0 0 var(--color-line);
+  color: var(--color-secondary);
+  text-align: right;
+  user-select: none;
+}
+
+.hwc-file-preview-text {
+  flex: none;
+  padding-left: var(--space-3);
+  color: var(--color-text);
 }

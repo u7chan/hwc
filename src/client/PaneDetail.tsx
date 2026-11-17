@@ -1310,6 +1310,7 @@ export function PaneDetail(props: PaneDetailProps) {
           {body.kind === "chat" ? (
             <LiveStatus
               open={replying || compacting}
+              divider={previewOpen}
               phase={livePhase}
               thought={liveThought}
               elapsedMs={compacting ? compactionElapsedMs : waitingMs}

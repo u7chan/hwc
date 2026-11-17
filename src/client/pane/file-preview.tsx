@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { formatFileSize } from "../../shared/attachments";
 import { looksBinary, messageFileLabel } from "../../shared/message-files";
 import { previewTextUrl } from "../api";
@@ -46,9 +46,23 @@ async function readPreview(
 
   return {
     kind: "text",
-    text: new TextDecoder().decode(bytes.subarray(0, PREVIEW_DISPLAY_BYTES)),
+    text: new TextDecoder()
+      .decode(bytes.subarray(0, PREVIEW_DISPLAY_BYTES))
+      .replace(/\r\n?/g, "\n"),
     totalBytes: bytes.byteLength,
   };
+}
+
+// 行番号は撹げず、1 行ずつ改行で並べた 1 つの pre にする。行ごとの要素を作ると
+// 数万行のファイルで DOM が重くなる。
+function lineNumbers(text: string): string {
+  let count = 1;
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) === 10) count += 1;
+  }
+  const numbers: string[] = [];
+  for (let number = 1; number <= count; number += 1) numbers.push(String(number));
+  return numbers.join("\n");
 }
 
 type FilePreviewProps = {
@@ -75,6 +89,7 @@ export function FilePreview(props: FilePreviewProps) {
   }, [props.paneId, props.path, attempt]);
 
   const name = messageFileLabel(props.path);
+  const numbers = useMemo(() => (body.kind === "text" ? lineNumbers(body.text) : ""), [body]);
   return (
     <div class="hwc-file-preview" inert={props.hidden}>
       <div class="hwc-file-preview-head">
@@ -116,7 +131,7 @@ export function FilePreview(props: FilePreviewProps) {
         ) : (
           <>
             {body.totalBytes > PREVIEW_DISPLAY_BYTES ? (
-              <p class="hwc-output-notice">
+              <p class="hwc-output-notice hwc-file-preview-notice">
                 大きいファイルのため先頭 256KB を表示しています（全
                 {formatFileSize(body.totalBytes)}）。
                 <a
@@ -129,7 +144,12 @@ export function FilePreview(props: FilePreviewProps) {
                 </a>
               </p>
             ) : null}
-            <pre class="hwc-file-preview-text">{body.text}</pre>
+            <div class="hwc-file-preview-code">
+              <pre class="hwc-file-preview-lines" aria-hidden="true">
+                {numbers}
+              </pre>
+              <pre class="hwc-file-preview-text">{body.text}</pre>
+            </div>
           </>
         )}
       </div>
