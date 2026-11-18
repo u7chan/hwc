@@ -1,3 +1,5 @@
+import { insertAtSelection, type Insertion } from "./input";
+
 // ツリーの行を入力欄へ運ぶときの DataTransfer の型。dragover では getData を読めない
 // （保護モード）ので、受け入れるかどうかは型だけで決める。
 export const FILE_REFERENCE_TYPE = "application/x-hwc-file-reference";
@@ -15,13 +17,9 @@ export function fileReference(
   return directory ? `${base}/` : base;
 }
 
-export type ReferenceInsertion = {
-  text: string;
-  caret: number;
-};
+export type ReferenceInsertion = Insertion;
 
-// 選択範囲を置き換え、前後の語とくっつかないよう必要なら空白を足す。キャレットは
-// 入れた文字列の直後（後ろに足した空白の手前）に置く。
+// 選択範囲を置き換え、前後の語とくっつかないよう必要なら空白を足す。
 export function insertFileReference(
   draft: string,
   start: number,
@@ -31,12 +29,5 @@ export function insertFileReference(
   // 入力欄を離れてから落とすので、選択範囲は前の下書きのものかもしれない。
   const from = Math.max(0, Math.min(start, end, draft.length));
   const to = Math.max(0, Math.min(Math.max(start, end), draft.length));
-  const before = draft.slice(0, from);
-  const after = draft.slice(to);
-  const lead = before !== "" && !/\s$/.test(before) ? " " : "";
-  const trail = after !== "" && !/^\s/.test(after) ? " " : "";
-  return {
-    text: `${before}${lead}${reference}${trail}${after}`,
-    caret: before.length + lead.length + reference.length,
-  };
+  return insertAtSelection(draft, from, to, reference);
 }

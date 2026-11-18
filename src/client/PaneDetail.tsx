@@ -818,6 +818,15 @@ export function PaneDetail(props: PaneDetailProps) {
     const start = recorded?.start ?? inputText.length;
     const end = recorded?.end ?? start;
     const next = insertFileReference(inputText, start, end, reference);
+    // 同じパスを選択範囲に落とすと下書きが変わらず、再描画後のキャレットを戻す
+    // layout effect が走らない。そのときは、その場で入力欄へ戻す。
+    if (next.text === inputText) {
+      const field = input.current;
+      if (field === null) return;
+      field.focus();
+      field.setSelectionRange(next.caret, next.caret);
+      return;
+    }
     setInputText(next.text);
     pendingCaret.current = next.caret;
   };

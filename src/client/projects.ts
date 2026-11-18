@@ -1,4 +1,5 @@
 import type { ProjectEntry } from "../shared/projects";
+import { insertAtSelection, type Insertion } from "./input";
 
 // 一覧を描画する上限。モノレポでも検索語で絞れるよう、全件を DOM に出さない。
 export const VISIBLE_PROJECTS = 50;
@@ -37,10 +38,7 @@ export function projectInsertion(path: string): string {
   return `./${path}/`;
 }
 
-export type ProjectInsertion = {
-  text: string;
-  caret: number;
-};
+export type ProjectInsertion = Insertion;
 
 // 選択範囲を置き換え、前後の語とくっつかないよう必要なら空白を足す。
 export function insertProjectPath(
@@ -49,13 +47,5 @@ export function insertProjectPath(
   end: number,
   path: string,
 ): ProjectInsertion {
-  const before = draft.slice(0, start);
-  const after = draft.slice(end);
-  const lead = before !== "" && !/\s$/.test(before) ? " " : "";
-  const trail = after !== "" && !/^\s/.test(after) ? " " : "";
-  const inserted = projectInsertion(path);
-  return {
-    text: `${before}${lead}${inserted}${trail}${after}`,
-    caret: before.length + lead.length + inserted.length,
-  };
+  return insertAtSelection(draft, start, end, projectInsertion(path));
 }
