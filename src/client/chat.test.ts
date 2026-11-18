@@ -28,6 +28,7 @@ import {
   newSessionReset,
   newSessionSnapshot,
   paneBody,
+  pendingCard,
   PENDING_TURN_GRACE_MS,
   pollOnStatusChange,
   splitInlineImages,
@@ -136,33 +137,62 @@ test("a cancellation is not a failure", () => {
 });
 
 test("the terminal output is shown until the conversation is readable", () => {
-  expect(paneBody({ chat: false, blocked: false, failed: false, snapshot })).toEqual({
+  expect(
+    paneBody({ chat: false, blocked: false, failed: false, snapshot, showTerminal: false }),
+  ).toEqual({ kind: "output" });
+  // 要対応でも、応答待ちが読めなければ端末を見る。
+  expect(
+    paneBody({ chat: true, blocked: true, failed: false, snapshot, showTerminal: false }),
+  ).toEqual({ kind: "output" });
+  expect(
+    paneBody({ chat: true, blocked: false, failed: true, snapshot: null, showTerminal: false }),
+  ).toEqual({ kind: "output" });
+});
+
+test("a blocked pane keeps the conversation only while a pending prompt is readable", () => {
+  const waiting: ChatSnapshot = {
+    ...snapshot,
+    pending: { kind: "tool", toolUseId: "t1", tool: "Bash", summary: "touch /tmp/demo" },
+  };
+  expect(
+    paneBody({ chat: true, blocked: true, failed: false, snapshot: waiting, showTerminal: false }),
+  ).toEqual({
+    kind: "chat",
+    snapshot: waiting,
+  });
+  // カードから「端末出力を見る」を押した間だけ端末へ切り替える。
+  expect(
+    paneBody({ chat: true, blocked: true, failed: false, snapshot: waiting, showTerminal: true }),
+  ).toEqual({
     kind: "output",
   });
-  // 要対応の間は端末を見たい。
-  expect(paneBody({ chat: true, blocked: true, failed: false, snapshot })).toEqual({
-    kind: "output",
-  });
-  expect(paneBody({ chat: true, blocked: false, failed: true, snapshot: null })).toEqual({
-    kind: "output",
-  });
+});
+
+test("the pending card is shown only while Herdr reports blocked", () => {
+  const waiting: ChatSnapshot = {
+    ...snapshot,
+    pending: { kind: "tool", toolUseId: "t1", tool: "Bash", summary: null },
+  };
+  // ツールが実行中の間も末尾は tool_use なので、pending だけでは人間待ちと決められない。
+  expect(pendingCard(waiting, false)).toBeNull();
+  expect(pendingCard(waiting, true)).toEqual(waiting.pending ?? null);
+  expect(pendingCard(snapshot, true)).toBeNull();
+  expect(pendingCard(null, true)).toBeNull();
 });
 
 test("the conversation replaces the skeleton once a snapshot arrives", () => {
-  expect(paneBody({ chat: true, blocked: false, failed: false, snapshot: null })).toEqual({
-    kind: "skeleton",
-  });
-  expect(paneBody({ chat: true, blocked: false, failed: false, snapshot })).toEqual({
-    kind: "chat",
-    snapshot,
-  });
+  expect(
+    paneBody({ chat: true, blocked: false, failed: false, snapshot: null, showTerminal: false }),
+  ).toEqual({ kind: "skeleton" });
+  expect(
+    paneBody({ chat: true, blocked: false, failed: false, snapshot, showTerminal: false }),
+  ).toEqual({ kind: "chat", snapshot });
 });
 
 test("an empty conversation is still a conversation", () => {
-  expect(paneBody({ chat: true, blocked: false, failed: false, snapshot: empty })).toEqual({
-    kind: "chat",
-    snapshot: empty,
-  });
+  expect(
+    paneBody({ chat: true, blocked: false, failed: false, snapshot: empty, showTerminal: false }),
+  ).toEqual({ kind: "chat", snapshot: empty });
 });
 
 test("a new session immediately hides the old history and usage without changing the snapshot", () => {
@@ -172,8 +202,10 @@ test("a new session immediately hides the old history and usage without changing
     context: { tokens: 40_000, window: 200_000 },
     usage: { input: 39_000, output: 1_000, cacheRead: 0, cacheWrite: 0, reasoning: null },
     compaction: { at: 900, tokensBefore: 50_000, summary: "previous", index: 0 },
+    pending: { kind: "tool", toolUseId: "t1", tool: "Bash", summary: null },
   };
   const original = structuredClone(previous);
+  // 応答待ちも literal で作るので、/new の直後はカードを出さない。
   expect(newSessionSnapshot(previous)).toEqual({
     ...empty,
     truncated: false,

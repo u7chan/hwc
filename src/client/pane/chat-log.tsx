@@ -1,5 +1,5 @@
 import { Fragment } from "preact";
-import type { ChatFile, ChatMessage, ChatSnapshot } from "../../server/chat/contract";
+import type { ChatFile, ChatMessage, ChatPending, ChatSnapshot } from "../../server/chat/contract";
 import {
   chatRows,
   compactionInsertIndex,
@@ -11,6 +11,7 @@ import { CopyGlyph, PencilIcon } from "../icons";
 import { type MessageReveal } from "../reveal";
 import { ChatEmpty } from "./empty";
 import { AgentMessage, CommandEcho, Compaction, ErrorMessage, UserMessage } from "./message";
+import { PendingCard } from "./pending";
 
 // 会話として読むための並び。ユーザーは右、エージェントは左。
 // どのエージェントかは入力欄の側に出しているので、ここでは繰り返さない。
@@ -29,6 +30,9 @@ export function ChatLog(props: {
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
   pending: readonly PendingMessage[];
+  // 人間の応答待ち。Herdr が blocked の間だけ入る（chat.ts の pendingCard）。
+  pendingCard: ChatPending | null;
+  onShowTerminal: () => void;
   reveal: MessageReveal | null;
 }) {
   const copyButton = (message: ChatMessage) => {
@@ -101,7 +105,8 @@ export function ChatLog(props: {
     !props.replying &&
     !props.compacting &&
     compaction === null &&
-    !echoVisible
+    !echoVisible &&
+    props.pendingCard === null
   )
     return <ChatEmpty />;
   return (
@@ -152,6 +157,9 @@ export function ChatLog(props: {
       })}
       {echoIndex === rows.length ? echoRow : null}
       {compactionIndex === rows.length ? compactionBlock : null}
+      {props.pendingCard === null ? null : (
+        <PendingCard pending={props.pendingCard} onShowTerminal={props.onShowTerminal} />
+      )}
     </ol>
   );
 }

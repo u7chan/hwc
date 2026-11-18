@@ -112,7 +112,7 @@ OpenCode の未起動表示は、架空の `<root>/opencode/service.json` だけ
 
 effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。`@demo/start-fails` は起動に失敗するモデルで、`agent.start` が `agent_spawn_failed` を返す。新しいペインとワークツリーの起動失敗（シェルを残してペイン内に行を出す）を、実 CLI に触れずに確かめるために使う。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。モデルを指定せずに起動した Pi は、チャット画面を開いたときに架空 RPC の `get_state` から既定を読み、解決中はスケルトンが出る（[ADR 0087](adr/0087-default-model-display.md)）。既定は `DEFAULT_PI_MODEL` / `DEFAULT_PI_EFFORT` で、架空 Herdr が `agent.start` に記録する値と揃えてある。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
 
-Claude の会話は `CLAUDE_CONFIG_DIR`（E2E では `<root>/claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[ADR 0097](adr/0097-claude-chat-transcript.md)）。fixture が架空の transcript を 2 本書く。会話を表示する `quickstart`（`w2:t2` の `w2:p2`、待機）は、`w2:t1` に足すと分割セルになり読み幅が半分になるため別タブに置く。transcript は 248 往復の履歴（500 メッセージの上限を超え、`truncated` になる）と、そのあとの 6 行（同じ `message.id` の text 連結、tool_result、`isMeta`、添付チップ、書式の崩れた注記）で作る。要対応の `writer`（`w2:p1`）には、応答待ちで終わる transcript を足して `blocked` のまま残す。実ホームの `~/.claude` は読まない。
+Claude の会話は `CLAUDE_CONFIG_DIR`（E2E では `<root>/claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[ADR 0097](adr/0097-claude-chat-transcript.md)）。fixture が架空の transcript を 2 本書く。会話を表示する `quickstart`（`w2:t2` の `w2:p2`、待機）は、`w2:t1` に足すと分割セルになり読み幅が半分になるため別タブに置く。transcript は 248 往復の履歴（500 メッセージの上限を超え、`truncated` になる）と、そのあとの 6 行（同じ `message.id` の text 連結、tool_result、`isMeta`、添付チップ、書式の崩れた注記）で作る。要対応の `writer`（`w2:p1`）には、末尾が tool_result を持たない AskUserQuestion の transcript を足し、`blocked` のまま応答待ちのカードを出す（[ADR 0098](adr/0098-claude-pending-in-chat.md)）。tool_use と tool_result の突き合わせ、input の検証、上限は `src/server/chat/claude.test.ts` で確かめる。実ホームの `~/.claude` は読まない。
 
 Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。初期化後の `config/read` / `model/list` / `thread/read` / `thread/turns/list` にだけ応答する。モデル指定した新規ペインは、そのモデルを架空の thread に記録する。入力は本番と同じ Herdr の `pane.send_input` 経由で受け、架空の user と assistant の item を追加する。チャット表示、送信後の確定、起動時のモデル引数を、実 Codex や実会話へ触れずに確認する。
 
@@ -171,14 +171,17 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 
 Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（`w2:t2` の `w2:p2`、待機）で確かめる（[ADR 0097](adr/0097-claude-chat-transcript.md)）。
 
-架空 Herdr の `agent.start` は Claude の session / transcript を作らないため、E2E で hwc から Claude を起動すると 10 秒後に `unknown`（起動を確認できません）へ落ちる。実機（Herdr 0.9.5 / Claude Code 2.1.327、2026-11-19）では `agent.start` の直後に `agent_session`（`kind: "id"`）が付き、`pane.chat` が true になる。fake に起動時のセッションを足すのは、起動直後の会話が要る #330 / #331 の E2E 拡張で行う。
+架空 Herdr の `agent.start` は Claude の session / transcript を作らないため、E2E で hwc から Claude を起動すると 10 秒後に `unknown`（起動を確認できません）へ落ちる。実機（Herdr 0.9.5 / Claude Code 2.1.327、2026-11-19）では `agent.start` の直後に `agent_session`（`kind: "id"`）が付き、`pane.chat` が true になる。fake に起動時のセッションを足すのは、起動直後の会話が要る E2E の拡張で行う。
 
 1. `すべて` から `acme-dashboard (docs)` を開き、`quickstart` のペインを開く。会話の先頭に「古い会話は省略されています」が出て、本文は transcript の末尾 500 件になる。「クイックスタートの手順を、今のコマンドに合わせて見直してください。」の user 行、同じ `message.id` の text を連結した agent 行（「まず `bun install` …」「そのあと `bun run dev` …」が 1 行）、`quickstart-review.pdf` のチップが出る。tool_use / tool_result / thinking / 内部エントリの行は無い。
 2. 「この行は注記の書式が崩れています。」の行は本文だけで、`<attached_files>` も絶対パスも残らない。チップも出ない。
 3. 同じペインで 2 回目の取得が 304 になることを、DevTools のネットワークで `/api/panes/w2:p2/chat` の応答を見て確かめる。会話が変わらない間は 200 が返らない。
 4. 端末出力へのフォールバックは、起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` を消して確かめる。次の取得が 502 になり、本文が `claude · quickstart` の端末出力に切り替わる。ファイルを戻すと会話に戻るが、見つからなかった結果を 30 秒だけ覚えるので、戻した直後は端末出力のままになる。
-5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` のまま。transcript はあるが、本文は端末出力と確認の注意になる。
-6. 空の会話では `/new` `/compact` の候補が消える。fixture の Claude は会話を持つため、この判定は `src/client/commands.test.ts` で確かめる。
+5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` で、transcript の末尾は tool_result を持たない AskUserQuestion になっている。会話は端末出力へ切り替わらず、末尾に「Claude からの質問」のカードが出る（[ADR 0098](adr/0098-claude-pending-in-chat.md)）。質問ごとにヘッダ・質問文・選択肢（label と description）が並び、複数選択の質問には「複数選べます」が付く。選択肢は押せない。入力欄・引用・添付・`/` の候補は出ず、代わりに「Claude の応答待ちです」の行が出る。
+6. カードの「端末出力を見る」を押すと body が `claude · docs` の端末出力に変わり、上に「端末で応答してください。」と「会話に戻る」が出る。「会話に戻る」で会話とカードに戻る。再読み込みすると会話に戻る（切替はローカルの状態）。
+7. 応答が解決するとカードが消えて入力欄が戻る。起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` に、tool_result の user と次の assistant を 1 行ずつ追記すると、次の取得（5 秒以内）でカードが消える（ファイルが変わればサイズも変わる）。
+8. 応答待ちが読めない `blocked` のペインは、今までどおり端末出力になる。`pending` を落とすには transcript の末尾を user の本文にする（`e2e/fixtures/scenario.ts` の `claudePendingTranscript` をその形に一時的に変えて確かめ、戻す）。
+9. 空の会話では `/new` `/compact` の候補が消える。fixture の Claude は会話を持つため、この判定は `src/client/commands.test.ts` で確かめる。
 
 ## 過去の発言の編集
 
@@ -524,6 +527,15 @@ HTML が配信できないスクリプトを読み込むと、iframe の上に 1
 5. 同じ操作で `contextWindow` を `200_000` に戻し、上限と割合も元に戻ることを確認する。
 
 override の追加・変更・削除や読み取り失敗からの復旧、ETag の安定性は BFF の unit / API テストで確認する。
+
+### blocked + 応答待ちの作り方
+
+応答待ちのカードは、架空 Herdr のペインを `blocked` にし、そのペインの Claude transcript の末尾を、tool_result を持たない assistant の tool_use にする（[ADR 0098](adr/0098-claude-pending-in-chat.md)）。fixture の `w2:p1` がこの形で、transcript は `e2e/fixtures/scenario.ts` の `claudePendingTranscript`、`agent_session` は同じペインの `CLAUDE_PENDING_SESSION`。
+
+1. 質問のカード: 末尾の tool_use を `name: "AskUserQuestion"` にし、`input.questions` へ `question` / `header` / `multiSelect` / `options[].{label,description}` を入れる。4 問、1 問 10 選択肢、質問文 2000 文字を超えた分は切られ、制御文字は落ちて改行は空白になる。`questions` が配列でない、`options` が空、`label` が空の input はカードにならない（射影が捨てる）。
+2. 承認のカード: 末尾の tool_use を `Bash`（`input.command`）や `Write`（`input.file_path`）にする。既知のツールだけ 1 行の要約が出て、`Write` の `content` のような input 全体は画面にも応答にも乗らない。未知のツールは名前だけになる。確かめるときは `claudePendingTranscript` の末尾の tool_use を一時的に差し替え、確認後に戻す。
+3. カードなし（解決済み）: 末尾の tool_use に `tool_result` を返す user entry を足すか、末尾を assistant の text / user の本文にする。fixture の `w2:p2`（待機）は tool_result 済みの形で、カードは出ない。`blocked` のまま末尾を user にする（#329 の形）と、カードは出ずに端末出力になる。
+4. 表示中に transcript を書き換えると、5 秒間隔の取得で次のスナップショットに変わる。実 Herdr では `agent_status` と transcript の pending がずれる瞬間があるので、カードは `blocked` の間だけ出す。
 
 ## 禁止
 
