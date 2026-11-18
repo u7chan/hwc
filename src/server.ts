@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createChatClient } from "./server/chat/pi";
 import { createOpencodeChatClient } from "./server/chat/opencode";
 import { createCodexChatClient } from "./server/chat/codex";
+import { createClaudeChatClient } from "./server/chat/claude";
 import { createPaneClient } from "./server/herdr/panes";
 import { createWorkspaceClient } from "./server/herdr/workspaces";
 import { createWorktreeClient } from "./server/herdr/worktrees";
@@ -73,6 +74,7 @@ const app = createApp({
   chat: createChatClient(),
   opencode: createOpencodeChatClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   codex: createCodexChatClient(),
+  claude: createClaudeChatClient(),
   models: createAgentModelsClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   pullRequests,
   git,

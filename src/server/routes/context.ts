@@ -71,6 +71,9 @@ export type CreateAppOptions = {
   // 一覧や端末出力は使えるようにする。
   opencode?: SessionChatClient;
   codex?: SessionChatClient;
+  // Claude は transcript を読む。読めない構成（別ユーザー・別ホスト）でも、ペインの一覧や
+  // 端末出力は使えるようにする。
+  claude?: SessionChatClient;
   models?: AgentModelsClient;
   // pi の既定モデルは、チャット画面を開いたときに読む。テストでは実プロセスを
   // 起動しないよう差し替える。
@@ -110,6 +113,7 @@ export function createAppContext(options: CreateAppOptions) {
     chat,
     opencode,
     codex,
+    claude,
     models,
     pullRequests,
     git,
@@ -382,6 +386,7 @@ export function createAppContext(options: CreateAppOptions) {
     chat,
     opencode,
     codex,
+    claude,
     models,
     pullRequests,
     git,

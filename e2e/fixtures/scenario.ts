@@ -35,6 +35,145 @@ export async function writeCodexThread(
   );
 }
 
+// Claude の transcript は、架空の CLAUDE_CONFIG_DIR 配下の projects/<cwd のエンコード>/
+// <session uuid>.jsonl に置く。プロジェクト名は内部形式なので、好きな名前でよい。
+const CLAUDE_PROJECT = "-home-dev-work-acme-dashboard-docs";
+export const CLAUDE_CHAT_SESSION = "3f1c0a52-9d4e-4b8a-8c21-5e7d6f0b1a2c";
+export const CLAUDE_PENDING_SESSION = "b7d2e4c1-0a95-4f3e-9c68-2d1b3a4c5e6f";
+
+type ClaudeEntry = Record<string, unknown>;
+
+// 1 つの API メッセージを block ごとに複数の entry へ分けて書く形を、実物に寄せて作る。
+// user の文字列は本文、配列は tool_result、attachment / system は parentUuid を辿るためだけに通す。
+function claudeEntries(
+  build: (add: {
+    user: (content: unknown, extra?: ClaudeEntry) => void;
+    assistant: (messageId: string, blocks: unknown[], extra?: ClaudeEntry) => void;
+    other: (entry: ClaudeEntry) => void;
+  }) => void,
+): ClaudeEntry[] {
+  const started = Date.parse("2026-01-01T10:00:00.000Z");
+  const entries: ClaudeEntry[] = [];
+  let parentUuid: string | null = null;
+  let count = 0;
+
+  const next = () => {
+    count += 1;
+    return {
+      uuid: `claude-${count}`,
+      parentUuid,
+      timestamp: new Date(started + count * 1_000).toISOString(),
+      isSidechain: false,
+    };
+  };
+
+  const push = (entry: ClaudeEntry) => {
+    entries.push(entry);
+    parentUuid = typeof entry.uuid === "string" ? entry.uuid : parentUuid;
+  };
+
+  build({
+    user(content, extra = {}) {
+      push({ ...next(), type: "user", message: { role: "user", content }, ...extra });
+    },
+    assistant(messageId, blocks, extra = {}) {
+      push({
+        ...next(),
+        type: "assistant",
+        message: { id: messageId, role: "assistant", model: "claude-sonnet-5-5", content: blocks },
+        perTurnEffort: "xhigh",
+        ...extra,
+      });
+    },
+    other(entry) {
+      push({ ...next(), ...entry });
+    },
+  });
+  return entries;
+}
+
+function claudeChatTranscript(): ClaudeEntry[] {
+  return claudeEntries(({ user, assistant, other }) => {
+    // 500 件の上限を超える長い履歴。先頭が truncated になり、末尾だけが Web に出る。
+    for (let index = 1; index <= 248; index += 1) {
+      user(`確認 ${index} の結果をまとめてください。`);
+      assistant(`msg-history-${index}`, [
+        { type: "text", text: `確認 ${index} は問題ありませんでした。` },
+      ]);
+    }
+
+    user("クイックスタートの手順を、今のコマンドに合わせて見直してください。");
+    assistant("msg-review-1", [{ type: "thinking", thinking: "手順の差分を確認しています。" }]);
+    assistant("msg-review-1", [
+      {
+        type: "text",
+        text: "見直す点は 2 つです。\n\n- セットアップのコマンドが古い\n- スクリーンショットの alt が空",
+      },
+    ]);
+    assistant("msg-review-1", [
+      { type: "tool_use", id: "tool-1", name: "Read", input: { file_path: "docs/quickstart.md" } },
+    ]);
+    // tool_result だけの user はメッセージにしない。
+    user([{ type: "tool_result", tool_use_id: "tool-1", content: "# Quickstart" }]);
+    other({ type: "attachment", attachment: { type: "environment", content: "internal" } });
+    // isMeta の user は会話にしない。
+    user("画面に出さない記録", { isMeta: true });
+    other({ type: "system", subtype: "turn_duration", durationMs: 1200 });
+    // 同じ message.id の text をファイル順に連結する。間の tool_result は行にしない。
+    assistant("msg-review-2", [{ type: "text", text: "まず `bun install` を実行してください。" }]);
+    assistant("msg-review-2", [
+      { type: "tool_use", id: "tool-2", name: "Read", input: { file_path: "README.md" } },
+    ]);
+    user([{ type: "tool_result", tool_use_id: "tool-2", content: "# acme-dashboard" }]);
+    assistant("msg-review-2", [
+      { type: "text", text: "\n\nそのあと `bun run dev` で起動します。" },
+    ]);
+    // 添付の注記は絶対パスを含む。strip できた分だけ名前のチップになる。
+    user(
+      [
+        "その 2 点でお願いします。",
+        "",
+        "<attached_files>",
+        "- /tmp/hwc-e2e/attachments/w2:p2/quickstart-review.pdf",
+        "</attached_files>",
+      ].join("\n"),
+    );
+    // 名前を取り出せない注記は、ブロックごと落として本文だけを残す。
+    user(
+      [
+        "この行は注記の書式が崩れています。",
+        "",
+        "<attached_files>",
+        "- /home/dev/private/.env",
+        "</attached_files>",
+      ].join("\n"),
+    );
+    assistant("msg-review-3", [
+      { type: "text", text: "2 点を反映しました。手順の差分は次のとおりです。" },
+    ]);
+  });
+}
+
+// blocked のままのペイン。最後の発言が user で終わる、応答待ちの形にする。
+function claudePendingTranscript(): ClaudeEntry[] {
+  return claudeEntries(({ user, assistant }) => {
+    user("docs/quickstart.md の手順を確認してください。");
+    assistant("msg-pending-1", [
+      { type: "text", text: "次の 3 点を更新してよいか確認してください。" },
+    ]);
+    user("進めてよいか、承認をお願いします。");
+  });
+}
+
+async function writeClaudeTranscript(root: string, sessionId: string, entries: ClaudeEntry[]) {
+  const directory = join(root, "claude", "projects", CLAUDE_PROJECT);
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    join(directory, `${sessionId}.jsonl`),
+    entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
+  );
+}
+
 // 起動に失敗する架空モデル。新しいペインやワークツリーの部分成功を、実 CLI に触れずに確かめる。
 export const START_FAILS_MODEL_ID = "@demo/start-fails";
 
@@ -194,8 +333,14 @@ export async function createScenario(root: string): Promise<Scenario> {
   // 大きさを出すために実ファイルを状態ディレクトリへ置く。
   const attachmentDir = join(root, "attachments", "w1:p1");
   await mkdir(attachmentDir, { recursive: true });
+  // Claude の会話に出す添付チップ。名前と大きさだけを出し、パスは本文に残さない。
+  const claudeAttachmentDir = join(root, "attachments", "w2:p2");
+  await mkdir(claudeAttachmentDir, { recursive: true });
 
   await Promise.all([
+    writeFile(join(claudeAttachmentDir, "quickstart-review.pdf"), Buffer.alloc(12 * 1024)),
+    writeClaudeTranscript(root, CLAUDE_CHAT_SESSION, claudeChatTranscript()),
+    writeClaudeTranscript(root, CLAUDE_PENDING_SESSION, claudePendingTranscript()),
     writeFile(join(attachmentDir, "empty-state-reference.zip"), Buffer.alloc(2 * 1024 * 1024)),
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
     writeFile(sessionPath, sessionLines.map((line) => `${line}\n`).join("")),
@@ -370,6 +515,14 @@ export async function createScenario(root: string): Promise<Scenario> {
         agent_status: "blocked",
         focused: false,
       },
+      // 会話を表示する idle の Claude。`w2:t1` に足すと分割セルになり、読み幅が半分になる。
+      {
+        tab_id: "w2:t2",
+        workspace_id: "w2",
+        label: "quickstart",
+        agent_status: "idle",
+        focused: false,
+      },
       {
         tab_id: "w4:t1",
         workspace_id: "w4",
@@ -475,9 +628,30 @@ export async function createScenario(root: string): Promise<Scenario> {
         tab_id: "w2:t1",
         cwd: docs,
         label: "writer",
+        // blocked のまま、応答待ちの transcript を持つ。表示は端末出力になる。
         agent_status: "blocked",
         focused: false,
-        agent_session: null,
+        agent_session: {
+          agent: "claude",
+          source: "herdr:claude",
+          kind: "id",
+          value: CLAUDE_PENDING_SESSION,
+        },
+      },
+      {
+        pane_id: "w2:p2",
+        workspace_id: "w2",
+        tab_id: "w2:t2",
+        cwd: docs,
+        label: "quickstart",
+        agent_status: "idle",
+        focused: false,
+        agent_session: {
+          agent: "claude",
+          source: "herdr:claude",
+          kind: "id",
+          value: CLAUDE_CHAT_SESSION,
+        },
       },
       // 別スペースの review と shell。w1 の review / shell と同じ名前で、スペースが違う。
       {
@@ -614,6 +788,13 @@ export async function createScenario(root: string): Promise<Scenario> {
       },
       {
         pane_id: "w2:p1",
+        workspace_id: "w2",
+        cwd: docs,
+        agent: "claude",
+        terminal_title_stripped: "docs",
+      },
+      {
+        pane_id: "w2:p2",
         workspace_id: "w2",
         cwd: docs,
         agent: "claude",
@@ -947,6 +1128,16 @@ const outputs: Record<string, string> = {
     "",
     "続けてよいか確認してください。",
     "",
+  ].join("\n"),
+  // transcript を消したときに、端末出力へ戻ったことを見分ける画面。
+  "w2:p2": [
+    "claude · quickstart",
+    "",
+    "docs/quickstart.md の手順を確認しました。",
+    "- セットアップのコマンドが古い",
+    "- スクリーンショットの alt が空",
+    "",
+    "› ",
   ].join("\n"),
   "w4:p1": [
     "codex · review",

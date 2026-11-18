@@ -357,6 +357,7 @@ export type TestAppOptions = {
     | "models"
     | "opencode"
     | "codex"
+    | "claude"
     | "pullRequests"
     | "git"
     | "projects"

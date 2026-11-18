@@ -48,7 +48,7 @@ test("GET /api/panes/:id/chat returns the conversation of the pane session", asy
   expect(seen).toEqual([sessionPath]);
 });
 
-test.each(["codex", "opencode"] as const)(
+test.each(["claude", "codex", "opencode"] as const)(
   "GET /api/panes/:id/chat reads a %s session through its own client",
   async (agent) => {
     const store = createFakeStore(chatState);
@@ -83,7 +83,7 @@ test.each(["codex", "opencode"] as const)(
   },
 );
 
-test.each(["codex", "opencode"] as const)(
+test.each(["claude", "codex", "opencode"] as const)(
   "GET /api/panes/:id/chat returns 502 when the %s client is not configured",
   async (agent) => {
     const store = createFakeStore(chatState);

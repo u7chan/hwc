@@ -190,8 +190,8 @@ test("a small history hides compact, an unknown size keeps it", () => {
 
 test("the threshold reads the context, not the agent", () => {
   // 閾値は agent ではなく context の有無で決める。context を持つ CLI（現在は pi と
-  // opencode）には pi の既定値がそのまま適用される。claude は今 context を持たないが、
-  // 判定が agent に依存しないことをここで見る。
+  // opencode）には pi の既定値がそのまま適用される。claude と codex は context を
+  // 持たないので、判定が agent に依存しないことをここで見る。
   expect(commandCandidates(pane("claude"), "/c", chat(1000))).toEqual([]);
   expect(commandCandidates(pane("claude"), "/c", null)).toEqual(["compact"]);
   expect(commandCandidates(pane("opencode"), "/c", chat(1000))).toEqual([]);

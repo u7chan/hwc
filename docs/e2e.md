@@ -23,6 +23,7 @@ bun run e2e:serve
 | GitHub の PR                                   | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                                   |
 | Codex App Server                               | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない             |
 | OpenCode サービス                              | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                              |
+| Claude の transcript                           | `~/.claude/projects/<project>/<session uuid>.jsonl` | `CLAUDE_CONFIG_DIR` を `<root>/claude` へ向け、fixture が架空の transcript と添付を書く                                        |
 | ブランチ                                       | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                 |
 | git のリモートと差                             | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す |
 | 状態ディレクトリ（添付・ペイン時刻・通知設定） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                     |
@@ -111,6 +112,8 @@ OpenCode の未起動表示は、架空の `<root>/opencode/service.json` だけ
 
 effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。`@demo/start-fails` は起動に失敗するモデルで、`agent.start` が `agent_spawn_failed` を返す。新しいペインとワークツリーの起動失敗（シェルを残してペイン内に行を出す）を、実 CLI に触れずに確かめるために使う。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。モデルを指定せずに起動した Pi は、チャット画面を開いたときに架空 RPC の `get_state` から既定を読み、解決中はスケルトンが出る（[ADR 0087](adr/0087-default-model-display.md)）。既定は `DEFAULT_PI_MODEL` / `DEFAULT_PI_EFFORT` で、架空 Herdr が `agent.start` に記録する値と揃えてある。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
 
+Claude の会話は `CLAUDE_CONFIG_DIR`（E2E では `<root>/claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[ADR 0097](adr/0097-claude-chat-transcript.md)）。fixture が架空の transcript を 2 本書く。会話を表示する `quickstart`（`w2:t2` の `w2:p2`、待機）は、`w2:t1` に足すと分割セルになり読み幅が半分になるため別タブに置く。transcript は 248 往復の履歴（500 メッセージの上限を超え、`truncated` になる）と、そのあとの 6 行（同じ `message.id` の text 連結、tool_result、`isMeta`、添付チップ、書式の崩れた注記）で作る。要対応の `writer`（`w2:p1`）には、応答待ちで終わる transcript を足して `blocked` のまま残す。実ホームの `~/.claude` は読まない。
+
 Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。初期化後の `config/read` / `model/list` / `thread/read` / `thread/turns/list` にだけ応答する。モデル指定した新規ペインは、そのモデルを架空の thread に記録する。入力は本番と同じ Herdr の `pane.send_input` 経由で受け、架空の user と assistant の item を追加する。チャット表示、送信後の確定、起動時のモデル引数を、実 Codex や実会話へ触れずに確認する。
 
 `pane.process_info` は、エージェントのペインでは親シェルと別の前景グループ（エージェント自身）を返す。シェルのペインは、fixture の `foreground` にコマンドを持つときだけ別グループになり、それ以外はプロンプトで待っている形を返す。`pane.send_keys` が `C-c` を受けると、そのペインの前景コマンドを消して端末出力に `^C` を追記する。
@@ -163,6 +166,19 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 6. `web` を選ぶとダイアログが閉じ、本文に `./packages/web/` が入り、入力欄にフォーカスが戻る。`Escape` で閉じた場合は + にフォーカスが戻り、本文は変わらない。
 7. 会話を持つペインを選び、分割セルで入力欄が 1 行に畳まれる幅にすると + は出ない。2 つのコマンドは `/` と打ったときの候補だけになる。狭い画面でも送信ボタンは右端に残り、モデル名だけが省略される。
 8. 空表示と取得失敗は、ブラウザのリクエスト差し替えで確かめる。`frontend` の `/api/panes/w1:p1/projects` を `{"projects":[],"truncated":false}` にすると「このディレクトリ配下に他のプロジェクトはありません。」、502 にすると再試行が出る。
+
+## Claude の会話
+
+Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（`w2:t2` の `w2:p2`、待機）で確かめる（[ADR 0097](adr/0097-claude-chat-transcript.md)）。
+
+架空 Herdr の `agent.start` は Claude の session / transcript を作らないため、E2E で hwc から Claude を起動すると 10 秒後に `unknown`（起動を確認できません）へ落ちる。実機（Herdr 0.9.5 / Claude Code 2.1.327、2026-11-19）では `agent.start` の直後に `agent_session`（`kind: "id"`）が付き、`pane.chat` が true になる。fake に起動時のセッションを足すのは、起動直後の会話が要る #330 / #331 の E2E 拡張で行う。
+
+1. `すべて` から `acme-dashboard (docs)` を開き、`quickstart` のペインを開く。会話の先頭に「古い会話は省略されています」が出て、本文は transcript の末尾 500 件になる。「クイックスタートの手順を、今のコマンドに合わせて見直してください。」の user 行、同じ `message.id` の text を連結した agent 行（「まず `bun install` …」「そのあと `bun run dev` …」が 1 行）、`quickstart-review.pdf` のチップが出る。tool_use / tool_result / thinking / 内部エントリの行は無い。
+2. 「この行は注記の書式が崩れています。」の行は本文だけで、`<attached_files>` も絶対パスも残らない。チップも出ない。
+3. 同じペインで 2 回目の取得が 304 になることを、DevTools のネットワークで `/api/panes/w2:p2/chat` の応答を見て確かめる。会話が変わらない間は 200 が返らない。
+4. 端末出力へのフォールバックは、起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` を消して確かめる。次の取得が 502 になり、本文が `claude · quickstart` の端末出力に切り替わる。ファイルを戻すと会話に戻るが、見つからなかった結果を 30 秒だけ覚えるので、戻した直後は端末出力のままになる。
+5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` のまま。transcript はあるが、本文は端末出力と確認の注意になる。
+6. 空の会話では `/new` `/compact` の候補が消える。fixture の Claude は会話を持つため、この判定は `src/client/commands.test.ts` で確かめる。
 
 ## 過去の発言の編集
 
@@ -238,7 +254,7 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 
 シェルのペインは、入力欄の左端の「エージェントを起動」から、分割せずその場でエージェントに変えられる（[ADR 0077](adr/0077-shell-pane-agent-start.md)）。
 
-1. `scratch` の `notes`（シェル、待機）を開く。入力欄の下の左端（会話ペインの + と同じ位置）に「エージェントを起動」が出る。エージェントのペイン（`docs` の `writer` は Claude で会話を読めない）には出ない。
+1. `scratch` の `notes`（シェル、待機）を開く。入力欄の下の左端（会話ペインの + と同じ位置）に「エージェントを起動」が出る。エージェントのペイン（`docs` の `writer`）には出ない。
 2. 入力欄に `ls` と入れて送る。端末出力に `ls` が追記される。シェルには会話が無いので、控えは作られない。
 3. 押すと「エージェントを起動」のダイアログが開く。ペイン名の欄と「エージェント / シェル」の切り替えは無く、説明にペイン ID と、作業ディレクトリと履歴が残ることが出る。
 4. そのまま「起動」を押すと、ダイアログが閉じ、本文がスケルトン、入力欄はエージェント仕様（`$` なし）で送信ボタンがスピナーになる。この間も入力欄には打てる。シェルの起動コマンドや Pi の TUI の途中、空状態は出ない。数秒で Pi の会話ビューと入力欄になり、一覧の行もエージェントのペインになる。ペインは増えない。会話ビューに、手順 2 で送った `ls` は出ない。
@@ -268,7 +284,7 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 
 1. `アクティブ` を開く。`scratch` の `folder-trust` 行の「…」を押す。メニューが開き、同じスペースに 5 枚（エージェント 4 枚 + `notes` のシェル）あるため最後の項目が「ペインを閉じる」になる。行は開かず、選択も変わらない。
 2. 「ペインを閉じる」を選ぶと、要対応の確認ダイアログが出る。キャンセルでメニューも確認も閉じ、行は残る。
-3. `acme-dashboard (docs)` の `writer` 行の「…」を押す。最後のペインなので「エージェントを終了」と「最後のペインとスペースは残します」が出る。`writer` は要対応なので、確認すると Herdr が終了を拒否し、ダイアログに失敗が出る（失敗表示の経路）。
+3. `acme-dashboard (docs)` の `writer` 行の「…」を押す。同じスペースに `quickstart`（`w2:t2`）がいるので「ペインを閉じる」になる。`quickstart` の行の「…」から先に閉じる（待機なので確認は出ない。Claude の会話の手順は閉じる前に済ませる）。`writer` が最後のペインになり、「エージェントを終了」と「最後のペインとスペースは残します」が出る。`writer` は要対応なので、確認すると Herdr が終了を拒否し、ダイアログに失敗が出る（失敗表示の経路）。
 4. `scratch` の `folder-trust` 行の「…」からペインを閉じると、閉じた行だけが消え、帯は残りのエージェントで残る。完了した行を開いて離れたときの既読は、従来どおり行を開いた場合だけ進む。
 5. 終了できる経路は「エージェントの終了」の手順で `scratch` の `folder-trust-saved` だけを残し、`アクティブ` のその行の「…」から「エージェントを終了」を選ぶ。確認すると、その帯が `アクティブ` から消え、`すべて` ではスペースとシェルが残る。
 6. PC 幅では、ポインタを載せた行・選択中の行だけ「…」が出る。390px では常に出る。狭い行ではタブ名、次に時刻が省かれ、名前と 44px の操作領域が残る。
@@ -287,7 +303,7 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 
 ファビコンは、スペースの左端にいる最初のエージェント（親）の完了と、全エージェントの要対応・作業中を見る（[ADR 0054](adr/0054-favicon-parent-status.md)）。タイトルは `HWC` のまま変えない。
 
-1. `アクティブ` を開く。`acme-dashboard` の `frontend` と、`scratch` の `folder-trust` に王冠の親マークが付く。`acme-dashboard (docs)` はエージェントが 1 枚だけなので付かない。
+1. `アクティブ` を開く。`acme-dashboard` の `frontend` と、`scratch` の `folder-trust` に王冠の親マークが付く。`acme-dashboard (checks)` はエージェントが 1 枚だけなので付かない。
 2. `すべて` に切り替え、同じ王冠がツリーのペイン名の横に出ることを確かめる。
 3. `frontend` を開く。詳細のペインタブの `frontend` に王冠が出る。同じタブの `shell` には出ない。`checks` タブの `review` にも出ない。
 4. `link[rel="icon"]` を調べる。PNG のリンクが残り、SVG の `href` が `data:image/svg+xml,` で始まる。fixture では `writer` と `folder-trust` が `blocked` なので、点は赤になる。SVG favicon を持たないブラウザは PNG でアイコンを出す（[ADR 0054](adr/0054-favicon-parent-status.md)）。
@@ -366,7 +382,7 @@ PC の分割は、開いたペインのタブと方向つきの二分木で持�
 7. グリッド内のタブの × を押す。確認は出ず、タブが幅を詰めながら淡く消え、そのペインがセルに出ていればセルも同じ 180ms で淡く消える。`prefers-reduced-motion` では即時に外れる。タブが外れるとその葉が畳まれて隣のセルが広がる。同じ向きの入れ子になる場合は、残りが T 字か 2x2 に組み直る。空きスロットと、空きを閉じる × は無い。ペインは一覧に残り、Herdr 側でも動き続ける。current を外したときは、PC の分割では表示順の次のタブ（無ければ手前）が木にあればそれが、無ければ最初の葉が選ばれる。モバイルと 1 枚表示では開いた順の次。実ペインが 1 枚だけになったら、残ったセルの枠は出ない。ペイン見出しのメニューから閉じた場合も、ペインが消えたスナップショットを待たずに同じアニメーションが出て、終わってから一覧が更新される。
 8. 再読み込みする。開いた順・MRU・current・木が復元される。架空 Herdr でペインを閉じた場合は、そのペインがタブと葉から落ち、親の分割が畳まれる。
 9. 4 枚まで並べられる。5 枚目のタブを端へドラッグしてもプレビューは出ず、落としても増えない。タブは 5 枚以上積めて、木の外のタブは固定ゾーンの右に MRU（左が新しい）で並ぶ。木の外のタブを選ぶと current の葉を置き換え、押し出されたペインは固定ゾーンのすぐ右へ出る。
-10. 最後のペインのタブでも × は出る。`acme-dashboard (docs)` の `writer`（スペース唯一のエージェント）で × を押すと、タブから外れるだけでペインとスペースは残り、一覧から開き直せる。`scratch` の `pi-trust` も同じ。単独シェルのスペースは fixture に無いため、`keep` の判定は `src/shared/pane-close.test.ts` で確認する。エージェントを終えるには、ペイン見出しの三点リーダーメニューから「エージェントを終了」を選ぶ。
+10. 最後のペインのタブでも × は出る。`acme-dashboard (docs)` の `writer`（`w2:t1` 唯一のエージェント）で × を押すと、タブから外れるだけでペインとスペースは残り、一覧から開き直せる。`scratch` の `pi-trust` も同じ。単独シェルのスペースは fixture に無いため、`keep` の判定は `src/shared/pane-close.test.ts` で確認する。エージェントを終えるには、ペイン見出しの三点リーダーメニューから「エージェントを終了」を選ぶ。
 11. プレビューを開いたままタブを切り替えると、プレビューは隠れてペインのセルに戻る。プレビューを選ぶと detail を占有し、グリッドは出ない。
 12. 一覧の行からも同じように分割できる。1600px で `hwc-split-view` を消して開き、`frontend` が 1 枚だけの状態にする。`アクティブ` を下へスクロールし、`acme-dashboard (checks)` の `review` の行を、そのセルの右端へドラッグする。タブからのドラッグと同じく、掴んだ行の名前とグリップが付いてきて、右半分に「右に追加」が出る。落とすと `frontend | review` の 2 列になる。ドラッグ後の click で一覧の行が開き直らない。`すべて` のツリーのペイン行でも同じ。束の見出しのドラッグは並べ替えのままで、分割のプレビューは出ない。
 13. 390px（モバイル）では、タブ履歴と 2 段目だけが出て、グリッド・4 色・ドラッグは出ない。タブは開いた順のままで、選んでも並びは変わらない（固定ゾーンは wide かつ 2 枚以上のときだけ）。タブ左端のスロット色バーと、一覧の行のスロット色も出ない（PC と同じ木を、色にだけ使わない）。タブの × は常に出て、タップで確認なしにタブから外れる。タブは縮みながら消え、本文も淡く消える。ペインは一覧に残る。`hwc-split-view` を消してから開くと、Herdr のフォーカス中ペインが 1 枚で開く。

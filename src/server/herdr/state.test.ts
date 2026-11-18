@@ -171,7 +171,7 @@ test("toAppState drops tabs whose workspace is gone and panes whose tab is gone"
   expect(state.workspaces[0]?.tabs[0]?.panes.map((pane) => pane.id)).toEqual(["w1:p1"]);
 });
 
-test("toAppState marks chat for pi paths and Codex / OpenCode ids", () => {
+test("toAppState marks chat for pi paths and Claude / Codex / OpenCode ids", () => {
   const state = toAppState({
     workspaces: [{ workspace_id: "w1" }],
     tabs: [{ tab_id: "w1:t1", workspace_id: "w1" }],
@@ -223,6 +223,12 @@ test("toAppState marks chat for pi paths and Codex / OpenCode ids", () => {
         tab_id: "w1:t1",
         agent_session: { agent: "codex", source: "herdr:codex", kind: "path", value: "/a.jsonl" },
       },
+      {
+        pane_id: "w1:p8",
+        workspace_id: "w1",
+        tab_id: "w1:t1",
+        agent_session: { agent: "claude", source: "herdr:claude", kind: "id", value: "sess_abc" },
+      },
     ],
   });
 
@@ -234,6 +240,7 @@ test("toAppState marks chat for pi paths and Codex / OpenCode ids", () => {
     true,
     true,
     false,
+    true,
   ]);
 });
 
@@ -249,11 +256,13 @@ test("the store resolves a chat source by pane id and keeps it out of the state"
     path: "/sessions/--home-dev--/2026-01-01.jsonl",
   });
   expect(store.chatSource("w1:p1")).toBeNull();
+  // path 形の Claude は transcript を引けないので、会話の読み取り口にしない。
+  expect(store.chatSource("w2:p1")).toBeNull();
   // パスはホストの構成を含む。クライアントへ配る状態には載せない。
   expect(JSON.stringify(store.get())).not.toContain("/sessions/");
 });
 
-test.each(["codex", "opencode"] as const)(
+test.each(["claude", "codex", "opencode"] as const)(
   "the store resolves a %s session id by pane id",
   async (agent) => {
     const { store, loads } = createControlledStore();
