@@ -61,7 +61,7 @@ Claude Code 2.1.327 は `CLAUDE_CONFIG_DIR`（既定 `~/.claude`）配下の `pr
 - 添付は本文の `<attached_files>` 注記のままで、実体は CLI へ渡していない。保存先はチェックアウトの外なので、Claude がそのパスを読むときに権限確認が出たら端末で承認する
 - `isCompactSummary` を持つセッションでは、要約の行が出ないまま前後の会話が並ぶ。区切りの設計は別 Issue に寄せる
 - 会話を読むエージェントが 4 つ揃ったので、hwc から起動したペインはどれも `pane.chat` を待つ。チャットを持たないのは未知のエージェントだけになる（[ADR 0078](0078-starting-pane-mask.md)）
-- hwc から起動した Claude が最初の送信まで `agent_session` を持たない場合、起動待ちが最大 10 秒続く。実機でのタイミングは未確認で、3 秒の settle に戻すかは確認してから決める
+- hwc から起動した Claude は、実機（Herdr 0.9.5、Claude Code 2.1.327、2026-11-19）で `agent.start` の直後に `agent_session` が付き、`pane.chat` が true になった。起動待ちが最初の送信まで続くことはない（[ADR 0078](0078-starting-pane-mask.md)）。架空 Herdr は `agent.start` で Claude の session を作らないため、E2E では起動した Claude のペインが 10 秒後に `unknown` へ落ちる。これは fake の制約で、起動時に session を渡す形は #330 / #331 の E2E 拡張で足す（[docs/e2e.md](../e2e.md)）
 - transcript は BFF と CLI が同じユーザー・同じホストで動いている前提。リモートや別ユーザーの Claude は端末出力のままになる
 
 ## Alternatives

@@ -171,6 +171,8 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 
 Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（`w2:t2` の `w2:p2`、待機）で確かめる（[ADR 0097](adr/0097-claude-chat-transcript.md)）。
 
+架空 Herdr の `agent.start` は Claude の session / transcript を作らないため、E2E で hwc から Claude を起動すると 10 秒後に `unknown`（起動を確認できません）へ落ちる。実機（Herdr 0.9.5 / Claude Code 2.1.327、2026-11-19）では `agent.start` の直後に `agent_session`（`kind: "id"`）が付き、`pane.chat` が true になる。fake に起動時のセッションを足すのは、起動直後の会話が要る #330 / #331 の E2E 拡張で行う。
+
 1. `すべて` から `acme-dashboard (docs)` を開き、`quickstart` のペインを開く。会話の先頭に「古い会話は省略されています」が出て、本文は transcript の末尾 500 件になる。「クイックスタートの手順を、今のコマンドに合わせて見直してください。」の user 行、同じ `message.id` の text を連結した agent 行（「まず `bun install` …」「そのあと `bun run dev` …」が 1 行）、`quickstart-review.pdf` のチップが出る。tool_use / tool_result / thinking / 内部エントリの行は無い。
 2. 「この行は注記の書式が崩れています。」の行は本文だけで、`<attached_files>` も絶対パスも残らない。チップも出ない。
 3. 同じペインで 2 回目の取得が 304 になることを、DevTools のネットワークで `/api/panes/w2:p2/chat` の応答を見て確かめる。会話が変わらない間は 200 が返らない。

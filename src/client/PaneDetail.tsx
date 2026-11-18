@@ -1741,8 +1741,8 @@ export function PaneDetail(props: PaneDetailProps) {
                   />
                 </span>
                 <div class="hwc-input-actions">
-                  {/* 入口を出すのはシェルだけ。会話を読めないエージェント（Claude など）は chat が
-                false になるので、chat ではなくペインの種類で分ける。 */}
+                  {/* 入口を出すのはシェルだけ。会話を読めないエージェント（supportsChat が false の
+                未知のエージェント）は chat が false になるので、chat ではなくペインの種類で分ける。 */}
                   {compact ? null : shell ? (
                     <button type="button" class="hwc-agent-start" onClick={startAgent}>
                       <AgentIcon size={16} />
