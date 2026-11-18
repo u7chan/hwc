@@ -96,6 +96,29 @@ test("classes used by the client keep the hwc- prefix", async () => {
   expect(offenders).toEqual([]);
 });
 
+// スクロールバーの見た目は scroll.css にだけ置く。容器ごとに足すと、次に増えた一覧や
+// ダイアログでだけ標準のバーが出る。隠す上書きだけを例外にする。
+test("scrollbars are styled only in scroll.css", async () => {
+  const offenders: string[] = [];
+  for (const file of partFiles) {
+    if (file.endsWith("/scroll.css")) continue;
+    const text = await Bun.file(file).text();
+    text.split("\n").forEach((line, index) => {
+      const trimmed = line.trim();
+      if (trimmed === "scrollbar-width: none;") return;
+      if (/scrollbar-[a-z]+:/.test(trimmed)) {
+        offenders.push(`${file}:${index + 1}: ${trimmed}`);
+        return;
+      }
+      for (const block of line.matchAll(/([^{}]*::-webkit-scrollbar[^{}]*)\{([^}]*)\}/g)) {
+        if (block[2].trim() !== "display: none;") offenders.push(`${file}: ${block[1].trim()}`);
+      }
+    });
+  }
+
+  expect(offenders).toEqual([]);
+});
+
 // アイコンの豆腐は、欠けても気づきにくい。CSS と同梱物の対応をここで固定する。
 const SYMBOLS_FACE = tokens.match(/@font-face\s*\{[^}]*Nerd Symbols Mono[^}]*\}/)?.[0] ?? "";
 const UI_FACE = tokens.match(/@font-face\s*\{[^}]*Noto Sans JP[^}]*\}/)?.[0] ?? "";
