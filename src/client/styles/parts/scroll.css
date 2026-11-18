@@ -1,0 +1,11 @@
+/* スクロールバーは全体で 1 つの見た目にする。容器のクラスを並べる方式は、一覧や
+   ダイアログを足すたびに書き足しが要り、漏れた場所にだけ標準のバーが出ていた。
+   スクロールしない要素には効かないので、全体に当てても害はない。
+   隠したい容器だけ、そちらで上書きする（例: .hwc-tabs の scrollbar-width: none と
+   ::-webkit-scrollbar の display: none）。装飾は ::-webkit-scrollbar で書かない。
+   scrollbar-color を指定した Chrome と Safari はそちらを無視するので、両方置くと
+   片方が効かないぶん読み手だけが迷う。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-control-line) transparent;
+}

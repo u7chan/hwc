@@ -13,6 +13,8 @@ Herdr CLI（WSL2）を Web ブラウザから操作・閲覧するアプリ。TU
 - oxlint / oxfmt / `tsc --noEmit`
 - Playwright CLI（エージェント経由の E2E）
 
+スクロールバーは [scroll.css](src/client/styles/parts/scroll.css) の全体ルールで揃う。容器ごとに色や幅を足さず、隠す容器だけその要素で上書きする。
+
 ## Principles
 
 - **Why / What / Constraints First**: Why（なぜ必要か）・What（何を満たすべきか）・Constraints（守るべき前提・制約）を簡潔に明確にしてから、How（設計・実装）に進む。How はここに書かず、設計とコードで表現する。
