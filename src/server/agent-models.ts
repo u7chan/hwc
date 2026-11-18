@@ -27,7 +27,8 @@ export const MODEL_LIST_TIMEOUT_MS = 20_000;
 // `claude --help`、`haiku` は CLI 同梱の alias 一覧で確認した（ADR 0096）。
 const CLAUDE_PROVIDER = "claude";
 const CLAUDE_MODEL_ALIASES = ["fable", "opus", "sonnet", "haiku"] as const;
-// `claude --help` の `--effort` が示す段階。エイリアスの解決先はすべてこの 5 段階に対応する。
+// `claude --help` の `--effort` が示す段階。first-party のエイリアス解決先はすべて対応するが、
+// 3P では解決先が変わり、対応しない段階がある（解決は CLI に任せる）。
 const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
 function claudeModels(): AgentModel[] {

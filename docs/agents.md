@@ -42,7 +42,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 ### Claude
 
 - 起動・名前・送信・停止・`/new` `/compact` の送信と、起動時のモデル・effort 指定。会話は読まないため端末出力にフォールバックする（`chatSourceOf` が Claude を返さない）
-- モデルは CLI のエイリアス（`fable` / `opus` / `sonnet` / `haiku`）、effort は `low` / `medium` / `high` / `xhigh` / `max` から選ぶ。版付きのモデル名や起動後の表示は出さない（[ADR 0096](adr/0096-claude-model-effort.md)）
+- モデルは CLI のエイリアス（`fable` / `opus` / `sonnet` / `haiku`）、effort は `low` / `medium` / `high` / `xhigh` / `max` から選ぶ。版付きのモデル名や起動後の表示は出さない。3P ではエイリアスの解決先と effort の対応段階が first-party と異なる（[ADR 0096](adr/0096-claude-model-effort.md)）
 - 初回の trust prompt などで `agent_not_ready` が返っても、起動成功としてペインを残す（[ADR 0027](adr/0027-new-pane-agent.md)）。応答は端末で行う（上の注意）。
 - 会話を持たないため、添付・引用・画像プレビュー・usage/context・圧縮の区切り・ライブ activity はない
 
