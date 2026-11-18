@@ -2,6 +2,7 @@ import { createPortal, type Ref } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { ChatAttachment, ChatFile, ChatMessage } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
+import type { FileTreeEntry } from "../shared/file-tree";
 import { gitStatusLabel, type GitSync } from "../shared/git";
 import {
   attachmentExtFromName,
@@ -12,6 +13,7 @@ import {
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, attachmentUrl, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
+import { FILE_REFERENCE_TYPE, fileReference, insertFileReference } from "./file-reference";
 import { fileTreeStore } from "./file-tree-store";
 import type { FileTreeSide } from "./file-tree-side";
 import { OutputText } from "./OutputText";
@@ -466,6 +468,9 @@ export function PaneDetail(props: PaneDetailProps) {
   const frame = useRef<HTMLDivElement>(null);
   // 引用を足した直後、再描画後の入力欄へカーソルを移す位置。
   const pendingCaret = useRef<number | null>(null);
+  // ツリーの行を掴むと入力欄からフォーカスが外れる。その直前の選択範囲を控え、
+  // 落としたときの差し込み位置にする。一度もフォーカスしていなければ null。
+  const lastSelection = useRef<{ start: number; end: number } | null>(null);
   // 開閉を押した時点の入力欄の高さ。開閉後の高さへ動かす始点にする。
   const toggleFrom = useRef<number | null>(null);
   // 実行中の開閉アニメーション。高さを測る前に止める。
@@ -806,6 +811,17 @@ export function PaneDetail(props: PaneDetailProps) {
     fit(field, expanded);
   };
 
+  // ツリーの行を composer へ落としたとき、そのパスを下書きの選択位置へ入れる。
+  // 末尾ではなくキャレットへ入れるので、指示の途中に複数並べられる。
+  const insertReference = (reference: string) => {
+    const recorded = lastSelection.current;
+    const start = recorded?.start ?? inputText.length;
+    const end = recorded?.end ?? start;
+    const next = insertFileReference(inputText, start, end, reference);
+    setInputText(next.text);
+    pendingCaret.current = next.caret;
+  };
+
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
   const removeAttachment = (key: string) => attachmentStore.remove(pane.id, key);
 
@@ -844,10 +860,13 @@ export function PaneDetail(props: PaneDetailProps) {
     }
   };
 
-  // ファイルのドラッグだけを扱う。テキストやページ内の要素のドラッグは既定動作のまま。
-  const fileTransfer = (transfer: DataTransfer | null): DataTransfer | null => {
-    if (transfer === null || !transfer.types.includes("Files")) return null;
-    return transfer;
+  // OS から落としたファイルと、ツリーの行を運んだドロップを同じ受け口で扱う。
+  // dragover 中は getData を読めない（保護モード）ので、種類は型だけで決める。
+  const dropKind = (transfer: DataTransfer | null): "files" | "reference" | null => {
+    if (transfer === null) return null;
+    if (transfer.types.includes(FILE_REFERENCE_TYPE)) return "reference";
+    if (transfer.types.includes("Files")) return "files";
+    return null;
   };
 
   // 貼り付けとドロップで同じ受け付け方をする。アップロードするファイルが無ければ
@@ -1138,6 +1157,18 @@ export function PaneDetail(props: PaneDetailProps) {
     filesButtonRef.current?.focus();
   };
 
+  // 行のドラッグは、プレビューの「パスをコピー」と同じ文字列を運ぶ。ツリーの根は
+  // スペースのチェックアウトで、ペインの cwd とは限らない（ADR 0056 / 0095）。
+  const startTreeDrag = (event: DragEvent, entry: FileTreeEntry) => {
+    const transfer = event.dataTransfer;
+    if (transfer === null) return;
+    transfer.setData(
+      FILE_REFERENCE_TYPE,
+      fileReference(props.context.workspacePath, entry.path, entry.kind === "dir"),
+    );
+    transfer.effectAllowed = "copy";
+  };
+
   // 広いセルでは会話の左右どちらか（設定で選ぶ）、狭いセルでは会話の上に重ねる。
   // 同じ要素をどちらか一方にだけ置く。
   const treeView = treeOpen ? (
@@ -1158,6 +1189,7 @@ export function PaneDetail(props: PaneDetailProps) {
         if (!sideBySide) closeTree();
       }}
       onOpenImage={onOpenImage}
+      onDragStart={startTreeDrag}
     />
   ) : null;
 
@@ -1475,19 +1507,15 @@ export function PaneDetail(props: PaneDetailProps) {
                 submit();
               }}
               onDragEnter={(event) => {
-                if (
-                  launchBlocked ||
-                  edit !== null ||
-                  !pane.chat ||
-                  fileTransfer(event.dataTransfer) === null
-                )
-                  return;
+                const transfer = event.dataTransfer;
+                if (launchBlocked || edit !== null || !pane.chat) return;
+                if (transfer === null || dropKind(transfer) === null) return;
                 dragDepth.current += 1;
                 setDropping(true);
               }}
               onDragOver={(event) => {
-                const transfer = fileTransfer(event.dataTransfer);
-                if (transfer === null) return;
+                const transfer = event.dataTransfer;
+                if (transfer === null || dropKind(transfer) === null) return;
                 // 添付を受け付けないペインでもファイルを開かせない。ただし落とせる場所では
                 // ないので、copy のカーソルは出さない。
                 event.preventDefault();
@@ -1500,14 +1528,24 @@ export function PaneDetail(props: PaneDetailProps) {
                 if (dragDepth.current === 0) setDropping(false);
               }}
               onDrop={(event) => {
-                const transfer = fileTransfer(event.dataTransfer);
-                if (transfer === null) return;
+                const transfer = event.dataTransfer;
+                const kind = dropKind(transfer);
+                if (transfer === null || kind === null) return;
                 // ファイルはブラウザに開かせない。
                 event.preventDefault();
                 dragDepth.current = 0;
                 setDropping(false);
                 if (edit !== null || !pane.chat || launchBlocked) return;
-                takeFiles(dropActionFrom(transfer.files));
+                if (kind === "files") {
+                  takeFiles(dropActionFrom(transfer.files));
+                  return;
+                }
+                // パスは Linux でも 4KB まで。改行や NUL を含む文字列は、送る本文を
+                // 崩すので差し込まない。
+                const reference = transfer.getData(FILE_REFERENCE_TYPE);
+                if (reference === "" || reference.length > 4096) return;
+                if (/[\r\n]/.test(reference) || reference.includes("\u0000")) return;
+                insertReference(reference);
               }}
             >
               {launchPending ? (
@@ -1636,6 +1674,15 @@ export function PaneDetail(props: PaneDetailProps) {
                     rows={1}
                     disabled={edit?.sending === true}
                     value={inputText}
+                    // ツリーの行を掴むと入力欄からフォーカスが外れる。落としたときに使う
+                    // 選択位置をここで控える。まだ一度もフォーカスしていなければ末尾へ入れる。
+                    onBlur={(event) => {
+                      const field = event.currentTarget;
+                      lastSelection.current = {
+                        start: field.selectionStart,
+                        end: field.selectionEnd,
+                      };
+                    }}
                     // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
                     {...(compact ? {} : { placeholder })}
                     onInput={(event) => {

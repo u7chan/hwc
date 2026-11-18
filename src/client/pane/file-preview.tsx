@@ -10,6 +10,7 @@ import {
 import { previewTextUrl, previewUrl } from "../api";
 import type { MessageImageSource, MessageLinkSource } from "../chat";
 import { useCopy } from "../copy";
+import { fileReference } from "../file-reference";
 import { ChevronLeftIcon, CodeIcon, CopyGlyph, EyeIcon } from "../icons";
 import { Markdown } from "../Markdown";
 import { markdownHrefs } from "../markdown/parse";
@@ -133,10 +134,9 @@ export function FilePreview(props: FilePreviewProps) {
   const backRef = useRef<HTMLButtonElement>(null);
   const markdown = isMarkdownPreviewPath(props.path);
   const showMarkdown = markdown && !source;
-  // コピーするのは、貼り付け先でそのまま使える絶対パス。ツリーの根はスペースの作業
-  // ディレクトリと同じなので、相対パスを足すだけでよい。
-  const copyPath =
-    props.workspacePath === null ? props.path : `${props.workspacePath}/${props.path}`;
+  // コピーするのは、貼り付け先でそのまま使える絶対パス。ツリーの行を composer へ
+  // 落としたときと同じ文字列になるよう、組み立ては fileReference に任せる。
+  const copyPath = fileReference(props.workspacePath, props.path, false);
 
   useEffect(() => {
     const controller = new AbortController();

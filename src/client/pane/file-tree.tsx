@@ -20,12 +20,23 @@ type FileTreeProps = {
   onRetry: (path: string) => void;
   onSelectFile: (path: string) => void;
   onOpenImage: (url: string, name: string) => void;
+  // 行を composer へ運ぶ。パス文字列はペインの作業ディレクトリを知る側で組み立てる。
+  onDragStart: (event: DragEvent, entry: FileTreeEntry) => void;
 };
 
 // 深さごとの字下げ。行の右側は揃えたいので、左だけを inline で決める。
 // 12px は --space-3。深い階層でも名前に幅が残るよう、字下げは 1 段だけにする。
 function indent(depth: number) {
   return { paddingLeft: `calc(var(--space-4) + ${depth} * var(--space-3))` };
+}
+
+// 開ける行も開けない行も、同じように composer へ運べる。淡色は hwc が配信できない
+// だけで、エージェントはパスから読める（ADR 0095）。
+function dragProps(tree: FileTreeProps, entry: FileTreeEntry) {
+  return {
+    draggable: true,
+    onDragStart: (event: DragEvent) => tree.onDragStart(event, entry),
+  };
 }
 
 function renderChildren(props: FileTreeProps, path: string, depth: number): ComponentChildren[] {
@@ -97,7 +108,13 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
     if (!entry.expandable) {
       return (
         <li class="hwc-tree-item">
-          <div class="hwc-tree-row" style={style} data-blocked="true" title={entry.path}>
+          <div
+            class="hwc-tree-row"
+            style={style}
+            data-blocked="true"
+            title={entry.path}
+            {...dragProps(tree, entry)}
+          >
             {content}
           </div>
         </li>
@@ -112,6 +129,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
           aria-expanded={expanded}
           title={entry.path}
           onClick={() => tree.onToggle(entry.path)}
+          {...dragProps(tree, entry)}
         >
           {content}
         </button>
@@ -149,6 +167,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
           data-selected={selected ? "true" : undefined}
           aria-current={selected ? "true" : undefined}
           onClick={() => tree.onSelectFile(entry.path)}
+          {...dragProps(tree, entry)}
         >
           {content}
         </button>
@@ -159,7 +178,13 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
   if (entry.open === null) {
     return (
       <li class="hwc-tree-item">
-        <div class="hwc-tree-row" style={style} data-blocked="true" title={entry.path}>
+        <div
+          class="hwc-tree-row"
+          style={style}
+          data-blocked="true"
+          title={entry.path}
+          {...dragProps(tree, entry)}
+        >
           {content}
         </div>
       </li>
@@ -176,6 +201,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
         onClick={() =>
           tree.onOpenImage(previewUrl(tree.paneId, { root: 0, name: entry.path }), entry.name)
         }
+        {...dragProps(tree, entry)}
       >
         {content}
       </button>
