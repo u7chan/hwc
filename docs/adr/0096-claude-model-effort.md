@@ -14,7 +14,7 @@ Claude はまだ会話を読めないため、起動後に選んだモデルを�
 
 ## Decision
 
-- 作成ダイアログのモデル候補に Claude を加える。候補は CLI のエイリアス `opus` / `sonnet` / `fable` / `haiku` とし、`provider` は `claude`、`id` はエイリアスにする。版を含むモデル id は候補にしない
+- 作成ダイアログのモデル候補に Claude を加える。候補は CLI のエイリアス `fable` / `opus` / `sonnet` / `haiku` の順とし、`provider` は `claude`、`id` はエイリアスにする。版を含むモデル id は候補にしない
 - 初期値はこれまでどおり「デフォルトモデル」で、未指定なら `--model` を渡さない。CLI の既定設定は変更しない
 - モデルを明示したときだけ effort を選べる。候補は `--effort` が受ける 5 段階とし、モデルによる差は設けない。エイリアスの解決先はすべてこの 5 段階に対応する。未指定なら `--effort` を渡さない
 - 起動引数は `["--model", "<alias>", ...(effort === null ? [] : ["--effort", effort])]` とし、Herdr の `agent.start` に渡す

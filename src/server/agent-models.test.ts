@@ -135,9 +135,9 @@ function claudeClient() {
 
 test("Claude candidates are the CLI's model aliases, not versioned catalog rows", async () => {
   expect(await claudeClient().list("claude", "/project")).toEqual([
+    { provider: "claude", id: "fable" },
     { provider: "claude", id: "opus" },
     { provider: "claude", id: "sonnet" },
-    { provider: "claude", id: "fable" },
     { provider: "claude", id: "haiku" },
   ]);
 });

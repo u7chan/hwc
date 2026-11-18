@@ -26,7 +26,7 @@ export const MODEL_LIST_TIMEOUT_MS = 20_000;
 // 解決する。hwc は版を追わず、エイリアスだけを候補にする。`fable` / `opus` / `sonnet` は
 // `claude --help`、`haiku` は CLI 同梱の alias 一覧で確認した（ADR 0096）。
 const CLAUDE_PROVIDER = "claude";
-const CLAUDE_MODEL_ALIASES = ["opus", "sonnet", "fable", "haiku"] as const;
+const CLAUDE_MODEL_ALIASES = ["fable", "opus", "sonnet", "haiku"] as const;
 // `claude --help` の `--effort` が示す段階。エイリアスの解決先はすべてこの 5 段階に対応する。
 const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
