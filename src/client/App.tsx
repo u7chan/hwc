@@ -55,7 +55,7 @@ import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
 import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
 import { Preview } from "./Preview";
-import { CloseIcon, HwcMark, SettingsIcon } from "./icons";
+import { HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import type { PaneOutputHandle } from "./commands";
@@ -1088,13 +1088,16 @@ export function App() {
   const actions = (
     <>
       {connChip}
+      {/* 足元は入口だけ。出口は設定の左上にあり、開いている間はその面の色で示す（ADR 0094）。 */}
       <button
         type="button"
         class="hwc-icon-button hwc-foot-button"
-        aria-label={settingsOpen ? "設定を閉じる" : "設定"}
+        aria-label="設定"
+        aria-pressed={settingsOpen}
+        data-current={settingsOpen ? "true" : undefined}
         onClick={() => setSettingsOpen((open) => !open)}
       >
-        {settingsOpen ? <CloseIcon /> : <SettingsIcon />}
+        <SettingsIcon />
       </button>
     </>
   );

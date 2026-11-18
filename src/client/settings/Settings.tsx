@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useElementWidth } from "../app/use-element-width";
 import type { ConnectionStatus } from "../connection";
 import type { FileTreeSide } from "../file-tree-side";
@@ -83,13 +83,39 @@ export function Settings(props: SettingsProps) {
   // いま出しているカテゴリ。広い画面は何も開いていなくても先頭を出している。
   const active = sideBySide ? shown : opened;
 
-  const title = opened === null ? "設定" : (editingTitle ?? settingsCategoryLabel(opened));
+  // カテゴリを常設している間の見出しは、画面の名前である「設定」にする。どのカテゴリを
+  // 出しているかは左の列が示す。定型文のフォームだけは、開いている段の名前を出す。
+  const title =
+    editingTitle ?? (opened === null || sideBySide ? "設定" : settingsCategoryLabel(opened));
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const target = scrollRef.current;
     if (target !== null) target.scrollTop = 0;
   }, [active]);
+
+  // 設定を 1 つの面として扱う。開いたら面へ焦点を移し、閉じたら元の場所へ返す。
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const surface = surfaceRef.current;
+    restoreRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    surface?.focus({ preventScroll: true });
+    return () => {
+      // 一覧の行を押して閉じたときは、その行の焦点を奪わない。
+      if (!surface?.contains(document.activeElement) && document.activeElement !== document.body) {
+        return;
+      }
+      // 狭い画面は、閉じた直後に一覧が戻る。隠れている間は焦点を当てられないので、
+      // 表示が切り替わってから返す。
+      queueMicrotask(() => {
+        if (restoreRef.current?.isConnected === true) {
+          restoreRef.current.focus({ preventScroll: true });
+        }
+      });
+    };
+  }, []);
 
   // 出しているカテゴリをもう一度押しても何もしない。作り直すと、入力途中のフォームが
   // 確認なしに消える。移るときは、編集中の名前も同じ操作で初期化する。
@@ -101,11 +127,36 @@ export function Settings(props: SettingsProps) {
     // 保存するまで空のままにならない。
     refreshSummary();
   };
+  // 広い画面はカテゴリの一覧が常に見えているので、戻る先は元の画面だけ。
   const back = () => {
     setEditingTitle(null);
-    if (opened === null) props.onClose();
+    if (sideBySide || opened === null) props.onClose();
     else setOpened(null);
   };
+  // 購読を貼り直さずに、常に最新の back を呼ぶ。
+  const backRef = useRef(back);
+  backRef.current = back;
+
+  // Esc は、設定を見ている間だけ ← と同じ動きにする。焦点が一覧のメニューやダイアログへ
+  // 移っている間は、そちらが Esc を取る。狭い画面はカテゴリを開いた時点で押した行が
+  // 消えるので、焦点の無い body もこの面のものとして扱う（ADR 0094）。
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"], [role="alertdialog"]') !== null
+      ) {
+        return;
+      }
+      const focused = document.activeElement;
+      if (focused !== document.body && surfaceRef.current?.contains(focused) !== true) return;
+      event.preventDefault();
+      backRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const index = (variant: "page" | "side", active: SettingsCategoryId | null) => (
     <SettingsIndex
@@ -121,15 +172,16 @@ export function Settings(props: SettingsProps) {
   );
 
   // 幅をまたいでも中身を組み替えない。組み替えると、入力途中のフォームが作り直されて
-  // 下書きが消える。広い画面の要素は hidden で隠すだけにする。
+  // 下書きが消える。上部バーの名前だけを差し替える。
   return (
-    <div class="hwc-detail-inner">
-      <header class="hwc-detail-bar" hidden={sideBySide}>
-        {/* 狭い画面では一覧ごと隠れるので、設定を閉じる道をここに残す。 */}
+    <div class="hwc-detail-inner" ref={surfaceRef} tabIndex={-1}>
+      <header class="hwc-detail-bar hwc-settings-bar">
+        {/* 狭い画面では一覧ごと隠れる。広い画面では足元の歯車が遠い。どちらも、
+            設定の左上から元の画面へ戻れるようにする（ADR 0094）。 */}
         <button
           type="button"
           class="hwc-icon-button"
-          aria-label={opened === null ? "設定を閉じる" : "設定の一覧へ戻る"}
+          aria-label={sideBySide || opened === null ? "設定を閉じる" : "設定の一覧へ戻る"}
           onClick={back}
         >
           <ChevronLeftIcon />
@@ -143,10 +195,9 @@ export function Settings(props: SettingsProps) {
         {sideBySide ? index("side", shown) : null}
 
         <div class="hwc-settings-scroll" ref={scrollRef}>
-          {/* カテゴリを左に常設している間はバーを隠すので、見出しは本文の側に置く。 */}
-          {sideBySide ? (
-            <h2 class="hwc-visually-hidden">{editingTitle ?? settingsCategoryLabel(shown)}</h2>
-          ) : null}
+          {/* 上部バーの名前は画面のもの。本文の側には、出しているカテゴリの名前を置く。
+              定型文のフォームを開いても、ここは「定型文」のままにする。 */}
+          {sideBySide ? <h2 class="hwc-visually-hidden">{settingsCategoryLabel(shown)}</h2> : null}
           {opened === null && !sideBySide ? (
             index("page", null)
           ) : (
