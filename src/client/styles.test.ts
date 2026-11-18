@@ -106,14 +106,12 @@ test("scrollbars are styled only in scroll.css", async () => {
     text.split("\n").forEach((line, index) => {
       const trimmed = line.trim();
       if (trimmed === "scrollbar-width: none;") return;
-      if (/scrollbar-[a-z]+:/.test(trimmed)) {
-        offenders.push(`${file}:${index + 1}: ${trimmed}`);
-        return;
-      }
-      for (const block of line.matchAll(/([^{}]*::-webkit-scrollbar[^{}]*)\{([^}]*)\}/g)) {
-        if (block[2].trim() !== "display: none;") offenders.push(`${file}: ${block[1].trim()}`);
-      }
+      if (/scrollbar-[a-z]+:/.test(trimmed)) offenders.push(`${file}:${index + 1}: ${trimmed}`);
     });
+    // 疑似要素のブロックは改行をまたぐ。行ごとに見ると、整形後の装飾を見逃す。
+    for (const block of text.matchAll(/([^{}]*::-webkit-scrollbar[^{}]*)\{([^}]*)\}/g)) {
+      if (block[2].trim() !== "display: none;") offenders.push(`${file}: ${block[1].trim()}`);
+    }
   }
 
   expect(offenders).toEqual([]);
