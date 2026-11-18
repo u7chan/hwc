@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import { createTestApp } from "./app.test-helpers";
 
-test.each(["pi", "codex", "opencode"] as const)(
+test.each(["pi", "claude", "codex", "opencode"] as const)(
   "GET /api/panes/:id/models lists %s candidates in the pane's directory",
   async (agent) => {
     const seen: unknown[] = [];
@@ -25,7 +25,7 @@ test.each(["pi", "codex", "opencode"] as const)(
   },
 );
 
-test.each(["pi", "codex", "opencode"] as const)(
+test.each(["pi", "claude", "codex", "opencode"] as const)(
   "GET /api/panes/:id/efforts reads %s choices for the explicit model in the pane's directory",
   async (agent) => {
     const seen: unknown[] = [];
@@ -49,14 +49,13 @@ test.each(["pi", "codex", "opencode"] as const)(
   },
 );
 
-test.each([
-  "agent=claude&provider=example&model=beam",
-  "agent=pi",
-  "agent=pi&provider=example&model=--help",
-])("GET /api/panes/:id/efforts rejects an invalid or missing model: %s", async (query) => {
-  const { app } = createTestApp();
-  expect((await app.request(`/api/panes/w1:p1/efforts?${query}`)).status).toBe(400);
-});
+test.each(["agent=pi", "agent=pi&provider=example&model=--help"])(
+  "GET /api/panes/:id/efforts rejects an invalid or missing model: %s",
+  async (query) => {
+    const { app } = createTestApp();
+    expect((await app.request(`/api/panes/w1:p1/efforts?${query}`)).status).toBe(400);
+  },
+);
 
 test("GET /api/panes/:id/efforts preserves unsupported choices and hides upstream errors", async () => {
   let fail = false;
@@ -89,7 +88,7 @@ test("GET /api/panes/:id/efforts requires an existing pane, a snapshot, and a mo
   expect((await unavailable.request(`/api/panes/w1:p1/efforts${query}`)).status).toBe(502);
 });
 
-test.each(["claude", "unknown", ""])(
+test.each(["unknown", ""])(
   "GET /api/panes/:id/models rejects unsupported agent %s",
   async (agent) => {
     const { app } = createTestApp();

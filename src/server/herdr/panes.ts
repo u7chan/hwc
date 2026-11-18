@@ -202,7 +202,11 @@ function parseAgentSelection(
 ): Parsed<{ model: AgentModel | null; effort: string | null }> {
   const model = record.model ?? null;
   if (model !== null && (!supportsModelSelection(agent) || !isAgentModel(model))) {
-    return { ok: false, status: 400, error: "model must identify a Pi, Codex, or OpenCode model" };
+    return {
+      ok: false,
+      status: 400,
+      error: "model must identify a Pi, Claude, Codex, or OpenCode model",
+    };
   }
 
   const effort = record.effort ?? null;

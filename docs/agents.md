@@ -14,8 +14,8 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 機能                                     | Pi             | Claude | Codex         | OpenCode          |
 | ---------------------------------------- | -------------- | ------ | ------------- | ----------------- |
 | 起動（新規ペイン / ワークツリー / 名前） | ○              | ○      | ○             | ○                 |
-| 起動時のモデル指定                       | ○              | ×      | ○             | ○（サービス必要） |
-| 起動時の effort 指定                     | ○              | ×      | ○             | ○（サービス必要） |
+| 起動時のモデル指定                       | ○              | ○      | ○             | ○（サービス必要） |
+| 起動時の effort 指定                     | ○              | ○      | ○             | ○（サービス必要） |
 | Web での会話表示                         | ○              | ×      | ○（hwc 起動） | ○                 |
 | 送信・停止                               | ○              | ○      | ○             | ○                 |
 | モデル・effort の表示                    | ○              | ×      | ○             | ○                 |
@@ -41,8 +41,8 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 ### Claude
 
-- 起動・名前・送信・停止・`/new` `/compact` の送信だけ。会話は読まないため端末出力にフォールバックする（`chatSourceOf` が Claude を返さない）
-- モデルと effort は起動時に選べず、デフォルトのみ（[ADR 0030](adr/0030-new-pane-model.md)）
+- 起動・名前・送信・停止・`/new` `/compact` の送信と、起動時のモデル・effort 指定。会話は読まないため端末出力にフォールバックする（`chatSourceOf` が Claude を返さない）
+- モデルは CLI のエイリアス（`fable` / `opus` / `sonnet` / `haiku`）、effort は `low` / `medium` / `high` / `xhigh` / `max` から選ぶ。版付きのモデル名や起動後の表示は出さない。3P ではエイリアスの解決先と effort の対応段階が first-party と異なる（[ADR 0096](adr/0096-claude-model-effort.md)）
 - 初回の trust prompt などで `agent_not_ready` が返っても、起動成功としてペインを残す（[ADR 0027](adr/0027-new-pane-agent.md)）。応答は端末で行う（上の注意）。
 - 会話を持たないため、添付・引用・画像プレビュー・usage/context・圧縮の区切り・ライブ activity はない
 
@@ -105,3 +105,4 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - [ADR 0035: 実行中の段階と thinking の末尾は pi 拡張の sidecar から一時表示する](adr/0035-live-pi-activity.md)
 - [ADR 0041: エージェントが書いた画像をメッセージ内でプレビューする](adr/0041-agent-message-images.md)
 - [ADR 0044: Pi のプロジェクト信頼確認も確認ビューで回答する](adr/0044-pi-project-trust.md)
+- [ADR 0096: Claude のモデルと effort は起動時にエイリアスと段階で選ぶ](adr/0096-claude-model-effort.md)

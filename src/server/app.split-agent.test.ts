@@ -53,7 +53,7 @@ function launchModelApp() {
   return { app, split };
 }
 
-test.each(["pi", "codex", "opencode"] as const)(
+test.each(["pi", "claude", "codex", "opencode"] as const)(
   "POST /api/panes/:id/split passes the selected %s effort only to the new pane",
   async (kind) => {
     const model = { provider: "example", id: "beam" };
@@ -98,7 +98,7 @@ test("POST /api/panes/:id/split rejects effort without a model before creating a
   expect((await postSplit(app, "w1:p1", { agent: "pi", effort: "high" })).status).toBe(400);
 });
 
-test.each(["pi", "codex"] as const)(
+test.each(["pi", "claude", "codex"] as const)(
   "POST /api/panes/:id/split passes the chosen %s model to startup preparation",
   async (kind) => {
     const seen: unknown[] = [];
@@ -460,23 +460,20 @@ test("POST /api/panes/:id/agent refuses a pane that already has an agent", async
   expect(calls).toEqual([]);
 });
 
-test.each([
-  {},
-  { agent: null },
-  { agent: "gemini" },
-  { agent: "claude", model: { provider: "example", id: "beam" } },
-  { agent: "pi", effort: "high" },
-])("POST /api/panes/:id/agent rejects an invalid body: %j", async (body) => {
-  const { app } = createTestApp({
-    panes: {
-      startAgent: async () => {
-        throw new Error("Must not start");
+test.each([{}, { agent: null }, { agent: "gemini" }, { agent: "pi", effort: "high" }])(
+  "POST /api/panes/:id/agent rejects an invalid body: %j",
+  async (body) => {
+    const { app } = createTestApp({
+      panes: {
+        startAgent: async () => {
+          throw new Error("Must not start");
+        },
       },
-    },
-  });
+    });
 
-  expect((await postAgent(app, "w1:p1", body)).status).toBe(400);
-});
+    expect((await postAgent(app, "w1:p1", body)).status).toBe(400);
+  },
+);
 
 test("POST /api/panes/:id/agent requires an existing pane and a readable snapshot", async () => {
   const missing = createTestApp().app;
@@ -516,43 +513,46 @@ test("POST /api/panes/:id/agent keeps the pane and reports a failed startup", as
   expect(await response.json()).toEqual({ error: "agent_start_failed" });
 });
 
-test("POST /api/panes/:id/agent passes the chosen model to startup preparation", async () => {
-  const seen: unknown[] = [];
-  const model = { provider: "example", id: "beam" };
-  const { app } = createTestApp({
-    panes: {
-      startAgent: async (options) => {
-        seen.push(options);
+test.each(["codex", "claude"] as const)(
+  "POST /api/panes/:id/agent passes the chosen %s model to startup preparation",
+  async (kind) => {
+    const seen: unknown[] = [];
+    const model = { provider: "example", id: "beam" };
+    const { app } = createTestApp({
+      panes: {
+        startAgent: async (options) => {
+          seen.push(options);
+        },
       },
-    },
-    models: {
-      list: async () => [model],
-      efforts: async () => [],
-      startArgs: async (agent, selected, directory, effort) => {
-        expect({ agent, selected, directory, effort }).toEqual({
-          agent: "codex",
-          selected: model,
-          directory: "/project",
-          effort: "low",
-        });
-        return ["--model", "beam"];
+      models: {
+        list: async () => [model],
+        efforts: async () => [],
+        startArgs: async (agent, selected, directory, effort) => {
+          expect({ agent, selected, directory, effort }).toEqual({
+            agent: kind,
+            selected: model,
+            directory: "/project",
+            effort: "low",
+          });
+          return ["--model", "beam"];
+        },
       },
-    },
-  });
+    });
 
-  const response = await postAgent(app, "w1:p1", { agent: "codex", model, effort: "low" });
+    const response = await postAgent(app, "w1:p1", { agent: kind, model, effort: "low" });
 
-  expect(response.status).toBe(200);
-  expect(seen).toEqual([
-    {
-      paneId: "w1:p1",
-      kind: "codex",
-      name: expect.stringMatching(/^hwc-w1-p1-[0-9a-z]{4}$/),
-      waitForShell: false,
-      args: ["--no-daemon", "--model", "beam"],
-    },
-  ]);
-});
+    expect(response.status).toBe(200);
+    expect(seen).toEqual([
+      {
+        paneId: "w1:p1",
+        kind,
+        name: expect.stringMatching(/^hwc-w1-p1-[0-9a-z]{4}$/),
+        waitForShell: false,
+        args: [...(kind === "codex" ? ["--no-daemon"] : []), "--model", "beam"],
+      },
+    ]);
+  },
+);
 
 test("POST /api/panes/:id/agent shows the chosen model until the session records one", async () => {
   const store = createFakeStore(state);
@@ -599,21 +599,6 @@ test("POST /api/panes/:id/agent shows the chosen model until the session records
     model: "beam",
     effort: "low",
   });
-});
-
-test("POST /api/panes/:id/split rejects a Claude model override before creating anything", async () => {
-  const { app } = createTestApp({
-    panes: {
-      split: async () => {
-        throw new Error("Must not split");
-      },
-    },
-  });
-  const response = await postSplit(app, "w1:p1", {
-    agent: "claude",
-    model: { provider: "example", id: "beam" },
-  });
-  expect(response.status).toBe(400);
 });
 
 test("POST /api/panes/:id/split validates the body before loading a snapshot", async () => {

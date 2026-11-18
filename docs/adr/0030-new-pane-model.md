@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-05
+- Amended by: [ADR 0096](0096-claude-model-effort.md)（Claude のモデル・effort 選択）
 
 ## Context
 
