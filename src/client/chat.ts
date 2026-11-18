@@ -5,6 +5,7 @@ import type {
   ChatFile,
   ChatLink,
   ChatMessage,
+  ChatPending,
   ChatSnapshot,
   ChatUsage,
 } from "../server/chat/contract";
@@ -92,15 +93,29 @@ export type PaneBody =
   | { kind: "output" };
 
 // 会話を持たないペイン、会話を読めない間、要対応で端末を見たい間は端末出力を出す。
+// 要対応でも応答待ちが読めるときは会話を維持し、カードから端末出力へ切り替える。
 export function paneBody(props: {
   chat: boolean;
   blocked: boolean;
   failed: boolean;
   snapshot: ChatSnapshot | null;
+  // 応答待ちのカードから「端末出力を見る」を押した間だけ true。
+  showTerminal: boolean;
 }): PaneBody {
-  if (!props.chat || props.blocked || props.failed) return { kind: "output" };
+  if (!props.chat || props.failed) return { kind: "output" };
+  // 応答待ちが読めないときは、今までどおり端末出力へ倒す。誤検知で操作不能にしない。
+  if (props.blocked && (props.showTerminal || props.snapshot?.pending === undefined)) {
+    return { kind: "output" };
+  }
   if (props.snapshot === null) return { kind: "skeleton" };
   return { kind: "chat", snapshot: props.snapshot };
+}
+
+// 応答待ちのカードは Herdr が blocked の間だけ出す。ツールが実行中の間も transcript の末尾は
+// tool_use なので、pending だけでは人間待ちと決められない。
+export function pendingCard(snapshot: ChatSnapshot | null, blocked: boolean): ChatPending | null {
+  if (!blocked || snapshot === null) return null;
+  return snapshot.pending ?? null;
 }
 
 export type MessageImageSource = { url: string; label: string };
@@ -188,6 +203,7 @@ export function newSessionPending(reset: NewSessionReset, snapshot: ChatSnapshot
 }
 
 // 表示だけを先に空にし、取得したスナップショットと条件付き取得の etag は書き換えない。
+// 応答待ちも literal で作り直すので一緒に消える。
 export function newSessionSnapshot(snapshot: ChatSnapshot | null): ChatSnapshot {
   return {
     etag: snapshot?.etag ?? "",

@@ -43,6 +43,7 @@ import {
   paneBody,
   type PendingMessage,
   PENDING_TURN_GRACE_MS,
+  pendingCard,
   usePaneChat,
 } from "./chat";
 import { composerDisabled, enterInsertsNewline } from "./input";
@@ -348,12 +349,19 @@ export function PaneDetail(props: PaneDetailProps) {
   const expanded = expandedOpen && !compact;
 
   // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
+  // ただし Claude の要対応は質問・承認の待ちで、内容は transcript にある。応答待ちを出す
+  // ために、blocked の間も 5 秒間隔（chatPollDelay の idle と同じ）で読み続ける。
   const blocked = pane.agentStatus === "blocked";
   const {
     snapshot: serverSnapshot,
     failed: chatFailed,
     refresh: refreshChat,
-  } = usePaneChat(pane.id, pane.chat, pane.chat && !blocked, pane.agentStatus);
+  } = usePaneChat(
+    pane.id,
+    pane.chat,
+    pane.chat && (!blocked || pane.agent === "claude"),
+    pane.agentStatus,
+  );
   // 実行中の段階は pi 拡張の sidecar からだけ取る（ADR 0035）。
   const activity = usePaneActivity(
     pane.id,
@@ -364,6 +372,11 @@ export function PaneDetail(props: PaneDetailProps) {
   const pullRequest = usePullRequest(context.workspaceId, branch, upstreamBranch);
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
+  // 応答待ちのカードと、そこから切り替える端末出力。どの tool_use に対して開いたかだけを
+  // 覚える。pending が変われば会話へ戻り、消えたあとに古い切り替えも残らない。
+  const pendingView = pendingCard(snapshot, blocked);
+  const [terminalFor, setTerminalFor] = useState<string | null>(null);
+  const showTerminal = pendingView !== null && terminalFor === pendingView.toolUseId;
   const editTarget =
     edit === null
       ? null
@@ -373,6 +386,7 @@ export function PaneDetail(props: PaneDetailProps) {
     blocked,
     failed: chatFailed && !resetting,
     snapshot,
+    showTerminal,
   });
   const pendingMessages = pending.filter(
     (item) =>
@@ -440,6 +454,7 @@ export function PaneDetail(props: PaneDetailProps) {
     body.snapshot.messages.length === 0 &&
     body.snapshot.compaction === null &&
     pendingMessages.length === 0 &&
+    pendingView === null &&
     !compacting &&
     visibleCompactionEcho === null &&
     !replying;
@@ -1407,11 +1422,28 @@ export function PaneDetail(props: PaneDetailProps) {
                       onOpenImage={onOpenImage}
                       onOpenPreview={onOpenPreview}
                       pending={pendingMessages}
+                      pendingCard={pendingView}
+                      onShowTerminal={() => {
+                        if (pendingView !== null) setTerminalFor(pendingView.toolUseId);
+                      }}
                       reveal={reveal}
                     />
                   </>
                 ) : (
                   <>
+                    {pendingView === null || readOnly ? null : (
+                      // 端末出力を見ている間も、応答待ちであることと戻り先を残す。
+                      <div class="hwc-pending-bar" role="status">
+                        <span>端末で応答してください。</span>
+                        <button
+                          type="button"
+                          class="hwc-pending-toggle"
+                          onClick={() => setTerminalFor(null)}
+                        >
+                          会話に戻る
+                        </button>
+                      </div>
+                    )}
                     {read?.truncated ? (
                       <p class="hwc-output-notice">最新の {OUTPUT_LINES} 行を表示しています</p>
                     ) : null}

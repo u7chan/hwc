@@ -1086,3 +1086,123 @@ p.hwc-compaction,
     animation: none;
   }
 }
+
+/* 人間の応答待ち。会話の末尾に 1 枚だけ置く。色だけに意味を持たせないよう、
+   見出しの記号と文言（質問 / 承認待ち）で区別する。 */
+.hwc-pending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-line);
+  border-left: 2px solid var(--color-attention);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.hwc-pending-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
+  font-weight: 600;
+  line-height: var(--line-tight);
+}
+
+.hwc-pending-questions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-pending-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hwc-pending-label-head {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+}
+
+.hwc-pending-text {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-body);
+  line-height: var(--line-body);
+  overflow-wrap: anywhere;
+}
+
+/* 選択肢はまだ押せない。ボタンと見分けられるよう、地を持たない左罫線の一覧にする。 */
+.hwc-pending-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-pending-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-line);
+}
+
+.hwc-pending-option-label {
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+}
+
+.hwc-pending-option-description {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.hwc-pending-note {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+/* 端末出力との行き来。カードの中と、端末出力の上に同じ形で置く。 */
+.hwc-pending-toggle {
+  align-self: flex-start;
+  min-height: var(--tap);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hwc-pending-toggle:hover {
+  background: var(--color-raised);
+}
+
+.hwc-pending-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.hwc-pending-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}

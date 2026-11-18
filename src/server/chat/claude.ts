@@ -7,7 +7,13 @@ import {
   ATTACHED_FILES_OPEN,
   stripAttachedFiles,
 } from "../../shared/attachments";
-import type { ChatMessage, ChatSnapshot, SessionChatClient } from "./contract";
+import type {
+  ChatMessage,
+  ChatPending,
+  ChatPendingQuestion,
+  ChatSnapshot,
+  SessionChatClient,
+} from "./contract";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
 
@@ -37,6 +43,27 @@ const LOCAL_COMMAND_TAGS = [
 // API を呼ばずに失敗したターンの記録に付くモデル名。表示するモデルではない。
 const SYNTHETIC_MODEL = "<synthetic>";
 
+// 応答待ちのカードは 1 問ずつ画面に収める。モデルが書いた文字列の上限はここで決め、
+// 超えた分は切り、制御文字を落として改行を空白にする。
+const PENDING_MAX_QUESTIONS = 4;
+const PENDING_MAX_OPTIONS = 10;
+const PENDING_QUESTION_MAX = 2_000;
+const PENDING_HEADER_MAX = 100;
+const PENDING_LABEL_MAX = 500;
+const PENDING_DESCRIPTION_MAX = 1_000;
+const PENDING_SUMMARY_MAX = 200;
+const PENDING_TOOL_MAX = 100;
+
+// 承認待ちの 1 行要約に使う input の欄。input 全体は出さない（Write の content など、
+// 本文が画面と通信に乗ってしまう）。ここに無いツールは要約を持たない。
+const SUMMARY_FIELDS: Record<string, string> = {
+  Bash: "command",
+  Read: "file_path",
+  Edit: "file_path",
+  Write: "file_path",
+  WebFetch: "url",
+};
+
 type TranscriptEntry = {
   type: string;
   uuid: string;
@@ -54,6 +81,8 @@ type TranscriptEntry = {
 type Projection = { size: number; inode: number; snapshot: ChatSnapshot };
 
 type AssistantGroup = { id: string; at: number; text: string; error: string | null };
+
+type PendingTool = { id: string; name: string; input: unknown };
 
 export function createClaudeChatClient(
   options: { maxBytes?: number; now?: () => number } = {},
@@ -281,6 +310,7 @@ function snapshotOf(
   }
 
   const limited = limitMessages(projectMessages(branch));
+  const pending = projectPending(branch);
   const body: Omit<ChatSnapshot, "etag"> = {
     messages: limited.messages,
     model,
@@ -289,6 +319,7 @@ function snapshotOf(
     // 読み取り API はコンテキスト量と圧縮の形を返さない。どちらも別 Issue で足す。
     context: null,
     compaction: null,
+    ...(pending === null ? {} : { pending }),
   };
   const etag = createHash("sha256").update(sessionId).update(JSON.stringify(body)).digest("hex");
   return { ...body, etag };
@@ -310,6 +341,143 @@ function activeBranch(entries: readonly TranscriptEntry[]): TranscriptEntry[] {
     current = current.parentUuid === null ? undefined : byUuid.get(current.parentUuid);
   }
   return branch.reverse();
+}
+
+// 未解決の tool_use を拾う。突き合わせのキーは tool_use block の id と tool_result の
+// tool_use_id。entry の uuid は、どの entry の tool_use かを辿るためにだけ使う
+// （assistant は block ごとに別 entry なので、message.id では tool_use を区別できない）。
+function projectPending(branch: readonly TranscriptEntry[]): ChatPending | null {
+  const resolved = new Set<string>();
+  const tools: PendingTool[] = [];
+  for (const entry of branch) {
+    if (entry.sidechain) continue;
+    if (entry.type === "user") {
+      for (const id of toolResultIds(entry.message?.content)) resolved.add(id);
+      continue;
+    }
+    if (entry.type !== "assistant") continue;
+    tools.push(...toolUses(entry.message?.content));
+  }
+
+  // 会話の末尾が assistant の tool_use のときだけ。tool_result が書かれたら消える。
+  // 行にならない entry（isMeta など）は末尾として見ない。
+  const tail = lastConversationEntry(branch);
+  if (tail === null || tail.type !== "assistant") return null;
+  const tailIds = new Set(toolUses(tail.message?.content).map((tool) => tool.id));
+  const unresolved = tools.filter((tool) => !resolved.has(tool.id));
+  if (!unresolved.some((tool) => tailIds.has(tool.id))) return null;
+
+  // 承認待ちが複数あるとき、どれが人間待ちか transcript だけでは決められない。
+  // AskUserQuestion を優先し、無ければ最後の 1 件を代表にする。
+  let question: PendingTool | null = null;
+  for (const tool of unresolved) {
+    if (tool.name === "AskUserQuestion") question = tool;
+  }
+  if (question !== null) {
+    const questions = pendingQuestions(question.input);
+    // 壊れた input はカードにしない。ツールの代表としても出さない。
+    if (questions === null) return null;
+    return { kind: "question", toolUseId: question.id, tool: "AskUserQuestion", questions };
+  }
+
+  const last = unresolved[unresolved.length - 1];
+  if (last === undefined) return null;
+  const tool = pendingText(last.name, PENDING_TOOL_MAX);
+  if (tool === "") return null;
+  return { kind: "tool", toolUseId: last.id, tool, summary: summaryOf(last) };
+}
+
+function lastConversationEntry(branch: readonly TranscriptEntry[]): TranscriptEntry | null {
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (entry === undefined || entry.sidechain || entry.meta || entry.compactSummary) continue;
+    if (entry.type === "user" || entry.type === "assistant") return entry;
+  }
+  return null;
+}
+
+function summaryOf(tool: PendingTool): string | null {
+  const field = SUMMARY_FIELDS[tool.name];
+  if (field === undefined) return null;
+  const input = asRecord(tool.input);
+  if (input === null) return null;
+  const summary = pendingText(input[field], PENDING_SUMMARY_MAX);
+  return summary === "" ? null : summary;
+}
+
+function pendingQuestions(input: unknown): ChatPendingQuestion[] | null {
+  const record = asRecord(input);
+  if (record === null) return null;
+  const raw = record.questions;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const questions: ChatPendingQuestion[] = [];
+  for (const value of raw.slice(0, PENDING_MAX_QUESTIONS)) {
+    const question = pendingQuestion(value);
+    if (question === null) return null;
+    questions.push(question);
+  }
+  return questions;
+}
+
+function pendingQuestion(value: unknown): ChatPendingQuestion | null {
+  const record = asRecord(value);
+  if (record === null) return null;
+  const question = pendingText(record.question, PENDING_QUESTION_MAX);
+  if (question === "") return null;
+  const raw = record.options;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+
+  const options: ChatPendingQuestion["options"] = [];
+  for (const value of raw.slice(0, PENDING_MAX_OPTIONS)) {
+    const option = asRecord(value);
+    if (option === null) return null;
+    const label = pendingText(option.label, PENDING_LABEL_MAX);
+    if (label === "") return null;
+    const description = pendingText(option.description, PENDING_DESCRIPTION_MAX);
+    options.push({ label, description: description === "" ? null : description });
+  }
+
+  const header = pendingText(record.header, PENDING_HEADER_MAX);
+  return {
+    question,
+    header: header === "" ? null : header,
+    multiSelect: record.multiSelect === true,
+    options,
+  };
+}
+
+// モデルが書いた文字列として扱う。制御文字を落として改行を空白にし、長さで切るだけにする。
+// Markdown や HTML は、描く側でテキストとして置く。
+function pendingText(value: unknown, max: number): string {
+  if (typeof value !== "string") return "";
+  const flat = value
+    .replace(/\p{Cc}/gu, (char) => (/[\n\r\t]/.test(char) ? " " : ""))
+    .replace(/ {2,}/g, " ")
+    .trim();
+  return Array.from(flat).slice(0, max).join("");
+}
+
+function toolResultIds(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const ids: string[] = [];
+  for (const value of content) {
+    const block = asRecord(value);
+    if (block?.type !== "tool_result" || typeof block.tool_use_id !== "string") continue;
+    ids.push(block.tool_use_id);
+  }
+  return ids;
+}
+
+function toolUses(content: unknown): PendingTool[] {
+  if (!Array.isArray(content)) return [];
+  const tools: PendingTool[] = [];
+  for (const value of content) {
+    const block = asRecord(value);
+    if (block?.type !== "tool_use" || typeof block.id !== "string" || block.id === "") continue;
+    if (typeof block.name !== "string" || block.name === "") continue;
+    tools.push({ id: block.id, name: block.name, input: block.input });
+  }
+  return tools;
 }
 
 function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {

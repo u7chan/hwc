@@ -154,14 +154,50 @@ function claudeChatTranscript(): ClaudeEntry[] {
   });
 }
 
-// blocked のままのペイン。最後の発言が user で終わる、応答待ちの形にする。
+// blocked のままのペイン。transcript の末尾は tool_result を持たない AskUserQuestion なので、
+// 会話の末尾に質問と選択肢のカードが出る。解決済みの tool_use はカードにしない。
 function claudePendingTranscript(): ClaudeEntry[] {
   return claudeEntries(({ user, assistant }) => {
     user("docs/quickstart.md の手順を確認してください。");
+    assistant("msg-pending-1", [{ type: "text", text: "見出しと直す範囲を選んでください。" }]);
     assistant("msg-pending-1", [
-      { type: "text", text: "次の 3 点を更新してよいか確認してください。" },
+      {
+        type: "tool_use",
+        id: "pending-tool-1",
+        name: "Read",
+        input: { file_path: "docs/quickstart.md" },
+      },
     ]);
-    user("進めてよいか、承認をお願いします。");
+    user([{ type: "tool_result", tool_use_id: "pending-tool-1", content: "# Quickstart" }]);
+    assistant("msg-pending-2", [
+      {
+        type: "tool_use",
+        id: "pending-tool-2",
+        name: "AskUserQuestion",
+        input: {
+          questions: [
+            {
+              question: "見出しはどれにしますか？",
+              header: "見出し",
+              multiSelect: false,
+              options: [
+                { label: "クイックスタート", description: "今の見出しを残す" },
+                { label: "セットアップ", description: "手順の目的を先に出す" },
+              ],
+            },
+            {
+              question: "直す範囲は？",
+              header: "範囲",
+              multiSelect: true,
+              options: [
+                { label: "コマンド", description: "bun に揃える" },
+                { label: "スクリーンショット", description: "alt を足す" },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
   });
 }
 
@@ -628,7 +664,8 @@ export async function createScenario(root: string): Promise<Scenario> {
         tab_id: "w2:t1",
         cwd: docs,
         label: "writer",
-        // blocked のまま、応答待ちの transcript を持つ。表示は端末出力になる。
+        // blocked のまま、応答待ち（AskUserQuestion）の transcript を持つ。会話のままカードを
+        // 出し、端末出力へはカードの切替で移る。
         agent_status: "blocked",
         focused: false,
         agent_session: {

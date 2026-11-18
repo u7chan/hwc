@@ -7,6 +7,8 @@ import type {
   ChatFile,
   ChatLink,
   ChatMessage,
+  ChatPending,
+  ChatPendingQuestion,
   ChatSnapshot,
   ChatUsage,
 } from "../server/chat/contract";
@@ -275,6 +277,52 @@ function toRetryCount(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 1 ? value : undefined;
 }
 
+// 応答待ちは入力の可否を変えるが、飾りでもある。形が読めない値は捨てて pending 無しにし、
+// blocked の間は今までどおり端末出力へ倒す（誤検知で操作不能にしない）。
+function toChatPending(value: unknown): ChatPending | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const pending = value as Partial<ChatPending>;
+  if (typeof pending.toolUseId !== "string" || pending.toolUseId === "") return undefined;
+  if (pending.kind === "tool") {
+    if (typeof pending.tool !== "string" || pending.tool === "") return undefined;
+    const { summary } = pending;
+    return {
+      kind: "tool",
+      toolUseId: pending.toolUseId,
+      tool: pending.tool,
+      summary: typeof summary === "string" && summary !== "" ? summary : null,
+    };
+  }
+  if (pending.kind !== "question" || pending.tool !== "AskUserQuestion") return undefined;
+  if (!Array.isArray(pending.questions)) return undefined;
+  const questions: ChatPendingQuestion[] = [];
+  for (const item of pending.questions) {
+    if (typeof item !== "object" || item === null) return undefined;
+    const question = item as Partial<ChatPendingQuestion>;
+    if (typeof question.question !== "string" || question.question === "") return undefined;
+    if (!Array.isArray(question.options) || question.options.length === 0) return undefined;
+    const options: ChatPendingQuestion["options"] = [];
+    for (const option of question.options) {
+      if (typeof option !== "object" || option === null) return undefined;
+      const { label, description } = option as { label?: unknown; description?: unknown };
+      if (typeof label !== "string" || label === "") return undefined;
+      options.push({
+        label,
+        description: typeof description === "string" && description !== "" ? description : null,
+      });
+    }
+    questions.push({
+      question: question.question,
+      header:
+        typeof question.header === "string" && question.header !== "" ? question.header : null,
+      multiSelect: question.multiSelect === true,
+      options,
+    });
+  }
+  if (questions.length === 0) return undefined;
+  return { kind: "question", toolUseId: pending.toolUseId, tool: "AskUserQuestion", questions };
+}
+
 export function toChatSnapshot(value: unknown): ChatSnapshot | null {
   if (typeof value !== "object" || value === null) return null;
   const snapshot = value as Partial<ChatSnapshot>;
@@ -289,6 +337,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     messages.push(message);
   }
   const usage = toChatUsage(snapshot.usage);
+  const pending = toChatPending(snapshot.pending);
   return {
     etag: snapshot.etag,
     messages,
@@ -299,6 +348,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     context: toChatContext(snapshot.context),
     ...(usage === undefined ? {} : { usage }),
     compaction: toChatCompaction(snapshot.compaction),
+    ...(pending === undefined ? {} : { pending }),
     canRewind: snapshot.canRewind === true,
   };
 }

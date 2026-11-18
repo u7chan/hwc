@@ -79,6 +79,27 @@ export type ChatCompaction = {
   index: number;
 };
 
+// 人間の応答を待っている選択肢 1 問。文字列はモデルが書いたもので、長さと制御文字だけを
+// BFF で正規化する。Markdown や HTML としては解釈しない。
+export type ChatPendingQuestion = {
+  question: string;
+  header: string | null;
+  multiSelect: boolean;
+  options: { label: string; description: string | null }[];
+};
+
+// transcript の active branch の末尾にある、tool_result を持たない assistant の tool_use。
+// ツールが実行中の間も末尾は tool_use なので、これだけでは人間待ちと決められない。
+// 人間待ちかどうかは Herdr の agent_status と重ねて判定する。
+export type ChatPending =
+  | {
+      kind: "question";
+      toolUseId: string;
+      tool: "AskUserQuestion";
+      questions: ChatPendingQuestion[];
+    }
+  | { kind: "tool"; toolUseId: string; tool: string; summary: string | null };
+
 export type ChatSnapshot = {
   etag: string;
   messages: ChatMessage[];
@@ -88,6 +109,8 @@ export type ChatSnapshot = {
   context: ChatContext | null;
   usage?: ChatUsage;
   compaction: ChatCompaction | null;
+  // 応答待ちの tool_use。解決するか、末尾が tool_use でなくなると消える。
+  pending?: ChatPending;
   // pi 拡張が hwc-capabilities を残したペインだけ true。他のエージェントは未設定。
   canRewind?: boolean;
 };
