@@ -147,11 +147,7 @@
   min-height: 0;
 }
 
-/* 幅をまたいでも本文の木は作り直さないので、使わない側は hidden で隠す。 */
-.hwc-detail-inner > .hwc-detail-bar[hidden] {
-  display: none;
-}
-
+/* 幅をまたいでも本文の木は作り直さない。上部バーの名前だけを差し替える。 */
 .hwc-settings-side {
   flex: none;
   display: flex;

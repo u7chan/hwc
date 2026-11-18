@@ -195,10 +195,9 @@ export function Settings(props: SettingsProps) {
         {sideBySide ? index("side", shown) : null}
 
         <div class="hwc-settings-scroll" ref={scrollRef}>
-          {/* 上部バーの名前は画面のもので、本文の側には出しているカテゴリの名前を置く。 */}
-          {sideBySide ? (
-            <h2 class="hwc-visually-hidden">{editingTitle ?? settingsCategoryLabel(shown)}</h2>
-          ) : null}
+          {/* 上部バーの名前は画面のもの。本文の側には、出しているカテゴリの名前を置く。
+              定型文のフォームを開いても、ここは「定型文」のままにする。 */}
+          {sideBySide ? <h2 class="hwc-visually-hidden">{settingsCategoryLabel(shown)}</h2> : null}
           {opened === null && !sideBySide ? (
             index("page", null)
           ) : (
