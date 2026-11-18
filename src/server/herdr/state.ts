@@ -35,7 +35,7 @@ export function findPane(state: AppState | null, paneId: string): PaneState | nu
 // セッションの在り処は AppState に載せず、BFF 内だけで解決する。
 export type ChatSource =
   | { agent: "pi"; path: string }
-  | { agent: "codex" | "opencode"; sessionId: string };
+  | { agent: "claude" | "codex" | "opencode"; sessionId: string };
 
 function chatSourceOf(session: HerdrAgentSession | null | undefined): ChatSource | null {
   if (!session) return null;
@@ -44,7 +44,11 @@ function chatSourceOf(session: HerdrAgentSession | null | undefined): ChatSource
   if (session.agent === "pi" && session.kind === "path") {
     return { agent: "pi", path: value };
   }
-  if ((session.agent === "codex" || session.agent === "opencode") && session.kind === "id") {
+  // Claude の transcript は id からしか引けない。path 形は対象外のまま。
+  if (
+    session.kind === "id" &&
+    (session.agent === "claude" || session.agent === "codex" || session.agent === "opencode")
+  ) {
     return { agent: session.agent, sessionId: value };
   }
   return null;

@@ -13,6 +13,7 @@ export function createChatHandlers(ctx: AppContext) {
     chat,
     opencode,
     codex,
+    claude,
     models,
     projects,
     previewRoots,
@@ -71,7 +72,7 @@ export function createChatHandlers(ctx: AppContext) {
       const source = store.chatSource(paneId);
       if (!pane.chat || source === null) return c.json({ error: "no_chat" }, 404);
 
-      const client = { pi: chat, opencode, codex }[source.agent];
+      const client = { pi: chat, opencode, codex, claude }[source.agent];
       if (client === undefined) return c.json({ error: "chat_unavailable" }, 502);
 
       try {

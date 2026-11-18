@@ -45,7 +45,7 @@ test("a started launch opens after the settle window once the conversation is re
 });
 
 test("a chat agent stays closed while its conversation is not readable yet", () => {
-  for (const agent of ["pi", "codex", "opencode"] as const) {
+  for (const agent of ["pi", "claude", "codex", "opencode"] as const) {
     const detected = pane({ agent });
     expect(launchPhase(launch(), detected, AT + STARTING_SETTLE_MS)).toBe("launching");
     expect(launchPhase(launch(), detected, AT + STARTING_LIMIT_MS - 1)).toBe("launching");
@@ -57,10 +57,10 @@ test("a chat agent stays closed while its conversation is not readable yet", () 
 });
 
 test("an agent without chat opens as soon as it owns the terminal", () => {
-  expect(launchPhase(launch({ agent: "claude" }), pane({ agent: "claude" }), AT)).toBe("launching");
-  expect(
-    launchPhase(launch({ agent: "claude" }), pane({ agent: "claude" }), AT + STARTING_SETTLE_MS),
-  ).toBe("ready");
+  // 4 つの CLI はどれも会話を読む。チャットを持たないのは、hwc が知らないエージェント。
+  const unknown = pane({ agent: "vim" });
+  expect(launchPhase(launch(), unknown, AT)).toBe("launching");
+  expect(launchPhase(launch(), unknown, AT + STARTING_SETTLE_MS)).toBe("ready");
 });
 
 test("a pane without a detected agent stays closed until the agent arrives", () => {
@@ -81,7 +81,10 @@ test("a failed launch opens for a shell and keeps waiting when an agent is detec
 
 test("the snapshot wins over a failed or timed out request", () => {
   const failed = launch({ request: "failed", error: "timeout" });
-  expect(launchPhase(failed, pane({ agent: "claude" }), AT)).toBe("ready");
+  expect(launchPhase(failed, pane({ agent: "vim" }), AT)).toBe("ready");
+  // 会話を読むエージェントは、起動要求が失敗していても会話が読めるまで待つ。
+  expect(launchPhase(failed, pane({ agent: "claude", chat: true }), AT)).toBe("ready");
+  expect(launchPhase(failed, pane({ agent: "claude" }), AT)).toBe("launching");
 });
 
 test("the record only applies to the pane it was created for", () => {
