@@ -122,6 +122,56 @@ test("excessive Codex catalog pagination fails instead of returning a partial se
   );
 });
 
+function claudeClient() {
+  const forbidden = () => {
+    throw new Error("Claude selection must not start another CLI or service");
+  };
+  return createAgentModelsClient({
+    piModels: async () => forbidden(),
+    loadService: async () => forbidden(),
+    codex: async () => forbidden(),
+  });
+}
+
+test("Claude candidates are the CLI's model aliases, not versioned catalog rows", async () => {
+  expect(await claudeClient().list("claude", "/project")).toEqual([
+    { provider: "claude", id: "opus" },
+    { provider: "claude", id: "sonnet" },
+    { provider: "claude", id: "fable" },
+    { provider: "claude", id: "haiku" },
+  ]);
+});
+
+test("Claude efforts are the CLI's effort levels for a known alias", async () => {
+  const client = claudeClient();
+  expect(await client.efforts("claude", { provider: "claude", id: "haiku" }, "/project")).toEqual([
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ]);
+  await expect(
+    client.efforts("claude", { provider: "claude", id: "claude-opus-5-5" }, "/project"),
+  ).rejects.toThrow();
+  await expect(
+    client.efforts("claude", { provider: "example", id: "opus" }, "/project"),
+  ).rejects.toThrow();
+});
+
+test("Claude starts with the selected alias and effort only", async () => {
+  const client = claudeClient();
+  const opus = { provider: "claude", id: "opus" };
+  expect(await client.startArgs("claude", opus, "/project")).toEqual(["--model", "opus"]);
+  expect(
+    await client.startArgs("claude", { provider: "claude", id: "sonnet" }, "/new-project", "high"),
+  ).toEqual(["--model", "sonnet", "--effort", "high"]);
+  await expect(
+    client.startArgs("claude", { provider: "claude", id: "opus-5" }, "/project"),
+  ).rejects.toThrow();
+  await expect(client.startArgs("claude", opus, "/project", "turbo")).rejects.toThrow();
+});
+
 test("Pi candidates keep the provider identity and collapse duplicate rows", () => {
   expect(parsePiModels(table)).toEqual([model, { provider: "other", id: "beam" }]);
   expect(parsePiModels("No models available. Use /login to sign in.")).toEqual([]);

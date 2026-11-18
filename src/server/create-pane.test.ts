@@ -81,7 +81,7 @@ test.each(["pi", "claude", "codex", "opencode"] as const)(
   },
 );
 
-test.each(["pi", "codex", "opencode"] as const)(
+test.each(["pi", "claude", "codex", "opencode"] as const)(
   "a new %s pane starts with model-specific arguments",
   async (agent) => {
     const { panes } = createFakePanes();
@@ -108,7 +108,7 @@ test.each(["pi", "codex", "opencode"] as const)(
   },
 );
 
-test.each(["pi", "codex", "opencode"] as const)(
+test.each(["pi", "claude", "codex", "opencode"] as const)(
   "a %s model or effort preparation failure keeps the named shell without falling back",
   async (agent) => {
     const { panes } = createFakePanes();

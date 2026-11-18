@@ -565,7 +565,7 @@ test("parseSplitBody rejects an unknown agent, a non-string name, or an overlong
   expect(parseSplitBody([]).ok).toBe(false);
 });
 
-test.each(["pi", "codex", "opencode"])(
+test.each(["pi", "claude", "codex", "opencode"])(
   "parseSplitBody accepts a provider-qualified model for %s",
   (agent) => {
     const model = { provider: "example", id: "family/beam-v1:latest" };
@@ -587,12 +587,12 @@ test.each(["pi", "opencode"])(
   },
 );
 
-test.each(["claude", null, undefined])("parseSplitBody rejects model overrides for %s", (agent) => {
+test.each([null, undefined])("parseSplitBody rejects model overrides for %s", (agent) => {
   expect(parseSplitBody({ agent, model: { provider: "example", id: "beam" } }).ok).toBe(false);
   expect(parseSplitBody({ agent, model: null }).ok).toBe(true);
 });
 
-test.each(["pi", "codex", "opencode"])(
+test.each(["pi", "claude", "codex", "opencode"])(
   "parseSplitBody accepts native effort values for an explicit %s model",
   (agent) => {
     const model = { provider: "example", id: "beam" };
@@ -603,7 +603,7 @@ test.each(["pi", "codex", "opencode"])(
   },
 );
 
-test.each(["pi", "codex", "opencode", "claude", null, undefined])(
+test.each(["pi", "codex", "opencode", null, undefined])(
   "parseSplitBody rejects effort without an explicit model for %s",
   (agent) => {
     expect(parseSplitBody({ agent, effort: "high" }).ok).toBe(false);
@@ -859,6 +859,11 @@ test("parseStartBody keeps the agent and its model selection without a name", ()
     ok: true,
     value: { agent: "codex", model, effort: "low", waitForShell: false },
   });
+  const alias = { provider: "claude", id: "opus" };
+  expect(parseStartBody({ agent: "claude", model: alias, effort: "high" })).toEqual({
+    ok: true,
+    value: { agent: "claude", model: alias, effort: "high", waitForShell: false },
+  });
   // 分割直後のペインだけ、シェルの準備待ちを含める。
   expect(parseStartBody({ agent: "pi", waitForShell: true })).toEqual({
     ok: true,
@@ -880,7 +885,6 @@ test.each([
 });
 
 test.each([
-  { agent: "claude", model: { provider: "example", id: "beam" } },
   { agent: "pi", effort: "high" },
   { agent: "pi", model: { provider: "example", id: "beam" }, effort: "" },
 ])("parseStartBody reuses the model and effort rules: %j", (body) => {

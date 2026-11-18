@@ -22,6 +22,18 @@ export type AgentModelsClient = {
 
 export const MODEL_LIST_TIMEOUT_MS = 20_000;
 
+// Claude Code 2.1.327 の `--model` は family のエイリアスを受け、その時点の最新モデルへ
+// 解決する。hwc は版を追わず、エイリアスだけを候補にする。`fable` / `opus` / `sonnet` は
+// `claude --help`、`haiku` は CLI 同梱の alias 一覧で確認した（ADR 0096）。
+const CLAUDE_PROVIDER = "claude";
+const CLAUDE_MODEL_ALIASES = ["opus", "sonnet", "fable", "haiku"] as const;
+// `claude --help` の `--effort` が示す段階。エイリアスの解決先はすべてこの 5 段階に対応する。
+const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+function claudeModels(): AgentModel[] {
+  return CLAUDE_MODEL_ALIASES.map((id) => ({ provider: CLAUDE_PROVIDER, id }));
+}
+
 export function parsePiModels(text: string): AgentModel[] {
   const lines = text.trim().split(/\r?\n/);
   const header = lines.findIndex((line) =>
@@ -104,6 +116,7 @@ export function createAgentModelsClient(
   const piEfforts = options.piEfforts ?? loadPiEfforts;
 
   const list: AgentModelsClient["list"] = async (agent, directory) => {
+    if (agent === "claude") return claudeModels();
     if (agent === "pi") return parsePiModels(await piModels(directory));
     if (agent === "codex")
       return (await listCodexModels(codex, directory)).map(({ provider, id }) => ({
@@ -116,6 +129,12 @@ export function createAgentModelsClient(
   };
 
   const efforts: AgentModelsClient["efforts"] = async (agent, model, directory) => {
+    if (agent === "claude") {
+      const available = claudeModels();
+      if (!available.some((candidate) => modelKey(candidate) === modelKey(model)))
+        throw new Error("Claude effort is unavailable");
+      return [...CLAUDE_EFFORTS];
+    }
     if (agent === "pi") return piEfforts(directory, model);
     if (agent === "codex") {
       const available = await listCodexModels(codex, directory);
@@ -150,6 +169,8 @@ export function createAgentModelsClient(
       }
       if (effort !== null && !(await efforts(agent, model, directory)).includes(effort))
         throw new Error("The selected effort is not available");
+      if (agent === "claude")
+        return ["--model", model.id, ...(effort === null ? [] : ["--effort", effort])];
       if (agent === "pi")
         return ["--model", modelKey(model), ...(effort === null ? [] : ["--thinking", effort])];
       if (agent === "codex")

@@ -4,7 +4,12 @@ export const AGENT_KINDS = ["pi", "claude", "codex", "opencode"] as const;
 
 export type AgentKind = (typeof AGENT_KINDS)[number];
 
-export type ModelAgentKind = "pi" | "codex" | "opencode";
+// hwc が会話を読めるエージェント。
+export type ChatAgentKind = "pi" | "codex" | "opencode";
+
+// 起動時にモデルと effort を選べるエージェント。Claude は会話を読まないが、CLI は
+// 起動時の `--model` / `--effort` を受け取れる（ADR 0096）。
+export type ModelAgentKind = ChatAgentKind | "claude";
 
 export type AgentModel = { provider: string; id: string };
 
@@ -18,12 +23,12 @@ export function isAgentEffort(value: unknown): value is string {
 }
 
 export function supportsModelSelection(agent: unknown): agent is ModelAgentKind {
-  return agent === "pi" || agent === "codex" || agent === "opencode";
+  return agent === "pi" || agent === "claude" || agent === "codex" || agent === "opencode";
 }
 
 // hwc が起動したときに会話を読める見込みがあるエージェント。起動直後はセッションが
 // できるまで pane.chat が false のままになる（Claude は会話を持たない）。
-export function supportsChat(agent: unknown): agent is ModelAgentKind {
+export function supportsChat(agent: unknown): agent is ChatAgentKind {
   return agent === "pi" || agent === "codex" || agent === "opencode";
 }
 
