@@ -177,10 +177,10 @@ Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（
 2. 「この行は注記の書式が崩れています。」の行は本文だけで、`<attached_files>` も絶対パスも残らない。チップも出ない。
 3. 同じペインで 2 回目の取得が 304 になることを、DevTools のネットワークで `/api/panes/w2:p2/chat` の応答を見て確かめる。会話が変わらない間は 200 が返らない。
 4. 端末出力へのフォールバックは、起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` を消して確かめる。次の取得が 502 になり、本文が `claude · quickstart` の端末出力に切り替わる。ファイルを戻すと会話に戻るが、見つからなかった結果を 30 秒だけ覚えるので、戻した直後は端末出力のままになる。
-5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` で、transcript の末尾は tool_result を持たない AskUserQuestion になっている。会話は端末出力へ切り替わらず、末尾に「Claude からの質問」のカードが出る（[ADR 0098](adr/0098-claude-pending-in-chat.md)）。質問ごとにヘッダ・質問文・選択肢（label と description）が並び、複数選択の質問には「複数選べます」が付く。選択肢は押せない。入力欄・引用・添付・`/` の候補は出ず、代わりに「Claude の応答待ちです」の行が出る。
+5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` で、質問は hook の sidecar（`<root>/claude/pending/<session uuid>.json`）にあり、transcript には質問の tool_use が無い（実機の Claude Code は待ちの間これを書かない。[ADR 0098](adr/0098-claude-pending-in-chat.md)）。会話は端末出力へ切り替わらず、末尾に「Claude からの質問」のカードが出る。質問ごとにヘッダ・質問文・選択肢（label と description）が並び、複数選択の質問には「複数選べます」が付く。選択肢は押せない。入力欄・引用・添付・`/` の候補は出ず、代わりに「Claude の応答待ちです」の行が出る。transcript にある解決済みの Read の tool_use は、カードにならない。
 6. カードの「端末出力を見る」を押すと body が `claude · docs` の端末出力に変わり、上に「端末で応答してください。」と「会話に戻る」が出る。「会話に戻る」で会話とカードに戻る。再読み込みすると会話に戻る（切替はローカルの状態）。
-7. 応答が解決するとカードが消えて入力欄が戻る。起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` に、tool_result の user と次の assistant を 1 行ずつ追記すると、次の取得（5 秒以内）でカードが消える（ファイルが変わればサイズも変わる）。
-8. 応答待ちが読めない `blocked` のペインは、今までどおり端末出力になる。`pending` を落とすには transcript の末尾を user の本文にする（`e2e/fixtures/scenario.ts` の `claudePendingTranscript` をその形に一時的に変えて確かめ、戻す）。
+7. 解決は transcript の tool_result で知る（Esc は hook を呼ばない）。起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` に、`pending-tool-2` の assistant の tool_use と、`tool_use_id` が同じ tool_result の user を 1 行ずつ追記すると、次の取得（5 秒以内）でカードが消える。架空 Herdr の `agent_status` は `blocked` のままなので、カードが消えたあとは端末出力になり、入力欄は閉じたまま（実機では Esc で `idle` に戻り、入力欄が戻る）。sidecar のファイルが残っていても、カードは戻らない。
+8. 応答待ちが読めない `blocked` のペインは、今までどおり端末出力になる。sidecar のファイルを消すと、次の取得でカードが消えて端末出力になる。
 9. 空の会話では `/new` `/compact` の候補が消える。fixture の Claude は会話を持つため、この判定は `src/client/commands.test.ts` で確かめる。
 
 ## 過去の発言の編集

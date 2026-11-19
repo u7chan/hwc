@@ -3,6 +3,8 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClaudeChatClient } from "./claude";
+import { SIDECAR_TTL_MS } from "./claude-sidecar";
+import type { ChatPending } from "./contract";
 import { ChatUnavailableError } from "./errors";
 import { MAX_CHAT_MESSAGES } from "./limit";
 
@@ -700,5 +702,155 @@ test("question text is flattened, stripped and cut to the limits", async () => {
     expect(head?.multiSelect).toBe(true);
     expect(head?.options).toHaveLength(10);
     expect(head?.options[0]?.description).toHaveLength(1_000);
+  });
+});
+
+// 実機（Claude Code 2.1.328）は、質問と承認の待ちの間は assistant の tool_use を transcript に
+// 書かず、ダイアログを閉じたときに tool_result と一緒に書く。待ちは hook の sidecar が教える。
+async function withSidecar(
+  run: (dirs: { root: string; pendingRoot: string }) => Promise<void>,
+): Promise<void> {
+  await withRoot(async (root) => {
+    const pendingRoot = join(root, "pending");
+    await mkdir(pendingRoot, { recursive: true });
+    await run({ root, pendingRoot });
+  });
+}
+
+const sidecarQuestion: ChatPending = {
+  kind: "question",
+  toolUseId: "t1",
+  tool: "AskUserQuestion",
+  questions: [question("好きな色は？", ["赤", "青"])],
+};
+
+async function writeSidecar(
+  pendingRoot: string,
+  fields: Record<string, unknown> = {},
+): Promise<void> {
+  await writeFile(
+    join(pendingRoot, `${SESSION}.json`),
+    JSON.stringify({
+      v: 1,
+      sessionId: SESSION,
+      at: BASE,
+      toolUseId: "t1",
+      tool: "AskUserQuestion",
+      pending: sidecarQuestion,
+      ...fields,
+    }),
+  );
+}
+
+test("a question the hook recorded is shown even though the transcript has no tool_use yet", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "色を聞いてください。")]);
+    await writeSidecar(pendingRoot);
+
+    const snapshot = await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(
+      SESSION,
+    );
+
+    expect(snapshot.pending).toEqual(sidecarQuestion);
+    expect(snapshot.messages.map((message) => message.text)).toEqual(["色を聞いてください。"]);
+  });
+});
+
+test("the wait is part of the etag so the card is not hidden by a 304", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "色を聞いてください。")]);
+    const client = createClaudeChatClient({ pendingRoot, now: () => BASE });
+    const without = await client.snapshot(SESSION);
+
+    await writeSidecar(pendingRoot);
+    const withCard = await client.snapshot(SESSION);
+
+    expect(without.pending).toBeUndefined();
+    expect(withCard.etag).not.toBe(without.etag);
+  });
+});
+
+test("Esc leaves the file behind, but the tool_result the CLI writes resolves the question", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    const first = user("u1", null, "色を聞いてください。");
+    const ask = assistant("a1", "u1", "msg_1", [askUse("t1", [question("好きな色は？", ["赤"])])]);
+    const rejected = user("u2", "a1", [{ ...toolResult("t1"), is_error: true }]);
+    const interrupted = user("u3", "u2", [text("[Request interrupted by user for tool use]")]);
+    await writeTranscript(root, [first, ask, rejected, interrupted]);
+    await writeSidecar(pendingRoot);
+
+    const snapshot = await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(
+      SESSION,
+    );
+
+    expect(snapshot.pending).toBeUndefined();
+  });
+});
+
+test("a tool approval the hook recorded is shown with its summary", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "ファイルを作ってください。")]);
+    await writeSidecar(pendingRoot, {
+      toolUseId: "t2",
+      tool: "Bash",
+      pending: { kind: "tool", toolUseId: "t2", tool: "Bash", summary: "touch ./probe" },
+    });
+
+    const snapshot = await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(
+      SESSION,
+    );
+
+    expect(snapshot.pending).toEqual({
+      kind: "tool",
+      toolUseId: "t2",
+      tool: "Bash",
+      summary: "touch ./probe",
+    });
+  });
+});
+
+test("a record older than its lifetime, a started tool and another session's file show no card", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "色を聞いてください。")]);
+    const client = createClaudeChatClient({ pendingRoot, now: () => BASE + SIDECAR_TTL_MS + 1 });
+
+    await writeSidecar(pendingRoot);
+    expect((await client.snapshot(SESSION)).pending).toBeUndefined();
+
+    await writeSidecar(pendingRoot, { pending: null });
+    expect(
+      (await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(SESSION)).pending,
+    ).toBeUndefined();
+
+    await writeSidecar(pendingRoot, { sessionId: "another-session" });
+    expect(
+      (await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(SESSION)).pending,
+    ).toBeUndefined();
+  });
+});
+
+test("without a pending root only the transcript decides", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "色を聞いてください。")]);
+    await writeSidecar(pendingRoot);
+
+    const snapshot = await createClaudeChatClient({ now: () => BASE }).snapshot(SESSION);
+
+    expect(snapshot.pending).toBeUndefined();
+  });
+});
+
+test("the hook's record wins over an unresolved tool_use at the end of the transcript", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    const first = user("u1", null, "続けてください。");
+    const ask = assistant("a1", "u1", "msg_1", [tool("t9", "Bash", { command: "ls" })]);
+    await writeTranscript(root, [first, ask]);
+    await writeSidecar(pendingRoot);
+
+    const snapshot = await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(
+      SESSION,
+    );
+
+    expect(snapshot.pending).toEqual(sidecarQuestion);
   });
 });

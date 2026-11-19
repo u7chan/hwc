@@ -44,6 +44,7 @@ import {
 import { createTemplatesStore, type TemplatesStore } from "../templates";
 import { defaultPreviewRoots } from "../message-files";
 import type { AgentModelsClient } from "../agent-models";
+import type { ClaudeSettingsProvider } from "../create-pane";
 import { HerdrError } from "../herdr/socket";
 
 // Bun.serve は 10 秒間何も書かれない chunked 応答を打ち切る。状態が変わらない間も接続を
@@ -75,6 +76,9 @@ export type CreateAppOptions = {
   // 端末出力は使えるようにする。
   claude?: SessionChatClient;
   models?: AgentModelsClient;
+  // Claude の起動に足す hook の設定ファイルを用意する。テストでは実ファイルを書かないよう、
+  // 渡さない（hook なしで起動する）。
+  claudeSettings?: ClaudeSettingsProvider;
   // pi の既定モデルは、チャット画面を開いたときに読む。テストでは実プロセスを
   // 起動しないよう差し替える。
   loadPiDefaults?: PiDefaultsReader;
@@ -115,6 +119,7 @@ export function createAppContext(options: CreateAppOptions) {
     codex,
     claude,
     models,
+    claudeSettings,
     pullRequests,
     git,
     projects = createProjectLister(),
@@ -388,6 +393,7 @@ export function createAppContext(options: CreateAppOptions) {
     codex,
     claude,
     models,
+    claudeSettings,
     pullRequests,
     git,
     projects,

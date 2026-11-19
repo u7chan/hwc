@@ -154,12 +154,14 @@ function claudeChatTranscript(): ClaudeEntry[] {
   });
 }
 
-// blocked のままのペイン。transcript の末尾は tool_result を持たない AskUserQuestion なので、
-// 会話の末尾に質問と選択肢のカードが出る。解決済みの tool_use はカードにしない。
+// blocked のままのペイン。実機の Claude Code は、質問の待ちの間は assistant の tool_use を
+// transcript に書かず、閉じたときに tool_result と一緒に書く。待ちは hook の sidecar が教える
+// ので、transcript は待ちに入る前の会話で終わらせ、質問は claudePendingSidecar に置く。
 function claudePendingTranscript(): ClaudeEntry[] {
   return claudeEntries(({ user, assistant }) => {
     user("docs/quickstart.md の手順を確認してください。");
     assistant("msg-pending-1", [{ type: "text", text: "見出しと直す範囲を選んでください。" }]);
+    // 解決済みの tool_use はカードにしない。
     assistant("msg-pending-1", [
       {
         type: "tool_use",
@@ -169,36 +171,52 @@ function claudePendingTranscript(): ClaudeEntry[] {
       },
     ]);
     user([{ type: "tool_result", tool_use_id: "pending-tool-1", content: "# Quickstart" }]);
-    assistant("msg-pending-2", [
-      {
-        type: "tool_use",
-        id: "pending-tool-2",
-        name: "AskUserQuestion",
-        input: {
-          questions: [
-            {
-              question: "見出しはどれにしますか？",
-              header: "見出し",
-              multiSelect: false,
-              options: [
-                { label: "クイックスタート", description: "今の見出しを残す" },
-                { label: "セットアップ", description: "手順の目的を先に出す" },
-              ],
-            },
-            {
-              question: "直す範囲は？",
-              header: "範囲",
-              multiSelect: true,
-              options: [
-                { label: "コマンド", description: "bun に揃える" },
-                { label: "スクリーンショット", description: "alt を足す" },
-              ],
-            },
+  });
+}
+
+// hook が Claude の状態ディレクトリ配下へ書く、応答待ちの 1 件（ADR 0098）。
+function claudePendingSidecar(): Record<string, unknown> {
+  return {
+    v: 1,
+    sessionId: CLAUDE_PENDING_SESSION,
+    at: Date.now(),
+    toolUseId: "pending-tool-2",
+    tool: "AskUserQuestion",
+    pending: {
+      kind: "question",
+      toolUseId: "pending-tool-2",
+      tool: "AskUserQuestion",
+      questions: [
+        {
+          question: "見出しはどれにしますか？",
+          header: "見出し",
+          multiSelect: false,
+          options: [
+            { label: "クイックスタート", description: "今の見出しを残す" },
+            { label: "セットアップ", description: "手順の目的を先に出す" },
           ],
         },
-      },
-    ]);
-  });
+        {
+          question: "直す範囲は？",
+          header: "範囲",
+          multiSelect: true,
+          options: [
+            { label: "コマンド", description: "bun に揃える" },
+            { label: "スクリーンショット", description: "alt を足す" },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+async function writeClaudePendingSidecar(root: string) {
+  const directory = join(root, "claude", "pending");
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    join(directory, `${CLAUDE_PENDING_SESSION}.json`),
+    JSON.stringify(claudePendingSidecar()),
+  );
 }
 
 async function writeClaudeTranscript(root: string, sessionId: string, entries: ClaudeEntry[]) {
@@ -377,6 +395,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeFile(join(claudeAttachmentDir, "quickstart-review.pdf"), Buffer.alloc(12 * 1024)),
     writeClaudeTranscript(root, CLAUDE_CHAT_SESSION, claudeChatTranscript()),
     writeClaudeTranscript(root, CLAUDE_PENDING_SESSION, claudePendingTranscript()),
+    writeClaudePendingSidecar(root),
     writeFile(join(attachmentDir, "empty-state-reference.zip"), Buffer.alloc(2 * 1024 * 1024)),
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
     writeFile(sessionPath, sessionLines.map((line) => `${line}\n`).join("")),
