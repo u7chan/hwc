@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-07（2026-11-08、2026-11-09、2026-11-11 改訂）
+- Amended by: [ADR 0100](0100-claude-live-activity.md)
 
 ## Context
 

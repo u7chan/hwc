@@ -1,6 +1,6 @@
 # ADR 0100: Claude の実行中の段階は transcript の進行行から出す
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-19
 - Amends: [ADR 0035](0035-live-pi-activity.md) の「実行中の段階は pi 拡張の sidecar からだけ読む」という前提
 
@@ -119,7 +119,7 @@ transcript は API の応答が終わるまで assistant の本文を書かな�
 - 画像だけの発言でもターンの起点になる。会話の行にはならないが、段階の判定には使う
 - thinking の本文があるのはローカルの 240 件のうち 24 件（10%）で、その多くは `showThinkingSummaries` が有効な環境の要約だった。既定の first-party では方向が最後の assistant 本文だけになる
 - `showThinkingSummaries` は変えない。hwc から起動したペインでも、thinking の本文はユーザーの設定と provider に従う
-- 実装と同じ変更で、`docs/agents.md` の activity の表と Claude の要点を直す。ADR 0035 には、この ADR が `Accepted` になった後に `Amended by: 0100` を足す（`Proposed` の間は足さない）
+- 実装と同じ変更で、`docs/agents.md` の activity の表と Claude の要点を直す。ADR 0035 には `Amended by: 0100` を足した
 - 帯の文言は 0035 の `waiting`（「応答を待っています」）ではなく `thinking`（「考えています」）を使う。要求中の思考と生成は区別できないため、まとめて `thinking` とする
 
 ## テスト
