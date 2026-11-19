@@ -26,6 +26,7 @@ import {
   mostUrgentStatus,
   paneName,
   paneRowTitle,
+  placeChip,
   pullRequestLabel,
   pullRequestTone,
   shortenBranchName,
@@ -161,6 +162,8 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
     workspaceId: "w1",
     workspaceLabel: "hwc",
     workspaceName: "hwc",
+    parentSpaceLabel: null,
+    parentSpaceName: null,
     workspacePath: "/home/example/hwc",
     tabLabel: "main",
     branch: "feat/board",
@@ -179,6 +182,8 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
     workspaceId: "w2",
     workspaceLabel: "hwc-verify",
     workspaceName: "hwc-verify",
+    parentSpaceLabel: null,
+    parentSpaceName: null,
     workspacePath: "/home/example/hwc-verify",
     tabLabel: "main",
     branch: null,
@@ -187,6 +192,67 @@ test("findPaneContext names the workspace, tab, and branch of a pane", () => {
   });
   expect(findPaneContext(state, "w9:p9")).toBeNull();
   expect(findPaneContext(state, null)).toBeNull();
+});
+
+test("a linked worktree takes the space it was created from", () => {
+  const worktree: WorktreeState = {
+    repoName: "hwc",
+    repoRoot: "/srv/hwc",
+    checkoutPath: "/srv/worktrees/hwc/silver-harbor-4da7",
+    isLinkedWorktree: true,
+    managed: true,
+  };
+  const host: WorkspaceState = {
+    ...state.workspaces[0],
+    id: "w1",
+    label: "hwc",
+    worktree: { ...worktree, checkoutPath: "/srv/hwc", isLinkedWorktree: false },
+  };
+  const linked: WorkspaceState = {
+    ...state.workspaces[1],
+    id: "w2",
+    label: "worktree-silver-harbor-4da7",
+    worktree,
+  };
+
+  expect(findPaneContext({ ...state, workspaces: [host, linked] }, "w2:p1")).toMatchObject({
+    workspaceName: "silver-harbor-4da7",
+    parentSpaceLabel: "hwc",
+    parentSpaceName: "hwc",
+  });
+  // 作成元はスペースの名前。リポジトリ名ではなく、Herdr で付けたラベルを使う。
+  const renamed = { ...host, label: "hwc-main" };
+  expect(findPaneContext({ ...state, workspaces: [renamed, linked] }, "w2:p1")).toMatchObject({
+    workspaceName: "silver-harbor-4da7",
+    parentSpaceLabel: "hwc-main",
+    parentSpaceName: "hwc-main",
+  });
+  // 作成元のスペースが閉じていればラベルは読めない。自動ラベルの元になるリポジトリ名で代える。
+  expect(findPaneContext({ ...state, workspaces: [linked] }, "w2:p1")).toMatchObject({
+    parentSpaceLabel: "hwc",
+    parentSpaceName: "hwc",
+  });
+  // リポジトリ本体は、自分自身を作成元にしない。
+  expect(findPaneContext({ ...state, workspaces: [host, linked] }, "w1:p1")).toMatchObject({
+    parentSpaceLabel: null,
+    parentSpaceName: null,
+  });
+});
+
+test("a place chip drops the names the heading already shows", () => {
+  expect(placeChip("Claude Code", "hwc", "silver-harbor-4da7")).toEqual({
+    parent: "hwc",
+    space: "silver-harbor-4da7",
+  });
+  expect(placeChip("Claude Code", null, "hwc")).toEqual({ parent: null, space: "hwc" });
+  // 同じ名前のスペースを作成元にしていたら、繰り返さない。
+  expect(placeChip("Claude Code", "hwc", "hwc")).toEqual({ parent: null, space: "hwc" });
+  // 名前の無いペインは見出しが場所そのものなので、チップを出さない。
+  expect(placeChip("silver-harbor-4da7", "hwc", "silver-harbor-4da7")).toBeNull();
+  expect(placeChip("hwc", "hwc", "silver-harbor-4da7")).toEqual({
+    parent: null,
+    space: "silver-harbor-4da7",
+  });
 });
 
 test("the counts follow the nesting", () => {

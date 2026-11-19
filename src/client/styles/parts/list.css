@@ -640,18 +640,40 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   outline-color: var(--slot-color);
 }
 
-/* セル見出しのスペース名。複数スペースのペインが並ぶときだけ出す。 */
+/* セル見出しの場所。複数スペースのペインが並ぶときだけ出す。ワークツリーは作成元の
+   スペースの下にあるので、作成元 → いまのスペースの順に並べる。 */
 .hwc-pane-head-space {
   /* 分割セルが狭いときは、ペイン名が 0 になってもここが残る。省略できるように
      縮む側へ倒し、見出しの右端（メニュー）をセルの外へ押し出さない。 */
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 10em;
+  /* スペース名の 10em に、作成元（6em ほど）と区切りの 1em を足した幅。 */
+  max-width: 17em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   overflow: hidden;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.hwc-pane-head-place {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 幅が足りないときは作成元から先に縮める（既定の flex）。いまのスペース（末尾）は
+   縮めず、名前が長いときだけ自分の上限で省略する。少しの不足で両方に省略記号を
+   付けないため。 */
+.hwc-pane-head-place[data-part="space"] {
+  flex: 0 0 auto;
+  max-width: 10em;
+}
+
+.hwc-pane-head-sep {
+  flex: none;
 }
 
 .hwc-pane-more {
