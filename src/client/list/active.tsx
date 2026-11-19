@@ -1,12 +1,20 @@
 import type { PaneState } from "../../server/herdr/state";
 import type { PullRequest } from "../../shared/pull-request";
-import { ArrowRightIcon, GitHubIcon, MergeIcon, MoreIcon, PaneIcon } from "../icons";
+import {
+  AgentGlyphIcon,
+  ArrowRightIcon,
+  GitHubIcon,
+  MergeIcon,
+  MoreIcon,
+  PaneIcon,
+} from "../icons";
 import { GitCount } from "../GitCount";
 import { MENU_ID } from "../Menu";
 import { ParentMark } from "../ParentMark";
 import { showsTabName, type ActiveGroup, type ActiveStatus } from "../scope";
 import {
   activeRowName,
+  agentGlyph,
   paneRowTitle,
   pullRequestLabel,
   pullRequestTone,
@@ -259,6 +267,9 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
                       <StatusIcon status={pane.agentStatus} />
                       <span class="hwc-active-main">
                         <span class="hwc-active-title">
+                          <span class="hwc-pane-agent" data-agent={agentGlyph(pane.agent)}>
+                            <AgentGlyphIcon agent={pane.agent} size={14} />
+                          </span>
                           <span class="hwc-active-name" title={name}>
                             {activeRowName(group.workspace.label, name)}
                           </span>
