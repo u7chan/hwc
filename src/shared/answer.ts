@@ -19,6 +19,11 @@ export type AnswerQuestion = {
 const MAX_ANSWERS = 4;
 const MAX_LABELS = 10;
 
+// 本文の先頭の文字は、そのまま CLI の入力欄に届く。質問文が `/`（スラッシュコマンド）や
+// `!`（シェル）、`#` で始まると、回答が届かないか、コマンドとして実行される。質問文で始めず、
+// 固定の 1 行を先頭に置く。条件付きで足すと、どの文字が危ないかを hwc が知っている前提になる。
+export const ANSWER_HEADING = "質問への回答:";
+
 // 形の検査だけ。pending との照合は composeAnswer が行う。
 export function parseAnswerRequest(body: unknown): AnswerRequest | null {
   const record = asRecord(body);
@@ -48,7 +53,8 @@ export function parseAnswerRequest(body: unknown): AnswerRequest | null {
   return { toolUseId, answers: parsed };
 }
 
-// 質問ごとの回答を、通常のユーザー発言として送る本文にする。質問文は pending のものを使い、
+// 質問ごとの回答を、通常のユーザー発言として送る本文にする（先頭の 1 行と、質問ごとの 1 行）。
+// 質問文は pending のものを使い、
 // クライアントが送った文言は使わない。回答が全質問を覆っていない・選択肢に無いラベル・
 // 単一選択に複数・空の回答は null。
 export function composeAnswer(
@@ -67,7 +73,7 @@ export function composeAnswer(
     if (body === null) return null;
     lines.push(`${question.question}: ${body}`);
   }
-  return lines.join("\n");
+  return [ANSWER_HEADING, ...lines].join("\n");
 }
 
 function freeText(text: string): string | null {

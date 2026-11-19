@@ -105,7 +105,7 @@ test("Esc closes the dialog first, then the answer is sent as an ordinary messag
 
   // 読む→Esc→（待ちが消えるまで読む）→本文。Esc より先に本文を送らない。
   expect(calls).toEqual(["read", `keys:${PANE}:esc`, "read", "read", "read", `send:${PANE}:true`]);
-  expect(sent).toEqual(["好きな色は？: 青"]);
+  expect(sent).toEqual(["質問への回答:\n好きな色は？: 青"]);
 });
 
 test("the body uses the question the pane is waiting on, not the client's wording", async () => {
@@ -115,7 +115,7 @@ test("the body uses the question the pane is waiting on, not the client's wordin
     request: { toolUseId: "t1", answers: [{ question: "好きな色は？", text: "  緑\nに近い青 " }] },
   });
 
-  expect(sent).toEqual(["好きな色は？: 緑 に近い青"]);
+  expect(sent).toEqual(["質問への回答:\n好きな色は？: 緑 に近い青"]);
 });
 
 test.each([
@@ -173,7 +173,7 @@ test("a body over the input limit is refused before the dialog is touched", asyn
 
 test("a body that fits exactly is sent", async () => {
   const { answer, sent } = setup([question("t1"), undefined]);
-  const prefix = "好きな色は？: ";
+  const prefix = "質問への回答:\n好きな色は？: ";
   const free = "a".repeat(MAX_TEXT_BYTES - new TextEncoder().encode(prefix).length);
 
   expect(

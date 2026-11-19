@@ -91,7 +91,7 @@ test("a blocked Claude pane is answered by closing the dialog and then sending t
 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true });
-  expect(calls).toEqual(["keys:esc", "send:true:好きな色は？: 青"]);
+  expect(calls).toEqual(["keys:esc", "send:true:質問への回答:\n好きな色は？: 青"]);
 });
 
 test.each([

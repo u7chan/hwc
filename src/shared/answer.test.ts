@@ -21,7 +21,7 @@ test("each question becomes one line of the question and what was chosen", () =>
     ],
   );
 
-  expect(text).toBe("好きな色は？: 青\nどれを使いますか？: りんご, もも");
+  expect(text).toBe("質問への回答:\n好きな色は？: 青\nどれを使いますか？: りんご, もも");
 });
 
 test("the lines follow the questions, not the order the client sent", () => {
@@ -33,7 +33,7 @@ test("the lines follow the questions, not the order the client sent", () => {
     ],
   );
 
-  expect(text).toBe("好きな色は？: 赤\nどれを使いますか？: なし");
+  expect(text).toBe("質問への回答:\n好きな色は？: 赤\nどれを使いますか？: なし");
 });
 
 test("free text answers in place of the options and is flattened to one line", () => {
@@ -42,7 +42,7 @@ test("free text answers in place of the options and is flattened to one line", (
     [{ question: "好きな色は？", text: "  緑に近い\n青\u0007です  " }],
   );
 
-  expect(text).toBe("好きな色は？: 緑に近い 青です");
+  expect(text).toBe("質問への回答:\n好きな色は？: 緑に近い 青です");
 });
 
 test("a label that holds a separator is quoted so the choices stay countable", () => {
@@ -62,7 +62,7 @@ test("a label that holds a separator is quoted so the choices stay countable", (
     [{ question: "どの形式？", labels: ["JSON, 整形あり", "key: value", '"生"', "CSV"] }],
   );
 
-  expect(text).toBe('どの形式？: "JSON, 整形あり", "key: value", "\\"生\\"", CSV');
+  expect(text).toBe('質問への回答:\nどの形式？: "JSON, 整形あり", "key: value", "\\"生\\"", CSV');
 });
 
 test.each([
@@ -92,7 +92,7 @@ test("an answer that leaves a question unanswered is refused", () => {
 test("multiple labels are accepted only for a multi-select question", () => {
   expect(
     composeAnswer([fruits], [{ question: "どれを使いますか？", labels: ["りんご", "なし"] }]),
-  ).toBe("どれを使いますか？: りんご, なし");
+  ).toBe("質問への回答:\nどれを使いますか？: りんご, なし");
 });
 
 test("a request carries a tool use id and one of labels or text per answer", () => {
@@ -139,4 +139,27 @@ test.each([
   ],
 ])("a request with %s is refused", (_name, body) => {
   expect(parseAnswerRequest(body)).toBeNull();
+});
+
+// 質問文はモデルが書く。本文の先頭がそのまま CLI の入力欄に届くので、質問文が入力欄の特別な
+// 文字で始まっても、コマンドやシェルとして解釈されない（`/clear` が走る、`/etc` が Unknown
+// command になる、`!` でシェルへ入る、`#` がメモになる）。
+test.each([
+  "/etc/hosts を直しますか？",
+  "/clear と /new のどちらですか？",
+  "!rm を使いますか？",
+  "# メモしますか？",
+])("a question that starts with %s does not make the body start with that character", (title) => {
+  const question: AnswerQuestion = {
+    question: title,
+    multiSelect: false,
+    options: [{ label: "/new" }, { label: "はい" }],
+  };
+
+  const text = composeAnswer([question], [{ question: title, labels: ["/new"] }]);
+
+  expect(text).toBe(`質問への回答:\n${title}: /new`);
+  expect(text?.startsWith("/")).toBe(false);
+  expect(text?.startsWith("!")).toBe(false);
+  expect(text?.startsWith("#")).toBe(false);
 });
