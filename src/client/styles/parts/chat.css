@@ -1140,7 +1140,8 @@ p.hwc-compaction,
   overflow-wrap: anywhere;
 }
 
-/* 選択肢はまだ押せない。ボタンと見分けられるよう、地を持たない左罫線の一覧にする。 */
+/* 質問の選択肢。タップしやすい行にして、単一選択は丸・複数選択は四角の印で示す。選択は枠の
+   色だけでなくチェックでも示す。自由入力の行は、どちらの質問でも他の選択肢と排他なので丸。 */
 .hwc-pending-options {
   display: flex;
   flex-direction: column;
@@ -1150,23 +1151,123 @@ p.hwc-compaction,
   list-style: none;
 }
 
-.hwc-pending-option {
+.hwc-pending-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-pending-choice:hover:not(:disabled) {
+  border-color: var(--color-control-line);
+  background: var(--color-raised);
+}
+
+/* 選択中の枠は内側に描く。外側に出すと、押した瞬間だけ枠が膨らんで見える。 */
+.hwc-pending-choice:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-pending-choice[data-selected="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-raised);
+}
+
+/* 送信中・送信後も、何を選んだかは読めるようにする。 */
+.hwc-pending-choice:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.hwc-pending-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  /* 1 行目の文字の中央に合わせる。 */
+  margin-top: 3px;
+  border: 1px solid var(--color-control-line);
+  border-radius: 50%;
+  color: var(--color-on-accent);
+}
+
+.hwc-pending-mark[data-multi="true"] {
+  border-radius: 4px;
+}
+
+.hwc-pending-choice[data-selected="true"] .hwc-pending-mark {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.hwc-pending-choice-text {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding-left: var(--space-3);
-  border-left: 2px solid var(--color-line);
+  min-width: 0;
 }
 
 .hwc-pending-option-label {
   color: var(--color-text);
-  font-size: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: var(--line-tight);
+  overflow-wrap: anywhere;
 }
 
 .hwc-pending-option-description {
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   overflow-wrap: anywhere;
+}
+
+.hwc-pending-other {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-control);
+  background: var(--color-content);
+  color: var(--color-text);
+  /* 16px を下回ると iOS がフォーカス時に拡大する。 */
+  font: 400 max(16px, var(--text-body)) / var(--line-body) var(--font-ui);
+  resize: none;
+}
+
+.hwc-pending-other:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-pending-other:disabled {
+  opacity: 0.6;
+}
+
+/* 答える操作。全幅にして、片手のタップが外れにくいようにする。 */
+.hwc-pending-submit {
+  flex: none;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.hwc-pending-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-attention);
+  font-size: var(--text-secondary);
 }
 
 .hwc-pending-note {

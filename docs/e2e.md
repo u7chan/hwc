@@ -72,7 +72,7 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 フォーカスを移して `pane.focused` を流す。実 Herdr と同じく seen も進むので、対象が `done` の
 ときは `idle` に戻し、そのタブとスペースの集約状態を残りのペインから引き直して `pane.updated`
 を流す。hwc の既読はこの遷移で完了から待機に変わる（行そのものは残る）。
-`pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。
+`pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。Claude のペインで応答待ちの sidecar（`<root>/claude/pending/<session uuid>.json`）に質問があれば、実機の Claude Code と同じく、assistant の tool_use と `is_error` の tool_result と user の `[Request interrupted by user for tool use]` を transcript へ書く（sidecar は残す。Esc は hook を呼ばないため）。`pane.send_input` は Claude のペインでは送信 text を transcript の user として追記し、sidecar を消す（`UserPromptSubmit` の hook に相当）。質問への回答（[ADR 0099](adr/0099-answer-ask-user-question.md)）は、この 2 つを通して確かめられる。
 `workspace.move_block` は `workspaces` を並べ替えて `workspace.reordered` を流す。実 Herdr と同じく、
 渡された id の列を 1 ブロックとしてアンカーの前へ置く。
 `workspace.close` はスペース・タブ・ペインをスナップショットから取り除き、`workspace.closed` を流す。
@@ -181,7 +181,9 @@ Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（
 6. カードの「端末出力を見る」を押すと body が `claude · docs` の端末出力に変わり、上に「端末で応答してください。」と「会話に戻る」が出る。「会話に戻る」で会話とカードに戻る。再読み込みすると会話に戻る（切替はローカルの状態）。
 7. 解決は transcript の tool_result で知る（Esc は hook を呼ばない）。起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` に、`pending-tool-2` の assistant の tool_use と、`tool_use_id` が同じ tool_result の user を 1 行ずつ追記すると、次の取得（5 秒以内）でカードが消える。架空 Herdr の `agent_status` は `blocked` のままなので、カードが消えたあとは端末出力になり、入力欄は閉じたまま（実機では Esc で `idle` に戻り、入力欄が戻る）。sidecar のファイルが残っていても、カードは戻らない。
 8. 応答待ちが読めない `blocked` のペインは、今までどおり端末出力になる。sidecar のファイルを消すと、次の取得でカードが消えて端末出力になる。
-9. 空の会話では `/new` `/compact` の候補が消える。fixture の Claude は会話を持つため、この判定は `src/client/commands.test.ts` で確かめる。
+9. 質問に答える（[ADR 0099](adr/0099-answer-ask-user-question.md)）。カードの選択肢は押せる。単一選択（見出し）は 1 つだけ、複数選択（範囲）は複数を選べ、選ぶと枠とチェックで示す。「その他（自由入力）」を押すと選択肢が外れて入力欄が開き、文字を入れるまで「この内容で答える」は無効のまま。全問に答えて押すと、押した間だけスピナーが出て、架空 Herdr が Esc で質問を閉じ、本文（1 行目が `質問への回答:`、続けて `質問: 選んだラベル` を質問ごとに 1 行）が user の発言として会話に出る。カードは消えて入力欄が戻り、`[Request interrupted by user for tool use]` の行は出ない。ダブルタップしても発言は 1 件。
+10. 失敗の表示は、`/api/panes/<id>/answer-question` の応答を差し替えて確かめる（Playwright の `route`。URL の `:` はエンコードされるので `**/api/panes/*/answer-question` で一致させる）。502 は「回答できませんでした。端末で答えてください。」、413 は「回答が長すぎて送れません。短くしてください。」が出て、選択は残り、再度押せる。
+11. 空の会話では `/new` `/compact` の候補が消える。fixture の Claude は会話を持つため、この判定は `src/client/commands.test.ts` で確かめる。
 
 ## 過去の発言の編集
 

@@ -58,6 +58,7 @@ export function createApp(options: CreateAppOptions) {
       .post("/api/workspaces/move", requireJson, workspacesHandlers.move)
       .get("/api/panes/:id/chat", chatHandlers.chat)
       .post("/api/panes/:id/edit-message", requireJson, editMessageHandlers.edit)
+      .post("/api/panes/:id/answer-question", requireJson, chatHandlers.answerQuestion)
       .get("/api/panes/:id/default-model", chatHandlers.defaultModel)
       .get("/api/panes/:id/activity", chatHandlers.activity)
       // マニフェストがあるディレクトリを、ペインの cwd から下だけ列挙する。

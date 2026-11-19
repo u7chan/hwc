@@ -16,6 +16,7 @@ import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
 import { parseFileTree, type FileTreeListing } from "../shared/file-tree";
 import { parsePaneActivity, type PaneActivity } from "../shared/activity";
+import type { AnswerRequest } from "../shared/answer";
 import {
   type AgentKind,
   type AgentModel,
@@ -769,6 +770,32 @@ export async function stopAgent(paneId: string): Promise<void> {
     init: { signal: AbortSignal.timeout(STOP_TIMEOUT_MS) },
   });
   if (!response.ok) throw new Error(`stop: ${response.status}`);
+}
+
+// BFF は Esc で閉じて pending が消えるのを最大 3 秒待ってから本文を送る。その上限と通信を
+// 覆い、返らない経路でカードを回し続けない。
+export const ANSWER_TIMEOUT_MS = 15_000;
+
+// status は失敗の理由を伝えるためだけに返す。0 はネットワークの失敗と打ち切り。
+export type AnswerResult = { ok: true } | { ok: false; status: number };
+
+function answerRequest(paneId: string, json: AnswerRequest) {
+  return { ...paneParam(paneId), json };
+}
+
+export async function answerQuestion(
+  paneId: string,
+  request: AnswerRequest,
+): Promise<AnswerResult> {
+  try {
+    const response = await client.api.panes[":id"]["answer-question"].$post(
+      answerRequest(paneId, request),
+      { init: { signal: AbortSignal.timeout(ANSWER_TIMEOUT_MS) } },
+    );
+    return response.ok ? { ok: true } : { ok: false, status: response.status };
+  } catch {
+    return { ok: false, status: 0 };
+  }
 }
 
 export async function confirmFolderTrust(paneId: string, id: string): Promise<void> {

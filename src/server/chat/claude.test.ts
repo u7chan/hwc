@@ -854,3 +854,23 @@ test("the hook's record wins over an unresolved tool_use at the end of the trans
     expect(snapshot.pending).toEqual(sidecarQuestion);
   });
 });
+
+test("the marker the CLI writes when Esc interrupts a turn is not a user message", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "続けてください。");
+    const ask = assistant("a1", "u1", "msg_1", [askUse("t1", [question("好きな色は？", ["赤"])])]);
+    const rejected = user("u2", "a1", [{ ...toolResult("t1"), is_error: true }]);
+    const interrupted = user("u3", "u2", [text("[Request interrupted by user for tool use]")]);
+    const interruptedTurn = user("u4", "u3", "[Request interrupted by user]");
+    const answer = user("u5", "u4", "好きな色は？: 青");
+    await writeTranscript(root, [first, ask, rejected, interrupted, interruptedTurn, answer]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    // 質問への回答として送った本文だけが、ユーザーの発言として残る。
+    expect(snapshot.messages.map((message) => message.text)).toEqual([
+      "続けてください。",
+      "好きな色は？: 青",
+    ]);
+  });
+});
