@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { sidecarRoot } from "./chat/claude-sidecar";
 
@@ -25,8 +25,11 @@ export async function ensureClaudeSettings(stateRoot: string): Promise<string> {
   const existing = await readFile(path, "utf8").catch(() => null);
   if (existing !== content) {
     await mkdir(join(stateRoot, "claude"), { recursive: true, mode: 0o700 });
-    await writeFile(path, content);
+    await writeFile(path, content, { mode: 0o600 });
   }
+  // writeFile の mode は作るときだけ効く。既に別のモードで作られたファイルは、内容が同じで
+  // 書き直さなくても、sidecar と同じ 0600 に直す。
+  await chmod(path, 0o600);
   return path;
 }
 

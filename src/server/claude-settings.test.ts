@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, stat, utimes } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeSettingsJson, ensureClaudeSettings } from "./claude-settings";
@@ -63,6 +63,21 @@ test("the settings file is written under the state directory and left alone when
     await utimes(path, past, past);
     await ensureClaudeSettings(stateRoot);
     expect((await stat(path)).mtimeMs).toBe(past.getTime());
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
+test("the settings file is private to the owner, including one created with looser permissions", async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), "hwc-claude-settings-"));
+  try {
+    const path = await ensureClaudeSettings(stateRoot);
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
+
+    // 内容が同じなら書き直されないが、モードだけは直る。
+    await chmod(path, 0o644);
+    await ensureClaudeSettings(stateRoot);
+    expect((await stat(path)).mode & 0o777).toBe(0o600);
   } finally {
     await rm(stateRoot, { recursive: true, force: true });
   }
