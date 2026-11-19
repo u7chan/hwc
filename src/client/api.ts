@@ -569,11 +569,11 @@ export function parseActivitySession(value: unknown): string | null {
   return typeof value === "string" && value !== "" && !/\p{Cc}/u.test(value) ? value : null;
 }
 
-// 既定モデルで起動した pi のペインで、会話にモデルが載るまでの表示に使う。
-// 値が無い場合と失敗は同じ null に畳む（表示だけの補い。ADR 0087）。
-export type DefaultModel = { model: string; effort: string | null };
+// 会話にモデルが載るまでの表示に使う。値が無い場合と失敗は同じ null に畳む
+// （表示だけの補い。ADR 0087 / 0101）。
+export type ModelInfo = { model: string; effort: string | null };
 
-export function toDefaultModel(value: unknown): DefaultModel | null {
+export function toModelInfo(value: unknown): ModelInfo | null {
   if (typeof value !== "object" || value === null) return null;
   const { model, effort } = value as { model?: unknown; effort?: unknown };
   if (typeof model !== "string" || model.trim() === "" || /\p{Cc}/u.test(model)) return null;
@@ -585,13 +585,30 @@ export function toDefaultModel(value: unknown): DefaultModel | null {
 export async function readDefaultModel(
   paneId: string,
   signal: AbortSignal,
-): Promise<DefaultModel | null> {
+): Promise<ModelInfo | null> {
   try {
     const response = await client.api.panes[":id"]["default-model"].$get(paneParam(paneId), {
       init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
     });
     if (!response.ok) return null;
-    return toDefaultModel(await response.json());
+    return toModelInfo(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+// hwc から起動したときの指定は、会話がまだ読めない間の表示を補う。Claude は最初の
+// メッセージまで transcript を作らないため、その間は会話ではなく端末出力になる。
+export async function readLaunchModel(
+  paneId: string,
+  signal: AbortSignal,
+): Promise<ModelInfo | null> {
+  try {
+    const response = await client.api.panes[":id"]["launch-model"].$get(paneParam(paneId), {
+      init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
+    });
+    if (!response.ok) return null;
+    return toModelInfo(await response.json());
   } catch {
     return null;
   }

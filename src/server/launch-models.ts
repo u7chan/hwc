@@ -17,6 +17,9 @@ export function createLaunchModels() {
     forget(paneId: string): void {
       selections.delete(paneId);
     },
+    read(paneId: string): LaunchSelection | null {
+      return selections.get(paneId) ?? null;
+    },
     apply(paneId: string, snapshot: ChatSnapshot): ChatSnapshot {
       const selection = selections.get(paneId);
       if (selection === undefined) return snapshot;

@@ -153,6 +153,19 @@ export function createChatHandlers(ctx: AppContext) {
         return c.json({ error: "default_model_unavailable" }, 502);
       }
     },
+    launchModel: async (c: IdContext) => {
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      const pane = findPane(state, paneId);
+      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+
+      // 会話が読めるまでの表示だけに使う。シェルや、hwc 以外から起動したペインは空。
+      c.header("cache-control", "no-store");
+      if (pane.agent === null) return c.json({ model: null, effort: null });
+      return c.json(launchModels.read(paneId) ?? { model: null, effort: null });
+    },
     activity: async (c: IdContext) => {
       const state = await current();
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
