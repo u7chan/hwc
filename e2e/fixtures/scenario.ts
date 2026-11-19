@@ -1,5 +1,5 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HerdrSnapshot } from "../../src/server/herdr/contract";
 import { FOLDER_TRUST_SCREEN, PI_TRUST_SCREEN } from "./folder-trust";
@@ -38,6 +38,11 @@ export async function writeCodexThread(
 // Claude の transcript は、架空の CLAUDE_CONFIG_DIR 配下の projects/<cwd のエンコード>/
 // <session uuid>.jsonl に置く。プロジェクト名は内部形式なので、好きな名前でよい。
 const CLAUDE_PROJECT = "-home-dev-work-acme-dashboard-docs";
+// 架空の Claude の transcript の置き場。会話を後から追記する fake が同じ場所を使う。
+export function claudeTranscriptPath(root: string, sessionId: string): string {
+  return join(root, "claude", "projects", CLAUDE_PROJECT, `${sessionId}.jsonl`);
+}
+
 export const CLAUDE_CHAT_SESSION = "3f1c0a52-9d4e-4b8a-8c21-5e7d6f0b1a2c";
 export const CLAUDE_PENDING_SESSION = "b7d2e4c1-0a95-4f3e-9c68-2d1b3a4c5e6f";
 
@@ -220,12 +225,9 @@ async function writeClaudePendingSidecar(root: string) {
 }
 
 async function writeClaudeTranscript(root: string, sessionId: string, entries: ClaudeEntry[]) {
-  const directory = join(root, "claude", "projects", CLAUDE_PROJECT);
-  await mkdir(directory, { recursive: true });
-  await writeFile(
-    join(directory, `${sessionId}.jsonl`),
-    entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
-  );
+  const path = claudeTranscriptPath(root, sessionId);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""));
 }
 
 // 起動に失敗する架空モデル。新しいペインやワークツリーの部分成功を、実 CLI に触れずに確かめる。

@@ -9,6 +9,7 @@ import {
   STARTUP_MODELS,
   writeCodexThread,
 } from "../fixtures/scenario";
+import type { Claude } from "./claude";
 import type { FakeContext } from "./context";
 import type { Layout } from "./layout";
 import type { Pi } from "./pi";
@@ -21,6 +22,7 @@ export function createHandle(
   pi: Pi,
   workspaces: Workspaces,
   paneLayouts: Layout,
+  claude: Claude,
 ) {
   const {
     root,
@@ -217,6 +219,12 @@ export function createHandle(
           send(socket, { id, result: { type: "ok" } });
           return;
         }
+        // Claude は発言を transcript へ書き、応答待ちの hook の記録を消す。
+        if (await claude.appendUser(paneId, text)) {
+          send(socket, { id, result: { type: "ok" } });
+          broadcast("pane.updated", { pane_id: paneId });
+          return;
+        }
         await appendUserEntry(paneId, text);
         send(socket, { id, result: { type: "ok" } });
         broadcast("pane.updated", { pane_id: paneId });
@@ -264,6 +272,7 @@ export function createHandle(
         // 停止ボタンは Esc だけを送る。実 Herdr と同じく、実行中のエージェントは
         // idle に戻ったものとして次のスナップショットを作る。
         if (keys.some((key) => key === "esc" || key === "escape")) {
+          await claude.dismissQuestion(paneId);
           activityEpochs.set(paneId, (activityEpochs.get(paneId) ?? 0) + 1);
           void clearPiActivity(paneId);
           target.agent_status = "idle";

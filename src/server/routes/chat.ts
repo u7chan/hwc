@@ -4,6 +4,7 @@ import { OpencodeServiceNotRunningError } from "../chat/opencode";
 import { findPane } from "../herdr/state";
 import { attachMessageFiles } from "../message-files";
 import { isAgentModel, supportsModelSelection } from "../../shared/agents";
+import { parseAnswerRequest } from "../../shared/answer";
 import type { AppContext, IdContext } from "./context";
 
 export function createChatHandlers(ctx: AppContext) {
@@ -21,6 +22,7 @@ export function createChatHandlers(ctx: AppContext) {
     current,
     launchModels,
     piDefaults,
+    questionAnswerer,
     paneFailure,
     matchesEtag,
   } = ctx;
@@ -99,6 +101,33 @@ export function createChatHandlers(ctx: AppContext) {
       } catch {
         return c.json({ error: "chat_unavailable" }, 502);
       }
+    },
+    // AskUserQuestion に Esc で閉じて本文で答える（ADR 0099）。Claude だけ。
+    answerQuestion: async (c: IdContext) => {
+      const request = parseAnswerRequest(await c.req.json().catch(() => null));
+      if (request === null) return c.json({ error: "invalid_request" }, 400);
+
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      const pane = findPane(state, paneId);
+      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      if (pane.agent !== "claude") return c.json({ error: "not_claude" }, 400);
+
+      // セッションの在り処はクライアントから受け取らず、BFF がペイン id から引く。
+      const source = store.chatSource(paneId);
+      if (!pane.chat || source?.agent !== "claude" || questionAnswerer === null) {
+        return c.json({ error: "not_waiting" }, 409);
+      }
+
+      const outcome = await questionAnswerer.answer({
+        paneId,
+        sessionId: source.sessionId,
+        blocked: pane.agentStatus === "blocked",
+        request,
+      });
+      return outcome.ok ? c.json({ ok: true }) : c.json({ error: outcome.error }, outcome.status);
     },
     defaultModel: async (c: IdContext) => {
       const state = await current();

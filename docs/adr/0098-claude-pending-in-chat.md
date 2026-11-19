@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-19
 - Amends: [ADR 0097](0097-claude-chat-transcript.md)
+- Amended by: [ADR 0099](0099-answer-ask-user-question.md)（質問への回答）
 
 ## Context
 
@@ -52,7 +53,7 @@ transcript の外で、待ちを教えてくれる口は CLI の hook にある�
 - `pending` が読めないときは今までどおり端末出力へ倒す。誤検知でペインを操作不能にしない（入力欄は #335 のとおり閉じたまま）
 - `blocked` 中も Claude だけ会話を取得する。`chatPollDelay` は `blocked` を `idle` と同じ間隔にしてある（5 秒）
 - `/new` の表示用スナップショット（`newSessionSnapshot`）は `pending` を落とす。`/new` の直後に古いカードを出さない
-- 質問への回答と permission の承認は Web から送らない。回答は別の ADR で決める
+- 質問への回答は [ADR 0099](0099-answer-ask-user-question.md)。permission の承認は Web から送らない
 - Codex / Pi の確認画面と、他のエージェントへの pending の展開は変えない
 
 ## Consequences

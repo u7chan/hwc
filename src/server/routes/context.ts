@@ -44,6 +44,7 @@ import {
 import { createTemplatesStore, type TemplatesStore } from "../templates";
 import { defaultPreviewRoots } from "../message-files";
 import type { AgentModelsClient } from "../agent-models";
+import { createQuestionAnswerer } from "../answer-question";
 import type { ClaudeSettingsProvider } from "../create-pane";
 import { HerdrError } from "../herdr/socket";
 
@@ -178,6 +179,9 @@ export function createAppContext(options: CreateAppOptions) {
     workspaceRoot === null ? previewRoots : [workspaceRoot, ...previewRoots];
 
   const folderTrust = createFolderTrust(panes);
+  // 質問への回答は、会話を読める Claude のペインだけ。読み取り口が無い構成では答えない。
+  const questionAnswerer =
+    claude === undefined ? null : createQuestionAnswerer({ panes, chat: claude });
   const launchModels = createLaunchModels();
   const piDefaults = createPiDefaults(readPiDefaults);
 
@@ -413,6 +417,7 @@ export function createAppContext(options: CreateAppOptions) {
     folderTrust,
     launchModels,
     piDefaults,
+    questionAnswerer,
     paneFailure,
     worktreeFailure,
     workspaceFailure,

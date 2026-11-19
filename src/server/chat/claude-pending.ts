@@ -1,3 +1,4 @@
+import { flatText } from "../../shared/flat-text";
 import type { ChatPending, ChatPendingQuestion } from "./contract";
 
 // 応答待ちのカードは 1 問ずつ画面に収める。モデルが書いた文字列の上限はここで決め、
@@ -102,15 +103,11 @@ function pendingQuestion(value: unknown): ChatPendingQuestion | null {
   };
 }
 
-// モデルが書いた文字列として扱う。制御文字を落として改行を空白にし、長さで切るだけにする。
-// Markdown や HTML は、描く側でテキストとして置く。
+// モデルが書いた文字列として扱う。1 行に揃えて長さで切るだけにする。Markdown や HTML は、
+// 描く側でテキストとして置く。
 function pendingText(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
-  const flat = value
-    .replace(/\p{Cc}/gu, (char) => (/[\n\r\t]/.test(char) ? " " : ""))
-    .replace(/ {2,}/g, " ")
-    .trim();
-  return Array.from(flat).slice(0, max).join("");
+  return Array.from(flatText(value)).slice(0, max).join("");
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

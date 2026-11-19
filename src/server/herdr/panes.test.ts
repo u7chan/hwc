@@ -135,6 +135,21 @@ test("stop sends Escape to the pane", async () => {
   ]);
 });
 
+test("sendKeys sends only the given keys, with no text", async () => {
+  const { calls, call } = recordingCaller();
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  await client.sendKeys({ paneId: "w1:p1", keys: ["esc"] });
+
+  expect(calls).toEqual([
+    {
+      method: "pane.send_keys",
+      params: { pane_id: "w1:p1", keys: ["esc"] },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});
+
 test("folder trust confirmation sends Enter without text or other keys", async () => {
   const { calls, call } = recordingCaller();
   await createPaneClient({ path: "/tmp/test.sock", call }).confirmFolderTrust({ paneId: "w1:p1" });

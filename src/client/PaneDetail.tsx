@@ -1,7 +1,8 @@
 import { createPortal, type Ref } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { ChatAttachment, ChatFile, ChatMessage } from "../server/chat/contract";
+import type { ChatAttachment, ChatFile, ChatMessage, ChatPending } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
+import type { QuestionAnswer } from "../shared/answer";
 import type { FileTreeEntry } from "../shared/file-tree";
 import { gitStatusLabel, type GitSync } from "../shared/git";
 import {
@@ -11,7 +12,7 @@ import {
   MAX_ATTACHMENTS,
 } from "../shared/attachments";
 import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
-import { OUTPUT_LINES, attachmentUrl, editMessage, uploadAttachment } from "./api";
+import { OUTPUT_LINES, answerQuestion, attachmentUrl, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference, insertFileReference } from "./file-reference";
 import { fileTreeStore } from "./file-tree-store";
@@ -377,6 +378,16 @@ export function PaneDetail(props: PaneDetailProps) {
   const pendingView = pendingCard(snapshot, blocked);
   const [terminalFor, setTerminalFor] = useState<string | null>(null);
   const showTerminal = pendingView !== null && terminalFor === pendingView.toolUseId;
+  // 回答の結果に関わらず、5 秒の取得を待たずに会話を読み直す。成功なら質問が消え、失敗でも
+  // 質問が既に無かったなら（409）カードがすぐ消える。
+  const answerQuestionAndRefresh = async (
+    target: Extract<ChatPending, { kind: "question" }>,
+    answers: QuestionAnswer[],
+  ) => {
+    const result = await answerQuestion(pane.id, { toolUseId: target.toolUseId, answers });
+    refreshChat();
+    return result;
+  };
   const editTarget =
     edit === null
       ? null
@@ -1426,6 +1437,7 @@ export function PaneDetail(props: PaneDetailProps) {
                       onShowTerminal={() => {
                         if (pendingView !== null) setTerminalFor(pendingView.toolUseId);
                       }}
+                      onAnswerQuestion={answerQuestionAndRefresh}
                       reveal={reveal}
                     />
                   </>
@@ -1546,9 +1558,12 @@ export function PaneDetail(props: PaneDetailProps) {
               </p>
             ) : null
           ) : inputDisabled ? (
-            // 質問・承認の待ちは TUI のダイアログが入力を受け取る。入力欄ごと閉じる。
+            // 質問・承認の待ちは TUI のダイアログが入力を受け取る。入力欄ごと閉じる。質問は
+            // カードから答えられる。承認と、待ちが読めないときは端末で行う（ADR 0098、0099）。
             <p class="hwc-terminal-note" role="status">
-              Claude の応答待ちです。質問への回答と承認は Herdr のターミナルで行ってください。
+              {pendingView?.kind === "question" && !showTerminal
+                ? "Claude の質問です。カードから答えると、入力欄が戻ります。"
+                : "Claude の応答待ちです。承認と、カードに出ない質問への回答は Herdr のターミナルで行ってください。"}
             </p>
           ) : (
             <form

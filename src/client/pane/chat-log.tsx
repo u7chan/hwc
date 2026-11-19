@@ -1,5 +1,7 @@
 import { Fragment } from "preact";
 import type { ChatFile, ChatMessage, ChatPending, ChatSnapshot } from "../../server/chat/contract";
+import type { QuestionAnswer } from "../../shared/answer";
+import type { AnswerResult } from "../api";
 import {
   chatRows,
   compactionInsertIndex,
@@ -33,6 +35,10 @@ export function ChatLog(props: {
   // 人間の応答待ち。Herdr が blocked の間だけ入る（chat.ts の pendingCard）。
   pendingCard: ChatPending | null;
   onShowTerminal: () => void;
+  onAnswerQuestion: (
+    pending: Extract<ChatPending, { kind: "question" }>,
+    answers: QuestionAnswer[],
+  ) => Promise<AnswerResult>;
   reveal: MessageReveal | null;
 }) {
   const copyButton = (message: ChatMessage) => {
@@ -158,7 +164,11 @@ export function ChatLog(props: {
       {echoIndex === rows.length ? echoRow : null}
       {compactionIndex === rows.length ? compactionBlock : null}
       {props.pendingCard === null ? null : (
-        <PendingCard pending={props.pendingCard} onShowTerminal={props.onShowTerminal} />
+        <PendingCard
+          pending={props.pendingCard}
+          onShowTerminal={props.onShowTerminal}
+          onAnswer={props.onAnswerQuestion}
+        />
       )}
     </ol>
   );

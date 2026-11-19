@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-03
+- Amended by: [ADR 0099](0099-answer-ask-user-question.md)（Esc を送る例外の追加）
 
 ## Context
 
@@ -11,7 +12,7 @@ hwc の入力欄は、書かれた文字列をそのままペインへ送る。B
 
 - pi は未知のコマンドをエラーにせず、そのまま本文としてモデルへ渡す
 - Claude Code と opencode は `Unknown command:` で止める
-- ピッカーを開くコマンド（`/model` など）は、hwc が汎用のキー入力を持たないため、開いたあと GUI から操作も取消もできない。停止の Esc（[ADR 0025](0025-stop-working-agent.md)）と、既知のフォルダ信頼確認への回答（[ADR 0032](0032-codex-folder-trust.md)）は例外
+- ピッカーを開くコマンド（`/model` など）は、hwc が汎用のキー入力を持たないため、開いたあと GUI から操作も取消もできない。停止の Esc（[ADR 0025](0025-stop-working-agent.md)）、既知のフォルダ信頼確認への回答（[ADR 0032](0032-codex-folder-trust.md)）、Claude の AskUserQuestion への回答（Esc で閉じて本文を送る。[ADR 0099](0099-answer-ask-user-question.md)）は例外
 
 GUI で意味のあるのは、ピッカーを開かず、即時実行される「新しい会話」と「会話を圧縮」に限られる。4 つの CLI はいずれも `/new` と `/compact` を受け付ける（Claude Code の `/new` は `/clear` の別名、opencode の `/clear` は `/new` の別名、Codex CLI の `/clear` は端末表示も消すため別物）。
 

@@ -33,6 +33,13 @@ const LOCAL_COMMAND_TAGS = [
   "<local-command-caveat>",
 ];
 
+// 利用者が Esc で中断したときに CLI が user の本文として書く固定の記録。発話ではない。
+// 質問に答えるときは hwc が Esc を送るので、毎回これが残る（ADR 0099）。
+const INTERRUPT_MARKERS = new Set([
+  "[Request interrupted by user]",
+  "[Request interrupted by user for tool use]",
+]);
+
 // API を呼ばずに失敗したターンの記録に付くモデル名。表示するモデルではない。
 const SYNTHETIC_MODEL = "<synthetic>";
 
@@ -491,6 +498,7 @@ function projectUser(entry: TranscriptEntry): ChatMessage | null {
   const raw = userText(entry.message?.content);
   if (raw === "") return null;
   if (isLocalCommandEcho(raw)) return null;
+  if (INTERRUPT_MARKERS.has(raw.trim())) return null;
 
   const { text, attachments } = projectUserText(raw);
   if (text === "" && attachments.length === 0) return null;
