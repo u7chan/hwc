@@ -1,4 +1,4 @@
-# ADR 0099: Claude の実行中の段階は transcript の進行行から出す
+# ADR 0100: Claude の実行中の段階は transcript の進行行から出す
 
 - Status: Proposed
 - Date: 2026-11-19
@@ -71,14 +71,14 @@ transcript は API の応答が終わるまで assistant の本文を書かな�
 - `GET /api/panes/:id/activity` を Claude にも返す。pi は従来どおり sidecar、Claude は transcript から導出した値を返す
 - 形は `PaneActivity` のままにする。`phase`、`text`、`tool`、`tools`、`at` を使い、`tokPerSecond` は入れない
 - `src/shared/activity.ts` の `text` の条件を `thinking` と `tool` に広げる。pi の書き手は `tool` のとき `text` を書かないので、pi の表示は変わらない
-- クライアントは `pane.agent === "pi" || pane.agent === "claude"` かつ `pane.chat && !blocked` で、見えていて `working` の間だけ 1 秒ごとに読む
+- クライアントは `pane.agent === "pi" || pane.agent === "claude"` かつ `pane.chat` の間、取得の effect を生かしたままにする。見えていて `working` の間だけ 1 秒ごとに読み、`blocked` の間は読まずに保持値を捨てる。blocked で effect を外すと、同じターンに戻ったときに古い段階が最初の取得まで残るため
 - 経過時間は既存の帯の値（Herdr が `working` を観測した起点）をそのまま使う。段階ごとの秒は出さない
 - transcript はチャットの射影と同じ読み取りに相乗りし、path + size + inode が同じなら使い回す。ターン中は行が増えるたびに読み直すが、ポーリングのたびには読まない
 - 現行の `claude.ts` は `uuid` を持たない `api-request` を捨て、`requestRef` も保持していない。射影に `api-request`（id / querySource / timestamp / version）、assistant の `requestRef`、`tool_use` の id・name・input、`tool_result` の `tool_use_id`・`is_error` を残し、`SessionChatClient` に activity を引く口（例: `activity(sessionId)`）を足す。`ctx.claude` が optional のときは `activity: null`
 - `GET /api/panes/:id/activity` の応答に `session`（ペインが指す会話の id。path は渡さない。pi は null）を足す。クライアントは保持している値の `session` と比べ、変わっていれば捨てる。BFF の状態取得は `working → idle → working` をまとめることがあるため、状態の遷移だけではセッションの切り替えを検知できない
 - ターン中に `activity: null` が返っても、クライアントは Claude のときだけ直前の `PaneActivity` をそのまま保つ。pi の契約（sidecar が無い・壊れた・古いときは出さない）は変えない
 - 保つのはターンが終わる（`working` を離れる）、ペインを離れる、blocked になる、`session` が変わる、最後に非 null を得てから 10 秒経つ、まで。同じペインで新しいターンが始まれば、最初の取得で置き換わる
-- 帯の thinking の枠は、Claude の通常セルではターン中ずっと確保する。最初の activity が届く前も 2 行分を空け、届いた時点で高さが動かないようにする。compact のセルは [ADR 0035](0035-live-pi-activity.md) のまま枠を出さない
+- 帯の thinking の枠は、Claude の通常セルではターン中ずっと確保する。最初の activity が届く前も 2 行分を空け、届いた時点で高さが動かないようにする。compact のセルは [ADR 0035](0035-live-pi-activity.md) のまま枠を出さない。hwc 自身の `/compact` の表示中も枠を出さない。圧縮は段階ではなく、方向の空きを残しても埋まらないため
 
 ### 読めないとき
 
@@ -119,12 +119,12 @@ transcript は API の応答が終わるまで assistant の本文を書かな�
 - 画像だけの発言でもターンの起点になる。会話の行にはならないが、段階の判定には使う
 - thinking の本文があるのはローカルの 240 件のうち 24 件（10%）で、その多くは `showThinkingSummaries` が有効な環境の要約だった。既定の first-party では方向が最後の assistant 本文だけになる
 - `showThinkingSummaries` は変えない。hwc から起動したペインでも、thinking の本文はユーザーの設定と provider に従う
-- 実装と同じ変更で、`docs/agents.md` の activity の表と Claude の要点を直す。ADR 0035 には、この ADR の承認後に `Amended by: 0099` を足す
+- 実装と同じ変更で、`docs/agents.md` の activity の表と Claude の要点を直す。ADR 0035 には、この ADR が `Accepted` になった後に `Amended by: 0100` を足す（`Proposed` の間は足さない）
 - 帯の文言は 0035 の `waiting`（「応答を待っています」）ではなく `thinking`（「考えています」）を使う。要求中の思考と生成は区別できないため、まとめて `thinking` とする
 
 ## テスト
 
 - unit（BFF の状態）: idle / done / unknown → working で `turnObserved = false`、blocked → working で保つ、初回観測・新規ペイン・再起動で `lastPrompt = null`、idle / done / unknown へ移ったら `turnObserved = false`（blocked では戻さない）。最後の prompt が `lastPrompt` と同じ間は `null`、変わったら進む。`lastPrompt = null` から進んだ次のターンは比較される
 - unit（BFF）: 要求と応答の対応、`isApiErrorMessage` での打ち切り、並列ツールの代表と件数、片方の結果だけが書かれた時点でも未完了のツールを落とさない、枝の外にある並列 `tool_result` との対応、結果側に ID が無い形式での `null`、sidechain の除外、ターンの起点（rewind・中断した前のターン・画像だけの発言）、`version` が古い / ID が空のときの `null`、16MB の窓で切れたときの `null`、`text` の 60 / 90 文字と 1 行化、`tool` の `text` を通す正規化
-- unit（client の純関数）: Claude だけ直前の `PaneActivity` を保つ判定（null を挟んでもターン中は保ち、終了・移動・blocked・`session` の変更・10 秒の経過で捨てる）、2 行の組み立てと優先順位、compact では枠を出さない
-- E2E: 架空 Herdr の Claude fixture で、まず `working` にして新しいターンの null の窓（帯の空枠）を確かめ、次に prompt → `api-request` → `tool_use` を追記して段階と方向が帯に出ることを確かめる。`null` を挟んだ後は 10 秒の保持で確かめる。blocked と終了で消えることも見る（[docs/e2e.md](../e2e.md)）
+- unit（client の純関数）: Claude だけ直前の `PaneActivity` を保つ判定（null を挟んでもターン中は保ち、終了・移動・blocked・`session` の変更・10 秒の経過で捨てる）、2 行の組み立てと優先順位、compact のセルと `/compact` 中は枠を出さない
+- E2E: 架空 Herdr の Claude fixture で、まず `working` にして新しいターンの null の窓（帯の空枠）を確かめ、次に prompt → `api-request` → `tool_use` を追記して段階と方向が帯に出ることを確かめる。`null` を挟んだ後は 10 秒の保持で確かめる。blocked と終了で消えること、`/compact` の表示中は枠が出ないことも見る（[docs/e2e.md](../e2e.md)）

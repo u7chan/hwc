@@ -124,7 +124,7 @@ export type SessionChatClient = {
 };
 
 // 実行中の段階を導いた結果。claim はターンの範囲を決める BFF の状態が行うので、
-// ここではどの prompt をターンの起点にしたかだけを返す（ADR 0099）。
+// ここではどの prompt をターンの起点にしたかだけを返す（ADR 0100）。
 export type SessionActivity = {
   // ターンの起点にした prompt の uuid。起点が読めないときは null。
   prompt: string | null;

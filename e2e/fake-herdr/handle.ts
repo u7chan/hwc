@@ -189,7 +189,7 @@ export function createHandle(
           return;
         }
         // フィクスチャ専用の入力。Claude のペインを working にし、transcript の進行行を
-        // 時間差で追記する（docs/e2e.md、ADR 0099）。
+        // 時間差で追記する（docs/e2e.md、ADR 0100）。
         if (!text.includes(ATTACHED_FILES_OPEN) && text.trim() === "/activity") {
           send(socket, { id, result: { type: "ok" } });
           await startClaudeActivity(paneId);

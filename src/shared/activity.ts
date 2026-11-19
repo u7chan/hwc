@@ -16,7 +16,7 @@ export type LivePhase = (typeof LIVE_PHASES)[number];
 export type PaneActivity = {
   phase: LivePhase;
   // thinking のときは現在のブロックの末尾。Claude は tool のときも、対象と方向の 2 行を
-  // 入れる（ADR 0099）。それ以外は空。
+  // 入れる（ADR 0100）。それ以外は空。
   text: string;
   // tool のときだけ、最後に開始した実行中ツール。
   tool: string | null;

@@ -99,7 +99,7 @@ test("the next run loads again after an idle turn", () => {
     fetch: false,
     clear: true,
   });
-  // blocked でもターンの表示は捨てる。戻ったときに同じターンとして取り直す。
+  // blocked でも effect は外さず、この遷移で保持値を捨てる（戻ったときに古い段階を出さない）。
   expect(activityStep("working", "blocked", true)).toEqual({
     last: "blocked",
     fetch: false,
@@ -108,7 +108,7 @@ test("the next run loads again after an idle turn", () => {
 });
 
 test("the two lines of a tool stay together in the snippet", () => {
-  // 対象 60 + 改行 + 方向 90 は、末尾 2 行・160 文字の枠に収まる（ADR 0099）。
+  // 対象 60 + 改行 + 方向 90 は、末尾 2 行・160 文字の枠に収まる（ADR 0100）。
   const text = `${"対象".repeat(30)}\n${"方向".repeat(45)}`;
   expect(activitySnippet(text)).toBe(text);
   expect(activitySnippet(text).split("\n")).toHaveLength(2);
@@ -138,14 +138,18 @@ test("Claude keeps the last activity through a null while the turn is running", 
 });
 
 test("Claude reserves the second line before the first activity arrives", () => {
-  expect(showActivityFrame("claude", false, null)).toBe(true);
+  expect(showActivityFrame("claude", false, null, false)).toBe(true);
   // 低いセルは会話へ高さを回すので、枠を出さない。
-  expect(showActivityFrame("claude", true, null)).toBe(false);
-  // pi は activity が届いてから枠を出す。
-  expect(showActivityFrame("pi", false, null)).toBe(false);
-  expect(showActivityFrame("pi", false, base)).toBe(true);
-  expect(showActivityFrame("pi", true, base)).toBe(false);
-  expect(showActivityFrame(null, false, null)).toBe(false);
+  expect(showActivityFrame("claude", true, null, false)).toBe(false);
+  // hwc 自身の /compact の表示中も、空の枠を残さない。
+  expect(showActivityFrame("claude", false, null, true)).toBe(false);
+  expect(showActivityFrame("claude", false, base, true)).toBe(false);
+  // pi は activity が届いてから枠を出す。圧縮中は出さない。
+  expect(showActivityFrame("pi", false, null, false)).toBe(false);
+  expect(showActivityFrame("pi", false, base, false)).toBe(true);
+  expect(showActivityFrame("pi", true, base, false)).toBe(false);
+  expect(showActivityFrame("pi", false, base, true)).toBe(false);
+  expect(showActivityFrame(null, false, null, false)).toBe(false);
 });
 
 test("a disabled hook does not return the previous pane's activity", () => {

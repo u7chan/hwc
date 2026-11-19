@@ -9,7 +9,7 @@ export const ACTIVITY_SNIPPET_LINES = 2;
 export const ACTIVITY_SNIPPET_CHARS = 160;
 
 // Claude の段階はターン中に取れない瞬間がある（新しい prompt がまだ書かれていない・行の
-// 形が読めない）。その間だけ直前の値を保つ。最後に非 null を得てから捨てるまで（ADR 0099）。
+// 形が読めない）。その間だけ直前の値を保つ。最後に非 null を得てから捨てるまで（ADR 0100）。
 export const ACTIVITY_HOLD_MS = 10_000;
 
 // 実行中だけ 1 秒ごとに読む。idle の sidecar は残骸なので読まない。
@@ -53,13 +53,15 @@ export function selectActivity(
 }
 
 // 帯の thinking の枠を出すか。Claude は最初の activity が届く前も 2 行分を空け、段階の
-// 切り替わりで帯の高さを動かさない。低いセルは会話へ高さを回すので枠を出さない（ADR 0099）。
+// 切り替わりで帯の高さを動かさない。低いセルは会話へ高さを回すので枠を出さない。hwc 自身の
+// /compact は段階ではないので、空の枠を残さない（ADR 0100）。
 export function showActivityFrame(
   agent: string | null,
   compact: boolean,
   activity: PaneActivity | null,
+  compacting: boolean,
 ): boolean {
-  if (compact) return false;
+  if (compact || compacting) return false;
   if (agent === "claude") return true;
   return activity !== null;
 }

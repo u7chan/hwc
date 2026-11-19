@@ -12,13 +12,7 @@ import {
   MAX_ATTACHMENTS,
 } from "../shared/attachments";
 import { activityLabel, activitySnippet, showActivityFrame, usePaneActivity } from "./activity";
-import {
-  OUTPUT_LINES,
-  answerQuestion,
-  attachmentUrl,
-  editMessage,
-  uploadAttachment,
-} from "./api";
+import { OUTPUT_LINES, answerQuestion, attachmentUrl, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference, insertFileReference } from "./file-reference";
 import { fileTreeStore } from "./file-tree-store";
@@ -1600,7 +1594,7 @@ export function PaneDetail(props: PaneDetailProps) {
               elapsedMs={compacting ? compactionElapsedMs : waitingMs}
               compacting={compacting}
               stopping={stopping}
-              showThought={showActivityFrame(pane.agent, compact, activity)}
+              showThought={showActivityFrame(pane.agent, compact, activity, compacting)}
               tokPerSecond={liveTokPerSecond}
               onCancelCompaction={() => void cancelCompaction()}
             />

@@ -164,7 +164,7 @@ export function createChatHandlers(ctx: AppContext) {
       // 使い捨ての値。null を返すときも、ブラウザや中間に残さない。
       c.header("cache-control", "no-store");
       // 段階は会話の読み取りから導く。path はペイン id から引き、クライアントへは渡さない。
-      // pi はセッションの隣の sidecar、Claude は transcript の進行行から読む（ADR 0035 / 0099）。
+      // pi はセッションの隣の sidecar、Claude は transcript の進行行から読む（ADR 0035 / 0100）。
       const source = store.chatSource(paneId);
       if (!pane.chat || source === null) return c.json({ activity: null, session: null });
       if (source.agent === "pi") {

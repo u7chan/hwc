@@ -140,7 +140,7 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 pi のペインでは、あわせてセッションの隣に live の sidecar（`<session>.jsonl.thinking.json`）を書く。まず `waiting` で `working` にし、1.2 秒後に折り返す長さの `thinking` と `tokPerSecond: 42.3` を上書きし、6 秒後に消して `idle` に戻す。実物の pi 拡張はターン中に phase・thinking の末尾・生成速度を上書きし続ける（[ADR 0035](adr/0035-live-pi-activity.md)）。E2E ではこの 2 段階で、段階の行が会話のスクロール領域の外（入力欄の直上）に出て、スクロールしても残ること、生成速度が経過時間の左に出て右端の時間が動かないこと、thinking がまだ無い待機中も帯の高さが変わらず、末尾 2 行だけが出てターン終了で消えることを確かめる。入力欄を 1 行に畳むセルでは thinking と生成速度を出さず、段階と経過時間だけになる。停止ボタン（`esc`）でも sidecar を消す。
 
-Claude のペインでは、フィクスチャ専用の入力 `/activity`（添付注記なし）が同じ役割を持つ。実物と同じく prompt・`api-request`・assistant・`tool_use`・`tool_result` を時間差で架空の transcript へ追記し、段階の切り替わりと 10 秒の保持を確かめられるようにする（[ADR 0099](adr/0099-claude-live-activity.md)）。架空の transcript の `version` は 2.1.328 に揃えてある。
+Claude のペインでは、フィクスチャ専用の入力 `/activity`（添付注記なし）が同じ役割を持つ。実物と同じく prompt・`api-request`・assistant・`tool_use`・`tool_result` を時間差で架空の transcript へ追記し、段階の切り替わりと 10 秒の保持を確かめられるようにする（[ADR 0100](adr/0100-claude-live-activity.md)）。架空の transcript の `version` は 2.1.328 に揃えてある。
 
 `/done`（添付注記なし）はフィクスチャ専用の入力で、実 Herdr には無い。受け取ったペインを `done` にする。実 Herdr の `done` は既読でしか `idle` に戻らず、hwc からは作れないため、一覧の終了時刻と端末間の一致を確かめる入口として置く。
 
@@ -190,14 +190,15 @@ Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（
 
 ## Claude の実行中の段階
 
-Claude の帯は transcript の進行行から導く（[ADR 0099](adr/0099-claude-live-activity.md)）。`quickstart`（`w2:p2`、待機）で確かめる。フィクスチャ専用の入力 `/activity` は実 Herdr には無い。送るとペインを `working` にし、架空の transcript へ 2 秒後に prompt と `api-request`、4 秒後に assistant の本文と `tool_use`、8 秒後に `tool_result` を追記する。実在の `~/.claude` は読まない。
+Claude の帯は transcript の進行行から導く（[ADR 0100](adr/0100-claude-live-activity.md)）。`quickstart`（`w2:p2`、待機）で確かめる。フィクスチャ専用の入力 `/activity` は実 Herdr には無い。送るとペインを `working` にし、架空の transcript へ 2 秒後に prompt と `api-request`、4 秒後に assistant の本文と `tool_use`、8 秒後に `tool_result` を追記する。実在の `~/.claude` は読まない。
 
 1. `quickstart` を開き、`/activity` を送る。すぐに帯が出て 3 点と経過時間だけになり、その下に thinking 用の 2 行の空きができる。ターンの最初の取得では新しい prompt がまだ書かれていないので、段階は出ない。
 2. 2 秒ほどで「考えています」に変わる。応答本文がまだ無いので、2 行の空きは空のまま。4 秒ほどで「Read を実行中」に変わり、1 行目に `quickstart.md`、2 行目に「手順を確認しています。」が出る。空きの高さはこの間ずっと同じで、会話の見える範囲が動かない。
 3. 8 秒ほどで transcript に `tool_result` が書かれ、次の取得は `activity: null` になる。帯は直前の「Read を実行中」と 2 行をそのまま保つ（最後に非 null を得てから 10 秒）。
 4. 10 秒ほど待つと保持が切れ、段階が消えて 3 点と経過時間だけになる。2 行の空きは残る。
 5. 停止ボタンで `idle` に戻すと帯が消える。もう一度 `/activity` を送ってから `/blocked` を送ると、本文が端末出力に変わり、入力欄と帯が消える。`/done` で戻すと会話表示に戻り、帯は出ない。
-6. 分割セル（2 枚以上）では compact になり、Claude でも 2 行の空きを出さず、段階と経過時間だけになる。単体では `showActivityFrame` を `src/client/activity.test.ts` で確かめる。
+6. `/compact` を送る（+ のメニューか直接入力）。「会話を圧縮しています」の帯が出て、その下に thinking の 2 行の空きは出ない。`中断` を押すと帯が消えて元の表示に戻る。Claude は `compaction` を返さないので、この表示は中断するまで残る。
+7. 分割セル（2 枚以上）では compact になり、Claude でも 2 行の空きを出さず、段階と経過時間だけになる。単体では `showActivityFrame` を `src/client/activity.test.ts` で確かめる。
 
 ## 過去の発言の編集
 

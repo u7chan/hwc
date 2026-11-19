@@ -114,7 +114,7 @@ export function toSavedPaneTimes(state: SnapshotState, times: PaneTimes): SavedP
   return saved;
 }
 
-// 実行中の段階を出すターンの範囲（ADR 0099）。ペインとセッションをキーにし、永続化しない。
+// 実行中の段階を出すターンの範囲（ADR 0100）。ペインとセッションをキーにし、永続化しない。
 export type PaneTurn = {
   // このターンの起点 prompt を transcript で見たか。
   observed: boolean;
