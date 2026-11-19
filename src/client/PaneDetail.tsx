@@ -45,6 +45,7 @@ import {
   PENDING_TURN_GRACE_MS,
   usePaneChat,
 } from "./chat";
+import { isFileTreeShortcut, isInOverlay, isTextEntry } from "./file-tree-key";
 import { composerDisabled, enterInsertsNewline } from "./input";
 import { useMessageReveal } from "./reveal";
 import {
@@ -147,6 +148,8 @@ type PaneDetailProps = {
   scheme: "light" | "dark";
   // 広いセルでツリーを会話の左右どちらに並べるか。狭いセルでは重ねるので効かない。
   treeSide: FileTreeSide;
+  // 枠線がハイライトしている、操作の対象になっているセルか。キーの対象を 1 つに絞る。
+  current: boolean;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
   // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
@@ -197,6 +200,7 @@ export function PaneDetail(props: PaneDetailProps) {
     compact,
     scheme,
     treeSide,
+    current,
     labeled,
     showSpace,
     branch,
@@ -243,6 +247,8 @@ export function PaneDetail(props: PaneDetailProps) {
   // 再生しないよう、初期値を store の開閉に合わせる。
   const [treeShown, setTreeShown] = useState(fileTree.open);
   const [treeClosing, setTreeClosing] = useState(false);
+  // キーで開いたときだけ、ツリーの行へ焦点を移す。0 は要求なし、押すたびに増やす。
+  const [treeFocus, setTreeFocus] = useState(0);
   const treeCloseTimer = useRef<number | null>(null);
 
   const cancelTreeClose = () => {
@@ -258,9 +264,11 @@ export function PaneDetail(props: PaneDetailProps) {
     return () => cancelAnimationFrame(frame);
   }, [treeOpen, treeShown, treeClosing]);
 
-  const openTree = () => {
+  const openTree = (focus: boolean) => {
     cancelTreeClose();
     setTreeClosing(false);
+    // ポインタで開いたときは 0 に戻す。ツリーの行に焦点を残したまま開き直さない。
+    setTreeFocus((request) => (focus ? request + 1 : 0));
     // 動きを減らす設定では待たずに出す。CSS も transition を持たない。
     if (prefersReducedMotion()) setTreeShown(true);
     fileTreeStore.open(pane.id);
@@ -297,6 +305,50 @@ export function PaneDetail(props: PaneDetailProps) {
     },
     [pane.id],
   );
+
+  // 見出しのボタンとキーは同じ経路を通す。store を直接叩くと開閉の動きとずれる。
+  // focus はキーで開いたときだけ true。ポインタで開いたときに焦点を飛ばさない。
+  const toggleTree = (focus: boolean) => {
+    if (treeOpen && !treeClosing) {
+      // ツリーの中に焦点があるまま閉じると body に落ちる。行き場を見出しの入口へ返す。
+      const active = document.activeElement;
+      if (focus && active instanceof Element && active.closest(".hwc-tree-view") !== null) {
+        filesButtonRef.current?.focus();
+      }
+      closeTree();
+      return;
+    }
+    openTree(focus);
+  };
+
+  // キーは文書全体で拾う。listener を持つのは対象のセル 1 つだけにする。
+  const toggleTreeRef = useRef(toggleTree);
+  toggleTreeRef.current = toggleTree;
+  useEffect(() => {
+    if (!current || !pane.chat) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!isFileTreeShortcut(event)) return;
+      const focused = document.activeElement instanceof Element ? document.activeElement : null;
+      // 入力欄の中では文字を、開いている面の中ではその面のキーを優先する。
+      if (isTextEntry(focused) || isInOverlay(focused)) return;
+      // 焦点が body にあるときは、最後にクリックしたセル（= current）を開閉する。
+      // 他のセルや一覧に焦点があるときは、その画面の操作を横取りしない。
+      if (focused !== null && focused !== document.body) {
+        const cell = focused.closest("[data-drop-pane]");
+        // 分割セルは印で見分ける。1 枚表示はセルの印が無く、詳細の中に PaneDetail が
+        // 1 つしか出ないので、詳細の中かどうかだけを見る。
+        const inside =
+          cell !== null
+            ? cell.getAttribute("data-drop-pane") === pane.id
+            : focused.closest(".hwc-detail-body") !== null;
+        if (!inside) return;
+      }
+      event.preventDefault();
+      toggleTreeRef.current(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [current, pane.chat, pane.id]);
 
   // チャットが消えたペインは配信の根を持たない。開いたままにしない。
   useEffect(() => {
@@ -1195,6 +1247,7 @@ export function PaneDetail(props: PaneDetailProps) {
       side={sideBySide}
       shown={treeShown}
       closing={treeClosing}
+      focusRequest={treeFocus}
       selectedPath={previewPath}
       onToggle={(path) => fileTreeStore.toggle(pane.id, path)}
       onRetry={(path) => fileTreeStore.retry(pane.id, path)}
@@ -1311,7 +1364,7 @@ export function PaneDetail(props: PaneDetailProps) {
                   treeOpen && !treeClosing ? "ファイルツリーを閉じる" : "ファイルツリーを開く"
                 }
                 aria-pressed={treeOpen && !treeClosing}
-                onClick={() => (treeOpen && !treeClosing ? closeTree() : openTree())}
+                onClick={() => toggleTree(false)}
               >
                 <FolderIcon size={16} />
                 <span class="hwc-pane-files-label">ファイル</span>

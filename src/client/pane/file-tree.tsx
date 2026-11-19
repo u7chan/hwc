@@ -1,7 +1,9 @@
 import type { ComponentChildren } from "preact";
+import { useEffect, useRef } from "preact/hooks";
 import { FILE_TREE_LIMIT, type FileTreeEntry, type FileTreeListing } from "../../shared/file-tree";
 import { previewUrl } from "../api";
 import type { FileTreeView } from "../file-tree-store";
+import { treeArrowIntent } from "../file-tree-key";
 import { ChevronRightIcon } from "../icons";
 import { Spinner } from "../Spinner";
 
@@ -15,6 +17,8 @@ type FileTreeProps = {
   // shown が true のまま始まり、動かない。
   shown: boolean;
   closing: boolean;
+  // キーで開いたか。0 は要求なしで、押すたびに増える。
+  focusRequest: number;
   selectedPath: string | null;
   onToggle: (path: string) => void;
   onRetry: (path: string) => void;
@@ -209,8 +213,87 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
   );
 }
 
+// 表示中の行をドキュメント順に返す。折りたたんだフォルダの子は DOM に残って
+// inert になるので、その中の行は含めない。
+function visibleRows(list: HTMLUListElement): HTMLElement[] {
+  return Array.from(list.querySelectorAll<HTMLElement>("button.hwc-tree-row")).filter(
+    (row) => row.closest("[inert]") === null,
+  );
+}
+
+// 焦点を当てる行。選んでいるファイルがあればそこ、無ければ先頭。
+function focusTarget(list: HTMLUListElement): HTMLElement | null {
+  const rows = visibleRows(list);
+  return rows.find((row) => row.getAttribute("aria-current") === "true") ?? rows[0] ?? null;
+}
+
+// ツリーの中の矢印キー。行はボタンなので、既定のままなら矢印はスクロールに使われる。
+// 扱ったキーだけ止め、行を移れない端では何もしない。
+function onTreeKey(event: KeyboardEvent, list: HTMLUListElement, onToggle: (path: string) => void) {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !active.classList.contains("hwc-tree-row")) return;
+  const path = active.getAttribute("title");
+  if (path === null) return;
+  const dir = active.hasAttribute("aria-expanded");
+  const intent = treeArrowIntent(event, {
+    dir,
+    expanded: dir && active.getAttribute("aria-expanded") === "true",
+  });
+  if (intent === null) return;
+  const rows = visibleRows(list);
+  const index = rows.indexOf(active);
+  if (index < 0) return;
+  const move = (row: HTMLElement | undefined | null) => {
+    event.preventDefault();
+    row?.focus();
+  };
+
+  switch (intent) {
+    case "next":
+      return move(rows[index + 1]);
+    case "previous":
+      return move(rows[index - 1]);
+    case "expand":
+    case "collapse":
+      event.preventDefault();
+      return onToggle(path);
+    case "in": {
+      // 子がまだ読み込み中なら、次の行は兄弟。接頭辞で確かめてから移る。
+      const child = rows[index + 1];
+      return move(
+        child?.getAttribute("title")?.startsWith(`${path}/`) === true ? child : undefined,
+      );
+    }
+    case "out": {
+      const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : null;
+      return move(
+        parent === null ? null : rows.find((row) => row.getAttribute("title") === parent),
+      );
+    }
+  }
+}
+
 // 根の行は出さない。ペイン見出しにリポジトリ名があり、直下から並べた方が浅く読める。
 export function FileTree(props: FileTreeProps) {
+  const list = useRef<HTMLUListElement>(null);
+  const handled = useRef(0);
+
+  // 根の一覧は開いた後に届く。行が無い間は待ち、届いたら 1 度だけ焦点を合わせる。
+  // 展開のたびに dirs が変わっても、同じ開閉で焦点を取り直さない。
+  useEffect(() => {
+    if (props.focusRequest === 0 || props.focusRequest === handled.current) return;
+    if (props.view.dirs.get("") === undefined) return;
+    const root = list.current;
+    if (root === null) return;
+    handled.current = props.focusRequest;
+    focusTarget(root)?.focus();
+  }, [props.focusRequest, props.view.dirs]);
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    const root = list.current;
+    if (root !== null) onTreeKey(event, root, props.onToggle);
+  };
+
   return (
     <div
       class="hwc-tree-view"
@@ -220,7 +303,7 @@ export function FileTree(props: FileTreeProps) {
       inert={props.closing}
       aria-hidden={props.closing ? "true" : undefined}
     >
-      <ul class="hwc-tree" aria-label="ファイルツリー">
+      <ul class="hwc-tree" aria-label="ファイルツリー" ref={list} onKeyDown={onKeyDown}>
         {renderChildren(props, "", 0)}
       </ul>
     </div>

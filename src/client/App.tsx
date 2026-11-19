@@ -1304,7 +1304,12 @@ export function App() {
     closeMenu();
   };
 
-  const renderPane = (item: PaneState, where: PaneContext, compact: boolean) => {
+  const renderPane = (
+    item: PaneState,
+    where: PaneContext,
+    compact: boolean,
+    isCurrent: boolean,
+  ) => {
     const launch = launches.get(item.id) ?? null;
     const phase = launchPhase(launch, item, now);
     const launchView: PaneLaunchView | null =
@@ -1325,6 +1330,7 @@ export function App() {
         compact={compact}
         scheme={scheme}
         treeSide={treeSide}
+        current={isCurrent}
         // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
         labeled={splitCells}
         // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
@@ -1386,10 +1392,11 @@ export function App() {
     const item = findPane(state, paneId);
     if (item === null) return null;
     const where = findPaneContext(state, paneId);
+    const isCurrent = item.id === pane?.id;
     // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
     // HWC から動かせないセルが current のままになる。
     const activate = () => {
-      if (item.id !== pane?.id) select(item.id);
+      if (!isCurrent) select(item.id);
     };
     // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
     // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
@@ -1429,7 +1436,7 @@ export function App() {
         class="hwc-split-cell"
         data-slot={layoutPanes.indexOf(item.id) + 1}
         data-compact={compact}
-        data-current={item.id === pane?.id}
+        data-current={isCurrent}
         data-drop-pane={item.id}
         data-drop-parent={parentDir ?? undefined}
         data-split-enter={item.id === entering ? "true" : undefined}
@@ -1441,7 +1448,7 @@ export function App() {
         }}
         onFocusIn={activateFromFocus}
       >
-        {where === null ? null : renderPane(item, where, compact)}
+        {where === null ? null : renderPane(item, where, compact, isCurrent)}
         {target === null ? null : (
           <div class="hwc-drop" data-zone={target.zone} aria-hidden="true">
             <span>{dropLabel(target.zone, dragging?.paneId ?? null)}</span>
@@ -1685,7 +1692,7 @@ export function App() {
                     {renderSplit(split.layout, null)}
                   </div>
                 ) : (
-                  renderPane(pane, context, false)
+                  renderPane(pane, context, false, true)
                 )}
               </div>
             </div>
