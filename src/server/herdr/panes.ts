@@ -57,6 +57,8 @@ export type StartRequest = {
   waitForShell: boolean;
 };
 
+export type SendKeysOptions = { paneId: string; keys: string[] };
+
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
 
 export type SendOptions = { paneId: string; text: string; submit: boolean };
@@ -105,6 +107,8 @@ export function restartAgentName(paneId: string, now: number = Date.now()): stri
 export type PaneClient = {
   read: (options: ReadOptions) => Promise<PaneOutput>;
   send: (options: SendOptions) => Promise<void>;
+  // キーだけを送る。文字は送らない。キー名は Herdr のもの（`esc`、`enter`、`C-c`）。
+  sendKeys: (options: SendKeysOptions) => Promise<void>;
   focus: (options: FocusOptions) => Promise<void>;
   stop: (options: StopOptions) => Promise<void>;
   interrupt: (options: StopOptions) => Promise<void>;
@@ -395,6 +399,8 @@ function hasParentShell(value: unknown, paneId: string): boolean {
 export function createPaneClient(options: { path?: string; call?: Caller } = {}): PaneClient {
   const { path } = options;
   const call: Caller = options.call ?? request;
+  const sendKeys = ({ paneId, keys }: SendKeysOptions) =>
+    call("pane.send_keys", { pane_id: paneId, keys }, { path }).then(() => undefined);
 
   return {
     async read({ paneId, source, lines }) {
@@ -423,14 +429,11 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
       // target はエージェント名も受けるが、hwc が持つのはペイン id だけ。
       await call("agent.focus", { target: paneId }, { path });
     },
-    async stop({ paneId }) {
-      // Herdr は Esc を esc として受ける。文字は送らず、キーだけを 1 回送る。
-      await call("pane.send_keys", { pane_id: paneId, keys: ["esc"] }, { path });
-    },
-    async interrupt({ paneId }) {
-      // シェルの前景プロセスを止める。Herdr のキー名は C-c で、PTY に SIGINT として届く。
-      await call("pane.send_keys", { pane_id: paneId, keys: ["C-c"] }, { path });
-    },
+    sendKeys,
+    // Herdr は Esc を esc として受ける。文字は送らず、キーだけを 1 回送る。
+    stop: ({ paneId }) => sendKeys({ paneId, keys: ["esc"] }),
+    // シェルの前景プロセスを止める。Herdr のキー名は C-c で、PTY に SIGINT として届く。
+    interrupt: ({ paneId }) => sendKeys({ paneId, keys: ["C-c"] }),
     async process({ paneId }) {
       const result = await call<unknown>("pane.process_info", { pane_id: paneId }, { path });
       const { process, pids } = parseProcessInfo(result, paneId);
@@ -442,7 +445,7 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
       await call("pane.clear", { pane_id: paneId }, { path });
     },
     async confirmFolderTrust({ paneId }) {
-      await call("pane.send_keys", { pane_id: paneId, keys: ["enter"] }, { path });
+      await sendKeys({ paneId, keys: ["enter"] });
     },
     async close({ paneId }) {
       // ペインを閉じるとエージェントのプロセスも終わる。開いていた作業は戻らない。

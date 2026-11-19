@@ -282,6 +282,76 @@ test("a chat body is accepted as the contract describes it", () => {
   expect(toChatSnapshot({ ...chatBody, model: null })).toEqual({ ...chatBody, model: null });
 });
 
+test("a pending prompt is kept as the contract describes it", () => {
+  const question = {
+    kind: "question" as const,
+    toolUseId: "t1",
+    tool: "AskUserQuestion" as const,
+    questions: [
+      {
+        question: "好きな色は？",
+        header: "色",
+        multiSelect: true,
+        options: [
+          { label: "赤", description: "暖かい色" },
+          { label: "青", description: null },
+        ],
+      },
+    ],
+  };
+  expect(toChatSnapshot({ ...chatBody, pending: question })?.pending).toEqual(question);
+
+  const tool = {
+    kind: "tool" as const,
+    toolUseId: "t2",
+    tool: "Bash",
+    summary: "touch /tmp/demo",
+  };
+  expect(toChatSnapshot({ ...chatBody, pending: tool })?.pending).toEqual(tool);
+  // 要約の無い承認待ちも、ツール名だけで出す。
+  expect(toChatSnapshot({ ...chatBody, pending: { ...tool, summary: "" } })?.pending).toEqual({
+    ...tool,
+    summary: null,
+  });
+});
+
+test("a pending prompt that breaks the contract costs the card, not the conversation", () => {
+  const questions = [
+    { question: "好きな色は？", header: "色", multiSelect: false, options: [{ label: "赤" }] },
+  ];
+  const broken: unknown[] = [
+    null,
+    {},
+    { kind: "question", toolUseId: "t1", tool: "AskUserQuestion", questions: [] },
+    { kind: "question", toolUseId: "t1", tool: "AskUserQuestion", questions: "色" },
+    { kind: "question", toolUseId: "", tool: "AskUserQuestion", questions },
+    { kind: "question", toolUseId: "t1", tool: "Bash", questions },
+    {
+      kind: "question",
+      toolUseId: "t1",
+      tool: "AskUserQuestion",
+      questions: [{ question: "", options: [{ label: "赤" }] }],
+    },
+    {
+      kind: "question",
+      toolUseId: "t1",
+      tool: "AskUserQuestion",
+      questions: [{ question: "色は？", options: [] }],
+    },
+    {
+      kind: "question",
+      toolUseId: "t1",
+      tool: "AskUserQuestion",
+      questions: [{ question: "色は？", options: [{ label: "" }] }],
+    },
+    { kind: "tool", toolUseId: "t2", tool: "" },
+  ];
+  for (const pending of broken) {
+    // 読めない値は pending 無しにし、blocked の間は今までどおり端末出力へ倒す。
+    expect(toChatSnapshot({ ...chatBody, pending })).toEqual(chatBody);
+  }
+});
+
 test("canRewind is kept only when it is true", () => {
   expect(toChatSnapshot(chatBody)?.canRewind).toBe(true);
   expect(toChatSnapshot({ ...chatBody, canRewind: false })?.canRewind).toBe(false);

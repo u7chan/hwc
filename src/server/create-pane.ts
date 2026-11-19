@@ -21,6 +21,9 @@ type CreationClient = Pick<PaneClient, "layout" | "split" | "startAgent" | "rena
 // エージェントの起動と表示名の付与だけを行う。
 export type SetupClient = Pick<PaneClient, "startAgent" | "rename" | "directory">;
 
+// hwc が所有する Claude の設定ファイルを用意し、そのパスを返す。ユーザーの設定は触らない。
+export type ClaudeSettingsProvider = () => Promise<string>;
+
 export type PaneSetupFailure = "agent_start_failed" | "pane_rename_failed";
 
 // エージェント名と、シェルの準備待ちを見るか。分割直後か、既存のシェルかで変わる。
@@ -37,13 +40,22 @@ export async function createPane(
   request: SplitRequest,
   models?: AgentModelsClient,
   piDefaults?: DefaultLaunchTracker,
+  claudeSettings?: ClaudeSettingsProvider,
 ): Promise<CreatePaneResult> {
   const layout = await panes.layout({ paneId });
   const plan = planSplit(layout.cells);
   if (plan === null) return { ok: false, error: "pane_limit" };
 
   const created = await panes.split(plan);
-  const error = await setupPane(panes, created.paneId, request, models, piDefaults);
+  const error = await setupPane(
+    panes,
+    created.paneId,
+    request,
+    models,
+    piDefaults,
+    undefined,
+    claudeSettings,
+  );
 
   return error === null
     ? { ok: true, paneId: created.paneId }
@@ -57,6 +69,7 @@ export async function startAgentInPane(
   request: StartRequest,
   models?: AgentModelsClient,
   piDefaults?: DefaultLaunchTracker,
+  claudeSettings?: ClaudeSettingsProvider,
 ): Promise<PaneSetupFailure | null> {
   return setupPane(
     panes,
@@ -65,6 +78,7 @@ export async function startAgentInPane(
     models,
     piDefaults,
     { agentName: restartAgentName(paneId), waitForShell: request.waitForShell },
+    claudeSettings,
   );
 }
 
@@ -76,6 +90,7 @@ export async function setupPane(
   models?: AgentModelsClient,
   piDefaults?: DefaultLaunchTracker,
   options: SetupOptions = { agentName: agentNameForPane(paneId), waitForShell: true },
+  claudeSettings?: ClaudeSettingsProvider,
 ): Promise<PaneSetupFailure | null> {
   let error: PaneSetupFailure | null = null;
 
@@ -100,6 +115,11 @@ export async function setupPane(
       if (request.agent === "codex") {
         // 共有デーモンのフックは別ペインの環境を引き継ぎ、会話 ID を誤ったペインに報告する。
         args = ["--no-daemon", ...(args ?? [])];
+      }
+      if (request.agent === "claude" && claudeSettings !== undefined) {
+        // 応答待ちを読むための hook。足せなくても起動は続け、カードが出ず端末出力のままになる。
+        const settings = await claudeSettings().catch(() => null);
+        if (settings !== null) args = ["--settings", settings, ...(args ?? [])];
       }
       await panes.startAgent({
         paneId,

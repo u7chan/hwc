@@ -7,7 +7,9 @@ import {
   ATTACHED_FILES_OPEN,
   stripAttachedFiles,
 } from "../../shared/attachments";
-import type { ChatMessage, ChatSnapshot, SessionChatClient } from "./contract";
+import { ASK_USER_QUESTION, questionPending, toolPending, toolSummary } from "./claude-pending";
+import { readSidecar, SESSION_ID, SIDECAR_TTL_MS } from "./claude-sidecar";
+import type { ChatMessage, ChatPending, ChatSnapshot, SessionChatClient } from "./contract";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
 
@@ -21,9 +23,6 @@ const MISSING_TTL_MS = 30_000;
 // 追記が止まったセッションを開き直したときに、同じファイルを読み直さない。
 const MAX_PROJECTIONS = 8;
 
-// セッション id は Herdr から来る。ファイル名に使うので、パスを跨ぐ値を弾く。
-const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
-
 // TUI のローカルコマンド（`/model` や `/theme`）の記録は利用者の発話ではない。会話に混ぜると
 // 会話の流れがコマンドの結果で埋まる。
 const LOCAL_COMMAND_TAGS = [
@@ -33,6 +32,13 @@ const LOCAL_COMMAND_TAGS = [
   "<local-command-stdout>",
   "<local-command-caveat>",
 ];
+
+// 利用者が Esc で中断したときに CLI が user の本文として書く固定の記録。発話ではない。
+// 質問に答えるときは hwc が Esc を送るので、毎回これが残る（ADR 0099）。
+const INTERRUPT_MARKERS = new Set([
+  "[Request interrupted by user]",
+  "[Request interrupted by user for tool use]",
+]);
 
 // API を呼ばずに失敗したターンの記録に付くモデル名。表示するモデルではない。
 const SYNTHETIC_MODEL = "<synthetic>";
@@ -51,12 +57,26 @@ type TranscriptEntry = {
   message: { id: string | null; model: string | null; content: unknown } | null;
 };
 
-type Projection = { size: number; inode: number; snapshot: ChatSnapshot };
+// resolved は active branch で tool_result が書かれた tool_use の id。transcript と一緒に
+// 読み、sidecar の待ちがもう解決済みかの判定に使う。
+type Projection = {
+  size: number;
+  inode: number;
+  snapshot: ChatSnapshot;
+  resolved: ReadonlySet<string>;
+};
 
 type AssistantGroup = { id: string; at: number; text: string; error: string | null };
 
+type PendingTool = { id: string; name: string; input: unknown };
+
 export function createClaudeChatClient(
-  options: { maxBytes?: number; now?: () => number } = {},
+  options: {
+    maxBytes?: number;
+    now?: () => number;
+    // hook が応答待ちを書く場所。無ければ transcript の末尾の tool_use だけを見る。
+    pendingRoot?: string;
+  } = {},
 ): SessionChatClient {
   const maxBytes = options.maxBytes ?? MAX_TRANSCRIPT_BYTES;
   const now = options.now ?? Date.now;
@@ -85,27 +105,27 @@ export function createClaudeChatClient(
     return path;
   };
 
-  const project = async (path: string, sessionId: string): Promise<ChatSnapshot> => {
+  const project = async (path: string, sessionId: string): Promise<Projection> => {
     const known = projections.get(path);
     if (known !== undefined) {
       const info = await stat(path).catch(() => null);
       if (info !== null && info.isFile() && info.size === known.size && info.ino === known.inode) {
-        return known.snapshot;
+        return known;
       }
     }
 
     const transcript = await readTranscript(path, maxBytes);
-    const snapshot = snapshotOf(sessionId, transcript.entries, transcript.clipped);
-    projections.set(path, {
+    const projection = {
       size: transcript.size,
       inode: transcript.inode,
-      snapshot,
-    });
+      ...snapshotOf(sessionId, transcript.entries, transcript.clipped),
+    };
+    projections.set(path, projection);
     if (projections.size > MAX_PROJECTIONS) {
       const oldest = projections.keys().next().value;
       if (oldest !== undefined) projections.delete(oldest);
     }
-    return snapshot;
+    return projection;
   };
 
   const load = async (sessionId: string): Promise<ChatSnapshot> => {
@@ -116,12 +136,29 @@ export function createClaudeChatClient(
     const key = `${root}\u0000${sessionId}`;
     const path = await locate(root, sessionId, key);
     try {
-      return await project(path, sessionId);
+      const { snapshot, resolved } = await project(path, sessionId);
+      return await withHookPending(snapshot, resolved, sessionId);
     } catch (error) {
       // 消えた transcript は覚えない。次に現れたときに読み直す。
       if (error instanceof ChatUnavailableError) locations.delete(key);
       throw error;
     }
+  };
+
+  // hook の sidecar は transcript の外にあるので、transcript の射影のキャッシュとは別に毎回読む。
+  // Esc で閉じた待ちは hook が何も呼ばないので、tool_result が書かれたかで解決を知る。
+  const withHookPending = async (
+    snapshot: ChatSnapshot,
+    resolved: ReadonlySet<string>,
+    sessionId: string,
+  ): Promise<ChatSnapshot> => {
+    if (options.pendingRoot === undefined) return snapshot;
+    const sidecar = await readSidecar(options.pendingRoot, sessionId);
+    const pending = sidecar?.pending ?? null;
+    if (pending === null || sidecar === null) return snapshot;
+    if (now() - sidecar.at > SIDECAR_TTL_MS || resolved.has(pending.toolUseId)) return snapshot;
+    const { etag: _etag, ...body } = snapshot;
+    return { ...body, pending, etag: etagOf(sessionId, { ...body, pending }) };
   };
 
   return {
@@ -269,8 +306,9 @@ function snapshotOf(
   sessionId: string,
   entries: readonly TranscriptEntry[],
   clipped: boolean,
-): ChatSnapshot {
+): { snapshot: ChatSnapshot; resolved: ReadonlySet<string> } {
   const branch = activeBranch(entries);
+  const resolved = resolvedToolUseIds(branch);
   let model: string | null = null;
   let effort: string | null = null;
   for (const entry of branch) {
@@ -281,6 +319,7 @@ function snapshotOf(
   }
 
   const limited = limitMessages(projectMessages(branch));
+  const pending = projectPending(branch, resolved);
   const body: Omit<ChatSnapshot, "etag"> = {
     messages: limited.messages,
     model,
@@ -289,9 +328,13 @@ function snapshotOf(
     // 読み取り API はコンテキスト量と圧縮の形を返さない。どちらも別 Issue で足す。
     context: null,
     compaction: null,
+    ...(pending === null ? {} : { pending }),
   };
-  const etag = createHash("sha256").update(sessionId).update(JSON.stringify(body)).digest("hex");
-  return { ...body, etag };
+  return { snapshot: { ...body, etag: etagOf(sessionId, body) }, resolved };
+}
+
+function etagOf(sessionId: string, body: Omit<ChatSnapshot, "etag">): string {
+  return createHash("sha256").update(sessionId).update(JSON.stringify(body)).digest("hex");
 }
 
 // 分岐（`/rewind` や resume）で古い枝を混ぜない。最後の entry から parentUuid を辿る。
@@ -310,6 +353,81 @@ function activeBranch(entries: readonly TranscriptEntry[]): TranscriptEntry[] {
     current = current.parentUuid === null ? undefined : byUuid.get(current.parentUuid);
   }
   return branch.reverse();
+}
+
+// 未解決の tool_use を拾う。突き合わせのキーは tool_use block の id と tool_result の
+// tool_use_id。entry の uuid は、どの entry の tool_use かを辿るためにだけ使う
+// （assistant は block ごとに別 entry なので、message.id では tool_use を区別できない）。
+function projectPending(
+  branch: readonly TranscriptEntry[],
+  resolved: ReadonlySet<string>,
+): ChatPending | null {
+  const tools: PendingTool[] = [];
+  for (const entry of branch) {
+    if (entry.sidechain || entry.type !== "assistant") continue;
+    tools.push(...toolUses(entry.message?.content));
+  }
+
+  // 会話の末尾が assistant の tool_use のときだけ。tool_result が書かれたら消える。
+  // 行にならない entry（isMeta など）は末尾として見ない。
+  const tail = lastConversationEntry(branch);
+  if (tail === null || tail.type !== "assistant") return null;
+  const tailIds = new Set(toolUses(tail.message?.content).map((tool) => tool.id));
+  const unresolved = tools.filter((tool) => !resolved.has(tool.id));
+  if (!unresolved.some((tool) => tailIds.has(tool.id))) return null;
+
+  // 承認待ちが複数あるとき、どれが人間待ちか transcript だけでは決められない。
+  // AskUserQuestion を優先し、無ければ最後の 1 件を代表にする。
+  let question: PendingTool | null = null;
+  for (const tool of unresolved) {
+    if (tool.name === ASK_USER_QUESTION) question = tool;
+  }
+  if (question !== null) return questionPending(question.id, question.input);
+
+  const last = unresolved[unresolved.length - 1];
+  if (last === undefined) return null;
+  return toolPending(last.id, last.name, toolSummary(last.name, last.input));
+}
+
+function resolvedToolUseIds(branch: readonly TranscriptEntry[]): Set<string> {
+  const resolved = new Set<string>();
+  for (const entry of branch) {
+    if (entry.sidechain || entry.type !== "user") continue;
+    for (const id of toolResultIds(entry.message?.content)) resolved.add(id);
+  }
+  return resolved;
+}
+
+function lastConversationEntry(branch: readonly TranscriptEntry[]): TranscriptEntry | null {
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (entry === undefined || entry.sidechain || entry.meta || entry.compactSummary) continue;
+    if (entry.type === "user" || entry.type === "assistant") return entry;
+  }
+  return null;
+}
+
+function toolResultIds(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const ids: string[] = [];
+  for (const value of content) {
+    const block = asRecord(value);
+    if (block?.type !== "tool_result" || typeof block.tool_use_id !== "string") continue;
+    ids.push(block.tool_use_id);
+  }
+  return ids;
+}
+
+function toolUses(content: unknown): PendingTool[] {
+  if (!Array.isArray(content)) return [];
+  const tools: PendingTool[] = [];
+  for (const value of content) {
+    const block = asRecord(value);
+    if (block?.type !== "tool_use" || typeof block.id !== "string" || block.id === "") continue;
+    if (typeof block.name !== "string" || block.name === "") continue;
+    tools.push({ id: block.id, name: block.name, input: block.input });
+  }
+  return tools;
 }
 
 function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {
@@ -380,6 +498,7 @@ function projectUser(entry: TranscriptEntry): ChatMessage | null {
   const raw = userText(entry.message?.content);
   if (raw === "") return null;
   if (isLocalCommandEcho(raw)) return null;
+  if (INTERRUPT_MARKERS.has(raw.trim())) return null;
 
   const { text, attachments } = projectUserText(raw);
   if (text === "" && attachments.length === 0) return null;

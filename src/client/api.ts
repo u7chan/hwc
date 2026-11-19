@@ -7,6 +7,8 @@ import type {
   ChatFile,
   ChatLink,
   ChatMessage,
+  ChatPending,
+  ChatPendingQuestion,
   ChatSnapshot,
   ChatUsage,
 } from "../server/chat/contract";
@@ -14,6 +16,7 @@ import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
 import { parseFileTree, type FileTreeListing } from "../shared/file-tree";
 import { parsePaneActivity, type PaneActivity } from "../shared/activity";
+import type { AnswerRequest } from "../shared/answer";
 import {
   type AgentKind,
   type AgentModel,
@@ -275,6 +278,52 @@ function toRetryCount(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value > 1 ? value : undefined;
 }
 
+// 応答待ちは入力の可否を変えるが、飾りでもある。形が読めない値は捨てて pending 無しにし、
+// blocked の間は今までどおり端末出力へ倒す（誤検知で操作不能にしない）。
+function toChatPending(value: unknown): ChatPending | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const pending = value as Partial<ChatPending>;
+  if (typeof pending.toolUseId !== "string" || pending.toolUseId === "") return undefined;
+  if (pending.kind === "tool") {
+    if (typeof pending.tool !== "string" || pending.tool === "") return undefined;
+    const { summary } = pending;
+    return {
+      kind: "tool",
+      toolUseId: pending.toolUseId,
+      tool: pending.tool,
+      summary: typeof summary === "string" && summary !== "" ? summary : null,
+    };
+  }
+  if (pending.kind !== "question" || pending.tool !== "AskUserQuestion") return undefined;
+  if (!Array.isArray(pending.questions)) return undefined;
+  const questions: ChatPendingQuestion[] = [];
+  for (const item of pending.questions) {
+    if (typeof item !== "object" || item === null) return undefined;
+    const question = item as Partial<ChatPendingQuestion>;
+    if (typeof question.question !== "string" || question.question === "") return undefined;
+    if (!Array.isArray(question.options) || question.options.length === 0) return undefined;
+    const options: ChatPendingQuestion["options"] = [];
+    for (const option of question.options) {
+      if (typeof option !== "object" || option === null) return undefined;
+      const { label, description } = option as { label?: unknown; description?: unknown };
+      if (typeof label !== "string" || label === "") return undefined;
+      options.push({
+        label,
+        description: typeof description === "string" && description !== "" ? description : null,
+      });
+    }
+    questions.push({
+      question: question.question,
+      header:
+        typeof question.header === "string" && question.header !== "" ? question.header : null,
+      multiSelect: question.multiSelect === true,
+      options,
+    });
+  }
+  if (questions.length === 0) return undefined;
+  return { kind: "question", toolUseId: pending.toolUseId, tool: "AskUserQuestion", questions };
+}
+
 export function toChatSnapshot(value: unknown): ChatSnapshot | null {
   if (typeof value !== "object" || value === null) return null;
   const snapshot = value as Partial<ChatSnapshot>;
@@ -289,6 +338,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     messages.push(message);
   }
   const usage = toChatUsage(snapshot.usage);
+  const pending = toChatPending(snapshot.pending);
   return {
     etag: snapshot.etag,
     messages,
@@ -299,6 +349,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     context: toChatContext(snapshot.context),
     ...(usage === undefined ? {} : { usage }),
     compaction: toChatCompaction(snapshot.compaction),
+    ...(pending === undefined ? {} : { pending }),
     canRewind: snapshot.canRewind === true,
   };
 }
@@ -719,6 +770,32 @@ export async function stopAgent(paneId: string): Promise<void> {
     init: { signal: AbortSignal.timeout(STOP_TIMEOUT_MS) },
   });
   if (!response.ok) throw new Error(`stop: ${response.status}`);
+}
+
+// BFF は Esc で閉じて pending が消えるのを最大 3 秒待ってから本文を送る。その上限と通信を
+// 覆い、返らない経路でカードを回し続けない。
+export const ANSWER_TIMEOUT_MS = 15_000;
+
+// status は失敗の理由を伝えるためだけに返す。0 はネットワークの失敗と打ち切り。
+export type AnswerResult = { ok: true } | { ok: false; status: number };
+
+function answerRequest(paneId: string, json: AnswerRequest) {
+  return { ...paneParam(paneId), json };
+}
+
+export async function answerQuestion(
+  paneId: string,
+  request: AnswerRequest,
+): Promise<AnswerResult> {
+  try {
+    const response = await client.api.panes[":id"]["answer-question"].$post(
+      answerRequest(paneId, request),
+      { init: { signal: AbortSignal.timeout(ANSWER_TIMEOUT_MS) } },
+    );
+    return response.ok ? { ok: true } : { ok: false, status: response.status };
+  } catch {
+    return { ok: false, status: 0 };
+  }
 }
 
 export async function confirmFolderTrust(paneId: string, id: string): Promise<void> {

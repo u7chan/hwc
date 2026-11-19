@@ -1,5 +1,5 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { HerdrSnapshot } from "../../src/server/herdr/contract";
 import { FOLDER_TRUST_SCREEN, PI_TRUST_SCREEN } from "./folder-trust";
@@ -38,6 +38,11 @@ export async function writeCodexThread(
 // Claude の transcript は、架空の CLAUDE_CONFIG_DIR 配下の projects/<cwd のエンコード>/
 // <session uuid>.jsonl に置く。プロジェクト名は内部形式なので、好きな名前でよい。
 const CLAUDE_PROJECT = "-home-dev-work-acme-dashboard-docs";
+// 架空の Claude の transcript の置き場。会話を後から追記する fake が同じ場所を使う。
+export function claudeTranscriptPath(root: string, sessionId: string): string {
+  return join(root, "claude", "projects", CLAUDE_PROJECT, `${sessionId}.jsonl`);
+}
+
 export const CLAUDE_CHAT_SESSION = "3f1c0a52-9d4e-4b8a-8c21-5e7d6f0b1a2c";
 export const CLAUDE_PENDING_SESSION = "b7d2e4c1-0a95-4f3e-9c68-2d1b3a4c5e6f";
 
@@ -154,24 +159,75 @@ function claudeChatTranscript(): ClaudeEntry[] {
   });
 }
 
-// blocked のままのペイン。最後の発言が user で終わる、応答待ちの形にする。
+// blocked のままのペイン。実機の Claude Code は、質問の待ちの間は assistant の tool_use を
+// transcript に書かず、閉じたときに tool_result と一緒に書く。待ちは hook の sidecar が教える
+// ので、transcript は待ちに入る前の会話で終わらせ、質問は claudePendingSidecar に置く。
 function claudePendingTranscript(): ClaudeEntry[] {
   return claudeEntries(({ user, assistant }) => {
     user("docs/quickstart.md の手順を確認してください。");
+    assistant("msg-pending-1", [{ type: "text", text: "見出しと直す範囲を選んでください。" }]);
+    // 解決済みの tool_use はカードにしない。
     assistant("msg-pending-1", [
-      { type: "text", text: "次の 3 点を更新してよいか確認してください。" },
+      {
+        type: "tool_use",
+        id: "pending-tool-1",
+        name: "Read",
+        input: { file_path: "docs/quickstart.md" },
+      },
     ]);
-    user("進めてよいか、承認をお願いします。");
+    user([{ type: "tool_result", tool_use_id: "pending-tool-1", content: "# Quickstart" }]);
   });
 }
 
-async function writeClaudeTranscript(root: string, sessionId: string, entries: ClaudeEntry[]) {
-  const directory = join(root, "claude", "projects", CLAUDE_PROJECT);
+// hook が Claude の状態ディレクトリ配下へ書く、応答待ちの 1 件（ADR 0098）。
+function claudePendingSidecar(): Record<string, unknown> {
+  return {
+    v: 1,
+    sessionId: CLAUDE_PENDING_SESSION,
+    at: Date.now(),
+    toolUseId: "pending-tool-2",
+    tool: "AskUserQuestion",
+    pending: {
+      kind: "question",
+      toolUseId: "pending-tool-2",
+      tool: "AskUserQuestion",
+      questions: [
+        {
+          question: "見出しはどれにしますか？",
+          header: "見出し",
+          multiSelect: false,
+          options: [
+            { label: "クイックスタート", description: "今の見出しを残す" },
+            { label: "セットアップ", description: "手順の目的を先に出す" },
+          ],
+        },
+        {
+          question: "直す範囲は？",
+          header: "範囲",
+          multiSelect: true,
+          options: [
+            { label: "コマンド", description: "bun に揃える" },
+            { label: "スクリーンショット", description: "alt を足す" },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+async function writeClaudePendingSidecar(root: string) {
+  const directory = join(root, "claude", "pending");
   await mkdir(directory, { recursive: true });
   await writeFile(
-    join(directory, `${sessionId}.jsonl`),
-    entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
+    join(directory, `${CLAUDE_PENDING_SESSION}.json`),
+    JSON.stringify(claudePendingSidecar()),
   );
+}
+
+async function writeClaudeTranscript(root: string, sessionId: string, entries: ClaudeEntry[]) {
+  const path = claudeTranscriptPath(root, sessionId);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""));
 }
 
 // 起動に失敗する架空モデル。新しいペインやワークツリーの部分成功を、実 CLI に触れずに確かめる。
@@ -341,6 +397,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeFile(join(claudeAttachmentDir, "quickstart-review.pdf"), Buffer.alloc(12 * 1024)),
     writeClaudeTranscript(root, CLAUDE_CHAT_SESSION, claudeChatTranscript()),
     writeClaudeTranscript(root, CLAUDE_PENDING_SESSION, claudePendingTranscript()),
+    writeClaudePendingSidecar(root),
     writeFile(join(attachmentDir, "empty-state-reference.zip"), Buffer.alloc(2 * 1024 * 1024)),
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
     writeFile(sessionPath, sessionLines.map((line) => `${line}\n`).join("")),
@@ -628,7 +685,8 @@ export async function createScenario(root: string): Promise<Scenario> {
         tab_id: "w2:t1",
         cwd: docs,
         label: "writer",
-        // blocked のまま、応答待ちの transcript を持つ。表示は端末出力になる。
+        // blocked のまま、応答待ち（AskUserQuestion）の transcript を持つ。会話のままカードを
+        // 出し、端末出力へはカードの切替で移る。
         agent_status: "blocked",
         focused: false,
         agent_session: {

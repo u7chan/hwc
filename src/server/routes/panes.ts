@@ -21,6 +21,7 @@ export function createPanesHandlers(ctx: AppContext) {
     store,
     panes,
     models,
+    claudeSettings,
     attachmentsRoot,
     current,
     folderTrust,
@@ -221,7 +222,14 @@ export function createPanesHandlers(ctx: AppContext) {
       if (tab.panes.length >= MAX_PANES_PER_TAB) return c.json({ error: "pane_limit" }, 409);
 
       try {
-        const result = await createPane(panes, paneId, request.value, models, piDefaults);
+        const result = await createPane(
+          panes,
+          paneId,
+          request.value,
+          models,
+          piDefaults,
+          claudeSettings,
+        );
         // 名前の付け直しに失敗してもエージェントは起動している。起動できた場合だけ、
         // 選んだモデルを会話に載るまでの表示に使う。モデル未指定の起動では、同じペインに
         // 残っている前回の選択を捨てる（`/new` が既定へ戻るため。ADR 0091）。
@@ -259,7 +267,14 @@ export function createPanesHandlers(ctx: AppContext) {
       if (pane.agent !== null) return c.json({ error: "pane_not_shell" }, 409);
 
       try {
-        const failure = await startAgentInPane(panes, paneId, request.value, models, piDefaults);
+        const failure = await startAgentInPane(
+          panes,
+          paneId,
+          request.value,
+          models,
+          piDefaults,
+          claudeSettings,
+        );
         if (failure !== null) return c.json({ error: failure }, 502);
         // 分割 API と同じく、最初のメッセージを送るまでのモデル表示に使う。モデル未指定の
         // 起動では、同じペインに残っている前回の選択を捨てる（`/new` が既定へ戻るため）。

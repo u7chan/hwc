@@ -420,3 +420,84 @@ test("an agent waiting at its startup prompt keeps the remembered default", asyn
   ).toEqual({ ok: true, paneId: "w1:p3" });
   expect(defaults.calls).toEqual(["remember w1:p3"]);
 });
+
+test("a Claude launch passes the hwc-owned settings next to the selected model", async () => {
+  const { panes } = createFakePanes();
+  const models = {
+    list: mock(async () => []),
+    efforts: mock(async () => []),
+    startArgs: mock(async () => ["--model", "opus"]),
+  };
+  const claudeSettings = mock(async () => "/state/claude/settings.json");
+
+  await createPane(
+    panes,
+    "w1:p1",
+    { name: null, agent: "claude", model: { provider: "anthropic", id: "opus" } },
+    models,
+    undefined,
+    claudeSettings,
+  );
+
+  expect(panes.startAgent).toHaveBeenCalledWith({
+    paneId: "w1:p3",
+    kind: "claude",
+    name: "hwc-w1-p3",
+    args: ["--settings", "/state/claude/settings.json", "--model", "opus"],
+  });
+});
+
+test("a Claude launch in an existing shell passes the settings too", async () => {
+  const { panes } = createFakePanes();
+
+  await startAgentInPane(
+    panes,
+    "w1:p2",
+    { agent: "claude", model: null, effort: null, waitForShell: false },
+    undefined,
+    undefined,
+    async () => "/state/claude/settings.json",
+  );
+
+  expect(panes.startAgent).toHaveBeenCalledWith({
+    paneId: "w1:p2",
+    kind: "claude",
+    name: expect.any(String),
+    waitForShell: false,
+    args: ["--settings", "/state/claude/settings.json"],
+  });
+});
+
+test("a Claude launch continues without hooks when the settings file cannot be written", async () => {
+  const { panes } = createFakePanes();
+
+  const result = await createPane(
+    panes,
+    "w1:p1",
+    { name: null, agent: "claude" },
+    undefined,
+    undefined,
+    async () => {
+      throw new Error("read-only state directory");
+    },
+  );
+
+  expect(result).toEqual({ ok: true, paneId: "w1:p3" });
+  expect(panes.startAgent).toHaveBeenCalledWith({
+    paneId: "w1:p3",
+    kind: "claude",
+    name: "hwc-w1-p3",
+  });
+});
+
+test.each(["pi", "codex", "opencode"] as const)(
+  "%s never takes Claude's settings",
+  async (agent) => {
+    const { panes } = createFakePanes();
+    const claudeSettings = mock(async () => "/state/claude/settings.json");
+
+    await createPane(panes, "w1:p1", { name: null, agent }, undefined, undefined, claudeSettings);
+
+    expect(claudeSettings).not.toHaveBeenCalled();
+  },
+);

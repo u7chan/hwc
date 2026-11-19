@@ -3,6 +3,8 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClaudeChatClient } from "./claude";
+import { SIDECAR_TTL_MS } from "./claude-sidecar";
+import type { ChatPending } from "./contract";
 import { ChatUnavailableError } from "./errors";
 import { MAX_CHAT_MESSAGES } from "./limit";
 
@@ -59,6 +61,19 @@ const toolUse = (id: string) => ({
   name: "Read",
   input: { file_path: "/a" },
 });
+const tool = (id: string, name: string, input: unknown) => ({ type: "tool_use", id, name, input });
+const toolResult = (id: string) => ({ type: "tool_result", tool_use_id: id, content: "ok" });
+const question = (
+  text: string,
+  options: string[],
+  extra: { header?: string; multiSelect?: boolean } = {},
+) => ({
+  question: text,
+  header: extra.header ?? "確認",
+  multiSelect: extra.multiSelect ?? false,
+  options: options.map((label) => ({ label, description: `${label} の説明` })),
+});
+const askUse = (id: string, questions: unknown) => tool(id, "AskUserQuestion", { questions });
 
 async function withRoot(run: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "hwc-claude-"));
@@ -465,5 +480,397 @@ test("only the newest messages within the chat limit are returned", async () => 
     expect(snapshot.messages[0]?.text).toBe("本文 1");
     expect(snapshot.messages.at(-1)?.text).toBe(`本文 ${MAX_CHAT_MESSAGES}`);
     expect(snapshot.truncated).toBe(true);
+  });
+});
+
+test("an unresolved AskUserQuestion at the end of the branch becomes a question card", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "配色を決めてください。");
+    const intro = assistant("a1", "u1", "msg_1", [text("確認します。")]);
+    const ask = assistant("a2", "a1", "msg_1", [
+      askUse("t1", [
+        question("好きな色は？", ["赤", "青", "緑"], { header: "色", multiSelect: true }),
+        question("次に直す場所は？", ["見出し", "本文"]),
+      ]),
+    ]);
+    await writeTranscript(root, [first, intro, ask]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.pending).toEqual({
+      kind: "question",
+      toolUseId: "t1",
+      tool: "AskUserQuestion",
+      questions: [
+        {
+          question: "好きな色は？",
+          header: "色",
+          multiSelect: true,
+          options: [
+            { label: "赤", description: "赤 の説明" },
+            { label: "青", description: "青 の説明" },
+            { label: "緑", description: "緑 の説明" },
+          ],
+        },
+        {
+          question: "次に直す場所は？",
+          header: "確認",
+          multiSelect: false,
+          options: [
+            { label: "見出し", description: "見出し の説明" },
+            { label: "本文", description: "本文 の説明" },
+          ],
+        },
+      ],
+    });
+    // カードは会話の行を増やさない。
+    expect(snapshot.messages.map((message) => message.text)).toEqual([
+      "配色を決めてください。",
+      "確認します。",
+    ]);
+  });
+});
+
+test("a tool_result clears the card and the conversation continues", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "好みを聞いてください。");
+    const ask = assistant("a1", "u1", "msg_1", [askUse("t1", [question("好きな色は？", ["赤"])])]);
+    const path = await writeTranscript(root, [first, ask]);
+    const client = createClaudeChatClient();
+
+    const waiting = await client.snapshot(SESSION);
+    expect(waiting.pending).toMatchObject({ kind: "question", toolUseId: "t1" });
+
+    const result = user("r1", "a1", [toolResult("t1")]);
+    const answer = assistant("a2", "r1", "msg_2", [text("赤ですね。")]);
+    await appendFile(path, `${JSON.stringify(result)}\n${JSON.stringify(answer)}\n`);
+
+    const resolved = await client.snapshot(SESSION);
+
+    expect(resolved.pending).toBeUndefined();
+    expect(resolved.etag).not.toBe(waiting.etag);
+    expect(resolved.messages.map((message) => message.text)).toEqual([
+      "好みを聞いてください。",
+      "赤ですね。",
+    ]);
+  });
+});
+
+test("parallel tool calls wait on the AskUserQuestion even when another tool comes later", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "並べて進めてください。");
+    const read = assistant("a1", "u1", "msg_1", [tool("t1", "Read", { file_path: "docs/a.md" })]);
+    const ask = assistant("a2", "a1", "msg_1", [
+      askUse("t2", [question("このままでよいですか？", ["はい", "いいえ"])]),
+    ]);
+    const after = assistant("a3", "a2", "msg_1", [tool("t3", "Read", { file_path: "docs/b.md" })]);
+    await writeTranscript(root, [first, read, ask, after]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.pending).toMatchObject({ kind: "question", toolUseId: "t2" });
+  });
+});
+
+test("an approval wait becomes a tool card with a one-line summary", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "一回だけ確認させてください。");
+    const write = assistant("a1", "u1", "msg_1", [
+      tool("t1", "Write", { file_path: "docs/quickstart.md", content: "本文の全文" }),
+    ]);
+    await writeTranscript(root, [first, write]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.pending).toEqual({
+      kind: "tool",
+      toolUseId: "t1",
+      tool: "Write",
+      summary: "docs/quickstart.md",
+    });
+    // 承認待ちに input 全体を載せない（Write の content を画面と通信へ出さない）。
+    expect(JSON.stringify(snapshot)).not.toContain("本文の全文");
+  });
+});
+
+test("a tool without a known summary field shows only its name", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "調べてください。");
+    const call = assistant("a1", "u1", "msg_1", [
+      tool("t1", "mcp__demo__lookup", { query: "内部の値" }),
+    ]);
+    await writeTranscript(root, [first, call]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.pending).toEqual({
+      kind: "tool",
+      toolUseId: "t1",
+      tool: "mcp__demo__lookup",
+      summary: null,
+    });
+    expect(JSON.stringify(snapshot)).not.toContain("内部の値");
+  });
+});
+
+test("the summary of a known tool is flattened to one line", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "空ファイルを作ってください。");
+    const call = assistant("a1", "u1", "msg_1", [
+      tool("t1", "Bash", { command: "touch /tmp/demo\n&& ls /tmp/demo" }),
+    ]);
+    await writeTranscript(root, [first, call]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.pending).toEqual({
+      kind: "tool",
+      toolUseId: "t1",
+      tool: "Bash",
+      summary: "touch /tmp/demo && ls /tmp/demo",
+    });
+  });
+});
+
+test("a malformed AskUserQuestion input does not become a card", async () => {
+  await withRoot(async (root) => {
+    const inputs: unknown[] = [
+      { questions: "好きな色は？" },
+      { questions: [] },
+      { questions: [{ question: "好きな色は？", options: [] }] },
+      { questions: [{ question: "", options: [{ label: "赤" }] }] },
+      { questions: [{ question: "好きな色は？", options: [{ label: "" }] }] },
+      null,
+    ];
+    for (const input of inputs) {
+      const first = user("u1", null, "聞いてください。");
+      const ask = assistant("a1", "u1", "msg_1", [tool("t1", "AskUserQuestion", input)]);
+      await writeTranscript(root, [first, ask]);
+      // 使い回しの射影に当たらないよう、毎回作り直して読む。
+      const snapshot = await createClaudeChatClient().snapshot(SESSION);
+      expect(snapshot.pending).toBeUndefined();
+    }
+  });
+});
+
+test("a pending tool is not shown when the branch ends with a user message", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "これで進めてください。");
+    const call = assistant("a1", "u1", "msg_1", [
+      tool("t1", "Bash", { command: "touch /tmp/demo" }),
+    ]);
+    const note = user("u2", "a1", "承認します。");
+    await writeTranscript(root, [first, call, note]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.pending).toBeUndefined();
+  });
+});
+
+test("question text is flattened, stripped and cut to the limits", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "選択肢をください。");
+    const ask = assistant("a1", "u1", "msg_1", [
+      askUse("t1", [
+        {
+          question: `色\r\nは\u0000何\tですか ${"長".repeat(2_100)}`,
+          header: "見".repeat(150),
+          multiSelect: true,
+          options: Array.from({ length: 12 }, (_, index) => ({
+            label: `選択肢${index}`,
+            description: "説".repeat(1_100),
+          })),
+        },
+        ...Array.from({ length: 5 }, () => question("余分な質問", ["はい"])),
+      ]),
+    ]);
+    await writeTranscript(root, [first, ask]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+    const pending = snapshot.pending;
+
+    expect(pending?.kind).toBe("question");
+    if (pending?.kind !== "question") return;
+    // 質問は 4 件、選択肢は 10 件まで。
+    expect(pending.questions).toHaveLength(4);
+    const [head] = pending.questions;
+    expect(head?.question.startsWith("色 は何 ですか ")).toBe(true);
+    expect(head?.question).toHaveLength(2_000);
+    expect(head?.question).not.toMatch(/\p{Cc}/u);
+    expect(head?.header).toHaveLength(100);
+    expect(head?.multiSelect).toBe(true);
+    expect(head?.options).toHaveLength(10);
+    expect(head?.options[0]?.description).toHaveLength(1_000);
+  });
+});
+
+// 実機（Claude Code 2.1.328）は、質問と承認の待ちの間は assistant の tool_use を transcript に
+// 書かず、ダイアログを閉じたときに tool_result と一緒に書く。待ちは hook の sidecar が教える。
+async function withSidecar(
+  run: (dirs: { root: string; pendingRoot: string }) => Promise<void>,
+): Promise<void> {
+  await withRoot(async (root) => {
+    const pendingRoot = join(root, "pending");
+    await mkdir(pendingRoot, { recursive: true });
+    await run({ root, pendingRoot });
+  });
+}
+
+const sidecarQuestion: ChatPending = {
+  kind: "question",
+  toolUseId: "t1",
+  tool: "AskUserQuestion",
+  questions: [question("好きな色は？", ["赤", "青"])],
+};
+
+async function writeSidecar(
+  pendingRoot: string,
+  fields: Record<string, unknown> = {},
+): Promise<void> {
+  await writeFile(
+    join(pendingRoot, `${SESSION}.json`),
+    JSON.stringify({
+      v: 1,
+      sessionId: SESSION,
+      at: BASE,
+      toolUseId: "t1",
+      tool: "AskUserQuestion",
+      pending: sidecarQuestion,
+      ...fields,
+    }),
+  );
+}
+
+test("a question the hook recorded is shown even though the transcript has no tool_use yet", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "色を聞いてください。")]);
+    await writeSidecar(pendingRoot);
+
+    const snapshot = await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(
+      SESSION,
+    );
+
+    expect(snapshot.pending).toEqual(sidecarQuestion);
+    expect(snapshot.messages.map((message) => message.text)).toEqual(["色を聞いてください。"]);
+  });
+});
+
+test("the wait is part of the etag so the card is not hidden by a 304", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "色を聞いてください。")]);
+    const client = createClaudeChatClient({ pendingRoot, now: () => BASE });
+    const without = await client.snapshot(SESSION);
+
+    await writeSidecar(pendingRoot);
+    const withCard = await client.snapshot(SESSION);
+
+    expect(without.pending).toBeUndefined();
+    expect(withCard.etag).not.toBe(without.etag);
+  });
+});
+
+test("Esc leaves the file behind, but the tool_result the CLI writes resolves the question", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    const first = user("u1", null, "色を聞いてください。");
+    const ask = assistant("a1", "u1", "msg_1", [askUse("t1", [question("好きな色は？", ["赤"])])]);
+    const rejected = user("u2", "a1", [{ ...toolResult("t1"), is_error: true }]);
+    const interrupted = user("u3", "u2", [text("[Request interrupted by user for tool use]")]);
+    await writeTranscript(root, [first, ask, rejected, interrupted]);
+    await writeSidecar(pendingRoot);
+
+    const snapshot = await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(
+      SESSION,
+    );
+
+    expect(snapshot.pending).toBeUndefined();
+  });
+});
+
+test("a tool approval the hook recorded is shown with its summary", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "ファイルを作ってください。")]);
+    await writeSidecar(pendingRoot, {
+      toolUseId: "t2",
+      tool: "Bash",
+      pending: { kind: "tool", toolUseId: "t2", tool: "Bash", summary: "touch ./probe" },
+    });
+
+    const snapshot = await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(
+      SESSION,
+    );
+
+    expect(snapshot.pending).toEqual({
+      kind: "tool",
+      toolUseId: "t2",
+      tool: "Bash",
+      summary: "touch ./probe",
+    });
+  });
+});
+
+test("a record older than its lifetime, a started tool and another session's file show no card", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "色を聞いてください。")]);
+    const client = createClaudeChatClient({ pendingRoot, now: () => BASE + SIDECAR_TTL_MS + 1 });
+
+    await writeSidecar(pendingRoot);
+    expect((await client.snapshot(SESSION)).pending).toBeUndefined();
+
+    await writeSidecar(pendingRoot, { pending: null });
+    expect(
+      (await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(SESSION)).pending,
+    ).toBeUndefined();
+
+    await writeSidecar(pendingRoot, { sessionId: "another-session" });
+    expect(
+      (await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(SESSION)).pending,
+    ).toBeUndefined();
+  });
+});
+
+test("without a pending root only the transcript decides", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    await writeTranscript(root, [user("u1", null, "色を聞いてください。")]);
+    await writeSidecar(pendingRoot);
+
+    const snapshot = await createClaudeChatClient({ now: () => BASE }).snapshot(SESSION);
+
+    expect(snapshot.pending).toBeUndefined();
+  });
+});
+
+test("the hook's record wins over an unresolved tool_use at the end of the transcript", async () => {
+  await withSidecar(async ({ root, pendingRoot }) => {
+    const first = user("u1", null, "続けてください。");
+    const ask = assistant("a1", "u1", "msg_1", [tool("t9", "Bash", { command: "ls" })]);
+    await writeTranscript(root, [first, ask]);
+    await writeSidecar(pendingRoot);
+
+    const snapshot = await createClaudeChatClient({ pendingRoot, now: () => BASE }).snapshot(
+      SESSION,
+    );
+
+    expect(snapshot.pending).toEqual(sidecarQuestion);
+  });
+});
+
+test("the marker the CLI writes when Esc interrupts a turn is not a user message", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "続けてください。");
+    const ask = assistant("a1", "u1", "msg_1", [askUse("t1", [question("好きな色は？", ["赤"])])]);
+    const rejected = user("u2", "a1", [{ ...toolResult("t1"), is_error: true }]);
+    const interrupted = user("u3", "u2", [text("[Request interrupted by user for tool use]")]);
+    const interruptedTurn = user("u4", "u3", "[Request interrupted by user]");
+    const answer = user("u5", "u4", "好きな色は？: 青");
+    await writeTranscript(root, [first, ask, rejected, interrupted, interruptedTurn, answer]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    // 質問への回答として送った本文だけが、ユーザーの発言として残る。
+    expect(snapshot.messages.map((message) => message.text)).toEqual([
+      "続けてください。",
+      "好きな色は？: 青",
+    ]);
   });
 });
