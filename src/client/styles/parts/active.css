@@ -410,7 +410,7 @@ a.hwc-active-band-repo-link:focus-visible {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
   min-height: var(--row-pane);
   /* 親のアイコンから子の段へ。ツリーのペイン行と同じ位置に記号を置く。 */
@@ -421,6 +421,12 @@ a.hwc-active-band-repo-link:focus-visible {
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
+}
+
+/* 行の状態記号には文言を添えない。枠は記号のぶんだけに詰め、浮いた幅を Provider の記号と名前に回す。 */
+.hwc-active-open .hwc-status {
+  width: var(--space-5);
+  height: var(--space-5);
 }
 
 /* 帯の中は面が surface なので、ツリーの hover（surface）では差が出ない。 */
@@ -456,11 +462,12 @@ a.hwc-active-band-repo-link:focus-visible {
   font-weight: 400;
 }
 
+/* 記号と名前、名前と印の間隔はツリーの行（.hwc-pane-title）と揃える。 */
 .hwc-active-title {
   display: flex;
   flex: 0 1 auto;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
 }
 
