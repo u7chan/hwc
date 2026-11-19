@@ -10,6 +10,7 @@ import {
 import { planSplit } from "./herdr/split";
 import { supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
+import type { ClaudeLaunch } from "./claude-settings";
 import type { PiDefaultsStore } from "./pi-defaults";
 
 // 起動の前後でだけ預かりを置き引きする。表示の解決は既定モデルの口が持つ。
@@ -21,8 +22,8 @@ type CreationClient = Pick<PaneClient, "layout" | "split" | "startAgent" | "rena
 // エージェントの起動と表示名の付与だけを行う。
 export type SetupClient = Pick<PaneClient, "startAgent" | "rename" | "directory">;
 
-// hwc が所有する Claude の設定ファイルを用意し、そのパスを返す。ユーザーの設定は触らない。
-export type ClaudeSettingsProvider = () => Promise<string>;
+// hwc が所有する Claude の設定ファイルと mod を用意する。ユーザーの設定は触らない。
+export type ClaudeSettingsProvider = () => Promise<ClaudeLaunch>;
 
 export type PaneSetupFailure = "agent_start_failed" | "pane_rename_failed";
 
@@ -117,9 +118,17 @@ export async function setupPane(
         args = ["--no-daemon", ...(args ?? [])];
       }
       if (request.agent === "claude" && claudeSettings !== undefined) {
-        // 応答待ちを読むための hook。足せなくても起動は続け、カードが出ず端末出力のままになる。
-        const settings = await claudeSettings().catch(() => null);
-        if (settings !== null) args = ["--settings", settings, ...(args ?? [])];
+        // 応答待ちを読むための hook と、生成中の速度を書く mod。足せなくても起動は続け、
+        // カードと速度が出ず端末出力のままになる。
+        const launch = await claudeSettings().catch(() => null);
+        if (launch !== null) {
+          args = [
+            "--settings",
+            launch.settings,
+            ...(launch.pluginDir === null ? [] : ["--plugin-dir", launch.pluginDir]),
+            ...(args ?? []),
+          ];
+        }
       }
       await panes.startAgent({
         paneId,

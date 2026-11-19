@@ -1,0 +1,6 @@
+{
+  "name": "hwc-live-rate",
+  "version": "0.1.0",
+  "description": "Publishes Claude Code's live output rate for hwc's pane activity band",
+  "author": { "name": "hwc" }
+}

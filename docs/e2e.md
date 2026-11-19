@@ -190,11 +190,11 @@ Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（
 
 ## Claude の実行中の段階
 
-Claude の帯は transcript の進行行から導く（[ADR 0100](adr/0100-claude-live-activity.md)）。`quickstart`（`w2:p2`、待機）で確かめる。フィクスチャ専用の入力 `/activity` は実 Herdr には無い。送るとペインを `working` にし、架空の transcript へ 2 秒後に prompt と `api-request`、4 秒後に assistant の本文と `tool_use`、8 秒後に `tool_result` を追記する。実在の `~/.claude` は読まない。
+Claude の帯は transcript の進行行から導く（[ADR 0100](adr/0100-claude-live-activity.md)）。`quickstart`（`w2:p2`、待機）で確かめる。フィクスチャ専用の入力 `/activity` は実 Herdr には無い。送るとペインを `working` にし、架空の transcript へ 2 秒後に prompt と `api-request`、16 秒後に assistant の本文と `tool_use`、20 秒後に `tool_result` を追記する。prompt の 6 秒後から 500ms ごとに mod と同じ形の速度（`68.4`）を `<root>/claude/live/<session id>.json` へ上書きし、16 秒後に消す（[ADR 0102](adr/0102-claude-live-tok-rate.md)）。実在の `~/.claude` は読まない。
 
 1. `quickstart` を開き、`/activity` を送る。すぐに帯が出て 3 点と経過時間だけになり、その下に thinking 用の 2 行の空きができる。ターンの最初の取得では新しい prompt がまだ書かれていないので、段階は出ない。
-2. 2 秒ほどで「考えています」に変わる。応答本文がまだ無いので、2 行の空きは空のまま。4 秒ほどで「Read を実行中」に変わり、1 行目に `quickstart.md`、2 行目に「手順を確認しています。」が出る。空きの高さはこの間ずっと同じで、会話の見える範囲が動かない。
-3. 8 秒ほどで transcript に `tool_result` が書かれ、次の取得は `activity: null` になる。帯は直前の「Read を実行中」と 2 行をそのまま保つ（最後に非 null を得てから 10 秒）。
+2. 2 秒ほどで「考えています」に変わり、続けて経過時間の左に `68.4 tok/s` が出る。応答本文がまだ無いので、2 行の空きは空のまま。16 秒ほどで「Read を実行中」に変わり、速度は消え、1 行目に `quickstart.md`、2 行目に「手順を確認しています。」が出る。空きの高さはこの間ずっと同じで、会話の見える範囲が動かない。
+3. 20 秒ほどで transcript に `tool_result` が書かれ、次の取得は `activity: null` になる。帯は直前の「Read を実行中」と 2 行をそのまま保つ（最後に非 null を得てから 10 秒）。
 4. 10 秒ほど待つと保持が切れ、段階が消えて 3 点と経過時間だけになる。2 行の空きは残る。
 5. 停止ボタンで `idle` に戻すと帯が消える。もう一度 `/activity` を送ってから `/blocked` を送ると、本文が端末出力に変わり、入力欄と帯が消える。`/done` で戻すと会話表示に戻り、帯は出ない。
 6. `/compact` を送る（+ のメニューか直接入力）。「会話を圧縮しています」の帯が出て、その下に thinking の 2 行の空きは出ない。`中断` を押すと帯が消えて元の表示に戻る。Claude は `compaction` を返さないので、この表示は中断するまで残る。

@@ -1,0 +1,4 @@
+{
+  "description": "hwc's live output rate for Claude Code",
+  "modules": ["./register.mjs"]
+}
