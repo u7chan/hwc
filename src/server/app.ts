@@ -60,6 +60,7 @@ export function createApp(options: CreateAppOptions) {
       .post("/api/panes/:id/edit-message", requireJson, editMessageHandlers.edit)
       .post("/api/panes/:id/answer-question", requireJson, chatHandlers.answerQuestion)
       .get("/api/panes/:id/default-model", chatHandlers.defaultModel)
+      .get("/api/panes/:id/launch-model", chatHandlers.launchModel)
       .get("/api/panes/:id/activity", chatHandlers.activity)
       // マニフェストがあるディレクトリを、ペインの cwd から下だけ列挙する。
       // 兄弟プロジェクトは、このペインから相対パスで届く範囲に無いものとして扱う。

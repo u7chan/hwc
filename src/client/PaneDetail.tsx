@@ -106,6 +106,7 @@ import { useFilePreview, useFileTree } from "./pane/use-file-tree";
 import { useTemplates } from "./pane/use-templates";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
 import { useDefaultModel } from "./pane/use-default-model";
+import { useLaunchModel } from "./pane/use-launch-model";
 import { useDraft } from "./pane/use-draft";
 import { canEditMessage, editFailureNotice, newRequestId, type EditSession } from "./edit";
 import { useOutputFollow } from "./pane/use-output-follow";
@@ -532,6 +533,7 @@ export function PaneDetail(props: PaneDetailProps) {
     launch === null || (launch.model === null && launch.effort === null)
       ? null
       : { model: launch.model === null ? null : launch.model.id, effort: launch.effort };
+  const snapshotInfo = agentInfo(snapshot);
   // 既定モデルで起動した pi は、会話にモデルが載るまで何も出せない。チャット画面を
   // 開いている間だけ既定を読み、スケルトンで待ちを示す（ADR 0087）。
   const defaultInfo = useDefaultModel(
@@ -541,10 +543,19 @@ export function PaneDetail(props: PaneDetailProps) {
       !readOnly &&
       body.kind === "chat" &&
       snapshot !== null &&
-      agentInfo(snapshot) === null &&
+      snapshotInfo === null &&
       launchInfo === null,
   );
-  const info = agentInfo(snapshot) ?? launchInfo ?? defaultInfo.info;
+  // 会話を読めないペインは、hwc が預かっている起動時の指定でモデルを補う（ADR 0101）。
+  const launchModelInfo = useLaunchModel(
+    pane.id,
+    pane.chat &&
+      !readOnly &&
+      snapshotInfo === null &&
+      launchInfo === null &&
+      defaultInfo.info === null,
+  );
+  const info = snapshotInfo ?? launchInfo ?? defaultInfo.info ?? launchModelInfo;
   const infoLoading = info === null && defaultInfo.loading;
   // モデルと effort が無くても、コンテキストの材料があれば行を出す。
   const meter = contextMeter(snapshot?.context ?? null);

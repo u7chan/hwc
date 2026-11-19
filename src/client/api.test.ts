@@ -22,7 +22,7 @@ import {
   toPaneRead,
   toAgentModels,
   toAgentEfforts,
-  toDefaultModel,
+  toModelInfo,
   MODEL_CREATE_TIMEOUT_MS,
   CREATE_WORKTREE_TIMEOUT_MS,
   canRetryWorktree,
@@ -54,13 +54,13 @@ test("model candidates with namespaced @ IDs remain selectable", () => {
   expect(toAgentModels({ models: [model] })).toEqual([model]);
 });
 
-test("the lazy default model keeps only a model and a non-empty effort", () => {
-  expect(toDefaultModel({ model: "beam", effort: "high" })).toEqual({
+test("the model info keeps only a model and a valid effort", () => {
+  expect(toModelInfo({ model: "beam", effort: "high" })).toEqual({
     model: "beam",
     effort: "high",
   });
-  expect(toDefaultModel({ model: "beam" })).toEqual({ model: "beam", effort: null });
-  expect(toDefaultModel({ model: "beam", effort: null })).toEqual({ model: "beam", effort: null });
+  expect(toModelInfo({ model: "beam" })).toEqual({ model: "beam", effort: null });
+  expect(toModelInfo({ model: "beam", effort: null })).toEqual({ model: "beam", effort: null });
   for (const body of [
     null,
     {},
@@ -69,7 +69,7 @@ test("the lazy default model keeps only a model and a non-empty effort", () => {
     { model: "beam", effort: 3 },
     { model: "beam", effort: "high\nexit" },
   ]) {
-    expect(toDefaultModel(body)).toBeNull();
+    expect(toModelInfo(body)).toBeNull();
   }
 });
 

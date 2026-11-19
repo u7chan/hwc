@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-19
 - Amends: [ADR 0078](0078-starting-pane-mask.md)
-- Amended by: [ADR 0098](0098-claude-pending-in-chat.md)（応答待ちの表示）
+- Amended by: [ADR 0098](0098-claude-pending-in-chat.md)（応答待ちの表示）、[ADR 0101](0101-launch-model-while-chat-unavailable.md)（会話が読めない間のモデル表示）
 - Revises: [ADR 0013](0013-pi-session-chat.md)、[ADR 0027](0027-new-pane-agent.md)、[ADR 0096](0096-claude-model-effort.md) の Claude に関する記述
 
 ## Context
