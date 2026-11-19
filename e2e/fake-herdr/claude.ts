@@ -1,16 +1,25 @@
 import { appendFile, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { claudeTranscriptPath } from "../fixtures/scenario";
+import { CLAUDE_VERSION, claudeTranscriptPath } from "../fixtures/scenario";
 import type { FakeContext } from "./context";
+import type { SetAgentStatus } from "./workspaces";
+
+// E2E 用の架空のターン。実物と同じく、prompt・要求・応答・ツール・結果は別々の行として
+// 時間差で追記する（ADR 0100）。最初の 2 秒は新しい prompt がまだ無いので、帯は空の枠の
+// ままになる。ツールの結果は 8 秒後に書くので、そのあとは取得が null になる。
+const PROMPT_DELAY_MS = 2_000;
+const TOOL_DELAY_MS = 4_000;
+const RESULT_DELAY_MS = 8_000;
 
 // 架空の Claude Code。実機（2.1.328）で確かめた、質問まわりの transcript と hook の動きだけを
 // 再現する（ADR 0098、0099）。
 //   - Esc でダイアログを閉じると、assistant の tool_use と、is_error の tool_result と、
 //     「[Request interrupted by user for tool use]」の user を一度に書く。hook は呼ばれない。
 //   - 次の発言（UserPromptSubmit）で、hook が応答待ちの sidecar を消す。
-export function createClaude(ctx: FakeContext) {
-  const { root, findPane } = ctx;
+export function createClaude(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
+  const { root, findPane, later } = ctx;
   let count = 0;
+  let sequence = 0;
 
   const sessionOf = (paneId: string): string | null => {
     const session = findPane(paneId)?.agent_session ?? null;
@@ -21,20 +30,20 @@ export function createClaude(ctx: FakeContext) {
 
   const sidecarPath = (sessionId: string) => join(root, "claude", "pending", `${sessionId}.json`);
 
-  // 末尾の entry の uuid。追記する entry をその子にして、active branch を伸ばす。
+  // 追記する entry の親にする uuid。末尾が uuid を持たない行（api-request）でも、その前の
+  // entry から枝を伸ばす。
   const tailUuid = async (path: string): Promise<string | null> => {
     const raw = await readFile(path, "utf8").catch(() => "");
-    const last = raw
-      .split("\n")
-      .filter((line) => line.trim() !== "")
-      .at(-1);
-    if (last === undefined) return null;
-    try {
-      const uuid = (JSON.parse(last) as { uuid?: unknown }).uuid;
-      return typeof uuid === "string" ? uuid : null;
-    } catch {
-      return null;
+    const lines = raw.split("\n").filter((line) => line.trim() !== "");
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      try {
+        const uuid = (JSON.parse(lines[index]!) as { uuid?: unknown }).uuid;
+        if (typeof uuid === "string" && uuid !== "") return uuid;
+      } catch {
+        // 書きかけの行は読み飛ばす。
+      }
     }
+    return null;
   };
 
   const append = async (sessionId: string, build: (next: () => object) => object[]) => {
@@ -46,6 +55,7 @@ export function createClaude(ctx: FakeContext) {
         uuid: `fake-claude-${count}`,
         parentUuid,
         timestamp: new Date().toISOString(),
+        version: CLAUDE_VERSION,
         isSidechain: false,
       };
       parentUuid = entry.uuid;
@@ -55,7 +65,97 @@ export function createClaude(ctx: FakeContext) {
     await appendFile(path, entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""));
   };
 
+  // uuid を持たない行（api-request など）は、枝を切らないよう単独で追記する。
+  const appendEntry = async (sessionId: string, entry: object) => {
+    const path = claudeTranscriptPath(root, sessionId);
+    await appendFile(path, `${JSON.stringify(entry)}\n`);
+  };
+
+  // フィクスチャ専用の入力 `/activity` のターンを始める。prompt が書かれるまでの 2 秒間は、
+  // クライアントが前のターンとの比較で待つ（ADR 0100）。
+  const start = async (paneId: string): Promise<void> => {
+    const sessionId = sessionOf(paneId);
+    if (sessionId === null) return;
+    sequence += 1;
+    const run = sequence;
+    const working = () => sequence === run && findPane(paneId)?.agent_status === "working";
+
+    // ターンは始まったが、prompt はまだ書かれていない。
+    setAgentStatus(paneId, "working");
+
+    later(async () => {
+      if (!working()) return;
+      await append(sessionId, (next) => [
+        {
+          ...next(),
+          type: "user",
+          message: { role: "user", content: "追加の依頼を確認してください。" },
+        },
+      ]);
+      await appendEntry(sessionId, {
+        type: "api-request",
+        id: `api-e2e-${run}`,
+        querySource: "repl_main_thread",
+        timestamp: new Date().toISOString(),
+        version: CLAUDE_VERSION,
+      });
+    }, PROMPT_DELAY_MS);
+
+    later(async () => {
+      if (!working()) return;
+      await append(sessionId, (next) => [
+        {
+          ...next(),
+          type: "assistant",
+          requestRef: `api-e2e-${run}`,
+          message: {
+            id: `msg-e2e-${run}`,
+            role: "assistant",
+            model: "claude-sonnet-5-5",
+            content: [{ type: "text", text: "手順を確認しています。" }],
+          },
+          perTurnEffort: "xhigh",
+        },
+        {
+          ...next(),
+          type: "assistant",
+          requestRef: `api-e2e-${run}`,
+          message: {
+            id: `msg-e2e-${run}`,
+            role: "assistant",
+            model: "claude-sonnet-5-5",
+            content: [
+              {
+                type: "tool_use",
+                id: `tool-e2e-${run}`,
+                name: "Read",
+                input: { file_path: "docs/quickstart.md" },
+              },
+            ],
+          },
+          perTurnEffort: "xhigh",
+        },
+      ]);
+    }, TOOL_DELAY_MS);
+
+    later(async () => {
+      if (!working()) return;
+      await append(sessionId, (next) => [
+        {
+          ...next(),
+          type: "user",
+          message: {
+            role: "user",
+            content: [{ type: "tool_result", tool_use_id: `tool-e2e-${run}`, content: "ok" }],
+          },
+        },
+      ]);
+    }, RESULT_DELAY_MS);
+  };
+
   return {
+    start,
+
     // Esc で質問を閉じる。応答待ちが sidecar にあるペインだけ。sidecar は残す（hook が無いので）。
     async dismissQuestion(paneId: string): Promise<void> {
       const sessionId = sessionOf(paneId);

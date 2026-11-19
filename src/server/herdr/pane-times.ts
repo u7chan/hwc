@@ -114,6 +114,80 @@ export function toSavedPaneTimes(state: SnapshotState, times: PaneTimes): SavedP
   return saved;
 }
 
+// 実行中の段階を出すターンの範囲（ADR 0100）。ペインとセッションをキーにし、永続化しない。
+export type PaneTurn = {
+  // このターンの起点 prompt を transcript で見たか。
+  observed: boolean;
+  // 直近に観測したターンの起点 prompt の uuid。まだ書かれていない prompt との比較に使う。
+  lastPrompt: string | null;
+};
+
+export type PaneTurns = ReadonlyMap<string, PaneTurn>;
+
+export const NO_TURNS: PaneTurns = new Map();
+
+const FRESH_TURN: PaneTurn = { observed: false, lastPrompt: null };
+
+function paneStatuses(state: SnapshotState | null): Map<string, AgentStatus> {
+  const statuses = new Map<string, AgentStatus>();
+  if (state === null) return statuses;
+  eachPane(state, (paneId, status) => {
+    statuses.set(paneId, status);
+  });
+  return statuses;
+}
+
+function sameTurns(a: PaneTurns, b: PaneTurns): boolean {
+  if (a.size !== b.size) return false;
+  for (const [paneId, turn] of b) {
+    const other = a.get(paneId);
+    if (other === undefined) return false;
+    if (other.observed !== turn.observed || other.lastPrompt !== turn.lastPrompt) return false;
+  }
+  return true;
+}
+
+// 状態の遷移からターンの範囲を決める。
+//   新規ペインと idle / done / unknown → working は新しいターンなので observed を戻す
+//   blocked → working は同じターンの続きなので observed を保つ
+//   idle / done / unknown へ移ったら observed を戻す（blocked では戻さない）
+// lastPrompt は保つ。新しい prompt がまだ書かれていないかを、ターンの最初の取得で比べる。
+export function trackPaneTurns(
+  previous: SnapshotState | null,
+  turns: PaneTurns,
+  next: SnapshotState,
+): Map<string, PaneTurn> {
+  const before = paneStatuses(previous);
+  const tracked = new Map<string, PaneTurn>();
+  eachPane(next, (paneId, status) => {
+    const kept = turns.get(paneId) ?? FRESH_TURN;
+    const was = before.get(paneId);
+    if (
+      status === "blocked" ||
+      (status === "working" && (was === "working" || was === "blocked"))
+    ) {
+      tracked.set(paneId, kept);
+      return;
+    }
+    tracked.set(paneId, { observed: false, lastPrompt: kept.lastPrompt });
+  });
+  return sameTurns(turns, tracked) ? (turns as Map<string, PaneTurn>) : tracked;
+}
+
+// ターンの最初の取得で、新しい prompt が書かれたかを確かめる。同じ prompt のままなら
+// false を返し、段階を出さない。観測済みになった後は、比べずにそのまま通す。
+export function claimPaneTurn(
+  turns: Map<string, PaneTurn>,
+  paneId: string,
+  promptId: string | null,
+): boolean {
+  if (promptId === null) return false;
+  const turn = turns.get(paneId) ?? FRESH_TURN;
+  if (!turn.observed && turn.lastPrompt === promptId) return false;
+  turns.set(paneId, { observed: true, lastPrompt: promptId });
+  return true;
+}
+
 // 保存した時刻を読む。壊れた JSON・非数・読んだ時刻より未来の値は捨てる
 // （端末ではなく BFF の時計だが、時計が戻ったときに負の経過を出さない）。
 export function parseSavedPaneTimes(raw: string | null, now: number): SavedPaneTimes {

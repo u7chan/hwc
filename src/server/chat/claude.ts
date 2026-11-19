@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { type FileHandle, open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
+import { TOOL_NAME_LIMIT, TOOLS_LIMIT } from "../../shared/activity";
 import {
   ATTACHED_FILES_CLOSE,
   ATTACHED_FILES_OPEN,
@@ -9,7 +10,13 @@ import {
 } from "../../shared/attachments";
 import { ASK_USER_QUESTION, questionPending, toolPending, toolSummary } from "./claude-pending";
 import { readSidecar, SESSION_ID, SIDECAR_TTL_MS } from "./claude-sidecar";
-import type { ChatMessage, ChatPending, ChatSnapshot, SessionChatClient } from "./contract";
+import type {
+  ChatMessage,
+  ChatPending,
+  ChatSnapshot,
+  SessionActivity,
+  SessionChatClient,
+} from "./contract";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
 
@@ -43,10 +50,42 @@ const INTERRUPT_MARKERS = new Set([
 // API を呼ばずに失敗したターンの記録に付くモデル名。表示するモデルではない。
 const SYNTHETIC_MODEL = "<synthetic>";
 
-type TranscriptEntry = {
+// api-request / tool_use の ID で応答の有無を判定できる版（ADR 0097 / 0100）。
+const MIN_ACTIVITY_VERSION = [2, 1, 327] as const;
+
+// 帯の 2 行は activitySnippet の 160 文字に収める。対象 60 + 改行 + 方向 90。
+const TARGET_LIMIT = 60;
+const DIRECTION_LIMIT = 90;
+
+// メインスレッドの要求だけが会話の応答を待つ。sdk の要求は本流の段階ではない。
+const MAIN_THREAD_SOURCE = "repl_main_thread";
+
+// transcript の message.content を、会話と段階に使う種類だけに絞った形。tool_result の
+// 本文や画像の base64 は抱えない（大きなセッションでも射影を膨らませないため）。
+type TranscriptBlock = {
   type: string;
-  uuid: string;
+  // text / thinking
+  text?: string;
+  thinking?: string;
+  // tool_use
+  id?: string;
+  name?: string;
+  input?: unknown;
+  // tool_result
+  toolUseId?: string;
+  isError?: boolean;
+};
+
+type TranscriptContent = string | TranscriptBlock[] | null;
+
+type TranscriptEntry = {
+  // ファイル順の位置。ターンの起点より後ろの行だけを段階の判定に使う。
+  index: number;
+  type: string;
+  // api-request は uuid を持たない。会話と枝は uuid のある行だけで作る。
+  uuid: string | null;
   parentUuid: string | null;
+  version: string | null;
   at: number;
   sidechain: boolean;
   meta: boolean;
@@ -54,7 +93,11 @@ type TranscriptEntry = {
   apiError: boolean;
   error: string | null;
   effort: string | null;
-  message: { id: string | null; model: string | null; content: unknown } | null;
+  message: { id: string | null; model: string | null; content: TranscriptContent } | null;
+  // 要求と応答の対応。api-request の id と assistant の requestRef が一致する。
+  requestId: string | null;
+  querySource: string | null;
+  requestRef: string | null;
 };
 
 // resolved は active branch で tool_result が書かれた tool_use の id。transcript と一緒に
@@ -64,11 +107,24 @@ type Projection = {
   inode: number;
   snapshot: ChatSnapshot;
   resolved: ReadonlySet<string>;
+  entries: TranscriptEntry[];
 };
 
 type AssistantGroup = { id: string; at: number; text: string; error: string | null };
 
 type PendingTool = { id: string; name: string; input: unknown };
+
+type ToolUse = {
+  id: string | null;
+  name: string;
+  input: unknown;
+  version: string | null;
+  index: number;
+};
+
+type ToolResult = { toolUseId: string | null; index: number };
+type RequestRef = { id: string | null; version: string | null; index: number };
+type AnswerRef = { requestRef: string | null; apiError: boolean; index: number };
 
 export function createClaudeChatClient(
   options: {
@@ -77,12 +133,14 @@ export function createClaudeChatClient(
     // hook が応答待ちを書く場所。無ければ transcript の末尾の tool_use だけを見る。
     pendingRoot?: string;
   } = {},
-): SessionChatClient {
+): SessionChatClient & {
+  activity: (sessionId: string) => Promise<SessionActivity>;
+} {
   const maxBytes = options.maxBytes ?? MAX_TRANSCRIPT_BYTES;
   const now = options.now ?? Date.now;
   const locations = new Map<string, { path: string } | { missingUntil: number }>();
   const projections = new Map<string, Projection>();
-  const running = new Map<string, Promise<ChatSnapshot>>();
+  const running = new Map<string, Promise<Projection>>();
 
   // 見つかった path は、CLAUDE_CONFIG_DIR を含めた組で覚える。unit や E2E が root を
   // 差し替えたときに、別の root の結果を引き継がないため。
@@ -119,6 +177,7 @@ export function createClaudeChatClient(
       size: transcript.size,
       inode: transcript.inode,
       ...snapshotOf(sessionId, transcript.entries, transcript.clipped),
+      entries: transcript.entries,
     };
     projections.set(path, projection);
     if (projections.size > MAX_PROJECTIONS) {
@@ -128,7 +187,7 @@ export function createClaudeChatClient(
     return projection;
   };
 
-  const load = async (sessionId: string): Promise<ChatSnapshot> => {
+  const load = async (sessionId: string): Promise<Projection> => {
     if (!SESSION_ID.test(sessionId)) {
       throw new ChatUnavailableError("claude session id is invalid");
     }
@@ -136,13 +195,23 @@ export function createClaudeChatClient(
     const key = `${root}\u0000${sessionId}`;
     const path = await locate(root, sessionId, key);
     try {
-      const { snapshot, resolved } = await project(path, sessionId);
-      return await withHookPending(snapshot, resolved, sessionId);
+      return await project(path, sessionId);
     } catch (error) {
       // 消えた transcript は覚えない。次に現れたときに読み直す。
       if (error instanceof ChatUnavailableError) locations.delete(key);
       throw error;
     }
+  };
+
+  // 会話と段階は同じ読み取りに相乗りする。ターン中の追記は、行が増えたときだけ読み直す。
+  const shared = (sessionId: string): Promise<Projection> => {
+    const pending = running.get(sessionId);
+    if (pending) return pending;
+    const settled = load(sessionId).finally(() => {
+      if (running.get(sessionId) === settled) running.delete(sessionId);
+    });
+    running.set(sessionId, settled);
+    return settled;
   };
 
   // hook の sidecar は transcript の外にあるので、transcript の射影のキャッシュとは別に毎回読む。
@@ -162,14 +231,12 @@ export function createClaudeChatClient(
   };
 
   return {
-    snapshot(sessionId) {
-      const pending = running.get(sessionId);
-      if (pending) return pending;
-      const settled = load(sessionId).finally(() => {
-        if (running.get(sessionId) === settled) running.delete(sessionId);
-      });
-      running.set(sessionId, settled);
-      return settled;
+    async snapshot(sessionId) {
+      const projection = await shared(sessionId);
+      return withHookPending(projection.snapshot, projection.resolved, sessionId);
+    },
+    async activity(sessionId) {
+      return sessionActivityOf((await shared(sessionId)).entries, now());
     },
   };
 }
@@ -263,7 +330,7 @@ function parseTranscript(
     const record = asRecord(parsed);
     if (record === null) continue;
     objects += 1;
-    const entry = toEntry(record);
+    const entry = toEntry(record, entries.length);
     if (entry !== null) entries.push(entry);
   }
 
@@ -275,15 +342,20 @@ function parseTranscript(
   return { entries, clipped };
 }
 
-function toEntry(record: Record<string, unknown>): TranscriptEntry | null {
+function toEntry(record: Record<string, unknown>, index: number): TranscriptEntry | null {
   const type = record.type;
-  const uuid = record.uuid;
-  if (typeof type !== "string" || typeof uuid !== "string" || uuid === "") return null;
+  if (typeof type !== "string") return null;
+  const uuid = nonEmptyText(record.uuid);
+  // 応答の対応は uuid を持たない api-request でしか取れない。それ以外の uuid の無い行は
+  // 会話にも枝にも段階にも使わない。
+  if (uuid === null && type !== "api-request") return null;
   const message = asRecord(record.message);
   return {
+    index,
     type,
     uuid,
     parentUuid: typeof record.parentUuid === "string" ? record.parentUuid : null,
+    version: nonEmptyText(record.version),
     at: timestampOf(record.timestamp),
     sidechain: record.isSidechain === true,
     meta: record.isMeta === true,
@@ -297,8 +369,11 @@ function toEntry(record: Record<string, unknown>): TranscriptEntry | null {
         : {
             id: nonEmptyText(message.id),
             model: nonEmptyText(message.model),
-            content: message.content,
+            content: projectContent(message.content),
           },
+    requestId: type === "api-request" ? nonEmptyText(record.id) : null,
+    querySource: type === "api-request" ? nonEmptyText(record.querySource) : null,
+    requestRef: nonEmptyText(record.requestRef),
   };
 }
 
@@ -340,14 +415,18 @@ function etagOf(sessionId: string, body: Omit<ChatSnapshot, "etag">): string {
 // 分岐（`/rewind` や resume）で古い枝を混ぜない。最後の entry から parentUuid を辿る。
 // サブエージェントの記録（isSidechain）は本流ではないので、葉にも起点にもしない。
 function activeBranch(entries: readonly TranscriptEntry[]): TranscriptEntry[] {
-  const byUuid = new Map(entries.map((entry) => [entry.uuid, entry]));
-  let leaf = entries.length - 1;
-  while (leaf >= 0 && entries[leaf]?.sidechain === true) leaf -= 1;
+  const byUuid = new Map<string, TranscriptEntry>();
+  let leaf: TranscriptEntry | undefined;
+  for (const entry of entries) {
+    if (entry.uuid === null) continue;
+    byUuid.set(entry.uuid, entry);
+    if (!entry.sidechain) leaf = entry;
+  }
 
   const branch: TranscriptEntry[] = [];
   const seen = new Set<string>();
-  let current: TranscriptEntry | undefined = entries[leaf];
-  while (current !== undefined && !seen.has(current.uuid)) {
+  let current: TranscriptEntry | undefined = leaf;
+  while (current !== undefined && current.uuid !== null && !seen.has(current.uuid)) {
     seen.add(current.uuid);
     branch.push(current);
     current = current.parentUuid === null ? undefined : byUuid.get(current.parentUuid);
@@ -407,24 +486,20 @@ function lastConversationEntry(branch: readonly TranscriptEntry[]): TranscriptEn
   return null;
 }
 
-function toolResultIds(content: unknown): string[] {
-  if (!Array.isArray(content)) return [];
+function toolResultIds(content: TranscriptContent | undefined): string[] {
   const ids: string[] = [];
-  for (const value of content) {
-    const block = asRecord(value);
-    if (block?.type !== "tool_result" || typeof block.tool_use_id !== "string") continue;
-    ids.push(block.tool_use_id);
+  for (const block of blocksOf(content)) {
+    if (block.type !== "tool_result" || block.toolUseId === undefined) continue;
+    ids.push(block.toolUseId);
   }
   return ids;
 }
 
-function toolUses(content: unknown): PendingTool[] {
-  if (!Array.isArray(content)) return [];
+function toolUses(content: TranscriptContent | undefined): PendingTool[] {
   const tools: PendingTool[] = [];
-  for (const value of content) {
-    const block = asRecord(value);
-    if (block?.type !== "tool_use" || typeof block.id !== "string" || block.id === "") continue;
-    if (typeof block.name !== "string" || block.name === "") continue;
+  for (const block of blocksOf(content)) {
+    if (block.type !== "tool_use" || block.id === undefined || block.id === "") continue;
+    if (block.name === undefined || block.name === "") continue;
     tools.push({ id: block.id, name: block.name, input: block.input });
   }
   return tools;
@@ -442,7 +517,7 @@ function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {
     const group = groups.get(key);
     if (group === undefined) {
       groups.set(key, {
-        id: entry.uuid,
+        id: entry.uuid ?? key,
         at: entry.at,
         text,
         error: entry.apiError ? entry.error : null,
@@ -487,7 +562,7 @@ function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {
 
 function groupKey(entry: TranscriptEntry): string {
   const id = entry.message?.id;
-  return id ?? `uuid\u0000${entry.uuid}`;
+  return id ?? `uuid\u0000${entry.uuid ?? String(entry.index)}`;
 }
 
 function projectUser(entry: TranscriptEntry): ChatMessage | null {
@@ -503,7 +578,7 @@ function projectUser(entry: TranscriptEntry): ChatMessage | null {
   const { text, attachments } = projectUserText(raw);
   if (text === "" && attachments.length === 0) return null;
   return {
-    id: entry.uuid,
+    id: entry.uuid ?? "",
     role: "user",
     text,
     at: entry.at,
@@ -541,28 +616,299 @@ function isLocalCommandEcho(text: string): boolean {
 
 // user の本文は文字列のことが多い。配列のときは text ブロックだけを拾い、tool_result だけの
 // entry はメッセージにしない。画像は v1 では出さないので、画像だけの entry も空になる。
-function userText(content: unknown): string {
+function userText(content: TranscriptContent | undefined): string {
   if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
+  if (content === null || content === undefined) return "";
   const parts: string[] = [];
-  for (const value of content) {
-    const block = asRecord(value);
-    if (block?.type !== "text" || typeof block.text !== "string") continue;
-    if (block.text === "") continue;
+  for (const block of content) {
+    if (block.type !== "text" || block.text === undefined || block.text === "") continue;
     parts.push(block.text);
   }
   return parts.join("\n\n");
 }
 
-function assistantText(content: unknown): string {
-  if (!Array.isArray(content)) return "";
+function assistantText(content: TranscriptContent | undefined): string {
+  if (content === null || content === undefined || typeof content === "string") return "";
   let text = "";
-  for (const value of content) {
-    const block = asRecord(value);
-    if (block?.type !== "text" || typeof block.text !== "string") continue;
+  for (const block of content) {
+    if (block.type !== "text" || block.text === undefined) continue;
     text += block.text;
   }
   return text;
+}
+
+// ターンの起点と、そこから読める段階（ADR 0100）。段階に使う行は枝で絞らず、ファイル順に
+// 起点より後ろを全部見る。並列ツールの tool_use は一時的に親鎖の外へ出るため。
+function sessionActivityOf(entries: readonly TranscriptEntry[], now: number): SessionActivity {
+  const branch = activeBranch(entries);
+  const start = lastPrompt(branch);
+  if (start === undefined || start.uuid === null) return { prompt: null, activity: null };
+  const prompt = start.uuid;
+
+  const toolUses: ToolUse[] = [];
+  const toolResults: ToolResult[] = [];
+  const requests: RequestRef[] = [];
+  const answers: AnswerRef[] = [];
+  for (const entry of entries) {
+    if (entry.index <= start.index || entry.sidechain) continue;
+    if (entry.type === "api-request") {
+      // サブエージェント（sdk）の要求は本流の段階ではない。
+      if (entry.querySource === MAIN_THREAD_SOURCE) {
+        requests.push({ id: entry.requestId, version: entry.version, index: entry.index });
+      }
+      continue;
+    }
+    if (entry.type === "assistant") {
+      answers.push({ requestRef: entry.requestRef, apiError: entry.apiError, index: entry.index });
+      for (const block of blocksOf(entry.message?.content)) {
+        if (block.type !== "tool_use") continue;
+        toolUses.push({
+          id: nonEmptyText(block.id),
+          name: nonEmptyText(block.name) ?? "",
+          input: block.input,
+          version: entry.version,
+          index: entry.index,
+        });
+      }
+      continue;
+    }
+    if (entry.type !== "user") continue;
+    for (const block of blocksOf(entry.message?.content)) {
+      if (block.type !== "tool_result") continue;
+      toolResults.push({ toolUseId: nonEmptyText(block.toolUseId), index: entry.index });
+    }
+  }
+
+  const direction = directionOf(branch, start.index);
+  const finished = new Set(
+    toolResults.flatMap((result) => (result.toolUseId === null ? [] : [result.toolUseId])),
+  );
+  const unfinished = toolUses.filter((tool) => tool.id === null || !finished.has(tool.id));
+
+  if (unfinished.length > 0) {
+    for (const tool of unfinished) {
+      // ID が無い・版が古い・結果側に ID が無い形式では、終わったかを決められない。
+      if (tool.id === null) return { prompt, activity: null };
+      if (!versionAtLeast(tool.version)) return { prompt, activity: null };
+      if (toolResults.some((result) => result.toolUseId === null && result.index > tool.index)) {
+        return { prompt, activity: null };
+      }
+    }
+    const representative = unfinished[unfinished.length - 1]!;
+    return {
+      prompt,
+      activity: {
+        phase: "tool",
+        text: joinLines(toolTarget(representative), direction),
+        tool: toolNameOf(representative),
+        tools: Math.min(unfinished.length, TOOLS_LIMIT),
+        tokPerSecond: null,
+        at: now,
+      },
+    };
+  }
+
+  const request = requests[requests.length - 1];
+  if (request !== undefined) {
+    const answered =
+      request.id !== null &&
+      answers.some((answer) => answer.requestRef === request.id && answer.index > request.index);
+    // 失敗の行は requestRef を持たないが、その要求が終わったことは示す。
+    const failed = answers.some((answer) => answer.apiError && answer.index > request.index);
+    if (!answered && !failed) {
+      // requestRef を持たない assistant は、どの要求の応答か決められない。
+      if (
+        answers.some(
+          (answer) =>
+            !answer.apiError && answer.requestRef === null && answer.index > request.index,
+        )
+      ) {
+        return { prompt, activity: null };
+      }
+      if (request.id === null) return { prompt, activity: null };
+      if (!versionAtLeast(request.version)) return { prompt, activity: null };
+      return {
+        prompt,
+        activity: {
+          phase: "thinking",
+          text: direction,
+          tool: null,
+          tools: 1,
+          tokPerSecond: null,
+          at: now,
+        },
+      };
+    }
+  }
+
+  return { prompt, activity: null };
+}
+
+// ターンの起点は active branch にある最後の prompt。画像だけの発言も起点になる。
+function lastPrompt(branch: readonly TranscriptEntry[]): TranscriptEntry | undefined {
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index]!;
+    if (isPrompt(entry)) return entry;
+  }
+  return undefined;
+}
+
+function isPrompt(entry: TranscriptEntry): boolean {
+  if (entry.type !== "user" || entry.sidechain || entry.meta || entry.compactSummary) return false;
+  const content = entry.message?.content;
+  if (typeof content === "string") {
+    const text = content.trim();
+    return text !== "" && !isLocalCommandEcho(text) && !INTERRUPT_MARKERS.has(text);
+  }
+  if (content === null || content === undefined) return false;
+  for (const block of content) {
+    if (block.type === "image") return true;
+    if (block.type !== "text" || block.text === undefined) continue;
+    const text = block.text.trim();
+    if (text !== "" && !isLocalCommandEcho(text) && !INTERRUPT_MARKERS.has(text)) return true;
+  }
+  return false;
+}
+
+// 方向は、起点より後ろの枝にある最後の assistant の text の先頭 1 行。無ければ thinking の
+// 本文の末尾。thinking は要約のことも生の本文のこともあるが、transcript に載った文を使う。
+function directionOf(branch: readonly TranscriptEntry[], startIndex: number): string {
+  let text = "";
+  let thinking = "";
+  for (const entry of branch) {
+    if (entry.index <= startIndex || entry.sidechain || entry.type !== "assistant") continue;
+    if (entry.apiError) continue;
+    for (const block of blocksOf(entry.message?.content)) {
+      if (block.type === "text" && block.text !== undefined && block.text.trim() !== "") {
+        text = block.text;
+      } else if (
+        block.type === "thinking" &&
+        block.thinking !== undefined &&
+        block.thinking.trim() !== ""
+      ) {
+        thinking = block.thinking;
+      }
+    }
+  }
+  if (text !== "") return headLine(text, DIRECTION_LIMIT);
+  if (thinking !== "") return tailLine(thinking, DIRECTION_LIMIT);
+  return "";
+}
+
+// ツールの対象。コマンドの本文は会話の内容そのものなので出さない。
+function toolTarget(tool: ToolUse): string {
+  const input = asRecord(tool.input);
+  if (input === null) return "";
+  const field = (key: string): string => nonEmptyText(input[key]) ?? "";
+  let target = "";
+  switch (tool.name.toLowerCase()) {
+    case "bash":
+    case "task":
+      target = field("description");
+      break;
+    case "read":
+    case "edit":
+    case "write":
+    case "grep":
+    case "glob": {
+      const path = field("file_path");
+      target = path === "" ? "" : basename(path);
+      break;
+    }
+  }
+  // 改行と制御文字は 1 行に畳む。対象は先頭から 60 文字まで。
+  return sliceHead(flatten(target), TARGET_LIMIT);
+}
+
+function toolNameOf(tool: ToolUse): string | null {
+  return tool.name === "" ? null : sliceHead(tool.name, TOOL_NAME_LIMIT);
+}
+
+function joinLines(target: string, direction: string): string {
+  if (target === "") return direction;
+  if (direction === "") return target;
+  return `${target}\n${direction}`;
+}
+
+function headLine(raw: string, limit: number): string {
+  for (const line of raw.split(/\r?\n/)) {
+    const text = flatten(line);
+    if (text !== "") return sliceHead(text, limit);
+  }
+  return "";
+}
+
+function tailLine(raw: string, limit: number): string {
+  return Array.from(flatten(raw)).slice(-limit).join("");
+}
+
+function sliceHead(raw: string, limit: number): string {
+  return Array.from(raw).slice(0, limit).join("");
+}
+
+function flatten(raw: string): string {
+  return raw
+    .replace(/\s+/gu, " ")
+    .replace(/\p{Cc}/gu, "")
+    .trim();
+}
+
+function versionAtLeast(version: string | null): boolean {
+  if (version === null) return false;
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (match === null) return false;
+  const parts = [Number(match[1]), Number(match[2]), Number(match[3])];
+  for (let index = 0; index < MIN_ACTIVITY_VERSION.length; index += 1) {
+    const mine = parts[index]!;
+    const minimum = MIN_ACTIVITY_VERSION[index]!;
+    if (mine !== minimum) return mine > minimum;
+  }
+  return true;
+}
+
+function blocksOf(content: TranscriptContent | undefined): TranscriptBlock[] {
+  return Array.isArray(content) ? content : [];
+}
+
+// 会話と段階に使う種類だけを残す。tool_result の本文や画像の base64 は、射影を抱えたまま
+// 大きくならないよう落とす。
+function projectContent(content: unknown): TranscriptContent {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return null;
+  const blocks: TranscriptBlock[] = [];
+  for (const value of content) {
+    const block = asRecord(value);
+    if (block === null) continue;
+    switch (block.type) {
+      case "text":
+        if (typeof block.text === "string") blocks.push({ type: "text", text: block.text });
+        break;
+      case "thinking":
+        if (typeof block.thinking === "string") {
+          blocks.push({ type: "thinking", thinking: block.thinking });
+        }
+        break;
+      case "tool_use":
+        blocks.push({
+          type: "tool_use",
+          ...(typeof block.id === "string" ? { id: block.id } : {}),
+          ...(typeof block.name === "string" ? { name: block.name } : {}),
+          ...(block.input === undefined ? {} : { input: block.input }),
+        });
+        break;
+      case "tool_result":
+        blocks.push({
+          type: "tool_result",
+          ...(typeof block.tool_use_id === "string" ? { toolUseId: block.tool_use_id } : {}),
+          ...(block.is_error === true ? { isError: true } : {}),
+        });
+        break;
+      case "image":
+        blocks.push({ type: "image" });
+        break;
+    }
+  }
+  return blocks;
 }
 
 function timestampOf(value: unknown): number {

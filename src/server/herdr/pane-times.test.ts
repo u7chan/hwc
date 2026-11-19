@@ -2,12 +2,15 @@ import { expect, test } from "bun:test";
 import type { AgentStatus } from "./contract";
 import {
   NO_TIMES,
+  NO_TURNS,
   type PaneTimes,
   type SavedPaneTimes,
+  claimPaneTurn,
   parseSavedPaneTimes,
   restorePaneTimes,
   toSavedPaneTimes,
   trackPaneTimes,
+  trackPaneTurns,
 } from "./pane-times";
 import type { SnapshotState } from "./state";
 
@@ -203,4 +206,66 @@ test("a saved file is read back, dropping broken values", () => {
   expect(parseSavedPaneTimes("not json", 5_000)).toEqual({});
   expect(parseSavedPaneTimes("[1000]", 5_000)).toEqual({});
   expect(parseSavedPaneTimes(null, 5_000)).toEqual({});
+});
+
+test("a new turn is observed from its first fetch", () => {
+  const turns = trackPaneTurns(null, NO_TURNS, statuses("working"));
+  expect(turns.get("w1:p1")).toEqual({ observed: false, lastPrompt: null });
+
+  expect(claimPaneTurn(turns, "w1:p1", "prompt-1")).toBe(true);
+  expect(turns.get("w1:p1")).toEqual({ observed: true, lastPrompt: "prompt-1" });
+  // 観測済みになった後は、同じ prompt でもそのまま段階を返す。
+  expect(claimPaneTurn(turns, "w1:p1", "prompt-1")).toBe(true);
+});
+
+test("the first fetch of a new turn waits for a new prompt", () => {
+  const working = trackPaneTurns(null, NO_TURNS, statuses("working"));
+  claimPaneTurn(working, "w1:p1", "prompt-1");
+
+  // ターンが終わると観測を戻す。prompt は次の比較のために保つ。
+  const idle = trackPaneTurns(statuses("working"), working, statuses("idle"));
+  expect(idle.get("w1:p1")).toEqual({ observed: false, lastPrompt: "prompt-1" });
+
+  const again = trackPaneTurns(statuses("idle"), idle, statuses("working"));
+  expect(again.get("w1:p1")).toEqual({ observed: false, lastPrompt: "prompt-1" });
+  // 新しい prompt がまだ書かれていない間は、前のターンの prompt のまま出さない。
+  expect(claimPaneTurn(again, "w1:p1", "prompt-1")).toBe(false);
+  expect(again.get("w1:p1")).toEqual({ observed: false, lastPrompt: "prompt-1" });
+  // 書かれたら進める。
+  expect(claimPaneTurn(again, "w1:p1", "prompt-2")).toBe(true);
+  expect(again.get("w1:p1")).toEqual({ observed: true, lastPrompt: "prompt-2" });
+});
+
+test("blocked is the same turn and keeps the observation", () => {
+  const working = trackPaneTurns(null, NO_TURNS, statuses("working"));
+  claimPaneTurn(working, "w1:p1", "prompt-1");
+
+  const blocked = trackPaneTurns(statuses("working"), working, statuses("blocked"));
+  expect(blocked.get("w1:p1")).toEqual({ observed: true, lastPrompt: "prompt-1" });
+  const resumed = trackPaneTurns(statuses("blocked"), blocked, statuses("working"));
+  expect(resumed.get("w1:p1")).toEqual({ observed: true, lastPrompt: "prompt-1" });
+  // 同じターンの続きなので、prompt を比べ直さない。
+  expect(claimPaneTurn(resumed, "w1:p1", "prompt-1")).toBe(true);
+});
+
+test("done and unknown also end the turn", () => {
+  for (const status of ["done", "unknown"] as const) {
+    const working = trackPaneTurns(null, NO_TURNS, statuses("working"));
+    claimPaneTurn(working, "w1:p1", "prompt-1");
+    const ended = trackPaneTurns(statuses("working"), working, statuses(status));
+    expect(ended.get("w1:p1")).toEqual({ observed: false, lastPrompt: "prompt-1" });
+  }
+});
+
+test("a pane first seen after a restart starts unobserved", () => {
+  for (const status of ["working", "idle"] as const) {
+    const turns = trackPaneTurns(null, NO_TURNS, statuses(status));
+    expect(turns.get("w1:p1")).toEqual({ observed: false, lastPrompt: null });
+  }
+});
+
+test("a turn whose start cannot be read is not claimed", () => {
+  const turns = trackPaneTurns(null, NO_TURNS, statuses("working"));
+  expect(claimPaneTurn(turns, "w1:p1", null)).toBe(false);
+  expect(turns.get("w1:p1")).toEqual({ observed: false, lastPrompt: null });
 });

@@ -29,14 +29,14 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 起動時の信頼確認                         | ○              | ×             | ○             | –                 |
 | 応答待ち（質問・承認）の表示             | ×              | ○（hwc 起動） | ×             | ×                 |
 | 質問への回答（AskUserQuestion）          | ×              | ○（hwc 起動） | ×             | ×                 |
-| ライブ activity                          | △（pi 拡張）   | ×             | ×             | ×                 |
+| ライブ activity                          | △（pi 拡張）   | △             | ×             | ×                 |
 
 - 添付ファイルの UI 自体は会話を持つペインで使えるが、hwc は実体を CLI へ渡さず、本文に `<attached_files>` のパス注記を足すだけ。Pi はこの経路を前提にしている（[ADR 0018](adr/0018-pasted-image-attachments.md)、[ADR 0080](adr/0080-file-attachments.md)）。Codex と OpenCode は、それぞれの CLI がそのパスを読めるか次第（[ADR 0028](adr/0028-opencode-chat.md)、[ADR 0031](adr/0031-codex-chat.md)）。Claude の注記は `$HWC_STATE_DIR/attachments/<pane-id>/` を指し、チェックアウトの外なので、CLI が読むときに権限確認が出たら端末で承認する（[ADR 0097](adr/0097-claude-chat-transcript.md)）。
 - Pi と Codex のフォルダ信頼確認は、専用ビューで「信頼して続行」だけを回答できる（[ADR 0032](adr/0032-codex-folder-trust.md)、[ADR 0044](adr/0044-pi-project-trust.md)）。それ以外の選択肢は端末で行う。
 - Claude の `blocked` 中（起動時の信頼確認・質問・権限確認の待ち）は、hwc の入力欄を閉じる。待ちが読めないとき（起動時の信頼確認、hwc 外で起動した Claude など）は、本文は端末出力のままで、応答は Herdr のターミナルで行う。hwc から起動した Claude の質問は、待ちが読めればカードから答えられ（下）、権限確認（承認）は端末で行う。入力欄が戻れば `blocked` は解けている。Pi と Codex の信頼確認は、これまでどおり専用ビューで「信頼して続行」を答える。
 - Claude の質問・承認の応答待ちは、hwc から起動したペインだけ、`blocked` の間に会話の末尾へカードを出す（[ADR 0098](adr/0098-claude-pending-in-chat.md)）。hwc が起動時に渡す hook が待ちを状態ディレクトリへ書き、会話を読むときに重ねる。待ちが読めれば会話を維持し、入力欄・引用・添付・コマンドを閉じる。質問は、カードの選択肢か「その他（自由入力）」で全問に答えて「この内容で答える」を押す。hwc は Esc でダイアログを閉じ、transcript に tool_result が現れてから、選んだ内容を通常の発言として送る（[ADR 0099](adr/0099-answer-ask-user-question.md)）。閉じたと確かめられなければ本文は送らず、「端末で答えてください」を出す。承認は hwc からは送らない。カードの「端末出力を見る」で端末の画面を見て、「会話に戻る」で戻る。待ちが読めないとき（hwc 外で起動した Claude など）は今までどおり端末出力になり、応答は端末で行う。
 - Codex の会話表示は、hwc が `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインだけ。既に起動している Codex や hwc 外で起動した Codex は端末出力になる（[ADR 0031](adr/0031-codex-chat.md)）。
-- ライブ activity は pi 拡張がセッションの隣に sidecar を書く場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）。拡張が無いペインでは表示されない。
+- ライブ activity は、pi は拡張がセッションの隣に sidecar を書く場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）、Claude は transcript の進行行から導く（[ADR 0100](adr/0100-claude-live-activity.md)）。pi は拡張が無いペイン、Claude は形式が読めない版のペインでは表示されない。
 - 過去の発言の編集は、mypi がセッションに `hwc-capabilities` を残した pi ペインだけ。対象はテキストだけの発言で、添付付き・最後の発言は編集できない（[ADR 0089](adr/0089-pi-message-edit.md)）。
 - コマンド候補のガードは会話スナップショットに依存する。Codex と Claude は context と compaction が無いため、履歴の小ささと圧縮済みの判定が効かない。空の会話では `/new` と `/compact` の候補が消える（Claude も会話が読めるようになったため、同じガードが効く）。OpenCode は圧縮済みの判定がほぼ効かない（[ADR 0013](adr/0013-pi-session-chat.md)、[ADR 0097](adr/0097-claude-chat-transcript.md)）。
 
@@ -46,6 +46,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 - 会話は `CLAUDE_CONFIG_DIR`（既定 `~/.claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[ADR 0097](adr/0097-claude-chat-transcript.md)）。Herdr が返す `agent_session` の id から transcript を引き、`parentUuid` を辿った active branch を射影する。hwc 外で起動した Claude も、同じユーザー・同じホストなら履歴が出る
 - 出すのは user の本文と assistant の text だけ。tool_use / tool_result / thinking / 内部エントリ / サブエージェントは出さない。`<attached_files>` の注記は strip して名前だけのチップにする
+- 実行中の段階（「考えています」「Read を実行中」など）と方向は、transcript の `api-request` / `tool_use` / `tool_result` から導く（[ADR 0100](adr/0100-claude-live-activity.md)）。要求と応答の対応が取れない版・形のときは出さない。方向はターン内の最後の assistant 本文（無ければ thinking の末尾）で、ツールのときは対象を 1 行目、方向を 2 行目に置く。`input.command` は出さない
 - 質問（AskUserQuestion）と権限確認の応答待ちは、`blocked` の間だけ会話の末尾にカードで出す。実機の Claude Code 2.1.328 は待ちの間 transcript に tool_use を書かないので、hwc が `--settings` で渡す hook（`PreToolUse` / `PermissionRequest` など）が `claude/pending/<session id>.json` へ書いた質問・選択肢・複数選択を読む。それ以外のツールは名前と 1 行の要約だけにする。Esc で閉じても hook は呼ばれないので、解決は transcript の `tool_result` で知る。質問にはカードから答え、承認は端末で行う（[ADR 0098](adr/0098-claude-pending-in-chat.md)、[ADR 0099](adr/0099-answer-ask-user-question.md)）。hook は hwc から起動したペインにだけ入る
 - モデルと effort は transcript の `model` と `perTurnEffort` から出す。モデルを指定して起動したペインは、最初の assistant が現れるまで起動時の指定で補う（[ADR 0033](adr/0033-launch-model-before-first-message.md)）。デフォルト起動では最初の応答まで出ない。モデルは CLI のエイリアス（`fable` / `opus` / `sonnet` / `haiku`）、effort は `low` / `medium` / `high` / `xhigh` / `max` から選ぶ（[ADR 0096](adr/0096-claude-model-effort.md)）
 - コンテキスト使用量と圧縮の区切りは `null`。usage・モデル別の window・圧縮ラインは別 Issue で扱う
@@ -87,7 +88,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`                                                             |
 | 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts`                                                   |
 | コマンド候補とガード                    | `src/client/commands.ts`                                                                                              |
-| ライブ activity                         | `src/server/chat/activity.ts`                                                                                         |
+| ライブ activity                         | `src/server/chat/activity.ts`（pi）、`src/server/chat/claude.ts`（Claude）                                            |
 | フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`                                                            |
 | 過去の発言の編集                        | `src/server/routes/edit-message.ts`、`src/client/edit.ts`、`src/shared/rewind.ts`                                     |
 | 添付・引用・activity の UI 分岐         | `src/client/PaneDetail.tsx`                                                                                           |
@@ -117,3 +118,4 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - [ADR 0097: Claude の会話は transcript を射影して読む](adr/0097-claude-chat-transcript.md)
 - [ADR 0098: Claude の応答待ちは hook の sidecar から読み、チャットに出す。Web からは承認しない](adr/0098-claude-pending-in-chat.md)
 - [ADR 0099: AskUserQuestion は Esc で閉じ、選んだ内容を本文で答える](adr/0099-answer-ask-user-question.md)
+- [ADR 0100: Claude の実行中の段階は transcript の進行行から出す](adr/0100-claude-live-activity.md)

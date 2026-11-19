@@ -4,12 +4,15 @@ import type { BranchReader, GitClient } from "../git";
 import {
   type PaneTimes,
   type PaneTimesFile,
+  type PaneTurn,
   type SavedPaneTimes,
   NO_TIMES,
+  claimPaneTurn,
   parseSavedPaneTimes,
   restorePaneTimes,
   toSavedPaneTimes,
   trackPaneTimes,
+  trackPaneTurns,
 } from "./pane-times";
 import type { PaneState, SnapshotState, TabState, WorkspaceState, WorktreeState } from "./snapshot";
 
@@ -137,6 +140,9 @@ export type StateStore = {
   workspacePath: (workspaceId: string) => string | null;
   // fetch / pull の後、次に状態を公開するときに読み直す。
   invalidateGit: (workspaceId: string) => void;
+  // 実行中の段階に使うターンの起点を確かめる。観測済みのターンなら true を返し、同じ
+  // prompt のままなら false を返す（ADR 0100）。クライアントには渡さない。
+  claimTurn: (paneId: string, promptId: string) => boolean;
 };
 
 function toChatSources(snapshot: HerdrSnapshot): Map<string, ChatSource> {
@@ -264,6 +270,8 @@ export function createStateStore(options: {
   // スナップショットから作れる部分。遷移の判定にはこちらだけを使う。
   let snapshotState: SnapshotState | null = null;
   let times: PaneTimes = NO_TIMES;
+  // ターンの観測状態。クライアントへは渡さず、永続化もしない（ADR 0100）。
+  let turns = new Map<string, PaneTurn>();
   // 起動時に 1 回だけ読む。最初の publish で現在のスナップショットに突き合わせる。
   let restored: SavedPaneTimes | null = parseSavedPaneTimes(
     options.times?.read() ?? null,
@@ -321,6 +329,7 @@ export function createStateStore(options: {
       restored = null;
     }
     times = trackPaneTimes(snapshotState, times, next, observedAt, observing);
+    turns = trackPaneTurns(snapshotState, turns, next);
     saveTimes(next);
     const repo = await withRepo(next, options.git, roots);
     const branched = await withBranches(repo, options.branch, roots);
@@ -382,6 +391,7 @@ export function createStateStore(options: {
       const path = workspacePaths.get(workspaceId);
       if (path !== undefined) options.git?.invalidate(path);
     },
+    claimTurn: (paneId, promptId) => claimPaneTurn(turns, paneId, promptId),
     onChange: (listener) => {
       listeners.add(listener);
       return () => {

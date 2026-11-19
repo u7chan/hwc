@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createScenario } from "./fixtures/scenario";
 import { startFakeOpencode } from "./fake-opencode";
-import { createContext } from "./fake-herdr/context";
 import { createClaude } from "./fake-herdr/claude";
+import { createContext } from "./fake-herdr/context";
 import { createHandle } from "./fake-herdr/handle";
 import { createLayout } from "./fake-herdr/layout";
 import { createPi } from "./fake-herdr/pi";
@@ -29,8 +29,8 @@ export async function startFakeHerdr(): Promise<FakeHerdr> {
   const ctx = createContext({ root, scenario });
   const workspaces = createWorkspaces(ctx);
   const pi = createPi(ctx, workspaces.setAgentStatus);
+  const claude = createClaude(ctx, workspaces.setAgentStatus);
   const paneLayouts = createLayout(ctx);
-  const claude = createClaude(ctx);
   const handle = createHandle(ctx, pi, workspaces, paneLayouts, claude);
   const { sockets, subscribers, listeners, timers } = ctx;
 

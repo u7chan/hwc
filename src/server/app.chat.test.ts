@@ -3,11 +3,13 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { type ChatClient, createChatClient } from "./chat/pi";
-import type { ChatSnapshot } from "./chat/contract";
+import type { ChatSnapshot, SessionChatClient } from "./chat/contract";
+import type { AppState } from "./herdr/state";
 import {
   type FakeStore,
   state,
   chatState,
+  workingState,
   sessionPath,
   createFakeStore,
   createFakeChat,
@@ -411,5 +413,171 @@ test("GET /api/panes/:id/chat adds the images the agent pointed at", async () =>
     await writeFile(join(root, "mock.png"), new Uint8Array([...pngBytes, 0]));
     const refreshed = await app.request("/api/panes/w1:p1/chat");
     expect(refreshed.headers.get("etag")).not.toBe(response.headers.get("etag"));
+  });
+});
+
+const claudeActivity = {
+  phase: "thinking" as const,
+  text: "方向",
+  tool: null,
+  tools: 1,
+  tokPerSecond: null,
+  at: 1,
+};
+
+const claudeWorkingState: AppState = {
+  ...workingState,
+  workspaces: workingState.workspaces.map((workspace) => ({
+    ...workspace,
+    tabs: workspace.tabs.map((tab) => ({
+      ...tab,
+      panes: tab.panes.map((pane) => ({ ...pane, agent: "claude" })),
+    })),
+  })),
+};
+
+const claudeIdleState: AppState = {
+  ...chatState,
+  workspaces: chatState.workspaces.map((workspace) => ({
+    ...workspace,
+    tabs: workspace.tabs.map((tab) => ({
+      ...tab,
+      panes: tab.panes.map((pane) => ({ ...pane, agent: "claude" })),
+    })),
+  })),
+};
+
+function createActivityApp(options: {
+  state: AppState;
+  claim?: (paneId: string, promptId: string) => boolean;
+  claude?: SessionChatClient;
+}) {
+  const store = createFakeStore(options.state);
+  store.setChatSource("w1:p1", { agent: "claude", sessionId: "ses_claude" });
+  if (options.claim !== undefined) store.claimTurn = options.claim;
+  return createTestApp({
+    store,
+    ...(options.claude === undefined ? {} : { claude: options.claude }),
+  }).app;
+}
+
+test("GET /api/panes/:id/activity returns a Claude step and claims its turn", async () => {
+  const seen: string[] = [];
+  const claims: string[] = [];
+  const app = createActivityApp({
+    state: claudeWorkingState,
+    claim: (paneId, promptId) => {
+      claims.push(`${paneId}:${promptId}`);
+      return true;
+    },
+    claude: {
+      snapshot: async () => emptyChat,
+      activity: async (sessionId) => {
+        seen.push(sessionId);
+        return { prompt: "prompt-1", activity: claudeActivity };
+      },
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/activity");
+
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.json()).toEqual({ activity: claudeActivity, session: "ses_claude" });
+  expect(seen).toEqual(["ses_claude"]);
+  expect(claims).toEqual(["w1:p1:prompt-1"]);
+});
+
+test("GET /api/panes/:id/activity withholds a turn whose prompt did not change", async () => {
+  const app = createActivityApp({
+    state: claudeWorkingState,
+    claim: () => false,
+    claude: {
+      snapshot: async () => emptyChat,
+      activity: async () => ({ prompt: "prompt-1", activity: claudeActivity }),
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/activity");
+
+  expect(await response.json()).toEqual({ activity: null, session: "ses_claude" });
+});
+
+test("GET /api/panes/:id/activity reads nothing while the pane is not working", async () => {
+  const calls: string[] = [];
+  const claude = {
+    snapshot: async () => emptyChat,
+    activity: async () => {
+      calls.push("activity");
+      return { prompt: "prompt-1", activity: claudeActivity };
+    },
+  };
+
+  for (const agentStatus of ["idle", "blocked"] as const) {
+    const base = claudeIdleState.workspaces[0]!.tabs[0]!.panes[0]!;
+    const state: AppState = {
+      ...claudeIdleState,
+      workspaces: [
+        {
+          ...claudeIdleState.workspaces[0]!,
+          tabs: [
+            {
+              ...claudeIdleState.workspaces[0]!.tabs[0]!,
+              panes: [{ ...base, agentStatus }],
+            },
+          ],
+        },
+      ],
+    };
+    const app = createActivityApp({ state, claude });
+    const response = await app.request("/api/panes/w1:p1/activity");
+    expect(await response.json()).toEqual({ activity: null, session: "ses_claude" });
+  }
+  expect(calls).toEqual([]);
+});
+
+test("GET /api/panes/:id/activity keeps the session when Claude is not configured or fails", async () => {
+  const configured = createActivityApp({ state: claudeWorkingState });
+  expect(await (await configured.request("/api/panes/w1:p1/activity")).json()).toEqual({
+    activity: null,
+    session: "ses_claude",
+  });
+
+  const failing = createActivityApp({
+    state: claudeWorkingState,
+    claude: {
+      snapshot: async () => emptyChat,
+      activity: async () => {
+        throw new Error("transcript is unreadable");
+      },
+    },
+  });
+  const response = await failing.request("/api/panes/w1:p1/activity");
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ activity: null, session: "ses_claude" });
+});
+
+test("GET /api/panes/:id/activity keeps the pi sidecar shape without a session", async () => {
+  const store = createFakeStore(chatState);
+  store.setChatSource("w1:p1", { agent: "pi", path: sessionPath });
+  const { app } = createTestApp({ store });
+  const response = await app.request("/api/panes/w1:p1/activity");
+  expect(await response.json()).toEqual({ activity: null, session: null });
+});
+
+test("GET /api/panes/:id/activity returns no step for other agents or panes without chat", async () => {
+  const store = createFakeStore(chatState);
+  store.setChatSource("w1:p1", { agent: "codex", sessionId: "ses_codex" });
+  const { app } = createTestApp({ store });
+  expect(await (await app.request("/api/panes/w1:p1/activity")).json()).toEqual({
+    activity: null,
+    session: "ses_codex",
+  });
+
+  const shell = createFakeStore(state);
+  const { app: shellApp } = createTestApp({ store: shell });
+  expect(await (await shellApp.request("/api/panes/w1:p1/activity")).json()).toEqual({
+    activity: null,
+    session: null,
   });
 });

@@ -244,6 +244,7 @@ export function createFakeStore(
     workspaceRoot: () => null,
     workspacePath: () => workspacePath,
     invalidateGit: () => {},
+    claimTurn: () => true,
     onChange: (listener) => {
       listeners.add(listener);
       if (pendingOnSubscribe) {

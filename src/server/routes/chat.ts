@@ -163,12 +163,29 @@ export function createChatHandlers(ctx: AppContext) {
 
       // 使い捨ての値。null を返すときも、ブラウザや中間に残さない。
       c.header("cache-control", "no-store");
-      // 段階は pi 拡張がセッションの隣に書く。会話と同じく、path はペイン id から引く。
+      // 段階は会話の読み取りから導く。path はペイン id から引き、クライアントへは渡さない。
+      // pi はセッションの隣の sidecar、Claude は transcript の進行行から読む（ADR 0035 / 0100）。
       const source = store.chatSource(paneId);
-      if (!pane.chat || source === null || source.agent !== "pi") {
-        return c.json({ activity: null });
+      if (!pane.chat || source === null) return c.json({ activity: null, session: null });
+      if (source.agent === "pi") {
+        return c.json({ activity: await readActivity(source.path), session: null });
       }
-      return c.json({ activity: await readActivity(source.path) });
+      // クライアントは保持中の値と session を比べ、変わっていれば捨てる。会話の id は渡すが、
+      // path は渡さない。
+      const session = source.sessionId;
+      if (source.agent !== "claude" || claude?.activity === undefined) {
+        return c.json({ activity: null, session });
+      }
+      // 段階は Herdr が working の間だけ返す。rewind の直後は idle なので、旧枝の未完了は出ない。
+      if (pane.agentStatus !== "working") return c.json({ activity: null, session });
+      try {
+        const derived = await claude.activity(session);
+        // ターンの最初の取得で、新しい prompt がまだ書かれていない間は出さない。
+        const claimed = derived.prompt !== null && store.claimTurn(paneId, derived.prompt);
+        return c.json({ activity: claimed ? derived.activity : null, session });
+      } catch {
+        return c.json({ activity: null, session });
+      }
     },
     projects: async (c: IdContext) => {
       const state = await current();
