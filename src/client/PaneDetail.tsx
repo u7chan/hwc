@@ -95,7 +95,7 @@ import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
 import { OutputEmpty, OutputSkeleton } from "./pane/empty";
 import { FilePreview } from "./pane/file-preview";
-import { FileTree } from "./pane/file-tree";
+import { FileTree, type TreeFocusRequest } from "./pane/file-tree";
 import { AgentInfoHint, AgentInfoSkeleton, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
 import { LaunchNote } from "./pane/launch-note";
@@ -247,8 +247,9 @@ export function PaneDetail(props: PaneDetailProps) {
   // 再生しないよう、初期値を store の開閉に合わせる。
   const [treeShown, setTreeShown] = useState(fileTree.open);
   const [treeClosing, setTreeClosing] = useState(false);
-  // キーで開いたときだけ、ツリーの行へ焦点を移す。0 は要求なし、押すたびに増やす。
-  const [treeFocus, setTreeFocus] = useState(0);
+  // キーで開いたときだけ、ツリーの行へ焦点を移す。token は開くたびに増え、
+  // focus はその開閉がキー由来かを示す。
+  const [treeFocus, setTreeFocus] = useState<TreeFocusRequest>({ token: 0, focus: false });
   const treeCloseTimer = useRef<number | null>(null);
 
   const cancelTreeClose = () => {
@@ -267,8 +268,9 @@ export function PaneDetail(props: PaneDetailProps) {
   const openTree = (focus: boolean) => {
     cancelTreeClose();
     setTreeClosing(false);
-    // ポインタで開いたときは 0 に戻す。ツリーの行に焦点を残したまま開き直さない。
-    setTreeFocus((request) => (focus ? request + 1 : 0));
+    // token は開くたびに増やし、focus とは別に持つ。番号を戻すと、閉じる途中の
+    // 開き直しで前の番号が再利用され、ツリーが処理済みと誤認して焦点を移さない。
+    setTreeFocus((request) => ({ token: request.token + 1, focus }));
     // 動きを減らす設定では待たずに出す。CSS も transition を持たない。
     if (prefersReducedMotion()) setTreeShown(true);
     fileTreeStore.open(pane.id);

@@ -17,8 +17,9 @@ type FileTreeProps = {
   // shown が true のまま始まり、動かない。
   shown: boolean;
   closing: boolean;
-  // キーで開いたか。0 は要求なしで、押すたびに増える。
-  focusRequest: number;
+  // キーで開いたか。token は開くたびに増えるので、同じ token を 2 度処理しない。
+  // focus はその開閉がキー由来かを示す（ポインタで開いたときは移さない）。
+  focusRequest: TreeFocusRequest;
   selectedPath: string | null;
   onToggle: (path: string) => void;
   onRetry: (path: string) => void;
@@ -27,6 +28,8 @@ type FileTreeProps = {
   // 行を composer へ運ぶ。パス文字列はペインの作業ディレクトリを知る側で組み立てる。
   onDragStart: (event: DragEvent, entry: FileTreeEntry) => void;
 };
+
+export type TreeFocusRequest = { token: number; focus: boolean };
 
 // 深さごとの字下げ。行の右側は揃えたいので、左だけを inline で決める。
 // 12px は --space-3。深い階層でも名前に幅が残るよう、字下げは 1 段だけにする。
@@ -281,11 +284,12 @@ export function FileTree(props: FileTreeProps) {
   // 根の一覧は開いた後に届く。行が無い間は待ち、届いたら 1 度だけ焦点を合わせる。
   // 展開のたびに dirs が変わっても、同じ開閉で焦点を取り直さない。
   useEffect(() => {
-    if (props.focusRequest === 0 || props.focusRequest === handled.current) return;
+    const request = props.focusRequest;
+    if (!request.focus || request.token === handled.current) return;
     if (props.view.dirs.get("") === undefined) return;
     const root = list.current;
     if (root === null) return;
-    handled.current = props.focusRequest;
+    handled.current = request.token;
     focusTarget(root)?.focus();
   }, [props.focusRequest, props.view.dirs]);
 
