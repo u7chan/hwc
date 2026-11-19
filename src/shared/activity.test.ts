@@ -39,9 +39,20 @@ test("accepts the v1 document and normalizes empty optional fields", () => {
     tokPerSecond: null,
     at: now,
   });
+  // tool の text は Claude が入れる（対象と方向の 2 行）。pi の書き手は入れない。
   expect(
-    parseActivityFile({ v: 1, at: now, phase: "tool", tool: "bash", tools: 2, text: "無視" }, now),
-  ).toEqual({ phase: "tool", text: "", tool: "bash", tools: 2, tokPerSecond: null, at: now });
+    parseActivityFile(
+      { v: 1, at: now, phase: "tool", tool: "bash", tools: 2, text: "対象\n方向" },
+      now,
+    ),
+  ).toEqual({
+    phase: "tool",
+    text: "対象\n方向",
+    tool: "bash",
+    tools: 2,
+    tokPerSecond: null,
+    at: now,
+  });
 });
 
 test("accepts a live rate only while the model is generating", () => {
@@ -122,6 +133,17 @@ test("the wire shape has no version and is normalized again on the client", () =
   expect(
     parsePaneActivity({ phase: "thinking", text: "考", tool: null, tools: 0, at: now }, now),
   ).toEqual({ phase: "thinking", text: "考", tool: null, tools: 1, tokPerSecond: null, at: now });
+  // Claude の tool は、対象と方向の 2 行を text で運ぶ。
+  expect(
+    parsePaneActivity({ phase: "tool", tool: "Read", tools: 1, text: "a.md\n方向", at: now }, now),
+  ).toEqual({
+    phase: "tool",
+    text: "a.md\n方向",
+    tool: "Read",
+    tools: 1,
+    tokPerSecond: null,
+    at: now,
+  });
   expect(parsePaneActivity({ phase: "writing", tokPerSecond: 42.3, at: now }, now)).toMatchObject({
     tokPerSecond: 42.3,
   });

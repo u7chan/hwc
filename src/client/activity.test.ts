@@ -1,13 +1,16 @@
 import { expect, test } from "bun:test";
 import { ACTIVITY_POLL_MS } from "./api";
 import {
+  ACTIVITY_HOLD_MS,
   activityLabel,
   activityLoadAllowed,
   activityPollDelay,
   activitySnippet,
   activityStep,
   formatTokPerSecond,
+  nextActivityHold,
   selectActivity,
+  showActivityFrame,
 } from "./activity";
 import type { PaneActivity } from "../shared/activity";
 
@@ -96,13 +99,61 @@ test("the next run loads again after an idle turn", () => {
     fetch: false,
     clear: true,
   });
+  // blocked でもターンの表示は捨てる。戻ったときに同じターンとして取り直す。
+  expect(activityStep("working", "blocked", true)).toEqual({
+    last: "blocked",
+    fetch: false,
+    clear: true,
+  });
+});
+
+test("the two lines of a tool stay together in the snippet", () => {
+  // 対象 60 + 改行 + 方向 90 は、末尾 2 行・160 文字の枠に収まる（ADR 0099）。
+  const text = `${"対象".repeat(30)}\n${"方向".repeat(45)}`;
+  expect(activitySnippet(text)).toBe(text);
+  expect(activitySnippet(text).split("\n")).toHaveLength(2);
+});
+
+test("Claude keeps the last activity through a null while the turn is running", () => {
+  const activity: PaneActivity = { ...base, phase: "tool", text: "quickstart.md\n手順", at: 1_000 };
+  const hold = { paneId: "w1:p1", session: "ses_1", activity, at: 1_000 };
+  const empty = { activity: null, session: "ses_1" };
+
+  // 段階が取れない間は、直前の値をそのまま出す。
+  expect(nextActivityHold(true, hold, "w1:p1", empty, 5_000)).toBe(hold);
+  // 最後に非 null を得てから 10 秒経ったら捨てる。
+  expect(nextActivityHold(true, hold, "w1:p1", empty, 1_000 + ACTIVITY_HOLD_MS)).toBeNull();
+  // pi は null をそのまま出し、ペインの移動と session の変更でも捨てる。
+  expect(nextActivityHold(false, hold, "w1:p1", empty, 2_000)).toBeNull();
+  expect(nextActivityHold(true, hold, "w1:p2", empty, 2_000)).toBeNull();
+  expect(
+    nextActivityHold(true, hold, "w1:p1", { activity: null, session: "ses_2" }, 2_000),
+  ).toBeNull();
+  expect(nextActivityHold(true, null, "w1:p1", empty, 2_000)).toBeNull();
+
+  const next: PaneActivity = { ...base, phase: "thinking", text: "方向", at: 2_000 };
+  expect(
+    nextActivityHold(true, hold, "w1:p1", { activity: next, session: "ses_1" }, 2_000),
+  ).toEqual({ paneId: "w1:p1", session: "ses_1", activity: next, at: 2_000 });
+});
+
+test("Claude reserves the second line before the first activity arrives", () => {
+  expect(showActivityFrame("claude", false, null)).toBe(true);
+  // 低いセルは会話へ高さを回すので、枠を出さない。
+  expect(showActivityFrame("claude", true, null)).toBe(false);
+  // pi は activity が届いてから枠を出す。
+  expect(showActivityFrame("pi", false, null)).toBe(false);
+  expect(showActivityFrame("pi", false, base)).toBe(true);
+  expect(showActivityFrame("pi", true, base)).toBe(false);
+  expect(showActivityFrame(null, false, null)).toBe(false);
 });
 
 test("a disabled hook does not return the previous pane's activity", () => {
   const activity: PaneActivity = { ...base, text: "前のターン", at: 1 };
-  expect(selectActivity(true, "w1:p1", { paneId: "w1:p1", activity })).toEqual(activity);
+  const hold = { paneId: "w1:p1", session: "ses_1", activity, at: 1 };
+  expect(selectActivity(true, "w1:p1", hold)).toEqual(activity);
   // 同じペイン id でも、無効化（codex に変わった等）や別ペインなら出さない。
-  expect(selectActivity(false, "w1:p1", { paneId: "w1:p1", activity })).toBeNull();
-  expect(selectActivity(true, "w1:p2", { paneId: "w1:p1", activity })).toBeNull();
+  expect(selectActivity(false, "w1:p1", hold)).toBeNull();
+  expect(selectActivity(true, "w1:p2", hold)).toBeNull();
   expect(selectActivity(true, "w1:p1", null)).toBeNull();
 });

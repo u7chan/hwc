@@ -140,6 +140,8 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 pi のペインでは、あわせてセッションの隣に live の sidecar（`<session>.jsonl.thinking.json`）を書く。まず `waiting` で `working` にし、1.2 秒後に折り返す長さの `thinking` と `tokPerSecond: 42.3` を上書きし、6 秒後に消して `idle` に戻す。実物の pi 拡張はターン中に phase・thinking の末尾・生成速度を上書きし続ける（[ADR 0035](adr/0035-live-pi-activity.md)）。E2E ではこの 2 段階で、段階の行が会話のスクロール領域の外（入力欄の直上）に出て、スクロールしても残ること、生成速度が経過時間の左に出て右端の時間が動かないこと、thinking がまだ無い待機中も帯の高さが変わらず、末尾 2 行だけが出てターン終了で消えることを確かめる。入力欄を 1 行に畳むセルでは thinking と生成速度を出さず、段階と経過時間だけになる。停止ボタン（`esc`）でも sidecar を消す。
 
+Claude のペインでは、フィクスチャ専用の入力 `/activity`（添付注記なし）が同じ役割を持つ。実物と同じく prompt・`api-request`・assistant・`tool_use`・`tool_result` を時間差で架空の transcript へ追記し、段階の切り替わりと 10 秒の保持を確かめられるようにする（[ADR 0099](adr/0099-claude-live-activity.md)）。架空の transcript の `version` は 2.1.328 に揃えてある。
+
 `/done`（添付注記なし）はフィクスチャ専用の入力で、実 Herdr には無い。受け取ったペインを `done` にする。実 Herdr の `done` は既読でしか `idle` に戻らず、hwc からは作れないため、一覧の終了時刻と端末間の一致を確かめる入口として置く。
 
 `/compact`（添付注記なし）を受け取ると、実 Herdr の pi 拡張と同じく `agent_status` は `working` にせず、1.2 秒後に架空の compaction をセッションへ追記して `idle` のままにする。hwc 側のローカルな「会話を圧縮しています」と、完了ログの位置・所要時間を E2E で確かめるため、最後の user メッセージを kept の先頭にする。
@@ -151,6 +153,7 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 - 添付注記（`<attached_files>`）の無い `/new` と `/compact`（`/compact <指示>` を含む）。会話を残さないか、履歴を置き換える
 - 同じく添付注記の無い `/reload`。実 Pi と同じくセッションに何も書かず、`agent_status` も `working` にしない。hwc は控えを履歴に残す（[ADR 0045](adr/0045-pending-echo-turn-grace.md)）
 - 添付注記の無い `/hwc-rewind <entryId> <requestId>`。専用の marker を追記し、本文としては残さない
+- 同じく添付注記の無い `/activity`。Claude の transcript にだけ進行行を追記し、user メッセージとしては残さない
 
 添付を持つペインで `Enter` が送信になるときは、常に本文の送信になる（[ADR 0018](adr/0018-pasted-image-attachments.md)）。タッチ端末では `Enter` が改行になる（[ADR 0037](adr/0037-enter-newline-on-touch.md)）。`/compact` と打っても添付と一緒に送れば本文として扱われるので、注記があるときはコマンドではなく通常本文として追記する。
 
@@ -184,6 +187,17 @@ Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（
 9. 質問に答える（[ADR 0099](adr/0099-answer-ask-user-question.md)）。カードの選択肢は押せる。単一選択（見出し）は 1 つだけ、複数選択（範囲）は複数を選べ、選ぶと枠とチェックで示す。「その他（自由入力）」を押すと選択肢が外れて入力欄が開き、文字を入れるまで「この内容で答える」は無効のまま。全問に答えて押すと、押した間だけスピナーが出て、架空 Herdr が Esc で質問を閉じ、本文（1 行目が `質問への回答:`、続けて `質問: 選んだラベル` を質問ごとに 1 行）が user の発言として会話に出る。カードは消えて入力欄が戻り、`[Request interrupted by user for tool use]` の行は出ない。ダブルタップしても発言は 1 件。
 10. 失敗の表示は、`/api/panes/<id>/answer-question` の応答を差し替えて確かめる（Playwright の `route`。URL の `:` はエンコードされるので `**/api/panes/*/answer-question` で一致させる）。502 は「回答できませんでした。端末で答えてください。」、413 は「回答が長すぎて送れません。短くしてください。」が出て、選択は残り、再度押せる。
 11. 空の会話では `/new` `/compact` の候補が消える。fixture の Claude は会話を持つため、この判定は `src/client/commands.test.ts` で確かめる。
+
+## Claude の実行中の段階
+
+Claude の帯は transcript の進行行から導く（[ADR 0099](adr/0099-claude-live-activity.md)）。`quickstart`（`w2:p2`、待機）で確かめる。フィクスチャ専用の入力 `/activity` は実 Herdr には無い。送るとペインを `working` にし、架空の transcript へ 2 秒後に prompt と `api-request`、4 秒後に assistant の本文と `tool_use`、8 秒後に `tool_result` を追記する。実在の `~/.claude` は読まない。
+
+1. `quickstart` を開き、`/activity` を送る。すぐに帯が出て 3 点と経過時間だけになり、その下に thinking 用の 2 行の空きができる。ターンの最初の取得では新しい prompt がまだ書かれていないので、段階は出ない。
+2. 2 秒ほどで「考えています」に変わる。応答本文がまだ無いので、2 行の空きは空のまま。4 秒ほどで「Read を実行中」に変わり、1 行目に `quickstart.md`、2 行目に「手順を確認しています。」が出る。空きの高さはこの間ずっと同じで、会話の見える範囲が動かない。
+3. 8 秒ほどで transcript に `tool_result` が書かれ、次の取得は `activity: null` になる。帯は直前の「Read を実行中」と 2 行をそのまま保つ（最後に非 null を得てから 10 秒）。
+4. 10 秒ほど待つと保持が切れ、段階が消えて 3 点と経過時間だけになる。2 行の空きは残る。
+5. 停止ボタンで `idle` に戻すと帯が消える。もう一度 `/activity` を送ってから `/blocked` を送ると、本文が端末出力に変わり、入力欄と帯が消える。`/done` で戻すと会話表示に戻り、帯は出ない。
+6. 分割セル（2 枚以上）では compact になり、Claude でも 2 行の空きを出さず、段階と経過時間だけになる。単体では `showActivityFrame` を `src/client/activity.test.ts` で確かめる。
 
 ## 過去の発言の編集
 

@@ -11,8 +11,14 @@ import {
   formatFileSize,
   MAX_ATTACHMENTS,
 } from "../shared/attachments";
-import { activityLabel, activitySnippet, usePaneActivity } from "./activity";
-import { OUTPUT_LINES, answerQuestion, attachmentUrl, editMessage, uploadAttachment } from "./api";
+import { activityLabel, activitySnippet, showActivityFrame, usePaneActivity } from "./activity";
+import {
+  OUTPUT_LINES,
+  answerQuestion,
+  attachmentUrl,
+  editMessage,
+  uploadAttachment,
+} from "./api";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference, insertFileReference } from "./file-reference";
 import { fileTreeStore } from "./file-tree-store";
@@ -417,11 +423,14 @@ export function PaneDetail(props: PaneDetailProps) {
     pane.chat && (!blocked || pane.agent === "claude"),
     pane.agentStatus,
   );
-  // 実行中の段階は pi 拡張の sidecar からだけ取る（ADR 0035）。
+  // 実行中の段階は pi 拡張の sidecar、Claude は transcript の進行行から取る（ADR 0035 / 0100）。
+  // blocked の間も hook は生かしたままにする。状態の遷移で保持値を捨て、取得は working の
+  // 間だけに限る（blocked で effect を外すと、同じターンに戻ったとき古い段階が一瞬出る）。
   const activity = usePaneActivity(
     pane.id,
-    pane.agent === "pi" && pane.chat && !blocked,
+    (pane.agent === "pi" || pane.agent === "claude") && pane.chat,
     pane.agentStatus,
+    pane.agent === "claude",
   );
   // 分割セルも含め、見出しごとに引く。同じスペースのセルは同じ PR になる。
   const pullRequest = usePullRequest(context.workspaceId, branch, upstreamBranch);
@@ -1591,7 +1600,7 @@ export function PaneDetail(props: PaneDetailProps) {
               elapsedMs={compacting ? compactionElapsedMs : waitingMs}
               compacting={compacting}
               stopping={stopping}
-              showThought={!compact && activity !== null}
+              showThought={showActivityFrame(pane.agent, compact, activity)}
               tokPerSecond={liveTokPerSecond}
               onCancelCompaction={() => void cancelCompaction()}
             />

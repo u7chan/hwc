@@ -45,6 +45,8 @@ export function claudeTranscriptPath(root: string, sessionId: string): string {
 
 export const CLAUDE_CHAT_SESSION = "3f1c0a52-9d4e-4b8a-8c21-5e7d6f0b1a2c";
 export const CLAUDE_PENDING_SESSION = "b7d2e4c1-0a95-4f3e-9c68-2d1b3a4c5e6f";
+// 段階の判定に必要な版（ADR 0100）。実物と同じく、すべての entry が版を持つ。
+export const CLAUDE_VERSION = "2.1.328";
 
 type ClaudeEntry = Record<string, unknown>;
 
@@ -68,6 +70,7 @@ function claudeEntries(
       uuid: `claude-${count}`,
       parentUuid,
       timestamp: new Date(started + count * 1_000).toISOString(),
+      version: CLAUDE_VERSION,
       isSidechain: false,
     };
   };

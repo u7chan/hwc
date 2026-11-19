@@ -1,4 +1,5 @@
 import type { ChatLinkKind, MessageFileKind } from "../../shared/message-files";
+import type { PaneActivity } from "../../shared/activity";
 
 export type ChatFile = {
   // 配信の根（ワークスペースのチェックアウト、またはプレビュー用の追加根）からの
@@ -118,4 +119,14 @@ export type ChatSnapshot = {
 // BFF がペイン id から解決した会話の読み取り口。セッション id や path はクライアントへ渡さない。
 export type SessionChatClient = {
   snapshot: (sessionId: string) => Promise<ChatSnapshot>;
+  // 実行中の段階。transcript の進行行から導けるエージェントだけが持つ。
+  activity?: (sessionId: string) => Promise<SessionActivity>;
+};
+
+// 実行中の段階を導いた結果。claim はターンの範囲を決める BFF の状態が行うので、
+// ここではどの prompt をターンの起点にしたかだけを返す（ADR 0099）。
+export type SessionActivity = {
+  // ターンの起点にした prompt の uuid。起点が読めないときは null。
+  prompt: string | null;
+  activity: PaneActivity | null;
 };

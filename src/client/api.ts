@@ -550,16 +550,23 @@ export async function readChat(
 }
 
 // 会話とは別の使い捨ての取得口。ETag も持たず、取れなければ null に畳む。
-export async function readActivity(
-  paneId: string,
-  signal?: AbortSignal,
-): Promise<PaneActivity | null> {
+export type ActivityRead = { activity: PaneActivity | null; session: string | null };
+
+export async function readActivity(paneId: string, signal?: AbortSignal): Promise<ActivityRead> {
   const response = await client.api.panes[":id"].activity.$get(paneParam(paneId), {
     init: { signal },
   });
   if (!response.ok) throw new Error(`activity: ${response.status}`);
-  const body = (await response.json()) as { activity?: unknown };
-  return parsePaneActivity(body.activity);
+  const body = (await response.json()) as { activity?: unknown; session?: unknown };
+  return {
+    activity: parsePaneActivity(body.activity),
+    session: parseActivitySession(body.session),
+  };
+}
+
+// 保持中の値と比べるだけの id。空文字と制御文字は捨てる。
+export function parseActivitySession(value: unknown): string | null {
+  return typeof value === "string" && value !== "" && !/\p{Cc}/u.test(value) ? value : null;
 }
 
 // 既定モデルで起動した pi のペインで、会話にモデルが載るまでの表示に使う。

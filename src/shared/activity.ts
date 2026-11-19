@@ -15,7 +15,8 @@ export type LivePhase = (typeof LIVE_PHASES)[number];
 
 export type PaneActivity = {
   phase: LivePhase;
-  // thinking のときだけ、現在のブロックの末尾。それ以外は空。
+  // thinking のときは現在のブロックの末尾。Claude は tool のときも、対象と方向の 2 行を
+  // 入れる（ADR 0099）。それ以外は空。
   text: string;
   // tool のときだけ、最後に開始した実行中ツール。
   tool: string | null;
@@ -35,8 +36,8 @@ export const ACTIVITY_RATE_PHASES = ["thinking", "writing", "tool-call"] as cons
 // 文字数推定でも数千 tok/s を超えることはない。壊れた writer の値で行を壊さないための上限。
 export const ACTIVITY_TOK_PER_SECOND_LIMIT = 10_000;
 
-const TOOL_NAME_LIMIT = 64;
-const TOOLS_LIMIT = 99;
+export const TOOL_NAME_LIMIT = 64;
+export const TOOLS_LIMIT = 99;
 
 function isRatePhase(phase: LivePhase): boolean {
   return (ACTIVITY_RATE_PHASES as readonly LivePhase[]).includes(phase);
@@ -61,8 +62,9 @@ function normalizeActivity(value: unknown, now: number): PaneActivity | null {
   if (!isLivePhase(record.phase)) return null;
   if (typeof record.at !== "number" || !Number.isFinite(record.at)) return null;
   if (Math.abs(now - record.at) > ACTIVITY_MAX_AGE_MS) return null;
+  // pi の書き手は tool のとき text を書かないので、通しても表示は変わらない。
   const text =
-    record.phase === "thinking" && typeof record.text === "string"
+    (record.phase === "thinking" || record.phase === "tool") && typeof record.text === "string"
       ? activityTextTail(record.text)
       : "";
   const tool =
