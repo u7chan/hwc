@@ -45,7 +45,7 @@ import {
   PENDING_TURN_GRACE_MS,
   usePaneChat,
 } from "./chat";
-import { enterInsertsNewline } from "./input";
+import { composerDisabled, enterInsertsNewline } from "./input";
 import { useMessageReveal } from "./reveal";
 import {
   chipOnInput,
@@ -397,6 +397,10 @@ export function PaneDetail(props: PaneDetailProps) {
   const interaction = read?.interaction ?? null;
   const view = confirmationView({ pane, interaction, dismissedId: dismissedConfirmation, failed });
   const readOnly = view !== "normal";
+  // 入力欄を閉じるか。folder trust の readOnly と、Claude の blocked（質問・権限確認の
+  // 待ち）を同じ扱いにする。readOnly と違い、Claude の blocked は本文を端末出力のまま
+  // にして、ダイアログへの入力漏れだけを塞ぐ。
+  const inputDisabled = composerDisabled(pane, readOnly);
   const body = readOnly ? { kind: "output" as const } : normalBody;
   const previewHasNewReply = usePreviewReplyBadge(
     previewOpen,
@@ -502,7 +506,11 @@ export function PaneDetail(props: PaneDetailProps) {
   // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
   // 起動中も出すと、選んだ時点で下書きがチップに変わり消える。準備ができるまで出さない。
   const candidates =
-    edit === null && !launchBlocked && attachments.length === 0 && compactionRun === null
+    edit === null &&
+    !launchBlocked &&
+    !inputDisabled &&
+    attachments.length === 0 &&
+    compactionRun === null
       ? commandCandidates(pane, draft, snapshot)
       : [];
   const uploading = attachments.some((item) => item.name === null);
@@ -607,7 +615,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // スクロールバーが一瞬出る。描画の前に合わせる。
   useLayoutEffect(() => {
     fit(input.current, expanded);
-  }, [inputText, expanded, compact, readOnly]);
+  }, [inputText, expanded, compact, inputDisabled]);
 
   // 高さが変わるのは開閉を押したときだけにする。打鍵に合わせた伸縮まで滑らせると、
   // 1 文字ごとに箱が動いて入力の手応えが鈍る。
@@ -723,7 +731,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // 候補を選ぶとチップになり、入力欄の /... は消える。送信はもう一度 Enter。
   // 起動中は候補を出さないが、古い描画からのクリックでも下書きを消さない。
   const pick = (id: CommandId) => {
-    if (launchBlocked || edit !== null) return;
+    if (launchBlocked || inputDisabled || edit !== null) return;
     setChip(id);
     setDraft("");
     // タップでキーボードが閉じないよう、入力欄へ焦点を戻す。
@@ -741,7 +749,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // （引用に続く本文として送り、/compact には戻さない。ADR 0016 / 0062）。
   const quoteSelection = () => {
     // 送信中に足すと、成功時のクリアで新しい引用まで消える。送っている間は受け付けない。
-    if (sendingAny || launchBlocked) return;
+    if (sendingAny || launchBlocked || inputDisabled) return;
     const text = selectionToolbar?.anchor.text ?? "";
     if (text === "") return;
     const next = appendQuote(inputText, text);
@@ -852,7 +860,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // 貼ったファイルを見たらコマンドではなく本文を書く。書きかけの draft は捨てない。
   // 上限を超えるものは送る前に弾く。
   const addFiles = (files: File[]) => {
-    if (launchBlocked || edit !== null) return;
+    if (launchBlocked || inputDisabled || edit !== null) return;
     const room = MAX_ATTACHMENTS - attachments.length;
     if (room <= 0) {
       setNotice(ATTACHMENT_LIMIT_NOTICE);
@@ -934,7 +942,7 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 過去の発言を入力欄へ移す。下書きはそのまま残し、編集中だけ別の本文を使う。
   const startEdit = (message: ChatMessage) => {
-    if (edit !== null || readOnly || launchBlocked) return;
+    if (edit !== null || inputDisabled || launchBlocked) return;
     setNotice(null);
     setChip(null);
     setEdit({
@@ -959,7 +967,7 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   const sendEdit = async () => {
-    if (edit === null || edit.sending || readOnly || launchBlocked) return;
+    if (edit === null || edit.sending || inputDisabled || launchBlocked) return;
     if (edit.text.trim() === "") return;
     if (pane.agentStatus === "working") {
       setNotice("実行中は編集できません");
@@ -991,7 +999,7 @@ export function PaneDetail(props: PaneDetailProps) {
       void sendEdit();
       return;
     }
-    if (readOnly || launchBlocked || !sendable || sending) return;
+    if (inputDisabled || launchBlocked || !sendable || sending) return;
     const names = attachments
       .map((item) => item.name)
       .filter((name): name is string => name !== null);
@@ -1064,7 +1072,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
     if (edit !== null) return;
-    if (readOnly || launchBlocked || sending || replying || compactionRun !== null) return;
+    if (inputDisabled || launchBlocked || sending || replying || compactionRun !== null) return;
     if (id === "compact" && compactDone) {
       setNotice(COMPACTED_NOTICE);
       return;
@@ -1085,7 +1093,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // メッセージのために残す（チップのように draft を指示には使わない）。
   const menuCommandAvailable = (id: CommandId): boolean =>
     edit === null &&
-    !readOnly &&
+    !inputDisabled &&
     !launchBlocked &&
     !sending &&
     compactionRun === null &&
@@ -1133,7 +1141,7 @@ export function PaneDetail(props: PaneDetailProps) {
     : null;
 
   const submit = () => {
-    if (readOnly || launchBlocked) return;
+    if (inputDisabled || launchBlocked) return;
     if (edit !== null) {
       void sendEdit();
       return;
@@ -1446,7 +1454,7 @@ export function PaneDetail(props: PaneDetailProps) {
               {chatHidden ? null : (
                 <SelectionToolbar
                   state={selectionToolbar}
-                  canQuote={!readOnly && !launchBlocked && pane.chat}
+                  canQuote={!inputDisabled && !launchBlocked && pane.chat}
                   onQuote={quoteSelection}
                   onCopy={() => {
                     const selection = document.getSelection();
@@ -1505,6 +1513,11 @@ export function PaneDetail(props: PaneDetailProps) {
                 この画面は閲覧のみです。操作は Herdr のターミナルで行ってください。
               </p>
             ) : null
+          ) : inputDisabled ? (
+            // 質問・承認の待ちは TUI のダイアログが入力を受け取る。入力欄ごと閉じる。
+            <p class="hwc-terminal-note" role="status">
+              Claude の応答待ちです。質問への回答と承認は Herdr のターミナルで行ってください。
+            </p>
           ) : (
             <form
               class="hwc-input"
@@ -1517,7 +1530,7 @@ export function PaneDetail(props: PaneDetailProps) {
               }}
               onDragEnter={(event) => {
                 const transfer = event.dataTransfer;
-                if (launchBlocked || edit !== null || !pane.chat) return;
+                if (launchBlocked || inputDisabled || edit !== null || !pane.chat) return;
                 if (transfer === null || dropKind(transfer) === null) return;
                 dragDepth.current += 1;
                 setDropping(true);
@@ -1529,7 +1542,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 // ないので、copy のカーソルは出さない。
                 event.preventDefault();
                 transfer.dropEffect =
-                  pane.chat && !launchBlocked && edit === null ? "copy" : "none";
+                  pane.chat && !launchBlocked && !inputDisabled && edit === null ? "copy" : "none";
               }}
               onDragLeave={() => {
                 if (dragDepth.current === 0) return;
@@ -1544,7 +1557,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 event.preventDefault();
                 dragDepth.current = 0;
                 setDropping(false);
-                if (edit !== null || !pane.chat || launchBlocked) return;
+                if (edit !== null || !pane.chat || launchBlocked || inputDisabled) return;
                 if (kind === "files") {
                   takeFiles(dropActionFrom(transfer.files));
                   return;
@@ -1716,7 +1729,7 @@ export function PaneDetail(props: PaneDetailProps) {
                         return;
                       }
                       // 添付を受け付けるのは会話を持つペインだけ。起動中はテキストだけ。
-                      if (edit !== null || !pane.chat || launchBlocked) return;
+                      if (edit !== null || !pane.chat || launchBlocked || inputDisabled) return;
                       const action = pasteActionFrom(event.clipboardData?.items);
                       // テキストだけの貼り付けは入力欄の既定動作のままにする。
                       if (action.kind === "default") return;
@@ -1748,7 +1761,7 @@ export function PaneDetail(props: PaneDetailProps) {
                       <AgentIcon size={16} />
                       エージェントを起動
                     </button>
-                  ) : pane.chat && !launchBlocked && edit === null ? (
+                  ) : pane.chat && !launchBlocked && !inputDisabled && edit === null ? (
                     <ComposerAdd
                       full={attachments.length >= MAX_ATTACHMENTS}
                       commands={composerCommands}

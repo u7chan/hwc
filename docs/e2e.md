@@ -177,7 +177,7 @@ Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（
 2. 「この行は注記の書式が崩れています。」の行は本文だけで、`<attached_files>` も絶対パスも残らない。チップも出ない。
 3. 同じペインで 2 回目の取得が 304 になることを、DevTools のネットワークで `/api/panes/w2:p2/chat` の応答を見て確かめる。会話が変わらない間は 200 が返らない。
 4. 端末出力へのフォールバックは、起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` を消して確かめる。次の取得が 502 になり、本文が `claude · quickstart` の端末出力に切り替わる。ファイルを戻すと会話に戻るが、見つからなかった結果を 30 秒だけ覚えるので、戻した直後は端末出力のままになる。
-5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` のまま。transcript はあるが、本文は端末出力と確認の注意になる。
+5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` のまま。本文は端末出力になり、入力欄の代わりに「Claude の応答待ちです。質問への回答と承認は Herdr のターミナルで行ってください。」が出る。送信・コマンド・添付・引用は出ない（Issue #335）。`quickstart`（待機）は今までどおり入力欄が出る。
 6. 空の会話では `/new` `/compact` の候補が消える。fixture の Claude は会話を持つため、この判定は `src/client/commands.test.ts` で確かめる。
 
 ## 過去の発言の編集

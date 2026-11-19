@@ -31,7 +31,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 - 添付ファイルの UI 自体は会話を持つペインで使えるが、hwc は実体を CLI へ渡さず、本文に `<attached_files>` のパス注記を足すだけ。Pi はこの経路を前提にしている（[ADR 0018](adr/0018-pasted-image-attachments.md)、[ADR 0080](adr/0080-file-attachments.md)）。Codex と OpenCode は、それぞれの CLI がそのパスを読めるか次第（[ADR 0028](adr/0028-opencode-chat.md)、[ADR 0031](adr/0031-codex-chat.md)）。Claude の注記は `$HWC_STATE_DIR/attachments/<pane-id>/` を指し、チェックアウトの外なので、CLI が読むときに権限確認が出たら端末で承認する（[ADR 0097](adr/0097-claude-chat-transcript.md)）。
 - Pi と Codex のフォルダ信頼確認は、専用ビューで「信頼して続行」だけを回答できる（[ADR 0032](adr/0032-codex-folder-trust.md)、[ADR 0044](adr/0044-pi-project-trust.md)）。それ以外の選択肢は端末で行う。
-- Claude の起動時の信頼確認は hwc では操作しない。応答は端末で行う。`blocked` 中も入力欄は有効なので、確認画面へ Enter を送らないよう注意する。
+- Claude の `blocked` 中（起動時の信頼確認・質問・権限確認の待ち）は、hwc の入力欄を閉じ、本文は端末出力のままにする。応答は Herdr のターミナルで行う。入力欄が戻れば `blocked` は解けている。Pi と Codex の信頼確認は、これまでどおり専用ビューで「信頼して続行」を答える。
 - Codex の会話表示は、hwc が `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインだけ。既に起動している Codex や hwc 外で起動した Codex は端末出力になる（[ADR 0031](adr/0031-codex-chat.md)）。
 - ライブ activity は pi 拡張がセッションの隣に sidecar を書く場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）。拡張が無いペインでは表示されない。
 - 過去の発言の編集は、mypi がセッションに `hwc-capabilities` を残した pi ペインだけ。対象はテキストだけの発言で、添付付き・最後の発言は編集できない（[ADR 0089](adr/0089-pi-message-edit.md)）。

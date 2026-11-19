@@ -1,7 +1,16 @@
+import type { PaneState } from "../server/herdr/state";
+
 // ソフトキーボードには Shift が無い。Enter を送信に固定すると、タッチ端末では改行できない。
 // 送信はボタンに任せ、Enter は 1 行足すだけにする。
 export function enterInsertsNewline(match: (query: string) => boolean): boolean {
   return match("(pointer: coarse)");
+}
+
+// 入力欄を閉じるか。Claude は質問・承認の待ちで blocked になり、その間の TUI はダイアログが
+// 入力を受け取る。hwc の本文がダイアログへ流れないよう、入力欄ごと閉じる。
+// readOnly（folder trust）と違い、本文は端末出力のままにする（Issue #335）。
+export function composerDisabled(pane: PaneState, readOnly: boolean): boolean {
+  return readOnly || (pane.agent === "claude" && pane.agentStatus === "blocked");
 }
 
 export type Insertion = {
