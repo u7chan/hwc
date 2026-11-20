@@ -28,8 +28,9 @@ test("読めない id は、そのまま返す", () => {
   expect(claudeModelName("<synthetic>")).toBe("<synthetic>");
 });
 
-test("モデルの表示名は Claude だけ表示名にし、Pi は provider を残す", () => {
+test("モデルのラベルは Claude を表示名にし、Codex / OpenCode は provider を落とし、Pi は残す", () => {
   expect(modelLabel("claude", { provider: "claude", id: "sonnet" })).toBe("Sonnet");
   expect(modelLabel("pi", { provider: "opencode-go", id: "model-a" })).toBe("opencode-go/model-a");
   expect(modelLabel("codex", { provider: "openai", id: "gpt-x" })).toBe("gpt-x");
+  expect(modelLabel("opencode", { provider: "opencode-go", id: "beam-free" })).toBe("beam-free");
 });
