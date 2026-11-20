@@ -1214,8 +1214,8 @@ function toId(value: unknown): string | null {
   return typeof value === "string" && value !== "" ? value : null;
 }
 
-// 作成の目的は新しいワークツリーの最初のペイン。どちらかの id が無いと開けないので失敗にする。
-export function toCreatedWorktree(value: unknown): { workspaceId: string; paneId: string } | null {
+// 作成の目的は新しいスペースの最初のペイン。どちらかの id が無いと開けないので失敗にする。
+export function toCreatedSpace(value: unknown): { workspaceId: string; paneId: string } | null {
   if (typeof value !== "object" || value === null) return null;
   const record = value as { workspaceId?: unknown; paneId?: unknown };
   const workspaceId = toId(record.workspaceId);
@@ -1224,21 +1224,20 @@ export function toCreatedWorktree(value: unknown): { workspaceId: string; paneId
 }
 
 // 部分成功はペインが既にある。ID の有無で、再送してよい失敗かを見分ける。
-export function toWorktreeError(value: unknown): {
-  error: CreateWorktreeFailure;
-  workspaceId: string | null;
-  paneId: string | null;
-} {
+function toCreationError<F extends string>(
+  value: unknown,
+  known: readonly F[],
+): { error: F | "failed"; workspaceId: string | null; paneId: string | null } {
   if (typeof value !== "object" || value === null) {
     return { error: "failed", workspaceId: null, paneId: null };
   }
   const record = value as { error?: unknown; workspaceId?: unknown; paneId?: unknown };
-  const error =
-    typeof record.error === "string" &&
-    WORKTREE_FAILURES.includes(record.error as CreateWorktreeFailure)
-      ? (record.error as CreateWorktreeFailure)
-      : "failed";
+  const error = known.find((item) => item === record.error) ?? "failed";
   return { error, workspaceId: toId(record.workspaceId), paneId: toId(record.paneId) };
+}
+
+export function toWorktreeError(value: unknown) {
+  return toCreationError(value, WORKTREE_FAILURES);
 }
 
 // Herdr が作成失敗を明示した場合と、同じチェックアウトへの同時操作だけは待って再送できる。
@@ -1261,13 +1260,68 @@ export async function createWorktree(
     });
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) return { ok: false, ...toWorktreeError(body) };
-    const created = toCreatedWorktree(body);
+    const created = toCreatedSpace(body);
     return created === null
       ? { ok: false, error: "failed", workspaceId: null, paneId: null }
       : { ok: true, ...created };
   } catch {
     // 応答が返らない・途中で切れた場合は、BFF が作成を終えているか分からない。作成済みの
     // ワークツリーを残したまま再送すると 2 つ目を作るので、期限切れと同じ結果不明に倒す。
+    return {
+      ok: false,
+      error: signal.aborted ? "timeout" : "failed",
+      workspaceId: null,
+      paneId: null,
+    };
+  }
+}
+
+export type CreateSpaceFailure =
+  | "pane_rename_failed"
+  | "pane_not_found"
+  | "no_checkout"
+  | "not_found"
+  | "invalid_request"
+  | "herdr_unavailable"
+  | "timeout"
+  | "failed";
+
+export type CreateSpaceOutcome =
+  | { ok: true; workspaceId: string; paneId: string }
+  | { ok: false; error: CreateSpaceFailure; workspaceId: string | null; paneId: string | null };
+
+const SPACE_FAILURES: readonly CreateSpaceFailure[] = [
+  "pane_rename_failed",
+  "pane_not_found",
+  "no_checkout",
+  "not_found",
+  "invalid_request",
+  "herdr_unavailable",
+];
+
+export function toSpaceError(value: unknown) {
+  return toCreationError(value, SPACE_FAILURES);
+}
+
+// ツリーのフォルダを作業ディレクトリにしたスペースを作る。path はツリーの根からの相対パス。
+export async function createSpace(
+  paneId: string,
+  request: { path: string; name: string | null },
+): Promise<CreateSpaceOutcome> {
+  const signal = AbortSignal.timeout(CREATE_TIMEOUT_MS);
+  try {
+    const input = { ...paneParam(paneId), json: request };
+    const response = await client.api.panes[":id"]["create-space"].$post(input, {
+      init: { signal },
+    });
+    const body: unknown = await response.json().catch(() => null);
+    if (!response.ok) return { ok: false, ...toSpaceError(body) };
+    const created = toCreatedSpace(body);
+    return created === null
+      ? { ok: false, error: "failed", workspaceId: null, paneId: null }
+      : { ok: true, ...created };
+  } catch {
+    // 作成済みのスペースを残したまま再送すると 2 つ目を作る。結果不明に倒す。
     return {
       ok: false,
       error: signal.aborted ? "timeout" : "failed",

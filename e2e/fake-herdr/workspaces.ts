@@ -171,6 +171,50 @@ export function createWorkspaces(ctx: FakeContext) {
     return removeWorkspace(workspaceId);
   };
 
+  const nextWorkspaceId = () => {
+    const number =
+      Math.max(
+        0,
+        ...(snapshot.workspaces ?? []).map(
+          (item) => Number(item.workspace_id.replace(/[^0-9]/g, "")) || 0,
+        ),
+      ) + 1;
+    return `w${number}`;
+  };
+
+  // スペースにタブと root pane を 1 枚ずつ付けてスナップショットに足す。hwc は focus: true を
+  // 送るので、実 Herdr と同じく新しいスペースへ移る。
+  const addSpace = (
+    workspace: HerdrWorkspace,
+    cwd: string,
+  ): { workspace: HerdrWorkspace; tab: HerdrTab; rootPane: HerdrPane } => {
+    const id = workspace.workspace_id;
+    const tab: HerdrTab = {
+      tab_id: `${id}:t1`,
+      workspace_id: id,
+      label: "main",
+      agent_status: "idle",
+      focused: false,
+    };
+    const rootPane: HerdrPane = {
+      pane_id: `${id}:p1`,
+      workspace_id: id,
+      tab_id: tab.tab_id,
+      cwd,
+      label: null,
+      agent_status: "unknown",
+      focused: false,
+      agent_session: null,
+    };
+    snapshot.workspaces = [...(snapshot.workspaces ?? []), workspace];
+    snapshot.tabs = [...(snapshot.tabs ?? []), tab];
+    snapshot.panes = [...(snapshot.panes ?? []), rootPane];
+    outputs.set(rootPane.pane_id, "$ ");
+    revisions.set(rootPane.pane_id, 0);
+    focus(rootPane.pane_id);
+    return { workspace, tab, rootPane };
+  };
+
   // 実 Herdr の worktree.create は git worktree add を実行し、リンクされたスペースを開く。
   // E2E では架空のチェックアウトを一時ディレクトリに作り、スナップショットにスペース・タブ・
   // root pane を足す。モデル検証は root pane の cwd で走るので、ディレクトリは実在させる。
@@ -193,14 +237,7 @@ export function createWorkspaces(ctx: FakeContext) {
       };
     }
     worktreeCount += 1;
-    const number =
-      Math.max(
-        0,
-        ...(snapshot.workspaces ?? []).map(
-          (item) => Number(item.workspace_id.replace(/[^0-9]/g, "")) || 0,
-        ),
-      ) + 1;
-    const id = `w${number}`;
+    const id = nextWorkspaceId();
     const callsign = `silver-cloud-${worktreeCount}`;
     const branch = `worktree/${callsign}`;
     const checkoutPath = join(root, "worktrees", branch.replace("/", "-"));
@@ -220,36 +257,21 @@ export function createWorkspaces(ctx: FakeContext) {
         is_linked_worktree: true,
       },
     };
-    const tab: HerdrTab = {
-      tab_id: `${id}:t1`,
-      workspace_id: id,
-      label: "main",
-      agent_status: "idle",
-      focused: false,
-    };
-    const rootPane: HerdrPane = {
-      pane_id: `${id}:p1`,
-      workspace_id: id,
-      tab_id: tab.tab_id,
-      cwd: checkoutPath,
-      label: null,
-      agent_status: "unknown",
-      focused: false,
-      agent_session: null,
-    };
-    snapshot.workspaces = [...(snapshot.workspaces ?? []), workspace];
-    snapshot.tabs = [...(snapshot.tabs ?? []), tab];
-    snapshot.panes = [...(snapshot.panes ?? []), rootPane];
-    outputs.set(rootPane.pane_id, "$ ");
-    revisions.set(rootPane.pane_id, 0);
+    const created = addSpace(workspace, checkoutPath);
     if (source.worktree == null) {
       source.worktree = sourceWorktree;
       broadcast("workspace.updated", { workspace_id: workspaceId });
     }
-    // focus: true を送っているので、実 Herdr と同じく新しいスペースへ移る。
-    focus(rootPane.pane_id);
-    return { workspace, tab, rootPane };
+    return created;
   };
+
+  // workspace.create は cwd を作業ディレクトリにしたスペースを開く。worktree 情報は
+  // 持たせない（hwc は git の種別をチェックアウトから読む）。
+  const createWorkspace = (
+    cwd: string,
+    label: string,
+  ): { workspace: HerdrWorkspace; tab: HerdrTab; rootPane: HerdrPane } =>
+    addSpace({ workspace_id: nextWorkspaceId(), label, agent_status: "idle", focused: false }, cwd);
 
   return {
     focus,
@@ -258,6 +280,7 @@ export function createWorkspaces(ctx: FakeContext) {
     removeWorkspace,
     removeWorktree,
     createWorktree,
+    createWorkspace,
     setAgentStatus,
     refreshAggregates,
     aggregateStatus,

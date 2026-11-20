@@ -3,15 +3,16 @@ import { AGENT_KINDS, AGENT_LABELS, type AgentKind, type AgentModel } from "../s
 import type { LaunchDefaults } from "../shared/launch-defaults";
 import {
   createPane,
+  createSpace,
   createWorktree,
   type CreatePaneFailure,
   type CreatePaneRequest,
   type CreatePaneOutcome,
-  type CreateWorktreeOutcome,
   readLaunchDefaults,
 } from "./api";
 import { useEffortCandidates, useModelCandidates } from "./launch-candidates";
 import { canLaunch, chooseEffort, chooseModel, savedEffortFor } from "./launch-choice";
+import { spaceFailureNotice } from "./space-create";
 import { worktreeFailureNotice } from "./worktree-create";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
@@ -20,13 +21,20 @@ import { CreatePaneModel } from "./CreatePaneModel";
 import { CreatePaneEffort } from "./CreatePaneEffort";
 import type { LaunchIntent } from "./starting";
 
+// 何を作るか。split は paneId のタブを分割する。start は既存のシェルペイン（paneId）で
+// 起動し、ペインを作らないので名前と種類の切り替えは出さない。worktree と space は新しい
+// スペースを作り、その root pane で起動する。space の path は paneId のツリーの根からの
+// 相対パス（ADR 0106）。
+export type CreateTarget =
+  | { kind: "split" }
+  | { kind: "start" }
+  | { kind: "worktree"; workspaceId: string }
+  | { kind: "space"; path: string };
+
 type CreatePaneProps = {
-  // 分割して作る場合は追加先のペイン。ワークツリーを作る場合はモデル一覧の取得元。
+  // 分割・起動の対象のペイン。ワークツリーとスペースではモデル一覧の取得元。
   paneId: string;
-  // 値があればワークツリーを作り、その root pane でエージェントを起動する。
-  worktreeWorkspaceId: string | null;
-  // 既存のシェルペイン（paneId）で起動する。ペインを作らないので名前と種類の切り替えは出さない。
-  start: boolean;
+  target: CreateTarget;
   // エージェントの起動を頼む内容。シェルだけを作る場合は null。起動そのものは
   // ダイアログを閉じた後に App が行う。
   onCreated: (paneId: string, launch: LaunchIntent | null) => void;
@@ -34,6 +42,13 @@ type CreatePaneProps = {
 };
 
 type Mode = "agent" | "shell";
+
+const TITLES: Record<CreateTarget["kind"], string> = {
+  split: "新しいペイン",
+  start: "エージェントを起動",
+  worktree: "新しいワークツリー",
+  space: "新しいスペース",
+};
 
 // 失敗の見せ方。再試行できるかどうかで、フォームを残すか「閉じる」だけにするかが変わる。
 type FailureView = { message: string; retry: boolean };
@@ -57,14 +72,27 @@ function paneFailureView(result: Extract<CreatePaneOutcome, { ok: false }>): Fai
   return { message: failureMessage(result.error), retry: result.error !== "timeout" };
 }
 
-function worktreeFailureView(result: Extract<CreateWorktreeOutcome, { ok: false }>): FailureView {
-  // ペインができている場合は起動へ進むので、ここへは来ない。
-  return worktreeFailureNotice(result.error);
+// ワークツリーとスペースは root pane ができるまで待つ。名前付けだけの失敗でも root pane は
+// できているので、paneId があれば起動へ進む。
+async function createRootPane(
+  paneId: string,
+  target: Extract<CreateTarget, { kind: "worktree" | "space" }>,
+  name: string | null,
+): Promise<{ paneId: string | null; failure: FailureView | null }> {
+  if (target.kind === "worktree") {
+    const result = await createWorktree(target.workspaceId, { name });
+    return {
+      paneId: result.paneId,
+      failure: result.ok ? null : worktreeFailureNotice(result.error),
+    };
+  }
+  const result = await createSpace(paneId, { path: target.path, name });
+  return { paneId: result.paneId, failure: result.ok ? null : spaceFailureNotice(result.error) };
 }
 
 export function CreatePane(props: CreatePaneProps) {
-  const worktree = props.worktreeWorkspaceId !== null;
-  const start = props.start;
+  const { target } = props;
+  const start = target.kind === "start";
   const [name, setName] = useState("");
   const [mode, setMode] = useState<Mode>("agent");
   const [agent, setAgent] = useState<AgentKind>("pi");
@@ -125,22 +153,18 @@ export function CreatePane(props: CreatePaneProps) {
       effort: null,
     };
 
-    if (props.worktreeWorkspaceId !== null) {
-      // ワークツリーは root pane ができるまで待つ。起動は分割と同じく、ペインが
-      // スナップショットに現れてから App が頼む。
-      const result = await createWorktree(props.worktreeWorkspaceId, { name: request.name });
-      // 名前の付け直しだけ失敗しても、ワークツリーと root pane はできている。
-      const paneId = result.paneId;
-      if (paneId !== null) {
-        props.onCreated(paneId, intent(true));
+    if (target.kind === "worktree" || target.kind === "space") {
+      // 起動は分割と同じく、ペインがスナップショットに現れてから App が頼む。
+      const result = await createRootPane(props.paneId, target, request.name);
+      if (result.paneId !== null) {
+        props.onCreated(result.paneId, intent(true));
         setOpen(false);
         return;
       }
-      if (result.ok) return;
+      if (result.failure === null) return;
       setBusy(false);
-      const view = worktreeFailureView(result);
-      setSettled(!view.retry);
-      setError(view.message);
+      setSettled(!result.failure.retry);
+      setError(result.failure.message);
       return;
     }
 
@@ -170,16 +194,21 @@ export function CreatePane(props: CreatePaneProps) {
       onExited={props.onClose}
     >
       <h2 class="hwc-dialog-title" id="hwc-create-title">
-        {start ? "エージェントを起動" : worktree ? "新しいワークツリー" : "新しいペイン"}
+        {TITLES[target.kind]}
       </h2>
 
-      {start ? (
+      {target.kind === "start" ? (
         <p class="hwc-dialog-text">
           シェルペイン <span class="hwc-dialog-id">{props.paneId}</span>{" "}
           の上で、作業ディレクトリと履歴を保ったまま起動します。
         </p>
-      ) : worktree ? (
+      ) : target.kind === "worktree" ? (
         <p class="hwc-dialog-text">ブランチ名と保存先は Herdr が自動で決めます。</p>
+      ) : target.kind === "space" ? (
+        <p class="hwc-dialog-text">
+          <span class="hwc-dialog-id">{target.path}</span>{" "}
+          を作業ディレクトリにしたスペースを作ります。
+        </p>
       ) : null}
 
       {start ? null : (
@@ -314,11 +343,9 @@ export function CreatePane(props: CreatePaneProps) {
                   <span class="hwc-spinner" aria-hidden="true" />
                   {start
                     ? "起動中…"
-                    : worktree
-                      ? "作成中…"
-                      : mode === "agent"
-                        ? "起動中…"
-                        : "作成中…"}
+                    : target.kind === "split" && mode === "agent"
+                      ? "起動中…"
+                      : "作成中…"}
                 </>
               ) : start ? (
                 "起動"

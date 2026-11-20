@@ -2,7 +2,7 @@ import { canRetryWorktree, type CreateWorktreeFailure } from "./api";
 
 // 作成できたかを確認できない失敗。ワークツリーとエージェントが残っている可能性があるので、
 // 確定した失敗として伝えない。ダイアログは再送させず、Herdr 側の確認を促す（ADR 0038）。
-const UNKNOWN_NOTICE =
+export const UNKNOWN_NOTICE =
   "作成できたか確認できませんでした。Herdr のスペースを確認してから、必要なら TUI で開き直してください。";
 
 export function worktreeOutcomeUnknown(error: CreateWorktreeFailure): boolean {

@@ -177,6 +177,58 @@ button.hwc-tree-row:active {
   outline-offset: -3px;
 }
 
+/* フォルダの行と、その右端の操作。行はボタンなので、操作は入れ子にせず並べる。 */
+.hwc-tree-line {
+  display: flex;
+  align-items: center;
+}
+
+.hwc-tree-line > .hwc-tree-row {
+  flex: 1;
+  min-width: 0;
+  padding-right: 0;
+}
+
+.hwc-tree-action {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.hwc-tree-action:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.hwc-tree-action:active {
+  background: var(--color-line);
+}
+
+.hwc-tree-action:focus-visible {
+  outline-offset: -3px;
+}
+
+/* ポインタの画面では行に乗ったときだけ出す。触れる画面では常に出す（ペインの「…」と同じ）。 */
+@media (hover: hover) {
+  .hwc-tree-action {
+    opacity: 0;
+  }
+
+  .hwc-tree-line:hover > .hwc-tree-action,
+  .hwc-tree-line:focus-within > .hwc-tree-action {
+    opacity: 1;
+  }
+}
+
 /* 選択中のファイル。会話のプレビューと同じ対象を示す。 */
 .hwc-tree-row[data-selected="true"] {
   background: var(--color-selected);

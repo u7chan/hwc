@@ -1,3 +1,4 @@
+import { parseWorkspaceCreated, type SpaceCreated } from "./contract";
 import { request } from "./socket";
 
 type Caller = <T>(
@@ -52,6 +53,7 @@ export function parseMoveWorkspacesBody(body: unknown): ParsedMoveWorkspaces {
 }
 
 export type WorkspaceClient = {
+  create: (options: { cwd: string; label: string }) => Promise<SpaceCreated>;
   moveBlock: (options: MoveWorkspacesRequest) => Promise<void>;
   close: (workspaceId: string) => Promise<void>;
 };
@@ -63,6 +65,12 @@ export function createWorkspaceClient(
   const call: Caller = options.call ?? request;
 
   return {
+    // focus: true で新しいスペースへ移り、hwc もその最初のペインを開く（ワークツリーと同じ）。
+    async create({ cwd, label }) {
+      const result = await call("workspace.create", { cwd, label, focus: true }, { path });
+      return parseWorkspaceCreated(result);
+    },
+
     async moveBlock({ workspaceIds, beforeWorkspaceId }) {
       await call(
         "workspace.move_block",

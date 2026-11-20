@@ -682,13 +682,19 @@ export function App() {
 
   // 名前とエージェントはダイアログで決める。メニューは入口だけ。
   const openCreateDialog = (paneId: string) => {
-    setCreating({ paneId, worktreeWorkspaceId: null, start: false });
+    setCreating({ paneId, target: { kind: "split" } });
     closeMenu();
   };
 
   // シェルペインの入力欄から起動する。ペインは作らないので、名前も追加先も持たない。
   const openStartAgentDialog = (paneId: string) => {
-    setCreating({ paneId, worktreeWorkspaceId: null, start: true });
+    setCreating({ paneId, target: { kind: "start" } });
+  };
+
+  // ツリーで選んだフォルダを作業ディレクトリにしたスペースを作る（ADR 0106）。モデル一覧は
+  // 起点のペインの cwd で読み、起動時の再検証は新しい root pane の cwd で BFF が行う。
+  const openCreateSpaceDialog = (paneId: string, path: string) => {
+    setCreating({ paneId, target: { kind: "space", path } });
   };
 
   // ワークツリーはリポジトリ本体のスペースからだけ作る。モデル一覧は起点スペースの先頭ペイン
@@ -701,7 +707,7 @@ export function App() {
     const paneId = workspace.tabs.flatMap((tab) => tab.panes)[0]?.id;
     if (paneId === undefined) return;
     closeMenu();
-    setCreating({ paneId, worktreeWorkspaceId: workspace.id, start: false });
+    setCreating({ paneId, target: { kind: "worktree", workspaceId: workspace.id } });
   };
 
   // ダイアログが決めた起動の指定を預かる。新しいペインはスナップショットに現れてから、
@@ -1370,6 +1376,7 @@ export function App() {
         onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
         onStop={() => stopPane(item.id)}
         onStartAgent={() => openStartAgentDialog(item.id)}
+        onCreateSpace={(path) => openCreateSpaceDialog(item.id, path)}
         onRetryLaunch={() => retryLaunch(item.id)}
         onUseShell={() => useShell(item.id)}
         onOpenImage={(url, name) => setViewer({ url, name })}

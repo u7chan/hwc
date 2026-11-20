@@ -187,6 +187,8 @@ type PaneDetailProps = {
   onStop: () => Promise<boolean>;
   // シェルのペインでエージェントを起動する。
   onStartAgent: () => void;
+  // ツリーのフォルダを作業ディレクトリにしたスペースを作る。path はツリーの根からの相対パス。
+  onCreateSpace: (path: string) => void;
   // 起動に失敗したペインで、同じ指定でもう一度頼む。
   onRetryLaunch: () => void;
   // 起動を諦め、残ったシェルとして使う。
@@ -239,11 +241,10 @@ export function PaneDetail(props: PaneDetailProps) {
   // 会話の上に重ねる（ADR 0090）。
   const { ref: widthRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
 
-  // チャットを持たないペインには配信先が無い。store の後始末より先に描かない。
-  const treeOpen = pane.chat && fileTree.open;
+  const treeOpen = fileTree.open;
   const sideBySide = treeOpen && frameWidth !== null && frameWidth >= TREE_SIDE_MIN_WIDTH;
   const treeOverlay = treeOpen && !sideBySide;
-  const previewOpen = pane.chat && previewPath !== null;
+  const previewOpen = previewPath !== null;
   // 会話は DOM に残してスクロール位置を保ち、表示だけを差し替える。
   const chatHidden = treeOverlay || previewOpen;
 
@@ -331,7 +332,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const toggleTreeRef = useRef(toggleTree);
   toggleTreeRef.current = toggleTree;
   useEffect(() => {
-    if (!current || !pane.chat) return;
+    if (!current) return;
     const onKey = (event: KeyboardEvent) => {
       if (!isFileTreeShortcut(event)) return;
       const focused = document.activeElement instanceof Element ? document.activeElement : null;
@@ -354,17 +355,7 @@ export function PaneDetail(props: PaneDetailProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [current, pane.chat, pane.id]);
-
-  // チャットが消えたペインは配信の根を持たない。開いたままにしない。
-  useEffect(() => {
-    if (pane.chat) return;
-    cancelTreeClose();
-    fileTreeStore.close(pane.id);
-    fileTreeStore.clearPreview(pane.id);
-    setTreeClosing(false);
-    setTreeShown(false);
-  }, [pane.chat, pane.id]);
+  }, [current, pane.id]);
   const shownPaneName = shortenPaneName(
     paneName(pane),
     context.workspaceLabel,
@@ -1310,6 +1301,7 @@ export function PaneDetail(props: PaneDetailProps) {
       }}
       onOpenImage={onOpenImage}
       onDragStart={startTreeDrag}
+      onCreateSpace={props.onCreateSpace}
     />
   ) : null;
 
@@ -1410,23 +1402,19 @@ export function PaneDetail(props: PaneDetailProps) {
                 #{pullRequest.number}
               </a>
             )}
-            {/* 開くファイルは会話のペインと同じ配信経路を使う。チャットを持たない
-            シェルのペインには出さない（開いても配信できないため）。 */}
-            {pane.chat ? (
-              <button
-                ref={filesButtonRef}
-                type="button"
-                class="hwc-pane-files"
-                aria-label={
-                  treeOpen && !treeClosing ? "ファイルツリーを閉じる" : "ファイルツリーを開く"
-                }
-                aria-pressed={treeOpen && !treeClosing}
-                onClick={() => toggleTree(false)}
-              >
-                <FolderIcon size={16} />
-                <span class="hwc-pane-files-label">ファイル</span>
-              </button>
-            ) : null}
+            <button
+              ref={filesButtonRef}
+              type="button"
+              class="hwc-pane-files"
+              aria-label={
+                treeOpen && !treeClosing ? "ファイルツリーを閉じる" : "ファイルツリーを開く"
+              }
+              aria-pressed={treeOpen && !treeClosing}
+              onClick={() => toggleTree(false)}
+            >
+              <FolderIcon size={16} />
+              <span class="hwc-pane-files-label">ファイル</span>
+            </button>
             <span class="hwc-pane-id" data-copied={copied}>
               <span class="hwc-pane-id-text">{pane.id}</span>
               <button
@@ -1601,6 +1589,7 @@ export function PaneDetail(props: PaneDetailProps) {
                   path={previewPath}
                   workspacePath={props.context.workspacePath}
                   hasNewReply={previewHasNewReply}
+                  backLabel={body.kind === "chat" ? "会話に戻る" : "出力に戻る"}
                   focusRequest={previewFocus}
                   hidden={treeOverlay && !treeClosing}
                   onOpenImage={onOpenImage}

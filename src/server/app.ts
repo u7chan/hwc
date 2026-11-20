@@ -95,6 +95,7 @@ export function createApp(options: CreateAppOptions) {
       .post("/api/panes/:id/exit", requireJson, panesHandlers.exit)
       .post("/api/panes/:id/split", requireJson, panesHandlers.split)
       .post("/api/panes/:id/agent", requireJson, panesHandlers.agent)
+      .post("/api/panes/:id/create-space", requireJson, workspacesHandlers.createSpace)
       .post("/api/workspaces/:id/create-worktree", requireJson, workspacesHandlers.createWorktree)
       .post("/api/workspaces/:id/remove-worktree", requireJson, workspacesHandlers.removeWorktree)
       .post("/api/workspaces/:id/close", requireJson, workspacesHandlers.close)

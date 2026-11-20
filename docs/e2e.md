@@ -53,6 +53,7 @@ bun run e2e:serve
 - `pane.close`
 - `worktree.create`
 - `worktree.remove`
+- `workspace.create`
 - `workspace.close`
 - `workspace.move_block`
 
@@ -62,6 +63,7 @@ linked worktree のスペースをスナップショットから取り除き、`
 または cwd と架空 git に登録したリポジトリから、リンクされたスペース・タブ・root pane をスナップショットに
 足して `workspace.created` / `pane.created` を流す（実際の `git worktree add` はしない）。
 起点に worktree 情報が無ければ補い、`workspace.updated` も流す。
+`workspace.create` は `cwd` を作業ディレクトリにしたスペース・タブ・root pane を足して、`workspace.created` / `pane.created` を流す。worktree 情報は持たせない。
 `pane.split` は
 `target_pane_id` のタブにシェルペインを 1 枚足し、`pane_info` を返して `pane.created` を流す。
 `pane.layout` はそのタブのセルを等幅のグリッドとして返す（E2E 用の固定形で、実際の分割方向は

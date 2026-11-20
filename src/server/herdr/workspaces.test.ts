@@ -82,3 +82,29 @@ test("close asks Herdr to close the workspace without closing its group", async 
     },
   ]);
 });
+
+test("create opens a focused workspace on the folder with its name", async () => {
+  const calls: Call[] = [];
+  const call = async <T>(method: string, params?: unknown, options?: unknown): Promise<T> => {
+    calls.push({ method, params, options });
+    return {
+      type: "workspace_created",
+      workspace: { workspace_id: "w3" },
+      tab: { tab_id: "w3:t1" },
+      root_pane: { pane_id: "w3:p1" },
+    } as T;
+  };
+  const client = createWorkspaceClient({ path: "/tmp/test.sock", call });
+
+  expect(await client.create({ cwd: "/work/repo/packages/web", label: "web" })).toEqual({
+    workspaceId: "w3",
+    paneId: "w3:p1",
+  });
+  expect(calls).toEqual([
+    {
+      method: "workspace.create",
+      params: { cwd: "/work/repo/packages/web", label: "web", focus: true },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});

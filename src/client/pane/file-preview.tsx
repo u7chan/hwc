@@ -76,6 +76,8 @@ type FilePreviewProps = {
   workspacePath: string | null;
   // プレビュー中に新しい返答が届いたか。会話に戻るボタンにバッジを付ける。
   hasNewReply: boolean;
+  // 戻り先の名前。シェルのペインでは端末出力に戻る（ADR 0106）。
+  backLabel: string;
   // 狭いセルでツリーの行が消えるときだけ、この選択でここへフォーカスを移す。
   focusRequest: { focus: boolean };
   // 狭いセルでツリーを重ねている間は、プレビューを入力と読み上げから外す。
@@ -198,11 +200,13 @@ export function FilePreview(props: FilePreviewProps) {
           ref={backRef}
           type="button"
           class="hwc-file-preview-back"
-          aria-label={props.hasNewReply ? "会話に戻る。新しい応答があります" : "会話に戻る"}
+          aria-label={
+            props.hasNewReply ? `${props.backLabel}。新しい応答があります` : props.backLabel
+          }
           onClick={props.onClose}
         >
           <ChevronLeftIcon size={16} />
-          <span>会話に戻る</span>
+          <span>{props.backLabel}</span>
           {props.hasNewReply ? <span class="hwc-file-preview-new" aria-hidden="true" /> : null}
         </button>
         <span class="hwc-file-preview-name">

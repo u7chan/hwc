@@ -451,12 +451,14 @@ async function listEntry(
   return treeFile(name, path, info, false);
 }
 
-// チェックアウトの 1 ディレクトリを返す。path は根からの相対パスで、空なら根。
-// 子は開いたときにだけ取りに来る前提で、ここでは 1 階層しか読まない。
-export async function listDirectory(options: {
+// ツリーが指すディレクトリの実体。path は根からの相対パスで、空なら根。根の外と
+// `.git` の中、ディレクトリでないものは null。
+export type TreeDirectory = { rootReal: string; real: string; base: string };
+
+export async function resolveTreeDirectory(options: {
   root: string;
   path: string;
-}): Promise<FileTreeListing | null> {
+}): Promise<TreeDirectory | null> {
   if (isAbsolute(options.path)) return null;
   const segments = options.path.split("/");
   // 親参照は受け付けない。realpath の配下判定と二重にしておく。
@@ -471,8 +473,23 @@ export async function listDirectory(options: {
     // symlink 経由で `.git` に入る経路も塞ぐ。
     if (hasGitSegment(relative(rootReal, real))) return null;
     const info = await stat(real);
-    if (!info.isDirectory()) return null;
+    return info.isDirectory() ? { rootReal, real, base } : null;
+  } catch {
+    return null;
+  }
+}
 
+// チェックアウトの 1 ディレクトリを返す。path は根からの相対パスで、空なら根。
+// 子は開いたときにだけ取りに来る前提で、ここでは 1 階層しか読まない。
+export async function listDirectory(options: {
+  root: string;
+  path: string;
+}): Promise<FileTreeListing | null> {
+  const directory = await resolveTreeDirectory(options);
+  if (directory === null) return null;
+  const { rootReal, real, base } = directory;
+
+  try {
     // `.git` だけは中身がリポジトリの構造ではないので、階層のどこでも出さない。
     const dirents = (await readdir(real, { withFileTypes: true })).filter(
       (item) => item.name !== ".git",

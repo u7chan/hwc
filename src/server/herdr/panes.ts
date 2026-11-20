@@ -176,6 +176,26 @@ export function parseWorktreeBody(body: unknown): Parsed<{ name: string | null }
   return name.ok ? { ok: true, value: { name: name.value } } : name;
 }
 
+// フォルダから作るスペース。path はツリーの根からの相対パスで、実在の確認は BFF が
+// realpath で行う。ここでは形だけを見る。根そのもの（空）は受けない（ADR 0106）。
+export function parseCreateSpaceBody(body: unknown): Parsed<{ path: string; name: string | null }> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, status: 400, error: "body must be an object" };
+  }
+  const record = body as Record<string, unknown>;
+  const path = record.path;
+  if (
+    typeof path !== "string" ||
+    path === "" ||
+    path.startsWith("/") ||
+    !path.split("/").every((part) => part !== "" && part !== "." && part !== "..")
+  ) {
+    return { ok: false, status: 400, error: "path must be a relative directory path" };
+  }
+  const name = parsePaneName(record);
+  return name.ok ? { ok: true, value: { path, name: name.value } } : name;
+}
+
 // 既存のシェルペインで起動する要求。名前は付け直さないので受け取らない。
 export function parseStartBody(body: unknown): Parsed<StartRequest> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {

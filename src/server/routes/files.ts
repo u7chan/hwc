@@ -52,7 +52,6 @@ export function createFilesHandlers(ctx: AppContext) {
       const paneId = c.req.param("id");
       const pane = findPane(state, paneId);
       if (!pane) return c.json({ error: "pane_not_found" }, 404);
-      if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
       const roots = rootsFor(store.workspaceRoot(paneId));
       const rootIndex = Number(c.req.query("root") ?? "0");
@@ -86,9 +85,6 @@ export function createFilesHandlers(ctx: AppContext) {
       const paneId = c.req.param("id");
       const pane = findPane(state, paneId);
       if (!pane) return c.json({ error: "pane_not_found" }, 404);
-      // ツリーから開くファイルは、会話と同じ /preview と /files の経路を使う。
-      // チャットを持たないペインには配信先が無いので、一覧も出さない。
-      if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
       // 根はワークスペースのチェックアウト。プレビューの追加根（/tmp など）は出さない。
       const root = store.workspaceRoot(paneId);
@@ -107,7 +103,6 @@ export function createFilesHandlers(ctx: AppContext) {
       const paneId = c.req.param("id");
       const pane = findPane(state, paneId);
       if (!pane) return c.json({ error: "pane_not_found" }, 404);
-      if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
       const requested = c.req.param("path") ?? "";
       const rootIndex = Number(c.req.param("root"));
