@@ -424,15 +424,10 @@ export function TreePaneList(props: TreePaneListProps) {
     );
   }
 
-  // タブ行には 2 つの役割がある。複数のタブを束ねる見出しであることと、見出し行を
-  // 持たないスペース（リポジトリ束ねの host）で開閉を持つ唯一の行であること。
-  // 省けるのは、スペース自身の見出しが開閉を持つときだけ。
-  function renderTabLevel(
-    workspace: AppState["workspaces"][number],
-    depth: number,
-    headerOwnsOpen: boolean,
-  ) {
-    const sole = headerOwnsOpen ? soleTab(workspace) : null;
+  // タブが 1 つだけなら、タブは何も束ねていない。見出しの有無に関わらずペインを
+  // 直下に並べる。hwc ではタブを作れず、既定名「1」の行が見出しとして残ると段だけが増える。
+  function renderTabLevel(workspace: AppState["workspaces"][number], depth: number) {
+    const sole = soleTab(workspace);
     if (sole !== null) return renderPanes(sole, depth);
     return (
       <ul class="hwc-tabs-list" data-depth={depth}>
@@ -492,7 +487,7 @@ export function TreePaneList(props: TreePaneListProps) {
             })
           : null}
         <GroupChildren id={groupId} open={withHeader ? open : true}>
-          {renderTabLevel(workspace, withHeader ? depth + 1 : depth, withHeader)}
+          {renderTabLevel(workspace, withHeader ? depth + 1 : depth)}
         </GroupChildren>
       </section>
     );
@@ -546,7 +541,7 @@ export function TreePaneList(props: TreePaneListProps) {
           order,
         })}
         <GroupChildren id={groupId} open={open}>
-          {renderTabLevel(representative, 1, true)}
+          {renderTabLevel(representative, 1)}
           {extras.map((workspace, index) =>
             renderWorkspace(workspace, 1, true, undefined, {
               label: `スペース ${index + 2}`,
@@ -609,7 +604,7 @@ export function TreePaneList(props: TreePaneListProps) {
               order,
             })}
             <GroupChildren id={groupId} open={open}>
-              {group.host ? renderTabLevel(group.host, 1, false) : null}
+              {group.host ? renderTabLevel(group.host, 1) : null}
               {group.linked.map((workspace) => renderWorkspace(workspace, 1, true))}
             </GroupChildren>
           </section>
