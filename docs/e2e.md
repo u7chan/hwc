@@ -559,6 +559,15 @@ HTML が配信できないスクリプトを読み込むと、iframe の上に 1
 
 override の追加・変更・削除や読み取り失敗からの復旧、ETag の安定性は BFF の unit / API テストで確認する。
 
+### Claude のコンテキスト使用量
+
+fixture の `w2:p2`（`quickstart`）は、mod が書く live ファイル（`<root>/claude/live/<session uuid>.json`）に `context: { tokens: 122_600, window: 1_000_000 }` を持つ（[ADR 0106](adr/0106-claude-context-usage.md)）。速度は `null` のままで、メーターだけを確かめる。
+
+1. `acme-dashboard (docs)` の `quickstart` を開く。入力欄の左下のモデル表示の横に `123k/1.0M (12.3%)` とバーが出る。390px では `12.3%` だけになる。
+2. メーターを押す（PC はポインタを載せる）と、使用量 `122,600` と設定枠 `1,000,000` が出る。
+3. live ファイルの `at` は起動時のままなので、表示までの時間が 2.5 秒を超えていてもメーターが出る。速度だけが鮮度で消える（[ADR 0106](adr/0106-claude-context-usage.md)）。
+4. `<root>` の live ファイルを消す。5 秒以内の取得でメーターが消え、モデル表示だけになる。
+
 ### blocked + 応答待ちの作り方
 
 応答待ちは、hook が書く sidecar `<root>/claude/pending/<session uuid>.json`（`<root>` は起動ログの `hwc e2e fixture: <root>`）に置く。実機の Claude Code は、待ちの間は transcript に質問の tool_use を書かない（[ADR 0098](adr/0098-claude-pending-in-chat.md)）ので、transcript は待ちに入る前の会話で終わらせる。fixture の `w2:p1` がこの形で、架空 Herdr のペインを `blocked` にし、`agent_session` は `CLAUDE_PENDING_SESSION`、sidecar は `e2e/fixtures/scenario.ts` の `claudePendingSidecar`、transcript は `claudePendingTranscript`。

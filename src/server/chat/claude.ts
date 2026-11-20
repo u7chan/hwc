@@ -135,7 +135,7 @@ export function createClaudeChatClient(
     now?: () => number;
     // hook が応答待ちを書く場所。無ければ transcript の末尾の tool_use だけを見る。
     pendingRoot?: string;
-    // mod が生成中の速度を書く場所。無ければ帯に速度を出さない。
+    // mod が生成中の速度とコンテキスト使用量を書く場所。無ければどちらも出さない。
     liveRoot?: string;
   } = {},
 ): SessionChatClient & {
@@ -241,6 +241,20 @@ export function createClaudeChatClient(
     return { ...body, pending, etag: etagOf(sessionId, { ...body, pending }) };
   };
 
+  // 使用量は mod がターンの終わりに書く。transcript の射影はファイルが増えたときしか
+  // 作り直さないので、射影のキャッシュとは別に毎回読んで重ねる。
+  const withLiveContext = async (
+    snapshot: ChatSnapshot,
+    sessionId: string,
+  ): Promise<ChatSnapshot> => {
+    if (options.liveRoot === undefined) return snapshot;
+    const live = await readLive(options.liveRoot, sessionId, now());
+    const context = live?.context ?? null;
+    if (context === null) return snapshot;
+    const { etag: _etag, ...body } = snapshot;
+    return { ...body, context, etag: etagOf(sessionId, { ...body, context }) };
+  };
+
   return {
     // 送信で transcript ができるかもしれない。見つからない記憶を捨て、次の poll で
     // 探し直せるようにする（ADR 0103）。
@@ -252,7 +266,8 @@ export function createClaudeChatClient(
     },
     async snapshot(sessionId) {
       const projection = await shared(sessionId);
-      return withHookPending(projection.snapshot, projection.resolved, sessionId);
+      const snapshot = await withHookPending(projection.snapshot, projection.resolved, sessionId);
+      return withLiveContext(snapshot, sessionId);
     },
     async activity(sessionId) {
       const at = now();

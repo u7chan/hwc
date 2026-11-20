@@ -118,7 +118,7 @@ export async function setupPane(
         args = ["--no-daemon", ...(args ?? [])];
       }
       if (request.agent === "claude" && claudeSettings !== undefined) {
-        // 応答待ちを読むための hook と、生成中の速度を書く mod。足せなくても起動は続け、
+        // 応答待ちを読むための hook と、生成中の速度・使用量を書く mod。足せなくても起動は続け、
         // カードと速度が出ず端末出力のままになる。
         const launch = await claudeSettings().catch(() => null);
         if (launch !== null) {

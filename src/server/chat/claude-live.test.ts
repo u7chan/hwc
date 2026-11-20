@@ -30,7 +30,11 @@ test("a fresh file gives the rate", async () => {
   await withRoot(async (root) => {
     await mkdir(root, { recursive: true });
     await writeFile(join(root, `${SESSION}.json`), body());
-    expect(await readLive(root, SESSION, NOW)).toEqual({ tokPerSecond: 68.4, at: NOW });
+    expect(await readLive(root, SESSION, NOW)).toEqual({
+      tokPerSecond: 68.4,
+      context: null,
+      at: NOW,
+    });
   });
 });
 
@@ -51,6 +55,7 @@ test("another session's file is not used", () => {
 test("a cleared rate keeps the file valid without a number", () => {
   expect(parseLive(JSON.parse(body({ tokPerSecond: null })), SESSION, NOW)).toEqual({
     tokPerSecond: null,
+    context: null,
     at: NOW,
   });
 });
@@ -67,6 +72,7 @@ test("a broken rate is not shown", () => {
 test("a rate above the activity limit is clamped", () => {
   expect(parseLive(JSON.parse(body({ tokPerSecond: 99_999 })), SESSION, NOW)).toEqual({
     tokPerSecond: 10_000,
+    context: null,
     at: NOW,
   });
 });
@@ -84,4 +90,40 @@ test("a partly written file and an oversized file are ignored", async () => {
 test("a session id that could leave the directory has no path", () => {
   expect(livePath("/state/live", "../escape")).toBeNull();
   expect(livePath("/state/live", SESSION)).toBe(join("/state/live", `${SESSION}.json`));
+});
+
+const context = { tokens: 122_600, window: 1_000_000 };
+
+test("the context is read with the rate", () => {
+  expect(parseLive(JSON.parse(body({ context })), SESSION, NOW)).toEqual({
+    tokPerSecond: 68.4,
+    context,
+    at: NOW,
+  });
+  // /context と同じで、まだ要求が無いセッションは window だけになる。
+  expect(parseLive(JSON.parse(body({ context: { window: 200_000 } })), SESSION, NOW)).toEqual({
+    tokPerSecond: 68.4,
+    context: { tokens: null, window: 200_000 },
+    at: NOW,
+  });
+});
+
+test("an old file keeps its context but loses the rate", () => {
+  const stale = JSON.parse(body({ at: NOW - LIVE_TTL_MS - 1, context }));
+  expect(parseLive(stale, SESSION, NOW)).toEqual({ tokPerSecond: null, context, at: stale.at });
+});
+
+test("an old file without context is still a leftover", () => {
+  expect(parseLive(JSON.parse(body({ at: NOW - LIVE_TTL_MS - 1 })), SESSION, NOW)).toBeNull();
+});
+
+test("a broken context is no context, but a broken rate still voids the file", () => {
+  for (const broken of [{ tokens: -1 }, { tokens: "many", window: 0 }, [], null]) {
+    expect(parseLive(JSON.parse(body({ context: broken })), SESSION, NOW)).toEqual({
+      tokPerSecond: 68.4,
+      context: null,
+      at: NOW,
+    });
+  }
+  expect(parseLive(JSON.parse(body({ tokPerSecond: "fast", context })), SESSION, NOW)).toBeNull();
 });
