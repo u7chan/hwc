@@ -186,6 +186,10 @@ export type PaneContext = {
   workspaceLabel: string;
   // 狭い見出しに出すスペース名。前置きを落とした表示用で、フルは workspaceLabel に残す。
   workspaceName: string;
+  // リンクされたワークツリーの作成元スペース。開いているときだけ入り、無ければ
+  // リポジトリ名で代える。作成元でないスペースでは null。
+  parentSpaceLabel: string | null;
+  parentSpaceName: string | null;
   // ファイルプレビューのパスのコピーに使う。見出しには出さないので、表示用の名前とは別に持つ。
   workspacePath: string | null;
   tabLabel: string;
@@ -196,14 +200,40 @@ export type PaneContext = {
   repoName: string | null;
 };
 
+// Herdr のサイドバーと同じく、リンクされたワークツリーは作成元のスペースの下に並ぶ。
+// 作成元は同じリポジトリの linked でないスペース。開いていなければ null。
+function parentSpaceOf(
+  workspaces: readonly WorkspaceState[],
+  workspace: WorkspaceState,
+): WorkspaceState | null {
+  const worktree = workspace.worktree;
+  if (worktree === null || !worktree.isLinkedWorktree) return null;
+  return (
+    workspaces.find(
+      (candidate) =>
+        candidate.id !== workspace.id &&
+        candidate.worktree !== null &&
+        !candidate.worktree.isLinkedWorktree &&
+        candidate.worktree.repoName === worktree.repoName,
+    ) ?? null
+  );
+}
+
 // 画面上部に出す、いま見ている対象の要約。選択が無いときは null。
 export function findPaneContext(state: AppState, paneId: string | null): PaneContext | null {
   const row = findPaneRow(state, paneId);
   if (row === null) return null;
+  const worktree = row.workspace.worktree;
+  const parent = parentSpaceOf(state.workspaces, row.workspace);
+  // 作成元が閉じているとラベルは読めない。リンクされたワークツリーの自動ラベルは
+  // リポジトリ名から作られるので、その名前で代える。
+  const fallback = worktree?.isLinkedWorktree === true ? worktree.repoName : null;
   return {
     workspaceId: row.workspace.id,
     workspaceLabel: row.workspace.label,
     workspaceName: shortenSpaceName(row.workspace),
+    parentSpaceLabel: parent?.label ?? fallback,
+    parentSpaceName: parent === null ? fallback : shortenSpaceName(parent),
     // ファイルツリーの根と同じ場所。実際のファイルの絶対パスを組み立てるのに使う。
     workspacePath: row.workspace.path ?? null,
     tabLabel: row.tab.label,
@@ -270,6 +300,32 @@ export function shortenPaneName(
   workspaceName: string,
 ): string {
   return name === workspaceLabel ? workspaceName : name;
+}
+
+export type PlaceChip = {
+  // 作成元スペース。開いていない・見出しと同じ名前なら null。
+  parent: string | null;
+  // いまのスペース。
+  space: string;
+};
+
+// 分割セルの見出しに出す場所。ワークツリーは作成元のスペースの下にあるので、その順に
+// 並べる。見出しの名前と同じ文字列は繰り返さない。名前の無いペインは見出しが場所そのもの
+// なので、チップを出さない（null）。
+export function placeChip(
+  paneName: string,
+  parentSpaceName: string | null,
+  spaceName: string,
+): PlaceChip | null {
+  if (spaceName === "" || spaceName === paneName) return null;
+  const parent =
+    parentSpaceName === null ||
+    parentSpaceName === "" ||
+    parentSpaceName === paneName ||
+    parentSpaceName === spaceName
+      ? null
+      : parentSpaceName;
+  return { parent, space: spaceName };
 }
 
 export function tabDisplayName(name: string, workspace: WorkspaceState): string {

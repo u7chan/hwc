@@ -1333,7 +1333,7 @@ export function App() {
         current={isCurrent}
         // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
         labeled={splitCells}
-        // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
+        // 複数スペースのペインが並ぶときだけ、見出しに場所を添える（ADR 0019）。
         showSpace={splitCells && multiSpaceTabs}
         // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
         // 値そのものは常に渡す。

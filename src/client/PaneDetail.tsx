@@ -121,6 +121,7 @@ import {
   agentGlyph,
   isShellPane,
   paneName,
+  placeChip,
   pullRequestLabel,
   shortenPaneName,
   type PaneContext,
@@ -155,7 +156,7 @@ type PaneDetailProps = {
   current: boolean;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
-  // 複数スペースのペインが並ぶときだけ、見出しにスペース名を添える（ADR 0019）。
+  // 複数スペースのペインが並ぶときだけ、見出しに場所を添える（ADR 0019）。
   showSpace: boolean;
   // スペースのブランチ。分割セルでも PR のチップを引くために渡す。
   // 文字として出すかは showBranch が決め、labeled のときは名前を優先する。
@@ -369,6 +370,13 @@ export function PaneDetail(props: PaneDetailProps) {
     context.workspaceLabel,
     context.workspaceName,
   );
+  // セルが並ぶときの場所。作成元のスペース → いまのスペースの順に、見出しの名前と
+  // 同じ文字列は落とす。どちらも残らないならチップを出さない。
+  const place = placeChip(shownPaneName, context.parentSpaceName, context.workspaceName);
+  const placeTitle =
+    context.parentSpaceLabel === null
+      ? `${context.workspaceLabel} / ${context.tabLabel}`
+      : `${context.parentSpaceLabel} / ${context.workspaceLabel} / ${context.tabLabel}`;
   const [expandedOpen, setExpandedOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1375,12 +1383,19 @@ export function PaneDetail(props: PaneDetailProps) {
                 {context.repoName}
               </a>
             )}
-            {labeled && showSpace && shownPaneName !== context.workspaceName ? (
-              <span
-                class="hwc-pane-head-space"
-                title={`${context.workspaceLabel} / ${context.tabLabel}`}
-              >
-                {context.workspaceName}
+            {labeled && showSpace && place !== null ? (
+              <span class="hwc-pane-head-space" title={placeTitle}>
+                {place.parent === null ? null : (
+                  <span class="hwc-pane-head-place" data-part="parent">
+                    {place.parent}
+                    <span class="hwc-pane-head-sep" aria-hidden="true">
+                      {" ›"}
+                    </span>
+                  </span>
+                )}
+                <span class="hwc-pane-head-place" data-part="space">
+                  {place.space}
+                </span>
               </span>
             ) : null}
             {labeled || showBranch ? null : <GitCount sync={sync} />}
