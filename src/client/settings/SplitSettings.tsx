@@ -1,4 +1,5 @@
 import { SPLIT_MOTIONS, type SplitPrefs } from "../split-prefs";
+import { Segmented } from "../Segmented";
 
 type SplitSettingsProps = {
   prefs: SplitPrefs;
@@ -34,22 +35,13 @@ export function SplitSettings(props: SplitSettingsProps) {
       </p>
 
       <p class="hwc-subtitle">分割の動き</p>
-      <div class="hwc-segmented" role="radiogroup" aria-label="分割の動き">
-        {SPLIT_MOTIONS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            role="radio"
-            class="hwc-segment"
-            aria-checked={motion === option.id}
-            data-selected={motion === option.id}
-            disabled={!autoSplit}
-            onClick={() => set({ motion: option.id })}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label="分割の動き"
+        options={SPLIT_MOTIONS}
+        value={motion}
+        disabled={!autoSplit}
+        onChange={(next) => set({ motion: next })}
+      />
       <p class="hwc-section-note">
         分割線が動く時間です。端末で「動きを減らす」を選んでいるときは、この設定より優先して止めます。
       </p>

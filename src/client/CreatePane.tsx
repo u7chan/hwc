@@ -19,6 +19,7 @@ import { DialogShell } from "./Dialog";
 import { AgentGlyphIcon, AgentIcon, TerminalIcon } from "./icons";
 import { CreatePaneModel } from "./CreatePaneModel";
 import { CreatePaneEffort } from "./CreatePaneEffort";
+import { Segmented } from "./Segmented";
 import type { LaunchIntent } from "./starting";
 
 // 何を作るか。split は paneId のタブを分割する。start は既存のシェルペイン（paneId）で
@@ -229,34 +230,24 @@ export function CreatePane(props: CreatePaneProps) {
       )}
 
       {start ? null : (
-        <div class="hwc-create-modes" role="radiogroup" aria-label="ペインの種類">
-          <button
-            type="button"
-            role="radio"
-            class="hwc-create-mode"
-            aria-checked={mode === "agent"}
-            disabled={busy || settled}
-            onClick={() => setMode("agent")}
-          >
-            <AgentIcon size={16} />
-            エージェント
-          </button>
-          <button
-            type="button"
-            role="radio"
-            class="hwc-create-mode"
-            aria-checked={mode === "shell"}
-            disabled={busy || settled}
-            onClick={() => {
-              setMode("shell");
+        <Segmented
+          label="ペインの種類"
+          value={mode}
+          disabled={busy || settled}
+          options={[
+            { id: "agent", label: "エージェント", icon: <AgentIcon size={16} /> },
+            { id: "shell", label: "シェル", icon: <TerminalIcon size={16} /> },
+          ]}
+          onChange={(next) => {
+            setMode(next);
+            // シェルの側に選ぶモデルとエフォートは無い。残すと、種類を戻したときに
+            // 選んでいない値で起動してしまう。
+            if (next === "shell") {
               setChosenModel(null);
               setChosenEffort(null);
-            }}
-          >
-            <TerminalIcon size={16} />
-            シェル
-          </button>
-        </div>
+            }
+          }}
+        />
       )}
 
       {mode === "agent" ? (

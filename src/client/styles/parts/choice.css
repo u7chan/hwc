@@ -1,4 +1,4 @@
-/* 選択カード。設定のテーマと新規ペイン作成のエージェントで共有する。 */
+/* 選択の部品。設定と新規ペイン作成で共有する。 */
 
 /* テーマとエージェントの選択カード。テーマは面の色、エージェントは Provider の印で示す。 */
 .hwc-choice-grid {
@@ -108,4 +108,88 @@
 
 .hwc-choice[data-selected="true"] .hwc-choice-icon[data-agent="claude"] {
   color: var(--color-agent-claude);
+}
+
+/* 選択肢を横に等分する切り替え。ペイン分割の動きとファイルツリーの位置、新規ペインの
+   種類で使う。 */
+.hwc-segmented {
+  /* つまみの幅と位置の基礎値。要素（Segmented）が列数と選ばれている列で上書きする。 */
+  --hwc-segments: 1;
+  --hwc-segment: 0;
+
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-raised);
+}
+
+/* 選んだ面は 1 枚のつまみとして選んだ列へ滑る。幅は 2px の内側余白と列の間隔を引いた
+   1 列分で、列数と位置は要素の CSS 変数（--hwc-segments / --hwc-segment）で受け取る。 */
+.hwc-segmented-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px - (var(--hwc-segments) - 1) * 2px) / var(--hwc-segments));
+  border-radius: calc(var(--radius-control) - 2px);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+  transform: translateX(calc(var(--hwc-segment) * (100% + 2px)));
+  transition: transform 180ms ease;
+  pointer-events: none;
+}
+
+.hwc-segment {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: calc(var(--radius-control) - 2px);
+  background: transparent;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.hwc-segment:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+.hwc-segment[aria-checked="true"] {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.hwc-segment:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-segment:disabled {
+  cursor: default;
+}
+
+/* 操作できない間は、つまみを含めた全体を淡くする。面だけが明るいままだと、
+   選び直せるように見える。 */
+.hwc-segmented:has(.hwc-segment:disabled) {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-segmented-thumb,
+  .hwc-segment {
+    transition: none;
+  }
 }
