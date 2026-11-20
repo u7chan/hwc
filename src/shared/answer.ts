@@ -15,7 +15,7 @@ export type AnswerQuestion = {
   options: readonly { label: string }[];
 };
 
-// 質問は 4 件、選択肢は 10 件まで（ADR 0098）。これを超える body は形の時点で弾く。
+// 質問は 4 件、選択肢は 10 件まで（ADR 0112）。これを超える body は形の時点で弾く。
 const MAX_ANSWERS = 4;
 const MAX_LABELS = 10;
 

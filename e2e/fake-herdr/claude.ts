@@ -15,7 +15,7 @@ const TOOL_DELAY_MS = 16_000;
 const RESULT_DELAY_MS = 20_000;
 
 // 架空の Claude Code。実機（2.1.328）で確かめた、質問まわりの transcript と hook の動きだけを
-// 再現する（ADR 0098、0099）。
+// 再現する（ADR 0112、0099）。
 //   - Esc でダイアログを閉じると、assistant の tool_use と、is_error の tool_result と、
 //     「[Request interrupted by user for tool use]」の user を一度に書く。hook は呼ばれない。
 //   - 次の発言（UserPromptSubmit）で、hook が応答待ちの sidecar を消す。

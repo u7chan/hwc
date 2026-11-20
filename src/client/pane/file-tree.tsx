@@ -27,7 +27,7 @@ type FileTreeProps = {
   onOpenImage: (url: string, name: string) => void;
   // 行を composer へ運ぶ。パス文字列はペインの作業ディレクトリを知る側で組み立てる。
   onDragStart: (event: DragEvent, entry: FileTreeEntry) => void;
-  // フォルダを作業ディレクトリにした新しいスペースを作る（ADR 0106）。
+  // フォルダを作業ディレクトリにした新しいスペースを作る（ADR 0113）。
   onCreateSpace: (path: string) => void;
 };
 

@@ -23,7 +23,7 @@ export async function nameRootPane(
   return { ok: true, ...created };
 }
 
-// ツリーで選んだディレクトリを作業ディレクトリにしたスペースを作る（ADR 0106）。
+// ツリーで選んだディレクトリを作業ディレクトリにしたスペースを作る（ADR 0113）。
 export async function createSpace(
   workspaces: Pick<WorkspaceClient, "create">,
   panes: Pick<PaneClient, "rename">,

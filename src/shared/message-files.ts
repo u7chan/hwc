@@ -6,11 +6,11 @@ import { attachmentContentTypeFromName } from "./attachments";
 export type MessageFileKind = "image" | "html";
 
 // 本文の相対パスのリンクから開くファイル。text はプレビューではなく、生の中身を新しいタブで
-// 見せる（ADR 0084）。
+// 見せる（ADR 0109）。
 export type ChatLinkKind = MessageFileKind | "text";
 
 // リンクから開けるテキストの拡張子。`env` のような設定ファイルの名前は入れない。
-// ドットファイルは開けるが、`.env` とその派生だけは isBlockedFileName で除く（ADR 0084）。
+// ドットファイルは開けるが、`.env` とその派生だけは isBlockedFileName で除く（ADR 0109）。
 const TEXT_EXT: ReadonlySet<string> = new Set([
   "md",
   "txt",
@@ -55,7 +55,7 @@ export function isHtmlName(name: string): boolean {
 }
 
 // 中身を配らない名前。ドットファイルは設定を読めるようにするが、環境変数は秘密が
-// 入る前提なので、`.env` とその派生（`.env.local` など）だけを除く（ADR 0084）。
+// 入る前提なので、`.env` とその派生（`.env.local` など）だけを除く（ADR 0109）。
 function isBlockedFileName(name: string): boolean {
   const base = name.slice(name.lastIndexOf("/") + 1).toLowerCase();
   return base === ".env" || base.startsWith(".env.");
@@ -138,7 +138,7 @@ function isDeliverableScript(src: string): boolean {
   // クエリとハッシュは配信の対象外。拡張子だけを見る。
   const path = url.split(/[?#]/, 1)[0] ?? "";
   // テキストとして配る拡張子（.ts / .tsx など）は、ブラウザがモジュールとして実行しない。
-  // 実行できる型で配るものだけを、読み込めるスクリプトとして数える（ADR 0084）。
+  // 実行できる型で配るものだけを、読み込めるスクリプトとして数える（ADR 0109）。
   return previewContentType(path) === "text/javascript; charset=utf-8";
 }
 

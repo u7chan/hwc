@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-07
 - Amended by: [ADR 0075](0075-git-kind-from-checkout.md), [ADR 0084](0084-launch-after-create.md)
-- Revised by: [ADR 0106](0106-shell-pane-tree-new-space.md) の一般のスペース作成（ツリーのフォルダから作る）
+- Revised by: [ADR 0113](0113-shell-pane-tree-new-space.md) の一般のスペース作成（ツリーのフォルダから作る）
 
 ## Context
 

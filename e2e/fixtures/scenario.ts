@@ -187,7 +187,7 @@ function claudePendingTranscript(): ClaudeEntry[] {
   });
 }
 
-// hook が Claude の状態ディレクトリ配下へ書く、応答待ちの 1 件（ADR 0098）。
+// hook が Claude の状態ディレクトリ配下へ書く、応答待ちの 1 件（ADR 0112）。
 function claudePendingSidecar(): Record<string, unknown> {
   return {
     v: 1,

@@ -117,11 +117,11 @@ export function createFilesHandlers(ctx: AppContext) {
       if (file === null || bytes === null) return previewNotFound(c, requested);
 
       // 本文のリンクから開くテキストと、ツリーのプレーン表示は raw を付ける。HTML の
-      // アセットにも同じ URL を使うので、raw が付いたときだけ text/plain に固定する（ADR 0084）。
+      // アセットにも同じ URL を使うので、raw が付いたときだけ text/plain に固定する（ADR 0109）。
       const raw = c.req.query("raw") === "1" && (isTextName(file.name) || isHtmlName(file.name));
       const contentType = raw ? "text/plain; charset=utf-8" : file.contentType;
       // 拡張子の無いファイルは、開くまでテキストかバイナリか分からない。文字として配る
-      // 経路だけ、先頭に NUL が無いことを確かめる（ADR 0084）。
+      // 経路だけ、先頭に NUL が無いことを確かめる（ADR 0109）。
       if (contentType === "text/plain; charset=utf-8" && looksBinary(new Uint8Array(bytes))) {
         return new Response("バイナリファイルのため表示できません。", {
           status: 415,

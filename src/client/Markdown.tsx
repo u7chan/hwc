@@ -363,7 +363,7 @@ function inlineChildren(nodes: MdInline[], context: InlineContextValue): Compone
   });
 }
 
-// 相対パスは、BFF が実在を確かめた表記と一致したときだけリンクにする（ADR 0084）。
+// 相対パスは、BFF が実在を確かめた表記と一致したときだけリンクにする（ADR 0109）。
 // 一致しなければ今までどおり原文を等幅で出す。
 function linkNode(node: MdLink, context: InlineContextValue) {
   const children = inlineChildren(node.children, context);

@@ -1,5 +1,5 @@
 // 委譲で現れたペインをどう見せるかは端末ごとの好み。Herdr の状態ではないので
-// localStorage に置き、BFF には送らない（ADR 0092）。
+// localStorage に置き、BFF には送らない（ADR 0111）。
 
 export type SplitMotion = "off" | "slow" | "normal" | "fast";
 

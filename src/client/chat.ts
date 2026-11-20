@@ -33,7 +33,7 @@ export function chatPollDelay(
 export type PollChange = "load" | "ignore";
 
 // 本文の相対パスのリンク 1 つの行き先。text は新しいタブ、html はプレビュー、image は
-// 拡大ダイアログで、html と image はチップと同じ行き先になる（ADR 0084）。
+// 拡大ダイアログで、html と image はチップと同じ行き先になる（ADR 0109）。
 export type MessageLinkSource =
   | { kind: "text"; url: string }
   | { kind: "html"; url: string; file: ChatFile }

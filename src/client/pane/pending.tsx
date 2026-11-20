@@ -17,7 +17,7 @@ import { Spinner } from "../Spinner";
 type Question = Extract<ChatPending, { kind: "question" }>;
 
 // 人間の応答待ち。会話の末尾に 1 枚だけ置く。質問には選択肢か自由入力で答えられる。承認は
-// 端末で行う（ADR 0098、0099）。
+// 端末で行う（ADR 0112、0099）。
 export function PendingCard(props: {
   pending: ChatPending;
   onShowTerminal: () => void;

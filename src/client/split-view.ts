@@ -406,7 +406,7 @@ export function openPane(view: SplitView, paneId: string): SplitView {
 }
 
 // 仕事を始めたペインを、タブにだけ足す。葉には入れないので、セルは動かない。
-// 5 枚目以降をタブへ回すときに使う（ADR 0092）。
+// 5 枚目以降をタブへ回すときに使う（ADR 0111）。
 export function addTabOnly(view: SplitView, paneId: string): SplitView {
   if (view.openTabs.includes(paneId)) return view;
   return { ...view, openTabs: [...view.openTabs, paneId] };

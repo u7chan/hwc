@@ -139,7 +139,7 @@ export function messagePathCandidates(text: string): MessagePathCandidate[] {
     const path = trimToken(token);
     if (path === null) continue;
     // テキストは、本文のリンクの destination として書かれたときだけ候補にする。裸のパスまで
-    // 候補にすると、チップの枠（MAX_CANDIDATES）を食って後ろの画像が消える（ADR 0084）。
+    // 候補にすると、チップの枠（MAX_CANDIDATES）を食って後ろの画像が消える（ADR 0109）。
     if (messageFileKindFromName(path) === null && !linkRefs.has(path)) continue;
     const current = candidates.get(path);
     if (current !== undefined) {

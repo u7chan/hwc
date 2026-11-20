@@ -1,4 +1,4 @@
-# ADR 0098: Claude の応答待ちは hook の sidecar から読み、チャットに出す。Web からは承認しない
+# ADR 0112: Claude の応答待ちは hook の sidecar から読み、チャットに出す。Web からは承認しない
 
 - Status: Accepted
 - Date: 2026-11-19

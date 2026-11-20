@@ -6,7 +6,7 @@ type SplitSettingsProps = {
   onChange: (next: SplitPrefs) => void;
 };
 
-// 端末ごとの見え方なので、選ぶとその場で保存する（ADR 0092）。読み直しも無い。
+// 端末ごとの見え方なので、選ぶとその場で保存する（ADR 0111）。読み直しも無い。
 export function SplitSettings(props: SplitSettingsProps) {
   const set = (patch: Partial<SplitPrefs>) => props.onChange({ ...props.prefs, ...patch });
   const { autoSplit, motion } = props.prefs;
