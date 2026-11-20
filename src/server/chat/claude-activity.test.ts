@@ -94,7 +94,10 @@ const toolUse = (id: string, name = "Read", input: unknown = { file_path: "docs/
 async function withTranscript<T>(
   entries: readonly Entry[],
   run: (client: ReturnType<typeof createClaudeChatClient>) => Promise<T>,
-  options: { maxBytes?: number } = {},
+  options: {
+    maxBytes?: number;
+    live?: { tokPerSecond: number | null; at?: number } | null;
+  } = {},
 ): Promise<T> {
   const root = await mkdtemp(join(tmpdir(), "hwc-claude-activity-"));
   const previous = process.env.CLAUDE_CONFIG_DIR;
@@ -106,10 +109,26 @@ async function withTranscript<T>(
       join(directory, `${SESSION}.jsonl`),
       entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
     );
+    const liveRoot = join(root, "live");
+    if (options.live !== undefined) {
+      await mkdir(liveRoot, { recursive: true });
+      if (options.live !== null) {
+        await writeFile(
+          join(liveRoot, `${SESSION}.json`),
+          JSON.stringify({
+            v: 1,
+            sessionId: SESSION,
+            at: options.live.at ?? NOW,
+            tokPerSecond: options.live.tokPerSecond,
+          }),
+        );
+      }
+    }
     return await run(
       createClaudeChatClient({
         now: () => NOW,
         ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
+        ...(options.live === undefined ? {} : { liveRoot }),
       }),
     );
   } finally {
@@ -121,7 +140,10 @@ async function withTranscript<T>(
 
 async function readActivity(
   entries: readonly Entry[],
-  options: { maxBytes?: number } = {},
+  options: {
+    maxBytes?: number;
+    live?: { tokPerSecond: number | null; at?: number } | null;
+  } = {},
 ): Promise<SessionActivity> {
   return withTranscript(entries, (client) => client.activity(SESSION), options);
 }
@@ -150,6 +172,41 @@ test("an unanswered request is thinking while an answered one is not", async () 
     assistant("a1", "p1", [text("答えました。")], { requestRef: "api-1" }),
   ]);
   expect(answered).toEqual({ prompt: "p1", activity: null });
+});
+
+test("a live rate fills the thinking band", async () => {
+  const state = await readActivity([prompt("p1", null), apiRequest("api-1")], {
+    live: { tokPerSecond: 68.4 },
+  });
+
+  expect(state.activity).toMatchObject({ phase: "thinking", tokPerSecond: 68.4 });
+});
+
+test("a rate older than the poll window is dropped", async () => {
+  const state = await readActivity([prompt("p1", null), apiRequest("api-1")], {
+    live: { tokPerSecond: 68.4, at: NOW - 2_501 },
+  });
+
+  expect(state.activity?.tokPerSecond).toBeNull();
+});
+
+test("a tool wait does not carry the rate", async () => {
+  const state = await readActivity(
+    [
+      prompt("p1", null),
+      apiRequest("api-1"),
+      assistant("a1", "p1", [toolUse("t1")], { requestRef: "api-1" }),
+    ],
+    { live: { tokPerSecond: 68.4 } },
+  );
+
+  expect(state.activity).toMatchObject({ phase: "tool", tokPerSecond: null });
+});
+
+test("without the mod's file the band has no rate", async () => {
+  const state = await readActivity([prompt("p1", null), apiRequest("api-1")], { live: null });
+
+  expect(state.activity?.tokPerSecond).toBeNull();
 });
 
 test("the direction comes from the last assistant text in the turn", async () => {

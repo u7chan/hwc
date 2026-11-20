@@ -1,4 +1,4 @@
-import { appendFile, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CLAUDE_VERSION, claudeTranscriptPath } from "../fixtures/scenario";
 import type { FakeContext } from "./context";
@@ -6,10 +6,13 @@ import type { SetAgentStatus } from "./workspaces";
 
 // E2E 用の架空のターン。実物と同じく、prompt・要求・応答・ツール・結果は別々の行として
 // 時間差で追記する（ADR 0100）。最初の 2 秒は新しい prompt がまだ無いので、帯は空の枠の
-// ままになる。ツールの結果は 8 秒後に書くので、そのあとは取得が null になる。
+// ままになる。ツールの結果は 20 秒後に書くので、そのあとは取得が null になる。
 const PROMPT_DELAY_MS = 2_000;
-const TOOL_DELAY_MS = 4_000;
-const RESULT_DELAY_MS = 8_000;
+// 要求中（API の応答待ち）に、mod が書くのと同じ形の速度を置く（ADR 0102）。
+// prompt の直後に置き、assistant が書かれるまで残す。1 秒間隔の取得でも確実に見える幅にする。
+const RATE_DELAY_MS = PROMPT_DELAY_MS + 6_000;
+const TOOL_DELAY_MS = 16_000;
+const RESULT_DELAY_MS = 20_000;
 
 // 架空の Claude Code。実機（2.1.328）で確かめた、質問まわりの transcript と hook の動きだけを
 // 再現する（ADR 0098、0099）。
@@ -29,6 +32,14 @@ export function createClaude(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   };
 
   const sidecarPath = (sessionId: string) => join(root, "claude", "pending", `${sessionId}.json`);
+  const livePath = (sessionId: string) => join(root, "claude", "live", `${sessionId}.json`);
+
+  // mod の代わりに速度を書く。null は「計測していない」で、ファイルは残る。
+  const publishRate = async (sessionId: string, tokPerSecond: number | null): Promise<void> => {
+    await mkdir(join(root, "claude", "live"), { recursive: true }).catch(() => {});
+    const body = JSON.stringify({ v: 1, sessionId, at: Date.now(), tokPerSecond });
+    await writeFile(livePath(sessionId), body).catch(() => {});
+  };
 
   // 追記する entry の親にする uuid。末尾が uuid を持たない行（api-request）でも、その前の
   // entry から枝を伸ばす。
@@ -101,8 +112,19 @@ export function createClaude(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
       });
     }, PROMPT_DELAY_MS);
 
+    // mod と同じく 500ms ごとに上書きする。1 回だけ書くと、BFF の鮮度（2.5 秒）で消える。
+    let publishing = true;
+    later(async () => {
+      while (publishing && working()) {
+        await publishRate(sessionId, 68.4);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }, RATE_DELAY_MS);
+
     later(async () => {
       if (!working()) return;
+      publishing = false;
+      await publishRate(sessionId, null);
       await append(sessionId, (next) => [
         {
           ...next(),

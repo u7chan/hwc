@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import { type FileHandle, open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join } from "node:path";
-import { TOOL_NAME_LIMIT, TOOLS_LIMIT } from "../../shared/activity";
+import { ACTIVITY_RATE_PHASES, TOOL_NAME_LIMIT, TOOLS_LIMIT } from "../../shared/activity";
 import {
   ATTACHED_FILES_CLOSE,
   ATTACHED_FILES_OPEN,
   stripAttachedFiles,
 } from "../../shared/attachments";
 import { ASK_USER_QUESTION, questionPending, toolPending, toolSummary } from "./claude-pending";
+import { readLive } from "./claude-live";
 import { readSidecar, SESSION_ID, SIDECAR_TTL_MS } from "./claude-sidecar";
 import type {
   ChatMessage,
@@ -132,6 +133,8 @@ export function createClaudeChatClient(
     now?: () => number;
     // hook が応答待ちを書く場所。無ければ transcript の末尾の tool_use だけを見る。
     pendingRoot?: string;
+    // mod が生成中の速度を書く場所。無ければ帯に速度を出さない。
+    liveRoot?: string;
   } = {},
 ): SessionChatClient & {
   activity: (sessionId: string) => Promise<SessionActivity>;
@@ -236,7 +239,15 @@ export function createClaudeChatClient(
       return withHookPending(projection.snapshot, projection.resolved, sessionId);
     },
     async activity(sessionId) {
-      return sessionActivityOf((await shared(sessionId)).entries, now());
+      const at = now();
+      const derived = sessionActivityOf((await shared(sessionId)).entries, at);
+      const activity = derived.activity;
+      if (activity === null || options.liveRoot === undefined) return derived;
+      // 速度は生成中の phase だけ。tool の待ちに前の応答の速度を残さない。
+      if (!(ACTIVITY_RATE_PHASES as readonly string[]).includes(activity.phase)) return derived;
+      const live = await readLive(options.liveRoot, sessionId, at);
+      if (live?.tokPerSecond == null) return derived;
+      return { ...derived, activity: { ...activity, tokPerSecond: live.tokPerSecond } };
     },
   };
 }

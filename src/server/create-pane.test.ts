@@ -428,7 +428,10 @@ test("a Claude launch passes the hwc-owned settings next to the selected model",
     efforts: mock(async () => []),
     startArgs: mock(async () => ["--model", "opus"]),
   };
-  const claudeSettings = mock(async () => "/state/claude/settings.json");
+  const claudeSettings = mock(async () => ({
+    settings: "/state/claude/settings.json",
+    pluginDir: "/state/hwc/claude-mod",
+  }));
 
   await createPane(
     panes,
@@ -443,7 +446,14 @@ test("a Claude launch passes the hwc-owned settings next to the selected model",
     paneId: "w1:p3",
     kind: "claude",
     name: "hwc-w1-p3",
-    args: ["--settings", "/state/claude/settings.json", "--model", "opus"],
+    args: [
+      "--settings",
+      "/state/claude/settings.json",
+      "--plugin-dir",
+      "/state/hwc/claude-mod",
+      "--model",
+      "opus",
+    ],
   });
 });
 
@@ -456,7 +466,7 @@ test("a Claude launch in an existing shell passes the settings too", async () =>
     { agent: "claude", model: null, effort: null, waitForShell: false },
     undefined,
     undefined,
-    async () => "/state/claude/settings.json",
+    async () => ({ settings: "/state/claude/settings.json", pluginDir: null }),
   );
 
   expect(panes.startAgent).toHaveBeenCalledWith({
@@ -494,7 +504,10 @@ test.each(["pi", "codex", "opencode"] as const)(
   "%s never takes Claude's settings",
   async (agent) => {
     const { panes } = createFakePanes();
-    const claudeSettings = mock(async () => "/state/claude/settings.json");
+    const claudeSettings = mock(async () => ({
+      settings: "/state/claude/settings.json",
+      pluginDir: null,
+    }));
 
     await createPane(panes, "w1:p1", { name: null, agent }, undefined, undefined, claudeSettings);
 

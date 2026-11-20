@@ -6,6 +6,7 @@ import { createOpencodeChatClient } from "./server/chat/opencode";
 import { createCodexChatClient } from "./server/chat/codex";
 import { createClaudeChatClient } from "./server/chat/claude";
 import { sidecarRoot } from "./server/chat/claude-sidecar";
+import { claudeLiveRoot } from "./server/chat/claude-live";
 import { ensureClaudeSettings } from "./server/claude-settings";
 import { createPaneClient } from "./server/herdr/panes";
 import { createWorkspaceClient } from "./server/herdr/workspaces";
@@ -76,7 +77,10 @@ const app = createApp({
   chat: createChatClient(),
   opencode: createOpencodeChatClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   codex: createCodexChatClient(),
-  claude: createClaudeChatClient({ pendingRoot: sidecarRoot(stateRoot) }),
+  claude: createClaudeChatClient({
+    pendingRoot: sidecarRoot(stateRoot),
+    liveRoot: claudeLiveRoot(stateRoot),
+  }),
   models: createAgentModelsClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
   claudeSettings: () => ensureClaudeSettings(stateRoot),
   pullRequests,

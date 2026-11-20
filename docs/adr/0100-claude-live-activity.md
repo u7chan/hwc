@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-19
 - Amends: [ADR 0035](0035-live-pi-activity.md) の「実行中の段階は pi 拡張の sidecar からだけ読む」という前提
+- Amended by: [ADR 0102](0102-claude-live-tok-rate.md)（生成中の `tokPerSecond`）
 
 ## Context
 
