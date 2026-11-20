@@ -345,7 +345,7 @@ export function App() {
   const live = useRef(false);
   // hwc から作ったペインは pendingSelect が開く。自動分割と二重に動かさない。
   const selfCreated = useRef(new Set<string>());
-  // 分割で入ったセル。次の描画で分割線から広げる（ADR 0092）。
+  // 分割で入ったセル。次の描画で分割線から広げる（ADR 0111）。
   const [entering, setEntering] = useState<string | null>(null);
 
   // 時刻は BFF が持つ。描画のたびに一度だけ Map へ引き直し、表示側の型は変えない。
@@ -569,7 +569,7 @@ export function App() {
     moveTo(pendingSelect);
   }, [state, pendingSelect, expanded]);
 
-  // 委譲でエージェントが増えたら、表示中のセルの隣へ差し込む（ADR 0092）。
+  // 委譲でエージェントが増えたら、表示中のセルの隣へ差し込む（ADR 0111）。
   // Herdr に委譲のイベントは無いので、前回のスナップショットとの差分で見る。
   useEffect(() => {
     if (state === null) return;
@@ -691,7 +691,7 @@ export function App() {
     setCreating({ paneId, target: { kind: "start" } });
   };
 
-  // ツリーで選んだフォルダを作業ディレクトリにしたスペースを作る（ADR 0106）。モデル一覧は
+  // ツリーで選んだフォルダを作業ディレクトリにしたスペースを作る（ADR 0113）。モデル一覧は
   // 起点のペインの cwd で読み、起動時の再検証は新しい root pane の cwd で BFF が行う。
   const openCreateSpaceDialog = (paneId: string, path: string) => {
     setCreating({ paneId, target: { kind: "space", path } });

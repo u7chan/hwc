@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-10
 - Revises: 2026-11-13 に「画像を追加」の受け付けをファイル全体へ広げた（[ADR 0080](0080-file-attachments.md)）
-- Revises: 2026-11-14 に「定型文を引用」を加えた（[ADR 0084](0084-composer-templates.md)）
+- Revises: 2026-11-14 に「定型文を引用」を加えた（[ADR 0110](0110-composer-templates.md)）
 
 ## Context
 

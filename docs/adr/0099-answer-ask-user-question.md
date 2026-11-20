@@ -2,25 +2,25 @@
 
 - Status: Accepted
 - Date: 2026-11-19
-- Amends: [ADR 0016](0016-composer-command-chips.md)、[ADR 0098](0098-claude-pending-in-chat.md)
+- Amends: [ADR 0016](0016-composer-command-chips.md)、[ADR 0112](0112-claude-pending-in-chat.md)
 
 ## Context
 
-Claude の AskUserQuestion は TUI のフォームで、質問ごとのタブ・選択肢・複数選択・Submit を持つ。応答待ちのカード（[ADR 0098](0098-claude-pending-in-chat.md)）で質問と選択肢は Web に出るが、答えられないので端末へ戻るしかなかった。hwc は汎用のキー入力を持たず、スマホには矢印キーも無い（[ADR 0016](0016-composer-command-chips.md)）ので、TUI のフォームをキー操作で再現する方法は採れない。
+Claude の AskUserQuestion は TUI のフォームで、質問ごとのタブ・選択肢・複数選択・Submit を持つ。応答待ちのカード（[ADR 0112](0112-claude-pending-in-chat.md)）で質問と選択肢は Web に出るが、答えられないので端末へ戻るしかなかった。hwc は汎用のキー入力を持たず、スマホには矢印キーも無い（[ADR 0016](0016-composer-command-chips.md)）ので、TUI のフォームをキー操作で再現する方法は採れない。
 
 Herdr は `pane.send_keys` で Esc を送れる（停止ボタンと同じ経路。[ADR 0025](0025-stop-working-agent.md)）。そこで「Esc で質問を閉じ、選んだ内容を通常のユーザー発言として送る」案を、実機（Claude Code 2.1.328、Herdr 0.9.5）で確かめた。
 
 - Esc でダイアログは閉じる。transcript には 0.5 秒以内に、assistant の `tool_use`、`is_error: true` の `tool_result`（本文は "The user doesn't want to proceed with this tool use. …"、`toolUseResult` は `"User rejected tool use"`）、user の `[Request interrupted by user for tool use]` が書かれる
 - 閉じたあと Claude は応答を始めず、入力待ちの `idle` に戻る。steering としてキューされる状況は起きなかった
 - そのあとに本文を送ると、普通の `UserPromptSubmit` として処理され、Claude は本文を回答として受け取った（「好きな色は？: 青」に「青」と答えた）
-- Esc は `PostToolUse` / `PostToolUseFailure` / `Stop` のどの hook も呼ばない（[ADR 0098](0098-claude-pending-in-chat.md)）。閉じたことは transcript の `tool_result` で知る
+- Esc は `PostToolUse` / `PostToolUseFailure` / `Stop` のどの hook も呼ばない（[ADR 0112](0112-claude-pending-in-chat.md)）。閉じたことは transcript の `tool_result` で知る
 
 停止ボタンは `working` のときだけ Esc を送る（`routes/panes.ts` の `stop`）ので、`blocked` 中のこの経路とは競合しない。
 
 ## Decision
 
 - 回答は `POST /api/panes/:id/answer-question` に `{ toolUseId, answers }` で送る。`answers` は質問ごとに `{ question, labels }`（選んだ選択肢）か `{ question, text }`（自由入力）のどちらか一方で、全質問を覆う。両方を同時には受け付けない
-- Claude のペインだけが対象。他のエージェントは 400。permission prompt（承認）には使わない。Esc は承認の拒否として働き、本文は承認の返事にならない。誤承認・誤拒否を避けるため、承認は端末で行う（[ADR 0098](0098-claude-pending-in-chat.md)）
+- Claude のペインだけが対象。他のエージェントは 400。permission prompt（承認）には使わない。Esc は承認の拒否として働き、本文は承認の返事にならない。誤承認・誤拒否を避けるため、承認は端末で行う（[ADR 0112](0112-claude-pending-in-chat.md)）
 - BFF はクライアントの主張を信じず、そのたびに確かめる。`agent_status === "blocked"`、会話の読み取り口から再読みした `pending` が AskUserQuestion で `toolUseId` が一致、質問文が pending のものと一致、`labels` が選択肢の部分集合（空・重複・単一選択に複数は不可）、`text` が制御文字と空白を落として空でない、全質問に答えがある。形が合わない・空は 400、待ちが無い・別の質問は 409
 - 本文は、固定の 1 行目 `質問への回答:` と、質問ごとの 1 行からなる。質問の行は `質問: ラベル, ラベル`、自由入力は `質問: 本文`。質問文は pending のものを使い、クライアントの文言は使わない。1 行目を固定で置くのは、本文の先頭の文字がそのまま CLI の入力欄に届くため。質問文はモデルが書くので、`/` で始まると回答が `Unknown command:` で届かないか `/clear` などのコマンドが走り、`!` や `#` で始まるとシェルやメモとして扱われ得る。どの文字が危ないかを hwc が知っている前提を置かず、条件を付けずに常に置く（[ADR 0016](0016-composer-command-chips.md)）。ラベルと本文は 1 行に揃える（制御文字を落とし、改行を空白にして trim）。ラベルに `,` `:` `"` が入るときは JSON 文字列として引用し、選んだ数と境界を読み違えさせない
 - 組み立てた本文が `MAX_TEXT_BYTES`（16,384 バイト）を超えるときは 413 とし、Esc も送らない（ダイアログを閉じてから失敗にしない）
@@ -51,5 +51,5 @@ Herdr は `pane.send_keys` で Esc を送れる（停止ボタンと同じ経路
 - **Esc を送らず本文だけを送る**: ダイアログが入力を受け取るため、本文が選択肢の検索や自由入力に流れ込む。閉じてから送る必要がある
 - **Esc のあと idle を待ってから送る**: 実機では Esc のあと応答は始まらず、`idle` になる。ただし `agent_status` は Herdr の状態で、transcript とずれる瞬間がある。会話の正は transcript なので、`tool_result` の出現（pending の消滅）を待つ。応答が始まる版が出たら、この判定を見直す
 - **画面のテキストでダイアログが閉じたかを判定する**: 折り返しと再描画で崩れ、画面の文言に依存する
-- **permission prompt にも同じ経路を使う**: Esc は拒否として働き、本文を承認の返事にできない。承認は Web から送らない（[ADR 0098](0098-claude-pending-in-chat.md)）
+- **permission prompt にも同じ経路を使う**: Esc は拒否として働き、本文を承認の返事にできない。承認は Web から送らない（[ADR 0112](0112-claude-pending-in-chat.md)）
 - **`labels` と `text` を同時に受け付ける**: 自由入力を選択肢と併用できるが、本文の形と検証が増える。TUI の `Other` も 1 つの答えとして扱われるので、排他にする

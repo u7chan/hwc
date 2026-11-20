@@ -162,7 +162,7 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       }
     },
     // ツリーで選んだフォルダを作業ディレクトリにしたスペースを作る。id は起点のペインで、
-    // パスはそのペインのツリーの根から解く（ADR 0106）。
+    // パスはそのペインのツリーの根から解く（ADR 0113）。
     createSpace: async (c: IdContext) => {
       const body = await c.req.json().catch(() => null);
       const request = parseCreateSpaceBody(body);

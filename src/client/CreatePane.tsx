@@ -25,7 +25,7 @@ import type { LaunchIntent } from "./starting";
 // 何を作るか。split は paneId のタブを分割する。start は既存のシェルペイン（paneId）で
 // 起動し、ペインを作らないので名前と種類の切り替えは出さない。worktree と space は新しい
 // スペースを作り、その root pane で起動する。space の path は paneId のツリーの根からの
-// 相対パス（ADR 0106）。
+// 相対パス（ADR 0113）。
 export type CreateTarget =
   | { kind: "split" }
   | { kind: "start" }

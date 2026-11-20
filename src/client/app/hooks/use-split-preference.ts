@@ -6,7 +6,7 @@ export type UseSplitPreference = {
   change: (next: SplitPrefs) => void;
 };
 
-// 分割表示の好みは端末ごと。テーマと同じく、読み書きは localStorage に閉じる（ADR 0092）。
+// 分割表示の好みは端末ごと。テーマと同じく、読み書きは localStorage に閉じる（ADR 0111）。
 export function useSplitPreference(): UseSplitPreference {
   const [prefs, setPrefs] = useState<SplitPrefs>(() =>
     loadSplitPrefs(typeof localStorage === "undefined" ? null : localStorage),

@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-02
-- Revises: 2026-11-15 に相対パスのリンクを開けるようにした（[ADR 0084](0084-relative-path-links.md)）
+- Revises: 2026-11-15 に相対パスのリンクを開けるようにした（[ADR 0109](0109-relative-path-links.md)）
 
 ## Context
 
@@ -20,7 +20,7 @@
 - パーサは DOM / Preact / React に依存させない。描画層は `src/client/Markdown.tsx` に置く（ADR 0007）
 - 描画するのは agent 本文だけ。user 本文は従来の plain text と折り畳みを維持する
 - 200KB（UTF-16 の文字数）を超える本文は解析せずプレーン表示に落とす
-- 相対パス・ファイルパスのリンクは、BFF が実在を確認した表記と一致したときだけリンクにする。一致しないものは原文の `literal`（等幅）として出す（2026-11-15 改訂、[ADR 0084](0084-relative-path-links.md)）
+- 相対パス・ファイルパスのリンクは、BFF が実在を確認した表記と一致したときだけリンクにする。一致しないものは原文の `literal`（等幅）として出す（2026-11-15 改訂、[ADR 0109](0109-relative-path-links.md)）
 - 散文は `--font-ui` / `--text-body`、コード・`pre`・`literal` は `--font-mono` / `--text-mono`。見出しはページのアウトラインに混ぜないよう h3〜h6 に写す
 - 返信の引用も user 本文なので、記号を含めて送った文字列をそのまま plain text で出す（2026-11-11 追記: 以前は先頭の blockquote を引用カードにしたが、[ADR 0062](0062-selection-toolbar.md) の改訂で廃止した）
 
@@ -39,7 +39,7 @@
 | 数式 `$…$` `$$…$$` `\(…\)` `\[…\]`                        | ✗    | 区切りごと原文                                                                                                                             |
 | 画像 `![]()`                                              | ✓    | BFF が実在を確認したファイルだけを本文の位置に描く。照合できなければ記法ごと原文（`literal`）（[ADR 0071](0071-inline-message-images.md)） |
 | タスクリスト `- [ ]`                                      | ✓    | 項目の `task` に完了状態を持つ。押した結果は表示だけで、Markdown は書き換えない                                                            |
-| 相対パス・ファイルパスのリンク                            | ✓    | BFF が実在を確認した表記だけリンクにする。それ以外は原文（`literal`）（[ADR 0084](0084-relative-path-links.md)）                           |
+| 相対パス・ファイルパスのリンク                            | ✓    | BFF が実在を確認した表記だけリンクにする。それ以外は原文（`literal`）（[ADR 0109](0109-relative-path-links.md)）                           |
 | 実体参照 / 脚注 / 参照リンク / HTML ブロック / 遅延継続行 | ✗    | 原文表示                                                                                                                                   |
 
 ## Consequences

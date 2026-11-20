@@ -58,7 +58,7 @@
    一覧の現在行と同じ色で結び付ける（ADR 0058 / 0061）。 */
 .hwc-split-cell {
   position: relative;
-  /* 委譲で増えたセルは、幅 0 から分割線を走らせて広げる（ADR 0092）。 */
+  /* 委譲で増えたセルは、幅 0 から分割線を走らせて広げる（ADR 0111）。 */
   transition:
     opacity 180ms ease-out,
     flex-grow var(--hwc-split-duration, 280ms) cubic-bezier(0.25, 0.72, 0.3, 1);
@@ -715,7 +715,7 @@ a.hwc-pane-head-repo:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* 動きを減らす設定は、アプリの「分割の動き」より優先する（ADR 0092）。 */
+  /* 動きを減らす設定は、アプリの「分割の動き」より優先する（ADR 0111）。 */
   .hwc-split-cell {
     transition: none;
   }

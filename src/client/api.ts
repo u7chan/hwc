@@ -383,7 +383,7 @@ export function previewUrl(paneId: string, file: { root: number; name: string })
 
 // 本文のリンクから開くテキストは、新しいタブで生の中身を読む。同じ URL を HTML のアセット
 // としても使うため、.js / .css は実行可能な型で返る。text のときだけ raw を付けて
-// text/plain にしてもらう（ADR 0084）。
+// text/plain にしてもらう（ADR 0109）。
 export function previewTextUrl(paneId: string, file: { root: number; name: string }): string {
   return `${previewUrl(paneId, file)}?raw=1`;
 }

@@ -1649,7 +1649,7 @@ export function PaneDetail(props: PaneDetailProps) {
             ) : null
           ) : inputDisabled ? (
             // 質問・承認の待ちは TUI のダイアログが入力を受け取る。入力欄ごと閉じる。質問は
-            // カードから答えられる。承認と、待ちが読めないときは端末で行う（ADR 0098、0099）。
+            // カードから答えられる。承認と、待ちが読めないときは端末で行う（ADR 0112、0099）。
             <p class="hwc-terminal-note" role="status">
               {pendingView?.kind === "question" && !showTerminal
                 ? "Claude の質問です。カードから答えると、入力欄が戻ります。"

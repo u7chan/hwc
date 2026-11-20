@@ -114,7 +114,7 @@ OpenCode のサービスの自動起動は、架空の `<root>/opencode/service.
 
 effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで選択が解除されることを確かめる。effort に対応するモデルでは、effort も選ぶまで作成ボタンを押せない。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。`@demo/start-fails` は起動に失敗するモデルで、`agent.start` が `agent_spawn_failed` を返す。新しいペインとワークツリーの起動失敗（シェルを残してペイン内に行を出す）を、実 CLI に触れずに確かめるために使う。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。モデルを指定せずに起動した Pi は、チャット画面を開いたときに架空 RPC の `get_state` から既定を読み、解決中はスケルトンが出る（[ADR 0087](adr/0087-default-model-display.md)）。hwc の画面はモデルを指定して起動するので、この経路は起動 API を直接呼んだときだけ通る。既定は `DEFAULT_PI_MODEL` / `DEFAULT_PI_EFFORT` で、架空 Herdr が `agent.start` に記録する値と揃えてある。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
 
-Claude の会話は `CLAUDE_CONFIG_DIR`（E2E では `<root>/claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[ADR 0097](adr/0097-claude-chat-transcript.md)）。fixture が架空の transcript を 2 本書く。会話を表示する `quickstart`（`w2:t2` の `w2:p2`、待機）は、`w2:t1` に足すと分割セルになり読み幅が半分になるため別タブに置く。transcript は 248 往復の履歴（500 メッセージの上限を超え、`truncated` になる）と、そのあとの 6 行（同じ `message.id` の text 連結、tool_result、`isMeta`、添付チップ、書式の崩れた注記）で作る。添付付きの user の 1 行は、実機と同じく貼り付けの `<pasted_content>` で包んで書く。要対応の `writer`（`w2:p1`）には、待ちに入る前の会話で終わる transcript と、質問を持つ hook の sidecar を足し、`blocked` のまま応答待ちのカードを出す（[ADR 0098](adr/0098-claude-pending-in-chat.md)、下の「blocked + 応答待ちの作り方」）。tool_use と tool_result の突き合わせ、input の検証、上限は `src/server/chat/claude.test.ts` と `claude-sidecar.test.ts` で確かめる。実ホームの `~/.claude` は読まない。
+Claude の会話は `CLAUDE_CONFIG_DIR`（E2E では `<root>/claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[ADR 0097](adr/0097-claude-chat-transcript.md)）。fixture が架空の transcript を 2 本書く。会話を表示する `quickstart`（`w2:t2` の `w2:p2`、待機）は、`w2:t1` に足すと分割セルになり読み幅が半分になるため別タブに置く。transcript は 248 往復の履歴（500 メッセージの上限を超え、`truncated` になる）と、そのあとの 6 行（同じ `message.id` の text 連結、tool_result、`isMeta`、添付チップ、書式の崩れた注記）で作る。添付付きの user の 1 行は、実機と同じく貼り付けの `<pasted_content>` で包んで書く。要対応の `writer`（`w2:p1`）には、待ちに入る前の会話で終わる transcript と、質問を持つ hook の sidecar を足し、`blocked` のまま応答待ちのカードを出す（[ADR 0112](adr/0112-claude-pending-in-chat.md)、下の「blocked + 応答待ちの作り方」）。tool_use と tool_result の突き合わせ、input の検証、上限は `src/server/chat/claude.test.ts` と `claude-sidecar.test.ts` で確かめる。実ホームの `~/.claude` は読まない。
 
 Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。初期化後の `config/read` / `model/list` / `thread/read` / `thread/turns/list` にだけ応答する。モデル指定した新規ペインは、そのモデルを架空の thread に記録する。入力は本番と同じ Herdr の `pane.send_input` 経由で受け、架空の user と assistant の item を追加する。チャット表示、送信後の確定、起動時のモデル引数を、実 Codex や実会話へ触れずに確認する。
 
@@ -161,7 +161,7 @@ Claude のペインでは、フィクスチャ専用の入力 `/activity`（添�
 
 ## 入力の + メニュー
 
-入力欄の下部左端の + から、会話のコマンドを実行し、定型文・ファイル・プロジェクトを追加する（[ADR 0055](adr/0055-composer-add-menu.md)、[ADR 0056](adr/0056-project-picker.md)、[ADR 0057](adr/0057-composer-conversation-commands.md)、[ADR 0084](adr/0084-composer-templates.md)）。
+入力欄の下部左端の + から、会話のコマンドを実行し、定型文・ファイル・プロジェクトを追加する（[ADR 0055](adr/0055-composer-add-menu.md)、[ADR 0056](adr/0056-project-picker.md)、[ADR 0057](adr/0057-composer-conversation-commands.md)、[ADR 0110](adr/0110-composer-templates.md)）。
 
 1. `review` を開き、+ を押す。+ の上に「新しい会話」「会話を圧縮」、区切り、「定型文を引用」「ファイルを追加」「プロジェクトを選ぶ」が開き、`Escape` か外側のタップで閉じる。`frontend`（実行中）では 2 つのコマンドが無効になり、補助文に「実行中は使えません」が出る。`new`（空の会話）では「会話が始まると使えます」になる。
 2. `review` で「新しい会話」を選ぶと確認ダイアログが開く。「キャンセル」では会話が残り、「始める」では会話が空になる。チップや直接入力の `/new` は確認を挟まない。ペイン見出しの「…」メニューには 2 つのコマンドが出ない。
@@ -182,7 +182,7 @@ Claude の transcript の射影は、`acme-dashboard (docs)` の `quickstart`（
 2. 「この行は注記の書式が崩れています。」の行は本文だけで、`<attached_files>` も絶対パスも残らない。チップも出ない。
 3. 同じペインで 2 回目の取得が 304 になることを、DevTools のネットワークで `/api/panes/w2:p2/chat` の応答を見て確かめる。会話が変わらない間は 200 が返らない。
 4. 端末出力へのフォールバックは、起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` を消して確かめる。次の取得が 502 になり、本文が `claude · quickstart` の端末出力に切り替わる。ファイルを戻すと会話に戻るが、見つからなかった結果を 4 秒だけ覚えるので、戻した直後は端末出力のままになる（[ADR 0103](adr/0103-claude-transcript-miss-on-send.md)）。
-5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` で、質問は hook の sidecar（`<root>/claude/pending/<session uuid>.json`）にあり、transcript には質問の tool_use が無い（実機の Claude Code は待ちの間これを書かない。[ADR 0098](adr/0098-claude-pending-in-chat.md)）。会話は端末出力へ切り替わらず、末尾に「Claude からの質問」のカードが出る。質問ごとにヘッダ・質問文・選択肢（label と description）が並び、複数選択の質問には「複数選べます」が付く。選択肢は押せない。入力欄・引用・添付・`/` の候補は出ず、代わりに「Claude の応答待ちです」の行が出る。transcript にある解決済みの Read の tool_use は、カードにならない。
+5. `acme-dashboard (docs)` の `writer`（`w2:t1`）は `blocked` で、質問は hook の sidecar（`<root>/claude/pending/<session uuid>.json`）にあり、transcript には質問の tool_use が無い（実機の Claude Code は待ちの間これを書かない。[ADR 0112](adr/0112-claude-pending-in-chat.md)）。会話は端末出力へ切り替わらず、末尾に「Claude からの質問」のカードが出る。質問ごとにヘッダ・質問文・選択肢（label と description）が並び、複数選択の質問には「複数選べます」が付く。選択肢は押せない。入力欄・引用・添付・`/` の候補は出ず、代わりに「Claude の応答待ちです」の行が出る。transcript にある解決済みの Read の tool_use は、カードにならない。
 6. カードの「端末出力を見る」を押すと body が `claude · docs` の端末出力に変わり、上に「端末で応答してください。」と「会話に戻る」が出る。「会話に戻る」で会話とカードに戻る。再読み込みすると会話に戻る（切替はローカルの状態）。
 7. 解決は transcript の tool_result で知る（Esc は hook を呼ばない）。起動ログの `hwc e2e fixture: <root>` が示す `<root>/claude/projects/<project>/<session uuid>.jsonl` に、`pending-tool-2` の assistant の tool_use と、`tool_use_id` が同じ tool_result の user を 1 行ずつ追記すると、次の取得（5 秒以内）でカードが消える。架空 Herdr の `agent_status` は `blocked` のままなので、カードが消えたあとは端末出力になり、入力欄は閉じたまま（実機では Esc で `idle` に戻り、入力欄が戻る）。sidecar のファイルが残っていても、カードは戻らない。
 8. 応答待ちが読めない `blocked` のペインは、今までどおり端末出力になる。sidecar のファイルを消すと、次の取得でカードが消えて端末出力になる。
@@ -213,7 +213,7 @@ pi のセッションに `hwc-capabilities` があるときだけ、ユーザー
 
 ## 定型文
 
-設定で登録した定型文を、入力欄の + から本文へ引用する（[ADR 0084](adr/0084-composer-templates.md)）。
+設定で登録した定型文を、入力欄の + から本文へ引用する（[ADR 0110](adr/0110-composer-templates.md)）。
 
 1. 設定の「定型文」で「定型文を追加」を押し、名前と本文を入れて保存する。一覧に行が増え、名前と本文の 1 行目が出る。行を押すと編集フォームが開き、名前を変えて保存すると一覧に反映される。
 2. `frontend` を開き、+ を押す。区切りの下の先頭に「定型文を引用」があり、補助文は「設定で登録した文から選ぶ」。押すとダイアログが開く。
@@ -583,7 +583,7 @@ fixture の `w2:p2`（`quickstart`）は、mod が書く live ファイル（`<r
 
 ### blocked + 応答待ちの作り方
 
-応答待ちは、hook が書く sidecar `<root>/claude/pending/<session uuid>.json`（`<root>` は起動ログの `hwc e2e fixture: <root>`）に置く。実機の Claude Code は、待ちの間は transcript に質問の tool_use を書かない（[ADR 0098](adr/0098-claude-pending-in-chat.md)）ので、transcript は待ちに入る前の会話で終わらせる。fixture の `w2:p1` がこの形で、架空 Herdr のペインを `blocked` にし、`agent_session` は `CLAUDE_PENDING_SESSION`、sidecar は `e2e/fixtures/scenario.ts` の `claudePendingSidecar`、transcript は `claudePendingTranscript`。
+応答待ちは、hook が書く sidecar `<root>/claude/pending/<session uuid>.json`（`<root>` は起動ログの `hwc e2e fixture: <root>`）に置く。実機の Claude Code は、待ちの間は transcript に質問の tool_use を書かない（[ADR 0112](adr/0112-claude-pending-in-chat.md)）ので、transcript は待ちに入る前の会話で終わらせる。fixture の `w2:p1` がこの形で、架空 Herdr のペインを `blocked` にし、`agent_session` は `CLAUDE_PENDING_SESSION`、sidecar は `e2e/fixtures/scenario.ts` の `claudePendingSidecar`、transcript は `claudePendingTranscript`。
 
 1. 質問のカード: sidecar の `pending` を `kind: "question"`（`toolUseId`、`tool: "AskUserQuestion"`、`questions[].{question,header,multiSelect,options[].{label,description}}`）にする。外側の `sessionId`、`at`（24 時間以内）、`toolUseId`、`tool` も要る。読むときに 4 問、1 問 10 選択肢、質問文 2000 文字を超えた分を切り、制御文字を落として改行を空白にする。`questions` が配列でない、`options` が空、`label` が空の `pending` は、カードにならない。
 2. 承認のカード: `pending` を `{ "kind": "tool", "toolUseId": "...", "tool": "Bash", "summary": "..." }` にする。要約は 1 行（200 文字まで）で、`Write` の `content` のような input 全体は sidecar にも画面にも載らない。要約を `null` にすると名前だけになる。

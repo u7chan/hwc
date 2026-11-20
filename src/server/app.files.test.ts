@@ -465,7 +465,7 @@ test("GET /api/panes/:id/preview serves the files the HTML refers to", async () 
     const image = await app.request("/api/panes/w1:p1/preview/0/preview/shot.png");
     expect(image.headers.get("content-type")).toBe("image/png");
 
-    // 本文のリンクから開くテキストは、実行させないよう text/plain で返す（ADR 0084）。
+    // 本文のリンクから開くテキストは、実行させないよう text/plain で返す（ADR 0109）。
     const text = await app.request("/api/panes/w1:p1/preview/0/preview/notes.txt?raw=1");
     expect(text.status).toBe(200);
     expect(text.headers.get("content-type")).toBe("text/plain; charset=utf-8");

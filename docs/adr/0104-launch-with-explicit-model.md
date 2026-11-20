@@ -21,7 +21,7 @@
 - effort の「デフォルト（CLI に任せる）」も無くす。選択中のモデルの effort 候補が 1 件以上なら、effort も選ぶ。候補が空（effort 非対応のモデル）なら、effort なしで起動する
 - 作成ボタンは、モデルを選び、そのモデルの effort 候補が届き、effort が必要なら選ぶまで押せない。シェルを作るときは従来どおり
 - 候補を取得できないとき（取得失敗・OpenCode サービス未起動・候補なし）は、起動できない。理由と「再取得」ボタンを出す。OpenCode のサービス未起動は「サービスを起動してから再取得」と案内する。サービスは hwc から起動しない（ADR 0030 のまま）。effort 候補を取得できないときも同じ
-- 既定は、エージェントごとに任意で 1 組のモデルと effort にする。effort は、保存したモデルが effort 非対応なら `null`。BFF が状態ディレクトリの `launch-defaults.json` に置き、[定型文](0084-composer-templates.md)と同じく、一意な tmp 名で書いて rename で置き換える。読めない・壊れた値は捨てて未設定で始める
+- 既定は、エージェントごとに任意で 1 組のモデルと effort にする。effort は、保存したモデルが effort 非対応なら `null`。BFF が状態ディレクトリの `launch-defaults.json` に置き、[定型文](0110-composer-templates.md)と同じく、一意な tmp 名で書いて rename で置き換える。読めない・壊れた値は捨てて未設定で始める
   - `GET /api/launch-defaults` は `{ defaults: { <agent>: { model, effort } } }` を `cache-control: no-store` で返す
   - `PUT /api/launch-defaults` は `{ agent, value }` を受け、そのエージェントの既定だけを置き換える。`value: null` で解除する。応答は全エージェントの既定。書けなければ 500 にし、メモリ上の既定は変えない
 - ダイアログの初期選択は、利用者の選択・既定・候補から描画中に導く
