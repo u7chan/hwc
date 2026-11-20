@@ -9,6 +9,7 @@ import {
   twoChatPanesState,
   createFakeStore,
   createTestApp,
+  emptyChat,
 } from "./app.test-helpers";
 
 test("GET /api/panes/:id/output returns the pane output", async () => {
@@ -334,6 +335,86 @@ test("POST /api/panes/:id/input sends without submit", async () => {
 
   expect(response.status).toBe(200);
   expect(seen).toEqual([{ paneId: "w1:p1", text: "ls", submit: false }]);
+});
+
+// transcript は ENTER を送った最初の入力でできる。送れなかった要求や入力途中で捨てると、
+// 次の poll が余分に projects/* を readdir するだけになる（ADR 0103）。
+test("POST /api/panes/:id/input forgets a missing Claude transcript after the send", async () => {
+  const forgotten: string[] = [];
+  const store = createFakeStore(state);
+  store.setChatSource("w1:p1", { agent: "claude", sessionId: "session-1" });
+  const { app } = createTestApp({
+    store,
+    panes: { send: async () => {} },
+    claude: {
+      snapshot: async () => emptyChat,
+      forgetMissing: (sessionId) => forgotten.push(sessionId),
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(forgotten).toEqual(["session-1"]);
+});
+
+test("POST /api/panes/:id/input keeps the miss when Herdr does not receive the text", async () => {
+  const forgotten: string[] = [];
+  const store = createFakeStore(state);
+  store.setChatSource("w1:p1", { agent: "claude", sessionId: "session-1" });
+  const { app } = createTestApp({
+    store,
+    panes: {
+      send: async () => {
+        throw new Error("socket closed");
+      },
+    },
+    claude: {
+      snapshot: async () => emptyChat,
+      forgetMissing: (sessionId) => forgotten.push(sessionId),
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+
+  expect(response.status).toBe(502);
+  expect(forgotten).toEqual([]);
+});
+
+test("POST /api/panes/:id/input does not forget a miss before ENTER or for another agent", async () => {
+  const forgotten: string[] = [];
+  const store = createFakeStore(state);
+  store.setChatSource("w1:p1", { agent: "claude", sessionId: "session-1" });
+  const { app } = createTestApp({
+    store,
+    claude: {
+      snapshot: async () => emptyChat,
+      forgetMissing: (sessionId) => forgotten.push(sessionId),
+    },
+  });
+  const send = (body: unknown) =>
+    app.request("/api/panes/w1:p1/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  // ENTER を送らない入力では transcript ができない。
+  expect((await send({ text: "hello" })).status).toBe(200);
+  expect(forgotten).toEqual([]);
+
+  // pi のセッション path は送信で変わらず、捨てる記憶も無い。
+  store.setChatSource("w1:p1", { agent: "pi", path: "/sessions/s.jsonl" });
+  expect((await send({ text: "hello", submit: true })).status).toBe(200);
+  expect(forgotten).toEqual([]);
 });
 
 test("POST /api/panes/:id/input rejects a text that is too long", async () => {
