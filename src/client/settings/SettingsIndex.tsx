@@ -1,4 +1,5 @@
 import type { ConnectionStatus } from "../connection";
+import type { ModelLabels } from "../../shared/agents";
 import {
   AgentGlyphIcon,
   BellIcon,
@@ -30,6 +31,7 @@ type SettingsIndexProps = {
   revision: string | null;
   current: SettingsCategoryId | null;
   variant: "page" | "side";
+  labels: ModelLabels | null;
   refreshKey: number;
   onOpen: (id: SettingsCategoryId) => void;
 };
@@ -99,6 +101,7 @@ export function SettingsIndex(props: SettingsIndexProps) {
     notifications: summary.notifications,
     restart: summary.restart,
     launchDefaults: summary.launchDefaults,
+    modelLabels: props.labels,
   };
 
   const rows = (group: SettingsCategory["group"]) =>

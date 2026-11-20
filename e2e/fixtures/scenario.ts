@@ -447,6 +447,11 @@ export async function createScenario(root: string): Promise<Scenario> {
       },
     ]),
     writeFile(
+      join(root, "bin", "claude"),
+      `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-claude.ts", import.meta.url))}" "$@"\n`,
+      { mode: 0o700 },
+    ),
+    writeFile(
       join(root, "bin", "codex"),
       `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-codex.ts", import.meta.url))}" "$@"\n`,
       { mode: 0o700 },

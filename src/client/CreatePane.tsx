@@ -10,7 +10,7 @@ import {
   type CreatePaneOutcome,
   readLaunchDefaults,
 } from "./api";
-import { useEffortCandidates, useModelCandidates } from "./launch-candidates";
+import { useEffortCandidates, useModelCandidates, useModelLabels } from "./launch-candidates";
 import { canLaunch, chooseEffort, chooseModel, savedEffortFor } from "./launch-choice";
 import { spaceFailureNotice } from "./space-create";
 import { worktreeFailureNotice } from "./worktree-create";
@@ -118,6 +118,7 @@ export function CreatePane(props: CreatePaneProps) {
 
   const saved = defaults[agent] ?? null;
   const models = useModelCandidates(props.paneId, agent);
+  const labels = useModelLabels(agent === "claude");
   const model = chooseModel(models.read, saved, chosenModel);
   const efforts = useEffortCandidates(props.paneId, agent, model);
   const effort = chooseEffort(efforts.read, model, saved, chosenEffort);
@@ -280,6 +281,7 @@ export function CreatePane(props: CreatePaneProps) {
             agent={agent}
             candidates={models.read}
             model={model}
+            labels={labels}
             saved={saved}
             disabled={busy || settled}
             onChange={(selected) => {

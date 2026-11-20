@@ -46,6 +46,7 @@ import { createTemplatesStore, type TemplatesStore } from "../templates";
 import { createLaunchDefaultsStore, type LaunchDefaultsStore } from "../launch-defaults";
 import { defaultPreviewRoots } from "../message-files";
 import type { AgentModelsClient } from "../agent-models";
+import type { ClaudeModelLabelsReader } from "../claude-model-labels";
 import { createQuestionAnswerer } from "../answer-question";
 import type { ClaudeSettingsProvider } from "../create-pane";
 import { HerdrError } from "../herdr/socket";
@@ -79,6 +80,8 @@ export type CreateAppOptions = {
   // 端末出力は使えるようにする。
   claude?: SessionChatClient;
   models?: AgentModelsClient;
+  // Claude の alias を表示名に解決する。読めない構成では null のまま。
+  modelLabels?: ClaudeModelLabelsReader;
   // Claude の起動に足す hook の設定ファイルを用意する。テストでは実ファイルを書かないよう、
   // 渡さない（hook なしで起動する）。
   claudeSettings?: ClaudeSettingsProvider;
@@ -126,6 +129,7 @@ export function createAppContext(options: CreateAppOptions) {
     codex,
     claude,
     models,
+    modelLabels,
     claudeSettings,
     pullRequests,
     git,
@@ -399,6 +403,7 @@ export function createAppContext(options: CreateAppOptions) {
     codex,
     claude,
     models,
+    modelLabels,
     claudeSettings,
     pullRequests,
     git,

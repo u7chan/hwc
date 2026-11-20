@@ -232,3 +232,46 @@ test("the home candidate routes fail in the same shape as the pane routes", asyn
     await (await missing.request("/api/efforts?agent=pi&provider=example&model=beam")).json(),
   ).toEqual({ error: "efforts_unavailable" });
 });
+
+// ラベルは候補とは別の口。ペインも Herdr も要らず、読めなければ null で返す。
+test("GET /api/model-labels returns Claude labels without a pane", async () => {
+  const { app } = createTestApp({
+    state: null,
+    storeFailure: new Error("Herdr is not needed to read labels"),
+    modelLabels: {
+      read: async () => ({ "claude/opus": "Opus 5.5", "claude/sonnet": "Sonnet 5.5" }),
+    },
+  });
+  const response = await app.request("/api/model-labels?agent=claude");
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    labels: { "claude/opus": "Opus 5.5", "claude/sonnet": "Sonnet 5.5" },
+  });
+});
+
+test("GET /api/model-labels hides a missing or failing label reader", async () => {
+  const missing = createTestApp().app;
+  expect(await (await missing.request("/api/model-labels?agent=claude")).json()).toEqual({
+    labels: null,
+  });
+
+  const failing = createTestApp({
+    modelLabels: {
+      read: async () => {
+        throw new Error("/private/path: credential failure");
+      },
+    },
+  }).app;
+  expect(await (await failing.request("/api/model-labels?agent=claude")).json()).toEqual({
+    labels: null,
+  });
+});
+
+test("GET /api/model-labels rejects agents that do not need a label lookup", async () => {
+  const { app } = createTestApp();
+  for (const agent of ["pi", "codex", "opencode", "unknown", ""]) {
+    const response = await app.request(`/api/model-labels?agent=${agent}`);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+  }
+});

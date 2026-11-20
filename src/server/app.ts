@@ -55,6 +55,7 @@ export function createApp(options: CreateAppOptions) {
       .put("/api/launch-defaults", requireJson, launchDefaultsHandlers.put)
       // 設定画面の候補。ペインを持たないので、BFF がホームディレクトリで読む。
       .get("/api/models", chatHandlers.homeModels)
+      .get("/api/model-labels", chatHandlers.homeModelLabels)
       .get("/api/efforts", chatHandlers.homeEfforts)
       .get("/api/panes/:id/models", chatHandlers.models)
       .get("/api/panes/:id/efforts", chatHandlers.efforts)

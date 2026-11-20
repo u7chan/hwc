@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { claudeModelName, isClaudeAlias, modelLabel } from "./agents";
 
-test("Claude のエイリアスは family 名だけにする。解決先の版は起動するまで分からない", () => {
+test("Claude のエイリアスは family 名だけにする", () => {
   expect(claudeModelName("opus")).toBe("Opus");
   expect(claudeModelName("fable")).toBe("Fable");
   expect(isClaudeAlias("opus")).toBe(true);
@@ -30,6 +30,24 @@ test("読めない id は、そのまま返す", () => {
 
 test("モデルのラベルは Claude を表示名にし、Codex / OpenCode は provider を落とし、Pi は残す", () => {
   expect(modelLabel("claude", { provider: "claude", id: "sonnet" })).toBe("Sonnet");
+  expect(
+    modelLabel(
+      "claude",
+      { provider: "claude", id: "sonnet" },
+      {
+        "claude/sonnet": "Sonnet 5.5",
+      },
+    ),
+  ).toBe("Sonnet 5.5");
+  expect(
+    modelLabel(
+      "claude",
+      { provider: "claude", id: "opus" },
+      {
+        "claude/sonnet": "Sonnet 5.5",
+      },
+    ),
+  ).toBe("Opus");
   expect(modelLabel("pi", { provider: "opencode-go", id: "model-a" })).toBe("opencode-go/model-a");
   expect(modelLabel("codex", { provider: "openai", id: "gpt-x" })).toBe("gpt-x");
   expect(modelLabel("opencode", { provider: "opencode-go", id: "beam-free" })).toBe("beam-free");

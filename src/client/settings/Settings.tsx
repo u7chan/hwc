@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useElementWidth } from "../app/use-element-width";
 import type { ConnectionStatus } from "../connection";
 import type { FileTreeSide } from "../file-tree-side";
+import type { ModelLabels } from "../../shared/agents";
+import { useModelLabels } from "../launch-candidates";
 import { ChevronLeftIcon } from "../icons";
 import { SETTINGS_SIDE_MIN_WIDTH } from "../layout";
 import type { SplitPrefs } from "../split-prefs";
@@ -34,6 +36,7 @@ function section(
   id: SettingsCategoryId,
   props: SettingsProps,
   callbacks: { onEditingTitleChange: (title: string | null) => void; onSaved: () => void },
+  labels: ModelLabels | null,
 ) {
   switch (id) {
     case "display":
@@ -64,7 +67,9 @@ function section(
       return <BuildSettings revision={props.revision} />;
     default: {
       const agent = agentOfCategory(id);
-      return agent === null ? null : <AgentSettings agent={agent} onSaved={callbacks.onSaved} />;
+      return agent === null ? null : (
+        <AgentSettings agent={agent} labels={labels} onSaved={callbacks.onSaved} />
+      );
     }
   }
 }
@@ -75,6 +80,7 @@ export function Settings(props: SettingsProps) {
   // 保存で一覧の現在値が変わる。詳細を開いたままでも引き直せるよう、番号を進める。
   const [summaryKey, setSummaryKey] = useState(0);
   const refreshSummary = () => setSummaryKey((key) => key + 1);
+  const labels = useModelLabels(true);
 
   // カテゴリを左に常設できるかは、詳細に実際に残っている幅で決める。ペイン一覧の
   // 幅は変えられるので、ウィンドウ幅だけでは足りない。
@@ -171,6 +177,7 @@ export function Settings(props: SettingsProps) {
       revision={props.revision}
       current={active}
       variant={variant}
+      labels={labels}
       refreshKey={summaryKey}
       onOpen={open}
     />
@@ -207,10 +214,15 @@ export function Settings(props: SettingsProps) {
             index("page", null)
           ) : (
             <div class="hwc-settings hwc-settings-detail" key={shown}>
-              {section(shown, props, {
-                onEditingTitleChange: setEditingTitle,
-                onSaved: refreshSummary,
-              })}
+              {section(
+                shown,
+                props,
+                {
+                  onEditingTitleChange: setEditingTitle,
+                  onSaved: refreshSummary,
+                },
+                labels,
+              )}
             </div>
           )}
         </div>

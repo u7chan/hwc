@@ -360,6 +360,7 @@ export type TestAppOptions = {
   Pick<
     Parameters<typeof createApp>[0],
     | "models"
+    | "modelLabels"
     | "opencode"
     | "codex"
     | "claude"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
-import type { AgentModel, ModelAgentKind } from "../shared/agents";
-import { type AgentModelsRead, readAgentEfforts, readAgentModels } from "./api";
+import type { AgentModel, ModelAgentKind, ModelLabels } from "../shared/agents";
+import { type AgentModelsRead, readAgentEfforts, readAgentModels, readModelLabels } from "./api";
 import type { EffortCandidates, ModelCandidates } from "./launch-choice";
 
 type Candidates<T> = { read: T; reload: () => void };
@@ -40,6 +40,23 @@ export function useModelCandidates(
   return useCandidates<AgentModelsRead>([paneId, agent], (signal) =>
     readAgentModels(paneId, agent, signal),
   );
+}
+
+// 候補は alias のまま返し、表示だけを後から差し替える。読めなければ alias のまま。
+export function useModelLabels(enabled: boolean): ModelLabels | null {
+  const [labels, setLabels] = useState<ModelLabels | null>(null);
+
+  useEffect(() => {
+    setLabels(null);
+    if (!enabled) return;
+    const controller = new AbortController();
+    void readModelLabels(controller.signal).then((read) => {
+      if (!controller.signal.aborted) setLabels(read);
+    });
+    return () => controller.abort();
+  }, [enabled]);
+
+  return labels;
 }
 
 // effort の候補はモデルごとに違う。モデルが決まるまでは読まない。

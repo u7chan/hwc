@@ -2,6 +2,7 @@ import {
   AGENT_KINDS,
   AGENT_LABELS,
   type ModelAgentKind,
+  type ModelLabels,
   modelLabel,
   supportsModelSelection,
 } from "../../shared/agents";
@@ -72,6 +73,7 @@ export type SettingsCategoryValues = {
   notifications: boolean | null;
   restart: boolean | null;
   launchDefaults: LaunchDefaults | null;
+  modelLabels: ModelLabels | null;
 };
 
 // 一覧の行に出す現在値。読めていない値は null にして、行には何も出さない。
@@ -99,7 +101,7 @@ export function settingsCategoryValue(
       const agent = agentOfCategory(id);
       if (agent === null || values.launchDefaults === null) return null;
       const saved = values.launchDefaults[agent];
-      return saved === undefined ? "未設定" : modelLabel(agent, saved.model);
+      return saved === undefined ? "未設定" : modelLabel(agent, saved.model, values.modelLabels);
     }
   }
 }

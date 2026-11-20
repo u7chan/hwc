@@ -2,7 +2,7 @@
 
 hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 ページで把握するための表。仕様の正は実装と ADR で、この表は俯瞰用。実装や ADR を変えたら、同じ変更でこの表も更新する。
 
-最終確認: 2026-11-20（Herdr 0.9.5、`bun run e2e:serve` の架空 Herdr）
+最終確認: 2026-11-21（Herdr 0.9.5、`bun run e2e:serve` の架空 Herdr）
 
 凡例:
 
@@ -52,6 +52,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - コンテキスト使用量は、同じ mod が `$.session.usage()` から `{ tokens, window }` を読んで live ファイルへ書き、BFF が会話のスナップショットに重ねる（[ADR 0106](adr/0106-claude-context-usage.md)）。`window` は CLI が解決した値（1M など）で、hwc はモデル別の表を持たない。速度の鮮度（2.5 秒）が切れても使用量は残る。hwc 外で起動したペインでは出ない。usage の内訳と圧縮の区切りは `null` のまま
 - 質問（AskUserQuestion）と権限確認の応答待ちは、`blocked` の間だけ会話の末尾にカードで出す。実機の Claude Code 2.1.328 は待ちの間 transcript に tool_use を書かないので、hwc が `--settings` で渡す hook（`PreToolUse` / `PermissionRequest` など）が `claude/pending/<session id>.json` へ書いた質問・選択肢・複数選択を読む。それ以外のツールは名前と 1 行の要約だけにする。Esc で閉じても hook は呼ばれないので、解決は transcript の `tool_result` で知る。質問にはカードから答え、承認は端末で行う（[ADR 0112](adr/0112-claude-pending-in-chat.md)、[ADR 0099](adr/0099-answer-ask-user-question.md)）。hook は hwc から起動したペインにだけ入る
 - モデルと effort は transcript の `model` と `perTurnEffort` から出す。hwc から起動したペインは必ずモデルを指定しているので、最初の assistant が現れるまで起動時の指定で補う（[ADR 0033](adr/0033-launch-model-before-first-message.md)、[ADR 0104](adr/0104-launch-with-explicit-model.md)）。hwc 以外から起動したペインは、最初の応答まで出ない。入力欄は `Opus` / `Opus 5.5` のように表示名で出し、パネルに識別子（エイリアスまたは `claude-opus-5-5`）を出す。エイリアスの間は「起動時の指定」と注記する（[ADR 0108](adr/0108-claude-model-display-name.md)）。モデルは CLI のエイリアス（`fable` / `opus` / `sonnet` / `haiku`）、effort は `low` / `medium` / `high` / `xhigh` / `max` から選ぶ（[ADR 0096](adr/0096-claude-model-effort.md)）
+- 作成ダイアログと設定画面の静的なモデル表示は、BFF が CLI の `list_models` から alias の解決先（`opus` → `Opus 5.5`）を読み、プロセスメモリに 5 分だけキャッシュする（[ADR 0116](adr/0116-claude-model-labels-from-cli.md)）。候補はエイリアスのままで、ラベルを読めなければ family 名に戻る。走行中ペインのチップは、transcript にモデルが載るまでエイリアスのまま
 - 初回の trust prompt などで `agent_not_ready` が返っても、起動成功としてペインを残す（[ADR 0027](adr/0027-new-pane-agent.md)）。応答は端末で行う（上の注意）
 - 画像は v1 では出さない。画像だけを送った発言は本文が空になるため行にしない
 
@@ -88,6 +89,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 応答待ちの hook・sidecar・カード        | `src/server/claude-hook.ts`、`claude-settings.ts`、`src/server/chat/claude-sidecar.ts`、`src/client/pane/pending.tsx` |
 | 各 CLI の会話 reader                    | `src/server/chat/pi.ts`、`claude.ts`、`codex.ts`、`opencode.ts`                                                       |
 | 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`                                                             |
+| Claude のモデルラベル                   | `src/server/claude-model-labels.ts`、`src/client/launch-candidates.ts`                                                |
 | 新しいペインの既定と初期選択            | `src/server/launch-defaults.ts`、`src/client/launch-choice.ts`、`src/client/settings/AgentSettings.tsx`               |
 | 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts`                                                   |
 | コマンド候補とガード                    | `src/client/commands.ts`                                                                                              |
@@ -128,3 +130,4 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - [ADR 0108: Claude のモデルは表示名で出し、起動時の指定と実際のモデルを区別する](adr/0108-claude-model-display-name.md)
 - [ADR 0112: Claude の応答待ちは hook の sidecar から読み、チャットに出す。Web からは承認しない](adr/0112-claude-pending-in-chat.md)
 - [ADR 0114: モデルのラベルは、どのエージェントでも provider を出さず、Pi だけ残す](adr/0114-model-label-by-agent.md)
+- [ADR 0116: Claude のモデルラベルは CLI に問い合わせ、BFF で短時間キャッシュする](adr/0116-claude-model-labels-from-cli.md)
