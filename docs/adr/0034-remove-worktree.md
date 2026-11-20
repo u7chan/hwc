@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-06
+- Revised by: [ADR 0107](0107-close-space.md) の「リポジトリ本体のスペースも、最後の 1 つでなければ閉じられる」
 
 ## Context
 

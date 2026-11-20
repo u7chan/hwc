@@ -138,14 +138,13 @@ export function placeGroupKeyFor(
   return null;
 }
 
-// 重複したネイティブスペースだけを閉じられる。最後の 1 つは残す。
-// ファイルは消さないので、linked worktree の削除とは入り口を分ける。
-export function canCloseDuplicateSpace(state: AppState, workspaceId: string): boolean {
+// 最後の 1 つは閉じず、0 スペースにしない。Herdr が管理する linked worktree は
+// 「ワークツリーを削除」に任せる。閉じるだけではフォルダが残り、hwc から開き直せない。
+export function canCloseSpace(state: AppState, workspaceId: string): boolean {
+  if (state.workspaces.length < 2) return false;
   const workspace = state.workspaces.find((item) => item.id === workspaceId);
   if (workspace === undefined) return false;
-  const place = placeOf(workspace);
-  if (place === null) return false;
-  return state.workspaces.filter((item) => placeOf(item)?.key === place.key).length >= 2;
+  return !(workspace.worktree?.managed === true && workspace.worktree.isLinkedWorktree);
 }
 
 export function countWorkspacePanes(workspaceId: string, state: AppState): number {

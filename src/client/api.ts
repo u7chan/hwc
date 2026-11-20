@@ -903,7 +903,7 @@ export async function removeWorktree(workspaceId: string): Promise<CloseOutcome>
   }
 }
 
-// 重複したネイティブスペースを閉じる。ファイルは消さないので、削除より短い期限で足りる。
+// スペースを閉じる。ファイルは消さないので、削除より短い期限で足りる。
 // 消えたスペースは目的の状態に達しているため、close と同じく 404 は成功として扱う。
 export async function closeWorkspace(workspaceId: string): Promise<CloseOutcome> {
   try {

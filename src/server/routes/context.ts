@@ -158,26 +158,20 @@ export function createAppContext(options: CreateAppOptions) {
       return null;
     });
 
-  // 同じ場所の close 要求が同時に来ると、両方が重複チェックを通って最後の 1 つまで
+  // close 要求が同時に来ると、両方が「他にもスペースがある」チェックを通って 0 スペースまで
   // 閉じ得る。BFF は 1 プロセスなので、閉じている間と、閉じた直後の状態が届くまでの
-  // workspace id を覚えておき、後続の要求を 409 にする。
-  const closingSpaces = new Map<string, Set<string>>();
+  // workspace id を覚えておき、残りの数から外して後続の要求を 409 にする。
+  const closingSpaces = new Set<string>();
 
-  const releaseClosingSpace = (placeKey: string, workspaceId: string) => {
-    const ids = closingSpaces.get(placeKey);
-    if (ids === undefined) return;
-    ids.delete(workspaceId);
-    if (ids.size === 0) closingSpaces.delete(placeKey);
+  const releaseClosingSpace = (workspaceId: string) => {
+    closingSpaces.delete(workspaceId);
   };
 
   // 状態から消えた id はもう閉じている。次の close 要求でガードを外す。
   const pruneClosingSpaces = (state: AppState) => {
     const live = new Set(state.workspaces.map((workspace) => workspace.id));
-    for (const [placeKey, ids] of closingSpaces) {
-      for (const id of ids) {
-        if (!live.has(id)) ids.delete(id);
-      }
-      if (ids.size === 0) closingSpaces.delete(placeKey);
+    for (const id of closingSpaces) {
+      if (!live.has(id)) closingSpaces.delete(id);
     }
   };
 
@@ -233,7 +227,7 @@ export function createAppContext(options: CreateAppOptions) {
     return c.json({ error: "herdr_unavailable" }, 502);
   };
 
-  // 重複スペースを閉じる操作は、フォルダを消さない。linked worktree の削除とは
+  // スペースを閉じる操作は、フォルダを消さない。linked worktree の削除とは
   // エラーコードも入口も分ける。グループを閉じる要求は勝手に通さない。
   const closeSpaceFailure = (c: Context, error: unknown) => {
     if (error instanceof HerdrError) {

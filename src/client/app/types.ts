@@ -57,7 +57,7 @@ export type Removing = {
 // successor は閉じる確認で決めた後継。× では省略し、removeTab の既定に任せる。
 export type LeavingTab = { paneId: string; successor?: string | null };
 
-// 重複したネイティブスペースを閉じる確認。フォルダは残るが、実行中のエージェントは終わる。
+// スペースを閉じる確認。フォルダは残るが、実行中のエージェントは終わる。
 export type ClosingSpace = {
   workspaceId: string;
   label: string;
