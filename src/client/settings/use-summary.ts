@@ -1,13 +1,25 @@
 import { useEffect, useState } from "preact/hooks";
-import { fetchNotifications, fetchRestartSettings, fetchTemplates } from "../api";
+import type { LaunchDefaults } from "../../shared/launch-defaults";
+import {
+  fetchNotifications,
+  fetchRestartSettings,
+  fetchTemplates,
+  readLaunchDefaults,
+} from "../api";
 
 export type SettingsSummary = {
   templates: number | null;
   notifications: boolean | null;
   restart: boolean | null;
+  launchDefaults: LaunchDefaults | null;
 };
 
-const LOADING: SettingsSummary = { templates: null, notifications: null, restart: null };
+const LOADING: SettingsSummary = {
+  templates: null,
+  notifications: null,
+  restart: null,
+  launchDefaults: null,
+};
 
 // 一覧の行に出す現在値だけを読む。保存は各画面が持つので、ここでは値を写さない。
 // 詳細で保存したら refreshKey を進め、写しではなく BFF から引き直す。
@@ -34,6 +46,7 @@ export function useSettingsSummary(refreshKey: number): SettingsSummary {
       (view) => apply({ restart: view.command !== null }),
       () => apply({ restart: null }),
     );
+    void readLaunchDefaults(signal).then((launchDefaults) => apply({ launchDefaults }));
 
     return () => controller.abort();
   }, [refreshKey]);

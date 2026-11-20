@@ -13,7 +13,8 @@ import { NotificationSettings } from "./NotificationSettings";
 import { RestartSettings } from "./RestartSettings";
 import { SettingsIndex } from "./SettingsIndex";
 import { SplitSettings } from "./SplitSettings";
-import { settingsCategoryLabel, type SettingsCategoryId } from "./categories";
+import { agentOfCategory, settingsCategoryLabel, type SettingsCategoryId } from "./categories";
+import { AgentSettings } from "./AgentSettings";
 import { TemplateSettings } from "./TemplateSettings";
 
 type SettingsProps = {
@@ -61,6 +62,10 @@ function section(
       return <ConnectionSettings connection={props.connection} />;
     case "build":
       return <BuildSettings revision={props.revision} />;
+    default: {
+      const agent = agentOfCategory(id);
+      return agent === null ? null : <AgentSettings agent={agent} onSaved={callbacks.onSaved} />;
+    }
   }
 }
 

@@ -1,12 +1,6 @@
-import { useState } from "preact/hooks";
-import {
-  AGENT_KINDS,
-  AGENT_LABELS,
-  type AgentKind,
-  type AgentModel,
-  modelKey,
-  supportsModelSelection,
-} from "../shared/agents";
+import { useEffect, useState } from "preact/hooks";
+import { AGENT_KINDS, AGENT_LABELS, type AgentKind, type AgentModel } from "../shared/agents";
+import type { LaunchDefaults } from "../shared/launch-defaults";
 import {
   createPane,
   createWorktree,
@@ -14,7 +8,10 @@ import {
   type CreatePaneRequest,
   type CreatePaneOutcome,
   type CreateWorktreeOutcome,
+  readLaunchDefaults,
 } from "./api";
+import { useEffortCandidates, useModelCandidates } from "./launch-candidates";
+import { canLaunch, chooseEffort, chooseModel, savedEffortFor } from "./launch-choice";
 import { worktreeFailureNotice } from "./worktree-create";
 import { ChoiceCard } from "./ChoiceCard";
 import { DialogShell } from "./Dialog";
@@ -71,13 +68,31 @@ export function CreatePane(props: CreatePaneProps) {
   const [name, setName] = useState("");
   const [mode, setMode] = useState<Mode>("agent");
   const [agent, setAgent] = useState<AgentKind>("pi");
-  const [model, setModel] = useState<AgentModel | null>(null);
-  const [effort, setEffort] = useState<string | null>(null);
+  // 利用者が選んだ値だけを持つ。起動する値は、既定と候補から描画中に導く。
+  const [chosenModel, setChosenModel] = useState<AgentModel | null>(null);
+  const [chosenEffort, setChosenEffort] = useState<string | null>(null);
+  // 開いたときの既定のスナップショット。読めなかったときは既定なしとして開く。
+  const [defaults, setDefaults] = useState<LaunchDefaults>({});
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(true);
   // 作成済みか結果不明で、再送できない状態。フィールドを閉じ、「閉じる」だけを出す。
   const [settled, setSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void readLaunchDefaults(controller.signal).then((read) => {
+      if (!controller.signal.aborted && read !== null) setDefaults(read);
+    });
+    return () => controller.abort();
+  }, []);
+
+  const saved = defaults[agent] ?? null;
+  const models = useModelCandidates(props.paneId, agent);
+  const model = chooseModel(models.read, saved, chosenModel);
+  const efforts = useEffortCandidates(props.paneId, agent, model);
+  const effort = chooseEffort(efforts.read, model, saved, chosenEffort);
+  const launchable = mode === "shell" || canLaunch(model, efforts.read, effort);
 
   // 結果を受け取るまで閉じない。閉じると、作成済みのペインとエラーを見失う。
   const close = () => {
@@ -89,7 +104,7 @@ export function CreatePane(props: CreatePaneProps) {
     mode === "agent" ? { agent, model, effort, waitForShell } : null;
 
   const submit = async () => {
-    if (busy || !open) return;
+    if (busy || !open || !launchable) return;
 
     // 既存のシェルで起動する場合は、待たずに閉じる。起動は App が裏で行う。
     if (start) {
@@ -205,8 +220,8 @@ export function CreatePane(props: CreatePaneProps) {
             disabled={busy || settled}
             onClick={() => {
               setMode("shell");
-              setModel(null);
-              setEffort(null);
+              setChosenModel(null);
+              setChosenEffort(null);
             }}
           >
             <TerminalIcon size={16} />
@@ -230,8 +245,8 @@ export function CreatePane(props: CreatePaneProps) {
                 onSelect={() => {
                   if (kind === agent) return;
                   setAgent(kind);
-                  setModel(null);
-                  setEffort(null);
+                  setChosenModel(null);
+                  setChosenEffort(null);
                 }}
                 label={AGENT_LABELS[kind]}
               >
@@ -242,27 +257,25 @@ export function CreatePane(props: CreatePaneProps) {
             ))}
           </div>
           <CreatePaneModel
-            key={`${props.paneId}/${agent}`}
-            paneId={props.paneId}
-            agent={agent}
+            candidates={models.read}
             model={model}
+            saved={saved}
             disabled={busy || settled}
             onChange={(selected) => {
-              setModel(selected);
-              setEffort(null);
+              setChosenModel(selected);
+              setChosenEffort(null);
             }}
+            onRetry={models.reload}
           />
-          {supportsModelSelection(agent) ? (
-            <CreatePaneEffort
-              key={`${props.paneId}/${agent}/${model === null ? "" : modelKey(model)}`}
-              paneId={props.paneId}
-              agent={agent}
-              model={model}
-              effort={effort}
-              disabled={busy || settled}
-              onChange={setEffort}
-            />
-          ) : null}
+          <CreatePaneEffort
+            model={model}
+            candidates={efforts.read}
+            effort={effort}
+            savedEffort={savedEffortFor(model, saved)}
+            disabled={busy || settled}
+            onChange={setChosenEffort}
+            onRetry={efforts.reload}
+          />
         </>
       ) : (
         <p class="hwc-create-note">エージェントを起動せず、シェルだけを作ります。</p>
@@ -292,7 +305,7 @@ export function CreatePane(props: CreatePaneProps) {
             <button
               type="button"
               class="hwc-dialog-button hwc-dialog-primary"
-              disabled={busy}
+              disabled={busy || !launchable}
               aria-busy={busy}
               onClick={submit}
             >

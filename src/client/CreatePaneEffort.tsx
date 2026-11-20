@@ -1,58 +1,49 @@
-import { useEffect, useState } from "preact/hooks";
-import { type AgentModel, type ModelAgentKind } from "../shared/agents";
-import { readAgentEfforts } from "./api";
+import type { AgentModel } from "../shared/agents";
 import { CreatePaneSelect } from "./CreatePaneSelect";
+import type { EffortCandidates } from "./launch-choice";
 
+function effortNote(model: AgentModel | null, candidates: EffortCandidates): string | null {
+  if (model === null) return "モデルを選択すると指定できます。";
+  if (candidates === null) return "エフォートを取得できませんでした。";
+  if (candidates?.length === 0) return "このモデルはエフォート指定に対応していません。";
+  return null;
+}
+
+// 「デフォルト（CLI に任せる）」は出さない。effort に対応するモデルでは必ず選ぶ（ADR 0104）。
 export function CreatePaneEffort(props: {
-  paneId: string;
-  agent: ModelAgentKind;
   model: AgentModel | null;
+  candidates: EffortCandidates;
   effort: string | null;
+  // 選択中のモデルが既定のモデルのときの、既定の effort。選択肢に「（既定）」を添える。
+  savedEffort: string | null;
   disabled: boolean;
-  onChange: (effort: string | null) => void;
+  onChange: (effort: string) => void;
+  onRetry: () => void;
 }) {
-  const [efforts, setEfforts] = useState<string[] | null>();
-  const provider = props.model?.provider;
-  const modelId = props.model?.id;
-
-  useEffect(() => {
-    if (provider === undefined || modelId === undefined) return;
-    const controller = new AbortController();
-    void readAgentEfforts(
-      props.paneId,
-      props.agent,
-      { provider, id: modelId },
-      controller.signal,
-    ).then((values) => {
-      if (!controller.signal.aborted) setEfforts(values);
-    });
-    return () => controller.abort();
-  }, [props.paneId, props.agent, provider, modelId]);
-
-  const note =
-    props.model === null
-      ? "モデルを選択すると指定できます。"
-      : efforts === null
-        ? "エフォートを取得できませんでした。CLI のデフォルトで起動します。"
-        : efforts?.length === 0
-          ? "このモデルはエフォート指定に対応していません。"
-          : null;
+  const efforts = Array.isArray(props.candidates) ? props.candidates : [];
 
   return (
     <div class="hwc-create-effort">
       <CreatePaneSelect
         label="エフォート"
         noteId="hwc-create-effort-note"
-        note={note}
-        loading={props.model !== null && efforts === undefined}
+        note={effortNote(props.model, props.candidates)}
+        loading={props.model !== null && props.candidates === undefined}
         value={props.effort ?? ""}
-        disabled={props.disabled || props.model === null || !efforts?.length}
-        onChange={(value) => props.onChange(efforts?.includes(value) ? value : null)}
+        disabled={props.disabled || efforts.length === 0}
+        onRetry={props.candidates === null && !props.disabled ? props.onRetry : undefined}
+        onChange={(value) => {
+          if (efforts.includes(value)) props.onChange(value);
+        }}
       >
-        <option value="">デフォルト（CLI に任せる）</option>
-        {(efforts ?? []).map((effort) => (
+        {/* 未選択の間だけ出す。選んでも何も変わらない。disabled にすると、モデルが未選択で
+            ほかに選択肢が無いときに空欄で描かれる。 */}
+        {props.effort === null ? (
+          <option value="">{props.candidates?.length === 0 ? "なし" : "エフォートを選択"}</option>
+        ) : null}
+        {efforts.map((effort) => (
           <option key={effort} value={effort}>
-            {effort}
+            {effort === props.savedEffort ? `${effort}（既定）` : effort}
           </option>
         ))}
       </CreatePaneSelect>

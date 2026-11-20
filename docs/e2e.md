@@ -14,21 +14,21 @@ bun run e2e:serve
 
 ## 実環境との分離
 
-| 対象                                           | 実環境                                              | E2E                                                                                                                            |
-| ---------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Herdr ソケット                                 | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                                 |
-| pi セッション                                  | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                            |
-| pi モデルカタログ                              | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                               |
-| pi モデル・effort・上限                        | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                                 |
-| GitHub の PR                                   | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                                   |
-| Codex App Server                               | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない             |
-| OpenCode サービス                              | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                              |
-| Claude の transcript                           | `~/.claude/projects/<project>/<session uuid>.jsonl` | `CLAUDE_CONFIG_DIR` を `<root>/claude` へ向け、fixture が架空の transcript と添付を書く                                        |
-| ブランチ                                       | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                 |
-| git のリモートと差                             | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す |
-| 状態ディレクトリ（添付・ペイン時刻・通知設定） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                     |
-| Discord Webhook（通知のテスト・自動送信）      | 実 Discord のチャンネル                             | `HWC_E2E_DISCORD_WEBHOOK_SINK` を一時ファイルへ向け、POST せず送信内容を追記する                                               |
-| ポート                                         | 30000                                               | 31000                                                                                                                          |
+| 対象                                                               | 実環境                                              | E2E                                                                                                                            |
+| ------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Herdr ソケット                                                     | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                                 |
+| pi セッション                                                      | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                            |
+| pi モデルカタログ                                                  | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                               |
+| pi モデル・effort・上限                                            | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                                 |
+| GitHub の PR                                                       | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                                   |
+| Codex App Server                                                   | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない             |
+| OpenCode サービス                                                  | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける                                                                              |
+| Claude の transcript                                               | `~/.claude/projects/<project>/<session uuid>.jsonl` | `CLAUDE_CONFIG_DIR` を `<root>/claude` へ向け、fixture が架空の transcript と添付を書く                                        |
+| ブランチ                                                           | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                 |
+| git のリモートと差                                                 | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す |
+| 状態ディレクトリ（添付・ペイン時刻・通知設定・新しいペインの既定） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                     |
+| Discord Webhook（通知のテスト・自動送信）                          | 実 Discord のチャンネル                             | `HWC_E2E_DISCORD_WEBHOOK_SINK` を一時ファイルへ向け、POST せず送信内容を追記する                                               |
+| ポート                                                             | 30000                                               | 31000                                                                                                                          |
 
 `e2e/serve.ts` が架空 Herdr を起動してから `src/server.ts` を読み込む。BFF とクライアントは本番コードのままで、ソケット経路・状態同期・チャット読み取りを通る。実 Herdr のソケットには接続しない。
 
@@ -108,9 +108,9 @@ URL が下線付きで新しいタブに開くことを目視できる（[ADR 00
 
 モデル選択では、`pane.get` が fixture の cwd を返す。Pi の一覧は架空 CLI から、OpenCode の一覧と新規セッションは `e2e/fake-opencode.ts` の loopback サービスから読み書きする。候補の正は `e2e/fixtures/scenario.ts` の `STARTUP_MODELS`。Claude の候補は hwc の固定リスト（エイリアスと effort の段階）で、CLI もサービスも起動しない。`agent.start` は受け取った引数を架空の端末出力にも残し、モデル指定した OpenCode には架空のセッション参照を付ける。
 
-OpenCode の未起動表示は、架空の `<root>/opencode/service.json` だけを一時退避してダイアログを開き、「OpenCode サービス未起動」と出ることを確認する。モデル欄は無効でもデフォルト起動は選べ、サービスの自動起動は行わない。接続情報を戻してダイアログを開き直すとモデル一覧が復帰することも確かめる。
+OpenCode の未起動表示は、架空の `<root>/opencode/service.json` だけを一時退避してダイアログを開き、「OpenCode サービス未起動。サービスを起動してから再取得してください。」と「再取得」が出ることを確認する。モデル欄は無効で、作成ボタンも押せない（[ADR 0104](adr/0104-launch-with-explicit-model.md)）。サービスの自動起動は行わない。接続情報を戻して「再取得」を押すと、ダイアログを開き直さずにモデル一覧が復帰することも確かめる。設定画面の「エージェント」→「OpenCode」でも同じ表示と再取得になる。
 
-effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで指定が解除されることを確かめる。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。`@demo/start-fails` は起動に失敗するモデルで、`agent.start` が `agent_spawn_failed` を返す。新しいペインとワークツリーの起動失敗（シェルを残してペイン内に行を出す）を、実 CLI に触れずに確かめるために使う。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。モデルを指定せずに起動した Pi は、チャット画面を開いたときに架空 RPC の `get_state` から既定を読み、解決中はスケルトンが出る（[ADR 0087](adr/0087-default-model-display.md)）。既定は `DEFAULT_PI_MODEL` / `DEFAULT_PI_EFFORT` で、架空 Herdr が `agent.start` に記録する値と揃えてある。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
+effort は同 fixture のエージェント別候補を使う。モデルを選択したときだけ候補が読まれ、モデル・エージェント・シェルの切り替えで選択が解除されることを確かめる。effort に対応するモデルでは、effort も選ぶまで作成ボタンを押せない。`@demo/beam-small` は effort 非対応、長いモデル名は選択肢が異なるモデルを表す。`@demo/start-fails` は起動に失敗するモデルで、`agent.start` が `agent_spawn_failed` を返す。新しいペインとワークツリーの起動失敗（シェルを残してペイン内に行を出す）を、実 CLI に触れずに確かめるために使う。Pi は架空 RPC の `get_state` / `get_available_thinking_levels`、Codex は `model/list`、OpenCode は `variants` を通す。Pi は実物と同じく、最初のメッセージを送るまで架空セッションを作らない。起動したペインのチャットのモデル・effort 表示は、送信前は BFF が起動時の指定で補い（[ADR 0033](adr/0033-launch-model-before-first-message.md)）、送信後は架空セッションに記録された値になる。モデルを指定せずに起動した Pi は、チャット画面を開いたときに架空 RPC の `get_state` から既定を読み、解決中はスケルトンが出る（[ADR 0087](adr/0087-default-model-display.md)）。hwc の画面はモデルを指定して起動するので、この経路は起動 API を直接呼んだときだけ通る。既定は `DEFAULT_PI_MODEL` / `DEFAULT_PI_EFFORT` で、架空 Herdr が `agent.start` に記録する値と揃えてある。取得失敗・遅い応答によるモデル間の取り違えはブラウザのリクエスト差し替えで確かめる。
 
 Claude の会話は `CLAUDE_CONFIG_DIR`（E2E では `<root>/claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[ADR 0097](adr/0097-claude-chat-transcript.md)）。fixture が架空の transcript を 2 本書く。会話を表示する `quickstart`（`w2:t2` の `w2:p2`、待機）は、`w2:t1` に足すと分割セルになり読み幅が半分になるため別タブに置く。transcript は 248 往復の履歴（500 メッセージの上限を超え、`truncated` になる）と、そのあとの 6 行（同じ `message.id` の text 連結、tool_result、`isMeta`、添付チップ、書式の崩れた注記）で作る。添付付きの user の 1 行は、実機と同じく貼り付けの `<pasted_content>` で包んで書く。要対応の `writer`（`w2:p1`）には、待ちに入る前の会話で終わる transcript と、質問を持つ hook の sidecar を足し、`blocked` のまま応答待ちのカードを出す（[ADR 0098](adr/0098-claude-pending-in-chat.md)、下の「blocked + 応答待ちの作り方」）。tool_use と tool_result の突き合わせ、input の検証、上限は `src/server/chat/claude.test.ts` と `claude-sidecar.test.ts` で確かめる。実ホームの `~/.claude` は読まない。
 
@@ -262,14 +262,27 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 
 ## 新しいペインの作成
 
-1. `frontend` のペイン見出しの「…」から「新しいペイン」を開き、エージェント Pi のまま「作成して起動」を押す。ダイアログはほどなく閉じ、新しいペインが開く（[ADR 0084](adr/0084-launch-after-create.md)）。
+1. `frontend` のペイン見出しの「…」から「新しいペイン」を開く。既定が無ければ、モデルは「モデルを選択」のままで「作成して起動」を押せない。エージェント Pi のまま、モデルとエフォートを選んで「作成して起動」を押す。ダイアログはほどなく閉じ、新しいペインが開く（[ADR 0084](adr/0084-launch-after-create.md)、[ADR 0104](adr/0104-launch-with-explicit-model.md)）。
 2. 開いた直後、本文はスケルトンで、入力欄はエージェント仕様（`$` が無く「メッセージを入力」）になっている。起動が終わるまで送信ボタンは無効でスピナーが出る。入力欄にはすぐ打てる。この間、添付の +、`/` の候補、引用、停止は出ない。
 3. そのままプロンプトを打ち、起動が終わって送信ボタンが送信に戻ったら押す。打った本文が送られ、会話に user の行が出る。
 4. モデルに `@demo/start-fails` を選んで作ると、ペインはシェルとして残り、入力欄はエージェント仕様のまま、上に起動失敗の行が出る。打った下書きは残る。「再試行」でもう一度起動でき、「シェルとして使う」で `$ コマンドを入力` に切り替わる。
 5. 起動中に別のペインを開いて戻っても、待ちと下書きは残る。
 6. 文字を打って 250ms 以内に別のペインへ切り替え、すぐ戻る。下書きは残っている（保存待ちのタイマーを捨てない）。
-7. 起動したペインの `/chat` をブラウザのリクエスト差し替えで 502 にすると、会話ではなく端末出力に切り替わる。モデルを指定して起動していれば、入力欄にそのモデルと effort が残る（[ADR 0101](adr/0101-launch-model-while-chat-unavailable.md)）。デフォルトモデルで起動したペインでは、最初の応答までモデルは出ない。
+7. 起動したペインの `/chat` をブラウザのリクエスト差し替えで 502 にすると、会話ではなく端末出力に切り替わる。hwc から起動したペインは必ずモデルを指定しているので、入力欄にそのモデルと effort が残る（[ADR 0101](adr/0101-launch-model-while-chat-unavailable.md)）。Claude でも同じ。
 8. 再読み込みすると起動意図は失われる。起動済みならエージェント、途中ならシェルの表示になる。
+
+## 新しいペインの既定
+
+新しいペインのモデルと effort の初期値は、設定画面でエージェントごとに決める（[ADR 0104](adr/0104-launch-with-explicit-model.md)）。既定は状態ディレクトリの `launch-defaults.json` にあり、E2E では起動のたびに空から始まる。
+
+1. 設定を開く。「エージェント」のまとまりに Pi / Claude / Codex / OpenCode が並び、どの行も `未設定` になっている。
+2. 「Claude」を開き、モデルに `claude/sonnet`、エフォートに `high` を選んで「保存」を押す。「現在の既定」と一覧の行が `claude/sonnet / high` になる。同じ値のままでは「保存」を押せない。
+3. 「新しいペイン」を開いてエージェントのカードで Claude を選ぶ。モデルは `claude/sonnet（既定）`、エフォートは `high（既定）` で選ばれており、すぐに「作成して起動」を押せる。Pi のカードに戻すと、Pi の既定（未設定なら「モデルを選択」）に切り替わる。
+4. Claude のままモデルを `claude/opus` に変えると、エフォートは「エフォートを選択」に戻り、作成ボタンは押せない。`claude/sonnet（既定）` に戻すと `high（既定）` が選ばれる。
+5. 既定のモデルが候補に無い場合は、ブラウザのリクエスト差し替えで `GET /api/launch-defaults` に `{"defaults":{"claude":{"model":{"provider":"claude","id":"missing"},"effort":"high"}}}` を返して開き直す。モデルは「モデルを選択」になる。エフォートだけが候補に無い場合（`"effort":"none"`）は、モデルが選ばれてエフォートは未選択になる。`GET /api/launch-defaults` を 500 にしても、既定なしとして開いて選べば起動できる。
+6. Claude の既定で起動し、`/chat` を 502 にしても、入力欄に `sonnet` と `high` が出る（[ADR 0101](adr/0101-launch-model-while-chat-unavailable.md)）。
+7. 設定の「Claude」で「解除」を押すと、行が `未設定` に戻り、ダイアログも「モデルを選択」で開く。
+8. `@demo/beam-small`（effort 非対応）を既定にすると、行はモデルだけになり、ダイアログはエフォート欄を「なし」で無効にしたまま作成ボタンを押せる。
 
 ## シェルペインからの起動
 
@@ -278,7 +291,7 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 1. `scratch` の `notes`（シェル、待機）を開く。入力欄の下の左端（会話ペインの + と同じ位置）に「エージェントを起動」が出る。エージェントのペイン（`docs` の `writer`）には出ない。
 2. 入力欄に `ls` と入れて送る。端末出力に `ls` が追記される。シェルには会話が無いので、控えは作られない。
 3. 押すと「エージェントを起動」のダイアログが開く。ペイン名の欄と「エージェント / シェル」の切り替えは無く、説明にペイン ID と、作業ディレクトリと履歴が残ることが出る。
-4. そのまま「起動」を押すと、ダイアログが閉じ、本文がスケルトン、入力欄はエージェント仕様（`$` なし）で送信ボタンがスピナーになる。この間も入力欄には打てる。シェルの起動コマンドや Pi の TUI の途中、空状態は出ない。数秒で Pi の会話ビューと入力欄になり、一覧の行もエージェントのペインになる。ペインは増えない。会話ビューに、手順 2 で送った `ls` は出ない。
+4. モデルとエフォートを選んで「起動」を押すと、ダイアログが閉じ、本文がスケルトン、入力欄はエージェント仕様（`$` なし）で送信ボタンがスピナーになる。この間も入力欄には打てる。シェルの起動コマンドや Pi の TUI の途中、空状態は出ない。数秒で Pi の会話ビューと入力欄になり、一覧の行もエージェントのペインになる。ペインは増えない。会話ビューに、手順 2 で送った `ls` は出ない。
 5. `acme-dashboard` の `shell`（`bun --watch src/server.ts` が動いている）で同じ入口を押すと、ダイアログは開かず、入力欄の上に「コマンドが動いています。停止してから起動できます」が出る。停止ボタンでコマンドを止めてから押すと、ダイアログが開く。
 6. 分割セル（広い画面で 2 枚以上）では、+ と同じ規則で入口が出ない。
 
@@ -371,7 +384,7 @@ fixture の `sandbox` は同じ場所を指す 2 スペースで、どちらも�
 
 1. `acme-dashboard`（リポジトリ本体）の見出しの先頭アイコンを押してメニューを開き、「新しいワークツリー」を選ぶ。
    ダイアログの見出しが「新しいワークツリー」で、ブランチ名と保存先が Herdr 任せである旨が出る。
-2. そのまま「作成して起動」を押すと、架空 Herdr にリンクされたスペースが 1 つ増え、hwc が
+2. モデルとエフォートを選んで「作成して起動」を押すと、架空 Herdr にリンクされたスペースが 1 つ増え、hwc が
    その root pane を開く。ダイアログはワークツリーと root pane ができるまでで閉じ、起動は裏で続く。
    開いた直後は本文がスケルトン、入力欄はエージェント仕様で送信ボタンがスピナーのまま、入力を待つ。
    シェルの起動コマンドや Pi の TUI の途中、空状態は出ない。数秒で入力欄と会話（空状態を含む）に

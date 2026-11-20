@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import type { Context, Env } from "hono";
 import {
   attachmentContentType,
@@ -42,6 +43,7 @@ import {
   type RestartSettingsStore,
 } from "../restart";
 import { createTemplatesStore, type TemplatesStore } from "../templates";
+import { createLaunchDefaultsStore, type LaunchDefaultsStore } from "../launch-defaults";
 import { defaultPreviewRoots } from "../message-files";
 import type { AgentModelsClient } from "../agent-models";
 import { createQuestionAnswerer } from "../answer-question";
@@ -107,6 +109,10 @@ export type CreateAppOptions = {
   editMarkerTimeoutMs?: number;
   // 定型文の保存先。テストでは実ファイルへ書かないよう差し替える。
   templates?: TemplatesStore;
+  // 新しいペインの既定モデル・effort の保存先。テストでは実ファイルへ書かないよう差し替える。
+  launchDefaults?: LaunchDefaultsStore;
+  // 設定画面の候補を読むディレクトリ。テストでは実ホームを渡さないよう差し替える。
+  homeDirectory?: string;
 };
 
 export function createAppContext(options: CreateAppOptions) {
@@ -135,6 +141,8 @@ export function createAppContext(options: CreateAppOptions) {
     restartDelayMs = RESTART_DELAY_MS,
     editMarkerTimeoutMs = 10_000,
     templates = createTemplatesStore({ read: () => null, write: () => {} }),
+    launchDefaults = createLaunchDefaultsStore({ read: () => null, write: () => {} }),
+    homeDirectory = homedir(),
     loadPiDefaults: readPiDefaults = loadPiDefaults,
   } = options;
 
@@ -411,6 +419,8 @@ export function createAppContext(options: CreateAppOptions) {
     restart,
     editMarkerTimeoutMs,
     templates,
+    launchDefaults,
+    homeDirectory,
     stateMessage,
     current,
     rootsFor,

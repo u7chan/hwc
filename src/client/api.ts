@@ -43,6 +43,11 @@ import {
 import { parsePullRequest, type PullRequest } from "../shared/pull-request";
 import { parseRestartSettings, type RestartSettings } from "../shared/restart";
 import { parseTemplates, type Template } from "../shared/templates";
+import {
+  type LaunchDefault,
+  type LaunchDefaults,
+  parseLaunchDefaults,
+} from "../shared/launch-defaults";
 
 // BFF 側の期限: Herdr ソケット 8 秒、エージェント起動 30 秒、worktree 60 秒、git 60 秒。
 // クライアントの期限はこれを目安に置く。
@@ -994,16 +999,19 @@ export function agentModelsOutcome(status: number, value: unknown): AgentModelsR
   return status >= 200 && status < 300 ? toAgentModels(value) : null;
 }
 
+// paneId が null のときは設定画面の候補で、BFF がホームディレクトリで読む。
 export async function readAgentModels(
-  paneId: string,
+  paneId: string | null,
   agent: ModelAgentKind,
   signal: AbortSignal,
 ): Promise<AgentModelsRead> {
   try {
-    const input = { ...paneParam(paneId), query: { agent } };
-    const response = await client.api.panes[":id"].models.$get(input, {
-      init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
-    });
+    const init = { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) };
+    const query = { query: { agent } };
+    const response =
+      paneId === null
+        ? await client.api.models.$get(query, { init })
+        : await client.api.panes[":id"].models.$get({ ...paneParam(paneId), ...query }, { init });
     return agentModelsOutcome(response.status, await response.json());
   } catch {
     return null;
@@ -1018,23 +1026,60 @@ export function toAgentEfforts(value: unknown): string[] | null {
 }
 
 export async function readAgentEfforts(
-  paneId: string,
+  paneId: string | null,
   agent: ModelAgentKind,
   model: AgentModel,
   signal: AbortSignal,
 ): Promise<string[] | null> {
   try {
-    const input = {
-      ...paneParam(paneId),
-      query: { agent, provider: model.provider, model: model.id },
-    };
-    const response = await client.api.panes[":id"].efforts.$get(input, {
-      init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
-    });
+    const init = { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) };
+    const query = { query: { agent, provider: model.provider, model: model.id } };
+    const response =
+      paneId === null
+        ? await client.api.efforts.$get(query, { init })
+        : await client.api.panes[":id"].efforts.$get({ ...paneParam(paneId), ...query }, { init });
     if (!response.ok) return null;
     return toAgentEfforts(await response.json());
   } catch {
     return null;
+  }
+}
+
+export function toLaunchDefaults(value: unknown): LaunchDefaults | null {
+  if (typeof value !== "object" || value === null) return null;
+  const defaults = (value as { defaults?: unknown }).defaults;
+  if (typeof defaults !== "object" || defaults === null || Array.isArray(defaults)) return null;
+  return parseLaunchDefaults(defaults);
+}
+
+// 読めなかったときは null。作成ダイアログは既定なしとして開く。
+export async function readLaunchDefaults(signal: AbortSignal): Promise<LaunchDefaults | null> {
+  try {
+    const response = await client.api["launch-defaults"].$get(
+      {},
+      { init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) } },
+    );
+    if (!response.ok) return null;
+    return toLaunchDefaults(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+export type LaunchDefaultSaveResult = { ok: true; defaults: LaunchDefaults } | { ok: false };
+
+// value が null なら、そのエージェントの既定を解除する。
+export async function saveLaunchDefault(
+  agent: ModelAgentKind,
+  value: LaunchDefault | null,
+): Promise<LaunchDefaultSaveResult> {
+  try {
+    const response = await client.api["launch-defaults"].$put({ json: { agent, value } });
+    if (!response.ok) return { ok: false };
+    const defaults = toLaunchDefaults(await response.json());
+    return defaults === null ? { ok: false } : { ok: true, defaults };
+  } catch {
+    return { ok: false };
   }
 }
 

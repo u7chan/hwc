@@ -27,6 +27,7 @@ import {
 } from "./server/notifications";
 import { createRestartSettingsFile, createRestartSettingsStore } from "./server/restart";
 import { createTemplatesFile, createTemplatesStore } from "./server/templates";
+import { createLaunchDefaultsFile, createLaunchDefaultsStore } from "./server/launch-defaults";
 import index from "../index.html";
 
 const stateRoot = defaultStateRoot();
@@ -49,6 +50,7 @@ const discordSender = createDiscordSender({
 });
 const restartSettings = createRestartSettingsStore(createRestartSettingsFile(stateRoot));
 const templates = createTemplatesStore(createTemplatesFile(stateRoot));
+const launchDefaults = createLaunchDefaultsStore(createLaunchDefaultsFile(stateRoot));
 
 // 通知は状態の publish を購読する。startStateSync より先に張り、購読後の最初の publish を
 // 「送らない基準」として受け取る。
@@ -90,6 +92,7 @@ const app = createApp({
   discordSender,
   restartSettings,
   templates,
+  launchDefaults,
 });
 
 // Herdr の応答を待つルート（ワークツリー作成・削除・モデル指定の起動）は数十秒返さない。

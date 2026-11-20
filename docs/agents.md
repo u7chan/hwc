@@ -18,7 +18,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 起動時の effort 指定                     | ○              | ○                       | ○             | ○（サービス必要） |
 | Web での会話表示                         | ○              | ○                       | ○（hwc 起動） | ○                 |
 | 送信・停止                               | ○              | ○                       | ○             | ○                 |
-| モデル・effort の表示                    | ○              | △                       | ○             | ○                 |
+| モデル・effort の表示                    | ○              | ○                       | ○             | ○                 |
 | コンテキスト使用量・usage                | ○              | ×                       | ×             | ○                 |
 | 圧縮の区切り                             | ○              | ×                       | ×             | ○                 |
 | 添付ファイル（画像以外も可）             | ○              | △                       | △             | △                 |
@@ -49,7 +49,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - 実行中の段階（「考えています」「Read を実行中」など）と方向は、transcript の `api-request` / `tool_use` / `tool_result` から導く（[ADR 0100](adr/0100-claude-live-activity.md)）。要求と応答の対応が取れない版・形のときは出さない。方向はターン内の最後の assistant 本文（無ければ thinking の末尾）で、ツールのときは対象を 1 行目、方向を 2 行目に置く。`input.command` は出さない
 - 生成中の `tok/s` は、hwc が `claude-mod/` を `--plugin-dir` で渡して起動したペインだけ。`--plugin-dir` は 2.1.265 以降、mod は 2.1.287 以降。2.1.265〜2.1.286 は起動できるが速度だけ出ない。2.1.265 未満では起動自体が失敗する。mod が `turn.step` の差分から見えている出力の速度を推定し、`<state root>/claude/live/<session id>.json` に書く。段階が `thinking` / `writing` / `tool-call` で、書き込みが 2.5 秒以内のときだけ BFF が段階に重ねる（[ADR 0102](adr/0102-claude-live-tok-rate.md)）。数字は画面に流れている出力の推定で、`usage.output_tokens` とは一致しない。thinking が隠れるモデル・設定では請求上の output より小さく出る
 - 質問（AskUserQuestion）と権限確認の応答待ちは、`blocked` の間だけ会話の末尾にカードで出す。実機の Claude Code 2.1.328 は待ちの間 transcript に tool_use を書かないので、hwc が `--settings` で渡す hook（`PreToolUse` / `PermissionRequest` など）が `claude/pending/<session id>.json` へ書いた質問・選択肢・複数選択を読む。それ以外のツールは名前と 1 行の要約だけにする。Esc で閉じても hook は呼ばれないので、解決は transcript の `tool_result` で知る。質問にはカードから答え、承認は端末で行う（[ADR 0098](adr/0098-claude-pending-in-chat.md)、[ADR 0099](adr/0099-answer-ask-user-question.md)）。hook は hwc から起動したペインにだけ入る
-- モデルと effort は transcript の `model` と `perTurnEffort` から出す。モデルを指定して起動したペインは、最初の assistant が現れるまで起動時の指定で補う（[ADR 0033](adr/0033-launch-model-before-first-message.md)）。デフォルト起動では最初の応答まで出ない。モデルは CLI のエイリアス（`fable` / `opus` / `sonnet` / `haiku`）、effort は `low` / `medium` / `high` / `xhigh` / `max` から選ぶ（[ADR 0096](adr/0096-claude-model-effort.md)）
+- モデルと effort は transcript の `model` と `perTurnEffort` から出す。hwc から起動したペインは必ずモデルを指定しているので、最初の assistant が現れるまで起動時の指定で補う（[ADR 0033](adr/0033-launch-model-before-first-message.md)、[ADR 0104](adr/0104-launch-with-explicit-model.md)）。hwc 以外から起動したペインは、最初の応答まで出ない。モデルは CLI のエイリアス（`fable` / `opus` / `sonnet` / `haiku`）、effort は `low` / `medium` / `high` / `xhigh` / `max` から選ぶ（[ADR 0096](adr/0096-claude-model-effort.md)）
 - コンテキスト使用量と圧縮の区切りは `null`。usage・モデル別の window・圧縮ラインは別 Issue で扱う
 - 初回の trust prompt などで `agent_not_ready` が返っても、起動成功としてペインを残す（[ADR 0027](adr/0027-new-pane-agent.md)）。応答は端末で行う（上の注意）
 - 画像は v1 では出さない。画像だけを送った発言は本文が空になるため行にしない
@@ -63,7 +63,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 ### OpenCode
 
 - 会話はローカルサービスの HTTP API から読む（[ADR 0028](adr/0028-opencode-chat.md)）。`service.json` が無い、loopback でない、API が失敗するときは端末出力へフォールバックする
-- モデルと effort はサービス API の model と variants から選ぶ。サービス未起動ではモデル候補が出ないが、デフォルト起動はできる（[ADR 0030](adr/0030-new-pane-model.md)）
+- モデルと effort はサービス API の model と variants から選ぶ。サービス未起動ではモデル候補が出ず、hwc からは起動できない。サービスを起動してから再取得する（[ADR 0030](adr/0030-new-pane-model.md)、[ADR 0104](adr/0104-launch-with-explicit-model.md)）
 - 添付ファイルの実体は渡さず、本文のパス注記だけを送る
 - 圧縮は完了したものだけを区切りにし、`tokensBefore` は `null`
 
@@ -71,7 +71,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 - 会話はセッション JSONL の active branch から読む（[ADR 0013](adr/0013-pi-session-chat.md)）
 - モデル・effort・context・usage・圧縮・添付ファイル・引用の基準実装
-- デフォルトモデルで起動したペインは、チャット画面を開いたときと `/new` で会話が空に戻ったときに pi の既定モデルと effort を読む。モデルを指定して起動したペインは起動時の指定で補う。どちらも会話にモデルが載っている間はセッションの値を使う。hwc 以外から起動したペインは対象外（[ADR 0033](adr/0033-launch-model-before-first-message.md)、[ADR 0087](adr/0087-default-model-display.md)、[ADR 0091](adr/0091-empty-session-model-display.md)）
+- デフォルトモデルで起動したペインは、チャット画面を開いたときと `/new` で会話が空に戻ったときに pi の既定モデルと effort を読む。hwc の画面はモデルを指定して起動するので（[ADR 0104](adr/0104-launch-with-explicit-model.md)）、これはモデル未指定の起動 API を直接呼んだ場合だけ。モデルを指定して起動したペインは起動時の指定で補う。どちらも会話にモデルが載っている間はセッションの値を使う。hwc 以外から起動したペインは対象外（[ADR 0033](adr/0033-launch-model-before-first-message.md)、[ADR 0087](adr/0087-default-model-display.md)、[ADR 0091](adr/0091-empty-session-model-display.md)）
 - プロジェクトの `Trust project folder?` は、既定の `Trust` だけを専用ビューで回答する。`.pi` や `.agents/skills` など信頼対象のリソースがあるフォルダでは、起動がこの確認で止まる。他の選択肢は端末で行う（[ADR 0044](adr/0044-pi-project-trust.md)）。hwc は `--approve` を渡さない
 - Herdr は Pi の信頼確認を `blocked` としないため、一覧の行は `idle` のまま。確認ビューは、開いているペインの画面から出す
 - ライブ activity は pi 拡張の sidecar がある場合だけ（[ADR 0035](adr/0035-live-pi-activity.md)）。Claude は transcript の段階に、hwc 起動時だけ mod の速度を重ねる（[ADR 0102](adr/0102-claude-live-tok-rate.md)）
@@ -87,6 +87,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 応答待ちの hook・sidecar・カード        | `src/server/claude-hook.ts`、`claude-settings.ts`、`src/server/chat/claude-sidecar.ts`、`src/client/pane/pending.tsx` |
 | 各 CLI の会話 reader                    | `src/server/chat/pi.ts`、`claude.ts`、`codex.ts`、`opencode.ts`                                                       |
 | 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`                                                             |
+| 新しいペインの既定と初期選択            | `src/server/launch-defaults.ts`、`src/client/launch-choice.ts`、`src/client/settings/AgentSettings.tsx`               |
 | 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts`                                                   |
 | コマンド候補とガード                    | `src/client/commands.ts`                                                                                              |
 | ライブ activity                         | `src/server/chat/activity.ts`（pi）、`src/server/chat/claude.ts`（Claude）                                            |
@@ -121,3 +122,4 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - [ADR 0099: AskUserQuestion は Esc で閉じ、選んだ内容を本文で答える](adr/0099-answer-ask-user-question.md)
 - [ADR 0100: Claude の実行中の段階は transcript の進行行から出す](adr/0100-claude-live-activity.md)
 - [ADR 0102: Claude の生成中の tok/s は同梱 mod のファイルから出す](adr/0102-claude-live-tok-rate.md)
+- [ADR 0104: 新しいペインは、hwc の既定から選んだモデルと effort で必ず起動する](adr/0104-launch-with-explicit-model.md)

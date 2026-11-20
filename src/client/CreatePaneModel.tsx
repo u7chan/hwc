@@ -1,42 +1,28 @@
-import { useEffect, useState } from "preact/hooks";
-import {
-  type AgentKind,
-  type AgentModel,
-  modelKey,
-  supportsModelSelection,
-} from "../shared/agents";
-import { type AgentModelsRead, readAgentModels } from "./api";
+import { type AgentModel, modelKey } from "../shared/agents";
+import type { LaunchDefault } from "../shared/launch-defaults";
 import { CreatePaneSelect } from "./CreatePaneSelect";
+import { type ModelCandidates, sameModel } from "./launch-choice";
 
+function modelNote(candidates: ModelCandidates): string | null {
+  if (candidates === "opencode_not_running")
+    return "OpenCode サービス未起動。サービスを起動してから再取得してください。";
+  if (candidates === null) return "モデルを取得できませんでした。";
+  if (candidates?.length === 0) return "選択できるモデルがありません。";
+  return null;
+}
+
+// 「デフォルトモデル」（CLI に任せる）は出さない。候補を読めなければ選べず、起動もできない
+// （ADR 0104）。
 export function CreatePaneModel(props: {
-  paneId: string;
-  agent: AgentKind;
+  candidates: ModelCandidates;
   model: AgentModel | null;
+  saved: LaunchDefault | null;
   disabled: boolean;
-  onChange: (model: AgentModel | null) => void;
+  onChange: (model: AgentModel) => void;
+  onRetry: () => void;
 }) {
-  const [result, setResult] = useState<AgentModelsRead>();
-  const models = Array.isArray(result) ? result : null;
-  const supported = supportsModelSelection(props.agent);
-
-  useEffect(() => {
-    if (!supportsModelSelection(props.agent)) return;
-    const controller = new AbortController();
-    void readAgentModels(props.paneId, props.agent, controller.signal).then((value) => {
-      if (!controller.signal.aborted) setResult(value);
-    });
-    return () => controller.abort();
-  }, [props.paneId, props.agent]);
-
-  const note = !supported
-    ? null
-    : result === "opencode_not_running"
-      ? "OpenCode サービス未起動。デフォルトモデルで起動します。"
-      : result === null
-        ? "モデルを取得できませんでした。デフォルトモデルで起動します。"
-        : result?.length === 0
-          ? "選択できるモデルがありません。デフォルトモデルで起動します。"
-          : null;
+  const models = Array.isArray(props.candidates) ? props.candidates : [];
+  const note = modelNote(props.candidates);
 
   return (
     <div class="hwc-create-model">
@@ -44,18 +30,23 @@ export function CreatePaneModel(props: {
         label="モデル"
         noteId="hwc-create-model-note"
         note={note}
-        loading={supported && result === undefined}
+        loading={props.candidates === undefined}
         value={props.model === null ? "" : modelKey(props.model)}
-        disabled={props.disabled || !supported || !models?.length}
+        disabled={props.disabled || models.length === 0}
+        onRetry={note === null || props.disabled ? undefined : props.onRetry}
         onChange={(value) => {
-          const selected = models?.find((model) => modelKey(model) === value);
-          props.onChange(selected ?? null);
+          const selected = models.find((model) => modelKey(model) === value);
+          if (selected !== undefined) props.onChange(selected);
         }}
       >
-        <option value="">デフォルトモデル</option>
-        {(models ?? []).map((model) => (
+        {/* 未選択の間だけ出す。選んでも何も変わらない。disabled にすると、ほかに選択肢が
+            無いときに空欄で描かれる。 */}
+        {props.model === null ? <option value="">モデルを選択</option> : null}
+        {models.map((model) => (
           <option key={modelKey(model)} value={modelKey(model)}>
-            {modelKey(model)}
+            {props.saved !== null && sameModel(model, props.saved.model)
+              ? `${modelKey(model)}（既定）`
+              : modelKey(model)}
           </option>
         ))}
       </CreatePaneSelect>

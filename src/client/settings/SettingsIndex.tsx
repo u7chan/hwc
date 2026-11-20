@@ -1,5 +1,6 @@
 import type { ConnectionStatus } from "../connection";
 import {
+  AgentGlyphIcon,
   BellIcon,
   ChevronRightIcon,
   CommitIcon,
@@ -11,7 +12,9 @@ import {
 } from "../icons";
 import type { ThemePreference } from "../theme";
 import {
+  agentOfCategory,
   SETTINGS_CATEGORIES,
+  SETTINGS_GROUP_LABELS,
   settingsCategoryValue,
   type SettingsCategory,
   type SettingsCategoryId,
@@ -46,6 +49,8 @@ function CategoryIcon(props: { id: SettingsCategoryId }) {
       return <LinkIcon size={20} />;
     case "build":
       return <CommitIcon size={20} />;
+    default:
+      return <AgentGlyphIcon agent={agentOfCategory(props.id)} size={20} />;
   }
 }
 
@@ -88,6 +93,7 @@ export function SettingsIndex(props: SettingsIndexProps) {
     templates: summary.templates,
     notifications: summary.notifications,
     restart: summary.restart,
+    launchDefaults: summary.launchDefaults,
   };
 
   const rows = (group: SettingsCategory["group"]) =>
@@ -107,7 +113,9 @@ export function SettingsIndex(props: SettingsIndexProps) {
     return (
       <nav class="hwc-settings-side" aria-label="設定のカテゴリ">
         {rows("settings")}
-        <p class="hwc-settings-group-label">アプリ</p>
+        <p class="hwc-settings-group-label">{SETTINGS_GROUP_LABELS.agents}</p>
+        {rows("agents")}
+        <p class="hwc-settings-group-label">{SETTINGS_GROUP_LABELS.app}</p>
         {rows("app")}
       </nav>
     );
@@ -119,7 +127,11 @@ export function SettingsIndex(props: SettingsIndexProps) {
         <div class="hwc-setting-group">{rows("settings")}</div>
       </section>
       <section>
-        <p class="hwc-settings-group-label">アプリ</p>
+        <p class="hwc-settings-group-label">{SETTINGS_GROUP_LABELS.agents}</p>
+        <div class="hwc-setting-group">{rows("agents")}</div>
+      </section>
+      <section>
+        <p class="hwc-settings-group-label">{SETTINGS_GROUP_LABELS.app}</p>
         <div class="hwc-setting-group">{rows("app")}</div>
       </section>
     </div>
