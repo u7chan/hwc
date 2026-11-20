@@ -95,19 +95,12 @@
   place-items: center;
   width: var(--space-8);
   height: var(--space-6);
-  color: var(--color-secondary);
+  color: var(--color-agent, var(--color-secondary));
 }
 
-.hwc-choice-icon[data-agent="claude"] {
-  color: var(--color-agent-claude);
-}
-
+/* ブランド色を持たないマークだけ、選んだ面で文字色へ寄せる。 */
 .hwc-choice[data-selected="true"] .hwc-choice-icon {
-  color: var(--color-text);
-}
-
-.hwc-choice[data-selected="true"] .hwc-choice-icon[data-agent="claude"] {
-  color: var(--color-agent-claude);
+  color: var(--color-agent, var(--color-text));
 }
 
 /* 選択肢を横に等分する切り替え。ペイン分割の動きとファイルツリーの位置、新規ペインの

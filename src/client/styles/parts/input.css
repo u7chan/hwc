@@ -331,11 +331,7 @@
   flex: none;
   display: grid;
   place-items: center;
-  color: var(--color-secondary);
-}
-
-.hwc-input-agent[data-agent="claude"] {
-  color: var(--color-agent-claude);
+  color: var(--color-agent, var(--color-secondary));
 }
 
 /* effort は名前と混ざらないよう、小さな札にする。入力欄と設定の一覧が同じ見た目を共有する。 */
