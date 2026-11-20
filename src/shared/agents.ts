@@ -54,8 +54,9 @@ export function modelKey(model: AgentModel): string {
   return `${model.provider}/${model.id}`;
 }
 
-// Claude Code の `--model` が受ける family のエイリアス。その時点の最新モデルへ解決され、
-// 候補はこれだけにする（ADR 0096）。
+// Claude Code 2.1.327 の `--model` は family のエイリアスを受け、その時点の最新モデルへ
+// 解決する。hwc は版を追わず、エイリアスだけを候補にする。`fable` / `opus` / `sonnet` は
+// `claude --help`、`haiku` は CLI 同梱の alias 一覧で確認した（ADR 0096）。
 export const CLAUDE_MODEL_ALIASES = ["fable", "opus", "sonnet", "haiku"] as const;
 
 export function isClaudeAlias(id: string): boolean {

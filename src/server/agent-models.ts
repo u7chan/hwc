@@ -26,9 +26,7 @@ export const MODEL_LIST_TIMEOUT_MS = 20_000;
 // `opencode service start` は待ち受けを始めて service.json を書いてから終わる（2.3.2 で約 1 秒）。
 const OPENCODE_START_TIMEOUT_MS = 15_000;
 
-// Claude Code 2.1.327 の `--model` は family のエイリアスを受け、その時点の最新モデルへ
-// 解決する。hwc は版を追わず、エイリアスだけを候補にする。`fable` / `opus` / `sonnet` は
-// `claude --help`、`haiku` は CLI 同梱の alias 一覧で確認した（ADR 0096）。
+// 候補の元は shared の `CLAUDE_MODEL_ALIASES`。表示側と同じ一覧を見る。
 const CLAUDE_PROVIDER = "claude";
 // `claude --help` の `--effort` が示す段階。first-party のエイリアス解決先はすべて対応するが、
 // 3P では解決先が変わり、対応しない段階がある（解決は CLI に任せる）。
