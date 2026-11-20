@@ -447,7 +447,8 @@ function snapshotOf(
     model,
     effort,
     truncated: clipped || limited.truncated,
-    // 読み取り API はコンテキスト量と圧縮の形を返さない。どちらも別 Issue で足す。
+    // 使用量は transcript に無いので、ここでは null のままにする。mod の live ファイルから
+    // snapshot に重ねる（ADR 0106）。圧縮の区切りは別 Issue で扱う。
     context: null,
     compaction: null,
     ...(pending === null ? {} : { pending }),

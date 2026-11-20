@@ -232,7 +232,7 @@ async function writeClaudePendingSidecar(root: string) {
   );
 }
 
-// mod がターンの終わりに書く、速度とコンテキスト使用量（ADR 0102・0105）。速度は持たない。
+// mod がターンの終わりに書く、速度とコンテキスト使用量（ADR 0102・0106）。速度は持たない。
 function claudeLive(): Record<string, unknown> {
   return {
     v: 1,
