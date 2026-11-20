@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   agentOfCategory,
   SETTINGS_CATEGORIES,
+  settingsCategoryBadge,
   settingsCategoryLabel,
   settingsCategoryValue,
 } from "./categories";
@@ -16,6 +17,7 @@ const loaded = {
   restart: true,
   launchDefaults: {
     claude: { model: { provider: "claude", id: "sonnet" }, effort: "high" },
+    pi: { model: { provider: "example", id: "beam-small" }, effort: "low" },
     opencode: { model: { provider: "example", id: "@demo/beam-small" }, effort: null },
   },
 };
@@ -37,11 +39,19 @@ test("each row shows the current value without opening the screen", () => {
   expect(settingsCategoryValue("build", loaded)).toBe("abc1234");
 });
 
-test("each agent row shows its default model and effort for new panes", () => {
-  expect(settingsCategoryValue("agent-claude", loaded)).toBe("claude/sonnet / high");
+test("each agent row shows its default model, with the effort as a separate badge", () => {
+  expect(settingsCategoryValue("agent-claude", loaded)).toBe("sonnet");
+  expect(settingsCategoryBadge("agent-claude", loaded)).toBe("high");
   // effort に対応しないモデルは、モデルだけを出す。
-  expect(settingsCategoryValue("agent-opencode", loaded)).toBe("example/@demo/beam-small");
-  expect(settingsCategoryValue("agent-pi", loaded)).toBe("未設定");
+  expect(settingsCategoryValue("agent-opencode", loaded)).toBe("@demo/beam-small");
+  expect(settingsCategoryBadge("agent-opencode", loaded)).toBeNull();
+  expect(settingsCategoryValue("agent-codex", loaded)).toBe("未設定");
+  expect(settingsCategoryBadge("agent-codex", loaded)).toBeNull();
+});
+
+test("only Pi keeps the provider, since the row already names the other agents", () => {
+  expect(settingsCategoryValue("agent-pi", loaded)).toBe("example/beam-small");
+  expect(settingsCategoryBadge("agent-pi", loaded)).toBe("low");
 });
 
 test("a value that has not loaded stays empty instead of guessing", () => {
@@ -51,6 +61,12 @@ test("a value that has not loaded stays empty instead of guessing", () => {
   expect(settingsCategoryValue("restart", { ...loaded, restart: null })).toBeNull();
   expect(settingsCategoryValue("build", { ...loaded, revision: null })).toBeNull();
   expect(settingsCategoryValue("agent-pi", { ...loaded, launchDefaults: null })).toBeNull();
+  expect(settingsCategoryBadge("agent-pi", { ...loaded, launchDefaults: null })).toBeNull();
+});
+
+test("rows other than the agents have no badge", () => {
+  expect(settingsCategoryBadge("display", loaded)).toBeNull();
+  expect(settingsCategoryBadge("build", loaded)).toBeNull();
 });
 
 test("rows are split into the settings you change, the agents, and the app state you read", () => {

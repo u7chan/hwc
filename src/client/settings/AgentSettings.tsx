@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
-import { type AgentModel, type ModelAgentKind } from "../../shared/agents";
-import { launchDefaultLabel, type LaunchDefaults } from "../../shared/launch-defaults";
+import { type AgentModel, type ModelAgentKind, modelLabel } from "../../shared/agents";
+import type { LaunchDefaults } from "../../shared/launch-defaults";
 import { readLaunchDefaults, saveLaunchDefault } from "../api";
 import { CreatePaneEffort } from "../CreatePaneEffort";
 import { CreatePaneModel } from "../CreatePaneModel";
@@ -89,8 +89,17 @@ export function AgentSettings(props: { agent: ModelAgentKind; onSaved: () => voi
       <div class="hwc-setting-group">
         <div class="hwc-setting-row">
           <span class="hwc-setting-label">現在の既定</span>
-          <span class="hwc-setting-value">
-            {saved === null ? "未設定" : launchDefaultLabel(saved)}
+          <span class="hwc-setting-value hwc-setting-model">
+            {saved === null ? (
+              "未設定"
+            ) : (
+              <>
+                <span class="hwc-setting-model-name">{modelLabel(props.agent, saved.model)}</span>
+                {saved.effort === null ? null : (
+                  <span class="hwc-effort-badge">{saved.effort}</span>
+                )}
+              </>
+            )}
           </span>
         </div>
       </div>

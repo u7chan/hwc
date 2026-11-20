@@ -15,6 +15,7 @@ import {
   agentOfCategory,
   SETTINGS_CATEGORIES,
   SETTINGS_GROUP_LABELS,
+  settingsCategoryBadge,
   settingsCategoryValue,
   type SettingsCategory,
   type SettingsCategoryId,
@@ -57,6 +58,7 @@ function CategoryIcon(props: { id: SettingsCategoryId }) {
 function CategoryRow(props: {
   category: SettingsCategory;
   value: string | null;
+  badge: string | null;
   status: string | null;
   current: boolean;
   onOpen: () => void;
@@ -73,8 +75,11 @@ function CategoryRow(props: {
       </span>
       <span class="hwc-settings-nav-label">{props.category.label}</span>
       {props.value === null ? null : (
-        <span class="hwc-settings-nav-value" data-status={props.status ?? undefined}>
-          {props.value}
+        <span class="hwc-settings-nav-end">
+          <span class="hwc-settings-nav-value" data-status={props.status ?? undefined}>
+            {props.value}
+          </span>
+          {props.badge === null ? null : <span class="hwc-effort-badge">{props.badge}</span>}
         </span>
       )}
       <ChevronRightIcon size={16} />
@@ -102,6 +107,7 @@ export function SettingsIndex(props: SettingsIndexProps) {
         key={category.id}
         category={category}
         value={settingsCategoryValue(category.id, values)}
+        badge={settingsCategoryBadge(category.id, values)}
         status={props.variant === "page" && category.id === "connection" ? props.connection : null}
         current={props.current === category.id}
         onOpen={() => props.onOpen(category.id)}

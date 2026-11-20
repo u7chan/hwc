@@ -3,7 +3,6 @@ import {
   isAgentEffort,
   isAgentModel,
   type ModelAgentKind,
-  modelKey,
   supportsModelSelection,
 } from "./agents";
 
@@ -31,9 +30,4 @@ export function parseLaunchDefaults(value: unknown): LaunchDefaults {
     if (parsed !== null) defaults[agent] = parsed;
   }
   return defaults;
-}
-
-export function launchDefaultLabel(value: LaunchDefault): string {
-  const model = modelKey(value.model);
-  return value.effort === null ? model : `${model} / ${value.effort}`;
 }

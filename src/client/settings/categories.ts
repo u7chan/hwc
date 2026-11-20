@@ -2,9 +2,10 @@ import {
   AGENT_KINDS,
   AGENT_LABELS,
   type ModelAgentKind,
+  modelLabel,
   supportsModelSelection,
 } from "../../shared/agents";
-import { launchDefaultLabel, type LaunchDefaults } from "../../shared/launch-defaults";
+import type { LaunchDefaults } from "../../shared/launch-defaults";
 import { connectionLabel, type ConnectionStatus } from "../connection";
 import { themeLabel, type ThemePreference } from "../theme";
 
@@ -98,7 +99,17 @@ export function settingsCategoryValue(
       const agent = agentOfCategory(id);
       if (agent === null || values.launchDefaults === null) return null;
       const saved = values.launchDefaults[agent];
-      return saved === undefined ? "未設定" : launchDefaultLabel(saved);
+      return saved === undefined ? "未設定" : modelLabel(agent, saved.model);
     }
   }
+}
+
+// 現在値の右に札で添える値。エージェントの行の effort だけが持つ。
+export function settingsCategoryBadge(
+  id: SettingsCategoryId,
+  values: SettingsCategoryValues,
+): string | null {
+  const agent = agentOfCategory(id);
+  if (agent === null || values.launchDefaults === null) return null;
+  return values.launchDefaults[agent]?.effort ?? null;
 }

@@ -102,7 +102,7 @@ export function AgentInfoHint(props: { info: AgentInfo }) {
         {...hint.triggerProps}
       >
         {model === null ? null : <span class="hwc-input-model">{model}</span>}
-        {effort === null ? null : <span class="hwc-input-effort">{effort}</span>}
+        {effort === null ? null : <span class="hwc-effort-badge hwc-input-effort">{effort}</span>}
       </button>
       <span
         id={hint.panelId}
