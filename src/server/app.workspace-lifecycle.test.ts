@@ -4,6 +4,8 @@ import type { AppState } from "./herdr/state";
 import {
   state,
   worktreeState,
+  hostWorktreeState,
+  threeWorkspaces,
   unmanagedLinkedState,
   duplicateState,
   unmanagedDuplicateState,
@@ -112,7 +114,7 @@ test.each([
   expect(response.status).toBe(status);
 });
 
-test("POST /api/workspaces/:id/close closes a duplicate native space", async () => {
+test("POST /api/workspaces/:id/close closes a space that is not the last one", async () => {
   const seen: string[] = [];
   const { app } = createTestApp({
     state: duplicateState,
@@ -152,7 +154,35 @@ test("close accepts unmanaged checkout duplicates", async () => {
   expect(seen).toEqual(["w2"]);
 });
 
-test("close refuses a native space without a duplicate", async () => {
+// リポジトリ本体のスペースも、他にスペースがあれば閉じられる。フォルダは残る。
+test("close accepts the repo host while another space exists", async () => {
+  const seen: string[] = [];
+  const hostAndOther: AppState = {
+    ...hostWorktreeState,
+    workspaces: [
+      hostWorktreeState.workspaces[0]!,
+      { ...state.workspaces[0]!, id: "w2", label: "sandbox", path: "/work/sandbox" },
+    ],
+  };
+  const { app } = createTestApp({
+    state: hostAndOther,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+      },
+    },
+  });
+  const response = await app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual(["w1"]);
+});
+
+test("close refuses the last space", async () => {
   const seen: string[] = [];
   const { app } = createTestApp({
     state,
@@ -168,21 +198,22 @@ test("close refuses a native space without a duplicate", async () => {
   });
 
   expect(response.status).toBe(409);
-  expect(await response.json()).toEqual({ error: "not_duplicate_space" });
+  expect(await response.json()).toEqual({ error: "not_closable_space" });
   expect(seen).toEqual([]);
 });
 
-test("close refuses the same path with a different label", async () => {
+// 閉じるだけではチェックアウトが残り、hwc からは開き直せない。削除の入口に一本化する。
+test("close refuses a linked worktree managed by herdr", async () => {
   const seen: string[] = [];
-  const differentLabel: AppState = {
-    ...duplicateState,
-    workspaces: duplicateState.workspaces.map((workspace, index) => ({
-      ...workspace,
-      label: index === 0 ? "mypi" : "mypi review",
-    })),
+  const linkedWithOther: AppState = {
+    ...worktreeState,
+    workspaces: [
+      worktreeState.workspaces[0]!,
+      { ...state.workspaces[0]!, id: "w2", label: "sandbox", path: "/work/sandbox" },
+    ],
   };
   const { app } = createTestApp({
-    state: differentLabel,
+    state: linkedWithOther,
     workspaces: {
       close: async (workspaceId) => {
         seen.push(workspaceId);
@@ -195,14 +226,21 @@ test("close refuses the same path with a different label", async () => {
   });
 
   expect(response.status).toBe(409);
-  expect(await response.json()).toEqual({ error: "not_duplicate_space" });
+  expect(await response.json()).toEqual({ error: "not_closable_space" });
   expect(seen).toEqual([]);
 });
 
-test("close refuses a linked worktree", async () => {
+test("close accepts a linked checkout that herdr does not manage", async () => {
   const seen: string[] = [];
+  const linkedWithOther: AppState = {
+    ...unmanagedLinkedState,
+    workspaces: [
+      unmanagedLinkedState.workspaces[0]!,
+      { ...state.workspaces[0]!, id: "w2", label: "sandbox", path: "/work/sandbox" },
+    ],
+  };
   const { app } = createTestApp({
-    state: worktreeState,
+    state: linkedWithOther,
     workspaces: {
       close: async (workspaceId) => {
         seen.push(workspaceId);
@@ -214,9 +252,9 @@ test("close refuses a linked worktree", async () => {
     headers: { "content-type": "application/json" },
   });
 
-  expect(response.status).toBe(409);
-  expect(await response.json()).toEqual({ error: "not_duplicate_space" });
-  expect(seen).toEqual([]);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(seen).toEqual(["w1"]);
 });
 
 test("close requires application/json", async () => {
@@ -260,7 +298,7 @@ test.each([
   expect(response.status).toBe(status);
 });
 
-test("close serializes concurrent requests for the same place", async () => {
+test("close refuses the other space while a close is in flight", async () => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -293,7 +331,46 @@ test("close serializes concurrent requests for the same place", async () => {
   expect([a.status, b.status].sort()).toEqual([200, 409]);
   expect(seen).toHaveLength(1);
   const rejected = a.status === 409 ? a : b;
-  expect(await rejected.json()).toEqual({ error: "not_duplicate_space" });
+  expect(await rejected.json()).toEqual({ error: "not_closable_space" });
+});
+
+// 残り 2 つを同時に閉じると 0 スペースになり得る。閉じている間は残りの数から外す。
+test("close keeps one space when two different spaces are closed at once", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const seen: string[] = [];
+  const twoSpaces: AppState = {
+    ...threeWorkspaces,
+    workspaces: threeWorkspaces.workspaces.slice(0, 2),
+  };
+  const { app } = createTestApp({
+    state: twoSpaces,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+        await gate;
+      },
+    },
+  });
+
+  const first = app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  const second = app.request("/api/workspaces/w2/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  await waitFor(() => seen.length === 1);
+  await Bun.sleep(10);
+  release();
+  const [a, b] = await Promise.all([first, second]);
+
+  expect([a.status, b.status].sort()).toEqual([200, 409]);
+  expect(seen).toHaveLength(1);
 });
 
 test("close keeps the guard while the state still shows the closed space", async () => {
@@ -313,13 +390,39 @@ test("close keeps the guard while the state still shows the closed space", async
   });
   expect(first.status).toBe(200);
 
-  // fake store の refresh は同じ重複状態を返す。状態が追いつくまで、残りを閉じさせない。
+  // fake store の refresh は同じ状態を返す。状態が追いつくまで、残りを閉じさせない。
   const second = await app.request("/api/workspaces/w2/close", {
     method: "POST",
     headers: { "content-type": "application/json" },
   });
 
   expect(second.status).toBe(409);
-  expect(await second.json()).toEqual({ error: "not_duplicate_space" });
+  expect(await second.json()).toEqual({ error: "not_closable_space" });
+  expect(seen).toEqual(["w1"]);
+});
+
+// 同じ id の再送は、状態が追いつく前でも二重に閉じない。
+test("close refuses the same workspace twice", async () => {
+  const seen: string[] = [];
+  const { app } = createTestApp({
+    state: threeWorkspaces,
+    workspaces: {
+      close: async (workspaceId) => {
+        seen.push(workspaceId);
+      },
+    },
+  });
+
+  const first = await app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  const second = await app.request("/api/workspaces/w1/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(first.status).toBe(200);
+  expect(second.status).toBe(409);
   expect(seen).toEqual(["w1"]);
 });

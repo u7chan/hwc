@@ -63,7 +63,7 @@ import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { paneCloseAction } from "../shared/pane-close";
 import {
-  canCloseDuplicateSpace,
+  canCloseSpace,
   findPane,
   findPaneContext,
   findPaneRow,
@@ -486,7 +486,7 @@ export function App() {
     state !== null &&
     closingSpace !== null &&
     closingSpaceWorkspace !== null &&
-    canCloseDuplicateSpace(state, closingSpace.workspaceId);
+    canCloseSpace(state, closingSpace.workspaceId);
 
   // 既読は Herdr の seen を進めて消す。失敗しても通知しない。次にその行を開いて離れたときに
   // もう一度送られるので、ここで知らせても利用者にできることが無い。
@@ -970,11 +970,11 @@ export function App() {
     });
   };
 
-  // 同じ場所のスペースが 2 つ以上あるときだけ、最後の 1 つを残して閉じられる。
+  // 最後の 1 つは残す。それ以外は、重複していなくても閉じられる。
   const openCloseSpaceConfirm = () => {
     if (menu === null || menu.target.kind !== "workspace" || state === null) return;
     const workspace = state.workspaces.find((item) => item.id === menu.target.id);
-    if (workspace === undefined || !canCloseDuplicateSpace(state, workspace.id)) return;
+    if (workspace === undefined || !canCloseSpace(state, workspace.id)) return;
     closeMenu();
     setClosingSpace({
       workspaceId: workspace.id,
@@ -1293,7 +1293,7 @@ export function App() {
   const menuWorktree = menuWorkspace?.worktree ?? null;
   const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
   const menuCanCloseSpace =
-    state !== null && menuWorkspace !== null && canCloseDuplicateSpace(state, menuWorkspace.id);
+    state !== null && menuWorkspace !== null && canCloseSpace(state, menuWorkspace.id);
   // 並びの正は Herdr。メニューはその移動を 1 タップで呼ぶだけで、hwc 側に順序は持たない。
   // 既に先頭の束には項目を出さない。
   const menuCanMoveToTop =

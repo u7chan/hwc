@@ -9,7 +9,7 @@ import {
 import {
   activeRowName,
   agentGlyph,
-  canCloseDuplicateSpace,
+  canCloseSpace,
   countPanes,
   countTabAgents,
   countWorkspaceAgents,
@@ -450,16 +450,56 @@ test("a single native space is not a place group", () => {
   expect(groups[0].place).toBeNull();
 });
 
-test("only duplicate native spaces can be closed", () => {
+test("any space except the last one can be closed", () => {
   const duplicate = duplicateState();
-  expect(canCloseDuplicateSpace(duplicate, "w4")).toBe(true);
-  expect(canCloseDuplicateSpace(duplicate, "w5")).toBe(true);
-  expect(canCloseDuplicateSpace(unmanagedDuplicateState(), "w4")).toBe(true);
-  expect(
-    canCloseDuplicateSpace({ ...duplicate, workspaces: [duplicate.workspaces[0]!] }, "w4"),
-  ).toBe(false);
-  expect(canCloseDuplicateSpace(state, "w1")).toBe(false);
-  expect(canCloseDuplicateSpace(state, "w9")).toBe(false);
+  expect(canCloseSpace(duplicate, "w4")).toBe(true);
+  expect(canCloseSpace(duplicate, "w5")).toBe(true);
+  expect(canCloseSpace(unmanagedDuplicateState(), "w4")).toBe(true);
+  expect(canCloseSpace({ ...duplicate, workspaces: [duplicate.workspaces[0]!] }, "w4")).toBe(false);
+  expect(canCloseSpace({ ...state, workspaces: [state.workspaces[0]!] }, "w1")).toBe(false);
+  expect(canCloseSpace({ ...state, workspaces: [state.workspaces[0]!] }, "w9")).toBe(false);
+});
+
+test("a native space that is not duplicated can be closed while another space exists", () => {
+  const single = { ...state, workspaces: [state.workspaces[0]!, state.workspaces[1]!] };
+
+  expect(canCloseSpace(single, "w1")).toBe(true);
+  expect(canCloseSpace(single, "w2")).toBe(true);
+});
+
+test("a linked worktree managed by herdr is left to removal", () => {
+  const linked: WorkspaceState = {
+    ...state.workspaces[0]!,
+    id: "w3",
+    worktree: {
+      repoName: "hwc",
+      repoRoot: "/repo",
+      checkoutPath: "/repo-wt",
+      isLinkedWorktree: true,
+      managed: true,
+    },
+  };
+  const withLinked = { ...state, workspaces: [state.workspaces[0]!, linked] };
+
+  expect(canCloseSpace(withLinked, "w3")).toBe(false);
+  expect(canCloseSpace(withLinked, "w1")).toBe(true);
+});
+
+test("a linked checkout that herdr does not manage can be closed", () => {
+  const linked: WorkspaceState = {
+    ...state.workspaces[0]!,
+    id: "w3",
+    worktree: {
+      repoName: "hwc",
+      repoRoot: "/repo",
+      checkoutPath: "/repo-wt",
+      isLinkedWorktree: true,
+      managed: false,
+    },
+  };
+  const withLinked = { ...state, workspaces: [state.workspaces[0]!, linked] };
+
+  expect(canCloseSpace(withLinked, "w3")).toBe(true);
 });
 
 test("a place group opens when a member is focused and is known to the tree", () => {

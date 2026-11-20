@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-10
+- Revised by: [ADR 0107](0107-close-space.md) の閉じる条件（最後の 1 つ以外は重複していなくても閉じられる、linked worktree は削除に一本化、`not_closable_space`、id 単位の in-flight ガード）
 
 ## Context
 

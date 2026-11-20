@@ -12,8 +12,8 @@ type CloseSpaceConfirmProps = {
   onCancel: () => void;
 };
 
-// 重複したネイティブスペースを閉じる。フォルダは残るので、linked worktree の削除とは
-// 文言を分ける。実行中のエージェントが終わることだけは省かない。
+// スペースを閉じるだけで、フォルダは残る。linked worktree の削除とは文言を分け、
+// 実行中のエージェントが終わることだけは省かない。
 export function CloseSpaceConfirm(props: CloseSpaceConfirmProps) {
   return (
     <Confirm

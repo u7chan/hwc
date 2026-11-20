@@ -5,7 +5,6 @@ import { parseCreateSpaceBody, parseWorktreeBody } from "../herdr/panes";
 import { findPane } from "../herdr/state";
 import { resolveTreeDirectory } from "../message-files";
 import { parseMoveWorkspacesBody } from "../herdr/workspaces";
-import { placeOf } from "../../shared/place";
 import { HerdrError } from "../herdr/socket";
 import { pullRequestBranches } from "../pull-request";
 import type { AppContext, IdContext, PlainContext } from "./context";
@@ -236,19 +235,16 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       const workspace = state.workspaces.find((item) => item.id === workspaceId);
       if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
 
-      // 閉じられるのは、同じ場所を指す Herdr が管理しないスペースが他にもあるときだけ。
-      // managed: true のワークツリーは対象外（linked は worktree.remove、本体は閉じない）。
-      const place = placeOf(workspace);
-      if (place === null) return c.json({ error: "not_duplicate_space" }, 409);
-      const closing = closingSpaces.get(place.key) ?? new Set<string>();
-      const duplicates = state.workspaces.filter(
-        (item) => !closing.has(item.id) && placeOf(item)?.key === place.key,
-      );
-      if (duplicates.length < 2) return c.json({ error: "not_duplicate_space" }, 409);
+      // 最後の 1 つは閉じない。Herdr が管理する linked worktree は worktree.remove に任せる。
+      if (workspace.worktree?.managed === true && workspace.worktree.isLinkedWorktree) {
+        return c.json({ error: "not_closable_space" }, 409);
+      }
+      if (closingSpaces.has(workspaceId)) return c.json({ error: "not_closable_space" }, 409);
+      const remaining = state.workspaces.filter((item) => !closingSpaces.has(item.id));
+      if (remaining.length < 2) return c.json({ error: "not_closable_space" }, 409);
 
-      // close が返る前に次の要求が重複チェックを通らないよう、呼ぶ前に印を付ける。
-      closing.add(workspaceId);
-      closingSpaces.set(place.key, closing);
+      // close が返る前に次の要求が残りの数を通らないよう、呼ぶ前に印を付ける。
+      closingSpaces.add(workspaceId);
       try {
         await workspaces.close(workspaceId);
         // 応答は待たせない。状態が届くまでの間は closing に残し、後続の close を
@@ -257,10 +253,10 @@ export function createWorkspacesHandlers(ctx: AppContext) {
         return c.json({ ok: true });
       } catch (error) {
         if (error instanceof HerdrError && error.code === "workspace_not_found") {
-          // 既に閉じている。状態が届くまでは、同じ場所の別スペースを閉じさせない。
+          // 既に閉じている。状態が届くまでは、他のスペースを閉じさせない。
           void store.refresh().catch(() => {});
         } else {
-          releaseClosingSpace(place.key, workspaceId);
+          releaseClosingSpace(workspaceId);
         }
         return closeSpaceFailure(c, error);
       }
