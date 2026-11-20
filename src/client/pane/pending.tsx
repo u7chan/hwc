@@ -11,7 +11,7 @@ import {
   pickOther,
   typeOther,
 } from "../answer";
-import { CheckIcon, StatusMark } from "../icons";
+import { CheckIcon, StatusMark, TerminalIcon } from "../icons";
 import { Spinner } from "../Spinner";
 
 type Question = Extract<ChatPending, { kind: "question" }>;
@@ -31,18 +31,36 @@ export function PendingCard(props: {
         <QuestionForm key={pending.toolUseId} pending={pending} onAnswer={props.onAnswer} />
       ) : (
         <>
-          <p class="hwc-pending-head">
-            <StatusMark tone="attention" size={12} />
-            承認待ち: {pending.tool}
-          </p>
+          <PendingHead state="承認待ち" who={pending.tool} />
           {pending.summary === null ? null : <p class="hwc-pending-text">{pending.summary}</p>}
           <p class="hwc-pending-note">端末で応答してください。</p>
         </>
       )}
       <button type="button" class="hwc-pending-toggle" onClick={props.onShowTerminal}>
+        <TerminalIcon size={16} />
         端末出力を見る
       </button>
     </li>
+  );
+}
+
+// 状態は記号と短文に集約する。面や枠を持たせず、見出しの強さを上げない。
+function PendingHead(props: { state: string; who: string; count?: number }) {
+  return (
+    <p class="hwc-pending-head">
+      <span class="hwc-pending-state">
+        <span class="hwc-pending-state-mark">
+          <StatusMark tone="attention" size={12} />
+        </span>
+        {props.state}
+      </span>
+      <span class="hwc-pending-who">{props.who}</span>
+      {props.count === undefined ? null : (
+        <span class="hwc-pending-count" aria-hidden="true">
+          {props.count} 問
+        </span>
+      )}
+    </p>
   );
 }
 
@@ -87,10 +105,7 @@ function QuestionForm(props: {
 
   return (
     <>
-      <p class="hwc-pending-head">
-        <StatusMark tone="attention" size={12} />
-        Claude からの質問
-      </p>
+      <PendingHead state="回答待ち" who="Claude からの質問" count={pending.questions.length} />
       <ol class="hwc-pending-questions">
         {pending.questions.map((question, index) => {
           const choice = choiceAt(index);
@@ -123,16 +138,19 @@ function QuestionForm(props: {
                     onClick={() => update(index, pickOther(choice))}
                   />
                   {choice.other ? (
-                    <textarea
-                      class="hwc-pending-other"
-                      rows={2}
-                      value={choice.text}
-                      disabled={locked}
-                      aria-label={`${question.question} の自由入力`}
-                      onInput={(event) =>
-                        update(index, typeOther(choice, event.currentTarget.value))
-                      }
-                    />
+                    <div class="hwc-pending-other-field">
+                      <textarea
+                        class="hwc-pending-other"
+                        rows={2}
+                        value={choice.text}
+                        placeholder="回答を入力"
+                        disabled={locked}
+                        aria-label={`${question.question} の自由入力`}
+                        onInput={(event) =>
+                          update(index, typeOther(choice, event.currentTarget.value))
+                        }
+                      />
+                    </div>
                   ) : null}
                 </li>
               </ul>

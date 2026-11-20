@@ -95,6 +95,8 @@
   --text-page: 1.75rem;
   --text-body: 1.0625rem;
   --text-secondary: 0.8125rem;
+  /* 選択肢の説明など、補助情報より一段強く読ませる文字。本文とは役割が違う。 */
+  --text-supporting: 0.9375rem;
   --text-mono: 0.9375rem;
   --line-tight: 1.2;
   --line-body: 1.5;
