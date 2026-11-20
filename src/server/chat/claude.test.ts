@@ -3,6 +3,7 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClaudeChatClient } from "./claude";
+import { LIVE_TTL_MS } from "./claude-live";
 import { SIDECAR_TTL_MS } from "./claude-sidecar";
 import type { ChatPending } from "./contract";
 import { ChatUnavailableError } from "./errors";
@@ -846,6 +847,79 @@ async function writeSidecar(
     }),
   );
 }
+
+test("the context the mod recorded is shown and is part of the etag", async () => {
+  await withRoot(async (root) => {
+    await writeTranscript(root, [user("u1", null, "本文です。")]);
+    const liveRoot = join(root, "live");
+    await mkdir(liveRoot, { recursive: true });
+    await writeFile(
+      join(liveRoot, `${SESSION}.json`),
+      JSON.stringify({
+        v: 1,
+        sessionId: SESSION,
+        at: BASE,
+        tokPerSecond: null,
+        context: { tokens: 122_600, window: 1_000_000 },
+      }),
+    );
+
+    const snapshot = await createClaudeChatClient({ liveRoot, now: () => BASE }).snapshot(SESSION);
+    const without = await createClaudeChatClient({ now: () => BASE }).snapshot(SESSION);
+
+    expect(snapshot.context).toEqual({ tokens: 122_600, window: 1_000_000 });
+    expect(without.context).toBeNull();
+    expect(snapshot.etag).not.toBe(without.etag);
+  });
+});
+
+// 使用量はターンの終わりにしか変わらない。速度の鮮度が切れても、次のターンまで表示を保つ。
+test("an old live file still supplies the context", async () => {
+  await withRoot(async (root) => {
+    await writeTranscript(root, [user("u1", null, "本文です。")]);
+    const liveRoot = join(root, "live");
+    await mkdir(liveRoot, { recursive: true });
+    await writeFile(
+      join(liveRoot, `${SESSION}.json`),
+      JSON.stringify({
+        v: 1,
+        sessionId: SESSION,
+        at: BASE,
+        tokPerSecond: 68.4,
+        context: { tokens: 40_000, window: 200_000 },
+      }),
+    );
+
+    const snapshot = await createClaudeChatClient({
+      liveRoot,
+      now: () => BASE + LIVE_TTL_MS + 1,
+    }).snapshot(SESSION);
+
+    expect(snapshot.context).toEqual({ tokens: 40_000, window: 200_000 });
+  });
+});
+
+test("another session's live file adds no context", async () => {
+  await withRoot(async (root) => {
+    await writeTranscript(root, [user("u1", null, "本文です。")]);
+    const liveRoot = join(root, "live");
+    await mkdir(liveRoot, { recursive: true });
+    await writeFile(
+      join(liveRoot, "another-session.json"),
+      JSON.stringify({
+        v: 1,
+        sessionId: "another-session",
+        at: BASE,
+        tokPerSecond: null,
+        context: { tokens: 122_600, window: 1_000_000 },
+      }),
+    );
+
+    const snapshot = await createClaudeChatClient({ liveRoot, now: () => BASE }).snapshot(SESSION);
+
+    expect(snapshot.context).toBeNull();
+  });
+});
 
 test("a question the hook recorded is shown even though the transcript has no tool_use yet", async () => {
   await withSidecar(async ({ root, pendingRoot }) => {

@@ -34,7 +34,7 @@ export async function ensureClaudeSettings(stateRoot: string): Promise<ClaudeLau
     await writeFile(path, content, { mode: 0o600 });
   }
   // mod は親ディレクトリを作らない。起動前に空の置き場を用意する。作れなくても、
-  // 速度が出ないだけで hook は使えるようにする。
+  // 速度と使用量が出ないだけで hook は使えるようにする。
   await mkdir(live, { recursive: true, mode: 0o700 }).catch(() => {});
   // writeFile の mode は作るときだけ効く。既に別のモードで作られたファイルは、内容が同じで
   // 書き直さなくても、sidecar と同じ 0600 に直す。

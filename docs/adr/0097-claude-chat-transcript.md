@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-19
 - Amends: [ADR 0078](0078-starting-pane-mask.md)
-- Amended by: [ADR 0098](0098-claude-pending-in-chat.md)（応答待ちの表示）、[ADR 0101](0101-launch-model-while-chat-unavailable.md)（会話が読めない間のモデル表示）、[ADR 0103](0103-claude-transcript-miss-on-send.md)（見つからない記憶の期限）
+- Amended by: [ADR 0098](0098-claude-pending-in-chat.md)（応答待ちの表示）、[ADR 0101](0101-launch-model-while-chat-unavailable.md)（会話が読めない間のモデル表示）、[ADR 0103](0103-claude-transcript-miss-on-send.md)（見つからない記憶の期限）、[ADR 0106](0106-claude-context-usage.md)（コンテキスト使用量）
 - Revises: [ADR 0013](0013-pi-session-chat.md)、[ADR 0027](0027-new-pane-agent.md)、[ADR 0096](0096-claude-model-effort.md) の Claude に関する記述
 
 ## Context
@@ -44,7 +44,7 @@ Claude Code 2.1.327 は `CLAUDE_CONFIG_DIR`（既定 `~/.claude`）配下の `pr
 - Claude Code が貼り付けた入力に付ける `<pasted_content id="…">…</pasted_content id="…">` の包みは外す。開きと閉じの id が揃った組だけを対象にし、前後の空行も落とす。片側だけ・id の違う組は本文として残す。外すのは注記より先（注記は包みの中にあり、注記を剥がすと閉じタグも消える）
 - `isApiErrorMessage: true` の assistant は `role: "error"` にして、`error` と本文を並べる（[ADR 0039](0039-chat-error-rows.md) と同じ見え方）。中断・拒否の tool_result は error 行にしない
 - `model` は branch の最後の assistant の `message.model`（`<synthetic>` は採らない）。`effort` は最後の非 null の `perTurnEffort`。起動時にモデルを指定したペインは、assistant がまだ無いときだけ `launchModels` の預かりで補う（[ADR 0033](0033-launch-model-before-first-message.md)）。デフォルト起動では最初の応答まで null のまま
-- `context` と `compaction` は `null`、`usage` は持たない。コンテキスト量・圧縮の区切り・モデル別の window は別 Issue で扱う
+- `context` と `compaction` は transcript からは `null`、`usage` は持たない。コンテキスト使用量は同じセッションの mod が書く live ファイルから重ねる（[ADR 0106](0106-claude-context-usage.md)）。圧縮の区切りは別 Issue で扱う
 - 取得の上限は既存の `limitMessages`（500 メッセージ / 1MB）に従い、切ったら `truncated` を立てる
 - transcript が見つからない・読めない・1 行も解釈できない・id がファイル名として不正なときは `ChatUnavailableError` を投げ、既存の 502 から端末出力へフォールバックさせる。pi と違い ENOENT を空の会話にしない（セッション参照はあるのにファイルが無い状態を、空の会話と取り違えない）
 - `ChatAgentKind` に `claude` を足す。4 つの CLI がすべて会話を読めるようになるため、`ModelAgentKind` は `ChatAgentKind` の別名にし、`supportsChat` と `supportsModelSelection` は用途別に残す

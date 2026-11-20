@@ -232,6 +232,23 @@ async function writeClaudePendingSidecar(root: string) {
   );
 }
 
+// mod がターンの終わりに書く、速度とコンテキスト使用量（ADR 0102・0106）。速度は持たない。
+function claudeLive(): Record<string, unknown> {
+  return {
+    v: 1,
+    sessionId: CLAUDE_CHAT_SESSION,
+    at: Date.now(),
+    tokPerSecond: null,
+    context: { tokens: 122_600, window: 1_000_000 },
+  };
+}
+
+async function writeClaudeLive(root: string) {
+  const directory = join(root, "claude", "live");
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, `${CLAUDE_CHAT_SESSION}.json`), JSON.stringify(claudeLive()));
+}
+
 async function writeClaudeTranscript(root: string, sessionId: string, entries: ClaudeEntry[]) {
   const path = claudeTranscriptPath(root, sessionId);
   await mkdir(dirname(path), { recursive: true });
@@ -406,6 +423,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeClaudeTranscript(root, CLAUDE_CHAT_SESSION, claudeChatTranscript()),
     writeClaudeTranscript(root, CLAUDE_PENDING_SESSION, claudePendingTranscript()),
     writeClaudePendingSidecar(root),
+    writeClaudeLive(root),
     writeFile(join(attachmentDir, "empty-state-reference.zip"), Buffer.alloc(2 * 1024 * 1024)),
     writeFile(join(agentDir, "models-store.json"), JSON.stringify(modelStore)),
     writeFile(sessionPath, sessionLines.map((line) => `${line}\n`).join("")),

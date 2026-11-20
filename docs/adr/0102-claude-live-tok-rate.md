@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-20
 - Amends: [ADR 0100](0100-claude-live-activity.md) の「Claude の activity に `tokPerSecond` を入れない」という前提
+- Amended by: [ADR 0106](0106-claude-context-usage.md)（同じ live ファイルにコンテキスト使用量を足す）
 
 ## Context
 
@@ -47,14 +48,14 @@
 ### ファイル
 
 - 置き場は `<stateRoot>/claude/live/<session id>.json`。hwc が `ensureClaudeSettings` のときに 0700 で作る。transcript の隣ではない（mod は transcript の path を知らない。session id だけで引ける方が単純）
-- 中身は 1 行 JSON で `{ v: 1, sessionId, at, tokPerSecond }`。`tokPerSecond` は数値または null。phase・本文・ツールは持たない。段階の正は transcript のままにする
+- 中身は 1 行 JSON で `{ v: 1, sessionId, at, tokPerSecond }`。`tokPerSecond` は数値または null。phase・本文・ツールは持たない。段階の正は transcript のままにする。`context` は [ADR 0106](0106-claude-context-usage.md) で足す
 - 1 件は数百バイト。読み手は 4KB を超えるファイルを読まない
 
 ### 読み手（BFF）
 
 - `createClaudeChatClient` に `liveRoot` を足す。`activity(sessionId)` は transcript から導いた段階に、次の条件を満たすときだけ速度を重ねる
   - 段階が `thinking` / `writing` / `tool-call`（`ACTIVITY_RATE_PHASES`）
-  - `at` が取得時刻から `LIVE_TTL_MS`（2.5 秒）以内
+  - `at` が取得時刻から `LIVE_TTL_MS`（2.5 秒）以内。使用量は鮮度で捨てない（[ADR 0106](0106-claude-context-usage.md)）
   - `tokPerSecond` が 1 以上の有限値。上限は `ACTIVITY_TOK_PER_SECOND_LIMIT`（10,000）
 - `v` / `sessionId` の不一致、読めない JSON、古いファイル、`null` の速度は「無い」ものとして扱い、段階だけを返す
 - 速度の取得に失敗しても段階は返す。会話・端末出力も止めない

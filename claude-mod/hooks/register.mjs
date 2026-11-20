@@ -1,5 +1,5 @@
-// hwc の帯に出す生成中の速度だけを書く。hwc が渡す HWC_CLAUDE_LIVE_DIR が無ければ何もしない。
-// phase や本文は transcript から導くので、ここでは速度に専念する（ADR 0102）。
+// hwc の帯に出す生成中の速度と、入力欄に出すコンテキスト使用量を書く。hwc が渡す
+// HWC_CLAUDE_LIVE_DIR が無ければ何もしない。phase や本文は transcript から導く（ADR 0102・0105）。
 
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 // 差分の文字数はトークンの代理。短い窓で割ると桁が壊れるので、観測できる長さと回数を待つ。
@@ -9,6 +9,7 @@ const WRITE_EVERY_MS = 500;
 
 let liveDir = "";
 let sessionId = "";
+let context = null;
 
 function estimateTokens(text) {
   let tokens = 0;
@@ -16,13 +17,34 @@ function estimateTokens(text) {
   return tokens;
 }
 
+// /context と同じ計算。window はモデルの設定（1M など）を CLI が解決した値なので、hwc 側に
+// モデル表を持たない。読めない版・セッションでは使用量を書かない。
+async function readContext($) {
+  try {
+    const value = (await $.session.usage())?.context;
+    if (typeof value !== "object" || value === null) return null;
+    const tokens = count(value.tokens, 0);
+    const window = count(value.window, 1);
+    if (tokens === null && window === null) return null;
+    return { tokens, window };
+  } catch {
+    return null;
+  }
+}
+
+function count(value, min) {
+  return typeof value === "number" && Number.isFinite(value) && value >= min
+    ? Math.round(value)
+    : null;
+}
+
 async function publish($, rate) {
   if (liveDir === "" || sessionId === "") return;
-  const body = JSON.stringify({ v: 1, sessionId, at: Date.now(), tokPerSecond: rate });
+  const body = JSON.stringify({ v: 1, sessionId, at: Date.now(), tokPerSecond: rate, context });
   try {
     await $.fs.write(`${liveDir}/${sessionId}.json`, body);
   } catch {
-    // 速度は表示のためだけ。書けなくてもターンを止めない。
+    // 速度と使用量は表示のためだけ。書けなくてもターンを止めない。
   }
 }
 
@@ -34,10 +56,14 @@ export function register(on) {
       if (typeof dir === "string" && SESSION_ID.test(id)) {
         liveDir = dir.replace(/\/+$/, "");
         sessionId = id;
+        // 再開したセッションは、次のターンまで使用量が動かない。開いた時点で書いておく。
+        context = await readContext($);
+        await publish($, null);
       }
     } catch {
       liveDir = "";
       sessionId = "";
+      context = null;
     }
     return next(e);
   });
@@ -85,9 +111,12 @@ export function register(on) {
     }
   });
 
-  // 中断では stop が来ないことがある。ターンの終わりに消す。
+  // 中断では stop が来ないことがある。ターンの終わりに消し、使用量を更新する。
   on("turn.complete", async ($, e, next) => {
-    if (e.agentId === undefined) await publish($, null);
+    if (e.agentId === undefined) {
+      context = await readContext($);
+      await publish($, null);
+    }
     return next(e);
   });
 }
