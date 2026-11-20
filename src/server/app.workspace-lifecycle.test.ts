@@ -298,7 +298,7 @@ test.each([
   expect(response.status).toBe(status);
 });
 
-test("close serializes concurrent requests for the same place", async () => {
+test("close refuses the other space while a close is in flight", async () => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
     release = resolve;
