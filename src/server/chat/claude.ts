@@ -2,7 +2,14 @@ import { createHash } from "node:crypto";
 import { type FileHandle, open, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join } from "node:path";
-import { ACTIVITY_RATE_PHASES, TOOL_NAME_LIMIT, TOOLS_LIMIT } from "../../shared/activity";
+import {
+  ACTIVITY_RATE_PHASES,
+  DIRECTION_LIMIT,
+  flattenLine,
+  sliceHead,
+  TOOL_NAME_LIMIT,
+  TOOLS_LIMIT,
+} from "../../shared/activity";
 import {
   ATTACHED_FILES_CLOSE,
   ATTACHED_FILES_OPEN,
@@ -58,7 +65,6 @@ const MIN_ACTIVITY_VERSION = [2, 1, 327] as const;
 
 // 帯の 2 行は activitySnippet の 160 文字に収める。対象 60 + 改行 + 方向 90。
 const TARGET_LIMIT = 60;
-const DIRECTION_LIMIT = 90;
 
 // メインスレッドの要求だけが会話の応答を待つ。sdk の要求は本流の段階ではない。
 const MAIN_THREAD_SOURCE = "repl_main_thread";
@@ -887,7 +893,7 @@ function toolTarget(tool: ToolUse): string {
     }
   }
   // 改行と制御文字は 1 行に畳む。対象は先頭から 60 文字まで。
-  return sliceHead(flatten(target), TARGET_LIMIT);
+  return sliceHead(flattenLine(target), TARGET_LIMIT);
 }
 
 function toolNameOf(tool: ToolUse): string | null {
@@ -902,25 +908,14 @@ function joinLines(target: string, direction: string): string {
 
 function headLine(raw: string, limit: number): string {
   for (const line of raw.split(/\r?\n/)) {
-    const text = flatten(line);
+    const text = flattenLine(line);
     if (text !== "") return sliceHead(text, limit);
   }
   return "";
 }
 
 function tailLine(raw: string, limit: number): string {
-  return Array.from(flatten(raw)).slice(-limit).join("");
-}
-
-function sliceHead(raw: string, limit: number): string {
-  return Array.from(raw).slice(0, limit).join("");
-}
-
-function flatten(raw: string): string {
-  return raw
-    .replace(/\s+/gu, " ")
-    .replace(/\p{Cc}/gu, "")
-    .trim();
+  return Array.from(flattenLine(raw)).slice(-limit).join("");
 }
 
 function versionAtLeast(version: string | null): boolean {

@@ -11,7 +11,14 @@ import {
   formatFileSize,
   MAX_ATTACHMENTS,
 } from "../shared/attachments";
-import { activityLabel, activitySnippet, showActivityFrame, usePaneActivity } from "./activity";
+import {
+  activityLabel,
+  activitySnippet,
+  latestAgentText,
+  showActivityFrame,
+  usePaneActivity,
+  withoutShownDirection,
+} from "./activity";
 import { OUTPUT_LINES, answerQuestion, attachmentUrl, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference, insertFileReference } from "./file-reference";
@@ -1256,7 +1263,15 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 圧縮中は hwc のローカル表示が正。拡張の段階と重ねない。
   const livePhase = compacting || activity === null ? null : activityLabel(activity);
-  const liveThought = compacting || activity === null ? "" : activitySnippet(activity.text);
+  const liveThought =
+    compacting || activity === null
+      ? ""
+      : activitySnippet(
+          withoutShownDirection(
+            activity.text,
+            body.kind === "chat" ? latestAgentText(body.snapshot.messages) : null,
+          ),
+        );
   // 低いセルは ADR 0035 のとおり段階と経過時間だけにする。速度は通常セルでだけ出す。
   const liveTokPerSecond =
     compacting || compact || activity === null ? null : activity.tokPerSecond;

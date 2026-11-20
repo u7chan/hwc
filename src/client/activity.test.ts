@@ -8,10 +8,13 @@ import {
   activitySnippet,
   activityStep,
   formatTokPerSecond,
+  latestAgentText,
   nextActivityHold,
   selectActivity,
   showActivityFrame,
+  withoutShownDirection,
 } from "./activity";
+import type { ChatMessage } from "../server/chat/contract";
 import type { PaneActivity } from "../shared/activity";
 
 const base: PaneActivity = {
@@ -160,4 +163,45 @@ test("a disabled hook does not return the previous pane's activity", () => {
   expect(selectActivity(false, "w1:p1", hold)).toBeNull();
   expect(selectActivity(true, "w1:p2", hold)).toBeNull();
   expect(selectActivity(true, "w1:p1", null)).toBeNull();
+});
+
+test("the direction already shown in the conversation is not repeated in the band", () => {
+  const said = "まず添付画像と、設定画面の実装を確認します。";
+  expect(withoutShownDirection(said, said)).toBe("");
+  // 本文が後ろへ続いていても、方向は先頭行だけ。
+  expect(withoutShownDirection(said, `${said}\n\n詳しくは次のとおりです。`)).toBe("");
+  // ツールのときは対象の行が残る。
+  expect(withoutShownDirection(`Settings.tsx\n${said}`, said)).toBe("Settings.tsx");
+});
+
+test("a direction that the conversation does not show yet stays in the band", () => {
+  const said = "まず添付画像と、設定画面の実装を確認します。";
+  expect(withoutShownDirection(said, null)).toBe(said);
+  expect(withoutShownDirection(said, "別の文です。")).toBe(said);
+  expect(withoutShownDirection("", said)).toBe("");
+});
+
+test("matches the line the way the BFF cut it", () => {
+  // BFF は 1 行に畳み、90 文字で切る。会話の本文は畳まれていない。
+  const long = "あ".repeat(120);
+  expect(withoutShownDirection("あ".repeat(90), long)).toBe("");
+  expect(withoutShownDirection("a b", "a   b")).toBe("");
+});
+
+test("the latest agent message is the one to compare with", () => {
+  const message = (role: "user" | "agent" | "error", text: string): ChatMessage => ({
+    id: text,
+    role,
+    text,
+    at: 0,
+  });
+  expect(latestAgentText([])).toBeNull();
+  expect(latestAgentText([message("user", "質問")])).toBeNull();
+  expect(
+    latestAgentText([
+      message("agent", "古い"),
+      message("agent", "新しい"),
+      message("user", "続き"),
+    ]),
+  ).toBe("新しい");
 });

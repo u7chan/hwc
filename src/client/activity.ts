@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { AgentStatus } from "../server/herdr/state";
-import type { PaneActivity } from "../shared/activity";
+import type { ChatMessage } from "../server/chat/contract";
+import { DIRECTION_LIMIT, flattenLine, type PaneActivity, sliceHead } from "../shared/activity";
 import { ACTIVITY_POLL_MS, type ActivityRead, readActivity } from "./api";
 import { isAbortError } from "./chat";
 
@@ -110,6 +111,29 @@ export function activitySnippet(
   const characters = Array.from(snippet);
   if (characters.length <= limit) return snippet;
   return `…${characters.slice(-limit).join("")}`;
+}
+
+// 会話の最後の agent 本文。Claude の方向（ADR 0100）はこの本文の行から取るので、
+// 帯へ重ねるかの判断に使う。
+export function latestAgentText(messages: readonly ChatMessage[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]!;
+    if (message.role === "agent") return message.text;
+  }
+  return null;
+}
+
+// 帯の方向（最後の行）が、会話にもう出ている行なら外す。方向は transcript の最後の
+// assistant 本文から取るので、会話に載った時点で同じ文が上下に並ぶ。行ごとに比べるのは、
+// 本文が複数のブロックを連ねていると、方向が本文の先頭行とは限らないため。
+export function withoutShownDirection(text: string, agentText: string | null): string {
+  if (agentText === null || text === "") return text;
+  const rows = text.split("\n");
+  const last = rows[rows.length - 1]!;
+  const shown = agentText
+    .split(/\r?\n/)
+    .some((line) => last === sliceHead(flattenLine(line), DIRECTION_LIMIT));
+  return shown ? rows.slice(0, -1).join("\n") : text;
 }
 
 // 保持中の値。ペインごとに 1 つだけ持ち、古いペインの値を出さない。
