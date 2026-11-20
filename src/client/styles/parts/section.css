@@ -99,6 +99,15 @@
   flex: 1 0 auto;
 }
 
+/* 現在値の右に札を寄せる。省略されるのは値だけで、札は縮めない。 */
+.hwc-settings-nav-end {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .hwc-settings-nav-value {
   flex: 0 1 auto;
   min-width: 0;

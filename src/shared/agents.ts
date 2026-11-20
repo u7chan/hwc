@@ -54,6 +54,13 @@ export function modelKey(model: AgentModel): string {
   return `${model.provider}/${model.id}`;
 }
 
+// エージェント名と並べて出すときの名前。Claude の provider は常に `claude` で、行の
+// 「Claude  claude/opus」のように自分を二重に名乗ってしまうので、provider を削ってモデルだけにする。
+// Pi だけは `opencode-go/…` のように provider が選択の一部なので残す。
+export function modelLabel(agent: ModelAgentKind, model: AgentModel): string {
+  return agent === "pi" ? modelKey(model) : model.id;
+}
+
 export const AGENT_LABELS: Record<AgentKind, string> = {
   pi: "Pi",
   claude: "Claude",

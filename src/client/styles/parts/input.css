@@ -338,8 +338,8 @@
   color: var(--color-agent-claude);
 }
 
-/* effort は名前と混ざらないよう、小さな札にする。 */
-.hwc-input-effort {
+/* effort は名前と混ざらないよう、小さな札にする。入力欄と設定の一覧が同じ見た目を共有する。 */
+.hwc-effort-badge {
   flex: none;
   padding: 0 var(--space-2);
   border: 1px solid var(--color-control-line);
