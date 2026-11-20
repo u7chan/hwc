@@ -71,14 +71,14 @@
 - **statusline の JSON を使う**: イベント駆動で応答途中の更新が来ない。transcript の平均と同じく、事後の値になる
 - **settings hook で書く**: `PreToolUse` などはターンの途中のチャンクを渡さない。速度には `turn.step` が要る
 - **transcript の隣に書く**: mod から transcript の path は取れない。session id から引ける state 配下の方が単純で、hwc の既存の sidecar と同じ扱いにできる
-- **`--plugin-dir` を知らない版でも起動できるようにする**: mod API の対象版（2.1.287 以降）より古い CLI は未知の long option で終了する。段階の導出も 2.1.327 以降の transcript 形式を前提にしている（[ADR 0100](0100-claude-live-activity.md)）。古い版は対象外とし、起動のたびに版を確かめる処理は足さない
+- **`--plugin-dir` を知らない版でも起動できるようにする**: `--plugin-dir` は 2.1.265 以降にあり、2.1.265〜2.1.286 は起動できるが mod の hooks module が動かないため速度だけ出ない。それより古い版は未知の long option で終了する。起動のたびに版を確かめる処理は足さない
 - **hwc の state に phase も書く**: 段階の正が transcript と mod の 2 つになる。段階は [ADR 0100](0100-claude-live-activity.md) のまま、速度だけを重ねる
 - **停止時にファイルを消す**: fs に delete が無い。鮮度（2.5 秒）で無視すれば足りる
 
 ## Consequences
 
 - hwc から起動した Claude だけ、生成中に `tok/s` が出る。TUI から起動したペインや、hwc が `--plugin-dir` を渡さないペインでは、段階と経過時間だけになる（[ADR 0100](0100-claude-live-activity.md) の表示に戻る）
-- `--plugin-dir` を受け付けない版（mod API の対象は 2.1.287 以降）では、hwc からの Claude の起動が `agent_start_failed` になる。段階の導出が 2.1.327 以降を前提にしていること（[ADR 0100](0100-claude-live-activity.md)）もあり、古い版は対象外とする
+- `--plugin-dir` は 2.1.265 以降、`turn.step` を提供する mod API は 2.1.287 以降。2.1.265〜2.1.286 では起動できて速度だけが出ない。2.1.265 未満では hwc からの起動が `agent_start_failed` になる。段階の導出も 2.1.327 以降を前提にしている（[ADR 0100](0100-claude-live-activity.md)）ため、古い版は対象外とする
 - mod API の変更で速度が出なくなることがある。その場合も起動・会話・段階は壊れない。`claude plugin validate` と実機の Haiku で確認する
 - 生成中は 500ms ごとに小さなファイルを書く。セッションごとに 1 ファイルで、履歴は持たない
 - 書き込みは原子的でない。BFF は parse できないファイルを「無い」として扱い、次のポーリング（1 秒後）で取り直す

@@ -8,7 +8,7 @@ import type { SetAgentStatus } from "./workspaces";
 // 時間差で追記する（ADR 0100）。最初の 2 秒は新しい prompt がまだ無いので、帯は空の枠の
 // ままになる。ツールの結果は 20 秒後に書くので、そのあとは取得が null になる。
 const PROMPT_DELAY_MS = 2_000;
-// 要求中（API の応答待ち）に、mod が書くのと同じ形の速度を置く（ADR 0101）。
+// 要求中（API の応答待ち）に、mod が書くのと同じ形の速度を置く（ADR 0102）。
 // prompt の直後に置き、assistant が書かれるまで残す。1 秒間隔の取得でも確実に見える幅にする。
 const RATE_DELAY_MS = PROMPT_DELAY_MS + 6_000;
 const TOOL_DELAY_MS = 16_000;
