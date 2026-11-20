@@ -1087,17 +1087,14 @@ p.hwc-compaction,
   }
 }
 
-/* 人間の応答待ち。会話の末尾に 1 枚だけ置く。色だけに意味を持たせないよう、
-   見出しの記号と文言（質問 / 承認待ち）で区別する。 */
+/* 人間の応答待ち。会話の末尾に 1 枚だけ置く。面も枠も持たせず、記号・余白・
+   文字の階層で質問票として読ませる。状態は見出しの記号と文言で区別する。 */
 .hwc-pending {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-line);
-  border-left: 2px solid var(--color-attention);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
+  /* 直前の発話と地続きに見えないよう、会話の行間より少し広く取る。 */
+  margin-top: var(--space-2);
 }
 
 .hwc-pending-head {
@@ -1105,17 +1102,43 @@ p.hwc-compaction,
   align-items: center;
   gap: var(--space-2);
   margin: 0;
-  color: var(--color-attention);
+  color: var(--color-secondary);
   font-size: var(--text-secondary);
-  font-weight: 600;
   line-height: var(--line-tight);
+}
+
+/* 状態の記号だけ attention にし、文字は補助色にそろえる。面全体を状態色にしない。 */
+.hwc-pending-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hwc-pending-state-mark {
+  display: inline-flex;
+  color: var(--color-attention);
+}
+
+.hwc-pending-who {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hwc-pending-count {
+  flex: none;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .hwc-pending-questions {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  margin: 0;
+  gap: var(--space-8);
+  /* 見出しから質問までを空ける。カードの内側の余白の代わり。 */
+  margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -1136,17 +1159,18 @@ p.hwc-compaction,
   margin: 0;
   color: var(--color-text);
   font-size: var(--text-body);
+  font-weight: 600;
   line-height: var(--line-body);
   overflow-wrap: anywhere;
 }
 
-/* 質問の選択肢。タップしやすい行にして、単一選択は丸・複数選択は四角の印で示す。選択は枠の
-   色だけでなくチェックでも示す。自由入力の行は、どちらの質問でも他の選択肢と排他なので丸。 */
+/* 質問の選択肢。枠と区切り線を持たず、行そのものを押せる面にする。選択とホバーは
+   行の面で示し、行は左右へ 8px はみ出させて押しやすくする。選択の印は丸/四角と
+   チェックで示し、色だけに頼らない。 */
 .hwc-pending-options {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
+  margin: var(--space-3) calc(var(--space-2) * -1) 0;
   padding: 0;
   list-style: none;
 }
@@ -1156,10 +1180,9 @@ p.hwc-compaction,
   align-items: flex-start;
   gap: var(--space-3);
   width: 100%;
-  min-height: var(--tap);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-control);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
   background: transparent;
   color: var(--color-text);
   font: inherit;
@@ -1167,8 +1190,8 @@ p.hwc-compaction,
   cursor: pointer;
 }
 
-.hwc-pending-choice:hover:not(:disabled) {
-  border-color: var(--color-control-line);
+/* 選択中の行はホバーでも選択の面を保つ。 */
+.hwc-pending-choice:hover:not(:disabled):not([data-selected="true"]) {
   background: var(--color-raised);
 }
 
@@ -1179,8 +1202,11 @@ p.hwc-compaction,
 }
 
 .hwc-pending-choice[data-selected="true"] {
-  border-color: var(--color-accent);
-  background: var(--color-raised);
+  background: var(--color-selected);
+}
+
+.hwc-pending-choice[data-selected="true"] .hwc-pending-option-label {
+  color: var(--color-accent);
 }
 
 /* 送信中・送信後も、何を選んだかは読めるようにする。 */
@@ -1221,14 +1247,21 @@ p.hwc-compaction,
 .hwc-pending-option-label {
   color: var(--color-text);
   font-size: var(--text-body);
-  line-height: var(--line-tight);
+  font-weight: 600;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
+/* 選ぶ根拠になる説明は、補助情報の 13px より一段大きく読ませる。 */
 .hwc-pending-option-description {
   color: var(--color-secondary);
-  font-size: var(--text-secondary);
+  font-size: var(--text-supporting);
+  line-height: var(--line-body);
   overflow-wrap: anywhere;
+}
+
+.hwc-pending-other-field {
+  padding: 0 var(--space-2) var(--space-3);
 }
 
 .hwc-pending-other {
@@ -1245,6 +1278,10 @@ p.hwc-compaction,
   resize: none;
 }
 
+.hwc-pending-other::placeholder {
+  color: var(--color-secondary);
+}
+
 .hwc-pending-other:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
@@ -1259,6 +1296,9 @@ p.hwc-compaction,
   flex: none;
   gap: var(--space-2);
   width: 100%;
+  min-height: 56px;
+  /* 直前の選択肢との間に 16px を取る（親の gap と合わせる）。 */
+  margin-top: var(--space-2);
 }
 
 .hwc-pending-error {
@@ -1278,24 +1318,28 @@ p.hwc-compaction,
 
 /* 端末出力との行き来。カードの中と、端末出力の上に同じ形で置く。 */
 .hwc-pending-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   align-self: flex-start;
   min-height: var(--tap);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-control-line);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-secondary);
   font: inherit;
+  font-size: var(--text-supporting);
   cursor: pointer;
 }
 
 .hwc-pending-toggle:hover {
-  background: var(--color-raised);
+  color: var(--color-text);
 }
 
 .hwc-pending-toggle:focus-visible {
   outline: 2px solid var(--color-accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .hwc-pending-bar {
