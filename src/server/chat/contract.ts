@@ -121,6 +121,9 @@ export type SessionChatClient = {
   snapshot: (sessionId: string) => Promise<ChatSnapshot>;
   // 実行中の段階。transcript の進行行から導けるエージェントだけが持つ。
   activity?: (sessionId: string) => Promise<SessionActivity>;
+  // 見つからなかった結果を覚える口が、送信で transcript ができた可能性を受けて記憶を
+  // 捨てる。覚えない口（pi・opencode・codex）は持たない。
+  forgetMissing?: (sessionId: string) => void;
 };
 
 // 実行中の段階を導いた結果。claim はターンの範囲を決める BFF の状態が行うので、

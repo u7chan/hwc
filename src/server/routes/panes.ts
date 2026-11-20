@@ -21,6 +21,7 @@ export function createPanesHandlers(ctx: AppContext) {
     store,
     panes,
     models,
+    claude,
     claudeSettings,
     attachmentsRoot,
     current,
@@ -137,10 +138,16 @@ export function createPanesHandlers(ctx: AppContext) {
 
       try {
         await panes.send({ paneId, text, submit: input.value.submit });
-        return c.json({ ok: true });
       } catch (error) {
         return paneFailure(c, error);
       }
+      // 送信は通った。transcript は最初の送信でできるので、見つからない記憶を捨て、
+      // 次の poll で会話ビューへ切り替える（ENTER を送らない入力ではできない。ADR 0103）。
+      if (input.value.submit) {
+        const source = store.chatSource(paneId);
+        if (source?.agent === "claude") claude?.forgetMissing?.(source.sessionId);
+      }
+      return c.json({ ok: true });
     },
     process: async (c: IdContext) => {
       const state = await current();

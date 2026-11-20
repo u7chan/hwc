@@ -2,7 +2,7 @@ import { beforeEach, expect, test } from "bun:test";
 import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createClaudeChatClient } from "./claude";
+import { createClaudeChatClient, MISSING_TTL_MS } from "./claude";
 import { SIDECAR_TTL_MS } from "./claude-sidecar";
 import type { ChatPending } from "./contract";
 import { ChatUnavailableError } from "./errors";
@@ -472,18 +472,35 @@ test("a session id is never carried over to another CLAUDE_CONFIG_DIR", async ()
   });
 });
 
-test("a missing session is remembered only for a short while", async () => {
+test("a missing session is remembered only for four seconds", async () => {
   await withRoot(async (root) => {
     let now = BASE;
     const client = createClaudeChatClient({ now: () => now });
     await expect(client.snapshot(SESSION)).rejects.toBeInstanceOf(ChatUnavailableError);
 
     await writeTranscript(root, [user("u1", null, "遅れて現れました。")]);
+    // 覚えている間は探し直さない。2 秒ごとの poll でも 2 回目には期限が切れる。
+    now += MISSING_TTL_MS - 1;
     await expect(client.snapshot(SESSION)).rejects.toBeInstanceOf(ChatUnavailableError);
 
-    now += 30_000;
+    now += 1;
     expect((await client.snapshot(SESSION)).messages.map((message) => message.text)).toEqual([
       "遅れて現れました。",
+    ]);
+  });
+});
+
+test("a sent message forgets the missing session before the next poll", async () => {
+  await withRoot(async (root) => {
+    const client = createClaudeChatClient({ now: () => BASE });
+    await expect(client.snapshot(SESSION)).rejects.toBeInstanceOf(ChatUnavailableError);
+
+    await writeTranscript(root, [user("u1", null, "送信のあとに現れました。")]);
+    // 送信は時刻を進めない。TTL の内側でも、捨てた直後の取得は探し直す。
+    client.forgetMissing(SESSION);
+
+    expect((await client.snapshot(SESSION)).messages.map((message) => message.text)).toEqual([
+      "送信のあとに現れました。",
     ]);
   });
 });

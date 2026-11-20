@@ -26,7 +26,9 @@ import { limitMessages } from "./limit";
 const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
 
 // poll のたびに projects/* を readdir しない。見つからなかった id は短くだけ覚える。
-const MISSING_TTL_MS = 30_000;
+// 期限は実行中の poll（2 秒）2 回分。5 秒覚えると、2 秒ごとの poll では次の探索が 6 秒後に
+// なり、送信で transcript ができてから会話ビューへ切り替わるまでが 5 秒を超えることがある。
+export const MISSING_TTL_MS = 4_000;
 
 // 追記が止まったセッションを開き直したときに、同じファイルを読み直さない。
 const MAX_PROJECTIONS = 8;
@@ -138,12 +140,16 @@ export function createClaudeChatClient(
   } = {},
 ): SessionChatClient & {
   activity: (sessionId: string) => Promise<SessionActivity>;
+  forgetMissing: (sessionId: string) => void;
 } {
   const maxBytes = options.maxBytes ?? MAX_TRANSCRIPT_BYTES;
   const now = options.now ?? Date.now;
   const locations = new Map<string, { path: string } | { missingUntil: number }>();
   const projections = new Map<string, Projection>();
   const running = new Map<string, Promise<Projection>>();
+  // 検索の途中で送信があると、その結果は送信前のミスになる。覚えずに次の poll へ任せる
+  // ための世代。送信のたびに進め、検索を始めた時点の値と比べる。
+  let searchEpoch = 0;
 
   // 見つかった path は、CLAUDE_CONFIG_DIR を含めた組で覚える。unit や E2E が root を
   // 差し替えたときに、別の root の結果を引き継がないため。
@@ -157,9 +163,11 @@ export function createClaudeChatClient(
       locations.delete(key);
     }
 
+    const epoch = searchEpoch;
     const path = await findTranscript(root, sessionId);
     if (path === null) {
-      locations.set(key, { missingUntil: now() + MISSING_TTL_MS });
+      // 検索中に送信があったら、このミスは送信前の結果。覚えずに次の poll で探し直す。
+      if (epoch === searchEpoch) locations.set(key, { missingUntil: now() + MISSING_TTL_MS });
       throw new ChatUnavailableError("claude session was not found");
     }
     locations.set(key, { path });
@@ -195,7 +203,7 @@ export function createClaudeChatClient(
       throw new ChatUnavailableError("claude session id is invalid");
     }
     const root = configRoot();
-    const key = `${root}\u0000${sessionId}`;
+    const key = locationKey(root, sessionId);
     const path = await locate(root, sessionId, key);
     try {
       return await project(path, sessionId);
@@ -234,6 +242,14 @@ export function createClaudeChatClient(
   };
 
   return {
+    // 送信で transcript ができるかもしれない。見つからない記憶を捨て、次の poll で
+    // 探し直せるようにする（ADR 0103）。
+    forgetMissing(sessionId) {
+      searchEpoch += 1;
+      const key = locationKey(configRoot(), sessionId);
+      const cached = locations.get(key);
+      if (cached !== undefined && "missingUntil" in cached) locations.delete(key);
+    },
     async snapshot(sessionId) {
       const projection = await shared(sessionId);
       return withHookPending(projection.snapshot, projection.resolved, sessionId);
@@ -274,6 +290,11 @@ async function findTranscript(root: string, sessionId: string): Promise<string |
   // 同じ id が複数のプロジェクトにあると、どれが会話か決められない。推測しない。
   if (matches.length > 1) throw new ChatUnavailableError("claude session is ambiguous");
   return matches[0] ?? null;
+}
+
+// 見つかった path とミスは CLAUDE_CONFIG_DIR と session id の組で覚える。
+function locationKey(root: string, sessionId: string): string {
+  return `${root}\u0000${sessionId}`;
 }
 
 function configRoot(): string {
