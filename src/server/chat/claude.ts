@@ -583,10 +583,13 @@ function projectUser(entry: TranscriptEntry): ChatMessage | null {
   if (entry.meta || entry.compactSummary) return null;
   const raw = userText(entry.message?.content);
   if (raw === "") return null;
-  if (isLocalCommandEcho(raw)) return null;
-  if (INTERRUPT_MARKERS.has(raw.trim())) return null;
+  // Claude Code が付ける貼り付けの包みを先に外す。添付の注記は包みの中にあり、
+  // 注記を剥がしてからでは閉じタグが消えて組を取れない。
+  const body = stripPastedContent(raw);
+  if (isLocalCommandEcho(body)) return null;
+  if (INTERRUPT_MARKERS.has(body.trim())) return null;
 
-  const { text, attachments } = projectUserText(raw);
+  const { text, attachments } = projectUserText(body);
   if (text === "" && attachments.length === 0) return null;
   return {
     id: entry.uuid ?? "",
@@ -597,6 +600,25 @@ function projectUser(entry: TranscriptEntry): ChatMessage | null {
       ? {}
       : { attachments: attachments.map((name) => ({ name, size: null })) }),
   };
+}
+
+// Claude Code は貼り付けた入力を `<pasted_content id="…">…</pasted_content id="…">` で
+// 包んで transcript に残す。hwc は Herdr の paste 経路で送るため、改行を含む本文（添付の
+// 注記を含むものを含む）は包まれる。hwc の本文ではないので取り込み時に外す。開きと閉じの
+// id が揃った組だけを外し、片側だけ・id の違う組は本文として残す（外部形式を推測で削らない）。
+const PASTED_CONTENT =
+  /<pasted_content id="([^"\n]{1,64})">\n?([\s\S]*?)\n?<\/pasted_content id="([^"\n]{1,64})">/g;
+
+function stripPastedContent(text: string): string {
+  let unwrapped = false;
+  const body = text.replace(PASTED_CONTENT, (match, open: string, inner: string, close: string) => {
+    if (open !== close) return match;
+    unwrapped = true;
+    return inner;
+  });
+  if (!unwrapped) return text;
+  // 包みの外側に付く空行は Claude Code が足したもの。本文の前後の改行だけを落とす。
+  return body.replace(/^\n+/, "").replace(/\n+$/, "");
 }
 
 // 注記の書式が崩れていて名前を取り出せないときは、注記ブロックごと落とす。hwc の保存先は

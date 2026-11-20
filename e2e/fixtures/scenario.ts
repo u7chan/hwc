@@ -136,14 +136,19 @@ function claudeChatTranscript(): ClaudeEntry[] {
     assistant("msg-review-2", [
       { type: "text", text: "\n\nそのあと `bun run dev` で起動します。" },
     ]);
-    // 添付の注記は絶対パスを含む。strip できた分だけ名前のチップになる。
+    // 実機と同じく、貼り付けた入力は Claude Code が `<pasted_content>` で包んで書く。
+    // hwc はこの包みを外し、中の添付の注記を名前のチップにする（ADR 0097）。
     user(
       [
+        "",
+        '<pasted_content id="a0e1">',
         "その 2 点でお願いします。",
         "",
         "<attached_files>",
         "- /tmp/hwc-e2e/attachments/w2:p2/quickstart-review.pdf",
         "</attached_files>",
+        '</pasted_content id="a0e1">',
+        "",
       ].join("\n"),
     );
     // 名前を取り出せない注記は、ブロックごと落として本文だけを残す。

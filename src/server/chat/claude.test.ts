@@ -285,6 +285,94 @@ test("a note that names nothing is dropped with the rest of the body kept", asyn
   });
 });
 
+test("the pasted content wrapper Claude Code adds is not shown as body text", async () => {
+  await withRoot(async (root) => {
+    // 実機の Claude Code 2.1.328 と同じ形。hwc の送信は paste 経路なので、改行を含む本文は
+    // `<pasted_content>` で包まれて transcript に残る。
+    const wrapped = user(
+      "u1",
+      null,
+      [
+        "",
+        '<pasted_content id="89c4">',
+        "その 2 点でお願いします。",
+        "",
+        "<attached_files>",
+        "- /var/tmp/hwc/attachments/w2:p2/quickstart-review.pdf",
+        "</attached_files>",
+        '</pasted_content id="89c4">',
+        "",
+      ].join("\n"),
+    );
+    await writeTranscript(root, [wrapped]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.messages).toEqual([
+      {
+        id: "u1",
+        role: "user",
+        text: "その 2 点でお願いします。",
+        at: Date.parse(wrapped.timestamp),
+        attachments: [{ name: "quickstart-review.pdf", size: null }],
+      },
+    ]);
+    expect(JSON.stringify(snapshot)).not.toContain("pasted_content");
+    expect(JSON.stringify(snapshot)).not.toContain("/var/tmp");
+  });
+});
+
+test("a wrapped multi-line message keeps its lines and loses the outer blank lines", async () => {
+  await withRoot(async (root) => {
+    const wrapped = user(
+      "u1",
+      null,
+      '\n\n<pasted_content id="1a2b">\n1: これで\n2: それで\n</pasted_content id="1a2b">\n',
+    );
+    await writeTranscript(root, [wrapped]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.messages.map((message) => message.text)).toEqual(["1: これで\n2: それで"]);
+  });
+});
+
+test("a wrapper without its pair stays in the body", async () => {
+  await withRoot(async (root) => {
+    const open = user("u1", null, '貼り付けの例です。\n\n<pasted_content id="89c4">\n本文');
+    const mismatch = user(
+      "u2",
+      "u1",
+      '<pasted_content id="89c4">\n本文\n</pasted_content id="ffff">',
+    );
+    await writeTranscript(root, [open, mismatch]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.messages.map((message) => message.text)).toEqual([
+      '貼り付けの例です。\n\n<pasted_content id="89c4">\n本文',
+      '<pasted_content id="89c4">\n本文\n</pasted_content id="ffff">',
+    ]);
+  });
+});
+
+test("every paired wrapper in one message is unwrapped", async () => {
+  await withRoot(async (root) => {
+    const wrapped = user(
+      "u1",
+      null,
+      '前置き\n\n<pasted_content id="a1">\n一つ目\n</pasted_content id="a1">\n\n<pasted_content id="b2">\n二つ目\n</pasted_content id="b2">',
+    );
+    await writeTranscript(root, [wrapped]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.messages.map((message) => message.text)).toEqual([
+      "前置き\n\n一つ目\n\n二つ目",
+    ]);
+  });
+});
+
 test("a failed API call becomes an error row without adopting the synthetic model", async () => {
   await withRoot(async (root) => {
     const first = user("u1", null, "状態を確認してください。");

@@ -41,6 +41,7 @@ Claude Code 2.1.327 は `CLAUDE_CONFIG_DIR`（既定 `~/.claude`）配下の `pr
 - assistant は `message.id` ごとに束ね、text block をファイル順に連結する。`id` と `at` は最初の entry の `uuid` と `timestamp`。text が空の組は行にしない。`thinking` と `tool_use` は捨てる
 - user は文字列を本文にする。配列のときは text ブロックだけを拾い、tool_result だけの entry と画像だけの entry は行にしない。`isMeta === true` と `isCompactSummary === true` は出さない。TUI のローカルコマンドの記録（`<command-name>` / `<local-command-stdout>` などで始まる本文）も出さない
 - `<attached_files>` は既存の `stripAttachedFiles` で落とし、名前だけを `attachments` に残す。名前を取り出せない注記は、絶対パスを画面に出さないため注記ブロックごと落とす。本文が空になったら行にしない
+- Claude Code が貼り付けた入力に付ける `<pasted_content id="…">…</pasted_content id="…">` の包みは外す。開きと閉じの id が揃った組だけを対象にし、前後の空行も落とす。片側だけ・id の違う組は本文として残す。外すのは注記より先（注記は包みの中にあり、注記を剥がすと閉じタグも消える）
 - `isApiErrorMessage: true` の assistant は `role: "error"` にして、`error` と本文を並べる（[ADR 0039](0039-chat-error-rows.md) と同じ見え方）。中断・拒否の tool_result は error 行にしない
 - `model` は branch の最後の assistant の `message.model`（`<synthetic>` は採らない）。`effort` は最後の非 null の `perTurnEffort`。起動時にモデルを指定したペインは、assistant がまだ無いときだけ `launchModels` の預かりで補う（[ADR 0033](0033-launch-model-before-first-message.md)）。デフォルト起動では最初の応答まで null のまま
 - `context` と `compaction` は `null`、`usage` は持たない。コンテキスト量・圧縮の区切り・モデル別の window は別 Issue で扱う
@@ -60,6 +61,7 @@ Claude Code 2.1.327 は `CLAUDE_CONFIG_DIR`（既定 `~/.claude`）配下の `pr
 - サブエージェント（`isSidechain`）の会話は出ない。本流の会話だけを映す
 - TUI のローカルコマンド実行は会話に残らない。`/model` や `/theme` の結果は端末で読む
 - 添付は本文の `<attached_files>` 注記のままで、実体は CLI へ渡していない。保存先はチェックアウトの外なので、Claude がそのパスを読むときに権限確認が出たら端末で承認する
+- 貼り付けの包みは Claude Code の内部形式で、hwc は形を推測して広くは削らない。版が変わって id を伴わない形になれば、タグが本文に戻る。`<attached_files>` と同じく、transcript は書き換えず取り込み側で吸収する
 - `isCompactSummary` を持つセッションでは、要約の行が出ないまま前後の会話が並ぶ。区切りの設計は別 Issue に寄せる
 - 会話を読むエージェントが 4 つ揃ったので、hwc から起動したペインはどれも `pane.chat` を待つ。チャットを持たないのは未知のエージェントだけになる（[ADR 0078](0078-starting-pane-mask.md)）
 - hwc から起動した Claude は、実機（Herdr 0.9.5、Claude Code 2.1.327、2026-11-19）で `agent.start` の直後に `agent_session` が付き、`pane.chat` が true になった。起動待ちが最初の送信まで続くことはない（[ADR 0078](0078-starting-pane-mask.md)）。架空 Herdr は `agent.start` で Claude の session を作らないため、E2E では起動した Claude のペインが 10 秒後に `unknown` へ落ちる。これは fake の制約で、起動時に session を渡す形は #330 / #331 の E2E 拡張で足す（[docs/e2e.md](../e2e.md)）
