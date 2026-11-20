@@ -23,8 +23,8 @@ hwc から起動した Claude は、transcript ができる前から `agent_sess
 
 ## Consequences
 
-- 最初の送信で transcript ができたあと、最大でも次の poll（実行中 2 秒 / 待機 5 秒）で会話ビューに切り替わる
-- 送信の直後、transcript ができる前の poll がミスを覚え直すことはある。その場合も期限の 4 秒（待機中は次の 5 秒 poll）で解け、30 秒には戻らない
+- 最初の送信で transcript ができたあと、送信直後にミスを覚え直した場合を除き、次の poll（実行中 2 秒 / 待機 5 秒）で会話ビューに切り替わる
+- 送信の直後、transcript ができる前の poll がミスを覚え直すと、そのミスが切れる次の探索（実行中は 4 秒後）まで端末出力のままになる。30 秒には戻らない
 - transcript が無い間の `projects/*` の readdir は、実行中 4 秒・待機中 5 秒に 1 回になる。30 秒より増えるが、poll ごとには戻らない
 - hwc の送信を通らずに transcript ができた場合（hwc 外で起動し、TUI から送った等）も、最大 5 秒で会話ビューに切り替わる
 - hwc 外で起動したペインは、Herdr が `agent_session` を返すまで `chatSource` が無い。送信しても捨てる記憶が無く、期限と待機中の poll で最大 5 秒かかる

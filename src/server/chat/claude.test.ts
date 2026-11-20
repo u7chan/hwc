@@ -2,7 +2,7 @@ import { beforeEach, expect, test } from "bun:test";
 import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createClaudeChatClient, MISSING_TTL_MS } from "./claude";
+import { createClaudeChatClient } from "./claude";
 import { SIDECAR_TTL_MS } from "./claude-sidecar";
 import type { ChatPending } from "./contract";
 import { ChatUnavailableError } from "./errors";
@@ -479,8 +479,8 @@ test("a missing session is remembered only for four seconds", async () => {
     await expect(client.snapshot(SESSION)).rejects.toBeInstanceOf(ChatUnavailableError);
 
     await writeTranscript(root, [user("u1", null, "遅れて現れました。")]);
-    // 覚えている間は探し直さない。2 秒ごとの poll でも 2 回目には期限が切れる。
-    now += MISSING_TTL_MS - 1;
+    // 期限は仕様値の 4 秒。実装の定数から作ると、30 秒へ戻してもこのテストが緑のままになる。
+    now += 3_999;
     await expect(client.snapshot(SESSION)).rejects.toBeInstanceOf(ChatUnavailableError);
 
     now += 1;

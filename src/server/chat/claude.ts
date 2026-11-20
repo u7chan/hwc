@@ -28,7 +28,7 @@ const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
 // poll のたびに projects/* を readdir しない。見つからなかった id は短くだけ覚える。
 // 期限は実行中の poll（2 秒）2 回分。5 秒覚えると、2 秒ごとの poll では次の探索が 6 秒後に
 // なり、送信で transcript ができてから会話ビューへ切り替わるまでが 5 秒を超えることがある。
-export const MISSING_TTL_MS = 4_000;
+const MISSING_TTL_MS = 4_000;
 
 // 追記が止まったセッションを開き直したときに、同じファイルを読み直さない。
 const MAX_PROJECTIONS = 8;
