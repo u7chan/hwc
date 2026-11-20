@@ -40,7 +40,7 @@ test("each row shows the current value without opening the screen", () => {
 });
 
 test("each agent row shows its default model, with the effort as a separate badge", () => {
-  expect(settingsCategoryValue("agent-claude", loaded)).toBe("sonnet");
+  expect(settingsCategoryValue("agent-claude", loaded)).toBe("Sonnet");
   expect(settingsCategoryBadge("agent-claude", loaded)).toBe("high");
   // effort に対応しないモデルは、モデルだけを出す。
   expect(settingsCategoryValue("agent-opencode", loaded)).toBe("@demo/beam-small");

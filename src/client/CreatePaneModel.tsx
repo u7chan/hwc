@@ -1,4 +1,4 @@
-import { type AgentModel, modelKey } from "../shared/agents";
+import { type AgentKind, type AgentModel, claudeModelName, modelKey } from "../shared/agents";
 import type { LaunchDefault } from "../shared/launch-defaults";
 import { CreatePaneSelect } from "./CreatePaneSelect";
 import { type ModelCandidates, sameModel } from "./launch-choice";
@@ -14,6 +14,7 @@ function modelNote(candidates: ModelCandidates): string | null {
 // 「デフォルトモデル」（CLI に任せる）は出さない。候補を読めなければ選べず、起動もできない
 // （ADR 0104）。
 export function CreatePaneModel(props: {
+  agent: AgentKind;
   candidates: ModelCandidates;
   model: AgentModel | null;
   saved: LaunchDefault | null;
@@ -23,6 +24,9 @@ export function CreatePaneModel(props: {
 }) {
   const models = Array.isArray(props.candidates) ? props.candidates : [];
   const note = modelNote(props.candidates);
+  // Claude の候補はエイリアスだけで、provider は常に `claude`。選択肢でも自分を二重に名乗らない。
+  const label = (model: AgentModel) =>
+    props.agent === "claude" ? claudeModelName(model.id) : modelKey(model);
 
   return (
     <div class="hwc-create-model">
@@ -45,8 +49,8 @@ export function CreatePaneModel(props: {
         {models.map((model) => (
           <option key={modelKey(model)} value={modelKey(model)}>
             {props.saved !== null && sameModel(model, props.saved.model)
-              ? `${modelKey(model)}（既定）`
-              : modelKey(model)}
+              ? `${label(model)}（既定）`
+              : label(model)}
           </option>
         ))}
       </CreatePaneSelect>

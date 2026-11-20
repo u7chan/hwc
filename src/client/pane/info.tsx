@@ -1,5 +1,6 @@
 import { useId, useState } from "preact/hooks";
 import type { ChatContext, ChatUsage } from "../../server/chat/contract";
+import { claudeModelName, isClaudeAlias } from "../../shared/agents";
 import { type AgentInfo, type ContextMeterView, contextDetails } from "../chat";
 import { type CommandId, commandLabel, commandText } from "../commands";
 import { useCopy } from "../copy";
@@ -85,10 +86,13 @@ export function ContextMeter(props: {
   );
 }
 
-// モデル名は狭い画面で省略される。全体を読む口と、名前を持ち出す口を同じパネルに置く。
-export function AgentInfoHint(props: { info: AgentInfo }) {
+// チップは Claude だけ表示名にする。パネルは省略されない全体と、持ち出す識別子を出す。
+// エイリアスは起動時に頼んだ値で、実際のモデルは最初の応答で分かる。
+export function AgentInfoHint(props: { agent: string | null; info: AgentInfo }) {
   const model = props.info.model;
   const effort = props.info.effort;
+  const claude = props.agent === "claude" && model !== null;
+  const provisional = claude && isClaudeAlias(model);
   const hint = useHint();
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "model";
@@ -101,7 +105,9 @@ export function AgentInfoHint(props: { info: AgentInfo }) {
         aria-controls={hint.panelId}
         {...hint.triggerProps}
       >
-        {model === null ? null : <span class="hwc-input-model">{model}</span>}
+        {model === null ? null : (
+          <span class="hwc-input-model">{claude ? claudeModelName(model) : model}</span>
+        )}
         {effort === null ? null : <span class="hwc-effort-badge hwc-input-effort">{effort}</span>}
       </button>
       <span
@@ -115,6 +121,11 @@ export function AgentInfoHint(props: { info: AgentInfo }) {
       >
         {model === null ? null : (
           <span class="hwc-model-row">
+            {provisional ? (
+              <span class="hwc-model-provisional" aria-hidden="true">
+                <InfoIcon size={14} />
+              </span>
+            ) : null}
             <span class="hwc-model-name">{model}</span>
             <button
               type="button"
@@ -127,6 +138,9 @@ export function AgentInfoHint(props: { info: AgentInfo }) {
             </button>
           </span>
         )}
+        {provisional ? (
+          <span class="hwc-hint-note">起動時の指定。最初の応答で実際のモデルに確定します</span>
+        ) : null}
         {effort === null ? null : (
           <span class="hwc-hint-row">
             <span>エフォート</span>

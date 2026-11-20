@@ -277,6 +277,7 @@ export function CreatePane(props: CreatePaneProps) {
             ))}
           </div>
           <CreatePaneModel
+            agent={agent}
             candidates={models.read}
             model={model}
             saved={saved}

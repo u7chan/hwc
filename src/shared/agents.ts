@@ -54,10 +54,30 @@ export function modelKey(model: AgentModel): string {
   return `${model.provider}/${model.id}`;
 }
 
+// Claude Code 2.1.327 の `--model` は family のエイリアスを受け、その時点の最新モデルへ
+// 解決する。hwc は版を追わず、エイリアスだけを候補にする。`fable` / `opus` / `sonnet` は
+// `claude --help`、`haiku` は CLI 同梱の alias 一覧で確認した（ADR 0096）。
+export const CLAUDE_MODEL_ALIASES = ["fable", "opus", "sonnet", "haiku"] as const;
+
+export function isClaudeAlias(id: string): boolean {
+  return (CLAUDE_MODEL_ALIASES as readonly string[]).includes(id);
+}
+
+// エイリアスは `Opus`、`claude-opus-5-5` は `Opus 5.5` にする。版は id に含まれるので、
+// リリースごとの対応表は持たない。minor を 1〜2 桁に絞るのは、`claude-opus-4-20250514` の
+// 日付を minor と読まないため。読めない id（旧形式、他プロバイダーの id）はそのまま返す。
+export function claudeModelName(id: string): string {
+  const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+  const [, family, major, minor] = /^claude-([a-z]+)-(\d+)-(\d{1,2})(?:-\d{8})?$/.exec(id) ?? [];
+  if (family !== undefined) return `${capitalize(family)} ${major}.${minor}`;
+  return isClaudeAlias(id) ? capitalize(id) : id;
+}
+
 // エージェント名と並べて出すときの名前。Claude の provider は常に `claude` で、行の
 // 「Claude  claude/opus」のように自分を二重に名乗ってしまうので、provider を削ってモデルだけにする。
 // Pi だけは `opencode-go/…` のように provider が選択の一部なので残す。
 export function modelLabel(agent: ModelAgentKind, model: AgentModel): string {
+  if (agent === "claude") return claudeModelName(model.id);
   return agent === "pi" ? modelKey(model) : model.id;
 }
 
