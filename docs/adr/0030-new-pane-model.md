@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-05
-- Amended by: [ADR 0096](0096-claude-model-effort.md)（Claude のモデル・effort 選択）、[ADR 0104](0104-launch-with-explicit-model.md)（モデルと effort の必須化と hwc の既定）
+- Amended by: [ADR 0096](0096-claude-model-effort.md)（Claude のモデル・effort 選択）、[ADR 0104](0104-launch-with-explicit-model.md)（モデルと effort の必須化と hwc の既定）、[ADR 0105](0105-opencode-service-autostart.md)（OpenCode サービスの自動起動）
 
 ## Context
 

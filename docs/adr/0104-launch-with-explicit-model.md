@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-20
 - Amends: [ADR 0030](0030-new-pane-model.md) の「初期値は『デフォルトモデル』」「未指定ならモデルの起動引数を追加せず、CLI の既定に任せる」「既定設定の保存はしない」「取得中・取得失敗・候補なしでも『デフォルトモデル』での作成は妨げない」、effort の「初期値は『デフォルト（CLI に任せる）』」「モデルを明示選択していても、effort 未指定での起動は妨げない」。[ADR 0096](0096-claude-model-effort.md) の「初期値はこれまでどおり『デフォルトモデル』」
+- Amended by: [ADR 0105](0105-opencode-service-autostart.md)（OpenCode サービスの自動起動）
 
 ## Context
 

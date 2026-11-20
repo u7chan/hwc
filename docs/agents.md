@@ -11,25 +11,25 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - ×: 非対応（端末出力で操作する）
 - –: そのエージェントに概念がない
 
-| 機能                                     | Pi             | Claude                  | Codex         | OpenCode          |
-| ---------------------------------------- | -------------- | ----------------------- | ------------- | ----------------- |
-| 起動（新規ペイン / ワークツリー / 名前） | ○              | ○                       | ○             | ○                 |
-| 起動時のモデル指定                       | ○              | ○                       | ○             | ○（サービス必要） |
-| 起動時の effort 指定                     | ○              | ○                       | ○             | ○（サービス必要） |
-| Web での会話表示                         | ○              | ○                       | ○（hwc 起動） | ○                 |
-| 送信・停止                               | ○              | ○                       | ○             | ○                 |
-| モデル・effort の表示                    | ○              | ○                       | ○             | ○                 |
-| コンテキスト使用量・usage                | ○              | ×                       | ×             | ○                 |
-| 圧縮の区切り                             | ○              | ×                       | ×             | ○                 |
-| 添付ファイル（画像以外も可）             | ○              | △                       | △             | △                 |
-| メッセージ内の画像プレビュー             | ○              | ○                       | ○             | ○                 |
-| 引用返信                                 | ○              | ○                       | ○             | ○                 |
-| 過去の発言の編集                         | ○（mypi 拡張） | ×                       | ×             | ×                 |
-| `/new` `/compact` の候補                 | ○              | △                       | △             | △                 |
-| 起動時の信頼確認                         | ○              | ×                       | ○             | –                 |
-| 応答待ち（質問・承認）の表示             | ×              | ○（hwc 起動）           | ×             | ×                 |
-| 質問への回答（AskUserQuestion）          | ×              | ○（hwc 起動）           | ×             | ×                 |
-| ライブ activity                          | △（pi 拡張）   | △（hwc 起動は速度付き） | ×             | ×                 |
+| 機能                                     | Pi             | Claude                  | Codex         | OpenCode        |
+| ---------------------------------------- | -------------- | ----------------------- | ------------- | --------------- |
+| 起動（新規ペイン / ワークツリー / 名前） | ○              | ○                       | ○             | ○               |
+| 起動時のモデル指定                       | ○              | ○                       | ○             | ○（hwc が起動） |
+| 起動時の effort 指定                     | ○              | ○                       | ○             | ○（hwc が起動） |
+| Web での会話表示                         | ○              | ○                       | ○（hwc 起動） | ○               |
+| 送信・停止                               | ○              | ○                       | ○             | ○               |
+| モデル・effort の表示                    | ○              | ○                       | ○             | ○               |
+| コンテキスト使用量・usage                | ○              | ×                       | ×             | ○               |
+| 圧縮の区切り                             | ○              | ×                       | ×             | ○               |
+| 添付ファイル（画像以外も可）             | ○              | △                       | △             | △               |
+| メッセージ内の画像プレビュー             | ○              | ○                       | ○             | ○               |
+| 引用返信                                 | ○              | ○                       | ○             | ○               |
+| 過去の発言の編集                         | ○（mypi 拡張） | ×                       | ×             | ×               |
+| `/new` `/compact` の候補                 | ○              | △                       | △             | △               |
+| 起動時の信頼確認                         | ○              | ×                       | ○             | –               |
+| 応答待ち（質問・承認）の表示             | ×              | ○（hwc 起動）           | ×             | ×               |
+| 質問への回答（AskUserQuestion）          | ×              | ○（hwc 起動）           | ×             | ×               |
+| ライブ activity                          | △（pi 拡張）   | △（hwc 起動は速度付き） | ×             | ×               |
 
 - 添付ファイルの UI 自体は会話を持つペインで使えるが、hwc は実体を CLI へ渡さず、本文に `<attached_files>` のパス注記を足すだけ。Pi はこの経路を前提にしている（[ADR 0018](adr/0018-pasted-image-attachments.md)、[ADR 0080](adr/0080-file-attachments.md)）。Codex と OpenCode は、それぞれの CLI がそのパスを読めるか次第（[ADR 0028](adr/0028-opencode-chat.md)、[ADR 0031](adr/0031-codex-chat.md)）。Claude の注記は `$HWC_STATE_DIR/attachments/<pane-id>/` を指し、チェックアウトの外なので、CLI が読むときに権限確認が出たら端末で承認する（[ADR 0097](adr/0097-claude-chat-transcript.md)）。
 - Pi と Codex のフォルダ信頼確認は、専用ビューで「信頼して続行」だけを回答できる（[ADR 0032](adr/0032-codex-folder-trust.md)、[ADR 0044](adr/0044-pi-project-trust.md)）。それ以外の選択肢は端末で行う。
@@ -63,7 +63,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 ### OpenCode
 
 - 会話はローカルサービスの HTTP API から読む（[ADR 0028](adr/0028-opencode-chat.md)）。`service.json` が無い、loopback でない、API が失敗するときは端末出力へフォールバックする
-- モデルと effort はサービス API の model と variants から選ぶ。サービス未起動ではモデル候補が出ず、hwc からは起動できない。サービスを起動してから再取得する（[ADR 0030](adr/0030-new-pane-model.md)、[ADR 0104](adr/0104-launch-with-explicit-model.md)）
+- モデルと effort はサービス API の model と variants から選ぶ。サービスが未起動なら、候補を読むときに hwc が `opencode service start` で起動する。起動できなければ候補が出ず、再取得で起動し直す（[ADR 0030](adr/0030-new-pane-model.md)、[ADR 0104](adr/0104-launch-with-explicit-model.md)、[ADR 0105](adr/0105-opencode-service-autostart.md)）
 - 添付ファイルの実体は渡さず、本文のパス注記だけを送る
 - 圧縮は完了したものだけを区切りにし、`tokensBefore` は `null`
 
@@ -117,6 +117,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - [ADR 0041: エージェントが書いた画像をメッセージ内でプレビューする](adr/0041-agent-message-images.md)
 - [ADR 0044: Pi のプロジェクト信頼確認も確認ビューで回答する](adr/0044-pi-project-trust.md)
 - [ADR 0096: Claude のモデルと effort は起動時にエイリアスと段階で選ぶ](adr/0096-claude-model-effort.md)
+- [ADR 0105: OpenCode のサービスは、候補を読むときに hwc が起動する](adr/0105-opencode-service-autostart.md)
 - [ADR 0097: Claude の会話は transcript を射影して読む](adr/0097-claude-chat-transcript.md)
 - [ADR 0098: Claude の応答待ちは hook の sidecar から読み、チャットに出す。Web からは承認しない](adr/0098-claude-pending-in-chat.md)
 - [ADR 0099: AskUserQuestion は Esc で閉じ、選んだ内容を本文で答える](adr/0099-answer-ask-user-question.md)

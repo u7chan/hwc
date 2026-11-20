@@ -5,7 +5,7 @@ import { type ModelCandidates, sameModel } from "./launch-choice";
 
 function modelNote(candidates: ModelCandidates): string | null {
   if (candidates === "opencode_not_running")
-    return "OpenCode サービス未起動。サービスを起動してから再取得してください。";
+    return "OpenCode サービスを起動できませんでした。再取得すると起動し直します。";
   if (candidates === null) return "モデルを取得できませんでした。";
   if (candidates?.length === 0) return "選択できるモデルがありません。";
   return null;

@@ -439,6 +439,11 @@ export async function createScenario(root: string): Promise<Scenario> {
       { mode: 0o700 },
     ),
     writeFile(
+      join(root, "bin", "opencode"),
+      `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-opencode-cli.ts", import.meta.url))}" "$@"\n`,
+      { mode: 0o700 },
+    ),
+    writeFile(
       join(root, "bin", "gh"),
       `#!/bin/sh\nexec "${process.execPath}" "${fileURLToPath(new URL("../fake-gh.ts", import.meta.url))}" "$@"\n`,
       { mode: 0o700 },

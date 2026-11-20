@@ -38,9 +38,12 @@ export async function startFakeOpencode(root: string) {
     },
   });
   await mkdir(join(root, "opencode"), { recursive: true });
-  await writeFile(
-    join(root, "opencode", "service.json"),
-    JSON.stringify({ url: server.url.href, password }),
+  const service = JSON.stringify({ url: server.url.href, password });
+  // 控えは架空の `opencode service start` が service.json へ戻す元（e2e/fake-opencode-cli.ts）。
+  await Promise.all(
+    ["service.json", "service.fixture.json"].map((name) =>
+      writeFile(join(root, "opencode", name), service),
+    ),
   );
   return { close: () => server.stop(true) };
 }

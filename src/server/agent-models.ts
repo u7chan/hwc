@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import {
   type AgentModel,
   type ModelAgentKind,
@@ -5,7 +6,7 @@ import {
   isAgentModel,
   modelKey,
 } from "../shared/agents";
-import { readServiceFile, requestJson } from "./chat/opencode";
+import { OpencodeServiceNotRunningError, readServiceFile, requestJson } from "./chat/opencode";
 import { asRecord, type CodexReader, nextCursor, withCodex } from "./codex";
 import { loadPiEfforts } from "./pi-efforts";
 
@@ -21,6 +22,8 @@ export type AgentModelsClient = {
 };
 
 export const MODEL_LIST_TIMEOUT_MS = 20_000;
+// `opencode service start` は待ち受けを始めて service.json を書いてから終わる（2.3.2 で約 1 秒）。
+const OPENCODE_START_TIMEOUT_MS = 15_000;
 
 // Claude Code 2.1.327 の `--model` は family のエイリアスを受け、その時点の最新モデルへ
 // 解決する。hwc は版を追わず、エイリアスだけを候補にする。`fable` / `opus` / `sonnet` は
@@ -82,14 +85,17 @@ function uniqueModels<T extends AgentModel>(models: T[]): T[] {
   );
 }
 
-async function listPiModels(directory: string): Promise<string> {
-  // HERDR_ を継ぐとペイン扱いになる。
-  const env = Object.fromEntries(
+// HERDR_ を継ぐとペイン扱いになる。
+function agentEnv(): Record<string, string | undefined> {
+  return Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
   );
+}
+
+async function listPiModels(directory: string): Promise<string> {
   const child = Bun.spawn(["pi", "--offline", "--list-models"], {
     cwd: directory,
-    env: { ...env, NO_COLOR: "1" },
+    env: { ...agentEnv(), NO_COLOR: "1" },
     stdin: "ignore",
     stdout: "pipe",
     stderr: "ignore",
@@ -100,6 +106,20 @@ async function listPiModels(directory: string): Promise<string> {
   return text;
 }
 
+// サービスは自分で setsid して常駐し、起動した側の環境を継ぐ。hwc の作業ディレクトリや
+// ペインの HERDR_ を持ち込まないよう、ホームで起動する。
+async function startOpencodeService(): Promise<void> {
+  const child = Bun.spawn(["opencode", "service", "start"], {
+    cwd: homedir(),
+    env: agentEnv(),
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+    timeout: OPENCODE_START_TIMEOUT_MS,
+  });
+  if ((await child.exited) !== 0) throw new Error("OpenCode service did not start");
+}
+
 export function createAgentModelsClient(
   options: {
     servicePath?: string;
@@ -108,6 +128,7 @@ export function createAgentModelsClient(
     request?: typeof requestJson;
     loadService?: typeof readServiceFile;
     codex?: CodexReader;
+    startService?: () => Promise<void>;
   } = {},
 ): AgentModelsClient {
   const piModels = options.piModels ?? listPiModels;
@@ -115,6 +136,24 @@ export function createAgentModelsClient(
   const loadService = () => (options.loadService ?? readServiceFile)(options.servicePath);
   const codex = options.codex ?? withCodex;
   const piEfforts = options.piEfforts ?? loadPiEfforts;
+  const startService = options.startService ?? startOpencodeService;
+
+  // 候補を読む場面（設定画面・作成ダイアログ・再取得）でだけ起動する。会話の読み取りは
+  // 起動済みのペインにしか起きないので、そちらからは起動しない。
+  let starting: Promise<void> | null = null;
+  const opencode = async (path: string, timeoutMs: number, body?: unknown) => {
+    try {
+      return await request(await loadService(), path, timeoutMs, body);
+    } catch (error) {
+      if (!(error instanceof OpencodeServiceNotRunningError)) throw error;
+    }
+    starting ??= startService().finally(() => {
+      starting = null;
+    });
+    // 起動に失敗したら、読み直しが未起動のまま失敗し、画面は再取得を出す。
+    await starting.catch(() => {});
+    return request(await loadService(), path, timeoutMs, body);
+  };
 
   const list: AgentModelsClient["list"] = async (agent, directory) => {
     if (agent === "claude") return claudeModels();
@@ -124,9 +163,8 @@ export function createAgentModelsClient(
         provider,
         id,
       }));
-    const service = await loadService();
     const query = new URLSearchParams({ "location[directory]": directory });
-    return parseOpencodeModels(await request(service, `/api/model?${query}`, 5_000));
+    return parseOpencodeModels(await opencode(`/api/model?${query}`, 5_000));
   };
 
   const efforts: AgentModelsClient["efforts"] = async (agent, model, directory) => {
@@ -144,9 +182,8 @@ export function createAgentModelsClient(
       if (!Array.isArray(values)) throw new Error("Codex effort is unavailable");
       return effortValues(values.map((value) => asRecord(value)?.reasoningEffort));
     }
-    const service = await loadService();
     const query = new URLSearchParams({ "location[directory]": directory });
-    const raw = asRecord(await request(service, `/api/model?${query}`, 5_000));
+    const raw = asRecord(await opencode(`/api/model?${query}`, 5_000));
     if (!Array.isArray(raw?.data)) throw new Error("OpenCode model list is not available");
     const selected = raw.data
       .map(asRecord)
@@ -185,8 +222,7 @@ export function createAgentModelsClient(
 
       // OpenCode 2 の通常 TUI に --model は無い。新規セッションだけにモデルを指定し、
       // --session で開く。共有の既定設定や実行中のセッションには触れない。
-      const service = await loadService();
-      const raw = await request(service, "/api/session", 5_000, {
+      const raw = await opencode("/api/session", 5_000, {
         model: {
           providerID: model.provider,
           id: model.id,
