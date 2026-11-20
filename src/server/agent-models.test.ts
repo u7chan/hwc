@@ -1,5 +1,7 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { createAgentModelsClient, parseOpencodeModels, parsePiModels } from "./agent-models";
+import { ChatUnavailableError } from "./chat/errors";
+import { OpencodeServiceNotRunningError } from "./chat/opencode";
 import type { CodexReader } from "./codex";
 
 const model = { provider: "example", id: "beam" };
@@ -271,6 +273,84 @@ test.each([model, namespacedModel])(
     ]);
   },
 );
+
+function stoppedOpencode(options: { start?: () => Promise<void> } = {}) {
+  let running = false;
+  let starts = 0;
+  const client = createAgentModelsClient({
+    loadService: async () => {
+      if (!running) throw new OpencodeServiceNotRunningError();
+      return service;
+    },
+    request: async (_service, path) =>
+      path === "/api/session"
+        ? { data: { id: "ses_fixture" } }
+        : {
+            data: [{ providerID: "example", id: "beam", enabled: true, variants: [{ id: "eco" }] }],
+          },
+    startService: async () => {
+      starts += 1;
+      await options.start?.();
+      running = true;
+    },
+  });
+  return { client, starts: () => starts };
+}
+
+describe("a stopped OpenCode service is started when candidates are read", () => {
+  test("models are read after starting the service", async () => {
+    const { client, starts } = stoppedOpencode();
+    expect(await client.list("opencode", "/project")).toEqual([model]);
+    expect(starts()).toBe(1);
+  });
+
+  test("efforts and the launch also start the service", async () => {
+    const effortsRead = stoppedOpencode();
+    expect(await effortsRead.client.efforts("opencode", model, "/project")).toEqual(["eco"]);
+    expect(effortsRead.starts()).toBe(1);
+    const launch = stoppedOpencode();
+    expect(await launch.client.startArgs("opencode", model, "/project")).toEqual([
+      "--session",
+      "ses_fixture",
+    ]);
+    expect(launch.starts()).toBe(1);
+  });
+
+  test("concurrent reads share one start", async () => {
+    const { client, starts } = stoppedOpencode();
+    await Promise.all([client.list("opencode", "/a"), client.list("opencode", "/b")]);
+    expect(starts()).toBe(1);
+  });
+
+  test("a failed start still reports the service as not running, and the next read tries again", async () => {
+    const { client, starts } = stoppedOpencode({
+      start: async () => {
+        throw new Error("opencode is not installed");
+      },
+    });
+    await expect(client.list("opencode", "/project")).rejects.toBeInstanceOf(
+      OpencodeServiceNotRunningError,
+    );
+    await expect(client.list("opencode", "/project")).rejects.toBeInstanceOf(
+      OpencodeServiceNotRunningError,
+    );
+    expect(starts()).toBe(2);
+  });
+
+  test("other service failures do not start the service", async () => {
+    let starts = 0;
+    const client = createAgentModelsClient({
+      loadService: async () => {
+        throw new ChatUnavailableError("opencode service is not on loopback");
+      },
+      startService: async () => {
+        starts += 1;
+      },
+    });
+    await expect(client.list("opencode", "/project")).rejects.toThrow("loopback");
+    expect(starts).toBe(0);
+  });
+});
 
 test("an unavailable OpenCode model does not create a session", async () => {
   const paths: string[] = [];
