@@ -664,16 +664,17 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   text-overflow: ellipsis;
 }
 
-/* 幅が足りないときは作成元から先に縮める（既定の flex）。いまのスペース（末尾）は
-   縮めず、名前が長いときだけ自分の上限で省略する。少しの不足で両方に省略記号を
-   付けないため。 */
-.hwc-pane-head-place[data-part="space"] {
-  flex: 0 0 auto;
-  max-width: 10em;
+/* 幅が足りないときは作成元から先に縮める。区切りは作成元の中に置き、省略されたら
+   一緒に消える。0 になれば、いまのスペース名だけが残る。 */
+.hwc-pane-head-place[data-part="parent"] {
+  flex: 0 20 auto;
 }
 
-.hwc-pane-head-sep {
-  flex: none;
+/* 作成元が消えても入らない幅では、いまのスペース名の末尾を省略する。省略記号の
+   ぶんだけ見出しの幅を食わないよう、上限は 10em にする。 */
+.hwc-pane-head-place[data-part="space"] {
+  flex: 0 1 auto;
+  max-width: 10em;
 }
 
 .hwc-pane-more {

@@ -1386,14 +1386,12 @@ export function PaneDetail(props: PaneDetailProps) {
             {labeled && showSpace && place !== null ? (
               <span class="hwc-pane-head-space" title={placeTitle}>
                 {place.parent === null ? null : (
-                  <>
-                    <span class="hwc-pane-head-place" data-part="parent">
-                      {place.parent}
-                    </span>
+                  <span class="hwc-pane-head-place" data-part="parent">
+                    {place.parent}
                     <span class="hwc-pane-head-sep" aria-hidden="true">
-                      ›
+                      {" ›"}
                     </span>
-                  </>
+                  </span>
                 )}
                 <span class="hwc-pane-head-place" data-part="space">
                   {place.space}
