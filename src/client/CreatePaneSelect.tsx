@@ -8,6 +8,8 @@ export function CreatePaneSelect(props: {
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
+  // 候補を読めず、読み直してよいときだけ渡す。ダイアログを開き直さずに読み直せる。
+  onRetry?: () => void;
   children: ComponentChildren;
 }) {
   const description = props.loading ? `${props.label}を読み込み中…` : props.note;
@@ -32,13 +34,20 @@ export function CreatePaneSelect(props: {
         </span>
       </label>
       {description === null ? null : (
-        <p
-          class={props.loading ? "hwc-visually-hidden" : "hwc-create-note"}
-          id={props.noteId}
-          role="status"
-        >
-          {description}
-        </p>
+        <div class="hwc-create-note-row">
+          <p
+            class={props.loading ? "hwc-visually-hidden" : "hwc-create-note"}
+            id={props.noteId}
+            role="status"
+          >
+            {description}
+          </p>
+          {props.loading || props.onRetry === undefined ? null : (
+            <button type="button" class="hwc-create-retry" onClick={props.onRetry}>
+              再取得
+            </button>
+          )}
+        </div>
       )}
     </>
   );

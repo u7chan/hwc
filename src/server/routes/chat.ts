@@ -3,9 +3,14 @@ import { readActivity } from "../chat/activity";
 import { OpencodeServiceNotRunningError } from "../chat/opencode";
 import { findPane } from "../herdr/state";
 import { attachMessageFiles } from "../message-files";
-import { isAgentModel, supportsModelSelection } from "../../shared/agents";
+import {
+  type AgentModel,
+  isAgentModel,
+  type ModelAgentKind,
+  supportsModelSelection,
+} from "../../shared/agents";
 import { parseAnswerRequest } from "../../shared/answer";
-import type { AppContext, IdContext } from "./context";
+import type { AppContext, IdContext, PlainContext } from "./context";
 
 export function createChatHandlers(ctx: AppContext) {
   const {
@@ -16,6 +21,7 @@ export function createChatHandlers(ctx: AppContext) {
     codex,
     claude,
     models,
+    homeDirectory,
     projects,
     previewRoots,
     attachmentsRoot,
@@ -27,6 +33,35 @@ export function createChatHandlers(ctx: AppContext) {
     matchesEtag,
   } = ctx;
 
+  const listModels = async (
+    c: PlainContext,
+    agent: ModelAgentKind,
+    directory: () => Promise<string>,
+  ) => {
+    try {
+      if (!models) return c.json({ error: "models_unavailable" }, 502);
+      return c.json({ models: await models.list(agent, await directory()) });
+    } catch (error) {
+      if (agent === "opencode" && error instanceof OpencodeServiceNotRunningError)
+        return c.json({ error: "opencode_not_running" }, 502);
+      return c.json({ error: "models_unavailable" }, 502);
+    }
+  };
+
+  const listEfforts = async (
+    c: PlainContext,
+    agent: ModelAgentKind,
+    model: AgentModel,
+    directory: () => Promise<string>,
+  ) => {
+    try {
+      if (!models) return c.json({ error: "efforts_unavailable" }, 502);
+      return c.json({ efforts: await models.efforts(agent, model, await directory()) });
+    } catch {
+      return c.json({ error: "efforts_unavailable" }, 502);
+    }
+  };
+
   return {
     models: async (c: IdContext) => {
       const agent = c.req.query("agent");
@@ -35,15 +70,7 @@ export function createChatHandlers(ctx: AppContext) {
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
       const paneId = c.req.param("id");
       if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
-      try {
-        if (!models) return c.json({ error: "models_unavailable" }, 502);
-        const directory = await panes.directory({ paneId });
-        return c.json({ models: await models.list(agent, directory) });
-      } catch (error) {
-        if (agent === "opencode" && error instanceof OpencodeServiceNotRunningError)
-          return c.json({ error: "opencode_not_running" }, 502);
-        return c.json({ error: "models_unavailable" }, 502);
-      }
+      return listModels(c, agent, () => panes.directory({ paneId }));
     },
     efforts: async (c: IdContext) => {
       const agent = c.req.query("agent");
@@ -54,13 +81,21 @@ export function createChatHandlers(ctx: AppContext) {
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
       const paneId = c.req.param("id");
       if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
-      try {
-        if (!models) return c.json({ error: "efforts_unavailable" }, 502);
-        const directory = await panes.directory({ paneId });
-        return c.json({ efforts: await models.efforts(agent, model, directory) });
-      } catch {
-        return c.json({ error: "efforts_unavailable" }, 502);
-      }
+      return listEfforts(c, agent, model, () => panes.directory({ paneId }));
+    },
+    // 設定画面にはペインが無い。hwc の作業ディレクトリで読むと hwc リポジトリの
+    // プロジェクト設定を拾うので、ホームで読む。
+    homeModels: async (c: PlainContext) => {
+      const agent = c.req.query("agent");
+      if (!supportsModelSelection(agent)) return c.json({ error: "invalid_request" }, 400);
+      return listModels(c, agent, async () => homeDirectory);
+    },
+    homeEfforts: async (c: PlainContext) => {
+      const agent = c.req.query("agent");
+      const model = { provider: c.req.query("provider"), id: c.req.query("model") };
+      if (!supportsModelSelection(agent) || !isAgentModel(model))
+        return c.json({ error: "invalid_request" }, 400);
+      return listEfforts(c, agent, model, async () => homeDirectory);
     },
     chat: async (c: IdContext) => {
       const state = await current();

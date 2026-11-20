@@ -639,6 +639,37 @@
   line-height: var(--line-body);
 }
 
+/* 候補を読めなかった理由と、読み直す操作を 1 行に並べる。狭ければ操作を次の行へ送る。
+   行そのものには余白を持たせない。読み込み中は理由が視覚的に隠れ、行の高さが 0 になる。 */
+.hwc-create-note-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+}
+
+.hwc-create-note-row .hwc-create-note {
+  flex: 1 1 12em;
+}
+
+.hwc-create-retry {
+  flex: none;
+  min-height: var(--tap);
+  margin-top: var(--space-3);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  cursor: pointer;
+}
+
+.hwc-create-retry:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
 .hwc-create-model,
 .hwc-create-effort {
   margin-top: var(--space-4);

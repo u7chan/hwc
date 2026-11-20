@@ -8,6 +8,7 @@ import { createNotificationsHandlers } from "./routes/notifications";
 import { createPanesHandlers } from "./routes/panes";
 import { createRestartHandlers } from "./routes/restart";
 import { createTemplatesHandlers } from "./routes/templates";
+import { createLaunchDefaultsHandlers } from "./routes/launch-defaults";
 import { createStateHandlers } from "./routes/state";
 import { createWorkspacesHandlers } from "./routes/workspaces";
 
@@ -32,6 +33,7 @@ export function createApp(options: CreateAppOptions) {
   const panesHandlers = createPanesHandlers(ctx);
   const restartHandlers = createRestartHandlers(ctx);
   const templatesHandlers = createTemplatesHandlers(ctx);
+  const launchDefaultsHandlers = createLaunchDefaultsHandlers(ctx);
   const stateHandlers = createStateHandlers(ctx);
   const workspacesHandlers = createWorkspacesHandlers(ctx);
 
@@ -49,6 +51,11 @@ export function createApp(options: CreateAppOptions) {
       .put("/api/notifications/discord", requireJson, notificationsHandlers.putDiscord)
       .delete("/api/notifications/discord", notificationsHandlers.deleteDiscord)
       .post("/api/notifications/discord/test", requireJson, notificationsHandlers.testDiscord)
+      .get("/api/launch-defaults", launchDefaultsHandlers.get)
+      .put("/api/launch-defaults", requireJson, launchDefaultsHandlers.put)
+      // 設定画面の候補。ペインを持たないので、BFF がホームディレクトリで読む。
+      .get("/api/models", chatHandlers.homeModels)
+      .get("/api/efforts", chatHandlers.homeEfforts)
       .get("/api/panes/:id/models", chatHandlers.models)
       .get("/api/panes/:id/efforts", chatHandlers.efforts)
       .get("/api/state", stateHandlers.state)

@@ -136,3 +136,99 @@ test("GET /api/panes/:id/models requires an existing pane and a readable snapsho
   const unavailable = createTestApp({ state: null, storeFailure: new Error("unavailable") }).app;
   expect((await unavailable.request("/api/panes/w1:p1/models?agent=pi")).status).toBe(502);
 });
+
+// 設定画面の候補はペインを持たない。BFF はホームディレクトリで読む。
+test.each(["pi", "claude", "codex", "opencode"] as const)(
+  "GET /api/models lists %s candidates in the home directory without a pane",
+  async (agent) => {
+    const seen: unknown[] = [];
+    const { app } = createTestApp({
+      homeDirectory: "/home/example",
+      state: null,
+      storeFailure: new Error("Herdr is not needed to read candidates"),
+      models: {
+        efforts: async () => [],
+        list: async (...args) => {
+          seen.push(args);
+          return [{ provider: "example", id: "beam" }];
+        },
+        startArgs: async () => {
+          throw new Error("Reading must not create a session");
+        },
+      },
+    });
+    const response = await app.request(`/api/models?agent=${agent}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ models: [{ provider: "example", id: "beam" }] });
+    expect(seen).toEqual([[agent, "/home/example"]]);
+  },
+);
+
+test.each(["pi", "claude", "codex", "opencode"] as const)(
+  "GET /api/efforts reads %s choices in the home directory without a pane",
+  async (agent) => {
+    const seen: unknown[] = [];
+    const { app } = createTestApp({
+      homeDirectory: "/home/example",
+      models: {
+        list: async () => [],
+        efforts: async (...args) => {
+          seen.push(args);
+          return ["eco", "max"];
+        },
+        startArgs: async () => {
+          throw new Error("Reading must not create a session");
+        },
+      },
+    });
+    const query = new URLSearchParams({ agent, provider: "example", model: "@demo/beam" });
+    const response = await app.request(`/api/efforts?${query}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ efforts: ["eco", "max"] });
+    expect(seen).toEqual([[agent, { provider: "example", id: "@demo/beam" }, "/home/example"]]);
+  },
+);
+
+test.each(["/api/models?agent=unknown", "/api/efforts?agent=pi&provider=example&model=--help"])(
+  "the home candidate routes reject an invalid query: %s",
+  async (path) => {
+    const { app } = createTestApp();
+    const response = await app.request(path);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+  },
+);
+
+test("the home candidate routes fail in the same shape as the pane routes", async () => {
+  const failing = createTestApp({
+    models: {
+      list: async (agent) => {
+        if (agent === "opencode") throw new OpencodeServiceNotRunningError();
+        throw new Error("/private/path: credential failure");
+      },
+      efforts: async () => {
+        throw new Error("/private/path: credential failure");
+      },
+      startArgs: async () => [],
+    },
+  }).app;
+  const cases = [
+    ["/api/models?agent=opencode", { error: "opencode_not_running" }],
+    ["/api/models?agent=pi", { error: "models_unavailable" }],
+    ["/api/efforts?agent=pi&provider=example&model=beam", { error: "efforts_unavailable" }],
+  ] as const;
+  for (const [path, body] of cases) {
+    const response = await failing.request(path);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual(body);
+  }
+
+  // モデルの読み取り口が無い構成でも、同じ形で失敗する。
+  const missing = createTestApp().app;
+  expect(await (await missing.request("/api/models?agent=pi")).json()).toEqual({
+    error: "models_unavailable",
+  });
+  expect(
+    await (await missing.request("/api/efforts?agent=pi&provider=example&model=beam")).json(),
+  ).toEqual({ error: "efforts_unavailable" });
+});

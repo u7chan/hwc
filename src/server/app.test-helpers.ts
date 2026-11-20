@@ -371,6 +371,8 @@ export type TestAppOptions = {
     | "discordSender"
     | "restartSettings"
     | "restart"
+    | "launchDefaults"
+    | "homeDirectory"
     | "restartDelayMs"
     | "editMarkerTimeoutMs"
     | "templates"
