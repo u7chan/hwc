@@ -1,4 +1,4 @@
-import { parseWorktreeCreated, type WorktreeCreated } from "./contract";
+import { parseWorktreeCreated, type SpaceCreated } from "./contract";
 import { request } from "./socket";
 
 // worktree.create は git worktree add とスペースの生成を行う。worktree.remove と同じく、
@@ -16,7 +16,7 @@ type Caller = (
 ) => Promise<unknown>;
 
 export type WorktreeClient = {
-  create: (options: { workspaceId: string }) => Promise<WorktreeCreated>;
+  create: (options: { workspaceId: string }) => Promise<SpaceCreated>;
   remove: (options: { workspaceId: string }) => Promise<void>;
 };
 

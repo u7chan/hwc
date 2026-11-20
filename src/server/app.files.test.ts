@@ -348,14 +348,15 @@ test("GET /api/panes/:id/files refuses a path outside the checkout", async () =>
   });
 });
 
-test("GET /api/panes/:id/files returns no_chat for a pane without a session", async () => {
+test("GET /api/panes/:id/files serves an image to a shell pane too", async () => {
   await withCheckout(async (root) => {
+    await writeFile(join(root, "mock.png"), pngBytes);
     const response = await createFilesApp(root, { state }).request(
       "/api/panes/w1:p1/files?path=mock.png",
     );
 
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "no_chat" });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
   });
 });
 
@@ -644,7 +645,7 @@ test("GET /api/panes/:id/preview shows a page, not JSON, when the HTML is gone",
   });
 });
 
-test("GET /api/panes/:id/preview refuses traversal and a pane without a session", async () => {
+test("GET /api/panes/:id/preview refuses traversal and a missing pane", async () => {
   await withCheckout(async (root) => {
     const outside = await mkdtemp(join(tmpdir(), "hwc-outside-"));
     const outsidePath = join(outside, "secret.html");
@@ -659,12 +660,6 @@ test("GET /api/panes/:id/preview refuses traversal and a pane without a session"
       ]) {
         expect((await app.request(`/api/panes/w1:p1/preview/0/${path}`)).status).toBe(404);
       }
-
-      const noChat = await createFilesApp(root, { state }).request(
-        "/api/panes/w1:p1/preview/0/mock.html",
-      );
-      expect(noChat.status).toBe(404);
-      expect(await noChat.json()).toEqual({ error: "no_chat" });
 
       const noPane = await app.request("/api/panes/w9:p9/preview/0/mock.html");
       expect(noPane.status).toBe(404);
@@ -977,11 +972,18 @@ test("GET /api/panes/:id/tree returns 404 without a checkout or outside the root
   expect(await response.json()).toEqual({ error: "no_checkout" });
 });
 
-test("GET /api/panes/:id/tree returns no_chat for a pane without a session", async () => {
+test("GET /api/panes/:id/tree lists the checkout for a shell pane too", async () => {
   await withCheckout(async (root) => {
     await writeFile(join(root, "note.md"), "text");
-    const response = await createFilesApp(root, { state }).request("/api/panes/w1:p1/tree");
-    expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ error: "no_chat" });
+    const app = createFilesApp(root, { state });
+
+    const tree = await app.request("/api/panes/w1:p1/tree");
+    expect(tree.status).toBe(200);
+    const listing = (await tree.json()) as { entries: { path: string }[] };
+    expect(listing.entries.map((entry) => entry.path)).toContain("note.md");
+
+    const preview = await app.request("/api/panes/w1:p1/preview/0/note.md?raw=1");
+    expect(preview.status).toBe(200);
+    expect(await preview.text()).toBe("text");
   });
 });

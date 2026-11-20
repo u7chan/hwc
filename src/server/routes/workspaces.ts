@@ -1,5 +1,9 @@
+import { basename } from "node:path";
+import { createSpace } from "../create-space";
 import { createWorktree } from "../create-worktree";
-import { parseWorktreeBody } from "../herdr/panes";
+import { parseCreateSpaceBody, parseWorktreeBody } from "../herdr/panes";
+import { findPane } from "../herdr/state";
+import { resolveTreeDirectory } from "../message-files";
 import { parseMoveWorkspacesBody } from "../herdr/workspaces";
 import { placeOf } from "../../shared/place";
 import { HerdrError } from "../herdr/socket";
@@ -156,6 +160,43 @@ export function createWorkspacesHandlers(ctx: AppContext) {
         return c.json({ workspaceId: result.workspaceId, paneId: result.paneId });
       } catch (error) {
         return worktreeFailure(c, error);
+      }
+    },
+    // ツリーで選んだフォルダを作業ディレクトリにしたスペースを作る。id は起点のペインで、
+    // パスはそのペインのツリーの根から解く（ADR 0106）。
+    createSpace: async (c: IdContext) => {
+      const body = await c.req.json().catch(() => null);
+      const request = parseCreateSpaceBody(body);
+      if (!request.ok) return c.json({ error: request.error }, request.status);
+
+      const state = await current();
+      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+
+      const paneId = c.req.param("id");
+      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      const root = store.workspaceRoot(paneId);
+      if (root === null) return c.json({ error: "no_checkout" }, 404);
+      // ツリーの一覧と同じ規則で解く。根の外・`.git`・ディレクトリでないものは作らない。
+      const directory = await resolveTreeDirectory({ root, path: request.value.path });
+      if (directory === null) return c.json({ error: "not_found" }, 404);
+
+      try {
+        const result = await createSpace(workspaces, panes, {
+          cwd: directory.real,
+          label: basename(directory.base),
+          name: request.value.name,
+        });
+        if (!result.ok) {
+          // スペースと root シェルは残っている。クライアントは起動へ進む。
+          return c.json(
+            { error: result.error, workspaceId: result.workspaceId, paneId: result.paneId },
+            502,
+          );
+        }
+        // 取り直しは workspace.created / pane.created に任せる。
+        return c.json({ workspaceId: result.workspaceId, paneId: result.paneId });
+      } catch (error) {
+        return workspaceFailure(c, error);
       }
     },
     removeWorktree: async (c: IdContext) => {

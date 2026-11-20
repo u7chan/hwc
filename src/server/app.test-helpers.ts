@@ -321,6 +321,9 @@ export function createFakeWorktrees(overrides: Partial<WorktreeClient> = {}): Wo
 
 export function createFakeWorkspaces(overrides: Partial<WorkspaceClient> = {}): WorkspaceClient {
   return {
+    create: async () => {
+      throw new Error("Unexpected workspace.create");
+    },
     moveBlock: async () => {},
     close: async () => {},
     ...overrides,

@@ -2,6 +2,7 @@ import type { ChatFile } from "../../server/chat/contract";
 import type { PaneCloseAction } from "../../shared/pane-close";
 import type { GitSyncFailure } from "../api";
 import type { DropZone, SplitView, TabSide } from "../split-view";
+import type { CreateTarget } from "../CreatePane";
 
 export type View = { split: SplitView; expanded: ReadonlySet<string> };
 
@@ -64,10 +65,8 @@ export type ClosingSpace = {
   phase: "confirm" | "busy" | "failed";
 };
 
-// 作成ダイアログ。ワークツリーを作る場合は、モデル一覧の取得元になる起点スペースの ID も持つ。
-// start は、作らずに既存のシェルペインで起動する。
+// 作成ダイアログ。何を作るかは target が決める。
 export type CreatingPane = {
   paneId: string;
-  worktreeWorkspaceId: string | null;
-  start: boolean;
+  target: CreateTarget;
 };

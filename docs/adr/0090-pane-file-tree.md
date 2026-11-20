@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-16
 - Revised by: [ADR 0098](0098-file-tree-shortcut.md) のキー操作
+- Revised by: [ADR 0106](0106-shell-pane-tree-new-space.md) のシェルのペインへの表示
 - Revises: 2026-11-16 に広いセルではチャットの左に並べる
 - Revises: 2026-11-17 にテキストと HTML をチャット領域のプレーン表示で開く
 - Revises: 2026-11-17 に開閉の動きを付ける

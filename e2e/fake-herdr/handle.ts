@@ -1,5 +1,5 @@
 import type net from "node:net";
-import { join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { isAgentKind } from "../../src/shared/agents";
 import { ATTACHED_FILES_OPEN } from "../../src/shared/attachments";
 import {
@@ -46,6 +46,7 @@ export function createHandle(
     removeWorkspace,
     removeWorktree,
     createWorktree,
+    createWorkspace,
     setAgentStatus,
     refreshAggregates,
   } = workspaces;
@@ -533,6 +534,27 @@ export function createHandle(
             tab: created.tab,
             root_pane: created.rootPane,
             worktree: created.workspace.worktree,
+          },
+        });
+        broadcast("workspace.created", { workspace_id: created.workspace.workspace_id });
+        broadcast("pane.created", { pane_id: created.rootPane.pane_id });
+        return;
+      }
+      case "workspace.create": {
+        const cwd = typeof params.cwd === "string" ? params.cwd : "";
+        const label = typeof params.label === "string" ? params.label : basename(cwd);
+        if (!isAbsolute(cwd)) {
+          send(socket, { id, error: { code: "invalid_params", message: "cwd must be absolute" } });
+          return;
+        }
+        const created = createWorkspace(cwd, label);
+        send(socket, {
+          id,
+          result: {
+            type: "workspace_created",
+            workspace: created.workspace,
+            tab: created.tab,
+            root_pane: created.rootPane,
           },
         });
         broadcast("workspace.created", { workspace_id: created.workspace.workspace_id });

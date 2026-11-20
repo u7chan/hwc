@@ -26,8 +26,9 @@ import {
   MODEL_CREATE_TIMEOUT_MS,
   CREATE_WORKTREE_TIMEOUT_MS,
   canRetryWorktree,
-  toCreatedWorktree,
+  toCreatedSpace,
   toWorktreeError,
+  toSpaceError,
   toPaneInteraction,
 } from "./api";
 
@@ -750,14 +751,14 @@ test("the create timeout leaves room for the agent start wait", () => {
 });
 
 test("the created worktree ids are read from the response", () => {
-  expect(toCreatedWorktree({ workspaceId: "w2", paneId: "w2:p1" })).toEqual({
+  expect(toCreatedSpace({ workspaceId: "w2", paneId: "w2:p1" })).toEqual({
     workspaceId: "w2",
     paneId: "w2:p1",
   });
-  expect(toCreatedWorktree({ workspaceId: "w2" })).toBeNull();
-  expect(toCreatedWorktree({ workspaceId: "", paneId: "w2:p1" })).toBeNull();
-  expect(toCreatedWorktree({ workspaceId: "w2", paneId: 1 })).toBeNull();
-  expect(toCreatedWorktree(null)).toBeNull();
+  expect(toCreatedSpace({ workspaceId: "w2" })).toBeNull();
+  expect(toCreatedSpace({ workspaceId: "", paneId: "w2:p1" })).toBeNull();
+  expect(toCreatedSpace({ workspaceId: "w2", paneId: 1 })).toBeNull();
+  expect(toCreatedSpace(null)).toBeNull();
 });
 
 test("a worktree error keeps the ids only when the checkout already exists", () => {
@@ -780,6 +781,23 @@ test("a worktree error keeps the ids only when the checkout already exists", () 
     paneId: null,
   });
   expect(toWorktreeError(null)).toEqual({ error: "failed", workspaceId: null, paneId: null });
+});
+
+test("a space error keeps the ids only when the space already exists", () => {
+  expect(toSpaceError({ error: "pane_rename_failed", workspaceId: "w3", paneId: "w3:p1" })).toEqual(
+    { error: "pane_rename_failed", workspaceId: "w3", paneId: "w3:p1" },
+  );
+  expect(toSpaceError({ error: "not_found" })).toEqual({
+    error: "not_found",
+    workspaceId: null,
+    paneId: null,
+  });
+  expect(toSpaceError({ error: "worktree_create_failed" })).toEqual({
+    error: "failed",
+    workspaceId: null,
+    paneId: null,
+  });
+  expect(toSpaceError(null)).toEqual({ error: "failed", workspaceId: null, paneId: null });
 });
 
 test("only an explicit creation failure or a busy checkout can be retried", () => {

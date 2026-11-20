@@ -4,7 +4,7 @@ import { FILE_TREE_LIMIT, type FileTreeEntry, type FileTreeListing } from "../..
 import { previewUrl } from "../api";
 import type { FileTreeView } from "../file-tree-store";
 import { treeArrowIntent } from "../file-tree-key";
-import { ChevronRightIcon } from "../icons";
+import { ChevronRightIcon, PlusIcon } from "../icons";
 import { Spinner } from "../Spinner";
 
 type FileTreeProps = {
@@ -27,6 +27,8 @@ type FileTreeProps = {
   onOpenImage: (url: string, name: string) => void;
   // 行を composer へ運ぶ。パス文字列はペインの作業ディレクトリを知る側で組み立てる。
   onDragStart: (event: DragEvent, entry: FileTreeEntry) => void;
+  // フォルダを作業ディレクトリにした新しいスペースを作る（ADR 0106）。
+  onCreateSpace: (path: string) => void;
 };
 
 export type TreeFocusRequest = { token: number; focus: boolean };
@@ -129,17 +131,29 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
     }
     return (
       <li class="hwc-tree-item">
-        <button
-          type="button"
-          class="hwc-tree-row"
-          style={style}
-          aria-expanded={expanded}
-          title={entry.path}
-          onClick={() => tree.onToggle(entry.path)}
-          {...dragProps(tree, entry)}
-        >
-          {content}
-        </button>
+        {/* 行はボタンなので、操作は入れ子にせず兄弟に置く。矢印キーの移動は行だけを辿る。 */}
+        <div class="hwc-tree-line">
+          <button
+            type="button"
+            class="hwc-tree-row"
+            style={style}
+            aria-expanded={expanded}
+            title={entry.path}
+            onClick={() => tree.onToggle(entry.path)}
+            {...dragProps(tree, entry)}
+          >
+            {content}
+          </button>
+          <button
+            type="button"
+            class="hwc-tree-action"
+            aria-label={`${entry.path} で新しいスペース`}
+            title="新しいスペース"
+            onClick={() => tree.onCreateSpace(entry.path)}
+          >
+            <PlusIcon size={16} />
+          </button>
+        </div>
         {expanded || loaded || failed ? (
           <div
             class="hwc-tree-slot"

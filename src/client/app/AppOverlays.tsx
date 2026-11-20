@@ -315,8 +315,7 @@ export function AppOverlays(props: AppOverlaysProps) {
       {creating === null ? null : (
         <CreatePane
           paneId={creating.paneId}
-          worktreeWorkspaceId={creating.worktreeWorkspaceId}
-          start={creating.start}
+          target={creating.target}
           onCreated={(paneId, launch) => {
             setPendingSelect(paneId);
             beginLaunch(paneId, launch);

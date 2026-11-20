@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { type HerdrSnapshot, parsePaneRead, parseSnapshot, parseWorktreeCreated } from "./contract";
+import {
+  type HerdrSnapshot,
+  parsePaneRead,
+  parseSnapshot,
+  parseWorkspaceCreated,
+  parseWorktreeCreated,
+} from "./contract";
 
 const snapshot: HerdrSnapshot = {
   focused_workspace_id: "w1",
@@ -257,4 +263,25 @@ test.each([
   ],
 ])("parseWorktreeCreated rejects %s", (_label, value) => {
   expect(() => parseWorktreeCreated(value)).toThrow();
+});
+
+test("parseWorkspaceCreated reads the new workspace and its first pane", () => {
+  expect(
+    parseWorkspaceCreated({
+      type: "workspace_created",
+      workspace: { workspace_id: "w3", label: "web" },
+      tab: { tab_id: "w3:t1" },
+      root_pane: { pane_id: "w3:p1", workspace_id: "w3" },
+    }),
+  ).toEqual({ workspaceId: "w3", paneId: "w3:p1" });
+});
+
+test("parseWorkspaceCreated rejects a worktree creation", () => {
+  expect(() =>
+    parseWorkspaceCreated({
+      type: "worktree_created",
+      workspace: { workspace_id: "w3" },
+      root_pane: { pane_id: "w3:p1" },
+    }),
+  ).toThrow();
 });
