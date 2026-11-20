@@ -278,11 +278,11 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 新しいペインのモデルと effort の初期値は、設定画面でエージェントごとに決める（[ADR 0104](adr/0104-launch-with-explicit-model.md)）。既定は状態ディレクトリの `launch-defaults.json` にあり、E2E では起動のたびに空から始まる。
 
 1. 設定を開く。「エージェント」のまとまりに Pi / Claude / Codex / OpenCode が並び、どの行も `未設定` になっている。
-2. 「Claude」を開き、モデルに `claude/sonnet`、エフォートに `high` を選んで「保存」を押す。「現在の既定」と一覧の行が、モデル名 `sonnet` の右に effort の札 `high` を並べた表示になる（Claude は provider を出さない。Pi だけ `provider/model` のまま）。同じ値のままでは「保存」を押せない。
-3. 「新しいペイン」を開いてエージェントのカードで Claude を選ぶ。モデルは `claude/sonnet（既定）`、エフォートは `high（既定）` で選ばれており、すぐに「作成して起動」を押せる。Pi のカードに戻すと、Pi の既定（未設定なら「モデルを選択」）に切り替わる。
-4. Claude のままモデルを `claude/opus` に変えると、エフォートは「エフォートを選択」に戻り、作成ボタンは押せない。`claude/sonnet（既定）` に戻すと `high（既定）` が選ばれる。
+2. 「Claude」を開き、モデルに `Sonnet`、エフォートに `high` を選んで「保存」を押す。「現在の既定」と一覧の行が、モデル名 `Sonnet` の右に effort の札 `high` を並べた表示になる（Claude は provider を出さず、エイリアスの表示名にする。Pi だけ `provider/model` のまま。[ADR 0108](adr/0108-claude-model-display-name.md)）。同じ値のままでは「保存」を押せない。
+3. 「新しいペイン」を開いてエージェントのカードで Claude を選ぶ。モデルは `Sonnet（既定）`、エフォートは `high（既定）` で選ばれており、すぐに「作成して起動」を押せる。Pi のカードに戻すと、Pi の既定（未設定なら「モデルを選択」）に切り替わる。
+4. Claude のままモデルを `Opus` に変えると、エフォートは「エフォートを選択」に戻り、作成ボタンは押せない。`Sonnet（既定）` に戻すと `high（既定）` が選ばれる。
 5. 既定のモデルが候補に無い場合は、ブラウザのリクエスト差し替えで `GET /api/launch-defaults` に `{"defaults":{"claude":{"model":{"provider":"claude","id":"missing"},"effort":"high"}}}` を返して開き直す。モデルは「モデルを選択」になる。エフォートだけが候補に無い場合（`"effort":"none"`）は、モデルが選ばれてエフォートは未選択になる。`GET /api/launch-defaults` を 500 にしても、既定なしとして開いて選べば起動できる。
-6. Claude の既定で起動し、`/chat` を 502 にしても、入力欄に `sonnet` と `high` が出る（[ADR 0101](adr/0101-launch-model-while-chat-unavailable.md)）。
+6. Claude の既定で起動し、`/chat` を 502 にしても、入力欄に `Sonnet` と `high` が出る（[ADR 0101](adr/0101-launch-model-while-chat-unavailable.md)）。モデルのチップを開くと、パネルに `ⓘ`、識別子 `sonnet`、「起動時の指定。最初の応答で実際のモデルに確定します」が出る。コピーするのも `sonnet`（[ADR 0108](adr/0108-claude-model-display-name.md)）。会話が読める Claude ペイン（fixture の `quickstart`）では、チップが `Sonnet 5.5`、パネルが `claude-sonnet-5-5` で、`ⓘ` と注記は出ない。
 7. 設定の「Claude」で「解除」を押すと、行が `未設定` に戻り、ダイアログも「モデルを選択」で開く。
 8. `@demo/beam-small`（effort 非対応）を既定にすると、行はモデルだけになり、ダイアログはエフォート欄を「なし」で無効にしたまま作成ボタンを押せる。
 

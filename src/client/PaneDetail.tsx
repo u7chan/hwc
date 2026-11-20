@@ -1918,7 +1918,7 @@ export function PaneDetail(props: PaneDetailProps) {
                         {infoLoading ? (
                           <AgentInfoSkeleton />
                         ) : info === null ? null : (
-                          <AgentInfoHint info={info} />
+                          <AgentInfoHint agent={pane.agent} info={info} />
                         )}
                         {meter === null || snapshot?.context == null ? null : (
                           <ContextMeter

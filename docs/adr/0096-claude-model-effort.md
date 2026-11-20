@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-18
 - Revises: [ADR 0030](0030-new-pane-model.md) の Claude に関する記述
-- Amended by: [ADR 0097](0097-claude-chat-transcript.md)、[ADR 0104](0104-launch-with-explicit-model.md)（初期値は hwc の既定、デフォルトモデルを無くす）
+- Amended by: [ADR 0097](0097-claude-chat-transcript.md)、[ADR 0104](0104-launch-with-explicit-model.md)（初期値は hwc の既定、デフォルトモデルを無くす）、[ADR 0108](0108-claude-model-display-name.md)（モデルは表示名で出す）
 
 ## Context
 

@@ -113,6 +113,7 @@ export function AgentSettings(props: { agent: ModelAgentKind; onSaved: () => voi
         }}
       >
         <CreatePaneModel
+          agent={props.agent}
           candidates={models.read}
           model={model}
           saved={saved}

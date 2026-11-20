@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-20
+- Amended by: [ADR 0108](0108-claude-model-display-name.md)（Claude のモデルは表示名で出す）
 - Amends: [ADR 0033](0033-launch-model-before-first-message.md) の「`GET /api/panes/:id/chat` が預かりで補う」、[ADR 0097](0097-claude-chat-transcript.md) の「起動時にモデルを指定したペインは、assistant がまだ無いときだけ預かりで補う」
 
 ## Context
