@@ -1336,6 +1336,13 @@ p.hwc-compaction,
   color: var(--color-text);
 }
 
+/* 端末出力の上では、戻り先の操作をアクセント色と矢印で示す。カードの端末リンクは
+   補助色の文字リンクのままにする。 */
+.hwc-pending-toggle-back {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
 .hwc-pending-toggle:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;

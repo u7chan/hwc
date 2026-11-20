@@ -77,6 +77,7 @@ import {
   AgentIcon,
   ArrowDownIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
   CloseIcon,
   CollapseIcon,
   CopyGlyph,
@@ -1521,9 +1522,10 @@ export function PaneDetail(props: PaneDetailProps) {
                         <span>端末で応答してください。</span>
                         <button
                           type="button"
-                          class="hwc-pending-toggle"
+                          class="hwc-pending-toggle hwc-pending-toggle-back"
                           onClick={() => setTerminalFor(null)}
                         >
+                          <ChevronLeftIcon size={16} />
                           会話に戻る
                         </button>
                       </div>
