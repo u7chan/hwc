@@ -127,3 +127,4 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - [ADR 0106: Claude のコンテキスト使用量は同梱 mod の `session.usage` から出す](adr/0106-claude-context-usage.md)
 - [ADR 0108: Claude のモデルは表示名で出し、起動時の指定と実際のモデルを区別する](adr/0108-claude-model-display-name.md)
 - [ADR 0112: Claude の応答待ちは hook の sidecar から読み、チャットに出す。Web からは承認しない](adr/0112-claude-pending-in-chat.md)
+- [ADR 0114: モデルのラベルは、どのエージェントでも provider を出さず、Pi だけ残す](adr/0114-model-label-by-agent.md)

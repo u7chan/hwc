@@ -1,4 +1,4 @@
-import { type AgentKind, type AgentModel, claudeModelName, modelKey } from "../shared/agents";
+import { type AgentKind, type AgentModel, modelKey, modelLabel } from "../shared/agents";
 import type { LaunchDefault } from "../shared/launch-defaults";
 import { CreatePaneSelect } from "./CreatePaneSelect";
 import { type ModelCandidates, sameModel } from "./launch-choice";
@@ -24,9 +24,6 @@ export function CreatePaneModel(props: {
 }) {
   const models = Array.isArray(props.candidates) ? props.candidates : [];
   const note = modelNote(props.candidates);
-  // Claude の候補はエイリアスだけで、provider は常に `claude`。選択肢でも自分を二重に名乗らない。
-  const label = (model: AgentModel) =>
-    props.agent === "claude" ? claudeModelName(model.id) : modelKey(model);
 
   return (
     <div class="hwc-create-model">
@@ -49,8 +46,8 @@ export function CreatePaneModel(props: {
         {models.map((model) => (
           <option key={modelKey(model)} value={modelKey(model)}>
             {props.saved !== null && sameModel(model, props.saved.model)
-              ? `${label(model)}（既定）`
-              : label(model)}
+              ? `${modelLabel(props.agent, model)}（既定）`
+              : modelLabel(props.agent, model)}
           </option>
         ))}
       </CreatePaneSelect>

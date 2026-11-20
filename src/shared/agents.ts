@@ -73,9 +73,11 @@ export function claudeModelName(id: string): string {
   return isClaudeAlias(id) ? capitalize(id) : id;
 }
 
-// エージェント名と並べて出すときの名前。Claude の provider は常に `claude` で、行の
-// 「Claude  claude/opus」のように自分を二重に名乗ってしまうので、provider を削ってモデルだけにする。
-// Pi だけは `opencode-go/…` のように provider が選択の一部なので残す。
+// エージェント名と並べて出すときの名前。Claude は provider が常に `claude` なので表示名だけに
+// し、エイリアスは `Opus` のように社名を冠さない。Codex / OpenCode の provider（`openai` /
+// `opencode-go`）も選んだエージェントと同じで、行の「Codex  openai/gpt-6.1-sol」のように自分を
+// 二重に名乗るので、モデル id だけにする。Pi だけは `opencode-go/…` のように provider が
+// 選択の一部なので残す。
 export function modelLabel(agent: ModelAgentKind, model: AgentModel): string {
   if (agent === "claude") return claudeModelName(model.id);
   return agent === "pi" ? modelKey(model) : model.id;
