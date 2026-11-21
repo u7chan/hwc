@@ -47,9 +47,37 @@
     flex-direction: row;
   }
 
+  /* 畳むときは幅を縮めず、左へ押し出す。幅を縮めると、中身が毎フレーム折り返し直される。
+     押し出した一覧のフォーカスと読み上げは inert で止める。開いたツリーは自身で
+     visibility: visible を指定するため、親の visibility: hidden では隠れない。 */
   .hwc-list {
     flex: none;
     width: var(--hwc-sidebar-width);
+    transition: margin-left var(--hwc-sidebar-duration) ease-out;
+  }
+
+  .hwc-app[data-sidebar="collapsed"] .hwc-list {
+    margin-left: calc(var(--hwc-sidebar-width) * -1);
+  }
+
+  /* 境目の線は押し出した先にも残るので隠す。閉じる側だけ、動きが終わってから隠す。 */
+  .hwc-app[data-sidebar="collapsed"] .hwc-resizer {
+    visibility: hidden;
+    transition: visibility 0s var(--hwc-sidebar-duration);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hwc-list {
+      transition: none;
+    }
+
+    .hwc-app[data-sidebar="collapsed"] .hwc-resizer {
+      transition: none;
+    }
+  }
+
+  .hwc-sidebar-edge {
+    display: block;
   }
 
   .hwc-sidebar-foot {

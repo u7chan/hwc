@@ -31,6 +31,7 @@ import { useListScope } from "./app/hooks/use-list-scope";
 import { useOpenGroups } from "./app/hooks/use-open-groups";
 import { useRevision } from "./app/hooks/use-revision";
 import { useServerClock } from "./app/hooks/use-server-clock";
+import { useSidebarCollapsed } from "./app/hooks/use-sidebar-collapsed";
 import { useSidebarWidth } from "./app/hooks/use-sidebar-width";
 import { useSplitPreference } from "./app/hooks/use-split-preference";
 import { useThemePreference } from "./app/hooks/use-theme-preference";
@@ -55,7 +56,7 @@ import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
 import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
 import { Preview } from "./Preview";
-import { HwcMark, SettingsIcon } from "./icons";
+import { ChevronLeftIcon, HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import type { PaneOutputHandle } from "./commands";
@@ -1073,6 +1074,7 @@ export function App() {
   const processes = usePaneProcesses(polledIds);
 
   const { sidebarWidth, setSidebarWidth, saveSidebarWidth, drag } = useSidebarWidth();
+  const { sidebarCollapsed, toggleSidebar } = useSidebarCollapsed();
 
   // アクティブの帯から「すべて」のその場所へ移る。スコープと一覧のスクロールは PaneList が
   // 持ち、ここでは代表ペインと開閉だけを決める。狭い画面は一覧と詳細を同時に出せず、
@@ -1533,13 +1535,19 @@ export function App() {
     <div
       class="hwc-app"
       data-view={settingsOpen ? "settings" : pane ? "detail" : "list"}
+      data-sidebar={sidebarCollapsed ? "collapsed" : "open"}
       style={{
         "--hwc-sidebar-width": `${sidebarWidth}px`,
         "--hwc-split-duration": `${splitMotionDuration(splitPrefs.motion)}ms`,
       }}
     >
       <div class="hwc-body">
-        <aside class="hwc-list" aria-label="ペイン一覧">
+        <aside
+          class="hwc-list"
+          id="hwc-sidebar"
+          aria-label="ペイン一覧"
+          inert={wide && sidebarCollapsed}
+        >
           {state === null ? (
             <ListPlaceholder connection={connection} />
           ) : (
@@ -1627,6 +1635,20 @@ export function App() {
             );
           }}
         />
+
+        {/* タブバーの左端には置かない。設定・空状態・読み込み中はタブバーが無く、畳んだまま開けなくなる。 */}
+        <div class="hwc-sidebar-edge">
+          <button
+            type="button"
+            class="hwc-sidebar-toggle"
+            aria-label={sidebarCollapsed ? "一覧を開く" : "一覧を閉じる"}
+            aria-controls="hwc-sidebar"
+            aria-expanded={!sidebarCollapsed}
+            onClick={toggleSidebar}
+          >
+            <ChevronLeftIcon size={14} />
+          </button>
+        </div>
 
         <main class="hwc-detail">
           {settingsOpen ? (

@@ -5,6 +5,7 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   clampSidebarWidth,
+  parseSidebarCollapsed,
   parseSidebarWidth,
 } from "./layout";
 
@@ -29,4 +30,11 @@ test("a stored width is restored and a broken one falls back", () => {
   expect(parseSidebarWidth("wide")).toBe(SIDEBAR_DEFAULT_WIDTH);
   expect(parseSidebarWidth("9999")).toBe(SIDEBAR_MAX_WIDTH);
   expect(parseSidebarWidth("9999", 900)).toBe(540);
+});
+
+test("the sidebar stays open unless it was stored as collapsed", () => {
+  expect(parseSidebarCollapsed("true")).toBe(true);
+  expect(parseSidebarCollapsed("false")).toBe(false);
+  expect(parseSidebarCollapsed(null)).toBe(false);
+  expect(parseSidebarCollapsed("collapsed")).toBe(false);
 });

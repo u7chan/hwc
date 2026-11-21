@@ -5,6 +5,7 @@ export const SIDEBAR_MAX_WIDTH = 560;
 export const DETAIL_MIN_WIDTH = 360;
 export const SIDEBAR_STORAGE_KEY = "hwc-sidebar-width";
 export const SIDEBAR_STEP = 16;
+export const SIDEBAR_COLLAPSED_STORAGE_KEY = "hwc-sidebar-collapsed";
 // app.css の @media (min-width: 900px) と同じ境目。片方を変えたらもう片方も変える。
 export const WIDE_LAYOUT_QUERY = "(min-width: 900px)";
 
@@ -32,4 +33,9 @@ export function parseSidebarWidth(value: string | null, viewportWidth?: number):
   return Number.isFinite(width)
     ? clampSidebarWidth(width, viewportWidth)
     : clampSidebarWidth(SIDEBAR_DEFAULT_WIDTH, viewportWidth);
+}
+
+// 保存された値が壊れていても一覧は隠さない。隠したまま開き方が分からなくなるより、開いて戻る方がよい。
+export function parseSidebarCollapsed(value: string | null): boolean {
+  return value === "true";
 }

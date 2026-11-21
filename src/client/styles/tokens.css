@@ -124,6 +124,7 @@
 
   /* 一覧の幅。広い画面では JS が実際の幅で上書きする。 */
   --hwc-sidebar-width: 352px;
+  --hwc-sidebar-duration: 220ms;
 
   /* 委譲で増えたセルが広がる時間。設定「ペイン分割」が JS から上書きする（ADR 0111）。 */
   --hwc-split-duration: 280ms;
