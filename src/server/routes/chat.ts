@@ -1,7 +1,6 @@
 import { attachAttachmentSizes } from "../attachments";
 import { readActivity } from "../chat/activity";
 import { OpencodeServiceNotRunningError } from "../chat/opencode";
-import { findPane } from "../herdr/state";
 import { attachMessageFiles } from "../message-files";
 import {
   type AgentModel,
@@ -26,10 +25,10 @@ export function createChatHandlers(ctx: AppContext) {
     projects,
     previewRoots,
     attachmentsRoot,
-    current,
     launchModels,
     piDefaults,
     questionAnswerer,
+    resolvePane,
     paneFailure,
     matchesEtag,
   } = ctx;
@@ -67,10 +66,9 @@ export function createChatHandlers(ctx: AppContext) {
     models: async (c: IdContext) => {
       const agent = c.req.query("agent");
       if (!supportsModelSelection(agent)) return c.json({ error: "invalid_request" }, 400);
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-      const paneId = c.req.param("id");
-      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
       return listModels(c, agent, () => panes.directory({ paneId }));
     },
     efforts: async (c: IdContext) => {
@@ -78,10 +76,9 @@ export function createChatHandlers(ctx: AppContext) {
       const model = { provider: c.req.query("provider"), id: c.req.query("model") };
       if (!supportsModelSelection(agent) || !isAgentModel(model))
         return c.json({ error: "invalid_request" }, 400);
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-      const paneId = c.req.param("id");
-      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
       return listEfforts(c, agent, model, () => panes.directory({ paneId }));
     },
     // 設定画面にはペインが無い。hwc の作業ディレクトリで読むと hwc リポジトリの
@@ -111,12 +108,9 @@ export function createChatHandlers(ctx: AppContext) {
       return listEfforts(c, agent, model, async () => homeDirectory);
     },
     chat: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
 
       // セッションの在り処はクライアントから受け取らず、BFF がペイン id から引く。
       const source = store.chatSource(paneId);
@@ -155,12 +149,9 @@ export function createChatHandlers(ctx: AppContext) {
       const request = parseAnswerRequest(await c.req.json().catch(() => null));
       if (request === null) return c.json({ error: "invalid_request" }, 400);
 
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
       if (pane.agent !== "claude") return c.json({ error: "not_claude" }, 400);
 
       // セッションの在り処はクライアントから受け取らず、BFF がペイン id から引く。
@@ -178,12 +169,9 @@ export function createChatHandlers(ctx: AppContext) {
       return outcome.ok ? c.json({ ok: true }) : c.json({ error: outcome.error }, outcome.status);
     },
     defaultModel: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
       // 既定モデルは pi の起動直後だけに意味がある。シェルや他のエージェントには出さない。
       if (pane.agent !== "pi" || !pane.chat) return c.json({ model: null, effort: null });
 
@@ -202,12 +190,9 @@ export function createChatHandlers(ctx: AppContext) {
       }
     },
     launchModel: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
 
       // 会話が読めるまでの表示だけに使う。シェルや、hwc 以外から起動したペインは空。
       c.header("cache-control", "no-store");
@@ -215,12 +200,9 @@ export function createChatHandlers(ctx: AppContext) {
       return c.json(launchModels.read(paneId) ?? { model: null, effort: null });
     },
     activity: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
 
       // 使い捨ての値。null を返すときも、ブラウザや中間に残さない。
       c.header("cache-control", "no-store");
@@ -249,12 +231,9 @@ export function createChatHandlers(ctx: AppContext) {
       }
     },
     projects: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
       if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
       let cwd: string;

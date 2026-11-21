@@ -18,7 +18,13 @@ import { createLaunchModels } from "../launch-models";
 import { createPiDefaults, loadPiDefaults, type PiDefaultsReader } from "../pi-defaults";
 import type { PaneCloseAction } from "../../shared/pane-close";
 import { isInvalidRequest, isPaneNotFound, type PaneClient } from "../herdr/panes";
-import { type AppState, findPane, type StateStore, type TabState } from "../herdr/state";
+import {
+  type AppState,
+  findPane,
+  type PaneState,
+  type StateStore,
+  type TabState,
+} from "../herdr/state";
 import type { WorkspaceClient } from "../herdr/workspaces";
 import type { WorktreeClient } from "../herdr/worktrees";
 import type { PullRequestReader } from "../pull-request";
@@ -162,6 +168,34 @@ export function createAppContext(options: CreateAppOptions) {
       return null;
     });
 
+  // 状態とペインの前提は、応答の形（ステータスと error 文字列）ごとここで決める。
+  // ルート固有の条件（会話やエージェント種別など）は、解決できた後に呼び出し側が足す。
+  const resolveState = async (
+    c: Context,
+  ): Promise<{ ok: true; state: AppState } | { ok: false; response: Response }> => {
+    const state = await current();
+    if (state === null) {
+      return { ok: false, response: c.json({ error: "herdr_unavailable" }, 502) };
+    }
+    return { ok: true, state };
+  };
+
+  const resolvePane = async (
+    c: Context,
+  ): Promise<
+    | { ok: true; state: AppState; paneId: string; pane: PaneState }
+    | { ok: false; response: Response }
+  > => {
+    const resolved = await resolveState(c);
+    if (!resolved.ok) return resolved;
+    const paneId = c.req.param("id") ?? "";
+    const pane = findPane(resolved.state, paneId);
+    if (pane === null) {
+      return { ok: false, response: c.json({ error: "pane_not_found" }, 404) };
+    }
+    return { ok: true, state: resolved.state, paneId, pane };
+  };
+
   // close 要求が同時に来ると、両方が「他にもスペースがある」チェックを通って 0 スペースまで
   // 閉じ得る。BFF は 1 プロセスなので、閉じている間と、閉じた直後の状態が届くまでの
   // workspace id を覚えておき、残りの数から外して後続の要求を 409 にする。
@@ -301,12 +335,9 @@ export function createAppContext(options: CreateAppOptions) {
     if (name === "") return c.json({ error: "invalid_request" }, 400);
     const limit = maxAttachmentBytes(attachmentKindOfName(name));
 
-    const state = await current();
-    if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-    const paneId = c.req.param("id") ?? "";
-    const pane = findPane(state, paneId);
-    if (!pane) return c.json({ error: "pane_not_found" }, 404);
+    const resolved = await resolvePane(c);
+    if (!resolved.ok) return resolved.response;
+    const { paneId, pane } = resolved;
     if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
     // 宣言された長さで先に落とし、読み終えた実バイト数でも見る。
@@ -327,12 +358,9 @@ export function createAppContext(options: CreateAppOptions) {
 
   // 保存した画像を返す。配信するのは画像 3 形式だけで、名前の検証とは別に絞る。
   const serveAttachment = async (c: IdNameContext) => {
-    const state = await current();
-    if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-    const paneId = c.req.param("id") ?? "";
-    const pane = findPane(state, paneId);
-    if (!pane) return c.json({ error: "pane_not_found" }, 404);
+    const resolved = await resolvePane(c);
+    if (!resolved.ok) return resolved.response;
+    const { paneId, pane } = resolved;
     if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
     const name = c.req.param("name") ?? "";
@@ -421,6 +449,8 @@ export function createAppContext(options: CreateAppOptions) {
     homeDirectory,
     stateMessage,
     current,
+    resolveState,
+    resolvePane,
     rootsFor,
     folderTrust,
     launchModels,

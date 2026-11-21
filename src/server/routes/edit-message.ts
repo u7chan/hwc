@@ -25,7 +25,16 @@ function parseBody(body: unknown): Parsed {
 }
 
 export function createEditMessageHandlers(ctx: AppContext) {
-  const { store, panes, chat, current, folderTrust, paneFailure, editMarkerTimeoutMs } = ctx;
+  const {
+    store,
+    panes,
+    chat,
+    current,
+    folderTrust,
+    resolvePane,
+    paneFailure,
+    editMarkerTimeoutMs,
+  } = ctx;
   const inFlight = new Set<string>();
   // ペインごとの requestId。同じ再送で marker を二度探さず、本文送信済みも判定する。
   const known = new Map<string, Map<string, Known>>();
@@ -76,11 +85,9 @@ export function createEditMessageHandlers(ctx: AppContext) {
       if (!parsed.ok) return c.json({ error: "invalid_request" }, 400);
       const { messageId, requestId, text } = parsed.value;
 
-      const state = await current();
-      if (state === null) return c.json({ error: "herdr_unavailable" }, 502);
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (pane === null) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
       if (pane.agent !== "pi" || !pane.chat) return c.json({ error: "no_chat" }, 404);
       if (pane.agentStatus === "working") return c.json({ error: "not_editable" }, 409);
       if (inFlight.has(paneId)) return c.json({ error: "edit_in_flight" }, 409);

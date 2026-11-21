@@ -28,6 +28,8 @@ export function createPanesHandlers(ctx: AppContext) {
     folderTrust,
     launchModels,
     piDefaults,
+    resolvePane,
+    resolveState,
     paneFailure,
     requestClose,
     findPaneTab,
@@ -39,11 +41,9 @@ export function createPanesHandlers(ctx: AppContext) {
       if (!query.ok) return c.json({ error: query.error }, query.status);
 
       try {
-        const state = await current();
-        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-        const paneId = c.req.param("id");
-        const pane = findPane(state, paneId);
-        if (!pane) return c.json({ error: "pane_not_found" }, 404);
+        const resolved = await resolvePane(c);
+        if (!resolved.ok) return resolved.response;
+        const { state, paneId, pane } = resolved;
         folderTrust.retain(
           state.workspaces.flatMap((workspace) =>
             workspace.tabs.flatMap((tab) => tab.panes.map((item) => item.id)),
@@ -57,11 +57,9 @@ export function createPanesHandlers(ctx: AppContext) {
       }
     },
     clearOutput: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
 
       try {
         await panes.clear({ paneId });
@@ -110,11 +108,9 @@ export function createPanesHandlers(ctx: AppContext) {
       // 添付が無いときは Herdr の pane_not_found に任せる。ペインの実在を状態から引くと、
       // 従来の経路に余分な往復が増える。
       if (input.value.attachments.length > 0) {
-        const state = await current();
-        if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-        const pane = findPane(state, paneId);
-        if (!pane) return c.json({ error: "pane_not_found" }, 404);
+        const resolved = await resolvePane(c);
+        if (!resolved.ok) return resolved.response;
+        const { pane } = resolved;
         if (!pane.chat) return c.json({ error: "no_chat" }, 404);
 
         // 書式は parseInputBody が見ている。ここではこのペインの保存先の実在を確かめる。
@@ -150,11 +146,9 @@ export function createPanesHandlers(ctx: AppContext) {
       return c.json({ ok: true });
     },
     process: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
 
       try {
         return c.json({ process: await panes.process({ paneId }) });
@@ -163,12 +157,9 @@ export function createPanesHandlers(ctx: AppContext) {
       }
     },
     stop: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
 
       // シェルは前景プロセスを C-c で止める。プロンプトへの C-c は入力中の行を消すだけなので、
       // 何か動いているときだけ送る。画面が古いだけの再クリックは成功として扱う。
@@ -196,11 +187,9 @@ export function createPanesHandlers(ctx: AppContext) {
       }
     },
     focus: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
 
       try {
         await panes.focus({ paneId });
@@ -219,11 +208,10 @@ export function createPanesHandlers(ctx: AppContext) {
       const request = parseSplitBody(body);
       if (!request.ok) return c.json({ error: request.error }, request.status);
 
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
+      const resolved = await resolveState(c);
+      if (!resolved.ok) return resolved.response;
       const paneId = c.req.param("id");
-      const tab = findPaneTab(state, paneId);
+      const tab = findPaneTab(resolved.state, paneId);
       if (tab === null) return c.json({ error: "pane_not_found" }, 404);
       // 画面が古い・同時に押された場合の取りこぼしを、Herdr を呼ぶ前に止める。
       if (tab.panes.length >= MAX_PANES_PER_TAB) return c.json({ error: "pane_limit" }, 409);
@@ -264,12 +252,9 @@ export function createPanesHandlers(ctx: AppContext) {
       const request = parseStartBody(body);
       if (!request.ok) return c.json({ error: request.error }, request.status);
 
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (pane === null) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
       // 画面が古い・TUI から先に起動された場合の取りこぼしを、Herdr を呼ぶ前に止める。
       if (pane.agent !== null) return c.json({ error: "pane_not_shell" }, 409);
 
