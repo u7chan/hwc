@@ -13,13 +13,13 @@
     "e2e:serve": "bun e2e/serve.ts"
   },
   "dependencies": {
-    "hono": "^4.13.17",
+    "hono": "^4.13.19",
     "preact": "^11.2.0"
   },
   "devDependencies": {
-    "@types/bun": "1.4.4",
-    "oxfmt": "^0.78.0",
-    "oxlint": "^1.93.0",
+    "@types/bun": "1.4.5",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
     "typescript": "^7.0.2"
   }
 }
