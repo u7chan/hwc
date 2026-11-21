@@ -24,6 +24,7 @@ bun run e2e:serve
 | Codex App Server                                                   | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない                                                                                            |
 | OpenCode サービス                                                  | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける。`<root>/bin/opencode` が `e2e/fake-opencode-cli.ts` を起動し、`service start` だけを受けて架空サービスの接続情報を戻す。実 OpenCode のサービスは起動しない |
 | Claude の transcript                                               | `~/.claude/projects/<project>/<session uuid>.jsonl` | `CLAUDE_CONFIG_DIR` を `<root>/claude` へ向け、fixture が架空の transcript と添付を書く                                                                                                                       |
+| Claude のモデルラベル                                              | `claude --print` の `list_models`                   | `<root>/bin/claude` が `e2e/fake-claude.ts` を起動し、架空の alias 解決だけを返す。実 CLI は起動しない                                                                                                        |
 | ブランチ                                                           | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                                                                                                |
 | git のリモートと差                                                 | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す                                                                                |
 | 状態ディレクトリ（添付・ペイン時刻・通知設定・新しいペインの既定） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                                                                                                    |
@@ -108,7 +109,7 @@ URL が下線付きで新しいタブに開くことを目視できる（[ADR 00
 
 `scratch` の `pi-trust` は、架空の Pi のプロジェクト信頼確認を表示する。会話を持たず `idle` のまま確認待ちになる。入力欄の代わりに確認ビューが出ること、「信頼して続行」の Enter で確認が消えて端末表示と入力欄に戻ること、「ターミナルで操作」では架空 Herdr へのキー送信がなく、確認が残ることを確かめる。表示するパスと注意文は `e2e/fixtures/folder-trust.ts` の `PI_TRUST_SCREEN` だけを使う。
 
-モデル選択では、`pane.get` が fixture の cwd を返す。Pi の一覧は架空 CLI から、OpenCode の一覧と新規セッションは `e2e/fake-opencode.ts` の loopback サービスから読み書きする。候補の正は `e2e/fixtures/scenario.ts` の `STARTUP_MODELS`。Claude の候補は hwc の固定リスト（エイリアスと effort の段階）で、CLI もサービスも起動しない。`agent.start` は受け取った引数を架空の端末出力にも残し、モデル指定した OpenCode には架空のセッション参照を付ける。
+モデル選択では、`pane.get` が fixture の cwd を返す。Pi の一覧は架空 CLI から、OpenCode の一覧と新規セッションは `e2e/fake-opencode.ts` の loopback サービスから読み書きする。候補の正は `e2e/fixtures/scenario.ts` の `STARTUP_MODELS`。Claude の候補は hwc の固定リスト（エイリアスと effort の段階）で、サービスは起動しない。表示名は `<root>/bin/claude` の `list_models` から読む（[ADR 0117](adr/0117-claude-model-labels-from-cli.md)）。`agent.start` は受け取った引数を架空の端末出力にも残し、モデル指定した OpenCode には架空のセッション参照を付ける。
 
 OpenCode のサービスの自動起動は、架空の `<root>/opencode/service.json` だけを一時退避してダイアログを開き、そのままモデル一覧が出ることで確かめる。PATH 上の架空の `opencode`（`e2e/fake-opencode-cli.ts`）が `service start` だけを受け、控えの `service.fixture.json` から接続情報を戻す（[ADR 0105](adr/0105-opencode-service-autostart.md)）。起動失敗の表示は、`service.json` と `service.fixture.json` の両方を退避して開き、「OpenCode サービスを起動できませんでした。再取得すると起動し直します。」と「再取得」が出ることを確認する。モデル欄は無効で、作成ボタンも押せない（[ADR 0104](adr/0104-launch-with-explicit-model.md)）。控えを戻して「再取得」を押すと、ダイアログを開き直さずにモデル一覧が復帰することも確かめる。設定画面の「エージェント」→「OpenCode」でも同じ表示と再取得になる。
 
@@ -278,9 +279,9 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 新しいペインのモデルと effort の初期値は、設定画面でエージェントごとに決める（[ADR 0104](adr/0104-launch-with-explicit-model.md)）。既定は状態ディレクトリの `launch-defaults.json` にあり、E2E では起動のたびに空から始まる。
 
 1. 設定を開く。「エージェント」のまとまりに Pi / Claude / Codex / OpenCode が並び、どの行も `未設定` になっている。
-2. 「Claude」を開き、モデルに `Sonnet`、エフォートに `high` を選んで「保存」を押す。「現在の既定」と一覧の行が、モデル名 `Sonnet` の右に effort の札 `high` を並べた表示になる（Claude は表示名にし、Codex / OpenCode は provider を落としたモデル id にする。Pi だけ `provider/model` のまま。[ADR 0114](adr/0114-model-label-by-agent.md)）。同じ値のままでは「保存」を押せない。
-3. 「新しいペイン」を開いてエージェントのカードで Claude を選ぶ。モデルは `Sonnet（既定）`、エフォートは `high（既定）` で選ばれており、すぐに「作成して起動」を押せる。選択肢も設定の行と同じラベルになる（Codex と OpenCode の選択肢は provider の無い id だけ。Pi だけ `provider/model` のまま。[ADR 0114](adr/0114-model-label-by-agent.md)）。Pi のカードに戻すと、Pi の既定（未設定なら「モデルを選択」）に切り替わる。
-4. Claude のままモデルを `Opus` に変えると、エフォートは「エフォートを選択」に戻り、作成ボタンは押せない。`Sonnet（既定）` に戻すと `high（既定）` が選ばれる。
+2. 「Claude」を開き、モデルに `Sonnet 5.5`、エフォートに `high` を選んで「保存」を押す。「現在の既定」と一覧の行が、モデル名 `Sonnet 5.5` の右に effort の札 `high` を並べた表示になる（Claude は表示名にし、Codex / OpenCode は provider を落としたモデル id にする。Pi だけ `provider/model` のまま。[ADR 0114](adr/0114-model-label-by-agent.md)）。同じ値のままでは「保存」を押せない。
+3. 「新しいペイン」を開いてエージェントのカードで Claude を選ぶ。モデルは `Sonnet 5.5（既定）`、エフォートは `high（既定）` で選ばれており、すぐに「作成して起動」を押せる。選択肢も設定の行と同じラベルになる（Codex と OpenCode の選択肢は provider の無い id だけ。Pi だけ `provider/model` のまま。[ADR 0114](adr/0114-model-label-by-agent.md)）。Pi のカードに戻すと、Pi の既定（未設定なら「モデルを選択」）に切り替わる。
+4. Claude のままモデルを `Opus 5.5` に変えると、エフォートは「エフォートを選択」に戻り、作成ボタンは押せない。`Sonnet 5.5（既定）` に戻すと `high（既定）` が選ばれる。
 5. 既定のモデルが候補に無い場合は、ブラウザのリクエスト差し替えで `GET /api/launch-defaults` に `{"defaults":{"claude":{"model":{"provider":"claude","id":"missing"},"effort":"high"}}}` を返して開き直す。モデルは「モデルを選択」になる。エフォートだけが候補に無い場合（`"effort":"none"`）は、モデルが選ばれてエフォートは未選択になる。`GET /api/launch-defaults` を 500 にしても、既定なしとして開いて選べば起動できる。
 6. Claude の既定で起動し、`/chat` を 502 にしても、入力欄に `Sonnet` と `high` が出る（[ADR 0101](adr/0101-launch-model-while-chat-unavailable.md)）。モデルのチップを開くと、パネルに `ⓘ`、識別子 `sonnet`、「起動時の指定。最初の応答で実際のモデルに確定します」が出る。コピーするのも `sonnet`（[ADR 0108](adr/0108-claude-model-display-name.md)）。会話が読める Claude ペイン（fixture の `quickstart`）では、チップが `Sonnet 5.5`、パネルが `claude-sonnet-5-5` で、`ⓘ` と注記は出ない。
 7. 設定の「Claude」で「解除」を押すと、行が `未設定` に戻り、ダイアログも「モデルを選択」で開く。

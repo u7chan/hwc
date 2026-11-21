@@ -21,6 +21,7 @@ import {
   type AgentKind,
   type AgentModel,
   type ModelAgentKind,
+  type ModelLabels,
   isAgentEffort,
   isAgentModel,
   supportsFolderTrust,
@@ -997,6 +998,32 @@ export function agentModelsOutcome(status: number, value: unknown): AgentModelsR
   )
     return "opencode_not_running";
   return status >= 200 && status < 300 ? toAgentModels(value) : null;
+}
+
+export function toModelLabels(value: unknown): ModelLabels | null {
+  if (typeof value !== "object" || value === null) return null;
+  const labels = (value as { labels?: unknown }).labels;
+  if (labels === null) return null;
+  if (typeof labels !== "object" || Array.isArray(labels)) return null;
+  const parsed: ModelLabels = {};
+  for (const [key, label] of Object.entries(labels)) {
+    if (key !== "" && typeof label === "string" && label !== "") parsed[key] = label;
+  }
+  return parsed;
+}
+
+// Claude の alias を表示名に解決する。候補とは別の口なので、読めなくても選べる。
+export async function readModelLabels(signal: AbortSignal): Promise<ModelLabels | null> {
+  try {
+    const init = { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) };
+    const response = await client.api["model-labels"].$get(
+      { query: { agent: "claude" } },
+      { init },
+    );
+    return response.status === 200 ? toModelLabels(await response.json()) : null;
+  } catch {
+    return null;
+  }
 }
 
 // paneId が null のときは設定画面の候補で、BFF がホームディレクトリで読む。

@@ -21,6 +21,7 @@ import {
   toCreatedPane,
   toPaneRead,
   toAgentModels,
+  toModelLabels,
   toAgentEfforts,
   toModelInfo,
   MODEL_CREATE_TIMEOUT_MS,
@@ -48,6 +49,20 @@ test("model candidates keep only their provider and id", () => {
   ]) {
     expect(toAgentModels(body)).toBeNull();
   }
+});
+
+test("model labels keep only usable display names", () => {
+  expect(
+    toModelLabels({ labels: { "claude/opus": "Opus 5.5", "claude/sonnet": "Sonnet 5.5" } }),
+  ).toEqual({ "claude/opus": "Opus 5.5", "claude/sonnet": "Sonnet 5.5" });
+  expect(toModelLabels({ labels: null })).toBeNull();
+  expect(toModelLabels({ labels: {} })).toEqual({});
+  for (const body of [null, {}, { labels: "Opus" }, { labels: [] }]) {
+    expect(toModelLabels(body)).toBeNull();
+  }
+  expect(toModelLabels({ labels: { "": "Opus", "claude/opus": "", "claude/sonnet": 3 } })).toEqual(
+    {},
+  );
 });
 
 test("model candidates with namespaced @ IDs remain selectable", () => {

@@ -15,6 +15,7 @@ const loaded = {
   templates: 3,
   notifications: true,
   restart: true,
+  modelLabels: null,
   launchDefaults: {
     claude: { model: { provider: "claude", id: "sonnet" }, effort: "high" },
     pi: { model: { provider: "example", id: "beam-small" }, effort: "low" },
@@ -41,6 +42,12 @@ test("each row shows the current value without opening the screen", () => {
 
 test("each agent row shows its default model, with the effort as a separate badge", () => {
   expect(settingsCategoryValue("agent-claude", loaded)).toBe("Sonnet");
+  expect(
+    settingsCategoryValue("agent-claude", {
+      ...loaded,
+      modelLabels: { "claude/sonnet": "Sonnet 5.5" },
+    }),
+  ).toBe("Sonnet 5.5");
   expect(settingsCategoryBadge("agent-claude", loaded)).toBe("high");
   // effort に対応しないモデルは、モデルだけを出す。
   expect(settingsCategoryValue("agent-opencode", loaded)).toBe("@demo/beam-small");

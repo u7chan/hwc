@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-20
-- Amended by: [ADR 0114](0114-model-label-by-agent.md)（作成ダイアログの選択肢も Claude は表示名にし、Codex / OpenCode は provider を落とす）
+- Amended by: [ADR 0114](0114-model-label-by-agent.md)（作成ダイアログの選択肢も Claude は表示名にし、Codex / OpenCode は provider を落とす）、[ADR 0117](0117-claude-model-labels-from-cli.md)（エイリアスの版は CLI に問い合わせ、静的な選択 UI にだけ使う）
 - Amends: [ADR 0101](0101-launch-model-while-chat-unavailable.md) の「出す値は起動時に選んだモデル id（Claude では `sonnet` などのエイリアス）と effort にする」。[ADR 0096](0096-claude-model-effort.md) の Consequences の「ダイアログの表示は `claude/opus` のようになり、`Opus 5.5` のような版付きの名前は出ない」
 
 ## Context

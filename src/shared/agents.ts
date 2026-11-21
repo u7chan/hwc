@@ -13,6 +13,9 @@ export type ModelAgentKind = ChatAgentKind;
 
 export type AgentModel = { provider: string; id: string };
 
+// 表示だけに使う解決済みの名前。キーは `modelKey`。保存する既定には含めない。
+export type ModelLabels = Record<string, string>;
+
 export function isAgentEffort(value: unknown): value is string {
   return (
     typeof value === "string" &&
@@ -78,8 +81,16 @@ export function claudeModelName(id: string): string {
 // `opencode-go`）も選んだエージェントと同じで、行の「Codex  openai/gpt-6.1-sol」のように自分を
 // 二重に名乗るので、モデル id だけにする。Pi だけは `opencode-go/…` のように provider が
 // 選択の一部なので残す。
-export function modelLabel(agent: ModelAgentKind, model: AgentModel): string {
-  if (agent === "claude") return claudeModelName(model.id);
+export function modelLabel(
+  agent: ModelAgentKind,
+  model: AgentModel,
+  labels: ModelLabels | null = null,
+): string {
+  if (agent === "claude") {
+    const label = labels?.[modelKey(model)];
+    if (label !== undefined && label !== "") return label;
+    return claudeModelName(model.id);
+  }
   return agent === "pi" ? modelKey(model) : model.id;
 }
 

@@ -1,4 +1,10 @@
-import { type AgentKind, type AgentModel, modelKey, modelLabel } from "../shared/agents";
+import {
+  type AgentKind,
+  type AgentModel,
+  type ModelLabels,
+  modelKey,
+  modelLabel,
+} from "../shared/agents";
 import type { LaunchDefault } from "../shared/launch-defaults";
 import { CreatePaneSelect } from "./CreatePaneSelect";
 import { type ModelCandidates, sameModel } from "./launch-choice";
@@ -17,6 +23,7 @@ export function CreatePaneModel(props: {
   agent: AgentKind;
   candidates: ModelCandidates;
   model: AgentModel | null;
+  labels: ModelLabels | null;
   saved: LaunchDefault | null;
   disabled: boolean;
   onChange: (model: AgentModel) => void;
@@ -46,8 +53,8 @@ export function CreatePaneModel(props: {
         {models.map((model) => (
           <option key={modelKey(model)} value={modelKey(model)}>
             {props.saved !== null && sameModel(model, props.saved.model)
-              ? `${modelLabel(props.agent, model)}（既定）`
-              : modelLabel(props.agent, model)}
+              ? `${modelLabel(props.agent, model, props.labels)}（既定）`
+              : modelLabel(props.agent, model, props.labels)}
           </option>
         ))}
       </CreatePaneSelect>

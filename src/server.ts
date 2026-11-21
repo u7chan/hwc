@@ -18,6 +18,7 @@ import { defaultStateRoot } from "./server/attachments";
 import { loadSnapshot, startStateSync } from "./server/herdr/sync";
 import { createApp } from "./server/app";
 import { createAgentModelsClient } from "./server/agent-models";
+import { createClaudeModelLabels } from "./server/claude-model-labels";
 import { createPullRequestReader } from "./server/pull-request";
 import {
   createDiscordSender,
@@ -84,6 +85,7 @@ const app = createApp({
     liveRoot: claudeLiveRoot(stateRoot),
   }),
   models: createAgentModelsClient({ servicePath: process.env.HWC_OPENCODE_SERVICE }),
+  modelLabels: createClaudeModelLabels(),
   claudeSettings: () => ensureClaudeSettings(stateRoot),
   pullRequests,
   git,

@@ -21,6 +21,7 @@ export function createChatHandlers(ctx: AppContext) {
     codex,
     claude,
     models,
+    modelLabels,
     homeDirectory,
     projects,
     previewRoots,
@@ -89,6 +90,18 @@ export function createChatHandlers(ctx: AppContext) {
       const agent = c.req.query("agent");
       if (!supportsModelSelection(agent)) return c.json({ error: "invalid_request" }, 400);
       return listModels(c, agent, async () => homeDirectory);
+    },
+    // 候補を読む口とは分ける。ラベルは表示の補いだけなので、読めなくても候補は返す。
+    homeModelLabels: async (c: PlainContext) => {
+      if (c.req.query("agent") !== "claude") {
+        return c.json({ error: "invalid_request" }, 400);
+      }
+      if (modelLabels === undefined) return c.json({ labels: null });
+      try {
+        return c.json({ labels: await modelLabels.read() });
+      } catch {
+        return c.json({ labels: null });
+      }
     },
     homeEfforts: async (c: PlainContext) => {
       const agent = c.req.query("agent");

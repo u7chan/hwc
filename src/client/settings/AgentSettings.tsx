@@ -1,5 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
-import { type AgentModel, type ModelAgentKind, modelLabel } from "../../shared/agents";
+import {
+  type AgentModel,
+  type ModelAgentKind,
+  type ModelLabels,
+  modelLabel,
+} from "../../shared/agents";
 import type { LaunchDefaults } from "../../shared/launch-defaults";
 import { readLaunchDefaults, saveLaunchDefault } from "../api";
 import { CreatePaneEffort } from "../CreatePaneEffort";
@@ -11,7 +16,11 @@ type LoadState = "loading" | "ready" | "failed";
 
 // 新しいペインの既定のモデルと effort。BFF が正で、保存・解除の応答で丸ごと置き換える。
 // 作成ダイアログには既定を変える操作を置かない（ADR 0104）。
-export function AgentSettings(props: { agent: ModelAgentKind; onSaved: () => void }) {
+export function AgentSettings(props: {
+  agent: ModelAgentKind;
+  labels: ModelLabels | null;
+  onSaved: () => void;
+}) {
   const [defaults, setDefaults] = useState<LaunchDefaults>({});
   const [load, setLoad] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
@@ -94,7 +103,9 @@ export function AgentSettings(props: { agent: ModelAgentKind; onSaved: () => voi
               "未設定"
             ) : (
               <>
-                <span class="hwc-setting-model-name">{modelLabel(props.agent, saved.model)}</span>
+                <span class="hwc-setting-model-name">
+                  {modelLabel(props.agent, saved.model, props.labels)}
+                </span>
                 {saved.effort === null ? null : (
                   <span class="hwc-effort-badge">{saved.effort}</span>
                 )}
@@ -116,6 +127,7 @@ export function AgentSettings(props: { agent: ModelAgentKind; onSaved: () => voi
           agent={props.agent}
           candidates={models.read}
           model={model}
+          labels={props.labels}
           saved={saved}
           disabled={busy}
           onChange={(selected) => {
