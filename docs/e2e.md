@@ -487,7 +487,7 @@ PR のチップは、1 枚表示と分割セルのペイン見出し、アクテ
 
 ### 根のラベル
 
-チップの種別欄は、チェックアウトのファイルでは `HTML` のまま、チェックアウト以外の根のファイルでは `HTML · /tmp` のように根を添える（[ファイルの配信](adr/file-serving.md)）。既定の fixture の `mock.html` はチェックアウトにあるので、ラベルは付かない。同じベース名を `/tmp` 側にも置くときだけ、fixture に次を足す。
+チップの種別欄は、チェックアウトのファイルでは `HTML` のまま、チェックアウト以外の根のファイルでは `HTML · /tmp` のように根を添える。既定の fixture の `mock.html` はチェックアウトにあるので、ラベルは付かない。同じベース名を `/tmp` 側にも置くときだけ、fixture に次を足す。
 
 1. `frontend` の `mock.html HTML` のチップを押す。ヘッダーは `mock.html` で、根のラベルは付かない。
 2. `e2e/fixtures/scenario.ts` の `createScenario` で、架空 Herdr の root（`e2e/fake-herdr.ts` の `mkdtemp`）の下、`work/` の外に `mock.html` をコピーする（例: `<root>/tmp-preview/mock.html`）。`work/*` の外に置くのは、他のペインのチェックアウトと解決先が紛れないようにするため。自ペインのチェックアウトの外なので、root 1（`/tmp`）で解決する。
@@ -498,7 +498,7 @@ PR のチップは、1 枚表示と分割セルのペイン見出し、アクテ
 
 ### 描けない HTML の案内
 
-HTML が配信できないスクリプトを読み込むと、iframe の上に 1 行の案内が出る（[ファイルの配信](adr/file-serving.md)）。既定の `docs/preview/mock.html` は `./mock.js` だけを読むので出ない。
+HTML が配信できないスクリプトを読み込むと、iframe の上に 1 行の案内が出る。既定の `docs/preview/mock.html` は `./mock.js` だけを読むので出ない。
 
 1. `frontend` の `mock.html` を開く。案内の行は出ず、iframe の `一覧` の切り替えが動く。
 2. 案内を出すには、fixture の `docs/preview/mock.html` の script を配信できない参照に差し替える（例: `<script type="module" src="./mock.ts"></script>`）。開き直すと iframe の上に案内が出て、中身は白いままになる。`再読み込み` でもう一度 HEAD を送り、案内は残る。

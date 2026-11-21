@@ -11,13 +11,21 @@ async function scan(patterns: string[]): Promise<string[]> {
 }
 
 const adrFiles = await scan(["docs/adr/*.md"]);
-const docFiles = await scan(["AGENTS.md", "README.md", "docs/**/*.md"]);
+const docFiles = await scan([
+  "AGENTS.md",
+  "README.md",
+  "docs/**/*.md",
+  ".agents/**/*.md",
+  "claude-mod/**/*.md",
+  "src/**/*.md",
+  "e2e/**/*.md",
+]);
 const sourceFiles = await scan(
   ["src", "e2e", "claude-mod"].flatMap((dir) =>
     ["ts", "tsx", "css", "mjs", "md"].map((ext) => `${dir}/**/*.${ext}`),
   ),
 );
-const referringFiles = [...docFiles, ...sourceFiles];
+const referringFiles = [...new Set([...docFiles, ...sourceFiles])];
 
 // 番号は並列のブランチが同時に同じ値を取る。名前は同じ論点のときだけ衝突し、git の衝突として気付ける。
 test("ADR のファイル名は番号を持たない小文字 kebab-case にする", () => {
@@ -40,8 +48,9 @@ test("ADR は見出しと、Accepted か Proposed の Status を持つ", async (
 test("ドキュメントの相対リンクは実在するファイルを指す", async () => {
   const broken: string[] = [];
   for (const file of docFiles) {
-    const text = await Bun.file(file).text();
-    for (const [, target] of text.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+    // コードフェンスの中の `a[i](x)` はリンクではない。
+    const text = (await Bun.file(file).text()).replace(/^```[\s\S]*?^```/gm, "");
+    for (const [, target] of text.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
       if (target === undefined || /^(https?:|mailto:|#)/.test(target)) continue;
       const path = join(dirname(file), target.split("#")[0]!);
       if (!existsSync(path)) broken.push(`${file}: ${target}`);
@@ -54,7 +63,8 @@ test("コードとドキュメントが参照する ADR は実在する", async 
   const missing: string[] = [];
   for (const file of referringFiles) {
     const text = await Bun.file(file).text();
-    for (const [path] of text.matchAll(/docs\/adr\/[a-z0-9-]+\.md/g)) {
+    for (const [match] of text.matchAll(/docs\/adr\/[A-Za-z0-9_.-]+/g)) {
+      const path = match.replace(/\.+$/, "");
       if (!existsSync(path)) missing.push(`${file}: ${path}`);
     }
   }
@@ -66,7 +76,7 @@ test("ADR を番号で参照しない", async () => {
   for (const file of referringFiles) {
     const text = await Bun.file(file).text();
     text.split("\n").forEach((line, index) => {
-      if (/ADR ?\d{4}|adr\/\d{4}-/.test(line)) numbered.push(`${file}:${index + 1}`);
+      if (/ADR[\s-]?\d{3,4}(?!\d)|adr\/\d{3,4}-/.test(line)) numbered.push(`${file}:${index + 1}`);
     });
   }
   expect(numbered).toEqual([]);

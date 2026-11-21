@@ -515,7 +515,7 @@ const DEFAULT_PREVIEW_ROOT = "/tmp";
 
 // チップとプレビューの見出しに出す根のラベル。番号ではなく設定値の文字列から作る。
 // 番号で /tmp を決めると、テストが注入した一時ディレクトリにも /tmp が付く。
-// realpath で決めると、/tmp が symlink の環境で別名になる（docs/adr/file-serving.md）。
+// realpath で決めると、/tmp が symlink の環境で別名になる。
 export function previewRootLabel(value: string): string {
   if (resolve(value) === DEFAULT_PREVIEW_ROOT) return DEFAULT_PREVIEW_ROOT;
   const name = basename(value);
