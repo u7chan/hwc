@@ -6,6 +6,12 @@ export function enterInsertsNewline(match: (query: string) => boolean): boolean 
   return match("(pointer: coarse)");
 }
 
+// `@` の候補は ↑↓ / Tab / Enter で選ぶ前提で、主ポインタが粗い端末には出さない。
+// 指でタップすると本文がフォーカスを失い、ソフトキーボードが閉じてしまう。
+export function projectMentionAllowed(match: (query: string) => boolean): boolean {
+  return !match("(pointer: coarse)");
+}
+
 // 入力欄を閉じるか。Claude は質問・承認の待ちで blocked になり、その間の TUI はダイアログが
 // 入力を受け取る。hwc の本文がダイアログへ流れないよう、入力欄ごと閉じる。
 // readOnly（folder trust）と違い、本文は端末出力のままにする（Issue #335）。

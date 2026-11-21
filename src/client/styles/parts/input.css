@@ -970,3 +970,73 @@
     min-height: 96px;
   }
 }
+
+/* `@` で出すプロジェクト候補。入力欄の上に重ね、会話の位置と入力欄の高さを動かさない。
+   キーボードのある端末にしか出さないので、固定行にしなくてもソフトキーボードに隠れない。
+   分割セルは container なので、cqh でセルの高さを超えないようにする。 */
+.hwc-mentions {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: min(22rem, 50cqh);
+  padding: var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.hwc-mentions-head {
+  flex: none;
+  padding: 0 var(--space-2) var(--space-1);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-mentions-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hwc-mention {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-mention[aria-selected="true"] {
+  background: var(--color-selected);
+}
+
+.hwc-mention-name {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-mention-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

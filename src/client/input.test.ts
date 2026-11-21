@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { AgentStatus, PaneState } from "../server/herdr/state";
-import { composerDisabled, enterInsertsNewline } from "./input";
+import { composerDisabled, enterInsertsNewline, projectMentionAllowed } from "./input";
 
 function pane(agent: string | null, agentStatus: AgentStatus = "idle"): PaneState {
   return {
@@ -21,6 +21,11 @@ test("a touch device inserts a newline on Enter instead of sending", () => {
   // マウスのある端末は従来どおり Enter で送る。
   const fine = () => false;
   expect(enterInsertsNewline(fine)).toBe(false);
+});
+
+test("the @ suggestions are for devices with a fine pointer only", () => {
+  expect(projectMentionAllowed(() => false)).toBe(true);
+  expect(projectMentionAllowed((query) => query === "(pointer: coarse)")).toBe(false);
 });
 
 test("a blocked Claude pane closes the composer", () => {

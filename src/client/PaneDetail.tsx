@@ -55,7 +55,7 @@ import {
   usePaneChat,
 } from "./chat";
 import { isFileTreeShortcut, isInOverlay, isTextEntry } from "./file-tree-key";
-import { composerDisabled, enterInsertsNewline } from "./input";
+import { composerDisabled, enterInsertsNewline, projectMentionAllowed } from "./input";
 import { useMessageReveal } from "./reveal";
 import {
   chipOnInput,
@@ -76,9 +76,17 @@ import {
 } from "./commands";
 import { ComposerAdd } from "./ComposerAdd";
 import { useCopy } from "./copy";
-import { insertProjectPath } from "./projects";
+import {
+  filterProjects,
+  highlightedProject,
+  insertProjectPath,
+  projectMention,
+  stepProject,
+  type ProjectMention,
+} from "./projects";
 import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
+import { useProjects } from "./use-projects";
 import {
   AgentGlyphIcon,
   AgentIcon,
@@ -397,6 +405,11 @@ export function PaneDetail(props: PaneDetailProps) {
     open: boolean;
     caret: number | null;
   } | null>(null);
+  // `@` の候補を出すかは、本文とキャレットから描画のたびに導く。キャレットは入力欄が
+  // 持つ値の写しで、フォーカスを外している間は null。強調と閉じた記録も識別子だけを持つ。
+  const [caret, setCaret] = useState<number | null>(null);
+  const [mentionHighlight, setMentionHighlight] = useState<string | null>(null);
+  const [mentionDismissed, setMentionDismissed] = useState<ProjectMention | null>(null);
   // 定型文のダイアログも、閉じるアニメーションの間は残す。caret は選んだ直後に
   // 入力欄へ戻す位置で、閉じただけのときは null のまま。
   const [templateDialog, setTemplateDialog] = useState<{
@@ -614,6 +627,30 @@ export function PaneDetail(props: PaneDetailProps) {
     compactionRun === null
       ? commandCandidates(pane, draft, snapshot)
       : [];
+  // + メニューは分割セルでは出ないので、同じ条件にせず `@` で選べるようにする。
+  const mention =
+    caret !== null &&
+    !shell &&
+    pane.chat &&
+    edit === null &&
+    !launchBlocked &&
+    !inputDisabled &&
+    projectMentionAllowed((query) => window.matchMedia(query).matches)
+      ? projectMention(draft, caret)
+      : null;
+  const projects = useProjects(pane.id, mention !== null);
+  const mentionClosed =
+    mention !== null &&
+    mentionDismissed !== null &&
+    mentionDismissed.start === mention.start &&
+    mentionDismissed.query === mention.query;
+  const suggestions =
+    mention !== null && !mentionClosed && projects.load.kind === "ready"
+      ? filterProjects(projects.load.projects, mention.query)
+      : [];
+  const suggested = highlightedProject(suggestions, mentionHighlight);
+  // path は空白を含み得て ID にならないので、並びの位置で付ける。
+  const suggestionId = (index: number) => `hwc-mention-${pane.id}-${index}`;
   const uploading = attachments.some((item) => item.name === null);
   const editSendable =
     edit !== null && edit.text.trim() !== "" && pane.agentStatus !== "working" && !edit.sending;
@@ -889,6 +926,20 @@ export function PaneDetail(props: PaneDetailProps) {
     field.setSelectionRange(caret, caret);
     fit(field, expanded);
   };
+
+  // `@語` を選んだパスで置き換える。ダイアログと違い入力欄から離れないので、
+  // キャレットは再描画の後に layout effect が戻す。
+  const pickMention = (path: string) => {
+    if (mention === null) return;
+    const next = insertProjectPath(inputText, mention.start, mention.end, path);
+    setInputText(next.text);
+    setCaret(next.caret);
+    setMentionHighlight(null);
+    pendingCaret.current = next.caret;
+  };
+
+  const syncCaret = (field: HTMLTextAreaElement) =>
+    setCaret(field.selectionStart === field.selectionEnd ? field.selectionStart : null);
 
   const openTemplates = () => setTemplateDialog({ open: true, caret: null });
 
@@ -1815,6 +1866,40 @@ export function PaneDetail(props: PaneDetailProps) {
                     ))}
                   </div>
                 )}
+                {suggested === null ? null : (
+                  // 語が変わるたびに作り直し、スクロールを先頭へ戻す。
+                  <div class="hwc-mentions" key={mention?.query}>
+                    <div class="hwc-mentions-head" aria-hidden="true">
+                      プロジェクト
+                    </div>
+                    <div
+                      class="hwc-mentions-list"
+                      id={`hwc-mentions-${pane.id}`}
+                      role="listbox"
+                      aria-label="プロジェクト候補"
+                    >
+                      {suggestions.map((project, index) => (
+                        <button
+                          type="button"
+                          role="option"
+                          class="hwc-mention"
+                          key={project.path}
+                          id={suggestionId(index)}
+                          tabIndex={-1}
+                          aria-selected={project.path === suggested.path}
+                          // 押しても本文のフォーカスを外さない。続けて打てるようにする。
+                          onMouseDown={(event) => event.preventDefault()}
+                          // mouseenter だと、↑↓ のスクロールで行がポインタの下へ来たときに強調を奪う。
+                          onMouseMove={() => setMentionHighlight(project.path)}
+                          onClick={() => pickMention(project.path)}
+                        >
+                          <span class="hwc-mention-name">{project.name}</span>
+                          <span class="hwc-mention-path">{project.path}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <span class="hwc-input-line">
                   {/* 消えるときに幅が跳ねないよう、シェル以外でも置いたまま折りたたむ。 */}
                   <span
@@ -1841,11 +1926,22 @@ export function PaneDetail(props: PaneDetailProps) {
                         start: field.selectionStart,
                         end: field.selectionEnd,
                       };
+                      setCaret(null);
                     }}
+                    onFocus={(event) => syncCaret(event.currentTarget)}
+                    onClick={(event) => syncCaret(event.currentTarget)}
+                    onKeyUp={(event) => syncCaret(event.currentTarget)}
+                    aria-controls={suggested === null ? undefined : `hwc-mentions-${pane.id}`}
+                    aria-activedescendant={
+                      suggested === null ? undefined : suggestionId(suggestions.indexOf(suggested))
+                    }
                     // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
                     {...(compact ? {} : { placeholder })}
                     onInput={(event) => {
                       setInputText(event.currentTarget.value);
+                      syncCaret(event.currentTarget);
+                      setMentionDismissed(null);
+                      setMentionHighlight(null);
                     }}
                     onPaste={(event) => {
                       // シェルは改行を受け取れない。末尾の改行だけなら落として差し込み、
@@ -1874,8 +1970,43 @@ export function PaneDetail(props: PaneDetailProps) {
                     }}
                     onKeyDown={(event) => {
                       const composing = event.isComposing || event.keyCode === 229;
-                      if (event.key !== "Enter") return;
                       if (composing) return;
+                      // 候補が出ている間は、Enter も候補の確定にする（ADR 0118）。候補はキーボードの
+                      // ある端末にしか出ないので、タッチ端末の Enter は改行のまま。
+                      if (mention !== null && suggested !== null) {
+                        const plain = !(
+                          event.shiftKey ||
+                          event.ctrlKey ||
+                          event.metaKey ||
+                          event.altKey
+                        );
+                        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                          event.preventDefault();
+                          const next = stepProject(
+                            suggestions,
+                            mentionHighlight,
+                            event.key === "ArrowDown" ? 1 : -1,
+                          );
+                          setMentionHighlight(next);
+                          // 強調が一覧の外へ出ないよう、描画を待たずに動かす。行は既に DOM にある。
+                          const row = suggestions.findIndex((project) => project.path === next);
+                          document
+                            .getElementById(suggestionId(row))
+                            ?.scrollIntoView({ block: "nearest" });
+                          return;
+                        }
+                        if (plain && (event.key === "Tab" || event.key === "Enter")) {
+                          event.preventDefault();
+                          pickMention(suggested.path);
+                          return;
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setMentionDismissed(mention);
+                          return;
+                        }
+                      }
+                      if (event.key !== "Enter") return;
                       // シェルは改行を受け取れない。タッチ端末でも Enter で送る。
                       const newline =
                         event.shiftKey ||
