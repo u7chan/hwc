@@ -1,6 +1,6 @@
 // localStorage はブラウザにしかなく、プライベートモードなどでは触った時点で例外になる。
-// 触る入口をここ 1 か所に畳み、呼び出し元は load/save に null を渡せばよい形にする
-// （docs/adr/state-storage.md）。
+// 取得を try/catch に畳む入口をここに置く。新しく増やすアクセスは、load/save と一緒に
+// これを通す（docs/adr/state-storage.md）。
 export type StorageLike = {
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;

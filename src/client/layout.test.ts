@@ -65,6 +65,11 @@ test("the sidebar stays open unless it was stored as collapsed", () => {
   expect(parseSidebarCollapsed("collapsed")).toBe(false);
 });
 
+test("the sidebar keeps the storage keys its settings are read from", () => {
+  expect(SIDEBAR_STORAGE_KEY).toBe("hwc-sidebar-width");
+  expect(SIDEBAR_COLLAPSED_STORAGE_KEY).toBe("hwc-sidebar-collapsed");
+});
+
 test("the stored width keeps the format the app writes", () => {
   const store = memoryStorage();
   saveSidebarWidth(store, 400.4);

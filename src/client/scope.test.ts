@@ -96,6 +96,10 @@ test("the list opens on every space", () => {
   expect(parseListScope("everything")).toBe("all");
 });
 
+test("the list scope keeps the storage key its setting is read from", () => {
+  expect(LIST_SCOPE_STORAGE_KEY).toBe("hwc-list-scope");
+});
+
 test("the chosen scope is stored as the value itself and comes back", () => {
   const store = memoryStorage();
   saveListScope(store, "active");

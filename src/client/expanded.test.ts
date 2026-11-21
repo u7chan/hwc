@@ -55,6 +55,10 @@ test("remembering a group keeps the other entries", () => {
   ]);
 });
 
+test("the open groups keep the storage key they are read from", () => {
+  expect(OPEN_GROUPS_STORAGE_KEY).toBe("hwc-open-groups");
+});
+
 test("the remembered groups are stored as one JSON object", () => {
   const store = memoryStorage();
   saveOpenGroups(store, rememberGroup(rememberGroup(new Map(), "w1", false), "w1:t1", true));
