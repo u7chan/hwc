@@ -520,7 +520,7 @@ HTML が配信できないスクリプトを読み込むと、iframe の上に 1
 
 Herdr がイベントを出さない cwd とブランチを、可視中だけ取り直して追う（[ADR 0121](adr/0121-live-state-refresh.md)）。既定は 3 秒で、設定の「ライブ更新」から変えられる。
 
-1. `scratch` の `notes` を開き、ファイルツリーを開く。根が `…/work/scratch` なので `notes.md` と `todo.md` が出る。入力欄に `cd <root>/work` を送る（`<root>` は起動ログの `hwc e2e fixture:` のパス）。何もせずに 4 秒ほど待つと、ツリーの一覧が `acme-dashboard` / `scratch` / `plain-checkout` に入れ替わり、一覧の `scratch` のスペースメニューのパスも `<root>/work` に変わる（再読み込みはしない）。
+1. `scratch` の `notes` を開き、ファイルツリーを開く。根が `…/work/scratch` で、実ファイルが無いので「空のディレクトリ」と出る。入力欄に `cd <root>/work` を送る（`<root>` は起動ログの `hwc e2e fixture:` のパス）。何もせずに 4 秒ほど待つと、ツリーの一覧が `acme-dashboard` / `acme-dashboard-checks` / `acme-dashboard-docs` / `plain-checkout` / `sandbox` / `scratch` に入れ替わり、一覧の `scratch` のスペースメニューのパスも `<root>/work` に変わる（再読み込みはしない）。
 2. `plain-checkout` の `shell` を開き、`git checkout feat/live` を送る。4 秒ほどで、ペイン見出しと一覧の行のブランチが `feat/live` に変わる。上流が無いので数字は出ない。
 3. 設定の「ライブ更新」を開き、「オフ」を選ぶ。設定の一覧に戻ると行の値が「オフ」になっている。`shell` で `git checkout feat/off-test` を送っても、5 秒待ってブランチは `feat/live` のまま。
 4. 「3 秒」に戻すと、その場で取り直してブランチが `feat/off-test` に変わる。設定の行の値も「3 秒」に戻る。
