@@ -117,7 +117,7 @@ import {
 } from "./layout";
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
-// スロット色を出さないときの並び。狭い画面は 4 色を使わない（ADR 0058）。
+// スロット色を出さないときの並び。狭い画面は 4 色を使わない。
 const NO_SLOTS: readonly string[] = [];
 
 const NO_PARENT_PANE_IDS: ReadonlySet<string> = new Set();
@@ -159,9 +159,8 @@ export function App() {
   // SSE の購読は 1 度しか張らないので、タブを外したあとの反映に使う一覧の
   // 開閉状態も ref から読む。
   const expandedRef = useRef<ReadonlySet<string>>(NO_GROUPS);
-  // ドロップの前後で位置を比べるための控え（ADR 0061）。タブはタブ列の
-  // スクロールを含めた位置で持ち、選択タブへの自動スクロールと競合させない
-  // （ADR 0086）。
+  // ドロップの前後で位置を比べるための控え。タブはタブ列の
+  // スクロールを含めた位置で持ち、選択タブへの自動スクロールと競合させない。
   const flipRects = useRef<Map<string, DOMRect> | null>(null);
   const flipTabRects = useRef<Map<string, { left: number; top: number }> | null>(null);
   // ドラッグ後の pointerup で click が成立しても、タブの選択を動かさない。
@@ -205,7 +204,7 @@ export function App() {
   const [removing, setRemoving] = useState<Removing | null>(null);
   const [closingSpace, setClosingSpace] = useState<ClosingSpace | null>(null);
   const [creating, setCreating] = useState<CreatingPane | null>(null);
-  // 拡大中の画像。ダイアログは App 直下（ADR 0021）。
+  // 拡大中の画像。ダイアログは App 直下。
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
   // 開いているプレビュー。対象のペインは、そのタブを開いている間だけ出す。
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
@@ -253,7 +252,7 @@ export function App() {
     heldSnapshotTimer.current ??= window.setTimeout(finishRemoval, REMOVAL_LEAVE_FALLBACK_MS);
   };
 
-  // 受信したスナップショットで丸ごと置き換える（ADR 0005）。画面から消える対象の
+  // 受信したスナップショットで丸ごと置き換える（docs/adr/bff-client-transport.md）。画面から消える対象の
   // アニメーションが途中で切り落とされないよう、その間だけ適用を保留する。
   const applyState = (next: AppState) => {
     const target = removingRef.current;
@@ -273,7 +272,7 @@ export function App() {
     }
     // ペインを閉じる要求の応答より先に、ペインが消えたスナップショットが届くことが
     // ある。消えるタブを先に見せてから適用する。ペインが無い以上 close の目的は
-    // 達しているので、確認は閉じ、遅れて返る応答は捨てる（ADR 0021）。
+    // 達しているので、確認は閉じ、遅れて返る応答は捨てる。
     const closeTarget = closingRef.current;
     if (
       closeTarget?.phase === "busy" &&
@@ -360,7 +359,7 @@ export function App() {
   const live = useRef(false);
   // hwc から作ったペインは pendingSelect が開く。自動分割と二重に動かさない。
   const selfCreated = useRef(new Set<string>());
-  // 分割で入ったセル。次の描画で分割線から広げる（ADR 0111）。
+  // 分割で入ったセル。次の描画で分割線から広げる。
   const [entering, setEntering] = useState<string | null>(null);
 
   // 時刻は BFF が持つ。描画のたびに一度だけ Map へ引き直し、表示側の型は変えない。
@@ -370,7 +369,7 @@ export function App() {
   useFavicon(state);
   const parentPaneIds = state === null ? NO_PARENT_PANE_IDS : markedParentPaneIds(state);
 
-  // 選んだペインがスナップショットから消えても id は残す（ADR 0021）。findPane が null を
+  // 選んだペインがスナップショットから消えても id は残す。findPane が null を
   // 返すので表示は一覧に戻り、戻ってきたときは同じペインを開ける。タブとスロットは
   // スナップショットに合わせて落とす。
   const rememberedView =
@@ -396,7 +395,7 @@ export function App() {
   }, [splitKey]);
 
   // ドロップで位置が変わったセルを、前の位置から滑らせる。分割で増えたセルは
-  // フェードで入れる。初回表示とウィンドウのリサイズでは動かさない（ADR 0061）。
+  // フェードで入れる。初回表示とウィンドウのリサイズでは動かさない。
   useLayoutEffect(() => {
     const before = flipRects.current;
     const beforeTabs = flipTabRects.current;
@@ -453,7 +452,7 @@ export function App() {
   // セルごとに文脈を引く。1 つの context を共有すると、別スペースを並べたときに
   // PR のチップや Git のメニューが別スペースの値になる。
   const context = state ? findPaneContext(state, selectedPaneId) : null;
-  // タブバーは表示順（ADR 0063 tab-order-by-pane-layout）。
+  // タブバーは表示順。
   const tabRows =
     state === null
       ? []
@@ -595,7 +594,7 @@ export function App() {
     setScrollTo({ paneId: createdPane, scope, token: ++scrollToSeq.current });
   }, [createdPane, state, wide, pane, settingsOpen, pendingSelect, scope]);
 
-  // 委譲でエージェントが増えたら、表示中のセルの隣へ差し込む（ADR 0111）。
+  // 委譲でエージェントが増えたら、表示中のセルの隣へ差し込む。
   // Herdr に委譲のイベントは無いので、前回のスナップショットとの差分で見る。
   useEffect(() => {
     if (state === null) return;
@@ -717,7 +716,7 @@ export function App() {
     setCreating({ paneId, target: { kind: "start" } });
   };
 
-  // ツリーで選んだフォルダを作業ディレクトリにしたスペースを作る（ADR 0113）。モデル一覧は
+  // ツリーで選んだフォルダを作業ディレクトリにしたスペースを作る。モデル一覧は
   // 起点のペインの cwd で読み、起動時の再検証は新しい root pane の cwd で BFF が行う。
   const openCreateSpaceDialog = (paneId: string, path: string) => {
     setCreating({ paneId, target: { kind: "space", path } });
@@ -881,12 +880,11 @@ export function App() {
     leaveTabTimer.current = window.setTimeout(() => finishTabLeave(paneId), TAB_LEAVE_FALLBACK_MS);
   };
 
-  // タブの × はタブから外すだけ。ペインは閉じず、Herdr 側で動き続ける
-  // （ADR 0059 tab-close-detaches）。
+  // タブの × はタブから外すだけ。ペインは閉じず、Herdr 側で動き続ける。
   const removeFromTabs = (paneId: string) => beginTabLeave(paneId);
 
   // プレビューのタブとヘッダーの × は同じ入口にする。どちらも画面から外すだけで、
-  // チップはメッセージに残る（ADR 0051）。
+  // チップはメッセージに残る。
   const closePreview = () => setPreview(null);
 
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。SSE が
@@ -987,7 +985,7 @@ export function App() {
         beginRemovalLeave();
         return;
       }
-      // 応答より先に対象が消えていた場合は、削除済みとして扱う（ADR 0034）。
+      // 応答より先に対象が消えていた場合は、削除済みとして扱う。
       if (removingRef.current?.phase === "leave") {
         finishRemoval();
         return;
@@ -1121,7 +1119,7 @@ export function App() {
   const actions = (
     <>
       {connChip}
-      {/* 足元は入口だけ。出口は設定の左上にあり、開いている間はその面の色で示す（ADR 0094）。 */}
+      {/* 足元は入口だけ。出口は設定の左上にあり、開いている間はその面の色で示す。 */}
       <button
         type="button"
         class="hwc-icon-button hwc-foot-button"
@@ -1149,7 +1147,7 @@ export function App() {
           paneTabName(draggedRow.pane, processes.get(draggedRow.pane.id) ?? null),
           draggedRow.workspace,
         );
-  // タブの落とし先。分割では枠、1 枚表示では差し込みの線で示す（ADR 0064 / 0086）。
+  // タブの落とし先。分割では枠、1 枚表示では差し込みの線で示す。
   const tabDrop =
     dragging?.target?.kind === "tab"
       ? {
@@ -1162,7 +1160,7 @@ export function App() {
       : null;
 
   // 変更の直前にセルとタブの位置を控える。セルは画面座標、タブは列のスクロールを
-  // 含めた位置で比べる（ADR 0061 / 0086）。
+  // 含めた位置で比べる。
   const captureFlip = () => {
     const rects = new Map<string, DOMRect>();
     for (const cell of document.querySelectorAll<HTMLElement>("[data-drop-pane]")) {
@@ -1189,7 +1187,7 @@ export function App() {
 
   // ドラッグの適用先。タブとセルの両方から掴むので、最新の状態を持つ関数を ref に置く。
   // 落としたときの選択はレイアウト操作。一覧の行を開いたわけではないので、既読の
-  // 保留は作らない（タブからのドラッグと同じ。ADR 0017 / 0061）。
+  // 保留は作らない（タブからのドラッグと同じ）。
   const applyDrop = (paneId: string, target: DropTarget) => {
     // ドラッグは広い画面だけで始まる。途中で幅が変わっても開始時の分割として扱う。
     const mode = target.kind === "tab" ? tabDropMode(split, paneId, target.pane, true) : null;
@@ -1274,7 +1272,7 @@ export function App() {
     };
   }, []);
 
-  // 空きの葉は持たない（ADR 0061）。
+  // 空きの葉は持たない。
   const layoutPanes = readingOrder(split.layout);
   const splitCells = wide && layoutPanes.length > 1;
   const gridOn = wide && pane !== null && split.layout !== null;
@@ -1316,7 +1314,7 @@ export function App() {
     gitAction.phase === "failed"
       ? { action: gitAction.action, error: gitAction.error }
       : null;
-  // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする（ADR 0038）。
+  // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする。
   const menuWorktree = menuWorkspace?.worktree ?? null;
   const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
   const menuCanCloseSpace =
@@ -1366,7 +1364,7 @@ export function App() {
         current={isCurrent}
         // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
         labeled={splitCells}
-        // 複数スペースのペインが並ぶときだけ、見出しに場所を添える（ADR 0019）。
+        // 複数スペースのペインが並ぶときだけ、見出しに場所を添える。
         showSpace={splitCells && multiSpaceTabs}
         // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
         // 値そのものは常に渡す。
@@ -1420,7 +1418,7 @@ export function App() {
     return moving !== null && layoutPanes.includes(moving) ? "ここで入れ替え" : "この位置に表示";
   };
 
-  // セルは木の葉。親の分割軸を data 属性に置き、ドラッグ中の向き判定に使う（ADR 0061）。
+  // セルは木の葉。親の分割軸を data 属性に置き、ドラッグ中の向き判定に使う。
   const renderCell = (paneId: string, parentDir: "row" | "col" | null) => {
     if (state === null) return null;
     const item = findPane(state, paneId);
@@ -1460,7 +1458,7 @@ export function App() {
       }
       startPaneDrag(event, item.id);
     };
-    // 落とし先が固定タブのときは、セル側に枠を出さない（ADR 0064）。
+    // 落とし先が固定タブのときは、セル側に枠を出さない。
     const target =
       dragging?.target?.kind === "cell" && dragging.target.pane === item.id
         ? dragging.target
@@ -1582,7 +1580,7 @@ export function App() {
             <PaneList
               state={state}
               selectedPaneId={selectedPaneId}
-              // スロット色は PC だけ。狭い画面ではタブ履歴と 2 段目だけを出す（ADR 0058）。
+              // スロット色は PC だけ。狭い画面ではタブ履歴と 2 段目だけを出す。
               slots={wide ? layoutPanes : NO_SLOTS}
               parentPaneIds={parentPaneIds}
               scope={scope}

@@ -46,7 +46,7 @@ export type PiDefaultsStore = {
 
 // 既定モデルで起動したペインだけ、チャット画面を開いたときと、/new でセッションが
 // 空に戻ったときに既定を読む。起動時には何も聞かない。同じペインの同時要求は 1 つに
-// 畳み、成功した値だけを預かる（ADR 0087・0091）。
+// 畳み、成功した値だけを預かる（docs/adr/agent-launch.md）。
 export function createPiDefaults(readDefaults: PiDefaultsReader = loadPiDefaults): PiDefaultsStore {
   // ペイン id ごとの起動世代。値と解決中の問い合わせは、この世代に属するものだけを
   // 有効にする。/exit して同じペインで起動し直したとき、前の問い合わせが遅れて返っても
@@ -70,7 +70,7 @@ export function createPiDefaults(readDefaults: PiDefaultsReader = loadPiDefaults
     },
     forget,
     // 会話にモデルが載ったら、解決済みの値は捨てる。既定で起動した記録は残すので、
-    // /new でセッションが空に戻ったときに、その時点の既定を取り直せる（ADR 0091）。
+    // /new でセッションが空に戻ったときに、その時点の既定を取り直せる（docs/adr/agent-launch.md）。
     dropResolved(paneId, model) {
       if (model !== null) resolved.delete(paneId);
     },

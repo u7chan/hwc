@@ -167,7 +167,7 @@ export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
 }
 
 // ワークツリーの作成は root ペインに名前を付けるだけ。起動するエージェントは
-// ペインができた後に /agent で指定する（ADR 0084）。
+// ペインができた後に /agent で指定する（docs/adr/agent-launch.md）。
 export function parseWorktreeBody(body: unknown): Parsed<{ name: string | null }> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { ok: false, status: 400, error: "body must be an object" };
@@ -177,7 +177,7 @@ export function parseWorktreeBody(body: unknown): Parsed<{ name: string | null }
 }
 
 // フォルダから作るスペース。path はツリーの根からの相対パスで、実在の確認は BFF が
-// realpath で行う。ここでは形だけを見る。根そのもの（空）は受けない（ADR 0113）。
+// realpath で行う。ここでは形だけを見る。根そのもの（空）は受けない。
 export function parseCreateSpaceBody(body: unknown): Parsed<{ path: string; name: string | null }> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { ok: false, status: 400, error: "body must be an object" };

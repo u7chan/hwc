@@ -28,7 +28,7 @@ export function notificationSettingsPath(root: string): string {
   return join(root, "notifications.json");
 }
 
-// 添付・ペイン時刻と同じ状態ディレクトリ配下の 1 ファイル（ADR 0018）。Webhook URL は
+// 添付・ペイン時刻と同じ状態ディレクトリ配下の 1 ファイル（docs/adr/state-storage.md）。Webhook URL は
 // 資格情報なので 0600 で書く。固定の tmp 名を使うと、並行した書き込みや前回の残骸と
 // 衝突するため、一意な名前で作ってから rename で置き換える。
 export function createNotificationSettingsFile(root: string): NotificationSettingsFile {
@@ -308,7 +308,7 @@ export function createNotificationDispatcher(options: {
     const branch = workspace.branch ?? null;
     const checkoutPath = options.store.workspacePath(workspace.id);
     if (branch === null || checkoutPath === null || options.pullRequests === undefined) return null;
-    // ペイン見出しと同じように、push 先の名前で引く（ADR 0043）。
+    // ペイン見出しと同じように、push 先の名前で引く（docs/adr/git-github.md）。
     const branches = pullRequestBranches(branch, workspace.sync?.upstreamBranch ?? null);
     const pullRequest = await options
       .pullRequests({ checkoutPath, branches, refresh: true })

@@ -172,7 +172,7 @@ type PaneDetailProps = {
   current: boolean;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
-  // 複数スペースのペインが並ぶときだけ、見出しに場所を添える（ADR 0019）。
+  // 複数スペースのペインが並ぶときだけ、見出しに場所を添える。
   showSpace: boolean;
   // スペースのブランチ。分割セルでも PR のチップを引くために渡す。
   // 文字として出すかは showBranch が決め、labeled のときは名前を優先する。
@@ -251,7 +251,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const fileTree = useFileTree(pane.id);
   const previewPath = useFilePreview(pane.id);
   // ライブ更新でスペースの根が変わると、取得済みの相対パスと選択中のファイルの意味が
-  // 変わる。次の取得から新しい根で解決するよう、store の根を合わせる（ADR 0121）。
+  // 変わる。次の取得から新しい根で解決するよう、store の根を合わせる。
   useEffect(() => {
     fileTreeStore.syncRoot(pane.id, props.context.workspacePath);
   }, [pane.id, props.context.workspacePath]);
@@ -259,7 +259,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // 狭いセルで選択したときだけ、プレビューへフォーカスを移す。
   const [previewFocus, setPreviewFocus] = useState<{ focus: boolean }>({ focus: false });
   // ツリーを横に並べるかは、ウィンドウではなく実際のセル幅で決める。狭いセルでは
-  // 会話の上に重ねる（ADR 0090）。
+  // 会話の上に重ねる。
   const { ref: widthRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
 
   const treeOpen = fileTree.open;
@@ -443,7 +443,7 @@ export function PaneDetail(props: PaneDetailProps) {
     pane.chat && (!blocked || pane.agent === "claude"),
     pane.agentStatus,
   );
-  // 実行中の段階は pi 拡張の sidecar、Claude は transcript の進行行から取る（ADR 0035 / 0100）。
+  // 実行中の段階は pi 拡張の sidecar、Claude は transcript の進行行から取る（docs/adr/pi-integration.md / docs/adr/claude-integration.md）。
   // blocked の間も hook は生かしたままにする。状態の遷移で保持値を捨て、取得は working の
   // 間だけに限る（blocked で effect を外すと、同じターンに戻ったとき古い段階が一瞬出る）。
   const activity = usePaneActivity(
@@ -560,7 +560,7 @@ export function PaneDetail(props: PaneDetailProps) {
       : { model: launch.model === null ? null : launch.model.id, effort: launch.effort };
   const snapshotInfo = agentInfo(snapshot);
   // 既定モデルで起動した pi は、会話にモデルが載るまで何も出せない。チャット画面を
-  // 開いている間だけ既定を読み、スケルトンで待ちを示す（ADR 0087）。
+  // 開いている間だけ既定を読み、スケルトンで待ちを示す。
   const defaultInfo = useDefaultModel(
     pane.id,
     pane.agent === "pi" &&
@@ -571,7 +571,7 @@ export function PaneDetail(props: PaneDetailProps) {
       snapshotInfo === null &&
       launchInfo === null,
   );
-  // 会話を読めないペインは、hwc が預かっている起動時の指定でモデルを補う（ADR 0101）。
+  // 会話を読めないペインは、hwc が預かっている起動時の指定でモデルを補う（docs/adr/agent-launch.md）。
   const launchModelInfo = useLaunchModel(
     pane.id,
     pane.chat &&
@@ -889,7 +889,7 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   // 選択を引用として下書きの末尾へ足す。compact のチップは外すが、指示の下書きは残す
-  // （引用に続く本文として送り、/compact には戻さない。ADR 0016 / 0062）。
+  // （引用に続く本文として送り、/compact には戻さない）。
   const quoteSelection = () => {
     // 送信中に足すと、成功時のクリアで新しい引用まで消える。送っている間は受け付けない。
     if (sendingAny || launchBlocked || inputDisabled) return;
@@ -1044,7 +1044,7 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   // 貼り付けとドロップで同じ受け付け方をする。アップロードするファイルが無ければ
-  // 既定動作を止めない（ADR 0018）。何もアップロードしないときは false を返す。
+  // 既定動作を止めない。何もアップロードしないときは false を返す。
   const takeFiles = (action: AttachmentAction): boolean => {
     if (action.kind !== "upload") return false;
     addFiles(action.files);
@@ -1329,7 +1329,7 @@ export function PaneDetail(props: PaneDetailProps) {
             body.kind === "chat" ? latestAgentText(body.snapshot.messages) : null,
           ),
         );
-  // 低いセルは ADR 0035 のとおり段階と経過時間だけにする。速度は通常セルでだけ出す。
+  // 低いセルは段階と経過時間だけにし、会話へ高さを回す。速度は通常セルでだけ出す。
   const liveTokPerSecond =
     compacting || compact || activity === null ? null : activity.tokPerSecond;
 
@@ -1340,7 +1340,7 @@ export function PaneDetail(props: PaneDetailProps) {
   };
 
   // 行のドラッグは、プレビューの「パスをコピー」と同じ文字列を運ぶ。ツリーの根は
-  // スペースのチェックアウトで、ペインの cwd とは限らない（ADR 0056 / 0095）。
+  // スペースのチェックアウトで、ペインの cwd とは限らない。
   const startTreeDrag = (event: DragEvent, entry: FileTreeEntry) => {
     const transfer = event.dataTransfer;
     if (transfer === null) return;
@@ -1704,7 +1704,7 @@ export function PaneDetail(props: PaneDetailProps) {
             ) : null
           ) : inputDisabled ? (
             // 質問・承認の待ちは TUI のダイアログが入力を受け取る。入力欄ごと閉じる。質問は
-            // カードから答えられる。承認と、待ちが読めないときは端末で行う（ADR 0112、0099）。
+            // カードから答えられる。承認と、待ちが読めないときは端末で行う（docs/adr/claude-integration.md）。
             <p class="hwc-terminal-note" role="status">
               {pendingView?.kind === "question" && !showTerminal
                 ? "Claude の質問です。カードから答えると、入力欄が戻ります。"
@@ -1975,7 +1975,7 @@ export function PaneDetail(props: PaneDetailProps) {
                     onKeyDown={(event) => {
                       const composing = event.isComposing || event.keyCode === 229;
                       if (composing) return;
-                      // 候補が出ている間は、Enter も候補の確定にする（ADR 0120）。候補はキーボードの
+                      // 候補が出ている間は、Enter も候補の確定にする。候補はキーボードの
                       // ある端末にしか出ないので、タッチ端末の Enter は改行のまま。
                       if (mention !== null && suggested !== null) {
                         const plain = !(

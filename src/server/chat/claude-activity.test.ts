@@ -505,7 +505,7 @@ test("an interrupted tool-use marker is not the start of the next turn", async (
     user("r1", "a1", [
       { type: "tool_result", tool_use_id: "t1", content: "rejected", is_error: true },
     ]),
-    // Esc で質問を閉じたときの CLI の記録。利用者の発言ではない（ADR 0099）。
+    // Esc で質問を閉じたときの CLI の記録。利用者の発言ではない（docs/adr/claude-integration.md）。
     user("m1", "r1", "[Request interrupted by user for tool use]"),
   ]);
 

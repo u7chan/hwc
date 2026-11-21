@@ -24,7 +24,7 @@ export const DEFAULT_ANSI_STYLE: AnsiStyle = {
 
 // Herdr の `format: "ansi"` は、画面の文字に SGR だけを重ねて返す。制御シーケンスは
 // 表示の邪魔になるので落とし、色と装飾だけを残す。背景色と反転は、テーマの地色と
-// 組み合わせると読めない組み合わせが作れるため採らない（ADR 0046）。
+// 組み合わせると読めない組み合わせが作れるため採らない。
 export function parseAnsi(input: string): AnsiSegment[] {
   const segments: AnsiSegment[] = [];
   let style = DEFAULT_ANSI_STYLE;

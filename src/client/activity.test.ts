@@ -111,7 +111,7 @@ test("the next run loads again after an idle turn", () => {
 });
 
 test("the two lines of a tool stay together in the snippet", () => {
-  // 対象 60 + 改行 + 方向 90 は、末尾 2 行・160 文字の枠に収まる（ADR 0100）。
+  // 対象 60 + 改行 + 方向 90 は、末尾 2 行・160 文字の枠に収まる。
   const text = `${"対象".repeat(30)}\n${"方向".repeat(45)}`;
   expect(activitySnippet(text)).toBe(text);
   expect(activitySnippet(text).split("\n")).toHaveLength(2);

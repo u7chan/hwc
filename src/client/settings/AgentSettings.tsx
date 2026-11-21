@@ -15,7 +15,7 @@ import { canLaunch, chooseEffort, chooseModel, sameModel, savedEffortFor } from 
 type LoadState = "loading" | "ready" | "failed";
 
 // 新しいペインの既定のモデルと effort。BFF が正で、保存・解除の応答で丸ごと置き換える。
-// 作成ダイアログには既定を変える操作を置かない（ADR 0104）。
+// 作成ダイアログには既定を変える操作を置かない（docs/adr/agent-launch.md）。
 export function AgentSettings(props: {
   agent: ModelAgentKind;
   labels: ModelLabels | null;

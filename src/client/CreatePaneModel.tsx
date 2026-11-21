@@ -18,7 +18,7 @@ function modelNote(candidates: ModelCandidates): string | null {
 }
 
 // 「デフォルトモデル」（CLI に任せる）は出さない。候補を読めなければ選べず、起動もできない
-// （ADR 0104）。
+// （docs/adr/agent-launch.md）。
 export function CreatePaneModel(props: {
   agent: AgentKind;
   candidates: ModelCandidates;

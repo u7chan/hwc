@@ -18,7 +18,7 @@ SIL Open Font License 1.1。全文は [NotoSansJP-OFL.txt](NotoSansJP-OFL.txt)�
 
 # Nerd Symbols Mono
 
-`NerdSymbolsMono.woff2` は Nerd Fonts v3.5.1 の `SymbolsNerdFontMono-Regular.ttf` を woff2 に変換したもの。ペイン出力に含まれる PUA のアイコンを描くためだけに使う（ADR 0015）。
+`NerdSymbolsMono.woff2` は Nerd Fonts v3.5.1 の `SymbolsNerdFontMono-Regular.ttf` を woff2 に変換したもの。ペイン出力に含まれる PUA のアイコンを描くためだけに使う（docs/adr/bundled-fonts.md）。
 
 ## 再生成
 

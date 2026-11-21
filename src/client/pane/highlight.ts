@@ -1,6 +1,6 @@
 // 言語別のシンタックスハイライト。外部ライブラリを足さないため、言語ごとの順序つきルールで
 // トークン列に分解するだけにして、HTML 文字列は一切組み立てない。移植元は u7agent の
-// client/src/lib/markdown/highlight.ts（ADR 0092）。
+// client/src/lib/markdown/highlight.ts（docs/adr/client-rendering.md）。
 
 export type TokenKind = "key" | "str" | "num" | "com" | "fn" | "type" | "op" | "plain";
 

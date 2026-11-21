@@ -7,7 +7,7 @@ export const FILE_REFERENCE_TYPE = "application/x-hwc-file-reference";
 // プレビューの「パスをコピー」と、ツリーからのドロップで同じ文字列を入れる。
 // ツリーの根はスペースのチェックアウトで、ペインの cwd とは限らない。エージェントは
 // `./` を cwd から解決するため、根からの相対パスを `./` で入れると、cwd がサブ
-// ディレクトリのペインで静かに別のファイルを指す（ADR 0056 / 0095）。
+// ディレクトリのペインで静かに別のファイルを指す。
 export function fileReference(
   workspacePath: string | null,
   path: string,

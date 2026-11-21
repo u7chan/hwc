@@ -7,7 +7,7 @@ import type { CreateTarget } from "../CreatePane";
 export type View = { split: SplitView; expanded: ReadonlySet<string> };
 
 // 開いているプレビュー。Herdr のペインではないので、状態には載せない。shown は
-// タブの選択と同じで、ペインのタブを選ぶと false に戻る（ADR 0051）。
+// タブの選択と同じで、ペインのタブを選ぶと false に戻る。
 export type PreviewTarget = { paneId: string; file: ChatFile; shown: boolean };
 
 // 閉じる確認。後継は確認を開いた時点で決める。SSE が閉じたペインを落とした後では、
@@ -26,9 +26,9 @@ export type OperationMenu = {
   open: boolean;
 };
 
-// ドラッグの落とし先。中央は入れ替え、端はその方向への分割（ADR 0061）。
-// kind は落とし先がセルかタブか。枠を出す側を分けるために持つ（ADR 0064）。
-// タブの side は差し込み位置。2 枚以上の分割では入れ替えなので使わない（ADR 0086）。
+// ドラッグの落とし先。中央は入れ替え、端はその方向への分割。
+// kind は落とし先がセルかタブか。枠を出す側を分けるために持つ。
+// タブの side は差し込み位置。2 枚以上の分割では入れ替えなので使わない。
 export type DropTarget =
   | { kind: "cell"; pane: string; zone: DropZone }
   | { kind: "tab"; pane: string; side: TabSide };

@@ -6,7 +6,7 @@ import type { AgentInfo } from "../chat";
 // 一瞬だけスケルトンが見えるのを避け、待っているときだけ出す。
 const SKELETON_DELAY_MS = 180;
 
-// 会話にモデルが載るまでの表示を、チャット画面を開いたときにだけ読む（ADR 0087）。
+// 会話にモデルが載るまでの表示を、チャット画面を開いたときにだけ読む。
 export function useDefaultModel(
   paneId: string,
   enabled: boolean,

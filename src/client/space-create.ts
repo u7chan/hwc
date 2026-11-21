@@ -1,7 +1,7 @@
 import type { CreateSpaceFailure } from "./api";
 import { UNKNOWN_NOTICE } from "./worktree-create";
 
-// フォルダから作るスペースの失敗。作成できたか分からないものは再送させない（ADR 0113）。
+// フォルダから作るスペースの失敗。作成できたか分からないものは再送させない。
 export function spaceFailureNotice(error: CreateSpaceFailure): { message: string; retry: boolean } {
   switch (error) {
     case "timeout":

@@ -185,7 +185,7 @@ export function createHandle(
         revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
         // フィクスチャ専用。実 Herdr と同じく、シェルの cd はスナップショットの cwd を
         // 変えるがイベントは流さない。hwc の可視中の取り直しで追随することを確かめる
-        // （ADR 0121）。git checkout も同じく、HEAD を書くだけでイベントは流さない。
+        // （docs/adr/herdr-socket.md）。git checkout も同じく、HEAD を書くだけでイベントは流さない。
         const shellLine = text.includes(ATTACHED_FILES_OPEN) ? null : text.trim();
         const hasAgent = snapshot.agents?.some((agent) => agent.pane_id === paneId) === true;
         if (shellLine !== null && !hasAgent && !foreground.has(paneId)) {
@@ -230,7 +230,7 @@ export function createHandle(
           return;
         }
         // フィクスチャ専用の入力。Claude のペインを working にし、transcript の進行行を
-        // 時間差で追記する（docs/e2e.md、ADR 0100）。
+        // 時間差で追記する（docs/e2e.md、docs/adr/claude-integration.md）。
         if (!text.includes(ATTACHED_FILES_OPEN) && text.trim() === "/activity") {
           send(socket, { id, result: { type: "ok" } });
           await startClaudeActivity(paneId);

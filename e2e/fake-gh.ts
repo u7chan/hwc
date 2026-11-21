@@ -10,7 +10,7 @@ const PULL_REQUESTS: Record<
     title: "Add an empty state to the dashboard",
     state: "OPEN",
   },
-  // 別スペースのセルには、そのスペースの PR が出る（ADR 0043）。
+  // 別スペースのセルには、そのスペースの PR が出る。
   "feat/checks": {
     number: 483,
     url: "https://github.com/example/acme-dashboard/pull/483",

@@ -1,6 +1,6 @@
 // Herdr がイベントを出さない cwd とブランチを、画面を見ている間だけ取り直す間隔。
 // 見え方と電池の好みなので、テーマやペイン分割と同じく端末ごとに localStorage へ置き、
-// BFF には送らない（ADR 0121）。
+// BFF には送らない（docs/adr/state-storage.md）。
 
 export type LiveUpdateInterval = "off" | "1s" | "3s" | "5s" | "10s";
 
@@ -37,7 +37,7 @@ export function parseLiveUpdate(value: string | null): LiveUpdateInterval {
   return isLiveUpdateInterval(value) ? value : DEFAULT_LIVE_UPDATE;
 }
 
-// 非表示の間は取り直さない。可視に戻った時点で 1 回呼ぶ（ADR 0069 と同じ判定）。
+// 非表示の間は取り直さない。可視に戻った時点で 1 回呼ぶ（前景プロセスの読み取りと同じ判定）。
 export function liveUpdateAllowed(visibility: DocumentVisibilityState): boolean {
   return visibility !== "hidden";
 }

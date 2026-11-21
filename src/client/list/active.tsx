@@ -105,7 +105,7 @@ function ActiveBand(props: {
   const pullRequest = props.pullRequest;
   const sync = workspace.sync ?? null;
   // GitHub のリモートがあるときは、記号とリポジトリ名をまとめてリポジトリのリンクに
-  // する。リンクにできないローカルのみのリポジトリと非 git は名前だけを出す（ADR 0083）。
+  // する。リンクにできないローカルのみのリポジトリと非 git は名前だけを出す。
   // リンクの読み上げが GitHub を名乗るため、記号は印にしない。
   const repoUrl = sync?.repoUrl ?? null;
   // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば

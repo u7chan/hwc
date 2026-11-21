@@ -36,8 +36,8 @@ export function dropTargetAt(
     const zone = dropZoneAt(cell, x, y);
     return canDrop(view, source, pane, zone, wide) ? { kind: "cell", pane, zone } : null;
   }
-  // タブは、分割では固定ゾーンの入れ替え、1 枚表示では差し込みを受け付ける
-  // （ADR 0064 / 0086）。プレビュー中は TabBar が data-drop-tab を出さないので、
+  // タブは、分割では固定ゾーンの入れ替え、1 枚表示では差し込みを受け付ける。
+  // プレビュー中は TabBar が data-drop-tab を出さないので、
   // ここへは来ない。
   const tab = element?.closest("[data-drop-tab]");
   if (tab instanceof HTMLElement) {

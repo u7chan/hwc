@@ -34,7 +34,7 @@
 }
 
 /* 行の輪郭はカードの overflow: hidden で切れるので、フォーカス中はカード側に出す。
-   タッチ・ペンでは ADR 0040 と同じく出さない。 */
+   タッチ・ペンでは、他のフォーカス輪郭と同じく出さない。 */
 html:not([data-input-modality="pointer"])
   .hwc-theme-preview:has(.hwc-theme-preview-head:focus-visible) {
   outline: 3px solid var(--color-accent);

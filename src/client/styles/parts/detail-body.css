@@ -75,13 +75,13 @@
   background: var(--slot-color);
 }
 
-/* ドラッグの落とし先になった固定タブを枠で示す（ADR 0064）。border だと幅が内容依存の
+/* ドラッグの落とし先になった固定タブを枠で示す。border だと幅が内容依存の
    タブ列が対象のたびに 1px ずれ、外側の outline は .hwc-tabs の overflow-x で上下が切れる。 */
 .hwc-tab-item[data-drop-target="true"] {
   box-shadow: inset 0 0 0 1px var(--slot-color);
 }
 
-/* 1 枚表示の並べ替えは、掴んだタブの差し込み位置を縦線で示す（ADR 0086）。
+/* 1 枚表示の並べ替えは、掴んだタブの差し込み位置を縦線で示す。
    スロット色のバーより後に描くため、::before ではなく ::after に置く。 */
 .hwc-tab-item[data-insert]::after {
   content: "";

@@ -233,7 +233,7 @@ test("the parent skips a shell, so the first agent leads the group", () => {
 
   const [group] = activeGroups(state);
 
-  // 親の定義は ADR 0054 と同じく「左端のタブから最初のエージェント」。
+  // 親の定義はファビコンと同じく「左端のタブから最初のエージェント」。
   expect(group?.rows.map((row) => row.pane.id)).toEqual(["w1:p2", "w1:p3"]);
 });
 

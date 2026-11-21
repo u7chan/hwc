@@ -7,7 +7,7 @@ export type CreatedSpaceResult =
   | { ok: false; error: "pane_rename_failed"; workspaceId: string; paneId: string };
 
 // 作ったスペースの root ペインに名前を付ける。エージェントの起動は、ペインが
-// スナップショットに現れてからクライアントが行う（ADR 0084）。
+// スナップショットに現れてからクライアントが行う（docs/adr/agent-launch.md）。
 export async function nameRootPane(
   panes: Pick<PaneClient, "rename">,
   created: SpaceCreated,
@@ -23,7 +23,7 @@ export async function nameRootPane(
   return { ok: true, ...created };
 }
 
-// ツリーで選んだディレクトリを作業ディレクトリにしたスペースを作る（ADR 0113）。
+// ツリーで選んだディレクトリを作業ディレクトリにしたスペースを作る。
 export async function createSpace(
   workspaces: Pick<WorkspaceClient, "create">,
   panes: Pick<PaneClient, "rename">,

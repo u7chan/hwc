@@ -11,7 +11,7 @@ PR をマージしたあと、常駐している開発サーバーへどう反�
 ```sh
 #!/bin/sh
 # HWC のチェックアウトを pull したときだけ、HWC を再起動する。
-# コマンドは pull したチェックアウトを cwd として起動される（ADR 0079）。
+# コマンドは pull したチェックアウトを cwd として起動される（docs/adr/restart-command.md）。
 [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "$HOME/workspace/hwc" ] || exit 0
 systemctl --user restart hwc
 ```
@@ -20,7 +20,7 @@ systemctl --user restart hwc
 
 どのリポジトリで実行するかを絞るのはコマンド側の責務。コマンドは **pull したチェックアウトをカレントディレクトリとして**起動する（設定画面の「今すぐ再起動」では、BFF が動いているチェックアウト）。上のガードが無いと、ほかのスペースで pull しても HWC が落ちる。
 
-設定は状態ディレクトリ（`HWC_STATE_DIR`、既定は `~/.local/state/hwc`）に保存する。マシンを作り直したら入れ直す。方式の判断は [ADR 0079](adr/0079-restart-command.md) を参照する。
+設定は状態ディレクトリ（`HWC_STATE_DIR`、既定は `~/.local/state/hwc`）に保存する。マシンを作り直したら入れ直す。方式の判断は [再起動コマンド](adr/restart-command.md) を参照する。
 
 ## 反映
 

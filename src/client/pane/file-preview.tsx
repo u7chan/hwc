@@ -76,7 +76,7 @@ type FilePreviewProps = {
   workspacePath: string | null;
   // プレビュー中に新しい返答が届いたか。会話に戻るボタンにバッジを付ける。
   hasNewReply: boolean;
-  // 戻り先の名前。シェルのペインでは端末出力に戻る（ADR 0113）。
+  // 戻り先の名前。シェルのペインでは端末出力に戻る。
   backLabel: string;
   // 狭いセルでツリーの行が消えるときだけ、この選択でここへフォーカスを移す。
   focusRequest: { focus: boolean };

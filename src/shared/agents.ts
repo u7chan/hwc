@@ -8,7 +8,7 @@ export type AgentKind = (typeof AGENT_KINDS)[number];
 export type ChatAgentKind = "pi" | "claude" | "codex" | "opencode";
 
 // 起動時にモデルと effort を選べるエージェント。4 つの CLI はどれも `--model` / `--effort`
-// 相当を受け取れる（ADR 0096）。
+// 相当を受け取れる（docs/adr/claude-integration.md）。
 export type ModelAgentKind = ChatAgentKind;
 
 export type AgentModel = { provider: string; id: string };
@@ -59,7 +59,7 @@ export function modelKey(model: AgentModel): string {
 
 // Claude Code 2.1.327 の `--model` は family のエイリアスを受け、その時点の最新モデルへ
 // 解決する。hwc は版を追わず、エイリアスだけを候補にする。`fable` / `opus` / `sonnet` は
-// `claude --help`、`haiku` は CLI 同梱の alias 一覧で確認した（ADR 0096）。
+// `claude --help`、`haiku` は CLI 同梱の alias 一覧で確認した（docs/adr/claude-integration.md）。
 export const CLAUDE_MODEL_ALIASES = ["fable", "opus", "sonnet", "haiku"] as const;
 
 export function isClaudeAlias(id: string): boolean {

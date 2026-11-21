@@ -4,7 +4,7 @@ import { sidecarRoot } from "./chat/claude-sidecar";
 import { claudeLiveRoot } from "./chat/claude-live";
 
 // hook を足すイベント。tool の hook は PermissionRequest を承認待ちの合図にし、残りは
-// sidecar を消す契機に使う（ADR 0112）。
+// sidecar を消す契機に使う（docs/adr/claude-integration.md）。
 const HOOK_EVENTS = [
   "PreToolUse",
   "PermissionRequest",

@@ -172,7 +172,7 @@ test("saving writes the settings with 0600 and leaves no temporary file", () => 
 
 test("the temporary file name is unique per write and ignores a stale fixed tmp", () => {
   const root = tempRoot();
-  // 固定名の tmp が残っていても書き込みを妨げない（ADR 0018 の pane-times とは別の形）。
+  // 固定名の tmp が残っていても書き込みを妨げない（pane-times とは別の形）。
   writeFileSync(join(root, "notifications.json.tmp"), "stale");
   const store = createNotificationSettingsStore(createNotificationSettingsFile(root));
   store.save({ enabled: false, scope: "pull-request", discordWebhookUrl: null });

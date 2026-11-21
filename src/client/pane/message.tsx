@@ -56,7 +56,7 @@ function MessageAttachments(props: {
 }
 
 // エージェントが本文で示したファイル。画像はユーザーの添付と同じ見た目で拡大し、
-// HTML はプレビューのタブで開く（ADR 0051）。
+// HTML はプレビューのタブで開く。
 function MessageFiles(props: {
   paneId: string;
   files: ChatFile[];
@@ -109,7 +109,7 @@ function MessageFiles(props: {
 }
 
 // 根の外にあったファイル。hwc は根の外を配信しないので、チップを出せない理由だけを
-// 1 行で示す（ADR 0065 outside-preview-root, 0066）。移すかどうかは会話で決める。
+// 1 行で示す（docs/adr/file-serving.md）。移すかどうかは会話で決める。
 function OutsideFileNote(props: { name: string }) {
   return (
     <p class="hwc-msg-outside">

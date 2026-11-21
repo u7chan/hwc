@@ -338,7 +338,7 @@ test("POST /api/panes/:id/input sends without submit", async () => {
 });
 
 // transcript は ENTER を送った最初の入力でできる。送れなかった要求や入力途中で捨てると、
-// 次の poll が余分に projects/* を readdir するだけになる（ADR 0103）。
+// 次の poll が余分に projects/* を readdir するだけになる（docs/adr/claude-integration.md）。
 test("POST /api/panes/:id/input forgets a missing Claude transcript after the send", async () => {
   const forgotten: string[] = [];
   const store = createFakeStore(state);

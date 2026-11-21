@@ -51,7 +51,7 @@ const LOCAL_COMMAND_TAGS = [
 ];
 
 // 利用者が Esc で中断したときに CLI が user の本文として書く固定の記録。発話ではない。
-// 質問に答えるときは hwc が Esc を送るので、毎回これが残る（ADR 0099）。
+// 質問に答えるときは hwc が Esc を送るので、毎回これが残る（docs/adr/claude-integration.md）。
 const INTERRUPT_MARKERS = new Set([
   "[Request interrupted by user]",
   "[Request interrupted by user for tool use]",
@@ -60,7 +60,7 @@ const INTERRUPT_MARKERS = new Set([
 // API を呼ばずに失敗したターンの記録に付くモデル名。表示するモデルではない。
 const SYNTHETIC_MODEL = "<synthetic>";
 
-// api-request / tool_use の ID で応答の有無を判定できる版（ADR 0097 / 0100）。
+// api-request / tool_use の ID で応答の有無を判定できる版（docs/adr/claude-integration.md）。
 const MIN_ACTIVITY_VERSION = [2, 1, 327] as const;
 
 // 帯の 2 行は activitySnippet の 160 文字に収める。対象 60 + 改行 + 方向 90。
@@ -263,7 +263,7 @@ export function createClaudeChatClient(
 
   return {
     // 送信で transcript ができるかもしれない。見つからない記憶を捨て、次の poll で
-    // 探し直せるようにする（ADR 0103）。
+    // 探し直せるようにする（docs/adr/claude-integration.md）。
     forgetMissing(sessionId) {
       searchEpoch += 1;
       const key = locationKey(configRoot(), sessionId);
@@ -454,7 +454,7 @@ function snapshotOf(
     effort,
     truncated: clipped || limited.truncated,
     // 使用量は transcript に無いので、ここでは null のままにする。mod の live ファイルから
-    // snapshot に重ねる（ADR 0106）。圧縮の区切りは別 Issue で扱う。
+    // snapshot に重ねる（docs/adr/claude-integration.md）。圧縮の区切りは別 Issue で扱う。
     context: null,
     compaction: null,
     ...(pending === null ? {} : { pending }),
@@ -598,7 +598,7 @@ function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {
     const group = groups.get(key);
     if (group === undefined) continue;
     // 失敗したターンは本文が無くても行にする。本文が空だと、送ったのに何も返らないまま
-    // idle に戻り、送信が届いていないように見える（ADR 0039）。
+    // idle に戻り、送信が届いていないように見える。
     const text =
       group.error === null
         ? group.text
@@ -713,7 +713,7 @@ function assistantText(content: TranscriptContent | undefined): string {
   return text;
 }
 
-// ターンの起点と、そこから読める段階（ADR 0100）。段階に使う行は枝で絞らず、ファイル順に
+// ターンの起点と、そこから読める段階（docs/adr/claude-integration.md）。段階に使う行は枝で絞らず、ファイル順に
 // 起点より後ろを全部見る。並列ツールの tool_use は一時的に親鎖の外へ出るため。
 function sessionActivityOf(entries: readonly TranscriptEntry[], now: number): SessionActivity {
   const branch = activeBranch(entries);

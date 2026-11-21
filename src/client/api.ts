@@ -385,7 +385,7 @@ export function previewUrl(paneId: string, file: { root: number; name: string })
 
 // 本文のリンクから開くテキストは、新しいタブで生の中身を読む。同じ URL を HTML のアセット
 // としても使うため、.js / .css は実行可能な型で返る。text のときだけ raw を付けて
-// text/plain にしてもらう（ADR 0109）。
+// text/plain にしてもらう（docs/adr/file-serving.md）。
 export function previewTextUrl(paneId: string, file: { root: number; name: string }): string {
   return `${previewUrl(paneId, file)}?raw=1`;
 }
@@ -511,7 +511,7 @@ export async function fetchState(signal?: AbortSignal): Promise<StateMessage> {
 }
 
 // Herdr がイベントを出さない cwd とブランチを追うための取り直しを頼む。応答は状態ではない。
-// 新しい状態は SSE で届くので、ここでは成否だけを見る（ADR 0121）。
+// 新しい状態は SSE で届くので、ここでは成否だけを見る（docs/adr/bff-client-transport.md）。
 export async function refreshState(signal?: AbortSignal): Promise<void> {
   const response = await client.api.state.refresh.$post({ json: {} }, { init: { signal } });
   if (!response.ok) throw new Error(`state refresh: ${response.status}`);
@@ -584,7 +584,7 @@ export function parseActivitySession(value: unknown): string | null {
 }
 
 // 会話にモデルが載るまでの表示に使う。値が無い場合と失敗は同じ null に畳む
-// （表示だけの補い。ADR 0087 / 0101）。
+// （表示だけの補い。docs/adr/agent-launch.md）。
 export type ModelInfo = { model: string; effort: string | null };
 
 export function toModelInfo(value: unknown): ModelInfo | null {

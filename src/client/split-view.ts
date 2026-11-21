@@ -1,6 +1,5 @@
 // 分割ビューの状態。開いた順（openTabs）、最後に選んだ順（recent）、選択（current）、
-// 方向つきの二分木（layout）だけを持ち、Herdr の状態は持たない
-// （ADR 0061 / 0063 tab-order-by-pane-layout）。
+// 方向つきの二分木（layout）だけを持ち、Herdr の状態は持たない。
 export const MAX_LEAVES = 4;
 
 export type SplitDir = "row" | "col";
@@ -11,25 +10,23 @@ export type SplitNode =
 
 export type DropZone = "center" | "top" | "bottom" | "left" | "right";
 
-// タブへの差し込み位置。対象タブの左半分なら前、右半分なら後ろ（ADR 0086）。
+// タブへの差し込み位置。対象タブの左半分なら前、右半分なら後ろ。
 export type TabSide = "before" | "after";
 
 // タブへのドロップの意味。2 枚以上の分割では固定ゾーンの入れ替え、
-// 1 枚表示ではタブの並べ替え（ADR 0064 / 0086）。
+// 1 枚表示ではタブの並べ替え。
 export type TabDropMode = "swap" | "insert";
 
 export type SplitView = {
   // タブの並び。全スペースを跨ぎ、一意で、実在するペインだけ。新しいタブは末尾に
-  // 足す。モバイルと 1 枚表示のタブ順に使い、1 枚表示では手で並べ替えられる
-  // （ADR 0063 tab-order-by-pane-layout / 0086 tab-reorder-single-pane）。
+  // 足す。モバイルと 1 枚表示のタブ順に使い、1 枚表示では手で並べ替えられる。
   openTabs: readonly string[];
   // 最後に選んだ順。openTabs と同じ集合の並べ替えで、先頭が current。
-  // PC の 2 枚以上の分割で、固定ゾーンの外に出たタブの順に使う
-  // （ADR 0063 tab-order-by-pane-layout）。
+  // PC の 2 枚以上の分割で、固定ゾーンの外に出たタブの順に使う。
   recent: readonly string[];
-  // 選択中のペイン。消えたペインの ID を保持することがある（ADR 0021）。
+  // 選択中のペイン。消えたペインの ID を保持することがある。
   current: string | null;
-  // 葉が最大 4 つ。空きの葉は持たない。同じ向きのネストは作らない（ADR 0061）。
+  // 葉が最大 4 つ。空きの葉は持たない。同じ向きのネストは作らない。
   layout: SplitNode | null;
 };
 
@@ -53,7 +50,7 @@ export function startSplitView(paneId: string | null): SplitView {
 }
 
 // 木の葉を、木の構造順（深さ優先）で返す。3 枚=T 字 / 4 枚=2x2 の組み直しと、
-// 葉の集合の判定に使う。表示順は readingOrder（ADR 0063 tab-order-by-pane-layout）。
+// 葉の集合の判定に使う。表示順は readingOrder。
 export function leafPanes(node: SplitNode | null): string[] {
   if (node === null) return [];
   if (node.kind === "leaf") return [node.pane];
@@ -88,8 +85,7 @@ function collectLeafBoxes(
 }
 
 // 画面の読み順（上端→左端）。2x2 は左上→右上→左下→右下、T 字は左上→右上→左下。
-// 木の深さ優先（左上→左下→右上→右下）とは 3 枚以上で変わる
-// （ADR 0063 tab-order-by-pane-layout）。
+// 木の深さ優先（左上→左下→右上→右下）とは 3 枚以上で変わる。
 export function readingOrder(node: SplitNode | null): string[] {
   if (node === null) return [];
   const boxes: LeafBox[] = [];
@@ -105,8 +101,7 @@ export function readingOrder(node: SplitNode | null): string[] {
 }
 
 // タブバーの表示順。PC の 2 枚以上の分割だけ、固定ゾーンをセルの読み順にし、
-// 残りを recent の新しい順に置く。モバイルと 1 枚表示は openTabs の並びのまま
-// （ADR 0063 tab-order-by-pane-layout / 0086 tab-reorder-single-pane）。
+// 残りを recent の新しい順に置く。モバイルと 1 枚表示は openTabs の並びのまま。
 export function tabPanes(view: SplitView, wide: boolean): string[] {
   const fixed = readingOrder(view.layout);
   if (!wide || fixed.length < 2) return [...view.openTabs];
@@ -128,7 +123,7 @@ export function multiSpace(workspaceIds: readonly string[]): boolean {
 }
 
 // 同じ軸に並ぶ葉を、子 2 つの木へ組み直す。3 枚は T 字、4 枚は 2x2。
-// 保存値の正規化と、葉を除去したときの畳みで使う（ADR 0061）。
+// 保存値の正規化と、葉を除去したときの畳みで使う。
 function buildSupported(dir: SplitDir, panes: readonly string[]): SplitNode | null {
   const leaves: SplitNode[] = panes.slice(0, MAX_LEAVES).map((pane) => ({ kind: "leaf", pane }));
   const [a, b, c, d] = leaves;
@@ -318,7 +313,7 @@ export function canDrop(
 }
 
 // タブへ落としたときの意味。2 枚以上の分割では固定ゾーンの中だけで入れ替え、
-// 1 枚表示では開いているタブを自由に差し替える（ADR 0064 / 0086）。
+// 1 枚表示では開いているタブを自由に差し替える。
 // 分割で固定ゾーンの外のタブを手で並べ替えることはできない。並びを変えると
 // recent の意味が壊れる。1 枚表示ではセルが動かないので、挿入で並べ替えてよい。
 // 固定ゾーンは wide かつ葉が 2 枚以上のときだけ出る（tabPanes）。
@@ -406,7 +401,7 @@ export function openPane(view: SplitView, paneId: string): SplitView {
 }
 
 // 仕事を始めたペインを、タブにだけ足す。葉には入れないので、セルは動かない。
-// 5 枚目以降をタブへ回すときに使う（ADR 0111）。
+// 5 枚目以降をタブへ回すときに使う。
 export function addTabOnly(view: SplitView, paneId: string): SplitView {
   if (view.openTabs.includes(paneId)) return view;
   return { ...view, openTabs: [...view.openTabs, paneId] };
@@ -494,7 +489,7 @@ export function removeTab(
 }
 
 // スナップショットに合わせる。消えたペインはタブと葉から落とし、親を畳む。current の
-// ID は保持する（ADR 0021）。消えた current が戻ってきたら葉へ戻す。
+// ID は保持する。消えた current が戻ってきたら葉へ戻す。
 export function syncSplitView(view: SplitView, exists: (paneId: string) => boolean): SplitView {
   const openTabs = view.openTabs.filter(exists);
   const layout = pruneLayout(view.layout, exists);

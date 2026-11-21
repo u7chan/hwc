@@ -66,7 +66,7 @@ test("ignores tags other than script", () => {
   expect(previewWarning("")).toBeNull();
 });
 
-// 本文の相対パスのリンクから開ける形式（ADR 0109）。拡張子の一覧はここ 1 か所。
+// 本文の相対パスのリンクから開ける形式（docs/adr/file-serving.md）。拡張子の一覧はここ 1 か所。
 test("links text files by extension, extensionless names, and dotfiles", () => {
   expect(messageLinkKindFromName("docs/notes.md")).toBe("text");
   expect(messageLinkKindFromName("data/report.csv")).toBe("text");

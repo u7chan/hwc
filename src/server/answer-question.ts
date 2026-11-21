@@ -31,7 +31,7 @@ type Clients = {
 
 export type QuestionAnswerer = ReturnType<typeof createQuestionAnswerer>;
 
-// AskUserQuestion には Esc で閉じ、選んだ内容を通常のユーザー発言として送る（ADR 0099）。
+// AskUserQuestion には Esc で閉じ、選んだ内容を通常のユーザー発言として送る（docs/adr/claude-integration.md）。
 // キー操作でフォームを再現しない。会話の正はセッションなので、画面は読まず、閉じたことは
 // transcript に tool_result が現れて pending が消えたことで知る。
 export function createQuestionAnswerer(

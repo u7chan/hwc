@@ -73,7 +73,7 @@ export function Preview(props: { paneId: string; file: ChatFile; onClose: () => 
       {warned ? <p class="hwc-preview-warning">{WARNING_TEXT}</p> : null}
       {/*
         allow-same-origin を付けないのが要。同じオリジンにすると、モックの script が
-        親の document に触れて sandbox を外せてしまう（ADR 0051）。
+        親の document に触れて sandbox を外せてしまう（docs/adr/file-serving.md）。
       */}
       <iframe
         class="hwc-preview-frame"

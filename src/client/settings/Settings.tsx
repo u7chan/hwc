@@ -156,7 +156,7 @@ export function Settings(props: SettingsProps) {
 
   // Esc は、設定を見ている間だけ ← と同じ動きにする。焦点が一覧のメニューやダイアログへ
   // 移っている間は、そちらが Esc を取る。狭い画面はカテゴリを開いた時点で押した行が
-  // 消えるので、焦点の無い body もこの面のものとして扱う（ADR 0094）。
+  // 消えるので、焦点の無い body もこの面のものとして扱う。
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -196,7 +196,7 @@ export function Settings(props: SettingsProps) {
     <div class="hwc-detail-inner" ref={surfaceRef} tabIndex={-1}>
       <header class="hwc-detail-bar hwc-settings-bar">
         {/* 狭い画面では一覧ごと隠れる。広い画面では足元の歯車が遠い。どちらも、
-            設定の左上から元の画面へ戻れるようにする（ADR 0094）。 */}
+            設定の左上から元の画面へ戻れるようにする。 */}
         <button
           type="button"
           class="hwc-icon-button"
