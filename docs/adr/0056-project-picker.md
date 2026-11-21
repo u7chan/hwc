@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-10
+- Revises: 2026-11-21 に PC では入力欄の `@` からも選べるようにした（[ADR 0118](0118-composer-project-mention.md)）
 
 ## Context
 

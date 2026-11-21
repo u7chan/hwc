@@ -49,3 +49,40 @@ export function insertProjectPath(
 ): ProjectInsertion {
   return insertAtSelection(draft, start, end, projectInsertion(path));
 }
+
+export type ProjectMention = {
+  // `@` の位置と、置き換える範囲の終わり（キャレット）。
+  start: number;
+  end: number;
+  query: string;
+};
+
+// キャレット直前の `@語` を拾う。`@` は行頭か空白の直後に限る。`a@example.com` や、
+// 語の途中の `@` を補完の入力と取り違えると、メールアドレスや `@types/node` を打てなくなる。
+export function projectMention(draft: string, caret: number): ProjectMention | null {
+  const end = Math.min(caret, draft.length);
+  let start = end;
+  while (start > 0 && !/\s/.test(draft.charAt(start - 1))) start -= 1;
+  if (draft.charAt(start) !== "@" || start === end) return null;
+  return { start, end, query: draft.slice(start + 1, end) };
+}
+
+// 強調中の候補は path だけを持つ。絞り込みで消えたら先頭に戻るので、リセットの処理は要らない。
+export function highlightedProject(
+  candidates: readonly ProjectEntry[],
+  highlighted: string | null,
+): ProjectEntry | null {
+  return candidates.find((project) => project.path === highlighted) ?? candidates[0] ?? null;
+}
+
+// 端で折り返して、↑↓ を押し続けても止まらないようにする。
+export function stepProject(
+  candidates: readonly ProjectEntry[],
+  highlighted: string | null,
+  step: 1 | -1,
+): string | null {
+  const current = highlightedProject(candidates, highlighted);
+  if (current === null) return null;
+  const index = candidates.indexOf(current);
+  return candidates[(index + step + candidates.length) % candidates.length]?.path ?? null;
+}

@@ -1,14 +1,9 @@
-import { useEffect, useState } from "preact/hooks";
-import { MAX_PROJECTS, type ProjectEntry } from "../shared/projects";
-import { readProjects } from "./api";
+import { useState } from "preact/hooks";
+import { MAX_PROJECTS } from "../shared/projects";
 import { DialogShell } from "./Dialog";
 import { filterProjects } from "./projects";
 import { Spinner } from "./Spinner";
-
-type Load =
-  | { kind: "loading" }
-  | { kind: "ready"; projects: ProjectEntry[]; truncated: boolean }
-  | { kind: "failed" };
+import { useProjects } from "./use-projects";
 
 type ProjectDialogProps = {
   paneId: string;
@@ -21,23 +16,8 @@ type ProjectDialogProps = {
 // マニフェストのあるディレクトリを、ペインの cwd から下だけ選ばせる。
 // 選んだパスは本文へ入れるだけで、送信の形は変えない。
 export function ProjectDialog(props: ProjectDialogProps) {
-  const [load, setLoad] = useState<Load>({ kind: "loading" });
+  const { load, retry } = useProjects(props.paneId, true);
   const [query, setQuery] = useState("");
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-    setLoad({ kind: "loading" });
-    void readProjects(props.paneId, controller.signal).then((result) => {
-      if (!active) return;
-      setLoad(result === null ? { kind: "failed" } : { kind: "ready", ...result });
-    });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [props.paneId, attempt]);
 
   const visible = load.kind === "ready" ? filterProjects(load.projects, query) : [];
 
@@ -78,11 +58,7 @@ export function ProjectDialog(props: ProjectDialogProps) {
       ) : load.kind === "failed" ? (
         <div class="hwc-project-state">
           <span role="status">プロジェクトを取得できませんでした。</span>
-          <button
-            type="button"
-            class="hwc-project-retry"
-            onClick={() => setAttempt((current) => current + 1)}
-          >
+          <button type="button" class="hwc-project-retry" onClick={retry}>
             再試行
           </button>
         </div>
