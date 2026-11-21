@@ -193,7 +193,7 @@ test("a count past two digits is shown as a range", () => {
 test("the agent badge and the shell mark name what the group holds", () => {
   expect(agentPresence(1)).toBe("エージェント 1");
   expect(agentPresence(4)).toBe("エージェント 4");
-  // 0 は数えず、何が居るかを言う。束の副題は件数に任せる。
+  // 0 は数えず、何が居るかを言う。束の副題は件数に任せ、シェル記号の名前はここから取る。
   expect(agentPresence(0)).toBe("シェルのみ");
 });
 

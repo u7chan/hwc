@@ -20,17 +20,17 @@ export function GroupChildren(props: { id: string; open: boolean; children: Comp
 
 // 折りたたみの状態は、開いている間は子の状態で分かるので、まとめは淡く消して場所だけ残す。
 // エージェントの居ない束は状態の集約が意味を持たない（待機や不明はシェルだけでも出る）ので、
-// 状態の代わりにシェルの記号を置く。副題は件数に任せ、「シェルのみ」はこの記号の名前として
-// だけ残す。
+// 状態の代わりにシェルの記号を置く。副題は件数に任せ、名前は agentPresence に任せる。
 export function GroupStatus(props: {
   status: PaneState["agentStatus"];
   agents: number;
   hidden: boolean;
 }) {
+  const shellMarkLabel = agentPresence(props.agents);
   return (
     <span class="hwc-group-status" data-hidden={props.hidden}>
       {props.agents === 0 ? (
-        <span class="hwc-group-shell" role="img" aria-label="シェルのみ" title="シェルのみ">
+        <span class="hwc-group-shell" role="img" aria-label={shellMarkLabel} title={shellMarkLabel}>
           <PaneIcon />
         </span>
       ) : (
