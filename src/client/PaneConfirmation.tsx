@@ -42,6 +42,9 @@ export function PaneConfirmation(props: {
       <p class="hwc-confirmation-path">{props.confirmation.directory}</p>
       <p class="hwc-confirmation-text">{DISCLOSURE[agent]}</p>
       <div class="hwc-confirmation-actions">
+        <button type="button" class="hwc-dialog-button hwc-dialog-cancel" onClick={props.onDismiss}>
+          ターミナルで操作
+        </button>
         <button
           type="button"
           class="hwc-dialog-button hwc-dialog-primary"
@@ -50,9 +53,6 @@ export function PaneConfirmation(props: {
         >
           {attempt === "sending" ? <Spinner /> : null}
           信頼して続行
-        </button>
-        <button type="button" class="hwc-dialog-button hwc-dialog-cancel" onClick={props.onDismiss}>
-          ターミナルで操作
         </button>
       </div>
       {attempt === "failed" ? (
