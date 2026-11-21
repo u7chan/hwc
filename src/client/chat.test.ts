@@ -18,7 +18,6 @@ import {
   echoInsertIndex,
   formatTokens,
   idleEchoExpired,
-  isAbortError,
   isPendingConfirmed,
   latestUserAt,
   messageFileDisplayName,
@@ -126,14 +125,6 @@ test("a page chip and the preview header show the root label", () => {
   expect(messageFileDisplayName("docs/preview/mock.html", "/tmp")).toBe("mock.html · /tmp");
   expect(messageFileKindLabel("/tmp")).toBe("HTML · /tmp");
   expect(messageFileKindLabel("mock")).toBe("HTML · mock");
-});
-
-test("a cancellation is not a failure", () => {
-  expect(isAbortError(new DOMException("aborted", "AbortError"))).toBe(true);
-  expect(isAbortError(Object.assign(new Error("aborted"), { name: "AbortError" }))).toBe(true);
-  expect(isAbortError(new Error("network"))).toBe(false);
-  expect(isAbortError(null)).toBe(false);
-  expect(isAbortError("AbortError")).toBe(false);
 });
 
 test("the terminal output is shown until the conversation is readable", () => {

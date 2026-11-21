@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { OUTPUT_POLL_MS, readOutput, type OutputRead } from "./api";
+import { startPoll } from "./poll";
 
 // 隠れている間に読み続けても、見る人はいない。復帰したらその場で 1 回取り直す。
 export function pollDelay(visibility: DocumentVisibilityState): number | null {
@@ -22,56 +23,16 @@ export function usePaneOutput(
     if (paneId === null) return;
     const id = paneId;
 
-    let active = true;
-    let timer: number | undefined;
-    let controller: AbortController | null = null;
-
-    function stop() {
-      if (timer !== undefined) window.clearTimeout(timer);
-      timer = undefined;
-    }
-
-    function schedule() {
-      stop();
-      const delay = pollDelay(document.visibilityState);
-      if (delay !== null) timer = window.setTimeout(() => void load(), delay);
-    }
-
-    async function load() {
-      stop();
-      const current = new AbortController();
-      controller = current;
-      try {
-        const read = await readOutput(id, current.signal);
-        if (!active) return;
+    const poll = startPoll({
+      delay: () => pollDelay(document.visibilityState),
+      read: (signal) => readOutput(id, signal),
+      apply: (read) => {
         setLatest(read);
         setFailed(false);
-      } catch {
-        // 隠れたことで打ち切った場合は失敗ではない。
-        if (!active || current.signal.aborted) return;
-        setFailed(true);
-      }
-      if (active) schedule();
-    }
-
-    function onVisibility() {
-      if (document.visibilityState === "hidden") {
-        stop();
-        controller?.abort();
-        return;
-      }
-      void load();
-    }
-
-    document.addEventListener("visibilitychange", onVisibility);
-    void load();
-
-    return () => {
-      active = false;
-      stop();
-      controller?.abort();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
+      },
+      failed: () => setFailed(true),
+    });
+    return poll.stop;
   }, [paneId, version]);
 
   // ペインを切り替えた直後に、前のペインの出力を出さない。

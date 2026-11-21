@@ -3,7 +3,7 @@ import type { AgentStatus } from "../server/herdr/state";
 import type { ChatMessage } from "../server/chat/contract";
 import { DIRECTION_LIMIT, flattenLine, type PaneActivity, sliceHead } from "../shared/activity";
 import { ACTIVITY_POLL_MS, type ActivityRead, readActivity } from "./api";
-import { isAbortError } from "./chat";
+import { startPoll } from "./poll";
 
 // 末尾 2 行だけ出す。積み上げないので、行数は固定して高さを揺らさない。
 export const ACTIVITY_SNIPPET_LINES = 2;
@@ -181,35 +181,34 @@ export function usePaneActivity(
   useEffect(() => {
     if (!enabled) return;
     const id = paneId;
+    lastStatus.current = statusRef.current;
 
-    let active = true;
-    let timer: number | undefined;
-    let controller: AbortController | null = null;
-
-    function stop() {
-      if (timer !== undefined) window.clearTimeout(timer);
-      timer = undefined;
-    }
-
-    function schedule() {
-      stop();
-      const delay = activityPollDelay(statusRef.current, document.visibilityState);
-      lastStatus.current = statusRef.current;
-      if (delay !== null) timer = window.setTimeout(() => void load(), delay);
-    }
-
-    async function load() {
-      stop();
-      controller?.abort();
-      const current = new AbortController();
-      controller = current;
-      try {
-        const read = await readActivity(id, current.signal);
-        if (!active || current.signal.aborted) return;
-        setLatest((previous) => nextActivityHold(hold, previous, id, read, Date.now()));
-      } catch (error) {
-        // 失敗した sidecar を出し続けない。会話の表示には影響させない。
-        if (!active || isAbortError(error)) return;
+    const poll = startPoll({
+      // 予約と同じ瞬間に、予約が前提にした状態を控える。
+      delay: () => {
+        lastStatus.current = statusRef.current;
+        return activityPollDelay(statusRef.current, document.visibilityState);
+      },
+      // 状態変化の読み直しに追い越された要求は打ち切る。結果は使わない。
+      replace: true,
+      // 隠れた状態で開いたときも、実行中でないときに可視へ戻ったときも読まない。
+      // 実行が始まったときの 1 回で追いつく。
+      resume: (poll, reason) => {
+        if (activityLoadAllowed(statusRef.current, document.visibilityState)) {
+          poll.load();
+          return;
+        }
+        // 可視へ戻ったら、残っている段階を捨てる。idle の sidecar は残骸。
+        if (reason === "visible") {
+          poll.pause();
+          setLatest(null);
+        }
+      },
+      read: (signal) => readActivity(id, signal),
+      apply: (read) =>
+        setLatest((previous) => nextActivityHold(hold, previous, id, read, Date.now())),
+      // 失敗した sidecar を出し続けない。会話の表示には影響させない。
+      failed: () =>
         setLatest((previous) =>
           nextActivityHold(
             hold,
@@ -219,57 +218,30 @@ export function usePaneActivity(
             { activity: null, session: previous?.session ?? null },
             Date.now(),
           ),
-        );
-      } finally {
-        if (controller === current) controller = null;
-      }
-      if (active) schedule();
-    }
-
-    // 実行中でなくなったら、取得を待たずにその場で消す。idle の sidecar は残骸。
-    function clear() {
-      stop();
-      controller?.abort();
-      setLatest(null);
-    }
+        ),
+    });
 
     // 実行が始まったら予約を待たずに読み、終わったらその場で消す。
-    function onStatusChange() {
+    nudge.current = () => {
       const step = activityStep(
         lastStatus.current,
         statusRef.current,
         document.visibilityState !== "hidden",
       );
       lastStatus.current = step.last;
-      if (step.fetch) void load();
-      else if (step.clear) clear();
-    }
-
-    function onVisibility() {
-      if (document.visibilityState === "hidden") {
-        stop();
-        controller?.abort();
+      if (step.fetch) {
+        poll.load();
         return;
       }
-      if (!activityLoadAllowed(statusRef.current, document.visibilityState)) {
-        clear();
-        return;
+      if (step.clear) {
+        poll.pause();
+        setLatest(null);
       }
-      void load();
-    }
-
-    nudge.current = onStatusChange;
-    lastStatus.current = statusRef.current;
-    document.addEventListener("visibilitychange", onVisibility);
-    // 隠れた状態で開いたときも読まない。見えるようになったときの 1 回で追いつく。
-    if (activityLoadAllowed(statusRef.current, document.visibilityState)) void load();
+    };
 
     return () => {
-      active = false;
       nudge.current = null;
-      stop();
-      controller?.abort();
-      document.removeEventListener("visibilitychange", onVisibility);
+      poll.stop();
     };
   }, [paneId, enabled, hold]);
 
