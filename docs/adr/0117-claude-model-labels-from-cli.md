@@ -1,4 +1,4 @@
-# ADR 0116: Claude のモデルラベルは CLI に問い合わせ、BFF で短時間キャッシュする
+# ADR 0117: Claude のモデルラベルは CLI に問い合わせ、BFF で短時間キャッシュする
 
 - Status: Accepted
 - Date: 2026-11-21

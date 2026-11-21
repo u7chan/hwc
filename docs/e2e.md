@@ -109,7 +109,7 @@ URL が下線付きで新しいタブに開くことを目視できる（[ADR 00
 
 `scratch` の `pi-trust` は、架空の Pi のプロジェクト信頼確認を表示する。会話を持たず `idle` のまま確認待ちになる。入力欄の代わりに確認ビューが出ること、「信頼して続行」の Enter で確認が消えて端末表示と入力欄に戻ること、「ターミナルで操作」では架空 Herdr へのキー送信がなく、確認が残ることを確かめる。表示するパスと注意文は `e2e/fixtures/folder-trust.ts` の `PI_TRUST_SCREEN` だけを使う。
 
-モデル選択では、`pane.get` が fixture の cwd を返す。Pi の一覧は架空 CLI から、OpenCode の一覧と新規セッションは `e2e/fake-opencode.ts` の loopback サービスから読み書きする。候補の正は `e2e/fixtures/scenario.ts` の `STARTUP_MODELS`。Claude の候補は hwc の固定リスト（エイリアスと effort の段階）で、サービスは起動しない。表示名は `<root>/bin/claude` の `list_models` から読む（[ADR 0116](adr/0116-claude-model-labels-from-cli.md)）。`agent.start` は受け取った引数を架空の端末出力にも残し、モデル指定した OpenCode には架空のセッション参照を付ける。
+モデル選択では、`pane.get` が fixture の cwd を返す。Pi の一覧は架空 CLI から、OpenCode の一覧と新規セッションは `e2e/fake-opencode.ts` の loopback サービスから読み書きする。候補の正は `e2e/fixtures/scenario.ts` の `STARTUP_MODELS`。Claude の候補は hwc の固定リスト（エイリアスと effort の段階）で、サービスは起動しない。表示名は `<root>/bin/claude` の `list_models` から読む（[ADR 0117](adr/0117-claude-model-labels-from-cli.md)）。`agent.start` は受け取った引数を架空の端末出力にも残し、モデル指定した OpenCode には架空のセッション参照を付ける。
 
 OpenCode のサービスの自動起動は、架空の `<root>/opencode/service.json` だけを一時退避してダイアログを開き、そのままモデル一覧が出ることで確かめる。PATH 上の架空の `opencode`（`e2e/fake-opencode-cli.ts`）が `service start` だけを受け、控えの `service.fixture.json` から接続情報を戻す（[ADR 0105](adr/0105-opencode-service-autostart.md)）。起動失敗の表示は、`service.json` と `service.fixture.json` の両方を退避して開き、「OpenCode サービスを起動できませんでした。再取得すると起動し直します。」と「再取得」が出ることを確認する。モデル欄は無効で、作成ボタンも押せない（[ADR 0104](adr/0104-launch-with-explicit-model.md)）。控えを戻して「再取得」を押すと、ダイアログを開き直さずにモデル一覧が復帰することも確かめる。設定画面の「エージェント」→「OpenCode」でも同じ表示と再取得になる。
 
