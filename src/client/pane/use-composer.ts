@@ -119,8 +119,9 @@ export type Composer = {
   takeFiles: (action: AttachmentAction) => boolean;
 };
 
-// composer のローカルな UI state と、その遷移。送信・編集の API 呼び出しと下書きの保存は
-// PaneDetail に残し、ここは値と handler を受け取って画面の状態だけを進める。
+// composer のローカルな UI state と、その遷移。送信・編集の API 呼び出しは PaneDetail に残し、
+// ここは値と handler を受け取って画面の状態だけを進める。下書きの保存可否はチップの状態で
+// 決まるので、下書きはこの hook から useDraft を呼ぶ。
 export function useComposer(options: ComposerOptions): Composer {
   const {
     pane,

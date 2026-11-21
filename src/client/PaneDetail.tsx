@@ -454,8 +454,8 @@ export function PaneDetail(props: PaneDetailProps) {
     return uploadFailureNotice(result.status, attachmentKindOfFileName(file.name));
   };
 
-  // 入力欄まわりの状態は useComposer が持つ。添付と定型文の取得、下書きの保存、送信と
-  // 編集の API 呼び出しはここに残す。
+  // 入力欄まわりの state は useComposer が持つ。添付と定型文の取得、送信と編集の API 呼び出しは
+  // ここに残す。
   const composer = useComposer({
     pane,
     shell,
