@@ -1,7 +1,34 @@
 /* エージェントのマークは「どのエージェントか」を示す記号で、選択でも状態でもない。
    左の一覧・ペイン見出し・入力欄・作成ダイアログ・設定のどこでも同じ色になるよう、
-   ブランド色の対応はここ 1 か所で決める（ADR 0116）。色を持つのはブランド色がある
-   Claude だけで、Codex / OpenCode / Pi は補助アイコンの色に置く。 */
+   マークの色はここ 1 か所で決める（ADR 0116 / 0118）。本家のマークが複数色のものも、
+   1 色に潰さず本家と同じ組み合わせで描く。 */
 [data-agent="claude"] {
   --color-agent: var(--color-agent-claude);
+}
+
+[data-agent="codex"] {
+  --color-agent: var(--color-agent-codex);
+}
+
+[data-agent="opencode"] {
+  --color-agent: var(--color-agent-opencode);
+}
+
+/* 内側のシェードは不透明な色ではなく、地を透かす濃さで描く。本家のアセットも透過で、
+   行の面・選択した面・控えめな面のどれでも同じ見え方になる。 */
+[data-agent="opencode"] .hwc-opencode-mark-shade {
+  fill-opacity: var(--color-agent-opencode-shade);
+}
+
+/* Pi は 3 色。1 色に潰すと本家のマークに見えないので、部分ごとに色を当てる。 */
+[data-agent="pi"] .hwc-pi-mark-coral {
+  fill: var(--color-agent-pi-coral);
+}
+
+[data-agent="pi"] .hwc-pi-mark-blue {
+  fill: var(--color-agent-pi-blue);
+}
+
+[data-agent="pi"] .hwc-pi-mark-yellow {
+  fill: var(--color-agent-pi-yellow);
 }

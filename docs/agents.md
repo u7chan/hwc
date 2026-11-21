@@ -131,3 +131,4 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - [ADR 0112: Claude の応答待ちは hook の sidecar から読み、チャットに出す。Web からは承認しない](adr/0112-claude-pending-in-chat.md)
 - [ADR 0114: モデルのラベルは、どのエージェントでも provider を出さず、Pi だけ残す](adr/0114-model-label-by-agent.md)
 - [ADR 0117: Claude のモデルラベルは CLI に問い合わせ、BFF で短時間キャッシュする](adr/0117-claude-model-labels-from-cli.md)
+- [ADR 0118: エージェントのマークは本家の配色で描く](adr/0118-agent-brand-colors.md)

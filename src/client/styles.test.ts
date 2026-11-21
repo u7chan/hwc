@@ -96,6 +96,23 @@ test("classes used by the client keep the hwc- prefix", async () => {
   expect(offenders).toEqual([]);
 });
 
+// マークの色は面ごとに書かず、marks.css の対応で決める。対象の綴りがずれると塗りが
+// 外れてマークが消えるので、エージェントとアイコンのクラスの両方をここで固定する。
+test("the mark colours cover every agent and every marked path", async () => {
+  const marks = await Bun.file("src/client/styles/parts/marks.css").text();
+  const icons = await Bun.file("src/client/icons.tsx").text();
+
+  const missingAgents = ["pi", "claude", "codex", "opencode"].filter(
+    (agent) => !marks.includes(`[data-agent="${agent}"]`),
+  );
+  const classes = [...icons.matchAll(/class="(hwc-[a-z-]*mark[a-z-]*)"/g)].map((match) => match[1]);
+  const missingClasses = classes.filter((name) => !marks.includes(`.${name}`));
+
+  expect(missingAgents).toEqual([]);
+  expect(classes.length).toBeGreaterThan(0);
+  expect(missingClasses).toEqual([]);
+});
+
 // スクロールバーの見た目は scroll.css にだけ置く。容器ごとに足すと、次に増えた一覧や
 // ダイアログでだけ標準のバーが出る。隠す上書きだけを例外にする。
 test("scrollbars are styled only in scroll.css", async () => {

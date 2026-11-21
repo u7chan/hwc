@@ -44,6 +44,15 @@
   --color-neutral-bg: #eef0f3;
   --color-danger: #b3333c;
   --color-agent-claude: #c15f3c;
+  /* エージェントのマークだけに使うブランド色（ADR 0118）。地の色や文字色には使わない。
+     Pi の 3 色と Claude は明暗で変えず、本家がモノクロの Codex と OpenCode だけ
+     ダークで反転する。 */
+  --color-agent-pi-coral: #f09082;
+  --color-agent-pi-blue: #4d9abf;
+  --color-agent-pi-yellow: #f1be58;
+  --color-agent-codex: #000000;
+  --color-agent-opencode: #1f1f1f;
+  --color-agent-opencode-shade: 0.2;
   /* Discord のブランド色。マークだけに使い、地の色や文字色には使わない。 */
   --color-discord: #5865f2;
 
@@ -732,6 +741,11 @@
   /* 暗い地では、ライト用のグレーは沈みすぎる。もっとも暗い content（Nord）でも
      4.5:1 を満たす値にする。 */
   --color-muted: #8e97a1;
+
+  /* モノクロのマークは、本家が明暗で別のアセットを出す。濃さだけを切り替える。 */
+  --color-agent-codex: #ffffff;
+  --color-agent-opencode: #eeeeee;
+  --color-agent-opencode-shade: 0.28;
 
   --ansi-0: #5c6370;
   --ansi-1: #ff7b86;
