@@ -12,6 +12,7 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   const { root, pendingPiSessions, findPane, later } = ctx;
   let sendCount = 0;
   let compactionCount = 0;
+  let abortCount = 0;
 
   // 最初の user メッセージでセッションを作る。実 pi と同じく、起動時の model_change と
   // thinking_level_change もこの時点でまとめて書く。
@@ -204,6 +205,46 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
     }, 6_000);
   };
 
+  // 応答を止めると、実 pi は本文の無い assistant をセッションへ追記して葉にする。hwc は
+  // それを描画しないので、止めた直後は送った発言が末尾に見える（ADR 0089）。
+  const appendAbort = async (paneId: string): Promise<void> => {
+    const target = findPane(paneId);
+    const session = target?.agent_session ?? null;
+    const path = session?.agent === "pi" && session.kind === "path" ? session.value : null;
+    if (path === null || target?.agent_status !== "working") return;
+    let raw: string;
+    try {
+      raw = await readFile(path, "utf8");
+    } catch {
+      return;
+    }
+    let parentId: string | null = null;
+    for (const line of raw.split("\n")) {
+      if (line.trim() === "") continue;
+      try {
+        const entry = JSON.parse(line) as { id?: unknown };
+        if (typeof entry.id === "string") parentId = entry.id;
+      } catch {
+        // 壊れた行は無視する。
+      }
+    }
+    if (parentId === null) return;
+    abortCount += 1;
+    const entry = {
+      type: "message",
+      id: `e2e-abort-${abortCount}`,
+      parentId,
+      timestamp: new Date().toISOString(),
+      message: {
+        role: "assistant",
+        content: [],
+        stopReason: "aborted",
+        timestamp: Date.now(),
+      },
+    };
+    await appendFile(path, `${JSON.stringify(entry)}\n`);
+  };
+
   // /compact の完了を架空セッションに追記する。最後の user メッセージを kept の先頭にし、
   // 圧縮の区切りが会話の時系列に置かれることを E2E で確かめられるようにする。
   const appendCompaction = async (paneId: string): Promise<boolean> => {
@@ -250,6 +291,7 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
     writePiSessionHeader,
     appendRewindMarker,
     appendUserEntry,
+    appendAbort,
     piActivityPath,
     clearPiActivity,
     writePiActivity,

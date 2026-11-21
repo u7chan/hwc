@@ -145,13 +145,12 @@ export function createEditMessageHandlers(ctx: AppContext) {
         }
 
         const message = snapshot.messages.find((item) => item.id === messageId);
-        const last = snapshot.messages[snapshot.messages.length - 1];
         if (
           message === undefined ||
           message.role !== "user" ||
           message.text.trim() === "" ||
           (message.attachments?.length ?? 0) > 0 ||
-          last?.id === messageId
+          snapshot.leafId === messageId
         ) {
           return c.json({ error: "not_editable" }, 409);
         }

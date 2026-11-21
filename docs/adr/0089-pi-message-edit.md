@@ -19,11 +19,12 @@ pi のセッションは `id` / `parentId` の木で、`ctx.navigateTree(targetI
 - BFF はセッション中に `customType: "hwc-capabilities"` かつ `data.v === 1 && data.rewind === true` のエントリがあれば `ChatSnapshot.canRewind = true` を返す。存在だけでは判定しない。`canRewind` は省略可能なフィールドとし、pi 以外の reader は設定しない
 - capability の探索は active branch に限らない。reader はファイル全体を読むため、過去の枝に capability があっても true にする。これは編集の途中で rewind して capability が active branch から外れる場合に必要になる。reader のリセット時に false へ戻す
 - capability が無いセッション（mypi が未導入、古いセッション）は、クライアントに鉛筆を出さない。BFF も `not_editable` にする
+- `ChatSnapshot.leafId` はセッションに最後に追記されたエントリの id を返す。pi のセッションは追記型で、新しいエントリは常に現在の葉の子として書かれるため、最後の行が葉になる。`canRewind` と同じく pi 以外の reader は設定しない
 
 ### クライアント
 
 - 鉛筆はユーザーメッセージのメタ行（コピーの隣）に置く。コピーと同じく、ホバーできる端末では行のホバー / フォーカスで出し、触れる端末では常に出す。`aria-label` は「このメッセージを編集」とし、押してもまだ rewind しない。発言の本文を入力欄へ移すだけにして、誤タップで会話を失わないようにする
-- 鉛筆を出す条件は、pi のチャットペインで `canRewind === true`、`agentStatus !== "working"`、通常送信中でない、編集中でない、セッション由来の user 行（送信控えでない）、本文が空でない、添付が無い、最後のセッション行でない、のすべてを満たすこと。最後の行は葉のことがあり、`navigateTree` が no-op になるため除く。葉の判定は表示中の `messages` の末尾で近似する（後述）
+- 鉛筆を出す条件は、pi のチャットペインで `canRewind === true`、`agentStatus !== "working"`、通常送信中でない、編集中でない、セッション由来の user 行（送信控えでない）、本文が空でない、添付が無い、セッションの葉でない、のすべてを満たすこと。葉は `navigateTree` が no-op になるため除く。葉は表示中の `messages` の末尾ではなく `leafId` で判定する。応答を止めると本文なしの assistant が追記されて葉になるので、表示上は送った発言が末尾に見えても戻せる
 - 編集状態は対象の entry id・`requestId`・本文だけを持つ。下書き（`draft`）と添付は触らない。入力欄には編集中だけ編集本文を表示し、× で編集状態と編集本文だけを捨てる。編集中は + メニュー・コマンド候補・添付・停止を出さず、引用は編集本文へ足す
 - 送信はフォームの submit を編集用に分岐する。成功したら編集状態を閉じ、会話を再取得する。下書き・添付は消さず、送信控え（echo）も積まない。失敗したら編集状態と本文を残す。`send_failed` かつ `rewound: true` のときは「会話は戻りましたが、送信できませんでした。もう一度送信してください」と出し、同じ `requestId` で再送できるようにする
 - `requestId` は `^[A-Za-z0-9_-]{1,64}$`。`crypto.randomUUID()` は secure context に限られ、LAN の HTTP では使えないため、時刻と乱数から `newRequestId()` で作る
@@ -31,7 +32,7 @@ pi のセッションは `id` / `parentId` の木で、`ctx.navigateTree(targetI
 ### BFF
 
 - `POST /api/panes/:id/edit-message` の body は `{ messageId, requestId, text }`。`messageId` / `requestId` は同じ ID の形、`text` は空でない文字列に限る。`text` は通常入力と同じ上限を使う
-- ペインが pi のチャットを持ち、`agentStatus !== "working"`、フォルダ信頼確認が無いことを確かめる。同じペインで同時に走る編集は 1 つだけ。対象が snapshot の user メッセージで、添付が無く、末尾でないことを確かめる。ただし同じ `requestId` の marker を既に知っている再送では、対象が active branch から外れているためこの検証を飛ばす
+- ペインが pi のチャットを持ち、`agentStatus !== "working"`、フォルダ信頼確認が無いことを確かめる。同じペインで同時に走る編集は 1 つだけ。対象が snapshot の user メッセージで、添付が無く、`leafId` と一致しない（葉でない）ことを確かめる。ただし同じ `requestId` の marker を既に知っている再送では、対象が active branch から外れているためこの検証を飛ばす
 - 第 1 相: `panes.send({ paneId, text: "/hwc-rewind <entryId> <requestId>", submit: true })` を送る。mypi は対象の親へ戻り、`customType: "hwc-rewind"` のエントリ `{ v: 1, requestId, targetId, leafId }` を追記する。`leafId` は移動後の葉（対象の親、先頭なら null）で、marker の `parentId` と一致する
 - 第 2 相: marker を確認してから、編集後の本文を通常の `panes.send({ submit: true })` で送る。marker は chat reader と共有せず、独立したハンドルでコマンド送信前のファイルサイズから追記分だけを読む。100ms 間隔で最大 10 秒待つ。未完行は消費せず、次回に持ち越す。ファイルが縮んだり置き換わったりしたときは末尾 256KB を読み直し、それでも無ければ `edit_failed` にする
 - marker を既に知っているとき（同一プロセスの再送）は、`sentText` が今回の本文と一致すれば成功、一致しなければ本文だけを送る。プロセス再起動後の再送に備え、初回はセッション末尾 256KB も走査する。`sentText` は marker の後に現れた最初の user メッセージの本文
@@ -47,8 +48,8 @@ pi のセッションは `id` / `parentId` の木で、`ctx.navigateTree(targetI
 - Web から過去の自分の発言を編集すると、pi のセッションに新しい枝ができ、元の枝はファイルに残るが表示されない。TUI も新しい枝を表示する（pi 1.5.2 で再描画を確認）
 - 戻すのは会話だけ。ファイル変更・ツール実行・シェルの状態は戻らない。利用者には「編集」と見せるが、実体は会話の分岐である
 - mypi の `/hwc-rewind` が無いセッションでは鉛筆が出ない。capability はセッション開始時に 1 回だけ書くため、拡張を入れる前に始めたセッションは `/new` するまで編集できない
-- 添付付きの発言は編集できない。ファイルを送り直す経路が別に必要になるため、対象外にした。最後のセッション行も編集できない。エージェントがまだ応答を書いていない user 発言は葉であり、戻す先が無い
-- 最後の行の判定は表示中の `messages` で近似する。実際の葉が表示に無いカスタム entry のときは、末尾の user 発言を編集できることがある。その場合 `navigateTree` は対象の親へ戻るので、結果は正しい。ただし応答待ちの短い間は、押しても何も起きない可能性がある
+- 添付付きの発言は編集できない。ファイルを送り直す経路が別に必要になるため、対象外にした。葉の発言も編集できない。エージェントがまだ何も書いていない user 発言は葉であり、戻す先が無い
+- 応答を止めると、pi は本文の無い assistant エントリを残す。hwc はそれを描画しないが葉として数えるため、止めた直後に送った発言は末尾に見えても編集できる。戻すとその空の assistant は枝ごと外れる
 - `send_failed` で `rewound: true` を受け取った後、編集を × でやめると、会話は戻した先（対象の親）に残る。編集前の枝はファイルにあるが、hwc の会話には戻らない。元の枝へ戻す操作は hwc には無い
 - `sentText` は marker の直後の user メッセージだけを見る。本文を送った後にセッションが 256KB 以上育つと、再起動後の再送で sentText を見つけられず、対象が active branch に無いため `not_editable` になることがある。requestId は編集ごとに作り直すので、通常の操作では起きにくい
 - marker の走査は requestId だけで照合する。同じ requestId を別の対象に再利用すると、別の枝の marker を拾う可能性がある。クライアントは編集を始めるたびに新しい requestId を作る

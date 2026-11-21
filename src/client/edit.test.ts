@@ -5,7 +5,7 @@ import { REWIND_ID_PATTERN } from "../shared/rewind";
 import type { ChatRow } from "./chat";
 import { canEditMessage, editFailureNotice, newRequestId } from "./edit";
 
-const snapshot = (canRewind: boolean): ChatSnapshot => ({
+const snapshot = (overrides: Partial<ChatSnapshot> = {}): ChatSnapshot => ({
   etag: "e",
   messages: [],
   model: null,
@@ -13,7 +13,8 @@ const snapshot = (canRewind: boolean): ChatSnapshot => ({
   truncated: false,
   context: null,
   compaction: null,
-  canRewind,
+  canRewind: true,
+  ...overrides,
 });
 
 const pane = (overrides: Partial<PaneState> = {}): PaneState => ({
@@ -52,18 +53,16 @@ test("newRequestId uses the contract alphabet and stays short", () => {
   expect(first.length).toBeLessThanOrEqual(64);
 });
 
-test("only an older pi user message with no attachments is editable", () => {
-  const rows = [row(user("u1")), row(agent("a1")), row(user("u2")), row(agent("a2"))];
+test("only a pi user message that is not the session leaf is editable", () => {
   const base = {
-    row: rows[0]!,
-    rows,
-    snapshot: snapshot(true),
+    row: row(user("u1")),
+    snapshot: snapshot({ leafId: "a1" }),
     pane: pane(),
     sending: false,
     editing: false,
   };
   expect(canEditMessage(base)).toBe(true);
-  expect(canEditMessage({ ...base, snapshot: snapshot(false) })).toBe(false);
+  expect(canEditMessage({ ...base, snapshot: snapshot({ canRewind: false }) })).toBe(false);
   expect(canEditMessage({ ...base, editing: true })).toBe(false);
   expect(canEditMessage({ ...base, sending: true })).toBe(false);
   expect(canEditMessage({ ...base, pane: pane({ agent: "codex" }) })).toBe(false);
@@ -77,19 +76,29 @@ test("only an older pi user message with no attachments is editable", () => {
   expect(canEditMessage({ ...base, row: row(agent("a3")) })).toBe(false);
 });
 
-test("the last session row is not editable, even when a pending echo follows", () => {
-  const rows = [row(user("u1")), row(agent("a1")), row(user("u2")), row(agent("a2"))];
+test("the session leaf is not editable", () => {
   const base = {
-    rows,
-    snapshot: snapshot(true),
+    snapshot: snapshot({ leafId: "u2" }),
     pane: pane(),
     sending: false,
     editing: false,
   };
-  const lastUser = row(user("u3"));
-  const withPending = [...rows, lastUser, row(user("pending-1"), "pending")];
-  expect(canEditMessage({ ...base, row: lastUser, rows: withPending })).toBe(false);
-  expect(canEditMessage({ ...base, row: rows[0]!, rows: withPending })).toBe(true);
+  expect(canEditMessage({ ...base, row: row(user("u2")) })).toBe(false);
+  expect(canEditMessage({ ...base, row: row(user("u1")) })).toBe(true);
+});
+
+test("a user message is editable while the leaf is an entry the log does not show", () => {
+  // 応答を止めると、本文なしの assistant が葉として残る。表示は送った発言で終わるが、
+  // 戻す先はあるので編集できる。
+  const base = {
+    row: row(user("u2")),
+    snapshot: snapshot({ leafId: "a-aborted" }),
+    pane: pane(),
+    sending: false,
+    editing: false,
+  };
+  expect(canEditMessage(base)).toBe(true);
+  expect(canEditMessage({ ...base, row: row(agent("a-aborted")) })).toBe(false);
 });
 
 test("editFailureNotice distinguishes a completed rewind", () => {

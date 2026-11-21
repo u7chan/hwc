@@ -17,26 +17,27 @@ export function newRequestId(now = Date.now(), random = Math.random()): string {
 
 export type EditEligibility = {
   row: ChatRow;
-  rows: readonly ChatRow[];
   snapshot: ChatSnapshot | null;
   pane: PaneState;
   sending: boolean;
   editing: boolean;
 };
 
-// 鉛筆を出す条件。最後の行は葉のことがあり、navigateTree が no-op になる。
-// 送信控えの行はセッションの entry id を持たないので除く。
+// 鉛筆を出す条件。葉は navigateTree が no-op になるので除く。葉は表示上の末尾ではなく、
+// セッションに最後に追記されたエントリで判定する。応答を止めると本文なしの assistant が
+// 葉として残り、送った発言は末尾に見えるが戻せるため。送信控えの行はセッションの
+// entry id を持たない。
 export function canEditMessage(args: EditEligibility): boolean {
   if (args.editing || args.sending) return false;
-  if (args.snapshot?.canRewind !== true) return false;
-  if (args.pane.agent !== "pi" || !args.pane.chat) return false;
-  if (args.pane.agentStatus === "working") return false;
-  if (args.row.echo !== "none") return false;
-  if (args.row.message.role !== "user") return false;
-  if (args.row.message.text.trim() === "") return false;
-  if ((args.row.message.attachments?.length ?? 0) > 0) return false;
-  const sessionRows = args.rows.filter((row) => row.echo === "none");
-  return sessionRows[sessionRows.length - 1]?.message.id !== args.row.message.id;
+  const { snapshot, pane, row } = args;
+  if (snapshot === null || snapshot.canRewind !== true) return false;
+  if (pane.agent !== "pi" || !pane.chat) return false;
+  if (pane.agentStatus === "working") return false;
+  if (row.echo !== "none") return false;
+  if (row.message.role !== "user") return false;
+  if (row.message.text.trim() === "") return false;
+  if ((row.message.attachments?.length ?? 0) > 0) return false;
+  return snapshot.leafId !== row.message.id;
 }
 
 export function editFailureNotice(error: string, rewound: boolean): string {

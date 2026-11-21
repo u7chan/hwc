@@ -88,17 +88,22 @@ const createEditApp = (
     noMarker?: boolean;
     messages?: ChatMessage[];
     snapshotMessages?: () => ChatMessage[];
+    leafId?: string;
   } = {},
 ) => {
   const sent: string[] = [];
   const { app, store } = createTestApp({
     state: options.state ?? chatState,
     chat: createFakeChat({
-      snapshot: async () => ({
-        ...emptyChat,
-        messages: options.snapshotMessages?.() ?? options.messages ?? messages,
-        canRewind: options.canRewind ?? true,
-      }),
+      snapshot: async () => {
+        const shown = options.snapshotMessages?.() ?? options.messages ?? messages;
+        return {
+          ...emptyChat,
+          messages: shown,
+          canRewind: options.canRewind ?? true,
+          leafId: options.leafId ?? shown[shown.length - 1]?.id,
+        };
+      },
     }),
     panes: {
       send: async ({ text }) => {
@@ -251,7 +256,17 @@ test("missing marker ends in edit_failed", async () => {
   expect(sent).toEqual(["/hwc-rewind u2 req-1"]);
 });
 
-test("rejects the last message, an attachment, a missing capability, and a busy pane", async () => {
+test("edits a user message whose leaf is an entry the snapshot does not show", async () => {
+  // 応答を止めると本文の無い assistant が葉になる。表示は止めた発言で終わるが戻せる。
+  const stopped = messages.slice(0, 3);
+  const { app, sent } = createEditApp({ messages: stopped, leafId: "a-aborted" });
+  const response = await post(app, { messageId: "u2", requestId: "req-1", text: "edited" });
+
+  expect(response.status).toBe(200);
+  expect(sent).toEqual(["/hwc-rewind u2 req-1", "edited"]);
+});
+
+test("rejects the leaf, an attachment, a missing capability, and a busy pane", async () => {
   const last = createEditApp({ messages: messages.slice(0, 3) });
   const lastResponse = await post(last.app, { messageId: "u2", requestId: "r1", text: "x" });
   expect(lastResponse.status).toBe(409);

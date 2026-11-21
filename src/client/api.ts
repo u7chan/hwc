@@ -357,6 +357,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     compaction: toChatCompaction(snapshot.compaction),
     ...(pending === undefined ? {} : { pending }),
     canRewind: snapshot.canRewind === true,
+    ...(typeof snapshot.leafId === "string" ? { leafId: snapshot.leafId } : {}),
   };
 }
 

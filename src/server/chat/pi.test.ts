@@ -1594,6 +1594,21 @@ test("canRewind comes from hwc-capabilities anywhere in the session", async () =
   expect((await createChatClient().snapshot(invalid)).canRewind).toBe(false);
 });
 
+test("leafId is the last appended entry, even when the log does not show it", async () => {
+  // 応答を止めると本文の無い assistant が追記される。会話には出ないが、葉にはなる。
+  const path = await writeSession(
+    header(),
+    user("u1", null, "one"),
+    assistant("a0", "u1", text("partial"), { stopReason: "aborted" }),
+    user("u2", "a0", "two"),
+    assistant("a2", "u2", [], { stopReason: "aborted" }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u1", "a0", "u2"]);
+  expect(snapshot.leafId).toBe("a2");
+});
+
 test("readRewindMarker returns the marker and the user text after it", async () => {
   const path = await writeSession(
     header(),

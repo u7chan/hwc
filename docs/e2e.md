@@ -75,7 +75,7 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 フォーカスを移して `pane.focused` を流す。実 Herdr と同じく seen も進むので、対象が `done` の
 ときは `idle` に戻し、そのタブとスペースの集約状態を残りのペインから引き直して `pane.updated`
 を流す。hwc の既読はこの遷移で完了から待機に変わる（行そのものは残る）。
-`pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。Claude のペインで応答待ちの sidecar（`<root>/claude/pending/<session uuid>.json`）に質問があれば、実機の Claude Code と同じく、assistant の tool_use と `is_error` の tool_result と user の `[Request interrupted by user for tool use]` を transcript へ書く（sidecar は残す。Esc は hook を呼ばないため）。`pane.send_input` は Claude のペインでは送信 text を transcript の user として追記し、sidecar を消す（`UserPromptSubmit` の hook に相当）。質問への回答（[ADR 0099](adr/0099-answer-ask-user-question.md)）は、この 2 つを通して確かめられる。
+`pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。pi のペインが `working` の間なら、実 pi と同じく本文の無い `stopReason: "aborted"` の assistant をセッションへ追記して葉にする（hwc は描画しないので、会話は止めた発言で終わって見える）。Claude のペインで応答待ちの sidecar（`<root>/claude/pending/<session uuid>.json`）に質問があれば、実機の Claude Code と同じく、assistant の tool_use と `is_error` の tool_result と user の `[Request interrupted by user for tool use]` を transcript へ書く（sidecar は残す。Esc は hook を呼ばないため）。`pane.send_input` は Claude のペインでは送信 text を transcript の user として追記し、sidecar を消す（`UserPromptSubmit` の hook に相当）。質問への回答（[ADR 0099](adr/0099-answer-ask-user-question.md)）は、この 2 つを通して確かめられる。
 `workspace.move_block` は `workspaces` を並べ替えて `workspace.reordered` を流す。実 Herdr と同じく、
 渡された id の列を 1 ブロックとしてアンカーの前へ置く。
 `workspace.close` はスペース・タブ・ペインをスナップショットから取り除き、`workspace.closed` を流す。
@@ -209,8 +209,9 @@ pi のセッションに `hwc-capabilities` があるときだけ、ユーザー
 
 1. `frontend` は最初 `working` なので、入力欄から短い本文（例: `あとで確認します`）を送り、6 秒ほどで待機に戻す。`編集の動作を確認します。` の吹き出しにホバーすると、コピーと並んで鉛筆が出る（触れる端末では常に表示）。入力欄に下書き（例: `下書き`）を入れてから鉛筆を押すと、入力欄がその本文に変わり、「編集中」のチップが出る。下書きは消えない。
 2. チップの × を押すと入力欄が `下書き` に戻る。もう一度 `編集の動作を確認します。` の鉛筆を押し、本文を `編集後の本文` に書き換えて送信する。架空 Herdr が `/hwc-rewind` の marker を追記し、BFF が編集後の本文を送る。会話は対象の親まで戻り、編集後の本文が新しい枝として出る。`下書き` は入力欄に残る。
-3. `review`（Codex）や `new`（空の会話）には鉛筆が出ない。添付付きの発言と最後の発言にも出ない。実行中は出ない。
-4. 失敗は `/api/panes/w1:p1/edit-message` の応答を差し替えて確かめる。`{"error":"send_failed","rewound":true}` の 502 では「会話は戻りましたが、送信できませんでした。もう一度送信してください」が出て、編集チップと本文が残る。同じ `requestId` で再送すると成功する。`{"error":"edit_failed"}` の 502 では「編集を開始できませんでした。もう一度お試しください」が出る。
+3. `review`（Codex）や `new`（空の会話）には鉛筆が出ない。添付付きの発言と、セッションの葉である発言にも出ない。実行中は出ない。
+4. `frontend` で本文を送り、応答が返る前に停止ボタン（Esc）を押す。架空 Herdr が本文の無い `aborted` の assistant を追記して葉にするので、会話は止めた発言で終わって見えるが、その発言には鉛筆が出る（葉ではないため）。押して本文を変えて送ると、空の assistant は枝ごと外れる。
+5. 失敗は `/api/panes/w1:p1/edit-message` の応答を差し替えて確かめる。`{"error":"send_failed","rewound":true}` の 502 では「会話は戻りましたが、送信できませんでした。もう一度送信してください」が出て、編集チップと本文が残る。同じ `requestId` で再送すると成功する。`{"error":"edit_failed"}` の 502 では「編集を開始できませんでした。もう一度お試しください」が出る。
 
 ## 定型文
 
