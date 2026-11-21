@@ -230,13 +230,15 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
 }
 
 /* 一覧と詳細の境目に付く開閉の取っ手。幅 0 の箱を境目に置き、取っ手は詳細側へ張り出す。
-   一覧側へ出すと一覧のスクロールバーと重なる。広い画面だけ出す。 */
+   一覧側へ出すと一覧のスクロールバーと重なる。広い画面だけ出す。
+   ファイルツリーのオーバーレイ（z-index: 3）より手前に置く。同じ値だと DOM で後ろの詳細が勝ち、
+   ツリーを開いている間は取っ手が隠れて、一覧を畳めなくなる。 */
 .hwc-sidebar-edge {
   display: none;
   position: relative;
   flex: none;
   width: 0;
-  z-index: 3;
+  z-index: 4;
 }
 
 .hwc-sidebar-toggle {
@@ -257,8 +259,9 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   transform: translateY(-50%);
 }
 
-/* 触れる範囲は詳細の左余白（読み幅の下限 24px）に収まる 4px だけ広げる。44px まで広げると、
-   余白を越えて本文の先頭（添付チップなど）を覆う。 */
+/* 触れる範囲は、本文や添付チップが始まる左余白（読み幅の下限 24px）に収まる 4px だけ広げる。
+   44px まで広げると、それらの先頭を覆う。行全体が操作領域の要素（ツリーの行など）は左端が
+   余白より内側から始まり、重なる範囲では取っ手が勝つ。畳むのは一覧の開閉だけで、文字は隠れない。 */
 .hwc-sidebar-toggle::before {
   content: "";
   position: absolute;
