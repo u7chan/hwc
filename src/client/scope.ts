@@ -12,6 +12,28 @@ export function parseListScope(raw: string | null): ListScope {
   return raw === "active" ? "active" : "all";
 }
 
+type StorageLike = { getItem: (key: string) => string | null };
+type WritableStorage = StorageLike & { setItem: (key: string, value: string) => void };
+
+export function loadListScope(storage: StorageLike | null): ListScope {
+  if (!storage) return parseListScope(null);
+  try {
+    return parseListScope(storage.getItem(LIST_SCOPE_STORAGE_KEY));
+  } catch {
+    // 保存領域が使えない環境では既定に戻す。
+    return parseListScope(null);
+  }
+}
+
+export function saveListScope(storage: WritableStorage | null, scope: ListScope): void {
+  if (!storage) return;
+  try {
+    storage.setItem(LIST_SCOPE_STORAGE_KEY, scope);
+  } catch {
+    // 保存だけ諦める。
+  }
+}
+
 // 帯に出す件数の状態。待機と不明は数えない。待機はどの帯にも並ぶ既定の状態なので、
 // 数字にしても「自分が動く番」を見つける助けにならない。
 const COUNTED_STATUSES = ["blocked", "working", "done"] as const;
