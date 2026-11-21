@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { AppState } from "../server/herdr/state";
 import type { PullRequest } from "../shared/pull-request";
 import { readPullRequest } from "./api";
-import { isAbortError } from "./chat";
+import { isAbortError } from "./poll";
 
 // ブランチが変われば PR も変わる。見出しを開いたときに 1 回だけ引き、引けなければ何も出さない。
 // 引き直しの間隔は BFF のキャッシュが持つので、ここではポーリングしない。

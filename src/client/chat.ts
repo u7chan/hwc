@@ -20,6 +20,7 @@ import {
   readChat,
 } from "./api";
 import { MARKDOWN_MAX_LENGTH, markdownImageHrefs } from "./markdown/parse";
+import { startPoll } from "./poll";
 
 // 返答が届いている間は短く、動いていない間は長く。隠れている間に読んでも見る人はいない。
 export function chatPollDelay(
@@ -79,12 +80,6 @@ export function pollOnStatusChange(props: {
   // マウント直後とペイン切替直後は、最初の取得と同じ状態でここへ来る。読み直す理由が無い。
   if (props.next === props.last) return "ignore";
   return "load";
-}
-
-// 打ち切りは失敗ではない。端末出力へも切り替えない。
-export function isAbortError(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  return "name" in error && (error as { name: unknown }).name === "AbortError";
 }
 
 export type PaneBody =
@@ -450,84 +445,51 @@ export function usePaneChat(
   useEffect(() => {
     if (!enabled) return;
     const id = paneId;
-
-    let active = true;
-    let timer: number | undefined;
-    let controller: AbortController | null = null;
     // 経過は effect の中で持ち回る。304 のときは本文を捨てて、この値を保つ。
     let etag: string | null = null;
+    lastStatus.current = statusRef.current;
 
-    function stop() {
-      if (timer !== undefined) window.clearTimeout(timer);
-      timer = undefined;
-    }
-
-    function schedule() {
-      stop();
-      const delay = chatPollDelay(statusRef.current, document.visibilityState);
-      lastStatus.current = statusRef.current;
-      if (delay !== null) timer = window.setTimeout(() => void load(), delay);
-    }
-
-    async function load() {
-      stop();
-      controller?.abort();
-      const current = new AbortController();
-      controller = current;
-      try {
-        const read = await readChat(id, etag, current.signal);
-        if (!active || current.signal.aborted) return;
+    const poll = startPoll({
+      // 予約と同じ瞬間に、予約が前提にした状態を控える。
+      delay: () => {
+        lastStatus.current = statusRef.current;
+        return chatPollDelay(statusRef.current, document.visibilityState);
+      },
+      // 状態変化の読み直しに追い越された要求は打ち切る。結果は使わない。
+      replace: true,
+      // 開いた直後に隠れている場合も読まない。見えるようになったときの 1 回で追いつく。
+      resume: (poll) => {
+        if (document.visibilityState !== "hidden") poll.load();
+      },
+      read: (signal) => readChat(id, etag, signal),
+      // 304 のときは本文を捨て、条件付き取得の etag を保つ。
+      apply: (read) => {
         if (read.kind === "snapshot") {
           etag = read.snapshot.etag;
           setLatest({ paneId: id, snapshot: read.snapshot });
         }
         setFailedPane(read.kind === "unavailable" ? id : null);
-      } catch (error) {
-        // 隠れたことで打ち切った場合も、読み直しに置き換えられた場合も失敗ではない。
-        if (!active || isAbortError(error)) return;
-        setFailedPane(id);
-      } finally {
-        // 追い越された要求が、後から始まった要求の持ち物を消さないようにする。
-        if (controller === current) controller = null;
-      }
-      if (active) schedule();
-    }
+      },
+      failed: () => setFailedPane(id),
+    });
 
     // 状態が変わったら、予約済みのタイマーを捨ててその場で読む。取得中の要求は打ち切る。
-    function onStatusChange() {
+    nudge.current = () => {
       const change = pollOnStatusChange({
         last: lastStatus.current,
         next: statusRef.current,
         visible: document.visibilityState !== "hidden",
       });
-      if (change === "load") void load();
-    }
-
-    function onVisibility() {
-      if (document.visibilityState === "hidden") {
-        stop();
-        controller?.abort();
-        return;
-      }
-      void load();
-    }
-
-    nudge.current = onStatusChange;
-    reload.current = () => {
-      if (document.visibilityState !== "hidden") void load();
+      if (change === "load") poll.load();
     };
-    lastStatus.current = statusRef.current;
-    document.addEventListener("visibilitychange", onVisibility);
-    // 開いた直後に隠れている場合も読まない。見えるようになったときの 1 回で追いつく。
-    if (document.visibilityState !== "hidden") void load();
+    reload.current = () => {
+      if (document.visibilityState !== "hidden") poll.load();
+    };
 
     return () => {
-      active = false;
       nudge.current = null;
       reload.current = null;
-      stop();
-      controller?.abort();
-      document.removeEventListener("visibilitychange", onVisibility);
+      poll.stop();
     };
   }, [paneId, enabled]);
 
