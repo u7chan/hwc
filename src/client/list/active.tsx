@@ -251,7 +251,7 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
               const slot = props.slots.indexOf(pane.id);
               const name = paneRowTitle(pane);
               return (
-                <li key={pane.id} class="hwc-active-row">
+                <li key={pane.id} class="hwc-active-row" data-pane-id={pane.id}>
                   <div
                     class="hwc-active-pane"
                     data-current={current}
