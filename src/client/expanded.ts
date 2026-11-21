@@ -20,6 +20,32 @@ export function parseOpenGroups(value: string | null): ReadonlyMap<string, boole
   }
 }
 
+type StorageLike = { getItem: (key: string) => string | null };
+type WritableStorage = StorageLike & { setItem: (key: string, value: string) => void };
+
+export function loadOpenGroups(storage: StorageLike | null): ReadonlyMap<string, boolean> {
+  if (!storage) return NO_GROUPS;
+  try {
+    return parseOpenGroups(storage.getItem(OPEN_GROUPS_STORAGE_KEY));
+  } catch {
+    // 保存領域が使えない環境では、何も覚えていない扱いにする。
+    return NO_GROUPS;
+  }
+}
+
+// 覚えた差分は 1 つの JSON にまとめる。グループごとにキーを分けると、消えた id の掃除が要る。
+export function saveOpenGroups(
+  storage: WritableStorage | null,
+  groups: ReadonlyMap<string, boolean>,
+): void {
+  if (!storage) return;
+  try {
+    storage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify(Object.fromEntries(groups)));
+  } catch {
+    // 保存だけ諦める。
+  }
+}
+
 export function rememberGroup(
   stored: ReadonlyMap<string, boolean>,
   groupId: string,

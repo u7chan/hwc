@@ -1,7 +1,34 @@
 import { expect, test } from "bun:test";
 import { type AppState, NO_TIMES } from "../server/herdr/state";
-import { applyOpenGroups, parseOpenGroups, rememberGroup } from "./expanded";
+import {
+  OPEN_GROUPS_STORAGE_KEY,
+  applyOpenGroups,
+  loadOpenGroups,
+  parseOpenGroups,
+  rememberGroup,
+  saveOpenGroups,
+} from "./expanded";
 import { groupIds } from "./select";
+
+function memoryStorage(initial: Record<string, string> = {}) {
+  const map = new Map(Object.entries(initial));
+  return {
+    map,
+    getItem: (key: string) => map.get(key) ?? null,
+    setItem: (key: string, value: string) => void map.set(key, value),
+  };
+}
+
+function deniedStorage() {
+  return {
+    getItem: () => {
+      throw new Error("denied");
+    },
+    setItem: () => {
+      throw new Error("denied");
+    },
+  };
+}
 
 test("the remembered open and closed groups survive a round trip", () => {
   const stored = rememberGroup(rememberGroup(new Map(), "w1", false), "w1:t1", true);
@@ -26,6 +53,30 @@ test("remembering a group keeps the other entries", () => {
     ["w1", false],
     ["w2", true],
   ]);
+});
+
+test("the open groups keep the storage key they are read from", () => {
+  expect(OPEN_GROUPS_STORAGE_KEY).toBe("hwc-open-groups");
+});
+
+test("the remembered groups are stored as one JSON object", () => {
+  const store = memoryStorage();
+  saveOpenGroups(store, rememberGroup(rememberGroup(new Map(), "w1", false), "w1:t1", true));
+
+  expect(store.map.get(OPEN_GROUPS_STORAGE_KEY)).toBe('{"w1":false,"w1:t1":true}');
+  expect([...loadOpenGroups(store)].sort()).toEqual([
+    ["w1", false],
+    ["w1:t1", true],
+  ]);
+});
+
+test("an unreadable store remembers nothing", () => {
+  expect(loadOpenGroups(memoryStorage()).size).toBe(0);
+  expect(loadOpenGroups(memoryStorage({ [OPEN_GROUPS_STORAGE_KEY]: "not json" })).size).toBe(0);
+  expect(loadOpenGroups(deniedStorage()).size).toBe(0);
+  expect(loadOpenGroups(null).size).toBe(0);
+  expect(() => saveOpenGroups(deniedStorage(), new Map([["w1", true]]))).not.toThrow();
+  expect(() => saveOpenGroups(null, new Map([["w1", true]]))).not.toThrow();
 });
 
 test("the default opening follows the remembered state for groups that exist", () => {

@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
-import { SIDEBAR_COLLAPSED_STORAGE_KEY, parseSidebarCollapsed } from "../../layout";
+import { loadSidebarCollapsed, saveSidebarCollapsed } from "../../layout";
+import { storage } from "../../storage";
 
 export type UseSidebarCollapsed = {
   sidebarCollapsed: boolean;
@@ -8,24 +9,12 @@ export type UseSidebarCollapsed = {
 
 // 一覧を畳むかは幅と同じく端末ごとの見え方。Herdr 側には持たせず、再読み込みでも保つ。
 export function useSidebarCollapsed(): UseSidebarCollapsed {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
-    parseSidebarCollapsed(
-      typeof localStorage === "undefined"
-        ? null
-        : localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY),
-    ),
-  );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadSidebarCollapsed(storage()));
 
   const toggleSidebar = () => {
     const next = !sidebarCollapsed;
     setSidebarCollapsed(next);
-    if (typeof localStorage !== "undefined") {
-      try {
-        localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
-      } catch {
-        // 保存だけ諦める。
-      }
-    }
+    saveSidebarCollapsed(storage(), next);
   };
 
   return { sidebarCollapsed, toggleSidebar };

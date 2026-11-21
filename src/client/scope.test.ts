@@ -7,15 +7,38 @@ import {
   type WorkspaceState,
 } from "../server/herdr/state";
 import {
+  LIST_SCOPE_STORAGE_KEY,
   activeGroups,
   activePanes,
   agentPresence,
   countLabel,
+  loadListScope,
   parseListScope,
   pendingReadAfter,
+  saveListScope,
   shouldFocusOnLeave,
   showsTabName,
 } from "./scope";
+
+function memoryStorage(initial: Record<string, string> = {}) {
+  const map = new Map(Object.entries(initial));
+  return {
+    map,
+    getItem: (key: string) => map.get(key) ?? null,
+    setItem: (key: string, value: string) => void map.set(key, value),
+  };
+}
+
+function deniedStorage() {
+  return {
+    getItem: () => {
+      throw new Error("denied");
+    },
+    setItem: () => {
+      throw new Error("denied");
+    },
+  };
+}
 
 function pane(id: string, agent: string | null, agentStatus: AgentStatus = "unknown"): PaneState {
   return {
@@ -71,6 +94,27 @@ test("the list opens on every space", () => {
   // 消したスコープと知らない値は、既定に倒す。移行処理は持たない。
   expect(parseListScope("agent")).toBe("all");
   expect(parseListScope("everything")).toBe("all");
+});
+
+test("the list scope keeps the storage key its setting is read from", () => {
+  expect(LIST_SCOPE_STORAGE_KEY).toBe("hwc-list-scope");
+});
+
+test("the chosen scope is stored as the value itself and comes back", () => {
+  const store = memoryStorage();
+  saveListScope(store, "active");
+
+  expect(store.map.get(LIST_SCOPE_STORAGE_KEY)).toBe("active");
+  expect(loadListScope(store)).toBe("active");
+});
+
+test("an unreadable scope falls back to every space", () => {
+  expect(loadListScope(memoryStorage())).toBe("all");
+  expect(loadListScope(memoryStorage({ [LIST_SCOPE_STORAGE_KEY]: "agent" }))).toBe("all");
+  expect(loadListScope(deniedStorage())).toBe("all");
+  expect(loadListScope(null)).toBe("all");
+  expect(() => saveListScope(deniedStorage(), "active")).not.toThrow();
+  expect(() => saveListScope(null, "active")).not.toThrow();
 });
 
 test("active lists every pane that has an agent, whatever its status", () => {

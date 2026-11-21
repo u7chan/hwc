@@ -38,3 +38,45 @@ export function parseSidebarWidth(value: string | null, viewportWidth?: number):
 export function parseSidebarCollapsed(value: string | null): boolean {
   return value === "true";
 }
+
+type StorageLike = { getItem: (key: string) => string | null };
+type WritableStorage = StorageLike & { setItem: (key: string, value: string) => void };
+
+export function loadSidebarWidth(storage: StorageLike | null): number {
+  if (!storage) return parseSidebarWidth(null);
+  try {
+    return parseSidebarWidth(storage.getItem(SIDEBAR_STORAGE_KEY));
+  } catch {
+    // 保存領域が使えない環境では既定の幅に戻す。
+    return parseSidebarWidth(null);
+  }
+}
+
+// 書く値も clamp する。読む側の parse と範囲を揃え、保存形式に範囲外の数値を残さない。
+export function saveSidebarWidth(storage: WritableStorage | null, width: number): void {
+  if (!storage) return;
+  try {
+    storage.setItem(SIDEBAR_STORAGE_KEY, String(clampSidebarWidth(width)));
+  } catch {
+    // 保存だけ諦める。
+  }
+}
+
+export function loadSidebarCollapsed(storage: StorageLike | null): boolean {
+  if (!storage) return parseSidebarCollapsed(null);
+  try {
+    return parseSidebarCollapsed(storage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY));
+  } catch {
+    // 保存領域が使えない環境では、一覧を開いたままにする。
+    return parseSidebarCollapsed(null);
+  }
+}
+
+export function saveSidebarCollapsed(storage: WritableStorage | null, collapsed: boolean): void {
+  if (!storage) return;
+  try {
+    storage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch {
+    // 保存だけ諦める。
+  }
+}
