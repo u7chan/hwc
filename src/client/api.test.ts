@@ -374,6 +374,12 @@ test("canRewind is kept only when it is true", () => {
   expect(toChatSnapshot({ ...chatBody, canRewind: "yes" })?.canRewind).toBe(false);
 });
 
+test("leafId is kept only when it is an id", () => {
+  expect(toChatSnapshot({ ...chatBody, leafId: "a1" })?.leafId).toBe("a1");
+  expect(toChatSnapshot(chatBody)?.leafId).toBeUndefined();
+  expect(toChatSnapshot({ ...chatBody, leafId: 3 })?.leafId).toBeUndefined();
+});
+
 test("a failed turn is read as an error row", () => {
   const message = { id: "e1", role: "error" as const, text: "429: busy", at: 1_000 };
   expect(toChatSnapshot({ ...chatBody, messages: [message] })).toEqual({

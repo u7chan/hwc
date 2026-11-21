@@ -552,6 +552,8 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
     ...(usage === null ? {} : { usage }),
     compaction: compacted === null ? null : { ...compacted.compaction, index: compactionIndex },
     canRewind: reader.canRewind,
+    // 追記型なので、最後に読んだエントリが葉。表示に無い entry でも葉になりうる。
+    ...(reader.leafId === null ? {} : { leafId: reader.leafId }),
   };
 }
 

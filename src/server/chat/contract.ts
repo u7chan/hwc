@@ -114,6 +114,9 @@ export type ChatSnapshot = {
   pending?: ChatPending;
   // pi 拡張が hwc-capabilities を残したペインだけ true。他のエージェントは未設定。
   canRewind?: boolean;
+  // セッションに最後に追記されたエントリの id。表示に無いエントリも葉になる。
+  // 編集できるかの判定に使う。他のエージェントは未設定。
+  leafId?: string;
 };
 
 // BFF がペイン id から解決した会話の読み取り口。セッション id や path はクライアントへ渡さない。

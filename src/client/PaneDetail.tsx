@@ -1558,10 +1558,9 @@ export function PaneDetail(props: PaneDetailProps) {
                           : null
                       }
                       onCopy={copy}
-                      canEdit={(row, rows) =>
+                      canEdit={(row) =>
                         canEditMessage({
                           row,
-                          rows,
                           snapshot: body.snapshot,
                           pane,
                           sending: sending || stopping,

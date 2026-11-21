@@ -27,7 +27,7 @@ export function ChatLog(props: {
   compactionDurationMs: number | null;
   compactionEcho: { text: string; at: number; completedAt: number | null } | null;
   onCopy: (id: string, text: string) => void;
-  canEdit: (row: ChatRow, rows: readonly ChatRow[]) => boolean;
+  canEdit: (row: ChatRow) => boolean;
   onEdit: (message: ChatMessage) => void;
   onOpenImage: (url: string, name: string) => void;
   onOpenPreview: (file: ChatFile) => void;
@@ -151,7 +151,7 @@ export function ChatLog(props: {
                     paneId={props.paneId}
                     message={row.message}
                     copyButton={userCopyButton(row.message)}
-                    editButton={props.canEdit(row, rows) ? editButton(row.message) : null}
+                    editButton={props.canEdit(row) ? editButton(row.message) : null}
                     onOpenImage={props.onOpenImage}
                     pending={row.echo === "pending"}
                   />
