@@ -90,7 +90,7 @@
   place-items: center;
   width: var(--space-5);
   height: var(--space-5);
-  color: var(--color-secondary);
+  color: var(--color-agent, var(--color-secondary));
 }
 
 /* 名前は短い固定の語なので縮めない。エージェントの行の現在値（モデル名）は長くなるので、
@@ -203,7 +203,11 @@
   font-weight: 600;
 }
 
-.hwc-settings-side .hwc-settings-nav[aria-current="true"] .hwc-settings-nav-icon,
+/* 現在地の行でも、ブランド色を持つマークはその色のままにする。 */
+.hwc-settings-side .hwc-settings-nav[aria-current="true"] .hwc-settings-nav-icon {
+  color: var(--color-agent, var(--color-accent));
+}
+
 .hwc-settings-side .hwc-settings-nav[aria-current="true"] > svg {
   color: var(--color-accent);
 }

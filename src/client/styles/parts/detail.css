@@ -327,6 +327,7 @@
   place-items: center;
   width: var(--space-4);
   height: var(--space-4);
+  color: var(--color-agent, var(--color-secondary));
 }
 
 .hwc-pane-head-name {

@@ -65,6 +65,8 @@ function CategoryRow(props: {
   current: boolean;
   onOpen: () => void;
 }) {
+  const agent = agentOfCategory(props.category.id);
+
   return (
     <button
       type="button"
@@ -72,7 +74,7 @@ function CategoryRow(props: {
       aria-current={props.current ? "true" : undefined}
       onClick={props.onOpen}
     >
-      <span class="hwc-settings-nav-icon">
+      <span class="hwc-settings-nav-icon" data-agent={agent ?? undefined}>
         <CategoryIcon id={props.category.id} />
       </span>
       <span class="hwc-settings-nav-label">{props.category.label}</span>

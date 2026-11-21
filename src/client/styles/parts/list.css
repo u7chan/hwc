@@ -362,7 +362,7 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   flex: none;
   display: grid;
   place-items: center;
-  color: var(--color-secondary);
+  color: var(--color-agent, var(--color-secondary));
 }
 
 /* 親ペインの印。状態の記号でも操作でもないので、文字と同じ補助色に置く。 */
@@ -371,10 +371,6 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   display: inline-grid;
   place-items: center;
   color: var(--color-secondary);
-}
-
-.hwc-pane-agent[data-agent="claude"] {
-  color: var(--color-agent-claude);
 }
 
 .hwc-group-name {
