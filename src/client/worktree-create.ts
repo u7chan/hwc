@@ -1,4 +1,5 @@
 import { canRetryWorktree, type CreateWorktreeFailure } from "./api";
+import { INVALID_REQUEST_NOTICE } from "./failure-text";
 
 // 作成できたかを確認できない失敗。ワークツリーとエージェントが残っている可能性があるので、
 // 確定した失敗として伝えない。ダイアログは再送させず、Herdr 側の確認を促す。
@@ -25,7 +26,7 @@ function knownFailureMessage(error: CreateWorktreeFailure): string {
     case "workspace_not_found":
       return "スペースが見つかりませんでした。";
     case "invalid_request":
-      return "入力内容を確認してください。";
+      return INVALID_REQUEST_NOTICE;
     default:
       return "ワークツリーを作成できませんでした。";
   }

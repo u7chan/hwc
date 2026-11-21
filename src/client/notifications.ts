@@ -1,5 +1,6 @@
 import { normalizeDiscordWebhookUrl } from "../shared/notifications";
 import type { NotificationTestResult } from "./api";
+import { INVALID_REQUEST_NOTICE } from "./failure-text";
 
 // 形式が正しいときだけ登録できる。BFF でも同じ検証を通す。
 export function canRegisterWebhook(url: string): boolean {
@@ -30,7 +31,7 @@ export function saveNotificationText(error: string | null): string {
     case "invalid_webhook_url":
       return "Webhook URL の形式が正しくありません。";
     case "invalid_request":
-      return "入力内容を確認してください。";
+      return INVALID_REQUEST_NOTICE;
     case "settings_unavailable":
       return "設定を保存できませんでした。もう一度お試しください。";
     default:

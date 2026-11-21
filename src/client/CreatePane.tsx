@@ -10,6 +10,7 @@ import {
   type CreatePaneOutcome,
   readLaunchDefaults,
 } from "./api";
+import { INVALID_REQUEST_NOTICE, PANE_NOT_FOUND_NOTICE } from "./failure-text";
 import { useEffortCandidates, useModelCandidates, useModelLabels } from "./launch-candidates";
 import { canLaunch, chooseEffort, chooseModel, savedEffortFor } from "./launch-choice";
 import { spaceFailureNotice } from "./space-create";
@@ -61,9 +62,9 @@ function failureMessage(error: CreatePaneFailure): string {
     case "pane_limit":
       return "このタブは 4 ペインまでです。";
     case "pane_not_found":
-      return "ペインが見つかりませんでした。";
+      return PANE_NOT_FOUND_NOTICE;
     case "invalid_request":
-      return "入力内容を確認してください。";
+      return INVALID_REQUEST_NOTICE;
     default:
       return "ペインを作成できませんでした。もう一度お試しください。";
   }

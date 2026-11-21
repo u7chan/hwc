@@ -1,4 +1,5 @@
 import type { CreateSpaceFailure } from "./api";
+import { INVALID_REQUEST_NOTICE, PANE_NOT_FOUND_NOTICE } from "./failure-text";
 import { UNKNOWN_NOTICE } from "./worktree-create";
 
 // フォルダから作るスペースの失敗。作成できたか分からないものは再送させない。
@@ -16,9 +17,9 @@ export function spaceFailureNotice(error: CreateSpaceFailure): { message: string
     case "no_checkout":
       return { message: "このペインのチェックアウトを読めませんでした。", retry: false };
     case "pane_not_found":
-      return { message: "ペインが見つかりませんでした。", retry: false };
+      return { message: PANE_NOT_FOUND_NOTICE, retry: false };
     case "invalid_request":
-      return { message: "入力内容を確認してください。", retry: true };
+      return { message: INVALID_REQUEST_NOTICE, retry: true };
     case "pane_rename_failed":
       // スペースはできているので、ダイアログは起動へ進み、ここへは来ない。
       return { message: "ペイン名を付けられませんでした。", retry: false };

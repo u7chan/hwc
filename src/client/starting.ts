@@ -2,6 +2,7 @@ import type { PaneState } from "../server/herdr/state";
 import type { AgentKind, AgentModel } from "../shared/agents";
 import { supportsChat } from "../shared/agents";
 import type { StartAgentFailure } from "./api";
+import { INVALID_REQUEST_NOTICE, PANE_NOT_FOUND_NOTICE } from "./failure-text";
 
 // hwc が起動を頼んだペイン。ダイアログで選んだ内容だけを持ち、起動したかどうかの正は
 // スナップショット（pane.agent / pane.chat）に置く。at は要求が終わった時刻で、
@@ -82,9 +83,9 @@ export function launchFailureMessage(error: StartAgentFailure | null): string {
     case "pane_not_shell":
       return "このペインではすでにエージェントが動いています。";
     case "pane_not_found":
-      return "ペインが見つかりませんでした。";
+      return PANE_NOT_FOUND_NOTICE;
     case "invalid_request":
-      return "入力内容を確認してください。";
+      return INVALID_REQUEST_NOTICE;
     case "timeout":
       return "起動できたか確認できませんでした。ペインの状態を見てから、必要ならもう一度お試しください。";
     case "agent_start_failed":
