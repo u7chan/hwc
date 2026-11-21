@@ -13,7 +13,7 @@ u7agent（`u7chan/monorepo` の `projects/u7agent`）には、DOM / React に依
 ## Decision
 
 - Markdown とシンタックスハイライトのために外部ライブラリを足さない（[依存の方針](dependency-policy.md)）。u7agent のパーサを `src/client/markdown/` に、トークナイザを `src/client/pane/highlight.ts` に移植し、各ファイルの先頭に移植元を 1 行残す
-- HTML 文字列を経由せず、Preact の VNode を組んで描く。`innerHTML` / `dangerouslySetInnerHTML` / `DOMParser` を使わない（`src/client/markdown/safety.test.ts` が検査する）
+- HTML 文字列を経由せず、Preact の VNode を組んで描く。`innerHTML` / `dangerouslySetInnerHTML` / `DOMParser` を使わない（Markdown とハイライトは `src/client/markdown/safety.test.ts` が検査する。端末出力は対象外）
 - パーサとトークナイザは DOM / Preact に依存させず、純関数としてテストする（[テスト方針](test-strategy.md)）
 - 生 HTML は描かず、タグは文字として出す。リンクにするのは `http` / `https` / `mailto` と、BFF が実在を確かめたファイルのパスだけ（[ファイルの配信](file-serving.md)）
 - Markdown として描くのはエージェントの本文だけ。利用者の本文は送った文字列をそのまま出す
