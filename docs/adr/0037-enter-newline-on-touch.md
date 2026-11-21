@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-07
-- Amended by: [ADR 0118](0118-composer-project-mention.md)（PC で `@` の候補が出ている間の Enter）
+- Amended by: [ADR 0119](0119-composer-project-mention.md)（PC で `@` の候補が出ている間の Enter）
 
 ## Context
 

@@ -1970,7 +1970,7 @@ export function PaneDetail(props: PaneDetailProps) {
                     onKeyDown={(event) => {
                       const composing = event.isComposing || event.keyCode === 229;
                       if (composing) return;
-                      // 候補が出ている間は、Enter も候補の確定にする（ADR 0118）。候補はキーボードの
+                      // 候補が出ている間は、Enter も候補の確定にする（ADR 0119）。候補はキーボードの
                       // ある端末にしか出ないので、タッチ端末の Enter は改行のまま。
                       if (mention !== null && suggested !== null) {
                         const plain = !(
