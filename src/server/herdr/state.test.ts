@@ -376,16 +376,33 @@ test("a publish tells subscribers whether the transition was observed", async ()
   await first;
 
   const second = store.refresh();
-  loads[1]?.resolve(snapshot);
+  loads[1]?.resolve({ ...snapshot, focused_workspace_id: "w2" });
   await second;
 
   // 再接続直後の取得も観測の切れ目になる。
   store.breakObservation();
   const third = store.refresh();
-  loads[2]?.resolve(snapshot);
+  loads[2]?.resolve({ ...snapshot, focused_workspace_id: "w1" });
   await third;
 
   expect(seen).toEqual([false, true, false]);
+});
+
+test("a refresh that changes nothing is not published again", async () => {
+  const { store, loads } = createControlledStore();
+  const seen: Array<string[] | undefined> = [];
+  store.onChange((state) => seen.push(workspaceIds(state)));
+
+  // cwd とブランチを追う取り直しでは、内容が変わらないことが多い（ADR 0120）。
+  const first = store.refresh();
+  loads[0]?.resolve(snapshot);
+  await first;
+  const second = store.refresh();
+  loads[1]?.resolve(snapshot);
+  await second;
+
+  expect(seen).toEqual([["w1", "w2"]]);
+  expect(workspaceIds(store.get())).toEqual(["w1", "w2"]);
 });
 
 test("refresh during a running load coalesces into one extra load", async () => {

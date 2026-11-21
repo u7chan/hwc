@@ -75,11 +75,12 @@ export function parseGitRepo(output: string, checkoutPath: string): GitRepo | nu
   return repoName === "" ? null : { repoName, repoRoot, isLinkedWorktree };
 }
 
-// ブランチを切り替えても Herdr からイベントは来ない。毎回読むと重いので少しだけ覚える。
+// ブランチを切り替えても Herdr からイベントは来ない。可視中の取り直し（ADR 0120）で
+// 追いつけるよう、HEAD の読みは短くだけ覚える。プロセスは起動しない。
 export function createBranchReader(
   options: { ttlMs?: number; now?: () => number } = {},
 ): BranchReader {
-  const ttlMs = options.ttlMs ?? 4_000;
+  const ttlMs = options.ttlMs ?? 1_000;
   const now = options.now ?? Date.now;
   const cache = new Map<string, { branch: string | null; at: number }>();
 

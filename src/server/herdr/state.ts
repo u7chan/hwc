@@ -269,6 +269,9 @@ export function createStateStore(options: {
   let current: AppState | null = null;
   // スナップショットから作れる部分。遷移の判定にはこちらだけを使う。
   let snapshotState: SnapshotState | null = null;
+  // 最後に購読者へ流した状態。cwd とブランチを追う取り直しでは、内容が変わらないことが
+  // 多い。同じ状態を SSE に流し直すと、端末が間隔ごとに全体を描き直す（ADR 0120）。
+  let published: string | null = null;
   let times: PaneTimes = NO_TIMES;
   // ターンの観測状態。クライアントへは渡さず、永続化もしない（ADR 0100）。
   let turns = new Map<string, PaneTurn>();
@@ -343,6 +346,9 @@ export function createStateStore(options: {
     sources = toChatSources(snapshot);
     workspacePaths = roots;
     paneRoots = toPaneRoots(snapshot, roots);
+    const serialized = JSON.stringify(state);
+    if (serialized === published) return state;
+    published = serialized;
     for (const listener of listeners) listener(state, observing);
     return state;
   };

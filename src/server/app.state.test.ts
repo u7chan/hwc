@@ -56,6 +56,35 @@ test("GET /api/state returns 502 when Herdr cannot be read", async () => {
   expect(await response.json()).toEqual({ error: "herdr_unavailable" });
 });
 
+test("POST /api/state/refresh asks the store to read Herdr again", async () => {
+  const { app, store } = createTestApp({ state });
+  const response = await app.request("/api/state/refresh", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(store.refreshCount()).toBe(1);
+});
+
+test("POST /api/state/refresh returns 502 when Herdr cannot be read", async () => {
+  const { app, store } = createTestApp({
+    state: null,
+    storeFailure: new Error("socket closed"),
+  });
+  const response = await app.request("/api/state/refresh", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+  expect(store.refreshCount()).toBe(1);
+});
+
 test("GET /api/events streams the current state first, then every update", async () => {
   const store = createFakeStore(state);
   const { app } = createTestApp({ store });

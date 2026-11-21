@@ -8,6 +8,7 @@ import {
 } from "../../shared/agents";
 import type { LaunchDefaults } from "../../shared/launch-defaults";
 import { connectionLabel, type ConnectionStatus } from "../connection";
+import { liveUpdateLabel, type LiveUpdateInterval } from "../live-update";
 import { themeLabel, type ThemePreference } from "../theme";
 
 // エージェントごとの画面。いまは新しいペインの既定モデルと effort だけを持つ（ADR 0104）。
@@ -16,6 +17,7 @@ export type AgentCategoryId = `agent-${ModelAgentKind}`;
 export type SettingsCategoryId =
   | "display"
   | "split"
+  | "live"
   | "templates"
   | "notifications"
   | "restart"
@@ -40,6 +42,7 @@ export function agentOfCategory(id: SettingsCategoryId): ModelAgentKind | null {
 export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   { id: "display", label: "表示", group: "settings" },
   { id: "split", label: "ペイン分割", group: "settings" },
+  { id: "live", label: "ライブ更新", group: "settings" },
   { id: "templates", label: "定型文", group: "settings" },
   { id: "notifications", label: "通知", group: "settings" },
   { id: "restart", label: "再起動", group: "settings" },
@@ -67,6 +70,7 @@ export function settingsCategoryLabel(id: SettingsCategoryId): string {
 export type SettingsCategoryValues = {
   theme: ThemePreference;
   split: boolean | null;
+  liveUpdate: LiveUpdateInterval;
   connection: ConnectionStatus;
   revision: string | null;
   templates: number | null;
@@ -87,6 +91,8 @@ export function settingsCategoryValue(
       return themeLabel(values.theme);
     case "split":
       return values.split === null ? null : values.split ? "オン" : "オフ";
+    case "live":
+      return liveUpdateLabel(values.liveUpdate);
     case "templates":
       return values.templates === null ? null : `${values.templates} 件`;
     case "notifications":

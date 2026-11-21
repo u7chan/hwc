@@ -1,4 +1,5 @@
 import type net from "node:net";
+import { writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join } from "node:path";
 import { isAgentKind } from "../../src/shared/agents";
 import { ATTACHED_FILES_OPEN } from "../../src/shared/attachments";
@@ -175,6 +176,33 @@ export function createHandle(
         const text = typeof params.text === "string" ? params.text : "";
         outputs.set(paneId, `${outputs.get(paneId) ?? ""}${text}\n`);
         revisions.set(paneId, (revisions.get(paneId) ?? 0) + 1);
+        // フィクスチャ専用。実 Herdr と同じく、シェルの cd はスナップショットの cwd を
+        // 変えるがイベントは流さない。hwc の可視中の取り直しで追随することを確かめる
+        // （ADR 0120）。git checkout も同じく、HEAD を書くだけでイベントは流さない。
+        const shellLine = text.includes(ATTACHED_FILES_OPEN) ? null : text.trim();
+        const hasAgent = snapshot.agents?.some((agent) => agent.pane_id === paneId) === true;
+        if (shellLine !== null && !hasAgent && !foreground.has(paneId)) {
+          const cd = /^cd (\S+)$/.exec(shellLine);
+          if (cd !== null) {
+            const pane = findPane(paneId);
+            if (pane !== null) pane.cwd = cd[1]!;
+            send(socket, { id, result: { type: "ok" } });
+            return;
+          }
+          const checkout = /^git checkout (\S+)$/.exec(shellLine);
+          if (checkout !== null) {
+            const cwd = findPane(paneId)?.cwd;
+            if (typeof cwd === "string" && isAbsolute(cwd)) {
+              try {
+                await writeFile(join(cwd, ".git", "HEAD"), `ref: refs/heads/${checkout[1]}\n`);
+              } catch {
+                // git 管理外の場所では何も起きない。架空のシェルも同じく黙って戻る。
+              }
+            }
+            send(socket, { id, result: { type: "ok" } });
+            return;
+          }
+        }
         // フィクスチャ専用の入力。実 Herdr には無い。既読を進めない限り idle にならない
         // done を E2E から作れるようにして、終了時刻の表示と端末間の一致を確かめる。
         if (text.trim() === "/done") {
