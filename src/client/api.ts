@@ -511,7 +511,7 @@ export async function fetchState(signal?: AbortSignal): Promise<StateMessage> {
 }
 
 // Herdr がイベントを出さない cwd とブランチを追うための取り直しを頼む。応答は状態ではない。
-// 新しい状態は SSE で届くので、ここでは成否だけを見る（ADR 0120）。
+// 新しい状態は SSE で届くので、ここでは成否だけを見る（ADR 0121）。
 export async function refreshState(signal?: AbortSignal): Promise<void> {
   const response = await client.api.state.refresh.$post({ json: {} }, { init: { signal } });
   if (!response.ok) throw new Error(`state refresh: ${response.status}`);

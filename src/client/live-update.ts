@@ -1,6 +1,6 @@
 // Herdr がイベントを出さない cwd とブランチを、画面を見ている間だけ取り直す間隔。
 // 見え方と電池の好みなので、テーマやペイン分割と同じく端末ごとに localStorage へ置き、
-// BFF には送らない（ADR 0120）。
+// BFF には送らない（ADR 0121）。
 
 export type LiveUpdateInterval = "off" | "1s" | "3s" | "5s" | "10s";
 

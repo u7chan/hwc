@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-08
-- Amended: 2026-11-21 に「ポーリングや自動フェッチはしない」を [ADR 0120](0120-live-state-refresh.md) で限定改訂（可視中だけ cwd / ブランチを取り直す。自動フェッチはしない）
+- Amended: 2026-11-21 に「ポーリングや自動フェッチはしない」を [ADR 0121](0121-live-state-refresh.md) で限定改訂（可視中だけ cwd / ブランチを取り直す。自動フェッチはしない）
 
 ## Context
 

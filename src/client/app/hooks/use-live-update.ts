@@ -6,7 +6,7 @@ export type UseLiveUpdate = {
   change: (next: LiveUpdateInterval) => void;
 };
 
-// ライブ更新の間隔は端末ごとの好み。テーマと同じく、読み書きは localStorage に閉じる（ADR 0120）。
+// ライブ更新の間隔は端末ごとの好み。テーマと同じく、読み書きは localStorage に閉じる（ADR 0121）。
 export function useLiveUpdate(): UseLiveUpdate {
   const [interval, setCurrent] = useState<LiveUpdateInterval>(() =>
     loadLiveUpdate(typeof localStorage === "undefined" ? null : localStorage),

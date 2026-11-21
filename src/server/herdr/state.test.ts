@@ -393,7 +393,7 @@ test("a refresh that changes nothing is not published again", async () => {
   const seen: Array<string[] | undefined> = [];
   store.onChange((state) => seen.push(workspaceIds(state)));
 
-  // cwd とブランチを追う取り直しでは、内容が変わらないことが多い（ADR 0120）。
+  // cwd とブランチを追う取り直しでは、内容が変わらないことが多い（ADR 0121）。
   const first = store.refresh();
   loads[0]?.resolve(snapshot);
   await first;

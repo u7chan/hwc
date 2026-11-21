@@ -60,7 +60,7 @@ export function createApp(options: CreateAppOptions) {
       .get("/api/panes/:id/models", chatHandlers.models)
       .get("/api/panes/:id/efforts", chatHandlers.efforts)
       .get("/api/state", stateHandlers.state)
-      // 状態を取り直す契機だけを返す。新しい状態は SSE で配る（ADR 0120）。
+      // 状態を取り直す契機だけを返す。新しい状態は SSE で配る（ADR 0121）。
       .post("/api/state/refresh", requireJson, stateHandlers.refresh)
       .get("/api/events", stateHandlers.events)
       .get("/api/workspaces/:id/pull-request", workspacesHandlers.pullRequest)
