@@ -2,6 +2,7 @@ import type { PaneState } from "../../server/herdr/state";
 import type { PullRequest } from "../../shared/pull-request";
 import {
   AgentGlyphIcon,
+  AgentIcon,
   ArrowRightIcon,
   GitHubIcon,
   MergeIcon,
@@ -217,10 +218,12 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
   if (groups.length === 0) {
     return (
       <div class="hwc-list-note">
+        <div class="hwc-list-note-mark">
+          <AgentIcon size={22} />
+        </div>
         <p class="hwc-list-note-title">エージェントがいません</p>
-        <p class="hwc-list-note-text">
-          起動しているエージェントのペインが、待機中も含めてここに並びます。シェルだけのスペースは「すべて」に出ます。
-        </p>
+        <p class="hwc-list-note-text">待機中も含め、起動中のエージェントがここに並びます。</p>
+        <p class="hwc-list-note-text">シェルだけのスペースは「すべて」で見られます。</p>
       </div>
     );
   }
