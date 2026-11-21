@@ -95,8 +95,8 @@ export function countLabel(count: number): string {
   return count > 99 ? "99+" : String(count);
 }
 
-// 「すべて」の見出しの副題。エージェントの有無を先に出す。シェルしか居ない束に
-// 「エージェント 0」と書かず、何が居るかを言う。
+// エージェントの数の札と、シェルしか居ない束の記号の名前。0 は数えず、
+// 何が居るかを言う。束の副題は件数を出すので、ここでは使わない。
 export function agentPresence(agents: number): string {
   return agents === 0 ? "シェルのみ" : `エージェント ${agents}`;
 }
