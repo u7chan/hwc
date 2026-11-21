@@ -82,9 +82,6 @@ export function pollOnStatusChange(props: {
   return "load";
 }
 
-// PR の取得も同じ判定を使う。移した先をそのまま出し、呼び出し側の import を変えない。
-export { isAbortError } from "./poll";
-
 export type PaneBody =
   | { kind: "chat"; snapshot: ChatSnapshot }
   | { kind: "skeleton" }
