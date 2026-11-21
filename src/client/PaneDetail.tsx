@@ -1,16 +1,11 @@
 import { createPortal, type Ref } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { ChatAttachment, ChatFile, ChatMessage, ChatPending } from "../server/chat/contract";
+import type { ChatAttachment, ChatFile, ChatPending } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import type { QuestionAnswer } from "../shared/answer";
 import type { FileTreeEntry } from "../shared/file-tree";
 import type { GitSync } from "../shared/git";
-import {
-  attachmentExtFromName,
-  attachmentKindOfFileName,
-  formatFileSize,
-  MAX_ATTACHMENTS,
-} from "../shared/attachments";
+import { attachmentKindOfFileName } from "../shared/attachments";
 import {
   activityLabel,
   activitySnippet,
@@ -19,22 +14,15 @@ import {
   usePaneActivity,
   withoutShownDirection,
 } from "./activity";
-import { OUTPUT_LINES, answerQuestion, attachmentUrl, editMessage, uploadAttachment } from "./api";
+import { OUTPUT_LINES, answerQuestion, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
-import { FILE_REFERENCE_TYPE, fileReference, insertFileReference } from "./file-reference";
+import { FILE_REFERENCE_TYPE, fileReference } from "./file-reference";
 import { fileTreeStore } from "./file-tree-store";
 import type { FileTreeSide } from "./file-tree-side";
 import { OutputText } from "./OutputText";
 import {
-  ATTACHMENT_LIMIT_NOTICE,
-  type AttachmentAction,
-  attachmentTooLargeNotice,
-  dropActionFrom,
-  exceedsAttachmentLimit,
-  pasteActionFrom,
   SEND_FAILED_NOTICE,
   SHELL_BUSY_NOTICE,
-  SHELL_NEWLINE_NOTICE,
   STOP_FAILED_NOTICE,
   uploadFailureNotice,
 } from "./attachments";
@@ -54,10 +42,9 @@ import {
   pendingCard,
   usePaneChat,
 } from "./chat";
-import { composerDisabled, enterInsertsNewline, projectMentionAllowed } from "./input";
+import { composerDisabled } from "./input";
 import { useMessageReveal } from "./reveal";
 import {
-  chipOnInput,
   type CommandId,
   commandAvailable,
   commandBlockReasonFor,
@@ -73,51 +60,30 @@ import {
   isNewSessionCommand,
   type PaneOutputHandle,
 } from "./commands";
-import { ComposerAdd } from "./ComposerAdd";
 import { useCopy } from "./copy";
-import {
-  filterProjects,
-  highlightedProject,
-  insertProjectPath,
-  projectMention,
-  stepProject,
-  type ProjectMention,
-} from "./projects";
+import { filterProjects, highlightedProject } from "./projects";
 import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
 import { useProjects } from "./use-projects";
-import {
-  AgentGlyphIcon,
-  AgentIcon,
-  ArrowDownIcon,
-  ChevronLeftIcon,
-  CloseIcon,
-  CollapseIcon,
-  ExpandIcon,
-  PencilIcon,
-  SendIcon,
-  StatusMark,
-  StopIcon,
-} from "./icons";
+import { ArrowDownIcon, ChevronLeftIcon, StatusMark } from "./icons";
 import { useElementWidth } from "./app/use-element-width";
 import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
 import { OutputEmpty, OutputSkeleton } from "./pane/empty";
 import { FilePreview } from "./pane/file-preview";
 import { FileTree } from "./pane/file-tree";
-import { AgentInfoHint, AgentInfoSkeleton, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
-import { LaunchNote } from "./pane/launch-note";
+import { PaneComposer } from "./pane/pane-composer";
 import { PaneHead } from "./pane/pane-head";
 import { useAttachments } from "./pane/use-attachments";
+import { useComposer } from "./pane/use-composer";
 import { useFilePreview } from "./pane/use-file-tree";
 import { useFileTreePanel } from "./pane/use-file-tree-panel";
 import { useTemplates } from "./pane/use-templates";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
 import { useDefaultModel } from "./pane/use-default-model";
 import { useLaunchModel } from "./pane/use-launch-model";
-import { useDraft } from "./pane/use-draft";
-import { canEditMessage, editFailureNotice, newRequestId, type EditSession } from "./edit";
+import { canEditMessage, editFailureNotice } from "./edit";
 import { useOutputFollow } from "./pane/use-output-follow";
 import { useOutputVersion } from "./pane/use-output-version";
 import { usePreviewReplyBadge } from "./pane/use-preview-reply";
@@ -125,14 +91,11 @@ import { useSelectionToolbar } from "./pane/use-selection-toolbar";
 import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
-import { appendQuote, canSend, canStop } from "./reply";
-import { agentGlyph, isShellPane, type PaneContext } from "./select";
+import { canSend, canStop } from "./reply";
+import { isShellPane, type PaneContext } from "./select";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { TemplateDialog } from "./TemplateDialog";
-import { insertTemplate } from "./templates";
-import { formatClock } from "./time";
 import { selectionCopyText } from "./selection-copy";
-import { Spinner } from "./Spinner";
 import { type PaneLaunchView } from "./starting";
 
 const PENDING_TIMEOUT_MS = 60_000;
@@ -252,40 +215,13 @@ export function PaneDetail(props: PaneDetailProps) {
   const chatHidden = treeOverlay || previewOpen;
   const [expandedOpen, setExpandedOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const { outputVersion, requestOutputRefresh } = useOutputVersion();
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const [sessionReset, setSessionReset] = useState<NewSessionReset | null>(null);
-  // チップは id だけを持つ。表示名と送信文字列は定数から引く。
-  const [chip, setChip] = useState<CommandId | null>(null);
-  // 編集は対象 id・requestId・本文だけを持つ。下書き (draft) は触らない。
-  const [edit, setEdit] = useState<EditSession | null>(null);
-  // メニューからの /new だけ、送る前に確認する。
-  const [confirmNew, setConfirmNew] = useState(false);
+  // 入力欄の状態と遷移は useComposer が持つ。ここは添付と定型文の取得だけを残す。
   const attachments = useAttachments(pane.id);
   // + メニューの「定型文を引用」を押せるかだけに使う。読めなければ押せる側に倒す。
   const templates = useTemplates(pane.chat);
-  // プロジェクトのダイアログは閉じるアニメーションの間も残す。caret は選んだ直後に
-  // 入力欄へ戻す位置で、閉じただけ（キャンセル）のときは null のまま。
-  const [projectDialog, setProjectDialog] = useState<{
-    open: boolean;
-    caret: number | null;
-  } | null>(null);
-  // `@` の候補を出すかは、本文とキャレットから描画のたびに導く。キャレットは入力欄が
-  // 持つ値の写しで、フォーカスを外している間は null。強調と閉じた記録も識別子だけを持つ。
-  const [caret, setCaret] = useState<number | null>(null);
-  const [mentionHighlight, setMentionHighlight] = useState<string | null>(null);
-  const [mentionDismissed, setMentionDismissed] = useState<ProjectMention | null>(null);
-  // 定型文のダイアログも、閉じるアニメーションの間は残す。caret は選んだ直後に
-  // 入力欄へ戻す位置で、閉じただけのときは null のまま。
-  const [templateDialog, setTemplateDialog] = useState<{
-    open: boolean;
-    caret: number | null;
-  } | null>(null);
-  // ファイルをドラッグしている間だけ composer を光らせる。dragenter / dragleave は
-  // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
-  const [dropping, setDropping] = useState(false);
-  const dragDepth = useRef(0);
 
   // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
   const expanded = expandedOpen && !compact;
@@ -332,10 +268,6 @@ export function PaneDetail(props: PaneDetailProps) {
     refreshChat();
     return result;
   };
-  const editTarget =
-    edit === null
-      ? null
-      : (snapshot?.messages.find((message) => message.id === edit.messageId) ?? null);
   const normalBody = paneBody({
     chat: pane.chat || resetting,
     blocked,
@@ -452,9 +384,6 @@ export function PaneDetail(props: PaneDetailProps) {
   const frame = useRef<HTMLDivElement>(null);
   // 引用を足した直後、再描画後の入力欄へカーソルを移す位置。
   const pendingCaret = useRef<number | null>(null);
-  // ツリーの行を掴むと入力欄からフォーカスが外れる。その直前の選択範囲を控え、
-  // 落としたときの差し込み位置にする。一度もフォーカスしていなければ null。
-  const lastSelection = useRef<{ start: number; end: number } | null>(null);
   // 開閉を押した時点の入力欄の高さ。開閉後の高さへ動かす始点にする。
   const toggleFrom = useRef<number | null>(null);
   // 実行中の開閉アニメーション。高さを測る前に止める。
@@ -466,101 +395,6 @@ export function PaneDetail(props: PaneDetailProps) {
   });
 
   const shell = isShellPane(pane) && launch === null;
-  // シェルには会話のコマンドが無い。エージェントを終了したときにチップが残っていても、
-  // シェルの入力欄では見せず、送信も本文として扱う。
-  const activeChip = shell ? null : chip;
-  const { draft, setDraft, clearDraft } = useDraft(pane.id, activeChip !== "compact");
-  const inputText = edit === null ? draft : edit.text;
-  // 編集中は入力欄の値を編集本文へ流し、下書きはそのまま残す。
-  const setInputText = (value: string) => {
-    if (edit !== null) {
-      setEdit((current) => (current === null ? current : { ...current, text: value }));
-      return;
-    }
-    setDraft(value);
-    setChip(chipOnInput(activeChip));
-  };
-  const compactDone = snapshot !== null && compactAlreadyDone(snapshot);
-  // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
-  // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
-  // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
-  // 起動中も出すと、選んだ時点で下書きがチップに変わり消える。準備ができるまで出さない。
-  const candidates =
-    edit === null &&
-    !launchBlocked &&
-    !inputDisabled &&
-    attachments.length === 0 &&
-    compactionRun === null
-      ? commandCandidates(pane, draft, snapshot)
-      : [];
-  // + メニューは分割セルでは出ないので、同じ条件にせず `@` で選べるようにする。
-  const mention =
-    caret !== null &&
-    !shell &&
-    pane.chat &&
-    edit === null &&
-    !launchBlocked &&
-    !inputDisabled &&
-    projectMentionAllowed((query) => window.matchMedia(query).matches)
-      ? projectMention(draft, caret)
-      : null;
-  const projects = useProjects(pane.id, mention !== null);
-  const mentionClosed =
-    mention !== null &&
-    mentionDismissed !== null &&
-    mentionDismissed.start === mention.start &&
-    mentionDismissed.query === mention.query;
-  const suggestions =
-    mention !== null && !mentionClosed && projects.load.kind === "ready"
-      ? filterProjects(projects.load.projects, mention.query)
-      : [];
-  const suggested = highlightedProject(suggestions, mentionHighlight);
-  // path は空白を含み得て ID にならないので、並びの位置で付ける。
-  const suggestionId = (index: number) => `hwc-mention-${pane.id}-${index}`;
-  const uploading = attachments.some((item) => item.name === null);
-  const editSendable =
-    edit !== null && edit.text.trim() !== "" && pane.agentStatus !== "working" && !edit.sending;
-  const sendable =
-    edit !== null
-      ? editSendable
-      : canSend({
-          uploading,
-          chip: activeChip,
-          replying,
-          draft,
-          attachments: attachments.length,
-        });
-  const sendingAny = sending || edit?.sending === true;
-  // 停止は入力が空のときだけ出す。文字・添付・引用があれば、送信は実行中への追加指示になる。
-  const stop =
-    edit === null &&
-    canStop({
-      replying,
-      agent: pane.agent,
-      running,
-      draft,
-      attachments: attachments.length,
-      chip: activeChip,
-    });
-  const busy = sendingAny || stopping;
-  const placeholder =
-    edit !== null
-      ? "この発言を編集"
-      : activeChip === "compact"
-        ? "圧縮の指示（任意）"
-        : shell
-          ? "コマンドを入力"
-          : "メッセージを入力";
-  // 圧縮のチップ中は入力欄が指示になる。長い定型文を引用する先ではない。
-  const templateBlock =
-    edit === null && activeChip === "compact" ? "圧縮の指示には使えません" : null;
-
-  // シェルに戻ったら、会話のコマンドチップは持ち越さない。残すと、シェルへ
-  // /compact を送ってしまい、次の会話に圧縮の控えが並ぶ。
-  useEffect(() => {
-    if (!shell) return;
-    setChip((current) => (current === null ? current : null));
-  }, [shell]);
 
   // 作ったペインは、閉じたダイアログの続きでそのまま打ち始められるように焦点を移す。
   // iOS は非同期の後にキーボードを出さないことがあるので、焦点だけを合わせる。
@@ -572,15 +406,6 @@ export function PaneDetail(props: PaneDetailProps) {
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
   const copyId = () => copy("pane", pane.id);
-
-  // 前景でコマンドが動いていると Herdr は起動を受け付けない。先に止めてもらう。
-  const startAgent = () => {
-    if (running) {
-      setNotice(SHELL_BUSY_NOTICE);
-      return;
-    }
-    props.onStartAgent();
-  };
 
   // 入力量に合わせて高さを伸ばす。広げている間は CSS の高さに任せる。
   // 簡略表示では入力欄と情報・送信を同じ行に置くが、折り返して 2 行以上になったら
@@ -613,13 +438,117 @@ export function PaneDetail(props: PaneDetailProps) {
     field.style.height = `${field.scrollHeight}px`;
   };
 
+  // 添付の保存。ペインを切り替えても止めない。送り先が消えたときだけ App が中断する。
+  // 失敗したときだけ、入力欄の上に出す文言を返す（表示は composer が持つ）。
+  const uploadFile = async (file: File): Promise<string | null> => {
+    const { key, controller } = attachmentStore.begin(pane.id, file.size);
+
+    const result = await uploadAttachment(pane.id, file, controller.signal);
+    if (result.ok) {
+      attachmentStore.settle(pane.id, key, result.name);
+      return null;
+    }
+    // 外された添付は一覧から既に消えている。その失敗は知らせない。
+    if (controller.signal.aborted) return null;
+    attachmentStore.remove(pane.id, key);
+    return uploadFailureNotice(result.status, attachmentKindOfFileName(file.name));
+  };
+
+  // 入力欄まわりの状態は useComposer が持つ。添付と定型文の取得、下書きの保存、送信と
+  // 編集の API 呼び出しはここに残す。
+  const composer = useComposer({
+    pane,
+    shell,
+    inputDisabled,
+    launchBlocked,
+    sending,
+    attachments,
+    selection: { toolbar: selectionToolbar, dismiss: dismissSelection },
+    input: { field: input, pendingCaret, fit, expanded },
+    upload: uploadFile,
+  });
+  const editTarget =
+    snapshot?.messages.find((message) => message.id === composer.edit?.messageId) ?? null;
+  const compactDone = snapshot !== null && compactAlreadyDone(snapshot);
+  // 添付を持っている間は候補を出さない。候補を選ぶと本文が消えるので、貼った画像と
+  // 書きかけの指示が別々のメッセージに分かれてしまう。引用は下書きの一部なので、
+  // 本文の先頭が `/` でなければ候補は出ない。空の会話と圧縮済みは commandAvailable が見る。
+  // 起動中も出すと、選んだ時点で下書きがチップに変わり消える。準備ができるまで出さない。
+  const candidates =
+    composer.edit === null &&
+    !launchBlocked &&
+    !inputDisabled &&
+    attachments.length === 0 &&
+    compactionRun === null
+      ? commandCandidates(pane, composer.draft, snapshot)
+      : [];
+  // + メニューは分割セルでは出ないので、同じ条件にせず `@` で選べるようにする。
+  // `@` の候補を出すかの判断は composer が持つ。取り直すのは候補を出す間だけ。
+  const projects = useProjects(pane.id, composer.mention !== null);
+  const suggestions =
+    composer.mention !== null && !composer.mentionClosed && projects.load.kind === "ready"
+      ? filterProjects(projects.load.projects, composer.mention.query)
+      : [];
+  const suggested = highlightedProject(suggestions, composer.mentionHighlight);
+  const uploading = attachments.some((item) => item.name === null);
+  const editSendable =
+    composer.edit !== null &&
+    composer.edit.text.trim() !== "" &&
+    pane.agentStatus !== "working" &&
+    !composer.edit.sending;
+  const sendable =
+    composer.edit !== null
+      ? editSendable
+      : canSend({
+          uploading,
+          chip: composer.activeChip,
+          replying,
+          draft: composer.draft,
+          attachments: attachments.length,
+        });
+  const sendingAny = sending || composer.edit?.sending === true;
+  // 停止は入力が空のときだけ出す。文字・添付・引用があれば、送信は実行中への追加指示になる。
+  const stop =
+    composer.edit === null &&
+    canStop({
+      replying,
+      agent: pane.agent,
+      running,
+      draft: composer.draft,
+      attachments: attachments.length,
+      chip: composer.activeChip,
+    });
+  const busy = sendingAny || stopping;
+  const placeholder =
+    composer.edit !== null
+      ? "この発言を編集"
+      : composer.activeChip === "compact"
+        ? "圧縮の指示（任意）"
+        : shell
+          ? "コマンドを入力"
+          : "メッセージを入力";
+  // 圧縮のチップ中は入力欄が指示になる。長い定型文を引用する先ではない。
+  const templateBlock =
+    composer.edit === null && composer.activeChip === "compact" ? "圧縮の指示には使えません" : null;
+  // 起動の行は、待ちと失敗の間だけ出す。準備ができたら入力欄だけを残す。
+  const launchNote = launchPending ? launch : null;
+
+  // 前景でコマンドが動いていると Herdr は起動を受け付けない。先に止めてもらう。
+  const startAgent = () => {
+    if (running) {
+      composer.setNotice(SHELL_BUSY_NOTICE);
+      return;
+    }
+    props.onStartAgent();
+  };
+
   // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
   // 前の inline height を残さない。
   // 描画の後に高さを直すと、改行した 1 フレームだけ箱が低いままになり、
   // スクロールバーが一瞬出る。描画の前に合わせる。
   useLayoutEffect(() => {
     fit(input.current, expanded);
-  }, [inputText, expanded, compact, inputDisabled]);
+  }, [composer.inputText, expanded, compact, inputDisabled]);
 
   // 高さが変わるのは開閉を押したときだけにする。打鍵に合わせた伸縮まで滑らせると、
   // 1 文字ごとに箱が動いて入力の手応えが鈍る。
@@ -657,7 +586,7 @@ export function PaneDetail(props: PaneDetailProps) {
     field.focus();
     field.setSelectionRange(caret, caret);
     fit(field, expanded);
-  }, [draft, expanded]);
+  }, [composer.draft, expanded]);
 
   useLayoutEffect(() => {
     if (confirmation !== null && scroller.current) scroller.current.scrollTop = 0;
@@ -672,7 +601,7 @@ export function PaneDetail(props: PaneDetailProps) {
     replying,
     pendingCount: pendingMessages.length,
     revealLength: reveal?.text.length,
-    notice,
+    notice: composer.notice,
     compactionRun,
     compactionEcho,
     confirmation,
@@ -732,185 +661,8 @@ export function PaneDetail(props: PaneDetailProps) {
     return () => clearTimeout(timer);
   }, [pending]);
 
-  // 候補を選ぶとチップになり、入力欄の /... は消える。送信はもう一度 Enter。
-  // 起動中は候補を出さないが、古い描画からのクリックでも下書きを消さない。
-  const pick = (id: CommandId) => {
-    if (launchBlocked || inputDisabled || edit !== null) return;
-    setChip(id);
-    setDraft("");
-    // タップでキーボードが閉じないよう、入力欄へ焦点を戻す。
-    input.current?.focus();
-  };
-
-  const clearChip = () => {
-    if (edit !== null) return;
-    setChip(null);
-    setDraft("");
-    input.current?.focus();
-  };
-
-  // 選択を引用として下書きの末尾へ足す。compact のチップは外すが、指示の下書きは残す
-  // （引用に続く本文として送り、/compact には戻さない）。
-  const quoteSelection = () => {
-    // 送信中に足すと、成功時のクリアで新しい引用まで消える。送っている間は受け付けない。
-    if (sendingAny || launchBlocked || inputDisabled) return;
-    const text = selectionToolbar?.anchor.text ?? "";
-    if (text === "") return;
-    const next = appendQuote(inputText, text);
-    setInputText(next.text);
-    if (edit === null) setChip(null);
-    pendingCaret.current = next.caret;
-    dismissSelection();
-  };
-
-  const openProjects = () => setProjectDialog({ open: true, caret: null });
-
-  const closeProjects = () =>
-    setProjectDialog((current) => (current === null ? null : { ...current, open: false }));
-
-  // 選んだプロジェクトは本文のカーソル位置へ入れる。チップは文字を打ったときと同じ規則で、
-  // new は解除し、compact の指示は残す。
-  const pickProject = (path: string) => {
-    const field = input.current;
-    const start = field?.selectionStart ?? inputText.length;
-    const end = field?.selectionEnd ?? start;
-    const next = insertProjectPath(inputText, start, end, path);
-    setInputText(next.text);
-    if (edit === null) setChip(chipOnInput(activeChip));
-    setProjectDialog({ open: false, caret: next.caret });
-  };
-
-  // キャンセル時は DialogShell が開く前の要素（+ ボタン）へ戻す。選んだときだけ、
-  // 閉じるアニメーションの後に本文へフォーカスを移す。
-  const projectsExited = () => {
-    const caret = projectDialog?.caret ?? null;
-    setProjectDialog(null);
-    if (caret === null) return;
-    const field = input.current;
-    if (field === null) return;
-    field.focus();
-    field.setSelectionRange(caret, caret);
-    fit(field, expanded);
-  };
-
-  // `@語` を選んだパスで置き換える。ダイアログと違い入力欄から離れないので、
-  // キャレットは再描画の後に layout effect が戻す。
-  const pickMention = (path: string) => {
-    if (mention === null) return;
-    const next = insertProjectPath(inputText, mention.start, mention.end, path);
-    setInputText(next.text);
-    setCaret(next.caret);
-    setMentionHighlight(null);
-    pendingCaret.current = next.caret;
-  };
-
-  const syncCaret = (field: HTMLTextAreaElement) =>
-    setCaret(field.selectionStart === field.selectionEnd ? field.selectionStart : null);
-
-  const openTemplates = () => setTemplateDialog({ open: true, caret: null });
-
-  const closeTemplates = () =>
-    setTemplateDialog((current) => (current === null ? null : { ...current, open: false }));
-
-  // 選んだ本文はカーソル位置へ入れる。チップは文字を打ったときと同じ規則で、
-  // new は解除し、compact の指示は残す。
-  const pickTemplate = (body: string) => {
-    const field = input.current;
-    const start = field?.selectionStart ?? inputText.length;
-    const end = field?.selectionEnd ?? start;
-    const next = insertTemplate(inputText, start, end, body);
-    setInputText(next.text);
-    if (edit === null) setChip(chipOnInput(activeChip));
-    setTemplateDialog({ open: false, caret: next.caret });
-  };
-
-  // キャンセル時は DialogShell が開く前の要素（+ ボタン）へ戻す。選んだときだけ、
-  // 閉じるアニメーションの後に本文へフォーカスを移す。
-  const templatesExited = () => {
-    const caret = templateDialog?.caret ?? null;
-    setTemplateDialog(null);
-    if (caret === null) return;
-    const field = input.current;
-    if (field === null) return;
-    field.focus();
-    field.setSelectionRange(caret, caret);
-    fit(field, expanded);
-  };
-
-  // ツリーの行を composer へ落としたとき、そのパスを下書きの選択位置へ入れる。
-  // 末尾ではなくキャレットへ入れるので、指示の途中に複数並べられる。
-  const insertReference = (reference: string) => {
-    const recorded = lastSelection.current;
-    const start = recorded?.start ?? inputText.length;
-    const end = recorded?.end ?? start;
-    const next = insertFileReference(inputText, start, end, reference);
-    // 同じパスを選択範囲に落とすと下書きが変わらず、再描画後のキャレットを戻す
-    // layout effect が走らない。そのときは、その場で入力欄へ戻す。
-    if (next.text === inputText) {
-      const field = input.current;
-      if (field === null) return;
-      field.focus();
-      field.setSelectionRange(next.caret, next.caret);
-      return;
-    }
-    setInputText(next.text);
-    pendingCaret.current = next.caret;
-  };
-
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
   const removeAttachment = (key: string) => attachmentStore.remove(pane.id, key);
-
-  // ペインを切り替えても止めない。送り先が消えたときだけ App が中断する。
-  const uploadFile = async (file: File) => {
-    const { key, controller } = attachmentStore.begin(pane.id, file.size);
-
-    const result = await uploadAttachment(pane.id, file, controller.signal);
-    if (result.ok) {
-      attachmentStore.settle(pane.id, key, result.name);
-      return;
-    }
-    // 外された添付は一覧から既に消えている。その失敗は知らせない。
-    if (controller.signal.aborted) return;
-    attachmentStore.remove(pane.id, key);
-    setNotice(uploadFailureNotice(result.status, attachmentKindOfFileName(file.name)));
-  };
-
-  // 貼ったファイルを見たらコマンドではなく本文を書く。書きかけの draft は捨てない。
-  // 上限を超えるものは送る前に弾く。
-  const addFiles = (files: File[]) => {
-    if (launchBlocked || inputDisabled || edit !== null) return;
-    const room = MAX_ATTACHMENTS - attachments.length;
-    if (room <= 0) {
-      setNotice(ATTACHMENT_LIMIT_NOTICE);
-      return;
-    }
-    if (files.length > room) setNotice(ATTACHMENT_LIMIT_NOTICE);
-    setChip(null);
-    for (const file of files.slice(0, room)) {
-      if (exceedsAttachmentLimit(file)) {
-        setNotice(attachmentTooLargeNotice(attachmentKindOfFileName(file.name)));
-        continue;
-      }
-      void uploadFile(file);
-    }
-  };
-
-  // OS から落としたファイルと、ツリーの行を運んだドロップを同じ受け口で扱う。
-  // dragover 中は getData を読めない（保護モード）ので、種類は型だけで決める。
-  const dropKind = (transfer: DataTransfer | null): "files" | "reference" | null => {
-    if (transfer === null) return null;
-    if (transfer.types.includes(FILE_REFERENCE_TYPE)) return "reference";
-    if (transfer.types.includes("Files")) return "files";
-    return null;
-  };
-
-  // 貼り付けとドロップで同じ受け付け方をする。アップロードするファイルが無ければ
-  // 既定動作を止めない。何もアップロードしないときは false を返す。
-  const takeFiles = (action: AttachmentAction): boolean => {
-    if (action.kind !== "upload") return false;
-    addFiles(action.files);
-    return true;
-  };
 
   const startsNewSession = (text: string, names: readonly string[]) =>
     (pane.chat || serverSnapshot !== null) &&
@@ -958,43 +710,16 @@ export function PaneDetail(props: PaneDetailProps) {
     return sent;
   };
 
-  // 過去の発言を入力欄へ移す。下書きはそのまま残し、編集中だけ別の本文を使う。
-  const startEdit = (message: ChatMessage) => {
-    if (edit !== null || inputDisabled || launchBlocked) return;
-    setNotice(null);
-    setChip(null);
-    setEdit({
-      messageId: message.id,
-      requestId: newRequestId(),
-      text: message.text,
-      sending: false,
-    });
-    requestAnimationFrame(() => {
-      const field = input.current;
-      if (field === null) return;
-      field.focus();
-      field.setSelectionRange(field.value.length, field.value.length);
-    });
-  };
-
-  const cancelEdit = () => {
-    if (edit === null || edit.sending) return;
-    setEdit(null);
-    setNotice(null);
-    input.current?.focus();
-  };
-
   const sendEdit = async () => {
-    if (edit === null || edit.sending || inputDisabled || launchBlocked) return;
-    if (edit.text.trim() === "") return;
+    if (composer.edit === null || composer.edit.sending || inputDisabled || launchBlocked) return;
+    if (composer.edit.text.trim() === "") return;
     if (pane.agentStatus === "working") {
-      setNotice("実行中は編集できません");
+      composer.setNotice("実行中は編集できません");
       return;
     }
-    const pendingEdit = { ...edit, sending: true };
-    setNotice(null);
-    input.current?.blur();
-    setEdit(pendingEdit);
+    const pendingEdit = { ...composer.edit, sending: true };
+    composer.beginSend();
+    composer.setEdit(pendingEdit);
     const result = await editMessage(
       pane.id,
       pendingEdit.messageId,
@@ -1002,18 +727,18 @@ export function PaneDetail(props: PaneDetailProps) {
       pendingEdit.text,
     );
     if (result.ok) {
-      setEdit(null);
+      composer.setEdit(null);
       setPinned(true);
       refreshChat();
       return;
     }
-    setEdit((current) => (current === null ? current : { ...current, sending: false }));
-    setNotice(editFailureNotice(result.error, result.rewound));
+    composer.setEditSending(false);
+    composer.setNotice(editFailureNotice(result.error, result.rewound));
     if (result.rewound) refreshChat();
   };
 
   const sendText = async () => {
-    if (edit !== null) {
+    if (composer.edit !== null) {
       void sendEdit();
       return;
     }
@@ -1025,29 +750,26 @@ export function PaneDetail(props: PaneDetailProps) {
     const echoed: ChatAttachment[] = attachments.flatMap((item) =>
       item.name === null ? [] : [{ name: item.name, size: item.size }],
     );
-    const text = draft;
+    const text = composer.draft;
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
     const compactCommand = attachments.length === 0 && isCompactCommand(text);
     const newCommand = startsNewSession(text, names);
     if (compactCommand && compactDone) {
-      setNotice(COMPACTED_NOTICE);
+      composer.setNotice(COMPACTED_NOTICE);
       return;
     }
     const baselineAt = snapshot?.compaction?.at ?? null;
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
     const after = snapshot?.messages.length ?? 0;
-    // 送信したらキーボードを閉じて出力を見せる。
-    input.current?.blur();
-    // 前の失敗は消す。送り直したのに前の notice が残っていると、いつの結果か読めない。
-    setNotice(null);
+    composer.beginSend();
     // 送れたときだけ空にする。失敗したら本文も添付も残す。
     if (await submitInput(text, names)) {
       // 猶予は送信が通った時点から測る。POST が遅いときに、届く前の echo を畳まない。
       const at = Date.now();
       // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
       setPinned(true);
-      clearDraft();
+      composer.clearDraft();
       attachmentStore.clear(pane.id);
       // シェルペインには会話が無い。控えを積むと、同じペインで後から起動した
       // エージェントの会話に、シェルで打ったコマンドが並ぶ。送信は端末にだけ届ける。
@@ -1061,15 +783,15 @@ export function PaneDetail(props: PaneDetailProps) {
         }
       }
     } else {
-      setNotice(SEND_FAILED_NOTICE);
+      composer.setNotice(SEND_FAILED_NOTICE);
     }
   };
 
   const stopWorking = async () => {
     if (stopping || !stop) return;
     setStopping(true);
-    setNotice(null);
-    if (!(await onStop())) setNotice(STOP_FAILED_NOTICE);
+    composer.setNotice(null);
+    if (!(await onStop())) composer.setNotice(STOP_FAILED_NOTICE);
     setStopping(false);
   };
 
@@ -1079,38 +801,37 @@ export function PaneDetail(props: PaneDetailProps) {
   const cancelCompaction = async () => {
     if (stopping) return;
     setStopping(true);
-    setNotice(null);
+    composer.setNotice(null);
     if (await onStop()) {
       clearCompaction();
-    } else setNotice(STOP_FAILED_NOTICE);
+    } else composer.setNotice(STOP_FAILED_NOTICE);
     setStopping(false);
   };
 
   // /new は user 発話を残さないので、送信中バブルを積むと最大 60 秒残る。
   // compact は draft を指示として後ろに付ける。送れたときだけ両方空にする。
   const sendCommand = async (id: CommandId) => {
-    if (edit !== null) return;
+    if (composer.edit !== null) return;
     if (inputDisabled || launchBlocked || sending || replying || compactionRun !== null) return;
     if (id === "compact" && compactDone) {
-      setNotice(COMPACTED_NOTICE);
+      composer.setNotice(COMPACTED_NOTICE);
       return;
     }
-    const text = commandSendText(id, draft);
+    const text = commandSendText(id, composer.draft);
     const baselineAt = snapshot?.compaction?.at ?? null;
-    input.current?.blur();
-    setNotice(null);
+    composer.beginSend();
     if (await submitInput(text, [])) {
       setPinned(true);
-      setChip(null);
-      setDraft("");
+      composer.setChip(null);
+      composer.setDraft("");
       if (id === "compact") markCompaction(baselineAt, text);
-    } else setNotice(SEND_FAILED_NOTICE);
+    } else composer.setNotice(SEND_FAILED_NOTICE);
   };
 
   // メニューからはコマンド文字列だけを送る。書きかけの draft・添付は次の
   // メッセージのために残す（チップのように draft を指示には使わない）。
   const menuCommandAvailable = (id: CommandId): boolean =>
-    edit === null &&
+    composer.edit === null &&
     !inputDisabled &&
     !launchBlocked &&
     !sending &&
@@ -1118,16 +839,15 @@ export function PaneDetail(props: PaneDetailProps) {
     commandAvailable(id, pane, snapshot);
 
   const runMenuCommand = async (id: CommandId) => {
-    if (edit !== null || !menuCommandAvailable(id)) return;
+    if (composer.edit !== null || !menuCommandAvailable(id)) return;
     const text = commandText(id);
     const baselineAt = snapshot?.compaction?.at ?? null;
-    input.current?.blur();
-    setNotice(null);
+    composer.beginSend();
     if (await submitInput(text, [])) {
       setPinned(true);
-      setChip(null);
+      composer.setChip(null);
       if (id === "compact") markCompaction(baselineAt, text);
-    } else setNotice(SEND_FAILED_NOTICE);
+    } else composer.setNotice(SEND_FAILED_NOTICE);
   };
 
   const menuCommandHint = (id: CommandId): string => {
@@ -1146,7 +866,7 @@ export function PaneDetail(props: PaneDetailProps) {
           available: menuCommandAvailable("new"),
           hint: menuCommandHint("new"),
           run: () => {
-            if (menuCommandAvailable("new")) setConfirmNew(true);
+            if (menuCommandAvailable("new")) composer.setConfirmNew(true);
           },
         },
         compact: {
@@ -1160,19 +880,19 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const submit = () => {
     if (inputDisabled || launchBlocked) return;
-    if (edit !== null) {
+    if (composer.edit !== null) {
       void sendEdit();
       return;
     }
     // 添付中は候補にもチップにも流さない。
     if (attachments.length === 0) {
-      if (activeChip !== null) {
-        void sendCommand(activeChip);
+      if (composer.activeChip !== null) {
+        void sendCommand(composer.activeChip);
         return;
       }
       const first = candidates[0];
       if (first !== undefined) {
-        pick(first);
+        composer.pick(first);
         return;
       }
     }
@@ -1336,10 +1056,10 @@ export function PaneDetail(props: PaneDetailProps) {
                           snapshot: body.snapshot,
                           pane,
                           sending: sending || stopping,
-                          editing: edit !== null,
+                          editing: composer.edit !== null,
                         })
                       }
-                      onEdit={startEdit}
+                      onEdit={composer.beginEdit}
                       onOpenImage={onOpenImage}
                       onOpenPreview={onOpenPreview}
                       pending={pendingMessages}
@@ -1410,7 +1130,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 <SelectionToolbar
                   state={selectionToolbar}
                   canQuote={!inputDisabled && !launchBlocked && pane.chat}
-                  onQuote={quoteSelection}
+                  onQuote={composer.quoteSelection}
                   onCopy={() => {
                     const selection = document.getSelection();
                     const element = scroller.current;
@@ -1454,12 +1174,12 @@ export function PaneDetail(props: PaneDetailProps) {
             />
           ) : null}
 
-          {notice === null ? null : (
+          {composer.notice === null ? null : (
             <p class="hwc-send-notice" role="status">
               <span class="hwc-send-notice-mark">
                 <StatusMark tone="attention" size={12} />
               </span>
-              {notice}
+              {composer.notice}
             </p>
           )}
 
@@ -1478,420 +1198,78 @@ export function PaneDetail(props: PaneDetailProps) {
                 : "Claude の応答待ちです。承認と、カードに出ない質問への回答は Herdr のターミナルで行ってください。"}
             </p>
           ) : (
-            <form
-              class="hwc-input"
-              data-expanded={expanded}
-              data-shell={shell}
-              data-drop={dropping}
-              onSubmit={(event) => {
-                event.preventDefault();
-                submit();
+            <PaneComposer
+              composer={composer}
+              target={{ pane, context }}
+              view={{
+                compact,
+                expanded,
+                shell,
+                inputDisabled,
+                launchBlocked,
+                launchNote,
+                launching,
+                editTarget,
+                candidates,
+                commands: composerCommands,
+                mentions: { query: composer.mention?.query ?? null, suggestions, suggested },
+                attachments,
+                templateCount: templates === null ? null : templates.length,
+                templateBlock,
+                info,
+                infoLoading,
+                meter,
+                context: snapshot?.context ?? null,
+                usage: snapshot?.usage,
+                sendable,
+                stop,
+                busy,
+                sendingAny,
+                stopping,
+                placeholder,
               }}
-              onDragEnter={(event) => {
-                const transfer = event.dataTransfer;
-                if (launchBlocked || inputDisabled || edit !== null || !pane.chat) return;
-                if (transfer === null || dropKind(transfer) === null) return;
-                dragDepth.current += 1;
-                setDropping(true);
+              actions={{
+                submit,
+                stopWorking,
+                startAgent,
+                toggleExpanded,
+                retryLaunch: props.onRetryLaunch,
+                useShell: props.onUseShell,
+                openImage: props.onOpenImage,
+                removeAttachment,
               }}
-              onDragOver={(event) => {
-                const transfer = event.dataTransfer;
-                if (transfer === null || dropKind(transfer) === null) return;
-                // 添付を受け付けないペインでもファイルを開かせない。ただし落とせる場所では
-                // ないので、copy のカーソルは出さない。
-                event.preventDefault();
-                transfer.dropEffect =
-                  pane.chat && !launchBlocked && !inputDisabled && edit === null ? "copy" : "none";
-              }}
-              onDragLeave={() => {
-                if (dragDepth.current === 0) return;
-                dragDepth.current -= 1;
-                if (dragDepth.current === 0) setDropping(false);
-              }}
-              onDrop={(event) => {
-                const transfer = event.dataTransfer;
-                const kind = dropKind(transfer);
-                if (transfer === null || kind === null) return;
-                // ファイルはブラウザに開かせない。
-                event.preventDefault();
-                dragDepth.current = 0;
-                setDropping(false);
-                if (edit !== null || !pane.chat || launchBlocked || inputDisabled) return;
-                if (kind === "files") {
-                  takeFiles(dropActionFrom(transfer.files));
-                  return;
-                }
-                // パスは Linux でも 4KB まで。改行や NUL を含む文字列は、送る本文を
-                // 崩すので差し込まない。
-                const reference = transfer.getData(FILE_REFERENCE_TYPE);
-                if (reference === "" || reference.length > 4096) return;
-                if (/[\r\n]/.test(reference) || reference.includes("\u0000")) return;
-                insertReference(reference);
-              }}
-            >
-              {launchPending ? (
-                <LaunchNote
-                  launch={launch}
-                  onRetry={props.onRetryLaunch}
-                  onUseShell={props.onUseShell}
-                />
-              ) : null}
-              <label class="hwc-visually-hidden" for={`hwc-input-${pane.id}`}>
-                {context.workspaceLabel} / {context.tabLabel} のペインへ送る
-              </label>
-              <div class="hwc-input-frame">
-                {compact ? null : (
-                  <button
-                    type="button"
-                    class="hwc-input-toggle"
-                    aria-expanded={expanded}
-                    aria-controls={`hwc-input-${pane.id}`}
-                    aria-label={expanded ? "入力を折りたたむ" : "入力を広げる"}
-                    onClick={toggleExpanded}
-                  >
-                    {expanded ? <CollapseIcon /> : <ExpandIcon />}
-                  </button>
-                )}
-                {edit !== null ? (
-                  <div class="hwc-commands" role="group" aria-label="編集中">
-                    <span class="hwc-command" data-chip="true" data-edit="true">
-                      <PencilIcon size={14} />
-                      <span class="hwc-command-label">編集中</span>
-                      {editTarget === null ? null : (
-                        <span class="hwc-command-text">{formatClock(editTarget.at)}</span>
-                      )}
-                      <button
-                        type="button"
-                        class="hwc-command-clear"
-                        aria-label="編集をやめる"
-                        disabled={edit.sending}
-                        onClick={cancelEdit}
-                      >
-                        <CloseIcon size={14} />
-                      </button>
-                    </span>
-                  </div>
-                ) : attachments.length > 0 ? (
-                  <div class="hwc-commands" role="group" aria-label="添付ファイル">
-                    {attachments.map((item) => {
-                      const name = item.name;
-                      return (
-                        <span class="hwc-command hwc-attachment" data-chip="true" key={item.key}>
-                          {name === null ? (
-                            <span class="hwc-attachment-sending">送信中</span>
-                          ) : attachmentExtFromName(name) === null ? (
-                            // 画像以外は配信しない。名前だけを見せ、押しても何も開かない。
-                            <>
-                              <span class="hwc-attachment-name" title={name}>
-                                {name}
-                              </span>
-                              <span class="hwc-attachment-size">{formatFileSize(item.size)}</span>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              class="hwc-attachment-open"
-                              aria-label="添付画像を拡大"
-                              aria-haspopup="dialog"
-                              onClick={() => onOpenImage(attachmentUrl(pane.id, name), name)}
-                            >
-                              <img
-                                class="hwc-attachment-thumb"
-                                src={attachmentUrl(pane.id, name)}
-                                alt=""
-                              />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            class="hwc-command-clear"
-                            aria-label="添付を外す"
-                            onClick={() => removeAttachment(item.key)}
-                          >
-                            <CloseIcon size={14} />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                ) : activeChip !== null ? (
-                  <div class="hwc-commands">
-                    <span class="hwc-command" data-chip="true">
-                      <CommandBadge id={activeChip} />
-                      <button
-                        type="button"
-                        class="hwc-command-clear"
-                        aria-label={`${commandText(activeChip)} を解除`}
-                        onClick={clearChip}
-                      >
-                        <CloseIcon size={14} />
-                      </button>
-                    </span>
-                  </div>
-                ) : candidates.length === 0 ? null : (
-                  <div class="hwc-commands" role="group" aria-label="コマンド候補">
-                    {candidates.map((id) => (
-                      <button type="button" class="hwc-command" key={id} onClick={() => pick(id)}>
-                        <CommandBadge id={id} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {suggested === null ? null : (
-                  // 語が変わるたびに作り直し、スクロールを先頭へ戻す。
-                  <div class="hwc-mentions" key={mention?.query}>
-                    <div class="hwc-mentions-head" aria-hidden="true">
-                      プロジェクト
-                    </div>
-                    <div
-                      class="hwc-mentions-list"
-                      id={`hwc-mentions-${pane.id}`}
-                      role="listbox"
-                      aria-label="プロジェクト候補"
-                    >
-                      {suggestions.map((project, index) => (
-                        <button
-                          type="button"
-                          role="option"
-                          class="hwc-mention"
-                          key={project.path}
-                          id={suggestionId(index)}
-                          tabIndex={-1}
-                          aria-selected={project.path === suggested.path}
-                          // 押しても本文のフォーカスを外さない。続けて打てるようにする。
-                          onMouseDown={(event) => event.preventDefault()}
-                          // mouseenter だと、↑↓ のスクロールで行がポインタの下へ来たときに強調を奪う。
-                          onMouseMove={() => setMentionHighlight(project.path)}
-                          onClick={() => pickMention(project.path)}
-                        >
-                          <span class="hwc-mention-name">{project.name}</span>
-                          <span class="hwc-mention-path">{project.path}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <span class="hwc-input-line">
-                  {/* 消えるときに幅が跳ねないよう、シェル以外でも置いたまま折りたたむ。 */}
-                  <span
-                    class="hwc-input-prompt"
-                    aria-hidden="true"
-                    data-hidden={shell ? undefined : "true"}
-                  >
-                    $
-                  </span>
-                  <textarea
-                    id={`hwc-input-${pane.id}`}
-                    ref={input}
-                    class="hwc-input-field"
-                    // 2 行ぶんの高さを初期値にすると、1 行のとき文字の下だけ空いて上に寄る。
-                    // 高さは fit() が入力量に合わせて伸ばす。
-                    rows={1}
-                    disabled={edit?.sending === true}
-                    value={inputText}
-                    // ツリーの行を掴むと入力欄からフォーカスが外れる。落としたときに使う
-                    // 選択位置をここで控える。まだ一度もフォーカスしていなければ末尾へ入れる。
-                    onBlur={(event) => {
-                      const field = event.currentTarget;
-                      lastSelection.current = {
-                        start: field.selectionStart,
-                        end: field.selectionEnd,
-                      };
-                      setCaret(null);
-                    }}
-                    onFocus={(event) => syncCaret(event.currentTarget)}
-                    onClick={(event) => syncCaret(event.currentTarget)}
-                    onKeyUp={(event) => syncCaret(event.currentTarget)}
-                    aria-controls={suggested === null ? undefined : `hwc-mentions-${pane.id}`}
-                    aria-activedescendant={
-                      suggested === null ? undefined : suggestionId(suggestions.indexOf(suggested))
-                    }
-                    // 簡略時は placeholder を付けない。狭い入力欄で「メッセージを入力」が切れる。
-                    {...(compact ? {} : { placeholder })}
-                    onInput={(event) => {
-                      setInputText(event.currentTarget.value);
-                      syncCaret(event.currentTarget);
-                      setMentionDismissed(null);
-                      setMentionHighlight(null);
-                    }}
-                    onPaste={(event) => {
-                      // シェルは改行を受け取れない。末尾の改行だけなら落として差し込み、
-                      // 途中に改行が残るなら入力を変えずに断る。
-                      if (shell) {
-                        const raw = event.clipboardData?.getData("text/plain") ?? "";
-                        if (!/[\r\n]/.test(raw)) return;
-                        const text = raw.replace(/[\r\n]+$/, "");
-                        event.preventDefault();
-                        if (/[\r\n]/.test(text)) {
-                          setNotice(SHELL_NEWLINE_NOTICE);
-                          return;
-                        }
-                        const field = event.currentTarget;
-                        field.setRangeText(text, field.selectionStart, field.selectionEnd, "end");
-                        setDraft(field.value);
-                        fit(field, expanded);
-                        return;
-                      }
-                      // 添付を受け付けるのは会話を持つペインだけ。起動中はテキストだけ。
-                      if (edit !== null || !pane.chat || launchBlocked || inputDisabled) return;
-                      const action = pasteActionFrom(event.clipboardData?.items);
-                      // テキストだけの貼り付けは入力欄の既定動作のままにする。
-                      if (action.kind === "default") return;
-                      if (takeFiles(action)) event.preventDefault();
-                    }}
-                    onKeyDown={(event) => {
-                      const composing = event.isComposing || event.keyCode === 229;
-                      if (composing) return;
-                      // 候補が出ている間は、Enter も候補の確定にする。候補はキーボードの
-                      // ある端末にしか出ないので、タッチ端末の Enter は改行のまま。
-                      if (mention !== null && suggested !== null) {
-                        const plain = !(
-                          event.shiftKey ||
-                          event.ctrlKey ||
-                          event.metaKey ||
-                          event.altKey
-                        );
-                        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-                          event.preventDefault();
-                          const next = stepProject(
-                            suggestions,
-                            mentionHighlight,
-                            event.key === "ArrowDown" ? 1 : -1,
-                          );
-                          setMentionHighlight(next);
-                          // 強調が一覧の外へ出ないよう、描画を待たずに動かす。行は既に DOM にある。
-                          const row = suggestions.findIndex((project) => project.path === next);
-                          document
-                            .getElementById(suggestionId(row))
-                            ?.scrollIntoView({ block: "nearest" });
-                          return;
-                        }
-                        if (plain && (event.key === "Tab" || event.key === "Enter")) {
-                          event.preventDefault();
-                          pickMention(suggested.path);
-                          return;
-                        }
-                        if (event.key === "Escape") {
-                          event.preventDefault();
-                          setMentionDismissed(mention);
-                          return;
-                        }
-                      }
-                      if (event.key !== "Enter") return;
-                      // シェルは改行を受け取れない。タッチ端末でも Enter で送る。
-                      const newline =
-                        event.shiftKey ||
-                        (!shell &&
-                          enterInsertsNewline((query) => window.matchMedia(query).matches));
-                      if (newline) {
-                        if (shell) event.preventDefault();
-                        return;
-                      }
-                      event.preventDefault();
-                      submit();
-                    }}
-                  />
-                </span>
-                <div class="hwc-input-actions">
-                  {/* 入口を出すのはシェルだけ。会話を読めないエージェント（supportsChat が false の
-                未知のエージェント）は chat が false になるので、chat ではなくペインの種類で分ける。 */}
-                  {compact ? null : shell ? (
-                    <button type="button" class="hwc-agent-start" onClick={startAgent}>
-                      <AgentIcon size={16} />
-                      エージェントを起動
-                    </button>
-                  ) : pane.chat && !launchBlocked && !inputDisabled && edit === null ? (
-                    <ComposerAdd
-                      full={attachments.length >= MAX_ATTACHMENTS}
-                      commands={composerCommands}
-                      templateCount={templates === null ? null : templates.length}
-                      templateBlock={templateBlock}
-                      onFiles={(files) => takeFiles(dropActionFrom(files))}
-                      onProjects={openProjects}
-                      onTemplates={openTemplates}
-                    />
-                  ) : null}
-                  <span class="hwc-input-tail">
-                    {info === null && !infoLoading && meter === null ? null : (
-                      <span class="hwc-input-info">
-                        <span class="hwc-input-agent" data-agent={agentGlyph(pane.agent)}>
-                          <AgentGlyphIcon agent={pane.agent} size={14} />
-                        </span>
-                        {infoLoading ? (
-                          <AgentInfoSkeleton />
-                        ) : info === null ? null : (
-                          <AgentInfoHint agent={pane.agent} info={info} />
-                        )}
-                        {meter === null || snapshot?.context == null ? null : (
-                          <ContextMeter
-                            key={pane.id}
-                            view={meter}
-                            context={snapshot.context}
-                            usage={snapshot.usage}
-                          />
-                        )}
-                      </span>
-                    )}
-                    <button
-                      type={stop && !busy ? "button" : "submit"}
-                      class="hwc-send"
-                      data-sending={sendingAny}
-                      data-stopping={stopping}
-                      data-launching={launching}
-                      aria-label={
-                        launching
-                          ? "起動中"
-                          : stopping
-                            ? "停止中"
-                            : sendingAny
-                              ? "送信中"
-                              : stop
-                                ? "停止"
-                                : edit !== null
-                                  ? "編集を送信"
-                                  : "送信"
-                      }
-                      aria-busy={launching || undefined}
-                      disabled={busy || launchBlocked || (!stop && !sendable)}
-                      onClick={stop && !busy ? stopWorking : undefined}
-                    >
-                      {busy || launching ? <Spinner /> : stop ? <StopIcon /> : <SendIcon />}
-                    </button>
-                  </span>
-                </div>
-              </div>
-            </form>
+            />
           )}
         </div>
         {sideBySide && treeSide === "right" ? treeView : null}
       </div>
-      {projectDialog === null ? null : (
+      {composer.projectDialog === null ? null : (
         <ProjectDialog
           paneId={pane.id}
-          open={projectDialog.open}
-          onClose={closeProjects}
-          onExited={projectsExited}
-          onPick={pickProject}
+          open={composer.projectDialog.open}
+          onClose={composer.closeProjects}
+          onExited={composer.projectsExited}
+          onPick={composer.pickProject}
         />
       )}
-      {templateDialog === null ? null : (
+      {composer.templateDialog === null ? null : (
         <TemplateDialog
-          open={templateDialog.open}
-          onClose={closeTemplates}
-          onExited={templatesExited}
-          onPick={pickTemplate}
+          open={composer.templateDialog.open}
+          onClose={composer.closeTemplates}
+          onExited={composer.templatesExited}
+          onPick={composer.pickTemplate}
         />
       )}
-      {confirmNew
+      {composer.confirmNew
         ? createPortal(
             <NewSessionConfirm
               paneId={pane.id}
               available={menuCommandAvailable("new")}
               onConfirm={() => {
-                setConfirmNew(false);
+                composer.setConfirmNew(false);
                 void runMenuCommand("new");
               }}
-              onCancel={() => setConfirmNew(false)}
+              onCancel={() => composer.setConfirmNew(false)}
             />,
             document.querySelector(".hwc-app") ?? document.body,
           )
