@@ -149,6 +149,9 @@ export function TemplateDialog(props: TemplateDialogProps) {
       </div>
 
       <div class="hwc-dialog-actions">
+        <button type="button" class="hwc-dialog-button hwc-dialog-cancel" onClick={props.onClose}>
+          閉じる
+        </button>
         <button
           type="button"
           class="hwc-dialog-button hwc-dialog-primary"
@@ -158,9 +161,6 @@ export function TemplateDialog(props: TemplateDialogProps) {
           }}
         >
           引用する
-        </button>
-        <button type="button" class="hwc-dialog-button hwc-dialog-cancel" onClick={props.onClose}>
-          閉じる
         </button>
       </div>
     </DialogShell>
