@@ -229,6 +229,69 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   background: var(--color-accent);
 }
 
+/* 一覧と詳細の境目に付く開閉の取っ手。幅 0 の箱を境目に置き、取っ手は詳細側へ張り出す。
+   一覧側へ出すと一覧のスクロールバーと重なる。広い画面だけ出す。
+   ファイルツリーのオーバーレイ（z-index: 3）より手前に置く。同じ値だと DOM で後ろの詳細が勝ち、
+   ツリーを開いている間は取っ手が隠れて、一覧を畳めなくなる。 */
+.hwc-sidebar-edge {
+  display: none;
+  position: relative;
+  flex: none;
+  width: 0;
+  z-index: 4;
+}
+
+.hwc-sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-left: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-surface);
+  color: var(--color-secondary);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+/* 触れる範囲は、本文や添付チップが始まる左余白（読み幅の下限 24px）に収まる 4px だけ広げる。
+   44px まで広げると、それらの先頭を覆う。行全体が操作領域の要素（ツリーの行など）は左端が
+   余白より内側から始まり、重なる範囲では取っ手が勝つ。畳むのは一覧の開閉だけで、文字は隠れない。 */
+.hwc-sidebar-toggle::before {
+  content: "";
+  position: absolute;
+  inset: 0 calc(var(--space-1) * -1) 0 0;
+}
+
+.hwc-sidebar-toggle:active {
+  opacity: 0.72;
+}
+
+.hwc-sidebar-toggle svg {
+  transition: transform var(--hwc-sidebar-duration) ease-out;
+}
+
+.hwc-sidebar-toggle[aria-expanded="false"] svg {
+  transform: rotate(180deg);
+}
+
+@media (hover: hover) {
+  .hwc-sidebar-toggle:hover {
+    color: var(--color-text);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-sidebar-toggle svg {
+    transition: none;
+  }
+}
+
 .hwc-body {
   flex: 1;
   min-height: 0;
