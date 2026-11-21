@@ -6,14 +6,7 @@ import type { QuestionAnswer } from "../shared/answer";
 import type { FileTreeEntry } from "../shared/file-tree";
 import type { GitSync } from "../shared/git";
 import { attachmentKindOfFileName } from "../shared/attachments";
-import {
-  activityLabel,
-  activitySnippet,
-  latestAgentText,
-  showActivityFrame,
-  usePaneActivity,
-  withoutShownDirection,
-} from "./activity";
+import { activityLabel, activitySnippet, showActivityFrame, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, answerQuestion, editMessage, uploadAttachment } from "./api";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference } from "./file-reference";
@@ -901,15 +894,9 @@ export function PaneDetail(props: PaneDetailProps) {
 
   // 圧縮中は hwc のローカル表示が正。拡張の段階と重ねない。
   const livePhase = compacting || activity === null ? null : activityLabel(activity);
-  const liveThought =
-    compacting || activity === null
-      ? ""
-      : activitySnippet(
-          withoutShownDirection(
-            activity.text,
-            body.kind === "chat" ? latestAgentText(body.snapshot.messages) : null,
-          ),
-        );
+  // 会話に載った本文も帯から外さない。外すと、本文が会話へ届いた瞬間に帯が空になり、
+  // 読み切る前に消える。次の本文が来るかターンが終わるまで残す。
+  const liveThought = compacting || activity === null ? "" : activitySnippet(activity.text);
   // 低いセルは段階と経過時間だけにし、会話へ高さを回す。速度は通常セルでだけ出す。
   const liveTokPerSecond =
     compacting || compact || activity === null ? null : activity.tokPerSecond;

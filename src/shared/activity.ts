@@ -39,12 +39,10 @@ export const ACTIVITY_TOK_PER_SECOND_LIMIT = 10_000;
 export const TOOL_NAME_LIMIT = 64;
 export const TOOLS_LIMIT = 99;
 
-// Claude の方向（assistant 本文の先頭 1 行）の上限。BFF が切り、クライアントが会話の行と
-// 突き合わせるときも同じ値で切る。
+// Claude の方向（assistant 本文の先頭 1 行）の上限。
 export const DIRECTION_LIMIT = 90;
 
-// 改行と制御文字を 1 行に畳む。BFF が帯の行を作るときと、クライアントが会話の行と
-// 比べるときで、同じ整形を使う。
+// 改行と制御文字を 1 行に畳む。
 export function flattenLine(raw: string): string {
   return raw
     .replace(/\s+/gu, " ")
