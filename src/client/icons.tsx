@@ -297,15 +297,16 @@ export function ParentIcon({ size = 14 }: IconProps) {
   );
 }
 
-// エージェントの見分けは、公式マークの形で付ける（色は行の色に合わせる）。
+// エージェントの見分けは、公式マークの形で付ける。色は marks.css が当てる。
 export function PiIcon({ size = 18 }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 800 800" fill="currentColor" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 800 800" fill="none" aria-hidden="true">
+      <path class="hwc-pi-mark-coral" d="M165.29 165.29H517.36V400H400V282.65H165.29Z" />
       <path
-        fill-rule="evenodd"
-        d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+        class="hwc-pi-mark-blue"
+        d="M165.29 282.65H282.65V400H400V517.36H282.65V634.72H165.29Z"
       />
-      <path d="M517.36 400H634.72V634.72H517.36Z" />
+      <path class="hwc-pi-mark-yellow" d="M517.36 400H634.72V634.72H517.36Z" />
     </svg>
   );
 }
@@ -326,17 +327,20 @@ export function CodexIcon({ size = 18 }: IconProps) {
   );
 }
 
+// 本家は 4:5。18px の枠の中で高さに合わせ、横は中央に置く。
 export function OpenCodeIcon({ size = 18 }: IconProps) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox="0 0 240 300"
       fill="currentColor"
       fill-rule="evenodd"
+      preserveAspectRatio="xMidYMid meet"
       aria-hidden="true"
     >
-      <path d="M16 6H8v12h8V6zm4 16H4V2h16v20z" />
+      <path class="hwc-opencode-mark-shade" d="M180 240H60V120H180V240Z" />
+      <path d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" />
     </svg>
   );
 }

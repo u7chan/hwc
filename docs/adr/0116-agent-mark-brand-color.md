@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-21
 - Amends: [ADR 0085](0085-settings-index.md) の「行のアイコンは枠なしの 20px、色は補助文字と同じにする」
+- Amended by: [ADR 0118](0118-agent-brand-colors.md)（ブランド色を Claude 以外にも広げ、複数色で描く）
 
 ## Context
 
