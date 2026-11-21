@@ -94,7 +94,7 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   const appendUserEntry = async (paneId: string, text: string): Promise<void> => {
     if (text.trim() === "") return;
     const session = findPane(paneId)?.agent_session ?? null;
-    // 添付を持つペインの Enter は常に本文の送信になる（ADR 0018）。添付付きの `/compact` も
+    // 添付を持つペインの Enter は常に本文の送信になる。添付付きの `/compact` も
     // 本文として送られるので、コマンド扱いは注記が無いときだけ。
     const command = !text.includes(ATTACHED_FILES_OPEN) && COMMAND_TEXT.test(text.trim());
     if (command) return;
@@ -145,7 +145,7 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
     await appendFile(path, `${JSON.stringify(entry)}\n`);
   };
 
-  // pi 拡張がセッションの隣に書く live の段階（ADR 0035）。実物はターン中に上書きし続けるが、
+  // pi 拡張がセッションの隣に書く live の段階（docs/adr/pi-integration.md）。実物はターン中に上書きし続けるが、
   // E2E では phase の切り替わりと末尾の描画だけを確かめるため、2 回書いて短時間で消す。
   const piActivityPath = (paneId: string): string | null => {
     const session = findPane(paneId)?.agent_session ?? null;
@@ -206,7 +206,7 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   };
 
   // 応答を止めると、実 pi は本文の無い assistant をセッションへ追記して葉にする。hwc は
-  // それを描画しないので、止めた直後は送った発言が末尾に見える（ADR 0089）。
+  // それを描画しないので、止めた直後は送った発言が末尾に見える（docs/adr/pi-integration.md）。
   const appendAbort = async (paneId: string): Promise<void> => {
     const target = findPane(paneId);
     const session = target?.agent_session ?? null;

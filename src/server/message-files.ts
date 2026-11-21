@@ -139,7 +139,7 @@ export function messagePathCandidates(text: string): MessagePathCandidate[] {
     const path = trimToken(token);
     if (path === null) continue;
     // テキストは、本文のリンクの destination として書かれたときだけ候補にする。裸のパスまで
-    // 候補にすると、チップの枠（MAX_CANDIDATES）を食って後ろの画像が消える（ADR 0109）。
+    // 候補にすると、チップの枠（MAX_CANDIDATES）を食って後ろの画像が消える。
     if (messageFileKindFromName(path) === null && !linkRefs.has(path)) continue;
     const current = candidates.get(path);
     if (current !== undefined) {
@@ -160,7 +160,7 @@ export function messagePathCandidates(text: string): MessagePathCandidate[] {
 
 type ResolvedFile = { name: string; version: string; path: string; root: number };
 
-// `.git` は一覧に出さず、配信の経路でも読ませない（ADR 0090）。
+// `.git` は一覧に出さず、配信の経路でも読ませない（docs/adr/file-serving.md）。
 function hasGitSegment(path: string): boolean {
   return path.split(sep).includes(".git");
 }
@@ -510,12 +510,12 @@ export async function listDirectory(options: {
 }
 
 // エージェントは使い捨てのモックを /tmp に書く。TMPDIR ではなく literal を見る。
-// 本文に書かれるのは `/tmp/...` なので、プロセスの環境で変えても一致しない（ADR 0066）。
+// 本文に書かれるのは `/tmp/...` なので、プロセスの環境で変えても一致しない（docs/adr/file-serving.md）。
 const DEFAULT_PREVIEW_ROOT = "/tmp";
 
 // チップとプレビューの見出しに出す根のラベル。番号ではなく設定値の文字列から作る。
 // 番号で /tmp を決めると、テストが注入した一時ディレクトリにも /tmp が付く。
-// realpath で決めると、/tmp が symlink の環境で別名になる（ADR 0067）。
+// realpath で決めると、/tmp が symlink の環境で別名になる。
 export function previewRootLabel(value: string): string {
   if (resolve(value) === DEFAULT_PREVIEW_ROOT) return DEFAULT_PREVIEW_ROOT;
   const name = basename(value);
@@ -523,7 +523,7 @@ export function previewRootLabel(value: string): string {
   return name === "" || name === sep ? "追加根" : name;
 }
 
-// 追加の根は既定で /tmp。HWC_PREVIEW_ROOTS はその後ろに足す（ADR 0051, 0066）。
+// 追加の根は既定で /tmp。HWC_PREVIEW_ROOTS はその後ろに足す（docs/adr/file-serving.md）。
 // 区切りは POSIX の `:`。Windows は対象外。
 export function defaultPreviewRoots(env: NodeJS.ProcessEnv = process.env): string[] {
   const raw = env.HWC_PREVIEW_ROOTS;

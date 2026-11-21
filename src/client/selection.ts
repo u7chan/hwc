@@ -4,8 +4,7 @@ import { placeGroupKeyFor } from "./select";
 import { type SplitView, parseSplitView, serializeSplitView } from "./split-view";
 
 // 開いていたタブ・選択・分割の木は端末ごとの好み。Herdr の状態ではないので BFF には
-// 持たせない。キーは 1 つにまとめる
-// （ADR 0058 / 0061 / 0063 tab-order-by-pane-layout）。
+// 持たせない。キーは 1 つにまとめる。
 export const SPLIT_VIEW_STORAGE_KEY = "hwc-split-view";
 
 // 未保存なら null。壊れた値は空として返し、初回表示の初期値で上書きしない。

@@ -9,7 +9,7 @@ import { shortenSpaceName, statusLabel, tabDisplayName, type PaneRow } from "./s
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
-  // タブバーの表示順（ADR 0063 tab-order-by-pane-layout）。
+  // タブバーの表示順。
   tabs: readonly PaneRow[];
   // 固定ゾーンの並び。タブの左端のバーをスロット色にするためにだけ使う。
   slots: readonly (string | null)[];
@@ -33,10 +33,10 @@ type TabBarProps = {
   onBack: () => void;
   // タブからのドラッグ。移動量で開始を判定するので、押した時点で位置だけ渡す。
   onDragStart: (event: PointerEvent, paneId: string) => void;
-  // 1 枚表示のとき、すべてのタブを並べ替えの落とし先にする（ADR 0086）。
+  // 1 枚表示のとき、すべてのタブを並べ替えの落とし先にする。
   canReorder: boolean;
   // ドラッグ中の落とし先がタブのとき、そのペインと差し込み位置。side が null なら
-  // 分割の入れ替えなので、枠を出す（ADR 0064）。
+  // 分割の入れ替えなので、枠を出す。
   tabDrop: { pane: string; side: TabSide | null } | null;
 };
 
@@ -54,7 +54,7 @@ export function TabBar(props: TabBarProps) {
   const tabList = useRef<HTMLDivElement>(null);
 
   // 選択中のタブが隠れていたら見える位置まで送る。プレビューを選んだときも、
-  // 並べ替えて選択タブが画面外へ出たときも送る（ADR 0086）。並べ替えられるのは
+  // 並べ替えて選択タブが画面外へ出たときも送る。並べ替えられるのは
   // PC の 1 枚表示だけなので、それ以外ではタブ順を依存に加えない。モバイルで
   // 未選択のタブを外しただけでスクロール位置を失わないため。
   const previewing = props.preview?.selected === true;
@@ -146,9 +146,9 @@ export function TabBar(props: TabBarProps) {
           const space = `${item.workspace.label} · ${item.tab.label || item.tab.id}`;
           const description = `${space}、${item.pane.id}、${statusLabel(item.pane.agentStatus)}`;
           const slot = props.slots.indexOf(item.pane.id);
-          // 分割では固定ゾーンのタブ、1 枚表示ではすべてのタブが落とし先になる
-          // （ADR 0064 / 0086）。プレビュー中はグリッドが見えないので、レイアウトを
-          // 変える落とし先にしない（ADR 0058）。
+          // 分割では固定ゾーンのタブ、1 枚表示ではすべてのタブが落とし先になる。
+          // プレビュー中はグリッドが見えないので、レイアウトを
+          // 変える落とし先にしない。
           const droppable = !previewing && (slot >= 0 || props.canReorder);
           const drop = droppable && props.tabDrop?.pane === item.pane.id ? props.tabDrop : null;
           return (

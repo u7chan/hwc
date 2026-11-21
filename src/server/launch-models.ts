@@ -5,8 +5,8 @@ type LaunchSelection = { model: string; effort: string | null };
 
 // pi は最初のメッセージまでセッション JSONL を書かず、/new の後も同じ状態に戻る。
 // 起動時に指定した値は、ペインのエージェントが終わるまで表示の補いとして預かる。
-// 会話にモデルが載っても捨てないのは、/new が起動時の指定を引き継ぐため（ADR 0091）。
-// 正はセッションのまま（ADR 0013・0033）。
+// 会話にモデルが載っても捨てないのは、/new が起動時の指定を引き継ぐため（docs/adr/agent-launch.md）。
+// 正はセッションのまま（docs/adr/agent-launch.md）。
 export function createLaunchModels() {
   const selections = new Map<string, LaunchSelection>();
 

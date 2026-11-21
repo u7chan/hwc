@@ -1,6 +1,6 @@
 // pi 拡張（pi-lab / mypi）がセッションの隣へ書く「実行中の段階」。会話の正は JSONL のままで、
 // これは一時的な activity に限る。契約は <session>.jsonl.thinking.json の 1 行 JSON で、
-// 追記せず上書きする（ADR 0035）。
+// 追記せず上書きする（docs/adr/pi-integration.md）。
 export const LIVE_PHASES = [
   "waiting",
   "thinking",
@@ -16,7 +16,7 @@ export type LivePhase = (typeof LIVE_PHASES)[number];
 export type PaneActivity = {
   phase: LivePhase;
   // thinking のときは現在のブロックの末尾。Claude は tool のときも、対象と方向の 2 行を
-  // 入れる（ADR 0100）。それ以外は空。
+  // 入れる（docs/adr/claude-integration.md）。それ以外は空。
   text: string;
   // tool のときだけ、最後に開始した実行中ツール。
   tool: string | null;

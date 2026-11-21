@@ -10,7 +10,7 @@ export function sameModel(a: AgentModel, b: AgentModel): boolean {
   return modelKey(a) === modelKey(b);
 }
 
-// CLI の既定には任せない（ADR 0104）。選んだモデル、無ければ既定のモデルを、どちらも
+// CLI の既定には任せない（docs/adr/agent-launch.md）。選んだモデル、無ければ既定のモデルを、どちらも
 // いまの候補にあるときだけ使う。既定の読み出しが遅れて届いても、選んだ値を上書きしない。
 export function chooseModel(
   candidates: ModelCandidates,

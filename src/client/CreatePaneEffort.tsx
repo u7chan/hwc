@@ -9,7 +9,7 @@ function effortNote(model: AgentModel | null, candidates: EffortCandidates): str
   return null;
 }
 
-// 「デフォルト（CLI に任せる）」は出さない。effort に対応するモデルでは必ず選ぶ（ADR 0104）。
+// 「デフォルト（CLI に任せる）」は出さない。effort に対応するモデルでは必ず選ぶ（docs/adr/agent-launch.md）。
 export function CreatePaneEffort(props: {
   model: AgentModel | null;
   candidates: EffortCandidates;

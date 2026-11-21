@@ -27,7 +27,7 @@ type FileTreeProps = {
   onOpenImage: (url: string, name: string) => void;
   // 行を composer へ運ぶ。パス文字列はペインの作業ディレクトリを知る側で組み立てる。
   onDragStart: (event: DragEvent, entry: FileTreeEntry) => void;
-  // フォルダを作業ディレクトリにした新しいスペースを作る（ADR 0113）。
+  // フォルダを作業ディレクトリにした新しいスペースを作る。
   onCreateSpace: (path: string) => void;
 };
 
@@ -40,7 +40,7 @@ function indent(depth: number) {
 }
 
 // 開ける行も開けない行も、同じように composer へ運べる。淡色は hwc が配信できない
-// だけで、エージェントはパスから読める（ADR 0095）。
+// だけで、エージェントはパスから読める。
 function dragProps(tree: FileTreeProps, entry: FileTreeEntry) {
   return {
     draggable: true,

@@ -5,7 +5,7 @@ export type OutputPart =
   | { kind: "link"; text: string; href: string; style: AnsiStyle };
 
 // 出力は任意のプログラムの文字列で、言語は決まらない。端末が付けた色はそのまま残し、
-// 裸の URL だけをリンクにする。ホストは読み替えない（ADR 0046）。
+// 裸の URL だけをリンクにする。ホストは読み替えない。
 export function linkify(segments: readonly AnsiSegment[]): OutputPart[] {
   const parts: OutputPart[] = [];
 

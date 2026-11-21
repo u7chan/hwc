@@ -236,7 +236,7 @@ test("the sync reader parses the upstream and its divergence", async () => {
 });
 
 // PR はローカル名ではなく push 先の名前で作られることがある。ワークツリーの自動生成名の
-// ままでも、upstream から push 先の名前を読めるようにしておく（ADR 0043）。
+// ままでも、upstream から push 先の名前を読めるようにしておく（docs/adr/git-github.md）。
 test("the sync reader reports the pushed branch even when the local name differs", async () => {
   const client = createGitClient({
     runRead: async (_path, args) =>

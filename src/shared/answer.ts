@@ -1,7 +1,7 @@
 import { flatText } from "./flat-text";
 
 // AskUserQuestion への回答。質問ごとに、選択肢のラベルか自由入力のどちらか一方だけを持つ。
-// クライアントが組み立てて送り、BFF が pending の質問と照合してから本文にする（ADR 0099）。
+// クライアントが組み立てて送り、BFF が pending の質問と照合してから本文にする（docs/adr/claude-integration.md）。
 export type QuestionAnswer =
   | { question: string; labels: string[] }
   | { question: string; text: string };
@@ -15,7 +15,7 @@ export type AnswerQuestion = {
   options: readonly { label: string }[];
 };
 
-// 質問は 4 件、選択肢は 10 件まで（ADR 0112）。これを超える body は形の時点で弾く。
+// 質問は 4 件、選択肢は 10 件まで（docs/adr/claude-integration.md）。これを超える body は形の時点で弾く。
 const MAX_ANSWERS = 4;
 const MAX_LABELS = 10;
 

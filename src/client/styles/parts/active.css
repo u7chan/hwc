@@ -144,7 +144,7 @@ a.hwc-active-band-repo-link {
 
 /* GitHub のリモートがあるときは、記号とリポジトリ名を 1 つのリンクにする。
    押下とホバーは PR チップと同じ背景で返し、名前の色は動かさない。常時の
-   アクセント色や下線は、帯を読む面としての静けさを崩すため採らない（ADR 0083）。 */
+   アクセント色や下線は、帯を読む面としての静けさを崩すため採らない。 */
 a.hwc-active-band-repo-link {
   position: relative;
   margin: 0 calc(-1 * var(--space-1));

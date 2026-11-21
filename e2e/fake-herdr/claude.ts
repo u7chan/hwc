@@ -5,17 +5,17 @@ import type { FakeContext } from "./context";
 import type { SetAgentStatus } from "./workspaces";
 
 // E2E 用の架空のターン。実物と同じく、prompt・要求・応答・ツール・結果は別々の行として
-// 時間差で追記する（ADR 0100）。最初の 2 秒は新しい prompt がまだ無いので、帯は空の枠の
+// 時間差で追記する（docs/adr/claude-integration.md）。最初の 2 秒は新しい prompt がまだ無いので、帯は空の枠の
 // ままになる。ツールの結果は 20 秒後に書くので、そのあとは取得が null になる。
 const PROMPT_DELAY_MS = 2_000;
-// 要求中（API の応答待ち）に、mod が書くのと同じ形の速度を置く（ADR 0102）。
+// 要求中（API の応答待ち）に、mod が書くのと同じ形の速度を置く（docs/adr/claude-integration.md）。
 // prompt の直後に置き、assistant が書かれるまで残す。1 秒間隔の取得でも確実に見える幅にする。
 const RATE_DELAY_MS = PROMPT_DELAY_MS + 6_000;
 const TOOL_DELAY_MS = 16_000;
 const RESULT_DELAY_MS = 20_000;
 
 // 架空の Claude Code。実機（2.1.328）で確かめた、質問まわりの transcript と hook の動きだけを
-// 再現する（ADR 0112、0099）。
+// 再現する（docs/adr/claude-integration.md）。
 //   - Esc でダイアログを閉じると、assistant の tool_use と、is_error の tool_result と、
 //     「[Request interrupted by user for tool use]」の user を一度に書く。hook は呼ばれない。
 //   - 次の発言（UserPromptSubmit）で、hook が応答待ちの sidecar を消す。
@@ -83,7 +83,7 @@ export function createClaude(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   };
 
   // フィクスチャ専用の入力 `/activity` のターンを始める。prompt が書かれるまでの 2 秒間は、
-  // クライアントが前のターンとの比較で待つ（ADR 0100）。
+  // クライアントが前のターンとの比較で待つ（docs/adr/claude-integration.md）。
   const start = async (paneId: string): Promise<void> => {
     const sessionId = sessionOf(paneId);
     if (sessionId === null) return;

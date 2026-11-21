@@ -141,7 +141,7 @@ export type StateStore = {
   // fetch / pull の後、次に状態を公開するときに読み直す。
   invalidateGit: (workspaceId: string) => void;
   // 実行中の段階に使うターンの起点を確かめる。観測済みのターンなら true を返し、同じ
-  // prompt のままなら false を返す（ADR 0100）。クライアントには渡さない。
+  // prompt のままなら false を返す（docs/adr/claude-integration.md）。クライアントには渡さない。
   claimTurn: (paneId: string, promptId: string) => boolean;
 };
 
@@ -270,10 +270,10 @@ export function createStateStore(options: {
   // スナップショットから作れる部分。遷移の判定にはこちらだけを使う。
   let snapshotState: SnapshotState | null = null;
   // 最後に購読者へ流した状態。cwd とブランチを追う取り直しでは、内容が変わらないことが
-  // 多い。同じ状態を SSE に流し直すと、端末が間隔ごとに全体を描き直す（ADR 0121）。
+  // 多い。同じ状態を SSE に流し直すと、端末が間隔ごとに全体を描き直す（docs/adr/herdr-socket.md）。
   let published: string | null = null;
   let times: PaneTimes = NO_TIMES;
-  // ターンの観測状態。クライアントへは渡さず、永続化もしない（ADR 0100）。
+  // ターンの観測状態。クライアントへは渡さず、永続化もしない（docs/adr/claude-integration.md）。
   let turns = new Map<string, PaneTurn>();
   // 起動時に 1 回だけ読む。最初の publish で現在のスナップショットに突き合わせる。
   let restored: SavedPaneTimes | null = parseSavedPaneTimes(

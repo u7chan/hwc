@@ -79,7 +79,7 @@ test("リンクは URL とタイトルを持つ", () => {
 });
 
 test("相対パスのリンクは、配信先が決まるまでリンクにしない", () => {
-  // 原文を保つ。BFF の対応表に載らなければ、この原文をそのまま等幅で出す（ADR 0109）。
+  // 原文を保つ。BFF の対応表に載らなければ、この原文をそのまま等幅で出す（docs/adr/client-rendering.md）。
   assert.deepEqual(parseInline("[相対](/docs/README.md)"), [
     {
       kind: "link",

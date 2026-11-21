@@ -11,7 +11,7 @@ import { connectionLabel, type ConnectionStatus } from "../connection";
 import { liveUpdateLabel, type LiveUpdateInterval } from "../live-update";
 import { themeLabel, type ThemePreference } from "../theme";
 
-// エージェントごとの画面。いまは新しいペインの既定モデルと effort だけを持つ（ADR 0104）。
+// エージェントごとの画面。いまは新しいペインの既定モデルと effort だけを持つ（docs/adr/agent-launch.md）。
 export type AgentCategoryId = `agent-${ModelAgentKind}`;
 
 export type SettingsCategoryId =

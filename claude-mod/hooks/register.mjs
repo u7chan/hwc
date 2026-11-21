@@ -1,5 +1,5 @@
 // hwc の帯に出す生成中の速度と、入力欄に出すコンテキスト使用量を書く。hwc が渡す
-// HWC_CLAUDE_LIVE_DIR が無ければ何もしない。phase や本文は transcript から導く（ADR 0102・0105）。
+// HWC_CLAUDE_LIVE_DIR が無ければ何もしない。phase や本文は transcript から導く（docs/adr/claude-integration.md）。
 
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 // 差分の文字数はトークンの代理。短い窓で割ると桁が壊れるので、観測できる長さと回数を待つ。
@@ -69,7 +69,7 @@ export function register(on) {
   });
 
   on("turn.step", async function* ($, e, next) {
-    // サブエージェントの速度は本流の帯に混ぜない（ADR 0100 の sidechain 除外と揃える）。
+    // サブエージェントの速度は本流の帯に混ぜない（段階の判定で sidechain を除くのと揃える）。
     if (liveDir === "" || e.agentId !== undefined) {
       yield* next(e);
       return;

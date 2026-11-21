@@ -238,7 +238,7 @@ test("dropping on the center swaps the two leaves and selects the moved pane", (
 
 test("dropping on a fixed tab swaps the leaves like the cell center", () => {
   // 固定タブへのドロップは、セルの中央へのドロップと同じに入替えとして適用する。
-  // 掴んだペインは recent の先頭に移る（ADR 0064）。
+  // 掴んだペインは recent の先頭に移る。
   const shown = view(["w1:p1", "w1:p2"], "w1:p2", row(leaf("w1:p1"), leaf("w1:p2")), [
     "w1:p2",
     "w1:p1",
@@ -527,7 +527,7 @@ test("a broken saved value starts empty", () => {
 });
 
 test("the old slot form is read as a single pane", () => {
-  // ADR 0061 で形が変わる前の保存値。layout が無いので移行しない。
+  // 方向つきの木になる前の保存値。layout が無いので移行しない。
   const restored = parseSplitView(
     '{"openTabs":["w1:p1","w1:p2"],"current":"w1:p2","slots":["w1:p1","w1:p2"]}',
   );

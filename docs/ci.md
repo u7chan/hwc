@@ -1,6 +1,6 @@
 # CI
 
-GitHub Actions の workflow は `.github/workflows/ci.yml` に集約する。`pull_request` と `push`（`main`）で、静的検査・テスト・action 固定の検証を回す。方式の判断は [ADR 0012](adr/0012-actions-lockfile.md) を参照する。
+GitHub Actions の workflow は `.github/workflows/ci.yml` に集約する。`pull_request` と `push`（`main`）で、静的検査・テスト・action 固定の検証を回す。方式の判断は [action の固定](adr/actions-lockfile.md) を参照する。
 
 ## action の固定
 

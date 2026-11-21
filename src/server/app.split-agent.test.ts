@@ -177,7 +177,7 @@ test("POST /api/panes/:id/split keeps the chosen model across empty conversation
   const fromSession = await app.request("/api/panes/w1:p2/chat");
   expect(await fromSession.json()).toEqual(recorded);
 
-  // /new で会話が空に戻ったら、また起動時の指定で補う（ADR 0091）。
+  // /new で会話が空に戻ったら、また起動時の指定で補う（docs/adr/agent-launch.md）。
   recorded = emptyChat;
   const after = await app.request("/api/panes/w1:p2/chat");
   expect(await after.json()).toEqual({

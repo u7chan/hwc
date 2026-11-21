@@ -142,7 +142,7 @@ export function createPanesHandlers(ctx: AppContext) {
         return paneFailure(c, error);
       }
       // 送信は通った。transcript は最初の送信でできるので、見つからない記憶を捨て、
-      // 次の poll で会話ビューへ切り替える（ENTER を送らない入力ではできない。ADR 0103）。
+      // 次の poll で会話ビューへ切り替える（ENTER を送らない入力ではできない。docs/adr/claude-integration.md）。
       if (input.value.submit) {
         const source = store.chatSource(paneId);
         if (source?.agent === "claude") claude?.forgetMissing?.(source.sessionId);
@@ -239,7 +239,7 @@ export function createPanesHandlers(ctx: AppContext) {
         );
         // 名前の付け直しに失敗してもエージェントは起動している。起動できた場合だけ、
         // 選んだモデルを会話に載るまでの表示に使う。モデル未指定の起動では、同じペインに
-        // 残っている前回の選択を捨てる（`/new` が既定へ戻るため。ADR 0091）。
+        // 残っている前回の選択を捨てる（`/new` が既定へ戻るため）。
         if (result.ok || result.error === "pane_rename_failed") {
           if (request.value.model != null) {
             launchModels.remember(result.paneId, request.value.model, request.value.effort ?? null);

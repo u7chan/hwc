@@ -303,7 +303,7 @@ test("serves the HTML and the files it references from the same root", async () 
   expect((await resolvePreviewFile({ root, path: "preview/logo.svg" }))?.contentType).toBe(
     "image/svg+xml",
   );
-  // 本文のリンクから開くテキストは配るが、必ず text/plain（ADR 0109）。
+  // 本文のリンクから開くテキストは配るが、必ず text/plain（docs/adr/file-serving.md）。
   expect((await resolvePreviewFile({ root, path: "preview/notes.txt" }))?.contentType).toBe(
     "text/plain; charset=utf-8",
   );
@@ -668,7 +668,7 @@ test("keeps the root of a same-named file so delivery cannot swap it", async () 
   }
 });
 
-// 本文のリンクから開く相対パス。ADR 0109。
+// 本文のリンクから開く相対パス。
 function agentChat(text: string): ChatSnapshot {
   return { ...snapshot, messages: [{ id: "a1", role: "agent", text, at: 1 }] };
 }

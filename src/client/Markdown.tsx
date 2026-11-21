@@ -24,8 +24,7 @@ const InlineContext = createContext<InlineContextValue>({});
 
 type MdGroup =
   | { kind: "block"; block: MdBlock }
-  // 画像記法だけでできた段落は、縦に積まずに横へ並べる
-  // （ADR 0071 inline-message-images）。
+  // 画像記法だけでできた段落は、縦に積まずに横へ並べる。
   | { kind: "images"; images: MdImage[] };
 
 // 画像の段落が連続しているときは 1 つの行にまとめる。改行で区切られていても、
@@ -363,7 +362,7 @@ function inlineChildren(nodes: MdInline[], context: InlineContextValue): Compone
   });
 }
 
-// 相対パスは、BFF が実在を確かめた表記と一致したときだけリンクにする（ADR 0109）。
+// 相対パスは、BFF が実在を確かめた表記と一致したときだけリンクにする（docs/adr/client-rendering.md）。
 // 一致しなければ今までどおり原文を等幅で出す。
 function linkNode(node: MdLink, context: InlineContextValue) {
   const children = inlineChildren(node.children, context);
@@ -411,8 +410,7 @@ function imageNode(node: MdImage, context: InlineContextValue) {
     return <code class="hwc-md-literal">{node.raw}</code>;
   }
   const alt = inlineText(node.children).trim();
-  // 読み上げ名は alt を優先する。img は装飾にし、ボタンの名前だけを読ませる
-  // （ADR 0042 / ADR 0071 inline-message-images）。
+  // 読み上げ名は alt を優先する。img は装飾にし、ボタンの名前だけを読ませる。
   const name = alt === "" ? image.label : alt;
   return (
     <button

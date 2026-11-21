@@ -15,7 +15,7 @@ import type { ChatSnapshot } from "./chat/contract";
 const MAX_NAME_ATTEMPTS = 1000;
 
 // 保存先の根。作業ディレクトリに依存させないため、相対値は採らずに既定へ落とす。
-// hwc が書き出すもの（添付・ペイン時刻・通知設定）はすべてこの下に置く（ADR 0018）。
+// hwc が書き出すもの（添付・ペイン時刻・通知設定）はすべてこの下に置く（docs/adr/state-storage.md）。
 export function defaultStateRoot(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env.HWC_STATE_DIR;
   if (explicit !== undefined && isAbsolute(explicit)) return explicit;

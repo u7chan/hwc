@@ -1,7 +1,7 @@
 import { highlightCode, normalizeLang, type Token } from "./highlight";
 
 // トークン 1 つが DOM ノード 1 つになる。スマホでスクロールが重くならないよう、
-// 色付けはこの数で打ち切る。超えたら本文と行番号だけのプレーン表示に戻す（ADR 0092）。
+// 色付けはこの数で打ち切る。超えたら本文と行番号だけのプレーン表示に戻す（docs/adr/client-rendering.md）。
 export const PREVIEW_HIGHLIGHT_MAX_TOKENS = 20_000;
 
 export function normalizePreviewText(text: string): string {

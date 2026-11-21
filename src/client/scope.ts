@@ -6,7 +6,7 @@ export type ListScope = "active" | "all";
 
 export const LIST_SCOPE_STORAGE_KEY = "hwc-list-scope";
 
-// 既定はすべて。片付けたいスペースが既定で隠れると、消す入口（ADR 0034）に辿り着けない。
+// 既定はすべて。片付けたいスペースが既定で隠れると、消す入口に辿り着けない。
 // 絞り込みは active が担う。旧値の agent などは既定へ倒す。
 export function parseListScope(raw: string | null): ListScope {
   return raw === "active" ? "active" : "all";
@@ -49,7 +49,7 @@ export type ActiveGroup = {
 };
 
 // アクティブの行をワークスペース単位で束ねる。同じワークツリーの行が散らばると、
-// どれが同じ場所かを目で追えないため。束の中は親ペイン（ADR 0054）を状態に関わらず
+// どれが同じ場所かを目で追えないため。束の中は親ペインを状態に関わらず
 // 先頭に固定する。王冠は状態ではなく役割の印で、位置が状態で動くと戻り先を探すコストと
 // 押し間違いにつながる。
 //

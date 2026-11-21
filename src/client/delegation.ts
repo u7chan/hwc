@@ -2,7 +2,7 @@ import type { AppState, PaneState, TabState } from "../server/herdr/state";
 import { insertDelegatedPane, leafPanes, type SplitView } from "./split-view";
 
 // 委譲そのものは Herdr のイベントに無い。代わりに、直前のスナップショットに無かった
-// エージェントのペインを「委譲で現れたペイン」として扱う（ADR 0111）。
+// エージェントのペインを「委譲で現れたペイン」として扱う。
 // シェルは数えない。委譲のプロンプトはエージェントが起動してから届く。
 
 export function allPaneIds(state: AppState): Set<string> {

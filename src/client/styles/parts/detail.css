@@ -24,7 +24,7 @@
   pointer-events: none;
 }
 
-/* 分割は方向つきの木。区切り線はセルの隙間から見せる（ADR 0061）。 */
+/* 分割は方向つきの木。区切り線はセルの隙間から見せる。 */
 .hwc-split {
   flex: 1;
   min-width: 0;
@@ -55,10 +55,10 @@
 }
 
 /* セルの枠はスロット位置の色。current は濃く、他のスロットは控えめにして、タブと
-   一覧の現在行と同じ色で結び付ける（ADR 0058 / 0061）。 */
+   一覧の現在行と同じ色で結び付ける。 */
 .hwc-split-cell {
   position: relative;
-  /* 委譲で増えたセルは、幅 0 から分割線を走らせて広げる（ADR 0111）。 */
+  /* 委譲で増えたセルは、幅 0 から分割線を走らせて広げる。 */
   transition:
     opacity 180ms ease-out,
     flex-grow var(--hwc-split-duration, 280ms) cubic-bezier(0.25, 0.72, 0.3, 1);
@@ -177,7 +177,7 @@
   }
 }
 
-/* 追加帯は廃止した（ADR 0061）。グリッドは detail の残りをそのまま使う。 */
+/* 追加帯は廃止した。グリッドは detail の残りをそのまま使う。 */
 .hwc-detail-grid {
   flex: 1;
   min-height: 0;
@@ -716,7 +716,7 @@ a.hwc-pane-head-repo:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* 動きを減らす設定は、アプリの「分割の動き」より優先する（ADR 0111）。 */
+  /* 動きを減らす設定は、アプリの「分割の動き」より優先する。 */
   .hwc-split-cell {
     transition: none;
   }

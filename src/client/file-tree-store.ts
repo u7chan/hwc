@@ -115,7 +115,7 @@ export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
   };
 
   // 根が変わると、取得済みの相対パスは別の場所を指す。開いているツリーは新しい根で
-  // 取り直し、選択中のファイルも閉じる（ADR 0121）。
+  // 取り直し、選択中のファイルも閉じる。
   const syncRoot = (paneId: string, root: string | null) => {
     // 初回は、その根で開かれている（または開かれようとしている）だけ。捨てるものは無い。
     if (!roots.has(paneId)) {

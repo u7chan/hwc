@@ -1,5 +1,5 @@
 // ファイルツリーを会話の左右どちらに並べるかは端末ごとの見え方。Herdr の状態ではないので
-// localStorage に置き、BFF には送らない（ADR 0090）。
+// localStorage に置き、BFF には送らない（docs/adr/state-storage.md）。
 
 export type FileTreeSide = "left" | "right";
 

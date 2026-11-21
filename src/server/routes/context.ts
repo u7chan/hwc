@@ -99,7 +99,7 @@ export type CreateAppOptions = {
   // 保存先はテストが実ホームへ書かないよう、外から差し替えられるようにする。
   attachmentsRoot?: string;
   // エージェントが示したファイルを配信してよい追加の根（チェックアウトの外）。
-  // 既定は /tmp と HWC_PREVIEW_ROOTS（ADR 0066）。
+  // 既定は /tmp と HWC_PREVIEW_ROOTS（docs/adr/file-serving.md）。
   previewRoots?: string[];
   // 通知設定の保存先と Webhook 送信器。テストでは実ファイル・実ネットワークを避けて差し替える。
   notificationSettings?: NotificationSettingsStore;
@@ -258,8 +258,7 @@ export function createAppContext(options: CreateAppOptions) {
       if (result === "changed") return c.json({ error: "pane_action_changed" }, 409);
       launchModels.forget(paneId);
       piDefaults.forget(paneId);
-      // シェルに戻ったのを観測してから、終了したエージェントの画面を消す
-      // （ADR 0073 clear-exited-agent-screen）。
+      // シェルに戻ったのを観測してから、終了したエージェントの画面を消す。
       if (action === "exit") exitCleanup(paneId);
       return c.json({ ok: true });
     } catch (error) {

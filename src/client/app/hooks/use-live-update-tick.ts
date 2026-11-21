@@ -3,7 +3,7 @@ import { refreshState } from "../../api";
 import { liveUpdateAllowed } from "../../live-update";
 
 // 状態の取り直しを頼むだけで、応答は状態として適用しない。新しい状態は SSE で届く
-// （ADR 0121）。間隔が 0 のときは何もしない。
+// （docs/adr/herdr-socket.md）。間隔が 0 のときは何もしない。
 export function useLiveUpdateTick(intervalMs: number): void {
   useEffect(() => {
     if (intervalMs <= 0) return;

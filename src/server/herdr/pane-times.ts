@@ -4,7 +4,7 @@ import type { AgentStatus } from "./contract";
 import type { SnapshotState } from "./snapshot";
 
 // 経過時間の起点と終了時刻。どちらも Herdr は返さないので BFF が唯一の持ち主になる。
-// 端末ではなく 1 プロセスが持つため、どの端末から見ても同じ値になる（ADR 0017）。
+// 端末ではなく 1 プロセスが持つため、どの端末から見ても同じ値になる。
 export type PaneTimes = {
   workingSince: Record<string, number>;
   finishedAt: Record<string, number>;
@@ -114,7 +114,7 @@ export function toSavedPaneTimes(state: SnapshotState, times: PaneTimes): SavedP
   return saved;
 }
 
-// 実行中の段階を出すターンの範囲（ADR 0100）。ペインとセッションをキーにし、永続化しない。
+// 実行中の段階を出すターンの範囲（docs/adr/claude-integration.md）。ペインとセッションをキーにし、永続化しない。
 export type PaneTurn = {
   // このターンの起点 prompt を transcript で見たか。
   observed: boolean;

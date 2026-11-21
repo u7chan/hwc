@@ -45,7 +45,7 @@ export function claudeTranscriptPath(root: string, sessionId: string): string {
 
 export const CLAUDE_CHAT_SESSION = "3f1c0a52-9d4e-4b8a-8c21-5e7d6f0b1a2c";
 export const CLAUDE_PENDING_SESSION = "b7d2e4c1-0a95-4f3e-9c68-2d1b3a4c5e6f";
-// 段階の判定に必要な版（ADR 0100）。実物と同じく、すべての entry が版を持つ。
+// 段階の判定に必要な版（docs/adr/claude-integration.md）。実物と同じく、すべての entry が版を持つ。
 export const CLAUDE_VERSION = "2.1.328";
 
 type ClaudeEntry = Record<string, unknown>;
@@ -137,7 +137,7 @@ function claudeChatTranscript(): ClaudeEntry[] {
       { type: "text", text: "\n\nそのあと `bun run dev` で起動します。" },
     ]);
     // 実機と同じく、貼り付けた入力は Claude Code が `<pasted_content>` で包んで書く。
-    // hwc はこの包みを外し、中の添付の注記を名前のチップにする（ADR 0097）。
+    // hwc はこの包みを外し、中の添付の注記を名前のチップにする（docs/adr/claude-integration.md）。
     user(
       [
         "",
@@ -187,7 +187,7 @@ function claudePendingTranscript(): ClaudeEntry[] {
   });
 }
 
-// hook が Claude の状態ディレクトリ配下へ書く、応答待ちの 1 件（ADR 0112）。
+// hook が Claude の状態ディレクトリ配下へ書く、応答待ちの 1 件（docs/adr/claude-integration.md）。
 function claudePendingSidecar(): Record<string, unknown> {
   return {
     v: 1,
@@ -232,7 +232,7 @@ async function writeClaudePendingSidecar(root: string) {
   );
 }
 
-// mod がターンの終わりに書く、速度とコンテキスト使用量（ADR 0102・0106）。速度は持たない。
+// mod がターンの終わりに書く、速度とコンテキスト使用量（docs/adr/claude-integration.md）。速度は持たない。
 function claudeLive(): Record<string, unknown> {
   return {
     v: 1,
@@ -308,7 +308,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeBranch(dashboard, "feat/empty-state"),
     writeBranch(docs, "docs/quickstart"),
     // ローカル名は Herdr の自動生成名のままで、push 先だけ "feat/checks"。PR はローカル名
-    // では引けないので、upstream の head 名で引くことをここで確かめる（ADR 0043）。
+    // では引けないので、upstream の head 名で引くことをここで確かめる（docs/adr/git-github.md）。
     writeBranch(checks, "worktree/review-checks"),
     writeBranch(plain, "feat/plain"),
     mkdir(scratch, { recursive: true }),
@@ -928,7 +928,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     outputs: {
       ...outputs,
       // 入力を受け付けるペインには画面がある。空の検出フレームは、再描画中かもしれない
-      // ため folder-trust が入力欄を閉じる（ADR 0044）。
+      // ため folder-trust が入力欄を閉じる（docs/adr/pi-integration.md）。
       "w1:p4": "› Ask pi to do anything\n",
       "w1:p5": "$ echo done\ndone\n$",
       "w3:p2": FOLDER_TRUST_SCREEN,

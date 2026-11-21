@@ -13,7 +13,7 @@ const PREVIEW_CSP = "sandbox allow-scripts";
 
 // HTML はアプリと同じオリジンで配信する。モックの script から BFF を触れないよう、
 // sandbox で文書のオリジンを不透明にする。iframe の属性だけに頼らず、直接開いた
-// ときにも効くよう応答にも付ける（ADR 0051）。
+// ときにも効くよう応答にも付ける（docs/adr/file-serving.md）。
 function previewHeaders(contentType: string): Record<string, string> {
   return {
     "content-type": contentType,
@@ -77,7 +77,7 @@ export function createFilesHandlers(ctx: AppContext) {
       });
     },
     // チェックアウトの 1 ディレクトリを、根からの相対パスで返す。ツリーは子を開いた
-    // ときにだけ取りに来る。絶対パスは返さない（ADR 0041）。
+    // ときにだけ取りに来る。絶対パスは返さない（docs/adr/file-serving.md）。
     tree: async (c: IdContext) => {
       const state = await current();
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
@@ -117,11 +117,11 @@ export function createFilesHandlers(ctx: AppContext) {
       if (file === null || bytes === null) return previewNotFound(c, requested);
 
       // 本文のリンクから開くテキストと、ツリーのプレーン表示は raw を付ける。HTML の
-      // アセットにも同じ URL を使うので、raw が付いたときだけ text/plain に固定する（ADR 0109）。
+      // アセットにも同じ URL を使うので、raw が付いたときだけ text/plain に固定する（docs/adr/file-serving.md）。
       const raw = c.req.query("raw") === "1" && (isTextName(file.name) || isHtmlName(file.name));
       const contentType = raw ? "text/plain; charset=utf-8" : file.contentType;
       // 拡張子の無いファイルは、開くまでテキストかバイナリか分からない。文字として配る
-      // 経路だけ、先頭に NUL が無いことを確かめる（ADR 0109）。
+      // 経路だけ、先頭に NUL が無いことを確かめる（docs/adr/file-serving.md）。
       if (contentType === "text/plain; charset=utf-8" && looksBinary(new Uint8Array(bytes))) {
         return new Response("バイナリファイルのため表示できません。", {
           status: 415,

@@ -20,7 +20,7 @@ export function restartSettingsPath(root: string): string {
   return join(root, "restart.json");
 }
 
-// 添付・ペイン時刻と同じ状態ディレクトリ配下の 1 ファイル（ADR 0018）。書式は通知設定に
+// 添付・ペイン時刻と同じ状態ディレクトリ配下の 1 ファイル（docs/adr/state-storage.md）。書式は通知設定に
 // 揃える。固定の tmp 名は並行した書き込みや前回の残骸と衝突するので、一意な名前で作って
 // rename で置き換える。
 export function createRestartSettingsFile(root: string): RestartSettingsFile {

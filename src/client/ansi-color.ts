@@ -16,7 +16,7 @@ const REFERENCE_BACKGROUND: Record<ColorScheme, Rgb> = {
 const MIN_CONTRAST = 4.5;
 
 // 8/16 色はテーマ側で明暗を用意している。256 色と 24bit は端末の値をそのまま使うと
-// 地色と近くなり得るので、読みにくいときだけ黒または白へ寄せる（ADR 0046）。
+// 地色と近くなり得るので、読みにくいときだけ黒または白へ寄せる。
 export function ansiCssColor(color: AnsiColor, scheme: ColorScheme): string {
   if (color.kind === "basic") return `var(--ansi-${color.index})`;
   const readable = readableRgb({ r: color.r, g: color.g, b: color.b }, scheme);

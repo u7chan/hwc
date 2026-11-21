@@ -44,7 +44,7 @@
   --color-neutral-bg: #eef0f3;
   --color-danger: #b3333c;
   --color-agent-claude: #c15f3c;
-  /* エージェントのマークだけに使うブランド色（ADR 0118）。地の色や文字色には使わない。
+  /* エージェントのマークだけに使うブランド色。地の色や文字色には使わない。
      Claude は従来どおりテーマごとの `--color-agent-claude` を使う。Pi の 3 色は明暗で
      共通、本家がモノクロの Codex と OpenCode だけダークで濃さを反転する。 */
   --color-agent-pi-coral: #f09082;
@@ -126,7 +126,7 @@
   --hwc-sidebar-width: 352px;
   --hwc-sidebar-duration: 220ms;
 
-  /* 委譲で増えたセルが広がる時間。設定「ペイン分割」が JS から上書きする（ADR 0111）。 */
+  /* 委譲で増えたセルが広がる時間。設定「ペイン分割」が JS から上書きする。 */
   --hwc-split-duration: 280ms;
 
   /* 会話の読み幅。本文と入力欄で共有し、広い画面では中央に置く。 */
@@ -136,7 +136,7 @@
   --hwc-tree-width: 260px;
 
   /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る（ADR 0058）。 */
+     濃淡は color-mix で作る。 */
   --color-slot-1: #2f62c8;
   --color-slot-2: #7a4fd0;
   --color-slot-3: #0f6f7d;
@@ -613,7 +613,7 @@
 
 /* 赤系のテーマは、アクセントと danger が同じ色相帯に寄る。アクセントを莓色・ローズに振り、
    danger は暗い地で淡い赤、明るい地で煉瓦色にして、危険色がテーマ色に見えないようにする。
-   スロット 4 もピンクからマゼンタへずらす（ADR 0058）。 */
+   スロット 4 もピンクからマゼンタへずらす。 */
 :root[data-theme="sakura"] {
   color-scheme: light;
 

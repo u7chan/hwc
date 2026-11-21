@@ -34,7 +34,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-// 絶対パスと親参照はクライアントへ渡さない（ADR 0041）。名前は根からの相対パスだけ。
+// 絶対パスと親参照はクライアントへ渡さない（docs/adr/file-serving.md）。名前は根からの相対パスだけ。
 // `\` は POSIX のファイル名として合法なので、区切りとしてではなく名前の一部として通す。
 function isRelativePath(value: string): boolean {
   if (value === "" || value.startsWith("/")) return false;

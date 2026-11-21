@@ -6,7 +6,7 @@ export type UseFileTreeSide = {
   change: (next: FileTreeSide) => void;
 };
 
-// ツリーを並べる側は端末ごとの好み。テーマと同じく、読み書きは localStorage に閉じる（ADR 0090）。
+// ツリーを並べる側は端末ごとの好み。テーマと同じく、読み書きは localStorage に閉じる（docs/adr/state-storage.md）。
 export function useFileTreeSide(): UseFileTreeSide {
   const [side, setSide] = useState<FileTreeSide>(() =>
     loadFileTreeSide(typeof localStorage === "undefined" ? null : localStorage),

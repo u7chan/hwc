@@ -127,7 +127,7 @@ export function createChatHandlers(ctx: AppContext) {
 
       try {
         const live = await client.snapshot(source.agent === "pi" ? source.path : source.sessionId);
-        // 解決済みの既定は捨てる。預かりは残すので、/new の後は読み直せる（ADR 0091）。
+        // 解決済みの既定は捨てる。預かりは残すので、/new の後は読み直せる（docs/adr/agent-launch.md）。
         piDefaults.dropResolved(paneId, live.model);
         const snapshot = launchModels.apply(paneId, live);
         // 添付のチップに出すサイズは保存済みファイルの実バイト数。名前から引く。
@@ -150,7 +150,7 @@ export function createChatHandlers(ctx: AppContext) {
         return c.json({ error: "chat_unavailable" }, 502);
       }
     },
-    // AskUserQuestion に Esc で閉じて本文で答える（ADR 0099）。Claude だけ。
+    // AskUserQuestion に Esc で閉じて本文で答える（docs/adr/claude-integration.md）。Claude だけ。
     answerQuestion: async (c: IdContext) => {
       const request = parseAnswerRequest(await c.req.json().catch(() => null));
       if (request === null) return c.json({ error: "invalid_request" }, 400);
@@ -193,7 +193,7 @@ export function createChatHandlers(ctx: AppContext) {
       } catch (error) {
         return paneFailure(c, error);
       }
-      // 表示だけの補い。読めなくても会話は止めず、何も出さない（ADR 0087）。
+      // 表示だけの補い。読めなくても会話は止めず、何も出さない。
       c.header("cache-control", "no-store");
       try {
         return c.json((await piDefaults.read(paneId, directory)) ?? { model: null, effort: null });
@@ -225,7 +225,7 @@ export function createChatHandlers(ctx: AppContext) {
       // 使い捨ての値。null を返すときも、ブラウザや中間に残さない。
       c.header("cache-control", "no-store");
       // 段階は会話の読み取りから導く。path はペイン id から引き、クライアントへは渡さない。
-      // pi はセッションの隣の sidecar、Claude は transcript の進行行から読む（ADR 0035 / 0100）。
+      // pi はセッションの隣の sidecar、Claude は transcript の進行行から読む（docs/adr/pi-integration.md / docs/adr/claude-integration.md）。
       const source = store.chatSource(paneId);
       if (!pane.chat || source === null) return c.json({ activity: null, session: null });
       if (source.agent === "pi") {
