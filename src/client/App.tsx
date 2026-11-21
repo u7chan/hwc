@@ -139,7 +139,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dismissedConfirmations, setDismissedConfirmations] = useState<Record<string, string>>({});
   const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
-  // 最新の木をイベントから引く。ドラッグとタブの購読は 1 度しか張らない。
+  // 最新の木をイベントから引く。ドラッグの購読は 1 度しか張らない。
   const splitRef = useRef<SplitView>(EMPTY_SPLIT_VIEW);
   // SSE の購読は 1 度しか張らないので、タブを外したあとの反映に使う一覧の
   // 開閉状態も ref から読む。
