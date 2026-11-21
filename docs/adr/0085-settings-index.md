@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-14
+- Amended by: [ADR 0116](0116-agent-mark-brand-color.md)（行のアイコンの色。寸法と枠はこの ADR のまま）
 
 ## Context
 
