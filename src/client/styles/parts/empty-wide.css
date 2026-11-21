@@ -80,6 +80,14 @@
     display: block;
   }
 
+  /* 設定を表示している間は、開いている一覧の取っ手を出さない。設定は読んで 1 つ触る画面で、
+     遷移中に一覧を畳む動機がない。取っ手は詳細側へ張り出し、カテゴリ一覧の行の隣に残る。
+     畳んだ一覧は inert でも、狭い画面で設定を開いてから広い画面へ入ると畳んだままになる。
+     その状態で取っ手まで消すと開き直せないので、畳んでいるときは残す。 */
+  .hwc-app[data-view="settings"][data-sidebar="open"] .hwc-sidebar-edge {
+    display: none;
+  }
+
   .hwc-sidebar-foot {
     padding: var(--space-2) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
   }
