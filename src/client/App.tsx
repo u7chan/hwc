@@ -100,7 +100,7 @@ import {
   type SplitNode,
   type SplitView,
 } from "./split-view";
-import { pendingReadAfter, shouldFocusOnLeave } from "./scope";
+import { pendingReadAfter, shouldFocusOnLeave, type ListScope } from "./scope";
 import { moveToTopPlan, orderUnits } from "./order";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import { type LaunchIntent, type PaneLaunch, type PaneLaunchView, launchPhase } from "./starting";
@@ -168,6 +168,15 @@ export function App() {
   // 同じ場所を何度も開けるよう、token で 1 回ずつ処理する。
   const [reveal, setReveal] = useState<{ workspaceId: string; token: number } | null>(null);
   const revealSeq = useRef(0);
+  // 作ったばかりのペインを一覧で見せる要求。狭い画面は詳細を開いている間、一覧が
+  // display:none でスクロールできないので、一覧が見えるまでペイン id だけ預かる。
+  const [createdPane, setCreatedPane] = useState<string | null>(null);
+  const [scrollTo, setScrollTo] = useState<{
+    paneId: string;
+    scope: ListScope;
+    token: number;
+  } | null>(null);
+  const scrollToSeq = useRef(0);
   // メニューの「先頭へ移動」。一覧がアニメーションを 1 度だけ起こせるよう、token で示す。
   const [moveToTop, setMoveToTop] = useState<{ workspaceId: string; token: number } | null>(null);
   const moveToTopSeq = useRef(0);
@@ -569,6 +578,17 @@ export function App() {
     if (findPane(state, pendingSelect) === null) return;
     moveTo(pendingSelect);
   }, [state, pendingSelect, expanded]);
+
+  // 作ったペインを一覧で見せる。広い画面は一覧が常に出ているのでそのまま送り、狭い画面は
+  // 詳細から戻って一覧が見えたときに送る。作成直後は移動待ちの間だけ一覧が見えるので、
+  // その間に送っても詳細を開いた時点で scrollTop が 0 に戻る。移動が済むまで待つ。
+  useLayoutEffect(() => {
+    if (createdPane === null) return;
+    if (state === null || findPane(state, createdPane) === null) return;
+    if (!wide && (pane !== null || settingsOpen || pendingSelect !== null)) return;
+    setCreatedPane(null);
+    setScrollTo({ paneId: createdPane, scope, token: ++scrollToSeq.current });
+  }, [createdPane, state, wide, pane, settingsOpen, pendingSelect, scope]);
 
   // 委譲でエージェントが増えたら、表示中のセルの隣へ差し込む（ADR 0111）。
   // Herdr に委譲のイベントは無いので、前回のスナップショットとの差分で見る。
@@ -1523,7 +1543,10 @@ export function App() {
     setCreating,
     // hwc から作ったペインは、自動分割の対象にしない。
     setPendingSelect: (paneId) => {
-      if (paneId !== null) selfCreated.current.add(paneId);
+      if (paneId !== null) {
+        selfCreated.current.add(paneId);
+        setCreatedPane(paneId);
+      }
       setPendingSelect(paneId);
     },
     beginLaunch,
@@ -1565,6 +1588,7 @@ export function App() {
               onDragStart={startListPaneDrag}
               onRevealWorkspace={revealWorkspace}
               reveal={reveal}
+              scrollTo={scrollTo}
               onToggle={toggle}
               openPaneMenuId={menu?.open === true && menu.fromList ? menuPaneId : null}
               openWorkspaceMenuId={menu?.open === true ? (menuWorkspace?.id ?? null) : null}

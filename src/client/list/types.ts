@@ -18,6 +18,9 @@ export type PaneListProps = {
   // 帯から「すべて」のその場所へ移る。スコープの切り替えは PaneList が先に行う。
   onRevealWorkspace: (workspaceId: string) => void;
   reveal: { workspaceId: string; token: number } | null;
+  // 作ったばかりのペインを一覧で見せる。作ったときのスコープの中でだけ働かせ、
+  // 別のスコープの保存位置は動かさない。
+  scrollTo: { paneId: string; scope: ListScope; token: number } | null;
   onToggle: (groupId: string) => void;
   openPaneMenuId: string | null;
   openWorkspaceMenuId: string | null;

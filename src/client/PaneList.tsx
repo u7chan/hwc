@@ -6,6 +6,7 @@ import { ScopeBar } from "./list/scope";
 import { TreePaneList } from "./list/tree";
 import type { PaneListProps } from "./list/types";
 import { activeGroups, type ActiveGroup, type ListScope } from "./scope";
+import { revealScrollDelta } from "./scroll";
 import { countPanes, groupWorkspaces } from "./select";
 
 // 一覧の上端は行の途中で止めない。位置を決め直したときに行が半分だけ見えると、
@@ -238,6 +239,38 @@ export function PaneList(props: PaneListProps) {
     // キーボードでも続けられるよう、移動先の見出しへフォーカスを送る。次の Tab がメニュー。
     target.querySelector<HTMLElement>(".hwc-group")?.focus({ preventScroll: true });
   }, [props.scope, props.reveal]);
+
+  // 作ったばかりのペインは、一覧の見える位置へ一度だけ送る。すでに見えている行は
+  // 動かさない。行がまだ描かれていない（起動中のエージェントをアクティブで待つ間）
+  // ときは、次のスナップショットで探し直す。
+  const scrolled = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const request = props.scrollTo;
+    const node = scroll.current;
+    if (request === null || node === null) return;
+    if (scrolled.current === request.token) return;
+    // 別のスコープへ移ったら捨てる。作ったときのスコープの位置だけを動かす。
+    if (props.scope !== request.scope) {
+      scrolled.current = request.token;
+      return;
+    }
+    const row = node.querySelector<HTMLElement>(`[data-pane-id="${request.paneId}"]`);
+    if (row === null) return;
+    scrolled.current = request.token;
+    // 畳んだ束の中の行は切り取られて見えない。開くまで送り先が決まらないので、何もしない。
+    if (row.closest('[data-open="false"]') !== null) return;
+    // アクティブの帯は上端に貼り付いて行を覆う。上へ送るときは帯の高さを空ける。
+    const inset =
+      props.scope === "active"
+        ? (node.querySelector<HTMLElement>(".hwc-active-band")?.offsetHeight ?? 0)
+        : 0;
+    const delta = revealScrollDelta(
+      row.getBoundingClientRect(),
+      node.getBoundingClientRect(),
+      inset,
+    );
+    if (delta !== 0) node.scrollTop += delta;
+  }, [props.scrollTo, props.state, props.scope]);
 
   if (countPanes(props.state) === 0) return <NoPanes />;
 
