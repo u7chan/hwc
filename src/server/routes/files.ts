@@ -1,4 +1,3 @@
-import { findPane } from "../herdr/state";
 import {
   listDirectory,
   messageFileContentType,
@@ -40,18 +39,15 @@ function previewNotFound(c: PreviewContext, requested: string): Response {
 }
 
 export function createFilesHandlers(ctx: AppContext) {
-  const { store, current, rootsFor, uploadAttachment, serveAttachment } = ctx;
+  const { store, rootsFor, resolvePane, uploadAttachment, serveAttachment } = ctx;
 
   return {
     uploadAttachment,
     serveAttachment,
     files: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
 
       const roots = rootsFor(store.workspaceRoot(paneId));
       const rootIndex = Number(c.req.query("root") ?? "0");
@@ -79,12 +75,9 @@ export function createFilesHandlers(ctx: AppContext) {
     // チェックアウトの 1 ディレクトリを、根からの相対パスで返す。ツリーは子を開いた
     // ときにだけ取りに来る。絶対パスは返さない（docs/adr/file-serving.md）。
     tree: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
 
       // 根はワークスペースのチェックアウト。プレビューの追加根（/tmp など）は出さない。
       const root = store.workspaceRoot(paneId);
@@ -97,12 +90,9 @@ export function createFilesHandlers(ctx: AppContext) {
       return c.json(listing);
     },
     preview: async (c: PreviewContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      const pane = findPane(state, paneId);
-      if (!pane) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
 
       const requested = c.req.param("path") ?? "";
       const rootIndex = Number(c.req.param("root"));

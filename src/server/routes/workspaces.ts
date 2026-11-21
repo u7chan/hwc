@@ -2,7 +2,6 @@ import { basename } from "node:path";
 import { createSpace } from "../create-space";
 import { createWorktree } from "../create-worktree";
 import { parseCreateSpaceBody, parseWorktreeBody } from "../herdr/panes";
-import { findPane } from "../herdr/state";
 import { resolveTreeDirectory } from "../message-files";
 import { parseMoveWorkspacesBody } from "../herdr/workspaces";
 import { HerdrError } from "../herdr/socket";
@@ -18,7 +17,8 @@ export function createWorkspacesHandlers(ctx: AppContext) {
     pullRequests,
     git,
     restartSettings,
-    current,
+    resolvePane,
+    resolveState,
     worktreeFailure,
     workspaceFailure,
     closeSpaceFailure,
@@ -30,8 +30,9 @@ export function createWorkspacesHandlers(ctx: AppContext) {
 
   return {
     pullRequest: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+      const resolved = await resolveState(c);
+      if (!resolved.ok) return resolved.response;
+      const { state } = resolved;
       const workspace = state.workspaces.find((item) => item.id === c.req.param("id"));
       if (workspace === undefined) return c.json({ error: "workspace_not_found" }, 404);
 
@@ -61,8 +62,9 @@ export function createWorkspacesHandlers(ctx: AppContext) {
         return c.json({ error: "invalid_request" }, 400);
       }
 
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+      const resolved = await resolveState(c);
+      if (!resolved.ok) return resolved.response;
+      const { state } = resolved;
 
       const workspaceId = c.req.param("id");
       const workspace = state.workspaces.find((item) => item.id === workspaceId);
@@ -105,8 +107,9 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       const parsed = parseMoveWorkspacesBody(body);
       if (!parsed.ok) return c.json({ error: parsed.error }, 400);
 
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+      const resolved = await resolveState(c);
+      if (!resolved.ok) return resolved.response;
+      const { state } = resolved;
 
       // 状態に無い id は、クライアントと BFF の取り違え。Herdr に渡す前に止める。
       const known = new Set(state.workspaces.map((workspace) => workspace.id));
@@ -134,8 +137,9 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       const request = parseWorktreeBody(body);
       if (!request.ok) return c.json({ error: request.error }, request.status);
 
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+      const resolved = await resolveState(c);
+      if (!resolved.ok) return resolved.response;
+      const { state } = resolved;
 
       const workspaceId = c.req.param("id");
       const workspace = state.workspaces.find((item) => item.id === workspaceId);
@@ -168,11 +172,9 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       const request = parseCreateSpaceBody(body);
       if (!request.ok) return c.json({ error: request.error }, request.status);
 
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-
-      const paneId = c.req.param("id");
-      if (!findPane(state, paneId)) return c.json({ error: "pane_not_found" }, 404);
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId } = resolved;
       const root = store.workspaceRoot(paneId);
       if (root === null) return c.json({ error: "no_checkout" }, 404);
       // ツリーの一覧と同じ規則で解く。根の外・`.git`・ディレクトリでないものは作らない。
@@ -199,8 +201,9 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       }
     },
     removeWorktree: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+      const resolved = await resolveState(c);
+      if (!resolved.ok) return resolved.response;
+      const { state } = resolved;
 
       const workspaceId = c.req.param("id");
       const workspace = state.workspaces.find((item) => item.id === workspaceId);
@@ -227,8 +230,9 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       }
     },
     close: async (c: IdContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
+      const resolved = await resolveState(c);
+      if (!resolved.ok) return resolved.response;
+      const { state } = resolved;
       pruneClosingSpaces(state);
 
       const workspaceId = c.req.param("id");

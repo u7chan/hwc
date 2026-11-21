@@ -3,14 +3,14 @@ import type { AppState } from "../herdr/state";
 import type { AppContext, PlainContext } from "./context";
 
 export function createStateHandlers(ctx: AppContext) {
-  const { store, revision, sseHeartbeatMs, stateMessage, current } = ctx;
+  const { store, revision, sseHeartbeatMs, stateMessage, current, resolveState } = ctx;
 
   return {
     health: (c: PlainContext) => c.json({ ok: true, service: "hwc", revision }),
     state: async (c: PlainContext) => {
-      const state = await current();
-      if (!state) return c.json({ error: "herdr_unavailable" }, 502);
-      return c.json(stateMessage(state));
+      const resolved = await resolveState(c);
+      if (!resolved.ok) return resolved.response;
+      return c.json(stateMessage(resolved.state));
     },
     // Herdr がイベントを出さない cwd とブランチを追うための契機。状態は応答ではなく
     // SSE で配るので、ここでは取り直したことだけを返す（docs/adr/herdr-socket.md）。
