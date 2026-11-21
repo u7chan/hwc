@@ -12,6 +12,16 @@ export function createStateHandlers(ctx: AppContext) {
       if (!state) return c.json({ error: "herdr_unavailable" }, 502);
       return c.json(stateMessage(state));
     },
+    // Herdr がイベントを出さない cwd とブランチを追うための契機。状態は応答ではなく
+    // SSE で配るので、ここでは取り直したことだけを返す（ADR 0121）。
+    refresh: async (c: PlainContext) => {
+      try {
+        await store.refresh();
+      } catch {
+        return c.json({ error: "herdr_unavailable" }, 502);
+      }
+      return c.json({ ok: true });
+    },
     events: (c: PlainContext) =>
       streamSSE(c, async (stream) => {
         const write = (event: string | null, data: string) =>

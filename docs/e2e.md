@@ -129,6 +129,8 @@ Codex のモデル一覧と会話は架空 App Server の JSON-RPC を通す。�
 
 `pane.send_input` は送信 text を端末出力へ追記し、`agent_session`（`kind: "path"`）を持つペインでは架空セッションの JSONL にも追記する。`frontend` の架空セッションには末尾に `hwc-capabilities` を置き、`/hwc-rewind <entryId> <requestId>` は user メッセージではなく、対象メッセージの親を `leafId` にした `hwc-rewind` の marker を追記する。その後に送る編集後の本文は marker の子になる。追記するのは user メッセージ 1 行だけで、それまでの葉を `parentId` にする。確定後の送信カードを画面で確かめるために要る。セッションがまだ無いペインでは、この追記の前にヘッダと `model_change` / `thinking_level_change` を書く。
 
+シェルのペイン（エージェントがいないペイン）で `cd <絶対パス>` を送ると、スナップショットの `cwd` を変える。`git checkout <ブランチ>` を送ると、その cwd の `.git/HEAD` を書き換える。どちらも実 Herdr と同じくイベントは流さない。ライブ更新（[ADR 0121](adr/0121-live-state-refresh.md)）を確かめるための入力で、実 Herdr には無い。`cd` が受け付けるのは fixture の根の下にある実在のディレクトリだけで、外や存在しないパスは無視する。HEAD の書き換えも根の下だけに限る。
+
 `frontend` の架空セッションは、最後のターンが失敗した状態（`stopReason: "error"` と `errorMessage`、本文は空）で終わる。同じ失敗をリトライの回数だけ並べてあり、Web では 1 行に畳まれて「3 回」と出る。その行が圧縮後の usage を変えないことも確かめる（[ADR 0039](adr/0039-chat-error-rows.md)）。
 
 その手前の assistant メッセージは、チェックアウト内の `docs/preview/app-icon.png` を裸のパスで、`docs/preview/empty-state.png` と `docs/preview/empty-state-light.png` を画像記法で指す。どれも実在する PNG（`src/client/assets/apple-touch-icon.png`）を fixture がコピーしたもの。連続した画像記法は本文のその位置に 1 行で並び、押すとダイアログで拡大でき、背景・`Esc`・閉じるボタンで閉じる（[ADR 0071](adr/0071-inline-message-images.md) / [ADR 0042](adr/0042-image-preview-dialog.md)）。裸のパスのほうは位置が無いので、今までどおりメッセージの末尾にサムネイルの行が出る（[ADR 0041](adr/0041-agent-message-images.md)）。セッションの葉から `parentId` を遡る読み取りに乗せるため、失敗したターンの鎖もこのメッセージを親にする。
@@ -534,6 +536,16 @@ HTML が配信できないスクリプトを読み込むと、iframe の上に 1
 2. `acme-dashboard (docs)` のメニューは、リポジトリのルートではなく `…/work/acme-dashboard-docs` を出す。
 3. `scratch`（git 管理外）のメニューは、先頭ペインの cwd に落ちた `…/work/scratch` を出す。
 4. ペイン詳細を開き、右端の「…」を開く。ペイン ID の下に「スペースのパスをコピー」があり、押すとそのペインのスペースのパスが入る。
+
+## ライブ更新
+
+Herdr がイベントを出さない cwd とブランチを、可視中だけ取り直して追う（[ADR 0121](adr/0121-live-state-refresh.md)）。既定は 3 秒で、設定の「ライブ更新」から変えられる。
+
+1. `scratch` の `notes` を開き、ファイルツリーを開く。根が `…/work/scratch` で、実ファイルが無いので「空のディレクトリ」と出る。入力欄に `cd <root>/work` を送る（`<root>` は起動ログの `hwc e2e fixture:` のパス）。何もせずに 4 秒ほど待つと、ツリーの一覧が `acme-dashboard` / `acme-dashboard-checks` / `acme-dashboard-docs` / `plain-checkout` / `sandbox` / `scratch` に入れ替わり、一覧の `scratch` のスペースメニューのパスも `<root>/work` に変わる（再読み込みはしない）。
+2. `plain-checkout` の `shell` を開き、`git checkout feat/live` を送る。4 秒ほどで、ペイン見出しと一覧の行のブランチが `feat/live` に変わる。上流が無いので数字は出ない。
+3. 設定の「ライブ更新」を開き、「オフ」を選ぶ。設定の一覧に戻ると行の値が「オフ」になっている。`shell` で `git checkout feat/off-test` を送っても、5 秒待ってブランチは `feat/live` のまま。
+4. 「3 秒」に戻すと、その場で取り直してブランチが `feat/off-test` に変わる。設定の行の値も「3 秒」に戻る。
+5. 設定を閉じて再読み込みしても、選んだ間隔が残る（`localStorage` の `hwc-live-update`）。
 
 ## 設定
 

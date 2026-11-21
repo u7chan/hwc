@@ -40,6 +40,8 @@ export type FileTreeStore = {
   retry: (paneId: string, path: string) => void;
   // アンマウント後に開き直したとき、取得できていないディレクトリを取り直す。
   ensure: (paneId: string) => void;
+  // スペースの根が変わったら、取得済みの一覧と選択中のファイルを捨てる。
+  syncRoot: (paneId: string, root: string | null) => void;
   // プレビュー中のファイル（根からの相対パス）。ツリーの開閉とは独立して持つ。
   preview: (paneId: string) => string | null;
   selectFile: (paneId: string, path: string) => void;
@@ -55,6 +57,8 @@ type PaneTree = {
 export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
   const panes = new Map<string, PaneTree>();
   const previews = new Map<string, string>();
+  // ペインがどの根の一覧を持っているか。根が変わると相対パスの意味が変わる。
+  const roots = new Map<string, string | null>();
   // 購読はペインごと。表示中のセルだけが購読するので、他のペインの変更を配り直さない。
   const listeners = new Map<string, Set<() => void>>();
 
@@ -110,14 +114,39 @@ export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
     for (const path of pane.view.expanded) load(paneId, path);
   };
 
+  // 根が変わると、取得済みの相対パスは別の場所を指す。開いているツリーは新しい根で
+  // 取り直し、選択中のファイルも閉じる（ADR 0121）。
+  const syncRoot = (paneId: string, root: string | null) => {
+    // 初回は、その根で開かれている（または開かれようとしている）だけ。捨てるものは無い。
+    if (!roots.has(paneId)) {
+      roots.set(paneId, root);
+      return;
+    }
+    if (roots.get(paneId) === root) return;
+    roots.set(paneId, root);
+
+    const pane = panes.get(paneId);
+    const hadPreview = previews.delete(paneId);
+    if (pane === undefined) {
+      if (hadPreview) notify(paneId);
+      return;
+    }
+    pane.controller.abort();
+    panes.set(paneId, {
+      view: { ...CLOSED, open: pane.view.open, expanded: new Set(), dirs: new Map() },
+      controller: new AbortController(),
+    });
+    notify(paneId);
+    ensure(paneId);
+  };
+
   const open = (paneId: string) => {
     if (panes.get(paneId)?.view.open === true) return;
-    const pane: PaneTree = {
+    panes.get(paneId)?.controller.abort();
+    panes.set(paneId, {
       view: { ...CLOSED, open: true, expanded: new Set(), dirs: new Map() },
       controller: new AbortController(),
-    };
-    panes.get(paneId)?.controller.abort();
-    panes.set(paneId, pane);
+    });
     notify(paneId);
     ensure(paneId);
   };
@@ -171,6 +200,9 @@ export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
     for (const paneId of previews.keys()) {
       if (!isAlive(paneId)) previews.delete(paneId);
     }
+    for (const paneId of roots.keys()) {
+      if (!isAlive(paneId)) roots.delete(paneId);
+    }
   };
 
   return {
@@ -181,6 +213,7 @@ export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
     toggle,
     retry,
     ensure,
+    syncRoot,
     preview,
     selectFile,
     clearPreview,

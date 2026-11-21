@@ -5,12 +5,14 @@ import type { FileTreeSide } from "../file-tree-side";
 import type { ModelLabels } from "../../shared/agents";
 import { useModelLabels } from "../launch-candidates";
 import { ChevronLeftIcon } from "../icons";
+import type { LiveUpdateInterval } from "../live-update";
 import { SETTINGS_SIDE_MIN_WIDTH } from "../layout";
 import type { SplitPrefs } from "../split-prefs";
 import type { ThemePreference } from "../theme";
 import { BuildSettings } from "./BuildSettings";
 import { ConnectionSettings } from "./ConnectionSettings";
 import { DisplaySettings } from "./DisplaySettings";
+import { LiveUpdateSettings } from "./LiveUpdateSettings";
 import { NotificationSettings } from "./NotificationSettings";
 import { RestartSettings } from "./RestartSettings";
 import { SettingsIndex } from "./SettingsIndex";
@@ -24,6 +26,8 @@ type SettingsProps = {
   onThemeChange: (theme: ThemePreference) => void;
   splitPrefs: SplitPrefs;
   onSplitPrefsChange: (prefs: SplitPrefs) => void;
+  liveUpdate: LiveUpdateInterval;
+  onLiveUpdateChange: (interval: LiveUpdateInterval) => void;
   treeSide: FileTreeSide;
   onTreeSideChange: (side: FileTreeSide) => void;
   revision: string | null;
@@ -50,6 +54,8 @@ function section(
       );
     case "split":
       return <SplitSettings prefs={props.splitPrefs} onChange={props.onSplitPrefsChange} />;
+    case "live":
+      return <LiveUpdateSettings value={props.liveUpdate} onChange={props.onLiveUpdateChange} />;
     case "templates":
       return (
         <TemplateSettings
@@ -173,6 +179,7 @@ export function Settings(props: SettingsProps) {
     <SettingsIndex
       theme={props.theme}
       split={props.splitPrefs.autoSplit}
+      liveUpdate={props.liveUpdate}
       connection={props.connection}
       revision={props.revision}
       current={active}

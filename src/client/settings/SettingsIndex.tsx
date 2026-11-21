@@ -4,6 +4,7 @@ import {
   AgentGlyphIcon,
   BellIcon,
   ChevronRightIcon,
+  ClockIcon,
   CommitIcon,
   LinkIcon,
   SplitIcon,
@@ -12,6 +13,7 @@ import {
   ThemeIcon,
 } from "../icons";
 import type { ThemePreference } from "../theme";
+import type { LiveUpdateInterval } from "../live-update";
 import {
   agentOfCategory,
   SETTINGS_CATEGORIES,
@@ -27,6 +29,7 @@ import { useSettingsSummary } from "./use-summary";
 type SettingsIndexProps = {
   theme: ThemePreference;
   split: boolean;
+  liveUpdate: LiveUpdateInterval;
   connection: ConnectionStatus;
   revision: string | null;
   current: SettingsCategoryId | null;
@@ -42,6 +45,8 @@ function CategoryIcon(props: { id: SettingsCategoryId }) {
       return <ThemeIcon size={20} />;
     case "split":
       return <SplitIcon size={20} />;
+    case "live":
+      return <ClockIcon size={20} />;
     case "templates":
       return <TemplateIcon size={20} />;
     case "notifications":
@@ -97,6 +102,7 @@ export function SettingsIndex(props: SettingsIndexProps) {
   const values: SettingsCategoryValues = {
     theme: props.theme,
     split: props.split,
+    liveUpdate: props.liveUpdate,
     connection: props.connection,
     revision: props.revision,
     templates: summary.templates,

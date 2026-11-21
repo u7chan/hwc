@@ -160,3 +160,60 @@ test("prune drops the trees of panes that no longer exist", () => {
   expect(store.view("w1:p1").open).toBe(true);
   expect(store.view("w1:p2").open).toBe(false);
 });
+
+test("changing the root drops the loaded rows and the selected file", async () => {
+  const requests: string[] = [];
+  const read: FileTreeReader = async (_paneId, path) => {
+    requests.push(path);
+    return path === "" ? rootListing : docsListing;
+  };
+  const store = createFileTreeStore(read);
+
+  store.syncRoot("w1:p1", "/work/scratch");
+  store.open("w1:p1");
+  await flush();
+  store.toggle("w1:p1", "docs");
+  await flush();
+  store.selectFile("w1:p1", "docs/mock.html");
+  expect(requests).toEqual(["", "docs"]);
+
+  // 根が変わると、同じ "" / "docs" は別の場所を指す。一覧も選択も捨てて取り直す。
+  store.syncRoot("w1:p1", "/work");
+  expect(store.view("w1:p1").dirs.size).toBe(0);
+  expect(store.view("w1:p1").expanded.size).toBe(0);
+  expect(store.preview("w1:p1")).toBeNull();
+  await flush();
+  expect(requests).toEqual(["", "docs", ""]);
+});
+
+test("the same root keeps the loaded rows and the selected file", async () => {
+  const requests: string[] = [];
+  const store = createFileTreeStore(async (_paneId, path) => {
+    requests.push(path);
+    return rootListing;
+  });
+
+  store.syncRoot("w1:p1", "/work/scratch");
+  store.open("w1:p1");
+  await flush();
+  store.selectFile("w1:p1", "README.md");
+
+  store.syncRoot("w1:p1", "/work/scratch");
+  expect(requests).toEqual([""]);
+  expect(store.preview("w1:p1")).toBe("README.md");
+});
+
+test("a root change while the tree is closed clears the selected file", async () => {
+  const store = createFileTreeStore(async () => rootListing);
+
+  store.syncRoot("w1:p1", "/work/scratch");
+  store.open("w1:p1");
+  await flush();
+  store.selectFile("w1:p1", "README.md");
+  store.close("w1:p1");
+
+  // ツリーを閉じても、同じ根の間は開いているファイルを残す。
+  expect(store.preview("w1:p1")).toBe("README.md");
+  store.syncRoot("w1:p1", "/work");
+  expect(store.preview("w1:p1")).toBeNull();
+});

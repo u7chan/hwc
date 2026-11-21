@@ -584,6 +584,16 @@ export function ReloadIcon({ size = 20 }: IconProps) {
   );
 }
 
+// 取り直す間隔。設定の「ライブ更新」に使う。
+export function ClockIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </Svg>
+  );
+}
+
 // アプリの外（新しいタブ）へ渡す。
 export function ExternalIcon({ size = 20 }: IconProps) {
   return (

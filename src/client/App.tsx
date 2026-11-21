@@ -28,6 +28,8 @@ import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
 import { useFavicon } from "./app/hooks/use-favicon";
 import { useFileTreeSide } from "./app/hooks/use-file-tree-side";
 import { useListScope } from "./app/hooks/use-list-scope";
+import { useLiveUpdate } from "./app/hooks/use-live-update";
+import { useLiveUpdateTick } from "./app/hooks/use-live-update-tick";
 import { useOpenGroups } from "./app/hooks/use-open-groups";
 import { useRevision } from "./app/hooks/use-revision";
 import { useServerClock } from "./app/hooks/use-server-clock";
@@ -51,6 +53,7 @@ import {
   syncWorkspace,
 } from "./api";
 import { INITIAL_CONNECTION, connectionAfter, type ConnectionStatus } from "./connection";
+import { liveUpdateMs } from "./live-update";
 import { allAgentPaneIds, allPaneIds, applyDelegation, newAgentPanes } from "./delegation";
 import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
@@ -347,6 +350,8 @@ export function App() {
   const { theme, scheme, changeTheme } = useThemePreference();
   const { prefs: splitPrefs, change: changeSplitPrefs } = useSplitPreference();
   const { side: treeSide, change: changeTreeSide } = useFileTreeSide();
+  const { interval: liveUpdate, change: changeLiveUpdate } = useLiveUpdate();
+  useLiveUpdateTick(liveUpdateMs(liveUpdate));
   // 委譲の検知は「エージェントが付いたペインが前回のスナップショットに無かった」で行う。
   // シェルとして先に現れるペインを取りこぼさないよう、ペインではなくエージェントで覚える。
   const seenAgents = useRef<Set<string> | null>(null);
@@ -1682,6 +1687,8 @@ export function App() {
               onThemeChange={changeTheme}
               splitPrefs={splitPrefs}
               onSplitPrefsChange={changeSplitPrefs}
+              liveUpdate={liveUpdate}
+              onLiveUpdateChange={changeLiveUpdate}
               treeSide={treeSide}
               onTreeSideChange={changeTreeSide}
               revision={revision}

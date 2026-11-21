@@ -10,6 +10,7 @@ import {
 const loaded = {
   theme: "system" as const,
   split: true,
+  liveUpdate: "3s" as const,
   connection: "live" as const,
   revision: "abc1234",
   templates: 3,
@@ -28,6 +29,8 @@ test("each row shows the current value without opening the screen", () => {
   expect(settingsCategoryValue("display", { ...loaded, theme: "nord" })).toBe("Nord");
   expect(settingsCategoryValue("split", loaded)).toBe("オン");
   expect(settingsCategoryValue("split", { ...loaded, split: false })).toBe("オフ");
+  expect(settingsCategoryValue("live", loaded)).toBe("3 秒");
+  expect(settingsCategoryValue("live", { ...loaded, liveUpdate: "off" })).toBe("オフ");
   expect(settingsCategoryValue("templates", loaded)).toBe("3 件");
   expect(settingsCategoryValue("notifications", loaded)).toBe("オン");
   expect(settingsCategoryValue("notifications", { ...loaded, notifications: false })).toBe("オフ");
@@ -80,6 +83,7 @@ test("rows are split into the settings you change, the agents, and the app state
   expect(SETTINGS_CATEGORIES.map((category) => category.id)).toEqual([
     "display",
     "split",
+    "live",
     "templates",
     "notifications",
     "restart",
@@ -90,7 +94,7 @@ test("rows are split into the settings you change, the agents, and the app state
     "connection",
     "build",
   ]);
-  expect(SETTINGS_CATEGORIES.filter((category) => category.group === "settings")).toHaveLength(5);
+  expect(SETTINGS_CATEGORIES.filter((category) => category.group === "settings")).toHaveLength(6);
   expect(SETTINGS_CATEGORIES.filter((category) => category.group === "agents")).toHaveLength(4);
   expect(SETTINGS_CATEGORIES.filter((category) => category.group === "app")).toHaveLength(2);
 });
@@ -102,6 +106,7 @@ test("an agent row opens that agent's screen", () => {
 
 test("the screen title uses the row label", () => {
   expect(settingsCategoryLabel("split")).toBe("ペイン分割");
+  expect(settingsCategoryLabel("live")).toBe("ライブ更新");
   expect(settingsCategoryLabel("templates")).toBe("定型文");
   expect(settingsCategoryLabel("build")).toBe("バージョン");
   expect(settingsCategoryLabel("agent-opencode")).toBe("OpenCode");

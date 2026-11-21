@@ -250,6 +250,11 @@ export function PaneDetail(props: PaneDetailProps) {
   // ツリーの状態は store に持つ。プレビューでこのセルが外れても開閉を保つ。
   const fileTree = useFileTree(pane.id);
   const previewPath = useFilePreview(pane.id);
+  // ライブ更新でスペースの根が変わると、取得済みの相対パスと選択中のファイルの意味が
+  // 変わる。次の取得から新しい根で解決するよう、store の根を合わせる（ADR 0121）。
+  useEffect(() => {
+    fileTreeStore.syncRoot(pane.id, props.context.workspacePath);
+  }, [pane.id, props.context.workspacePath]);
   const filesButtonRef = useRef<HTMLButtonElement>(null);
   // 狭いセルで選択したときだけ、プレビューへフォーカスを移す。
   const [previewFocus, setPreviewFocus] = useState<{ focus: boolean }>({ focus: false });
