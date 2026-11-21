@@ -15,12 +15,13 @@ import type {
   GitAction,
   LeavingTab,
   OperationMenu,
-  PreviewTarget,
   Removing,
   View,
 } from "./app/types";
-import { dropTargetAt } from "./app/drop";
+import { useFlipLayout } from "./app/use-flip-layout";
 import { useMediaQuery } from "./app/use-media-query";
+import { usePaneDrag } from "./app/use-pane-drag";
+import { usePreview } from "./app/use-preview";
 import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
@@ -57,7 +58,6 @@ import { liveUpdateMs } from "./live-update";
 import { allAgentPaneIds, allPaneIds, applyDelegation, newAgentPanes } from "./delegation";
 import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
-import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
 import { Preview } from "./Preview";
 import { ChevronLeftIcon, HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
@@ -95,7 +95,6 @@ import {
   openPane,
   readingOrder,
   removeTab,
-  startsPaneDrag,
   syncSplitView,
   tabDropMode,
   tabPanes,
@@ -140,31 +139,11 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dismissedConfirmations, setDismissedConfirmations] = useState<Record<string, string>>({});
   const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
-  // 分割のドラッグ。PC のポインタだけが起点で、押した時点の位置だけを控える。
-  // listStart は一覧の行から始めたドラッグ。触れる画面では縦の動きをスクロールに譲る。
-  const paneDrag = useRef<{
-    paneId: string;
-    x: number;
-    y: number;
-    active: boolean;
-    listStart: boolean;
-  } | null>(null);
-  const dropTargetRef = useRef<DropTarget | null>(null);
-  const [dragging, setDragging] = useState<{
-    paneId: string;
-    target: DropTarget | null;
-  } | null>(null);
-  // 最新の木をイベントから引く。ドラッグの購読は 1 度しか張らない。
+  // 最新の木をイベントから引く。ドラッグとタブの購読は 1 度しか張らない。
   const splitRef = useRef<SplitView>(EMPTY_SPLIT_VIEW);
   // SSE の購読は 1 度しか張らないので、タブを外したあとの反映に使う一覧の
   // 開閉状態も ref から読む。
   const expandedRef = useRef<ReadonlySet<string>>(NO_GROUPS);
-  // ドロップの前後で位置を比べるための控え。タブはタブ列の
-  // スクロールを含めた位置で持ち、選択タブへの自動スクロールと競合させない。
-  const flipRects = useRef<Map<string, DOMRect> | null>(null);
-  const flipTabRects = useRef<Map<string, { left: number; top: number }> | null>(null);
-  // ドラッグ後の pointerup で click が成立しても、タブの選択を動かさない。
-  const draggedSincePress = useRef(false);
   const { openGroups, rememberOpen } = useOpenGroups();
   // 帯から「すべて」の場所へ移ったとき、一覧をその見出しまで送るための要求。
   // 同じ場所を何度も開けるよう、token で 1 回ずつ処理する。
@@ -206,8 +185,6 @@ export function App() {
   const [creating, setCreating] = useState<CreatingPane | null>(null);
   // 拡大中の画像。ダイアログは App 直下。
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
-  // 開いているプレビュー。対象のペインは、そのタブを開いている間だけ出す。
-  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   // 起動を頼んだペイン。ダイアログで選んだ内容だけを持ち、起動したかはスナップショットで決める。
@@ -394,60 +371,8 @@ export function App() {
     writeSplitView(split);
   }, [splitKey]);
 
-  // ドロップで位置が変わったセルを、前の位置から滑らせる。分割で増えたセルは
-  // フェードで入れる。初回表示とウィンドウのリサイズでは動かさない。
-  useLayoutEffect(() => {
-    const before = flipRects.current;
-    const beforeTabs = flipTabRects.current;
-    flipRects.current = null;
-    flipTabRects.current = null;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const tabList = document.querySelector<HTMLElement>("[data-tab-list]");
-    if (tabList !== null && beforeTabs !== null && beforeTabs.size > 0) {
-      // タブはタブ列のスクロールを含めた位置で比べる。選択タブへの自動スクロールが
-      // 同じフレームで動いても、滑る距離が変わらない。
-      const listRect = tabList.getBoundingClientRect();
-      for (const item of tabList.querySelectorAll<HTMLElement>("[data-tab-pane]")) {
-        // 外すアニメーション中のタブは幅を動かしている。同じ要素を動かさない。
-        if (item.dataset.leaving === "true") continue;
-        const pane = item.dataset.tabPane;
-        const previous = pane === undefined ? undefined : beforeTabs.get(pane);
-        if (previous === undefined) continue;
-        const rect = item.getBoundingClientRect();
-        const dx = previous.left - (rect.left - listRect.left + tabList.scrollLeft);
-        const dy = previous.top - (rect.top - listRect.top);
-        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-        item.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
-          duration: 200,
-          easing: "cubic-bezier(.2, 0, 0, 1)",
-        });
-      }
-    }
-    if (before === null || before.size === 0) return;
-    for (const cell of document.querySelectorAll<HTMLElement>("[data-drop-pane]")) {
-      const paneId = cell.dataset.dropPane;
-      if (paneId === undefined) continue;
-      const previous = before.get(paneId);
-      if (previous === undefined) {
-        cell.animate(
-          [
-            { opacity: 0, transform: "scale(0.985)" },
-            { opacity: 1, transform: "none" },
-          ],
-          { duration: 160, easing: "cubic-bezier(.2, 0, 0, 1)" },
-        );
-        continue;
-      }
-      const now = cell.getBoundingClientRect();
-      const dx = previous.left - now.left;
-      const dy = previous.top - now.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      cell.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], {
-        duration: 200,
-        easing: "cubic-bezier(.2, 0, 0, 1)",
-      });
-    }
-  }, [splitKey]);
+  // ドロップやタブの反映の直前に位置を控え、変わったセルとタブを前の位置から滑らせる。
+  const captureFlip = useFlipLayout(splitKey);
 
   // セルごとに文脈を引く。1 つの context を共有すると、別スペースを並べたときに
   // PR のチップや Git のメニューが別スペースの値になる。
@@ -462,16 +387,16 @@ export function App() {
         });
   const multiSpaceTabs = multiSpace(tabRows.map((row) => row.workspace.id));
 
-  // プレビューは一時タブのまま。開いた履歴にもスロットにも入れず、対象ペインが開いている
-  // 間だけタブに出せる。ペインを選ぶと隠れる。
-  const previewInTab = preview !== null && split.openTabs.includes(preview.paneId);
-  const previewing = preview?.shown === true && previewInTab;
-
-  // 閉じたペインのプレビューは残さない。配信の根が消えて、iframe は 404 になるだけ。
-  useEffect(() => {
-    if (preview === null || state === null) return;
-    if (findPane(state, preview.paneId) === null) setPreview(null);
-  }, [state, preview]);
+  // プレビューは一時タブのまま。対象のペインが開いている間だけ、タブと本文に出せる。
+  const {
+    preview,
+    previewInTab,
+    previewing,
+    open: openPreview,
+    show: showPreview,
+    hide: hidePreview,
+    close: closePreview,
+  } = usePreview({ state, openTabs: split.openTabs });
 
   // ペインがスナップショットから消えたら、その添付と進行中のアップロードを捨てる。
   // ペインを切り替えただけでは捨てない（戻ってから送れるようにする）。
@@ -526,10 +451,7 @@ export function App() {
     }
     pendingRead.current = pendingReadAfter(pending, paneId, opened);
     setPendingSelect(null);
-    // ペインのタブを選んだら、プレビューは閉じずに隠す。閉じるのはプレビュー自身の操作。
-    setPreview((current) =>
-      current === null || !current.shown ? current : { ...current, shown: false },
-    );
+    hidePreview();
     if (paneId === null) {
       setView({ split: clearCurrent(split), expanded: explicitExpanded ?? expanded });
       setSettingsOpen(false);
@@ -546,13 +468,6 @@ export function App() {
     }
     setView({ split: openPane(split, paneId), expanded: nextExpanded ?? expanded });
     setSettingsOpen(false);
-  };
-
-  // ドラッグが成立した後の click で選択を動かさない。次の押下で解除する。
-  const consumeDraggedClick = (): boolean => {
-    if (!draggedSincePress.current) return false;
-    draggedSincePress.current = false;
-    return true;
   };
 
   // 保留を作るのはアクティブ一覧の行だけ。ツリー・詳細のタブバー・復元では作らない。
@@ -883,10 +798,6 @@ export function App() {
   // タブの × はタブから外すだけ。ペインは閉じず、Herdr 側で動き続ける。
   const removeFromTabs = (paneId: string) => beginTabLeave(paneId);
 
-  // プレビューのタブとヘッダーの × は同じ入口にする。どちらも画面から外すだけで、
-  // チップはメッセージに残る。
-  const closePreview = () => setPreview(null);
-
   // 確認を開く時点のスナップショットで、閉じたあとに選ぶペインを決めておく。SSE が
   // 閉じたペインを落とした後では、後継を引けない。
   const requestClose = (paneId: string) => {
@@ -1137,6 +1048,33 @@ export function App() {
   // 異常のときだけ出す。正常な間は何も出さず、タブの幅を空けておく。
   const detailStatus = wide || connection === "live" ? null : connChip;
 
+  // ドラッグの適用先。タブとセルの両方から掴むので、最新の状態を持つ関数を hook に渡す。
+  // 落としたときの選択はレイアウト操作。一覧の行を開いたわけではないので、既読の
+  // 保留は作らない（タブからのドラッグと同じ）。
+  const applyDrop = (paneId: string, target: DropTarget) => {
+    // ドラッグは広い画面だけで始まる。途中で幅が変わっても開始時の分割として扱う。
+    const mode = target.kind === "tab" ? tabDropMode(split, paneId, target.pane, true) : null;
+    if (target.kind === "tab" && mode === null) return;
+    const next =
+      target.kind === "tab" && mode === "insert"
+        ? moveTab(split, paneId, target.pane, target.side)
+        : dropOnPane(
+            split,
+            paneId,
+            target.pane,
+            target.kind === "tab" ? "center" : target.zone,
+            true,
+          );
+    if (next === split) return;
+    captureFlip();
+    setView({ split: next, expanded });
+  };
+  const { dragging, startPaneDrag, startListPaneDrag, consumeDraggedClick } = usePaneDrag({
+    wide,
+    split: splitRef,
+    onDrop: applyDrop,
+  });
+
   // 掴んでいるタブの見出し。タブバーと同じ名前を使い、掴んだものがそのまま付いてくるようにする。
   const draggedRow =
     state === null || dragging === null ? null : findPaneRow(state, dragging.paneId);
@@ -1158,119 +1096,6 @@ export function App() {
               : null,
         }
       : null;
-
-  // 変更の直前にセルとタブの位置を控える。セルは画面座標、タブは列のスクロールを
-  // 含めた位置で比べる。
-  const captureFlip = () => {
-    const rects = new Map<string, DOMRect>();
-    for (const cell of document.querySelectorAll<HTMLElement>("[data-drop-pane]")) {
-      const paneId = cell.dataset.dropPane;
-      if (paneId !== undefined) rects.set(paneId, cell.getBoundingClientRect());
-    }
-    flipRects.current = rects;
-    const tabRects = new Map<string, { left: number; top: number }>();
-    const tabList = document.querySelector<HTMLElement>("[data-tab-list]");
-    if (tabList !== null) {
-      const listRect = tabList.getBoundingClientRect();
-      for (const item of tabList.querySelectorAll<HTMLElement>("[data-tab-pane]")) {
-        const paneId = item.dataset.tabPane;
-        if (paneId === undefined) continue;
-        const rect = item.getBoundingClientRect();
-        tabRects.set(paneId, {
-          left: rect.left - listRect.left + tabList.scrollLeft,
-          top: rect.top - listRect.top,
-        });
-      }
-    }
-    flipTabRects.current = tabRects;
-  };
-
-  // ドラッグの適用先。タブとセルの両方から掴むので、最新の状態を持つ関数を ref に置く。
-  // 落としたときの選択はレイアウト操作。一覧の行を開いたわけではないので、既読の
-  // 保留は作らない（タブからのドラッグと同じ）。
-  const applyDrop = (paneId: string, target: DropTarget) => {
-    // ドラッグは広い画面だけで始まる。途中で幅が変わっても開始時の分割として扱う。
-    const mode = target.kind === "tab" ? tabDropMode(split, paneId, target.pane, true) : null;
-    if (target.kind === "tab" && mode === null) return;
-    const next =
-      target.kind === "tab" && mode === "insert"
-        ? moveTab(split, paneId, target.pane, target.side)
-        : dropOnPane(
-            split,
-            paneId,
-            target.pane,
-            target.kind === "tab" ? "center" : target.zone,
-            true,
-          );
-    if (next === split) return;
-    captureFlip();
-    setView({ split: next, expanded });
-  };
-  const applyDropLatest = useRef(applyDrop);
-  applyDropLatest.current = applyDrop;
-
-  // タブ・セル・一覧の行の押下だけを控え、動き始めてからドラッグにする。クリックとの
-  // 競合を移動量で分ける（一覧の並べ替えと同じ判定）。
-  const startPaneDrag = (event: PointerEvent, paneId: string, listStart = false) => {
-    // 幅の変更でドラッグが始まらない画面でも、抑止は押下のたびに解除する。
-    // 前のドラッグの抑止が残ると、一覧へ戻った最初の選択が 1 回無視される。
-    draggedSincePress.current = false;
-    if (!wide || event.button !== 0) return;
-    paneDrag.current = {
-      paneId,
-      x: event.clientX,
-      y: event.clientY,
-      active: false,
-      listStart,
-    };
-  };
-
-  const startListPaneDrag = (event: PointerEvent, paneId: string) => {
-    startPaneDrag(event, paneId, true);
-  };
-
-  useEffect(() => {
-    const onMove = (event: PointerEvent) => {
-      const dragState = paneDrag.current;
-      if (dragState === null) return;
-      if (!dragState.active) {
-        const dx = event.clientX - dragState.x;
-        const dy = event.clientY - dragState.y;
-        if (!startsPaneDrag(event.pointerType, dragState.listStart, dx, dy)) return;
-        dragState.active = true;
-        draggedSincePress.current = true;
-      }
-      event.preventDefault();
-      setDragGhostPoint(event.clientX, event.clientY);
-      dropTargetRef.current = dropTargetAt(
-        event.clientX,
-        event.clientY,
-        dragState.paneId,
-        splitRef.current,
-        true,
-      );
-      setDragging({ paneId: dragState.paneId, target: dropTargetRef.current });
-    };
-    const onEnd = () => {
-      const dragState = paneDrag.current;
-      paneDrag.current = null;
-      if (dragState === null || !dragState.active) return;
-      const target = dropTargetRef.current;
-      dropTargetRef.current = null;
-      clearDragGhostPoint();
-      setDragging(null);
-      if (target !== null) applyDropLatest.current(dragState.paneId, target);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onEnd);
-    window.addEventListener("pointercancel", onEnd);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onEnd);
-      window.removeEventListener("pointercancel", onEnd);
-      clearDragGhostPoint();
-    };
-  }, []);
 
   // 空きの葉は持たない。
   const layoutPanes = readingOrder(split.layout);
@@ -1405,7 +1230,7 @@ export function App() {
         onRetryLaunch={() => retryLaunch(item.id)}
         onUseShell={() => useShell(item.id)}
         onOpenImage={(url, name) => setViewer({ url, name })}
-        onOpenPreview={(file) => setPreview({ paneId: item.id, file, shown: true })}
+        onOpenPreview={(file) => openPreview(item.id, file)}
       />
     );
   };
@@ -1718,9 +1543,7 @@ export function App() {
                 onSelectPane={selectFromTab}
                 onRemoveTab={removeFromTabs}
                 onLeaveFinished={finishTabLeave}
-                onSelectPreview={() =>
-                  setPreview((current) => (current === null ? null : { ...current, shown: true }))
-                }
+                onSelectPreview={showPreview}
                 onClosePreview={closePreview}
                 onBack={back}
                 onDragStart={startPaneDrag}
