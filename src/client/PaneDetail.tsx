@@ -4,7 +4,7 @@ import type { ChatAttachment, ChatFile, ChatMessage, ChatPending } from "../serv
 import type { PaneState } from "../server/herdr/state";
 import type { QuestionAnswer } from "../shared/answer";
 import type { FileTreeEntry } from "../shared/file-tree";
-import { gitStatusLabel, type GitSync } from "../shared/git";
+import type { GitSync } from "../shared/git";
 import {
   attachmentExtFromName,
   attachmentKindOfFileName,
@@ -54,7 +54,6 @@ import {
   pendingCard,
   usePaneChat,
 } from "./chat";
-import { isFileTreeShortcut, isInOverlay, isTextEntry } from "./file-tree-key";
 import { composerDisabled, enterInsertsNewline, projectMentionAllowed } from "./input";
 import { useMessageReveal } from "./reveal";
 import {
@@ -91,34 +90,28 @@ import {
   AgentGlyphIcon,
   AgentIcon,
   ArrowDownIcon,
-  ChevronDownIcon,
   ChevronLeftIcon,
   CloseIcon,
   CollapseIcon,
-  CopyGlyph,
   ExpandIcon,
-  FolderIcon,
-  MoreIcon,
-  PaneIcon,
   PencilIcon,
   SendIcon,
   StatusMark,
   StopIcon,
 } from "./icons";
-import { GitCount } from "./GitCount";
-import { MENU_ID } from "./Menu";
 import { useElementWidth } from "./app/use-element-width";
-import { TREE_SIDE_MIN_WIDTH } from "./layout";
 import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
 import { OutputEmpty, OutputSkeleton } from "./pane/empty";
 import { FilePreview } from "./pane/file-preview";
-import { FileTree, type TreeFocusRequest } from "./pane/file-tree";
+import { FileTree } from "./pane/file-tree";
 import { AgentInfoHint, AgentInfoSkeleton, CommandBadge, ContextMeter } from "./pane/info";
 import { LiveStatus } from "./pane/live-status";
 import { LaunchNote } from "./pane/launch-note";
+import { PaneHead } from "./pane/pane-head";
 import { useAttachments } from "./pane/use-attachments";
-import { useFilePreview, useFileTree } from "./pane/use-file-tree";
+import { useFilePreview } from "./pane/use-file-tree";
+import { useFileTreePanel } from "./pane/use-file-tree-panel";
 import { useTemplates } from "./pane/use-templates";
 import { useCompactionEcho } from "./pane/use-compaction-echo";
 import { useDefaultModel } from "./pane/use-default-model";
@@ -133,15 +126,7 @@ import { usePullRequest } from "./pull-request";
 import { confirmationView, type ConfirmationAttempt } from "./confirmation";
 import { PaneConfirmation } from "./PaneConfirmation";
 import { appendQuote, canSend, canStop } from "./reply";
-import {
-  agentGlyph,
-  isShellPane,
-  paneName,
-  placeChip,
-  pullRequestLabel,
-  shortenPaneName,
-  type PaneContext,
-} from "./select";
+import { agentGlyph, isShellPane, type PaneContext } from "./select";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { TemplateDialog } from "./TemplateDialog";
 import { insertTemplate } from "./templates";
@@ -152,13 +137,6 @@ import { type PaneLaunchView } from "./starting";
 
 const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
-// ツリーを閉じるアニメーションの長さ。CSS の transition と揃える。
-const TREE_CLOSE_MS = 120;
-// CSS の transition は次のフレームから始まる。閉じ終える前に unmount しないよう、
-// 1 フレーム分だけ待つ。
-const TREE_CLOSE_SETTLE_MS = 20;
-
-const prefersReducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 type PaneDetailProps = {
   pane: PaneState;
@@ -246,149 +224,32 @@ export function PaneDetail(props: PaneDetailProps) {
     onOpenImage,
     onOpenPreview,
   } = props;
-  const repoUrl = sync?.repoUrl ?? null;
-  // ツリーの状態は store に持つ。プレビューでこのセルが外れても開閉を保つ。
-  const fileTree = useFileTree(pane.id);
+  // ツリーを横に並べるかは、ウィンドウではなく実際のセル幅で決める。狭いセルでは
+  // 会話の上に重ねる。
+  const { ref: widthRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
+  const {
+    view: fileTree,
+    buttonRef: filesButtonRef,
+    open: treeOpen,
+    sideBySide,
+    overlay: treeOverlay,
+    shown: treeShown,
+    closing: treeClosing,
+    focusRequest: treeFocus,
+    close: closeTree,
+    toggle: toggleTree,
+  } = useFileTreePanel({ paneId: pane.id, current, frameWidth });
   const previewPath = useFilePreview(pane.id);
   // ライブ更新でスペースの根が変わると、取得済みの相対パスと選択中のファイルの意味が
   // 変わる。次の取得から新しい根で解決するよう、store の根を合わせる。
   useEffect(() => {
     fileTreeStore.syncRoot(pane.id, props.context.workspacePath);
   }, [pane.id, props.context.workspacePath]);
-  const filesButtonRef = useRef<HTMLButtonElement>(null);
   // 狭いセルで選択したときだけ、プレビューへフォーカスを移す。
   const [previewFocus, setPreviewFocus] = useState<{ focus: boolean }>({ focus: false });
-  // ツリーを横に並べるかは、ウィンドウではなく実際のセル幅で決める。狭いセルでは
-  // 会話の上に重ねる。
-  const { ref: widthRef, width: frameWidth } = useElementWidth<HTMLDivElement>();
-
-  const treeOpen = fileTree.open;
-  const sideBySide = treeOpen && frameWidth !== null && frameWidth >= TREE_SIDE_MIN_WIDTH;
-  const treeOverlay = treeOpen && !sideBySide;
   const previewOpen = previewPath !== null;
   // 会話は DOM に残してスクロール位置を保ち、表示だけを差し替える。
   const chatHidden = treeOverlay || previewOpen;
-
-  // 開閉の動きは開いた瞬間だけ。ペインを切り替えて戻ったときは store が開いたままでも
-  // 再生しないよう、初期値を store の開閉に合わせる。
-  const [treeShown, setTreeShown] = useState(fileTree.open);
-  const [treeClosing, setTreeClosing] = useState(false);
-  // キーで開いたときだけ、ツリーの行へ焦点を移す。token は開くたびに増え、
-  // focus はその開閉がキー由来かを示す。
-  const [treeFocus, setTreeFocus] = useState<TreeFocusRequest>({ token: 0, focus: false });
-  const treeCloseTimer = useRef<number | null>(null);
-
-  const cancelTreeClose = () => {
-    if (treeCloseTimer.current === null) return;
-    window.clearTimeout(treeCloseTimer.current);
-    treeCloseTimer.current = null;
-  };
-
-  // 面を 1 フレーム隠した状態で描いてから表示へ移し、CSS の transition を走らせる。
-  useEffect(() => {
-    if (!treeOpen || treeShown || treeClosing) return;
-    const frame = requestAnimationFrame(() => setTreeShown(true));
-    return () => cancelAnimationFrame(frame);
-  }, [treeOpen, treeShown, treeClosing]);
-
-  const openTree = (focus: boolean) => {
-    cancelTreeClose();
-    setTreeClosing(false);
-    // token は開くたびに増やし、focus とは別に持つ。番号を戻すと、閉じる途中の
-    // 開き直しで前の番号が再利用され、ツリーが処理済みと誤認して焦点を移さない。
-    setTreeFocus((request) => ({ token: request.token + 1, focus }));
-    // 動きを減らす設定では待たずに出す。CSS も transition を持たない。
-    if (prefersReducedMotion()) setTreeShown(true);
-    fileTreeStore.open(pane.id);
-  };
-
-  // store の close はアニメーションの後。閉じている間は一覧を残したまま inert にし、
-  // 消えていく行を押せないようにする。
-  const closeTree = () => {
-    if (!fileTree.open) return;
-    cancelTreeClose();
-    if (prefersReducedMotion()) {
-      fileTreeStore.close(pane.id);
-      setTreeClosing(false);
-      setTreeShown(false);
-      return;
-    }
-    setTreeClosing(true);
-    setTreeShown(false);
-    treeCloseTimer.current = window.setTimeout(() => {
-      treeCloseTimer.current = null;
-      fileTreeStore.close(pane.id);
-      setTreeClosing(false);
-      setTreeShown(false);
-    }, TREE_CLOSE_MS + TREE_CLOSE_SETTLE_MS);
-  };
-
-  // 閉じる途中でセルが外れたら、保留した close を済ませて開いたままにしない。
-  useEffect(
-    () => () => {
-      if (treeCloseTimer.current === null) return;
-      window.clearTimeout(treeCloseTimer.current);
-      treeCloseTimer.current = null;
-      fileTreeStore.close(pane.id);
-    },
-    [pane.id],
-  );
-
-  // 見出しのボタンとキーは同じ経路を通す。store を直接叩くと開閉の動きとずれる。
-  // focus はキーで開いたときだけ true。ポインタで開いたときに焦点を飛ばさない。
-  const toggleTree = (focus: boolean) => {
-    if (treeOpen && !treeClosing) {
-      // ツリーの中に焦点があるまま閉じると body に落ちる。行き場を見出しの入口へ返す。
-      const active = document.activeElement;
-      if (focus && active instanceof Element && active.closest(".hwc-tree-view") !== null) {
-        filesButtonRef.current?.focus();
-      }
-      closeTree();
-      return;
-    }
-    openTree(focus);
-  };
-
-  // キーは文書全体で拾う。listener を持つのは対象のセル 1 つだけにする。
-  const toggleTreeRef = useRef(toggleTree);
-  toggleTreeRef.current = toggleTree;
-  useEffect(() => {
-    if (!current) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (!isFileTreeShortcut(event)) return;
-      const focused = document.activeElement instanceof Element ? document.activeElement : null;
-      // 入力欄の中では文字を、開いている面の中ではその面のキーを優先する。
-      if (isTextEntry(focused) || isInOverlay(focused)) return;
-      // 焦点が body にあるときは、最後にクリックしたセル（= current）を開閉する。
-      // 他のセルや一覧に焦点があるときは、その画面の操作を横取りしない。
-      if (focused !== null && focused !== document.body) {
-        const cell = focused.closest("[data-drop-pane]");
-        // 分割セルは印で見分ける。1 枚表示はセルの印が無く、詳細の中に PaneDetail が
-        // 1 つしか出ないので、詳細の中かどうかだけを見る。
-        const inside =
-          cell !== null
-            ? cell.getAttribute("data-drop-pane") === pane.id
-            : focused.closest(".hwc-detail-body") !== null;
-        if (!inside) return;
-      }
-      event.preventDefault();
-      toggleTreeRef.current(true);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [current, pane.id]);
-  const shownPaneName = shortenPaneName(
-    paneName(pane),
-    context.workspaceLabel,
-    context.workspaceName,
-  );
-  // セルが並ぶときの場所。作成元のスペース → いまのスペースの順に、見出しの名前と
-  // 同じ文字列は落とす。どちらも残らないならチップを出さない。
-  const place = placeChip(shownPaneName, context.parentSpaceName, context.workspaceName);
-  const placeTitle =
-    context.parentSpaceLabel === null
-      ? `${context.workspaceLabel} / ${context.tabLabel}`
-      : `${context.parentSpaceLabel} / ${context.workspaceLabel} / ${context.tabLabel}`;
   const [expandedOpen, setExpandedOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1397,123 +1258,29 @@ export function PaneDetail(props: PaneDetailProps) {
 
   return (
     <>
-      <div class="hwc-pane-head" data-bare={!labeled}>
-        {sideBySide && treeSide === "left" ? treeHead : null}
-        <div class="hwc-pane-head-main">
-          <div class="hwc-pane-head-content">
-            <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
-              {pane.agent ? (
-                <AgentGlyphIcon agent={pane.agent} size={14} />
-              ) : (
-                <PaneIcon size={14} />
-              )}
-            </span>
-            {labeled ? (
-              <span class="hwc-pane-head-name">{shownPaneName}</span>
-            ) : showBranch ? (
-              branch === null ? null : (
-                <button
-                  type="button"
-                  class="hwc-pane-head-branch-menu"
-                  aria-label={`${branch} のスペースメニュー${sync === null ? "" : `、${gitStatusLabel(sync)}`}`}
-                  aria-haspopup="menu"
-                  aria-expanded={workspaceMenuOpen}
-                  aria-controls={MENU_ID}
-                  data-open={workspaceMenuOpen}
-                  onClick={(event) => onOpenWorkspaceMenu(context.workspaceId, event.currentTarget)}
-                >
-                  <span class="hwc-pane-head-branch" title={branch}>
-                    {branch}
-                  </span>
-                  <GitCount sync={sync} />
-                  <span class="hwc-chevron-down">
-                    <ChevronDownIcon size={12} />
-                  </span>
-                </button>
-              )
-            ) : context.repoName === null ? null : repoUrl === null ? (
-              <span class="hwc-pane-head-repo" title={context.repoName}>
-                {context.repoName}
-              </span>
-            ) : (
-              <a
-                class="hwc-pane-head-repo"
-                href={repoUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`${context.repoName} を GitHub で開く`}
-                title={context.repoName}
-              >
-                {context.repoName}
-              </a>
-            )}
-            {labeled && showSpace && place !== null ? (
-              <span class="hwc-pane-head-space" title={placeTitle}>
-                {place.parent === null ? null : (
-                  <span class="hwc-pane-head-place" data-part="parent">
-                    {place.parent}
-                    <span class="hwc-pane-head-sep" aria-hidden="true">
-                      {" ›"}
-                    </span>
-                  </span>
-                )}
-                <span class="hwc-pane-head-place" data-part="space">
-                  {place.space}
-                </span>
-              </span>
-            ) : null}
-            {labeled || showBranch ? null : <GitCount sync={sync} />}
-            {pullRequest === null || pullRequest.state !== "OPEN" ? null : (
-              <a
-                class="hwc-pane-head-pr"
-                href={pullRequest.url}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={pullRequestLabel(pullRequest)}
-              >
-                #{pullRequest.number}
-              </a>
-            )}
-            <button
-              ref={filesButtonRef}
-              type="button"
-              class="hwc-pane-files"
-              aria-label={
-                treeOpen && !treeClosing ? "ファイルツリーを閉じる" : "ファイルツリーを開く"
-              }
-              aria-pressed={treeOpen && !treeClosing}
-              onClick={() => toggleTree(false)}
-            >
-              <FolderIcon size={16} />
-              <span class="hwc-pane-files-label">ファイル</span>
-            </button>
-            <span class="hwc-pane-id" data-copied={copied}>
-              <span class="hwc-pane-id-text">{pane.id}</span>
-              <button
-                type="button"
-                class="hwc-pane-id-copy"
-                aria-label={copied ? "コピーしました" : "ペイン ID をコピー"}
-                onClick={copyId}
-              >
-                <CopyGlyph copied={copied} />
-              </button>
-            </span>
-            {/* ID の外に置く。中に入れると、hover できる端末で ID と一緒に隠れる。 */}
-            <button
-              type="button"
-              class="hwc-pane-more"
-              aria-label={`${pane.id} のメニュー`}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              aria-controls={MENU_ID}
-              onClick={(event) => onOpenMenu(pane.id, event.currentTarget)}
-            >
-              <MoreIcon />
-            </button>
-          </div>
-        </div>
-        {sideBySide && treeSide === "right" ? treeHead : null}
-      </div>
+      <PaneHead
+        pane={pane}
+        context={context}
+        labeled={labeled}
+        showSpace={showSpace}
+        showBranch={showBranch}
+        branch={branch}
+        sync={sync}
+        pullRequest={pullRequest}
+        files={{
+          open: treeOpen && !treeClosing,
+          buttonRef: filesButtonRef,
+          onToggle: () => toggleTree(false),
+        }}
+        copy={{ copied, onCopy: copyId }}
+        spaceMenu={{
+          open: workspaceMenuOpen,
+          onOpen: (trigger) => onOpenWorkspaceMenu(context.workspaceId, trigger),
+        }}
+        paneMenu={{ open: menuOpen, onOpen: (trigger) => onOpenMenu(pane.id, trigger) }}
+        leading={sideBySide && treeSide === "left" ? treeHead : null}
+        trailing={sideBySide && treeSide === "right" ? treeHead : null}
+      />
       <div
         class="hwc-pane-body"
         ref={widthRef}
