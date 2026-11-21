@@ -45,8 +45,8 @@
   --color-danger: #b3333c;
   --color-agent-claude: #c15f3c;
   /* エージェントのマークだけに使うブランド色（ADR 0118）。地の色や文字色には使わない。
-     Pi の 3 色と Claude は明暗で変えず、本家がモノクロの Codex と OpenCode だけ
-     ダークで反転する。 */
+     Claude は従来どおりテーマごとの `--color-agent-claude` を使う。Pi の 3 色は明暗で
+     共通、本家がモノクロの Codex と OpenCode だけダークで濃さを反転する。 */
   --color-agent-pi-coral: #f09082;
   --color-agent-pi-blue: #4d9abf;
   --color-agent-pi-yellow: #f1be58;
