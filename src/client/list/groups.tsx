@@ -20,7 +20,8 @@ export function GroupChildren(props: { id: string; open: boolean; children: Comp
 
 // 折りたたみの状態は、開いている間は子の状態で分かるので、まとめは淡く消して場所だけ残す。
 // エージェントの居ない束は状態の集約が意味を持たない（待機や不明はシェルだけでも出る）ので、
-// 状態の代わりにシェルの記号を置き、エージェントの有無を右端でも読めるようにする。
+// 状態の代わりにシェルの記号を置く。副題は件数に任せ、「シェルのみ」はこの記号の名前として
+// だけ残す。
 export function GroupStatus(props: {
   status: PaneState["agentStatus"];
   agents: number;

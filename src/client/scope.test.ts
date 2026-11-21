@@ -190,10 +190,10 @@ test("a count past two digits is shown as a range", () => {
   expect(countLabel(100)).toBe("99+");
 });
 
-test("the group summary tells whether there is an agent", () => {
+test("the agent badge and the shell mark name what the group holds", () => {
   expect(agentPresence(1)).toBe("エージェント 1");
   expect(agentPresence(4)).toBe("エージェント 4");
-  // 0 は数えず、何が居るかを言う。状態の集約だけではシェルだけの束を見分けられない。
+  // 0 は数えず、何が居るかを言う。束の副題は件数に任せる。
   expect(agentPresence(0)).toBe("シェルのみ");
 });
 

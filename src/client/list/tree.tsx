@@ -23,7 +23,6 @@ import {
 } from "../order";
 import { useOrderDrag } from "../order-drag";
 import { ParentMark } from "../ParentMark";
-import { agentPresence } from "../scope";
 import {
   agentGlyph,
   countTabAgents,
@@ -341,9 +340,7 @@ export function TreePaneList(props: TreePaneListProps) {
               <span class="hwc-tabrow-name">{tab.label}</span>
               {agents === 0 ? null : <GroupAgents agents={agents} />}
             </span>
-            <span class="hwc-tabrow-sub">
-              {agents === 0 ? agentPresence(agents) : `${tab.panes.length} ペイン`}
-            </span>
+            <span class="hwc-tabrow-sub">{tab.panes.length} ペイン</span>
           </span>
           <GroupStatus status={tab.agentStatus} agents={agents} hidden={tabOpen} />
           <span class="hwc-chevron" data-open={tabOpen}>
@@ -469,11 +466,9 @@ export function TreePaneList(props: TreePaneListProps) {
                 <PullRequestSummary
                   pullRequest={pullRequest}
                   fallback={
-                    agents === 0
-                      ? agentPresence(agents)
-                      : workspace.worktree?.isLinkedWorktree === true
-                        ? `${workspace.worktree.repoName} · ${panes} ペイン`
-                        : `${panes} ペイン`
+                    workspace.worktree?.isLinkedWorktree === true
+                      ? `${workspace.worktree.repoName} · ${panes} ペイン`
+                      : `${panes} ペイン`
                   }
                 />
               ),
@@ -524,12 +519,7 @@ export function TreePaneList(props: TreePaneListProps) {
           depth: 0,
           icon: <WorkspaceGlyph worktree={representative.worktree} />,
           label: group.place.label,
-          sub: (
-            <PullRequestSummary
-              pullRequest={pullRequest}
-              fallback={agents === 0 ? agentPresence(agents) : `${panes} ペイン`}
-            />
-          ),
+          sub: <PullRequestSummary pullRequest={pullRequest} fallback={`${panes} ペイン`} />,
           title: group.place.path,
           status: mostUrgentStatus(members.map((workspace) => workspace.agentStatus)),
           agents,
@@ -591,7 +581,7 @@ export function TreePaneList(props: TreePaneListProps) {
               sub: (
                 <PullRequestSummary
                   pullRequest={hostPullRequest}
-                  fallback={agents === 0 ? agentPresence(agents) : `${worktrees} ワークツリー`}
+                  fallback={`${worktrees} ワークツリー`}
                 />
               ),
               title: group.host?.worktree?.repoRoot ?? undefined,
