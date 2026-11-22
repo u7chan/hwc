@@ -587,6 +587,12 @@
   .hwc-cache-narrow {
     display: inline-flex;
   }
+
+  /* スマホの 1 ペイン表示には hwc-cell の容器が無い。入力欄の幅でも、バーがモデル名を
+     押し出すので数値だけにする。 */
+  .hwc-context-bar {
+    display: none;
+  }
 }
 
 .hwc-context-bar {
