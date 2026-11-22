@@ -352,6 +352,12 @@ function RowMenuCard(props: { name: string; copyTarget: string; onNewSpace: () =
 export function FileTree(props: FileTreeProps) {
   const list = useRef<HTMLUListElement>(null);
   const handled = useRef(0);
+  // 確定前の焦点。並べ方が変わるとツリーごと作り直され、Menu も開き直されて
+  // 先頭の項目へ焦点を移す。そのあとでメニューを捨てると焦点の行き場が無くなるので、
+  // 捨てる前にここへ戻す（描画中の読み取りは、子のレイアウト効果より前でしかできない）。
+  const focusedBefore = useRef<HTMLElement | null>(null);
+  focusedBefore.current =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
   // 開いているメニューは store が 1 つだけ持つ。根が変わると store が一覧ごと捨てるので、
   // 消えた行の相対パスを新しい根と結合しない。行のボタンが DOM から外れている間は
   // 位置合わせができないので描かない（ツリーを閉じた・セルが外れた後）。
@@ -375,6 +381,10 @@ export function FileTree(props: FileTreeProps) {
   useLayoutEffect(() => {
     const opening = props.view.menu;
     if (opening === null || opening.trigger.isConnected) return;
+    const card = document.getElementById(TREE_MENU_ID);
+    if (card !== null && card.contains(document.activeElement)) {
+      focusedBefore.current?.focus({ preventScroll: true });
+    }
     props.onClearMenu();
   });
 
