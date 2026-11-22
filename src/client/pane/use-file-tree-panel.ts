@@ -91,6 +91,8 @@ export function useFileTreePanel(options: FileTreePanelOptions): FileTreePanel {
   // 消えていく行を押せないようにする。
   const closeTree = () => {
     if (!open) return;
+    // 閉じると行のボタンも消え、メニューは位置合わせも焦点の復帰もできない。
+    fileTreeStore.clearRowMenu(paneId);
     cancelClose();
     if (prefersReducedMotion()) {
       fileTreeStore.close(paneId);
@@ -108,9 +110,11 @@ export function useFileTreePanel(options: FileTreePanelOptions): FileTreePanel {
     }, TREE_CLOSE_MS + TREE_CLOSE_SETTLE_MS);
   };
 
-  // 閉じる途中でセルが外れたら、保留した close を済ませて開いたままにしない。
+  // 閉じる途中でセルが外れたら、保留した close を済ませて開いたままにしない。行メニューも
+  // 同じ理由で捨てる（store に残すと、戻ったときに切断済みのボタンで描こうとする）。
   useEffect(
     () => () => {
+      fileTreeStore.clearRowMenu(paneId);
       if (closeTimer.current === null) return;
       window.clearTimeout(closeTimer.current);
       closeTimer.current = null;

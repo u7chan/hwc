@@ -115,7 +115,10 @@ export function Menu(props: MenuProps) {
 
   return (
     <>
-      {open ? <div class="hwc-menu-backdrop" onPointerDown={onClose} /> : null}
+      {/* 面は全面を覆うので、ホイールは下の一覧ではなくこの面に当たる。スクロールの合図で
+          閉じないと、アンカーが動かないまま一覧をスクロールできない。触れる端末は
+          pointerdown で閉じるので、ここで見るのはホイールだけでよい。 */}
+      {open ? <div class="hwc-menu-backdrop" onPointerDown={onClose} onWheel={onClose} /> : null}
       <div
         id={props.id ?? MENU_ID}
         ref={card}
