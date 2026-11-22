@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import {
   FILE_TREE_LIMIT,
   type FileTreeDir,
@@ -43,7 +43,8 @@ type FileTreeProps = {
   // 開けるメニューは常に 1 つ。分割セルのもう一方が開いていれば、そちらは閉じる。
   onOpenMenu: (path: string, name: string, trigger: HTMLElement) => void;
   onCloseMenu: (path: string) => void;
-  onClearMenu: (path: string) => void;
+  // path を渡さないときは、行のボタンごと消えたとしてとにかく捨てる。
+  onClearMenu: (path?: string) => void;
 };
 
 // ツリーの行へ渡すもの。メニューの開閉は store が持ち、行は開く合図だけを送る。
@@ -367,6 +368,15 @@ export function FileTree(props: FileTreeProps) {
     handled.current = request.token;
     focusTarget(root)?.focus();
   }, [props.focusRequest, props.view.dirs]);
+
+  // 行のボタンが作り直されると、控えた要素は切り離される。並べ方の切り替え（重ね表示から
+  // 並べ表示へ移る）では、この描画ではまだ DOM に残っているので、確定を待って確かめる。
+  // 描画前に捨てるので、上端に置かれた面が見えることはない。
+  useLayoutEffect(() => {
+    const opening = props.view.menu;
+    if (opening === null || opening.trigger.isConnected) return;
+    props.onClearMenu();
+  });
 
   const onKeyDown = (event: KeyboardEvent) => {
     const root = list.current;
