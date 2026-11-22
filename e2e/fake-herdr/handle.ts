@@ -268,6 +268,11 @@ export function createHandle(
           send(socket, { id, result: { type: "ok" } });
           return;
         }
+        // Claude のローカルコマンド（`/model`・`/effort`）は発言にならず、結果だけを書く。
+        if (await claude.runLocalCommand(paneId, text)) {
+          send(socket, { id, result: { type: "ok" } });
+          return;
+        }
         // Claude は発言を transcript へ書き、応答待ちの hook の記録を消す。
         if (await claude.appendUser(paneId, text)) {
           send(socket, { id, result: { type: "ok" } });

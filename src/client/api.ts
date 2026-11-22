@@ -17,6 +17,7 @@ import type { AppState } from "../server/herdr/state";
 import { parseFileTree, type FileTreeListing } from "../shared/file-tree";
 import { parsePaneActivity, type PaneActivity } from "../shared/activity";
 import type { AnswerRequest } from "../shared/answer";
+import type { ModelSwitchRequest } from "../shared/model-switch";
 import {
   type AgentKind,
   type AgentModel,
@@ -829,6 +830,32 @@ export async function answerQuestion(
     const response = await client.api.panes[":id"]["answer-question"].$post(
       answerRequest(paneId, request),
       { init: { signal: AbortSignal.timeout(ANSWER_TIMEOUT_MS) } },
+    );
+    return response.ok ? { ok: true } : { ok: false, status: response.status };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
+// BFF は `/model` の完了を最大 8 秒、`/effort` の結果を最大 5 秒待つ。その上限と通信を覆い、
+// 返らない経路でダイアログを回し続けない。
+export const SWITCH_MODEL_TIMEOUT_MS = 20_000;
+
+// status は失敗の理由を伝えるためだけに返す。0 はネットワークの失敗と打ち切り。
+export type SwitchModelResult = { ok: true } | { ok: false; status: number };
+
+function switchRequest(paneId: string, json: ModelSwitchRequest) {
+  return { ...paneParam(paneId), json };
+}
+
+export async function switchModel(
+  paneId: string,
+  request: ModelSwitchRequest,
+): Promise<SwitchModelResult> {
+  try {
+    const response = await client.api.panes[":id"]["switch-model"].$post(
+      switchRequest(paneId, request),
+      { init: { signal: AbortSignal.timeout(SWITCH_MODEL_TIMEOUT_MS) } },
     );
     return response.ok ? { ok: true } : { ok: false, status: response.status };
   } catch {

@@ -69,6 +69,7 @@ export function createApp(options: CreateAppOptions) {
       .get("/api/panes/:id/chat", chatHandlers.chat)
       .post("/api/panes/:id/edit-message", requireJson, editMessageHandlers.edit)
       .post("/api/panes/:id/answer-question", requireJson, chatHandlers.answerQuestion)
+      .post("/api/panes/:id/switch-model", requireJson, chatHandlers.switchModel)
       .get("/api/panes/:id/default-model", chatHandlers.defaultModel)
       .get("/api/panes/:id/launch-model", chatHandlers.launchModel)
       .get("/api/panes/:id/activity", chatHandlers.activity)

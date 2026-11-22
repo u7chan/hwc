@@ -12,16 +12,17 @@ Herdr は最後のタブの最後のペインを閉じると、スペースご�
 
 ## Decision
 
-- 入力欄の文字列は解釈せず、そのまま Herdr の送信で送る。hwc は各 CLI の TUI コマンドの一覧を持たない。例外は hwc が存在を知っている会話コマンド `/new` と `/compact` だけで、送り方は通常の文字列送信と同じ。送る文字列は `src/client/commands.ts` の表に固定する
+- 入力欄の文字列は解釈せず、そのまま Herdr の送信で送る。hwc は各 CLI の TUI コマンドの一覧を持たない。例外は hwc が存在を知っている会話コマンド `/new` と `/compact` だけで、送り方は通常の文字列送信と同じ。送る文字列は `src/client/commands.ts` の表に固定する。もう 1 つの例外は Claude のモデルと effort の切り替えで、BFF が候補にある値だけから `/model <alias>` と `/effort <level>` を組み立てて、同じ送信で送る（[Claude](claude-integration.md)）
 - 任意のキーを送る機能は持たない。hwc が送るキーは次に限り、いずれも BFF が直前の状態を確かめてから送る
   - 停止: エージェントには Esc を、`agentStatus === "working"` のときだけ送る。シェルには C-c を、前景プロセスがシェルと別のときだけ送る。条件を満たさない要求はキーを送らずに成功として返す
   - 既知のフォルダ信頼確認への回答: Enter を 1 回だけ送る。BFF が `pane.read` の `detection` から確認画面を照合して識別子を発行し、回答 API は識別子だけを受ける。照合の条件はエージェントごとの ADR（[Codex](codex-integration.md)、[pi](pi-integration.md)）が定める。同じペインの判定と回答は直列化し、送信結果が不明でも再送しない
   - Claude の AskUserQuestion への回答: Esc でダイアログを閉じ、閉じたことを transcript で確かめてから本文を送る（[Claude](claude-integration.md)）
+  - Claude のモデルと effort の切り替えで、確かめられなかったときに、開いたままの確認ダイアログを閉じる: Esc を、`agentStatus === "blocked"` で、頼んでから新しい発言も応答待ち（pending）も現れていないときだけ送る。`blocked` には権限確認や質問の待ちも含まれ、待つ間に別のクライアントが発言していれば、その待ちを拒否してしまうため。会話を読めないときも送らない。ダイアログの確認に Enter は送らない。hwc の確認を通った切り替えだけを、hook が許可する（[Claude](claude-integration.md)）
 - スペースの最後のペインは `pane.close` しない。エージェントがいれば終了だけを要求してシェルとペインを残し、シェルだけのペインは閉じさせない
 - エージェントの終了は `agent.prompt` で `/quit` を送る。`pane.process_info` で、シェルがエージェントを前景ジョブとして待っていると確かめたときだけ送る。Ctrl+D は送らない。失敗しても `pane.close`・シグナル・別のキーへフォールバックしない
 - 確認中のペインへの通常入力と停止は `confirmation_pending` で拒否する。確認への回答に通常入力の経路を使わせない
 - 承認（permission prompt）は Web から送らない。端末で行う
-- 送る文字列にコマンドを組み立てる場合（[pi](pi-integration.md) の `/hwc-rewind`、Claude への回答の本文）は、埋め込む値の形を BFF が検証し、改行や先頭の記号でコマンドを注入できないようにする
+- 送る文字列にコマンドを組み立てる場合（[pi](pi-integration.md) の `/hwc-rewind`、Claude への回答の本文、Claude の `/model` と `/effort`）は、埋め込む値の形を BFF が検証し、改行や先頭の記号でコマンドを注入できないようにする
 
 ## Consequences
 

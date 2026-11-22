@@ -9,6 +9,8 @@ import {
   supportsModelSelection,
 } from "../../shared/agents";
 import { parseAnswerRequest } from "../../shared/answer";
+import { parseModelSwitchRequest } from "../../shared/model-switch";
+import { findPane } from "../herdr/state";
 import type { AppContext, IdContext, PlainContext } from "./context";
 
 export function createChatHandlers(ctx: AppContext) {
@@ -28,6 +30,7 @@ export function createChatHandlers(ctx: AppContext) {
     launchModels,
     piDefaults,
     questionAnswerer,
+    modelSwitcher,
     resolvePane,
     paneFailure,
     matchesEtag,
@@ -123,7 +126,12 @@ export function createChatHandlers(ctx: AppContext) {
         const live = await client.snapshot(source.agent === "pi" ? source.path : source.sessionId);
         // 解決済みの既定は捨てる。預かりは残すので、/new の後は読み直せる（docs/adr/agent-launch.md）。
         piDefaults.dropResolved(paneId, live.model);
-        const snapshot = launchModels.apply(paneId, live);
+        const launched = launchModels.apply(paneId, live);
+        // 切り替えた値は、次の応答が transcript に載るまで表示を補う（docs/adr/claude-integration.md）。
+        const snapshot =
+          source.agent === "claude" && modelSwitcher !== null
+            ? modelSwitcher.apply(paneId, source.sessionId, launched)
+            : launched;
         // 添付のチップに出すサイズは保存済みファイルの実バイト数。名前から引く。
         const withSizes = await attachAttachmentSizes(snapshot, {
           root: attachmentsRoot,
@@ -164,6 +172,43 @@ export function createChatHandlers(ctx: AppContext) {
         paneId,
         sessionId: source.sessionId,
         blocked: pane.agentStatus === "blocked",
+        request,
+      });
+      return outcome.ok ? c.json({ ok: true }) : c.json({ error: outcome.error }, outcome.status);
+    },
+    // 実行中の Claude のモデルと effort を、`/model` と `/effort` で切り替える
+    // （docs/adr/claude-integration.md）。Claude だけ。
+    switchModel: async (c: IdContext) => {
+      const request = parseModelSwitchRequest(await c.req.json().catch(() => null));
+      if (request === null) return c.json({ error: "invalid_request" }, 400);
+
+      const resolved = await resolvePane(c);
+      if (!resolved.ok) return resolved.response;
+      const { paneId, pane } = resolved;
+      if (pane.agent !== "claude") return c.json({ error: "not_claude" }, 400);
+
+      // セッションの在り処はクライアントから受け取らず、BFF がペイン id から引く。
+      const source = store.chatSource(paneId);
+      if (!pane.chat || source?.agent !== "claude" || modelSwitcher === null) {
+        return c.json({ error: "not_available" }, 409);
+      }
+
+      let directory: string;
+      try {
+        directory = await panes.directory({ paneId });
+      } catch (error) {
+        return paneFailure(c, error);
+      }
+
+      const outcome = await modelSwitcher.switch({
+        paneId,
+        sessionId: source.sessionId,
+        directory,
+        idle: pane.agentStatus === "idle" || pane.agentStatus === "done",
+        blocked: () => {
+          const state = store.get();
+          return (state && findPane(state, paneId)?.agentStatus) === "blocked";
+        },
         request,
       });
       return outcome.ok ? c.json({ ok: true }) : c.json({ error: outcome.error }, outcome.status);

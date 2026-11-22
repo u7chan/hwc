@@ -50,6 +50,8 @@ const LOCAL_COMMAND_TAGS = [
   "<local-command-caveat>",
 ];
 
+const LOCAL_COMMAND_OUTPUT = /<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/;
+
 // 利用者が Esc で中断したときに CLI が user の本文として書く固定の記録。発話ではない。
 // 質問に答えるときは hwc が Esc を送るので、毎回これが残る（docs/adr/claude-integration.md）。
 const INTERRUPT_MARKERS = new Set([
@@ -147,6 +149,7 @@ export function createClaudeChatClient(
 ): SessionChatClient & {
   activity: (sessionId: string) => Promise<SessionActivity>;
   forgetMissing: (sessionId: string) => void;
+  localCommandOutputs: (sessionId: string, since: number) => Promise<string[]>;
 } {
   const maxBytes = options.maxBytes ?? MAX_TRANSCRIPT_BYTES;
   const now = options.now ?? Date.now;
@@ -274,6 +277,18 @@ export function createClaudeChatClient(
       const projection = await shared(sessionId);
       const snapshot = await withHookPending(projection.snapshot, projection.resolved, sessionId);
       return withLiveContext(snapshot, sessionId);
+    },
+    // `/effort` の結果は、user の行に <local-command-stdout> として残る。会話には出さない
+    // 記録なので、射影ではなく entry から読む（docs/adr/claude-integration.md）。
+    async localCommandOutputs(sessionId, since) {
+      const outputs: string[] = [];
+      for (const entry of (await shared(sessionId)).entries) {
+        const content = entry.message?.content;
+        if (entry.type !== "user" || entry.at < since || typeof content !== "string") continue;
+        const output = LOCAL_COMMAND_OUTPUT.exec(content)?.[1];
+        if (output !== undefined) outputs.push(output);
+      }
+      return outputs;
     },
     async activity(sessionId) {
       const at = now();

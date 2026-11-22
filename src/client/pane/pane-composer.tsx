@@ -43,7 +43,11 @@ export type ComposerView = {
   editTarget: ChatMessage | null;
   candidates: readonly CommandId[];
   // コマンドを持たない agent では null。
-  commands: { newSession: ComposerCommand; compact: ComposerCommand } | null;
+  commands: {
+    newSession: ComposerCommand;
+    compact: ComposerCommand;
+    modelSwitch: ComposerCommand | null;
+  } | null;
   mentions: {
     // 語が変わるたびに一覧を作り直す鍵。
     query: string | null;

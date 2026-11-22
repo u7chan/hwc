@@ -6,7 +6,15 @@ import {
   MAX_FILE_ATTACHMENT_BYTES,
   MAX_IMAGE_ATTACHMENT_BYTES,
 } from "../shared/attachments";
-import { CollapseIcon, FileIcon, NewSessionIcon, PlusIcon, RepoIcon, TemplateIcon } from "./icons";
+import {
+  CollapseIcon,
+  FileIcon,
+  NewSessionIcon,
+  PlusIcon,
+  RepoIcon,
+  SettingsIcon,
+  TemplateIcon,
+} from "./icons";
 import { Menu } from "./Menu";
 
 export const ADD_MENU_ID = "hwc-add-menu";
@@ -21,7 +29,12 @@ export type ComposerCommand = {
 type ComposerAddProps = {
   full: boolean;
   // コマンドを持たない agent では null。定型文・画像・プロジェクトだけの + メニューになる。
-  commands: { newSession: ComposerCommand; compact: ComposerCommand } | null;
+  commands: {
+    newSession: ComposerCommand;
+    compact: ComposerCommand;
+    // 実行中の Claude のモデルと effort を切り替える。Claude だけが持つ。
+    modelSwitch: ComposerCommand | null;
+  } | null;
   // 読めていないときは null。押せる側に倒し、ダイアログが読み直して失敗を出す。
   templateCount: number | null;
   // 定型文を引用できない理由。件数以外の理由（圧縮の指示中）を 1 つだけ出す。
@@ -106,6 +119,9 @@ export function ComposerAdd(props: ComposerAddProps) {
             <>
               {command(props.commands.newSession, <NewSessionIcon size={18} />)}
               {command(props.commands.compact, <CollapseIcon size={18} />)}
+              {props.commands.modelSwitch === null
+                ? null
+                : command(props.commands.modelSwitch, <SettingsIcon size={18} />)}
               <hr class="hwc-menu-separator" />
             </>
           )}

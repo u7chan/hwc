@@ -127,6 +127,9 @@ export type SessionChatClient = {
   // 見つからなかった結果を覚える口が、送信で transcript ができた可能性を受けて記憶を
   // 捨てる。覚えない口（pi・opencode・codex）は持たない。
   forgetMissing?: (sessionId: string) => void;
+  // `since`（ミリ秒）以降に、CLI のローカルコマンド（`/effort` など）が書いた結果の本文。
+  // 会話の行にはならない記録なので、スナップショットとは別に読む。
+  localCommandOutputs?: (sessionId: string, since: number) => Promise<string[]>;
 };
 
 // 実行中の段階を導いた結果。claim はターンの範囲を決める BFF の状態が行うので、

@@ -2,9 +2,11 @@ import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { sidecarRoot } from "./chat/claude-sidecar";
 import { claudeLiveRoot } from "./chat/claude-live";
+import { switchRoot } from "./chat/claude-switch";
 
 // hook を足すイベント。tool の hook は PermissionRequest を承認待ちの合図にし、残りは
-// sidecar を消す契機に使う（docs/adr/claude-integration.md）。
+// sidecar を消す契機に使う。PreModelSwitch / PostModelSwitch は、hwc からのモデルの切り替えを
+// 許可して記録する（docs/adr/claude-integration.md）。
 const HOOK_EVENTS = [
   "PreToolUse",
   "PermissionRequest",
@@ -13,6 +15,8 @@ const HOOK_EVENTS = [
   "UserPromptSubmit",
   "Stop",
   "SessionEnd",
+  "PreModelSwitch",
+  "PostModelSwitch",
 ] as const;
 
 // 起動のたびに呼ぶ。内容が同じなら書かない。
@@ -26,6 +30,7 @@ export async function ensureClaudeSettings(stateRoot: string): Promise<ClaudeLau
     runtime: process.execPath,
     script: join(import.meta.dir, "claude-hook.ts"),
     root: sidecarRoot(stateRoot),
+    switches: switchRoot(stateRoot),
     live,
   });
   const existing = await readFile(path, "utf8").catch(() => null);
@@ -52,10 +57,13 @@ export function claudeSettingsJson(props: {
   runtime: string;
   script: string;
   root: string;
+  switches: string;
   live: string;
 }): string {
   // hook のコマンドはシェルが解釈する。パスに空白や記号があっても 1 語になるよう引用する。
-  const command = [props.runtime, props.script, props.root].map(shellQuote).join(" ");
+  const command = [props.runtime, props.script, props.root, props.switches]
+    .map(shellQuote)
+    .join(" ");
   const entry = [{ hooks: [{ type: "command", command, timeout: 5 }] }];
   const hooks = Object.fromEntries(HOOK_EVENTS.map((event) => [event, entry]));
   return `${JSON.stringify({ hooks, env: { HWC_CLAUDE_LIVE_DIR: props.live } }, null, 2)}\n`;
