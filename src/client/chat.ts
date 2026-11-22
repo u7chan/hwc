@@ -337,7 +337,7 @@ export function contextPercent(context: ChatContext): number | null {
 }
 
 // pi は 90% 超を危険色にするが、hwc に危険な状態の文字色は無い。バーの長さでも差が出るので
-// 段は 1 つに留める。段を増やすなら design のトークンを見直す。
+// 段は 1 つに留める。段を増やすなら tokens.css の状態色を見直す。
 export function contextTone(percent: number): "secondary" | "attention" {
   return percent > 70 ? "attention" : "secondary";
 }
