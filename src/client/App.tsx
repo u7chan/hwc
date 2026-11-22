@@ -1207,6 +1207,7 @@ export function App() {
         // 広い画面でも PR のチップは見出しに出す。ブランチだけを隠す。
         showBranch={!wide}
         waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
+        now={now}
         running={processes.get(item.id)?.running === true}
         sending={inputsInFlight.current.has(item.id)}
         launch={launchView}

@@ -5,6 +5,7 @@ import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
 import { MARKDOWN_MAX_LENGTH } from "./markdown/parse";
 import {
   agentInfo,
+  cacheView,
   chatPollDelay,
   compactionLabel,
   contextDetails,
@@ -611,4 +612,41 @@ test("maps a resolved link to the same destination as the chip", () => {
   });
   expect(messageLinks("w1:p1", undefined)).toBeUndefined();
   expect(messageLinks("w1:p1", [])).toBeUndefined();
+});
+
+test("the cache expiry counts down in minutes and seconds", () => {
+  const now = 1_000_000;
+  expect(cacheView(now + 42 * 60_000 + 18_000, now)).toEqual({
+    expired: false,
+    wide: "42:18",
+    narrow: "42m",
+  });
+  // 1 分未満は秒で出す。切り上げて、満了前に 0 を出さない。
+  expect(cacheView(now + 42_000, now)).toEqual({ expired: false, wide: "0:42", narrow: "42s" });
+  expect(cacheView(now + 500, now)).toEqual({ expired: false, wide: "0:01", narrow: "1s" });
+});
+
+test("an expired or unknown cache expiry is shown as expired only when known", () => {
+  const now = 1_000_000;
+  expect(cacheView(now, now)).toEqual({ expired: true, wide: "切れ", narrow: "切れ" });
+  expect(cacheView(now - 1, now)).toEqual({ expired: true, wide: "切れ", narrow: "切れ" });
+  expect(cacheView(null, now)).toBeNull();
+  expect(cacheView(undefined, now)).toBeNull();
+  expect(cacheView(Number.NaN, now)).toBeNull();
+});
+
+test("a new conversation hides the old cache expiry", () => {
+  const previous: ChatSnapshot = {
+    ...snapshot,
+    cacheExpiresAt: 9_999_999,
+  };
+  expect(newSessionSnapshot(previous)).toEqual({
+    etag: "abc",
+    messages: [],
+    model: "pi-large",
+    effort: "high",
+    truncated: false,
+    context: null,
+    compaction: null,
+  });
 });

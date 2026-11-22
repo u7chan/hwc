@@ -247,8 +247,11 @@ export function createModelSwitcher(
     ) {
       return snapshot;
     }
+    // 旧モデル・旧 effort の 1h キャッシュの期限は、切り替え後の会話には当てはまらない。
+    // 新しい応答が載るまでの間は出さない（docs/adr/claude-integration.md）。
+    const { cacheExpiresAt: _cacheExpiresAt, ...rest } = snapshot;
     return {
-      ...snapshot,
+      ...rest,
       etag: `${snapshot.etag}+switch${override.at}`,
       model: override.model ?? snapshot.model,
       effort: override.effort ?? snapshot.effort,

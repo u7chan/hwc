@@ -21,6 +21,7 @@ import {
 } from "./attachments";
 import {
   agentInfo,
+  cacheView,
   contextMeter,
   idleEchoExpired,
   isPendingConfirmed,
@@ -121,6 +122,8 @@ type PaneDetailProps = {
   upstreamBranch: string | null;
   workspaceMenuOpen: boolean;
   waitingMs: number | null;
+  // サーバーの時計で刻んだ「今」。キャッシュの残り時間を描画のたびにここから引く。
+  now: number;
   // シェルの前景プロセスが動いているか。停止ボタンの出し分けにだけ使う。
   running: boolean;
   sending: boolean;
@@ -167,6 +170,7 @@ export function PaneDetail(props: PaneDetailProps) {
     upstreamBranch,
     workspaceMenuOpen,
     waitingMs,
+    now,
     running,
     sending,
     launch,
@@ -373,6 +377,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const infoLoading = info === null && defaultInfo.loading;
   // モデルと effort が無くても、コンテキストの材料があれば行を出す。
   const meter = contextMeter(snapshot?.context ?? null);
+  const cache = cacheView(snapshot?.cacheExpiresAt, now);
   const content = body.kind === "chat" ? body.snapshot.messages : output;
 
   const input = useRef<HTMLTextAreaElement>(null);
@@ -1234,6 +1239,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 info,
                 infoLoading,
                 meter,
+                cache,
                 context: snapshot?.context ?? null,
                 usage: snapshot?.usage,
                 sendable,

@@ -76,6 +76,71 @@ const question = (
 });
 const askUse = (id: string, questions: unknown) => tool(id, "AskUserQuestion", { questions });
 
+const HOUR_MS = 60 * 60 * 1000;
+const SYNTHETIC = "<synthetic>";
+
+function request(id: string, extra: Record<string, unknown> = {}) {
+  return {
+    type: "api-request",
+    id,
+    querySource: "repl_main_thread",
+    timestamp: timestamp(),
+    version: "2.1.328",
+    ...extra,
+  };
+}
+
+// 実機の message.usage のうち、キャッシュの判定に使う項目だけを持つ形。
+function cacheUsage(oneHour: number, fiveMinutes = 0, read = 0) {
+  return {
+    cache_creation_input_tokens: oneHour + fiveMinutes,
+    cache_read_input_tokens: read,
+    cache_creation: {
+      ephemeral_1h_input_tokens: oneHour,
+      ephemeral_5m_input_tokens: fiveMinutes,
+    },
+  };
+}
+
+function reply(
+  uuid: string,
+  parentUuid: string | null,
+  messageId: string,
+  requestRef: string | null,
+  cache: unknown,
+  extra: {
+    model?: string;
+    effort?: string | null;
+    blocks?: unknown[];
+    entry?: Record<string, unknown>;
+  } = {},
+) {
+  const blocks = extra.blocks ?? [text("返事です。")];
+  return assistant(uuid, parentUuid, messageId, blocks, {
+    ...(requestRef === null ? {} : { requestRef }),
+    ...(extra.effort === undefined ? {} : { perTurnEffort: extra.effort }),
+    ...extra.entry,
+    message: {
+      id: messageId,
+      role: "assistant",
+      model: extra.model ?? MODEL,
+      content: blocks,
+      stop_reason: "end_turn",
+      ...(cache === null ? {} : { usage: cache }),
+    },
+  });
+}
+
+const boundary = (parentUuid: string | null) => ({
+  type: "system",
+  subtype: "compact_boundary",
+  uuid: "boundary-1",
+  parentUuid,
+  logicalParentUuid: parentUuid,
+  timestamp: timestamp(),
+  version: "2.1.328",
+});
+
 async function withRoot(run: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "hwc-claude-"));
   const previous = process.env.CLAUDE_CONFIG_DIR;
@@ -1075,5 +1140,303 @@ test("the marker the CLI writes when Esc interrupts a turn is not a user message
       "続けてください。",
       "好きな色は？: 青",
     ]);
+  });
+});
+
+test("a completed main-thread reply that wrote the whole prompt cache for 1h sets the expiry", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    await writeTranscript(root, [prompt, req, answer]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    // 起点は応答の時刻ではなく、要求の送信時刻。
+    expect(snapshot.cacheExpiresAt).toBe(Date.parse(req.timestamp) + HOUR_MS);
+  });
+});
+
+test("a read-only reply extends the expiry only while the same model and effort are still warm", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const first = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    const second = request("api-2");
+    const read = reply("a2", "a1", "msg-2", "api-2", cacheUsage(0, 0, 12_000));
+    await writeTranscript(root, [prompt, first, answer, second, read]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.cacheExpiresAt).toBe(Date.parse(second.timestamp) + HOUR_MS);
+  });
+});
+
+test("a read-only reply without a warm 1h cache does not start the expiry", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const read = reply("a1", "u1", "msg-1", "api-1", cacheUsage(0, 0, 12_000));
+    await writeTranscript(root, [prompt, req, read]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.cacheExpiresAt).toBeUndefined();
+  });
+});
+
+test("a read-only reply sent after the expiry withdraws the old expiry", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const first = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    // 期限を過ぎた時刻に送った要求。実時間は待たずに、記録の時刻だけで確かめる。
+    const late = request("api-2", {
+      timestamp: new Date(Date.parse(first.timestamp) + 2 * HOUR_MS).toISOString(),
+    });
+    const read = reply("a2", "a1", "msg-2", "api-2", cacheUsage(0, 0, 12_000));
+    await writeTranscript(root, [prompt, first, answer, late, read]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.cacheExpiresAt).toBeUndefined();
+  });
+});
+
+test("a write that is not all 1h, no cache or an unreadable usage withdraws the old expiry", async () => {
+  const cases: [string, unknown][] = [
+    ["a 5m write", cacheUsage(0, 12_000)],
+    ["a mixed 1h and 5m write", cacheUsage(6_000, 6_000)],
+    ["no cache at all", cacheUsage(0, 0, 0)],
+    ["a missing breakdown", { cache_creation_input_tokens: 12_000, cache_read_input_tokens: 0 }],
+    [
+      "a negative count",
+      {
+        cache_creation_input_tokens: -1,
+        cache_read_input_tokens: 0,
+        cache_creation: { ephemeral_1h_input_tokens: -1, ephemeral_5m_input_tokens: 0 },
+      },
+    ],
+  ];
+
+  for (const [name, usage] of cases) {
+    await withRoot(async (root) => {
+      const prompt = user("u1", null, "続けてください。");
+      const first = request("api-1");
+      const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+      const second = request("api-2");
+      const next = reply("a2", "a1", "msg-2", "api-2", usage);
+      await writeTranscript(root, [prompt, first, answer, second, next]);
+
+      const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+      expect(`${name}: ${String(snapshot.cacheExpiresAt)}`).toBe(`${name}: undefined`);
+    });
+  }
+});
+
+test("blocks split from one completed request are counted once", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const first = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000), {
+      blocks: [text("前半です。")],
+    });
+    // 同じ要求の後半の block。先に 1h と確かめたので、後半の 5m で取り下げない。
+    const second = reply("a2", "a1", "msg-1", "api-1", cacheUsage(0, 12_000), {
+      blocks: [text("後半です。")],
+    });
+    await writeTranscript(root, [prompt, req, first, second]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.cacheExpiresAt).toBe(Date.parse(req.timestamp) + HOUR_MS);
+  });
+});
+
+test("failed, interrupted, sub-agent and other-branch replies leave the expiry alone", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const first = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+
+    const syntheticReq = request("api-2");
+    const synthetic = reply("a2", "a1", "msg-2", "api-2", cacheUsage(0, 12_000), {
+      model: SYNTHETIC,
+      entry: { isApiErrorMessage: true, error: "API failed" },
+    });
+    const failedReq = request("api-3");
+    const failed = reply("a3", "a2", "msg-3", "api-3", cacheUsage(0, 12_000), {
+      entry: { isApiErrorMessage: true, error: "API failed" },
+    });
+    const sideReq = request("api-4");
+    const side = reply("a4", "a3", "msg-4", "api-4", cacheUsage(0, 12_000), {
+      entry: { isSidechain: true },
+    });
+    const noRef = reply("a5", "a4", "msg-5", null, cacheUsage(0, 12_000));
+
+    const interrupted = user("u2", "a5", "止めた要求です。");
+    const interruptedReq = request("api-5");
+
+    // 別の枝。active branch の葉は最後の user で終わるので、この応答は混ざらない。
+    const oldPrompt = user("u3", "a5", "古い枝です。");
+    const oldReq = request("api-6");
+    const oldAnswer = reply("a6", "u3", "msg-6", "api-6", cacheUsage(0, 12_000));
+    const leaf = user("u4", "a5", "いまの枝です。");
+
+    await writeTranscript(root, [
+      prompt,
+      first,
+      answer,
+      syntheticReq,
+      synthetic,
+      failedReq,
+      failed,
+      sideReq,
+      side,
+      noRef,
+      interrupted,
+      interruptedReq,
+      oldPrompt,
+      oldReq,
+      oldAnswer,
+      leaf,
+    ]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.cacheExpiresAt).toBe(Date.parse(first.timestamp) + HOUR_MS);
+  });
+});
+
+test("a compaction boundary or summary drops the expiry before it", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    await writeTranscript(root, [prompt, req, answer, boundary("a1")]);
+
+    expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBeUndefined();
+  });
+
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    const summary = user("s1", "a1", "これまでの要約です。", { isCompactSummary: true });
+    await writeTranscript(root, [prompt, req, answer, summary]);
+
+    expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBeUndefined();
+  });
+});
+
+test("a requested model or effort change drops the expiry, but a cancelled change keeps it", async () => {
+  const commands = [
+    "Set model to `opus` and saved as your default for new sessions",
+    "Set effort level to high (saved as your default for new sessions)",
+  ];
+  for (const command of commands) {
+    await withRoot(async (root) => {
+      const prompt = user("u1", null, "続けてください。");
+      const req = request("api-1");
+      const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+      const changed = user("c1", "a1", `<local-command-stdout>${command}</local-command-stdout>`);
+      await writeTranscript(root, [prompt, req, answer, changed]);
+
+      expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBeUndefined();
+    });
+  }
+
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    const kept = user(
+      "c1",
+      "a1",
+      "<local-command-stdout>Kept model as `opus`</local-command-stdout>",
+    );
+    await writeTranscript(root, [prompt, req, answer, kept]);
+
+    expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBe(
+      Date.parse(req.timestamp) + HOUR_MS,
+    );
+  });
+});
+
+test("a model or effort discovered only in a reply is not extended from the old one", async () => {
+  const changedCases = [
+    { model: "claude-opus-5-5", effort: undefined },
+    { model: MODEL, effort: "low" },
+  ];
+  for (const change of changedCases) {
+    await withRoot(async (root) => {
+      const prompt = user("u1", null, "続けてください。");
+      const first = request("api-1");
+      const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+      const second = request("api-2");
+      const read = reply("a2", "a1", "msg-2", "api-2", cacheUsage(0, 0, 12_000), change);
+      await writeTranscript(root, [prompt, first, answer, second, read]);
+
+      expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBeUndefined();
+    });
+  }
+});
+
+test("a reply to a request sent before the boundary does not bring the expiry back", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    const cut = boundary("a1");
+    // 境界の後に応答だけが載った形。要求は境界より前なので、新しい期限にしない。
+    const late = reply("a2", "boundary-1", "msg-2", "api-1", cacheUsage(12_000));
+    await writeTranscript(root, [prompt, req, answer, cut, late]);
+
+    expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBeUndefined();
+  });
+});
+
+test("an unreadable usage hides only the cache and keeps the conversation", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", "not an object");
+    await writeTranscript(root, [prompt, req, answer]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.cacheExpiresAt).toBeUndefined();
+    expect(snapshot.messages.map((message) => message.text)).toEqual([
+      "続けてください。",
+      "返事です。",
+    ]);
+    expect(snapshot.model).toBe(MODEL);
+  });
+});
+
+test("the expiry stays out of the passage of time but its change moves the etag", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const first = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    const path = await writeTranscript(root, [prompt, first, answer]);
+    const expiresAt = Date.parse(first.timestamp) + HOUR_MS;
+
+    const startedAt = BASE;
+    const before = await createClaudeChatClient({ now: () => startedAt }).snapshot(SESSION);
+    const later = await createClaudeChatClient({ now: () => startedAt + 30 * 60_000 }).snapshot(
+      SESSION,
+    );
+    expect(later.etag).toBe(before.etag);
+    expect(later.cacheExpiresAt).toBe(expiresAt);
+
+    const second = request("api-2");
+    const renewed = reply("a2", "a1", "msg-2", "api-2", cacheUsage(12_000));
+    await appendFile(path, [second, renewed].map((entry) => `${JSON.stringify(entry)}\n`).join(""));
+
+    const after = await createClaudeChatClient({ now: () => startedAt }).snapshot(SESSION);
+    expect(after.etag).not.toBe(before.etag);
+    expect(after.cacheExpiresAt).toBe(Date.parse(second.timestamp) + HOUR_MS);
   });
 });

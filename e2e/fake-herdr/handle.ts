@@ -268,6 +268,23 @@ export function createHandle(
           send(socket, { id, result: { type: "ok" } });
           return;
         }
+        // フィクスチャ専用の入力。1h キャッシュの表示を、1 時間待たずに確かめるための
+        // 完了応答を書く（docs/e2e.md）。
+        if (!text.includes(ATTACHED_FILES_OPEN) && (await claude.cacheTurn(paneId, text))) {
+          send(socket, { id, result: { type: "ok" } });
+          broadcast("pane.updated", { pane_id: paneId });
+          return;
+        }
+        // フィクスチャ専用の `/new`。Claude のペインを、会話の無い新しいセッションへ切り替える。
+        if (
+          !text.includes(ATTACHED_FILES_OPEN) &&
+          text.trim() === "/new" &&
+          (await claude.startNewSession(paneId))
+        ) {
+          send(socket, { id, result: { type: "ok" } });
+          broadcast("pane.updated", { pane_id: paneId });
+          return;
+        }
         // Claude のローカルコマンド（`/model`・`/effort`）は発言にならず、結果だけを書く。
         if (await claude.runLocalCommand(paneId, text)) {
           send(socket, { id, result: { type: "ok" } });

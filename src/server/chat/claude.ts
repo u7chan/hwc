@@ -71,6 +71,12 @@ const TARGET_LIMIT = 60;
 // メインスレッドの要求だけが会話の応答を待つ。sdk の要求は本流の段階ではない。
 const MAIN_THREAD_SOURCE = "repl_main_thread";
 
+// 1 時間プロンプトキャッシュの寿命。期限は「要求の送信時刻 + これ」で出す。
+const PROMPT_CACHE_TTL_MS = 60 * 60 * 1000;
+
+// キャッシュを切るローカルコマンドの結果。取り消し（`Kept model as ...`）は含めない。
+const CACHE_INVALIDATING_OUTPUT = /^(?:Set model to |Set effort level to )/;
+
 // transcript の message.content を、会話と段階に使う種類だけに絞った形。tool_result の
 // 本文や画像の base64 は抱えない（大きなセッションでも射影を膨らませないため）。
 type TranscriptBlock = {
@@ -89,6 +95,15 @@ type TranscriptBlock = {
 
 type TranscriptContent = string | TranscriptBlock[] | null;
 
+// 1 つの応答のキャッシュ使用量。書き込みの内訳は、形が読めない版では null にして
+// 「1h と確認できない」と区別する。
+type TranscriptUsage = {
+  cacheWrite: number;
+  cacheRead: number;
+  cacheWrite1h: number | null;
+  cacheWrite5m: number | null;
+};
+
 type TranscriptEntry = {
   // ファイル順の位置。ターンの起点より後ろの行だけを段階の判定に使う。
   index: number;
@@ -104,7 +119,16 @@ type TranscriptEntry = {
   apiError: boolean;
   error: string | null;
   effort: string | null;
-  message: { id: string | null; model: string | null; content: TranscriptContent } | null;
+  message: {
+    id: string | null;
+    model: string | null;
+    content: TranscriptContent;
+    // 応答が終わったことを示す。中断・失敗・書き込み途中の行を完了応答と区別する。
+    stopReason: string | null;
+    usage: TranscriptUsage | null;
+  } | null;
+  // system 行の種類。圧縮の区切り（compact_boundary）を拾う。
+  subtype: string | null;
   // 要求と応答の対応。api-request の id と assistant の requestRef が一致する。
   requestId: string | null;
   querySource: string | null;
@@ -438,7 +462,10 @@ function toEntry(record: Record<string, unknown>, index: number): TranscriptEntr
             id: nonEmptyText(message.id),
             model: nonEmptyText(message.model),
             content: projectContent(message.content),
+            stopReason: nonEmptyText(message.stop_reason),
+            usage: usageOf(message),
           },
+    subtype: nonEmptyText(record.subtype),
     requestId: type === "api-request" ? nonEmptyText(record.id) : null,
     querySource: type === "api-request" ? nonEmptyText(record.querySource) : null,
     requestRef: nonEmptyText(record.requestRef),
@@ -463,6 +490,7 @@ function snapshotOf(
 
   const limited = limitMessages(projectMessages(branch));
   const pending = projectPending(branch, resolved);
+  const cacheExpiresAt = promptCacheExpiry(entries, branch);
   const body: Omit<ChatSnapshot, "etag"> = {
     messages: limited.messages,
     model,
@@ -472,6 +500,7 @@ function snapshotOf(
     // snapshot に重ねる（docs/adr/claude-integration.md）。圧縮の区切りは別 Issue で扱う。
     context: null,
     compaction: null,
+    ...(cacheExpiresAt === null ? {} : { cacheExpiresAt }),
     ...(pending === null ? {} : { pending }),
   };
   return { snapshot: { ...body, etag: etagOf(sessionId, body) }, resolved };
@@ -479,6 +508,164 @@ function snapshotOf(
 
 function etagOf(sessionId: string, body: Omit<ChatSnapshot, "etag">): string {
   return createHash("sha256").update(sessionId).update(JSON.stringify(body)).digest("hex");
+}
+
+// 1 時間プロンプトキャッシュの期限（Unix ミリ秒）。statusline や mod には依存せず、
+// active branch の完了応答だけから出す（docs/adr/claude-integration.md）。
+function promptCacheExpiry(
+  entries: readonly TranscriptEntry[],
+  branch: readonly TranscriptEntry[],
+): number | null {
+  // 要求の行は uuid を持たず枝に入らない。id で引けるようにしておく。
+  const requests = new Map<string, { at: number; index: number }>();
+  for (const entry of entries) {
+    if (entry.type !== "api-request" || entry.querySource !== MAIN_THREAD_SOURCE) continue;
+    if (entry.requestId === null) continue;
+    requests.set(entry.requestId, { at: entry.at, index: entry.index });
+  }
+
+  // 応答は block ごとに複数行へ分かれる。完了した要求ごとに 1 回だけ扱い、usage を持つ行を
+  // 優先する（最初の行に無くても、同じ応答の別の行から拾う）。
+  const completed = new Map<string, { index: number; usage: TranscriptUsage | null }>();
+  for (const entry of branch) {
+    if (entry.type !== "assistant" || entry.sidechain || entry.apiError) continue;
+    const requestRef = entry.requestRef;
+    const entryModel = entry.message?.model ?? null;
+    if (requestRef === null || entry.message?.stopReason == null) continue;
+    if (entryModel === null || entryModel === SYNTHETIC_MODEL) continue;
+    const known = completed.get(requestRef);
+    if (known === undefined) {
+      completed.set(requestRef, { index: entry.index, usage: entry.message?.usage ?? null });
+      continue;
+    }
+    if (known.usage === null && entry.message?.usage != null) {
+      completed.set(requestRef, { index: known.index, usage: entry.message.usage });
+    }
+  }
+
+  let expiresAt: number | null = null;
+  let model: string | null = null;
+  let effort: string | null = null;
+  // 圧縮やモデル・エフォートの変更より前に送られた要求の応答では、期限を作り直さない。
+  let cut = -1;
+  const counted = new Set<string>();
+
+  // 確かめられた 1h 以外（5m を含む書き込み、無キャッシュ、不明な使用量）は取り下げる。
+  // 費用を過小に見せるより、出さない側へ倒す。
+  const withdraw = (index: number): void => {
+    if (index > cut) cut = index;
+    expiresAt = null;
+    model = null;
+    effort = null;
+  };
+
+  for (const entry of branch) {
+    if ((entry.type === "system" && entry.subtype === "compact_boundary") || entry.compactSummary) {
+      withdraw(entry.index);
+      continue;
+    }
+    if (entry.type === "user") {
+      if (!entry.sidechain && !entry.meta && isCacheInvalidatingCommand(entry)) {
+        withdraw(entry.index);
+      }
+      continue;
+    }
+    if (entry.type !== "assistant" || entry.sidechain || entry.apiError) continue;
+    const requestRef = entry.requestRef;
+    if (requestRef === null || counted.has(requestRef)) continue;
+    const known = completed.get(requestRef);
+    if (known === undefined) continue;
+    // 応答の block のうち、最初の行で 1 回だけ処理する。
+    if (entry.index !== known.index) continue;
+    counted.add(requestRef);
+
+    const request = requests.get(requestRef);
+    // 要求の行が読めない・区切りより前なら、推測せずに前の期限を残す（区切り後なら既に消えている）。
+    if (request === undefined || request.index <= cut) continue;
+
+    const entryModel = entry.message?.model ?? null;
+    if (entryModel === null || entryModel === SYNTHETIC_MODEL) continue;
+    // 時刻・使用量を検証できない応答は、1h と確かめられたことにしない。
+    const usage = known.usage;
+    const next: { expiresAt: number; model: string; effort: string | null } | null =
+      usage === null || request.at <= 0
+        ? null
+        : cacheAfterResponse(
+            usage,
+            request.at,
+            { expiresAt, model, effort },
+            { model: entryModel, effort: entry.effort },
+          );
+    if (next === null) {
+      withdraw(entry.index);
+      continue;
+    }
+    expiresAt = next.expiresAt;
+    model = next.model;
+    effort = next.effort;
+  }
+
+  return expiresAt;
+}
+
+// 直前の期限を引き継ぐか、取り下げるかを決める。
+function cacheAfterResponse(
+  usage: TranscriptUsage,
+  sentAt: number,
+  previous: { expiresAt: number | null; model: string | null; effort: string | null },
+  response: { model: string; effort: string | null },
+): { expiresAt: number; model: string; effort: string | null } | null {
+  if (usage.cacheWrite > 0) {
+    // 全量が 1h の書き込みだけを新しい期限にする。5m を含む・内訳が総数と合わないなら確かめられない。
+    if (usage.cacheWrite1h !== usage.cacheWrite || usage.cacheWrite5m !== 0) return null;
+    return {
+      expiresAt: sentAt + PROMPT_CACHE_TTL_MS,
+      model: response.model,
+      effort: response.effort,
+    };
+  }
+  if (usage.cacheRead <= 0) return null;
+  // 読み取りだけでは、どのキャッシュに当たったかを区別できない。同じ会話・モデル・エフォートで
+  // 追跡中で、送信時点で期限内だったときだけ延長する。未確認・失効済みを 1h 扱いにしない。
+  if (
+    previous.expiresAt === null ||
+    previous.model !== response.model ||
+    previous.effort !== response.effort ||
+    sentAt >= previous.expiresAt
+  ) {
+    return null;
+  }
+  return {
+    expiresAt: sentAt + PROMPT_CACHE_TTL_MS,
+    model: response.model,
+    effort: response.effort,
+  };
+}
+
+function isCacheInvalidatingCommand(entry: TranscriptEntry): boolean {
+  const content = entry.message?.content;
+  if (typeof content !== "string") return false;
+  const output = LOCAL_COMMAND_OUTPUT.exec(content)?.[1]?.trim() ?? "";
+  return CACHE_INVALIDATING_OUTPUT.test(output);
+}
+
+function usageOf(message: Record<string, unknown>): TranscriptUsage | null {
+  const usage = asRecord(message.usage);
+  if (usage === null) return null;
+  const cacheWrite = tokenCount(usage.cache_creation_input_tokens);
+  const cacheRead = tokenCount(usage.cache_read_input_tokens);
+  if (cacheWrite === null || cacheRead === null) return null;
+  const creation = asRecord(usage.cache_creation);
+  return {
+    cacheWrite,
+    cacheRead,
+    cacheWrite1h: creation === null ? null : tokenCount(creation.ephemeral_1h_input_tokens),
+    cacheWrite5m: creation === null ? null : tokenCount(creation.ephemeral_5m_input_tokens),
+  };
+}
+
+function tokenCount(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
 // 分岐（`/rewind` や resume）で古い枝を混ぜない。最後の entry から parentUuid を辿る。
@@ -635,9 +822,8 @@ function groupKey(entry: TranscriptEntry): string {
 }
 
 function projectUser(entry: TranscriptEntry): ChatMessage | null {
-  // isMeta は hwc の画面に出ないシステム寄りの記録。圧縮の要約は本文ではないので、
-  // 区切りと要約の扱いを決めるまで出さない。
-  // TBD: 圧縮済みセッションの形（isCompactSummary / compact_boundary）が実物で確認できるまで。
+  // isMeta は hwc の画面に出ないシステム寄りの記録。圧縮の要約は本文ではないので出さない。
+  // TBD: 圧縮済みセッションで、要約と区切りを会話の行としてどこまで見せるか。
   if (entry.meta || entry.compactSummary) return null;
   const raw = userText(entry.message?.content);
   if (raw === "") return null;
