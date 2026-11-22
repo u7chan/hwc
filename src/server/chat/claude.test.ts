@@ -131,15 +131,19 @@ function reply(
   });
 }
 
-const boundary = (parentUuid: string | null) => ({
-  type: "system",
-  subtype: "compact_boundary",
-  uuid: "boundary-1",
-  parentUuid,
-  logicalParentUuid: parentUuid,
-  timestamp: timestamp(),
-  version: "2.1.328",
-});
+// 実物と同じく、圧縮の境界は新しい枝の根になる。parentUuid は null で、元の枝は
+// logicalParentUuid にだけ残る。active branch は logicalParentUuid を辿らない。
+function boundary(logicalParentUuid: string | null) {
+  return {
+    type: "system",
+    subtype: "compact_boundary",
+    uuid: "boundary-1",
+    parentUuid: null,
+    logicalParentUuid,
+    timestamp: timestamp(),
+    version: "2.1.328",
+  };
+}
 
 async function withRoot(run: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "hwc-claude-"));
@@ -1330,6 +1334,23 @@ test("a compaction boundary or summary drops the expiry before it", async () => 
   });
 });
 
+test("a 1h write after compaction starts a new expiry", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const first = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    const cut = boundary("a1");
+    const summary = user("s1", "boundary-1", "これまでの要約です。", { isCompactSummary: true });
+    const next = request("api-2");
+    const renewed = reply("a2", "s1", "msg-2", "api-2", cacheUsage(12_000));
+    await writeTranscript(root, [prompt, first, answer, cut, summary, next, renewed]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.cacheExpiresAt).toBe(Date.parse(next.timestamp) + HOUR_MS);
+  });
+});
+
 test("a requested model or effort change drops the expiry, but a cancelled change keeps it", async () => {
   const commands = [
     "Set model to `opus` and saved as your default for new sessions",
@@ -1389,12 +1410,52 @@ test("a reply to a request sent before the boundary does not bring the expiry ba
     const req = request("api-1");
     const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
     const cut = boundary("a1");
+    const summary = user("s1", "boundary-1", "これまでの要約です。", { isCompactSummary: true });
     // 境界の後に応答だけが載った形。要求は境界より前なので、新しい期限にしない。
-    const late = reply("a2", "boundary-1", "msg-2", "api-1", cacheUsage(12_000));
-    await writeTranscript(root, [prompt, req, answer, cut, late]);
+    const late = reply("a2", "s1", "msg-2", "api-1", cacheUsage(12_000));
+    await writeTranscript(root, [prompt, req, answer, cut, summary, late]);
 
     expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBeUndefined();
   });
+});
+
+test("a completed reply whose request line is missing does not move the last expiry", async () => {
+  await withRoot(async (root) => {
+    const prompt = user("u1", null, "続けてください。");
+    const req = request("api-1");
+    const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
+    // 要求の行が無い応答は、対象の要求と対応しない。時刻を確かめられないので推測せず、
+    // 最後に確かめた期限をそのまま残す。
+    const unpaired = reply("a2", "a1", "msg-2", "api-missing", cacheUsage(0, 12_000));
+    await writeTranscript(root, [prompt, req, answer, unpaired]);
+
+    expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBe(
+      Date.parse(req.timestamp) + HOUR_MS,
+    );
+  });
+});
+
+test("a read-only reply whose effort cannot be compared does not extend the expiry", async () => {
+  const efforts: [string | null, string][] = [
+    [null, "high"],
+    ["xhigh", "high"],
+  ];
+  for (const [firstEffort, secondEffort] of efforts) {
+    await withRoot(async (root) => {
+      const prompt = user("u1", null, "続けてください。");
+      const first = request("api-1");
+      const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000), {
+        effort: firstEffort,
+      });
+      const second = request("api-2");
+      const read = reply("a2", "a1", "msg-2", "api-2", cacheUsage(0, 0, 12_000), {
+        effort: secondEffort,
+      });
+      await writeTranscript(root, [prompt, first, answer, second, read]);
+
+      expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBeUndefined();
+    });
+  }
 });
 
 test("an unreadable usage hides only the cache and keeps the conversation", async () => {
