@@ -99,12 +99,6 @@
   list-style: none;
 }
 
-/* 行の面はパネルの端に接させない。左右の余白は行の外側で取り、字下げと
-   操作の位置は行の中だけで決める。 */
-.hwc-tree {
-  padding-inline: var(--space-2);
-}
-
 /* 設定のサンプル。行は本物と同じクラスで描き、幅も並べるときのツリーと同じ変数にする。 */
 .hwc-tree-sample {
   width: var(--hwc-tree-width);
@@ -165,18 +159,21 @@
 }
 
 /* 行はボタンと開けない行の 2 種で同じ形にする。左の字下げだけ inline で
-   深さに合わせ、行の右端を揃える。面は上下の余白ぶんを引いて角を丸め、
-   隣の行と接しないようにする。 */
+   深さに合わせ、行の右端を揃える。 */
 .hwc-tree-row {
+  position: relative;
+  /* 面は疑似要素で行の内側に描く。負の z-index を行の中で閉じ込め、パネルの
+     背景の後ろへ回り込ませない。 */
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
   min-height: var(--tap);
-  margin: var(--space-1) 0;
+  margin: 0;
   padding: 0 var(--space-4) 0 var(--space-4);
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -185,16 +182,30 @@
   text-decoration: none;
 }
 
+/* 行の面はパネルの端と隣の行から内側へ引く。塗るのは疑似要素だけにして、
+   行の箱・字下げ・当たり判定は変えない。 */
+.hwc-tree-item > .hwc-tree-row::before,
+.hwc-tree-line::before {
+  content: "";
+  position: absolute;
+  inset: var(--space-1) var(--space-2);
+  z-index: -1;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
 button.hwc-tree-row {
   cursor: pointer;
 }
 
 /* フォルダの行は右端の操作とひとつの面に見せるため、行ではなく line を塗る。 */
-.hwc-tree-item > button.hwc-tree-row:hover {
+.hwc-tree-item > button.hwc-tree-row:hover::before,
+.hwc-tree-line:hover::before {
   background: var(--color-raised);
 }
 
-.hwc-tree-item > button.hwc-tree-row:active {
+.hwc-tree-item > button.hwc-tree-row:active::before,
+.hwc-tree-line:active::before {
   background: var(--color-line);
 }
 
@@ -202,61 +213,58 @@ button.hwc-tree-row {
   outline-offset: -3px;
 }
 
-/* フォルダの行と、その右端の操作。行はボタンなので、操作は入れ子にせず並べる。
-   上下の余白は line が持ち、行はその中を埋める。 */
+/* フォルダの行と、その右端の操作。行はボタンなので、操作は入れ子にせず並べる。 */
 .hwc-tree-line {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
-  margin: var(--space-1) 0;
-  border-radius: var(--radius-sm);
-}
-
-.hwc-tree-line:hover {
-  background: var(--color-raised);
-}
-
-.hwc-tree-line:active {
-  background: var(--color-line);
 }
 
 .hwc-tree-line > .hwc-tree-row {
   flex: 1;
   min-width: 0;
-  margin: 0;
   padding-right: 0;
 }
 
-/* 操作の枠は 32px に留め、行の面の右端から 8px 内側に置く。行の面は raised で
-   塗られるので、操作は surface に落として押せる範囲を示す（一覧の開閉と同じ）。 */
+/* 操作の当たり判定は 44px のまま、枠だけを --space-2 ぶん縮めて面の内側に置く。
+   行の面は raised で塗られるので、操作は surface に落として押せる範囲を示す
+   （一覧の開閉と同じ）。 */
 .hwc-tree-action {
   position: relative;
+  isolation: isolate;
   flex: none;
   display: grid;
   place-items: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  margin: 0 var(--space-2) 0 0;
+  width: var(--tap);
+  height: var(--tap);
+  margin: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
 }
 
-/* 枠を小さくしたぶん、触れる範囲だけ 44px まで広げる。 */
-.hwc-tree-action::after {
+.hwc-tree-action::before {
   content: "";
   position: absolute;
-  inset: calc((var(--space-8) - var(--tap)) / 2);
+  inset: var(--space-2);
+  z-index: -1;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+.hwc-tree-action:hover::before {
+  background: var(--color-surface);
 }
 
 .hwc-tree-action:hover {
-  background: var(--color-surface);
   color: var(--color-text);
 }
 
-.hwc-tree-action:active {
+.hwc-tree-action:active::before {
   background: var(--color-line);
 }
 
@@ -277,7 +285,7 @@ button.hwc-tree-row {
 }
 
 /* 選択中のファイル。会話のプレビューと同じ対象を示す。 */
-.hwc-tree-row[data-selected="true"] {
+.hwc-tree-item > .hwc-tree-row[data-selected="true"]::before {
   background: var(--color-selected);
 }
 
@@ -305,13 +313,12 @@ button.hwc-tree-row {
   white-space: nowrap;
 }
 
-/* 読み込み中・空・打ち切り・失敗の 1 行。行の高さと上下の余白はツリーの行と揃える。 */
+/* 読み込み中・空・打ち切り・失敗の 1 行。行の高さはツリーの行と揃える。 */
 .hwc-tree-status {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-height: var(--tap);
-  margin: var(--space-1) 0;
   padding: 0 var(--space-4) 0 var(--space-4);
   color: var(--color-secondary);
   font-size: var(--text-secondary);
