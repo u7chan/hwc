@@ -1000,9 +1000,12 @@ p.hwc-compaction,
 }
 
 /* 本文がまだ無い間はバーを出さない。確保だけしている 2 行の横に線だけが立つと、
-   途切れた枠に見える。透明にして幅は残す（0 にすると本文が出た瞬間に 2px ずれる）。 */
+   途切れた枠に見える。色ではなく幅を 0 にするのは、forced-colors が色を CanvasText へ
+   強制しても線が残らないようにするため。減った幅は padding に足し、本文が出た瞬間に
+   横へずれないようにする。 */
 .hwc-live-thought:not(:has(.hwc-live-thought-text)) {
-  border-left-color: transparent;
+  padding-left: calc(var(--space-2) + 2px);
+  border-left-width: 0;
 }
 
 .hwc-live-thought-text {
