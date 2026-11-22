@@ -23,6 +23,9 @@ export type FileTreeView = {
 export type FileTreeRowMenu = {
   path: string;
   name: string;
+  // コピーする文字列。開いた時点の根で組み立てて固定する。根が変わってから一覧が
+  // 捨てられるまでの 1 フレームで、古い行と新しい根を結合しない。
+  copyTarget: string;
   // 位置合わせに使う行のボタン。行が作り直されたら開き直す。
   trigger: HTMLElement;
   // 閉じる合図のあとも、フェードアウトの間は面を残す。
@@ -63,7 +66,9 @@ export type FileTreeStore = {
   openRowMenu: (paneId: string, menu: Omit<FileTreeRowMenu, "open">) => void;
   // 閉じる合図。フェードアウトが終わったら clearRowMenu で捨てる。
   closeRowMenu: (paneId: string, path: string) => void;
-  clearRowMenu: (paneId: string, path: string) => void;
+  // 開いているメニューを捨てる。path を渡すとそのメニューのときだけ。渡さないときは
+  // 行のボタンごと消える（ツリーを閉じた・セルが外れた）合図で、使えなくなった面を残さない。
+  clearRowMenu: (paneId: string, path?: string) => void;
   prune: (isAlive: (paneId: string) => boolean) => void;
 };
 
@@ -227,10 +232,14 @@ export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
     );
   };
 
-  const clearRowMenu = (paneId: string, path: string) => {
-    update(paneId, (current) =>
-      current.menu?.path === path && !current.menu.open ? { ...current, menu: null } : current,
-    );
+  const clearRowMenu = (paneId: string, path?: string) => {
+    update(paneId, (current) => {
+      if (current.menu === null) return current;
+      if (path === undefined) return { ...current, menu: null };
+      return current.menu.path === path && !current.menu.open
+        ? { ...current, menu: null }
+        : current;
+    });
   };
 
   const prune = (isAlive: (paneId: string) => boolean) => {

@@ -975,9 +975,14 @@ export function PaneDetail(props: PaneDetailProps) {
       onOpenImage={onOpenImage}
       onDragStart={startTreeDrag}
       onCreateSpace={props.onCreateSpace}
-      workspacePath={props.context.workspacePath}
       onOpenMenu={(path, name, trigger) =>
-        fileTreeStore.openRowMenu(pane.id, { path, name, trigger })
+        fileTreeStore.openRowMenu(pane.id, {
+          path,
+          name,
+          trigger,
+          // 根はメニューを開いた時点で固める（開いた後の根の変化で文字列を組み直さない）。
+          copyTarget: fileReference(props.context.workspacePath, path, true),
+        })
       }
       onCloseMenu={(path) => fileTreeStore.closeRowMenu(pane.id, path)}
       onClearMenu={(path) => fileTreeStore.clearRowMenu(pane.id, path)}

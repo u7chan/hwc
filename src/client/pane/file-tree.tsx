@@ -8,7 +8,6 @@ import {
 } from "../../shared/file-tree";
 import { previewUrl } from "../api";
 import { useCopy } from "../copy";
-import { fileReference } from "../file-reference";
 import type { FileTreeView } from "../file-tree-store";
 import { treeArrowIntent } from "../file-tree-key";
 import { ChevronRightIcon, CopyGlyph, MoreIcon, PlusIcon } from "../icons";
@@ -41,9 +40,6 @@ type FileTreeProps = {
   onDragStart: (event: DragEvent, entry: FileTreeEntry) => void;
   // フォルダを作業ディレクトリにした新しいスペースを作る。
   onCreateSpace: (path: string) => void;
-  // 行のメニューでコピーする絶対パスを組み立てる。ツリーの根はペインの cwd ではなく
-  // スペースのチェックアウトなので、根からの相対パスだけでは貼り付け先で開けない。
-  workspacePath: string | null;
   // 開けるメニューは常に 1 つ。分割セルのもう一方が開いていれば、そちらは閉じる。
   onOpenMenu: (path: string, name: string, trigger: HTMLElement) => void;
   onCloseMenu: (path: string) => void;
@@ -356,8 +352,9 @@ export function FileTree(props: FileTreeProps) {
   const list = useRef<HTMLUListElement>(null);
   const handled = useRef(0);
   // 開いているメニューは store が 1 つだけ持つ。根が変わると store が一覧ごと捨てるので、
-  // 消えた行の相対パスを新しい根と結合しない。
-  const menu = props.view.menu;
+  // 消えた行の相対パスを新しい根と結合しない。行のボタンが DOM から外れている間は
+  // 位置合わせができないので描かない（ツリーを閉じた・セルが外れた後）。
+  const menu = props.view.menu?.trigger.isConnected === true ? props.view.menu : null;
 
   // 根の一覧は開いた後に届く。行が無い間は待ち、届いたら 1 度だけ焦点を合わせる。
   // 展開のたびに dirs が変わっても、同じ開閉で焦点を取り直さない。
@@ -410,7 +407,7 @@ export function FileTree(props: FileTreeProps) {
         >
           <RowMenuCard
             name={menu.name}
-            copyTarget={fileReference(props.workspacePath, menu.path, true)}
+            copyTarget={menu.copyTarget}
             onNewSpace={() => {
               props.onCloseMenu(menu.path);
               props.onCreateSpace(menu.path);
