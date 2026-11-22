@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { FileTreeView } from "../file-tree-store";
 import { fileTreeStore } from "../file-tree-store";
 import { isFileTreeShortcut, isInOverlay, isTextEntry } from "../file-tree-key";
-import { TREE_SIDE_MIN_WIDTH } from "../layout";
+import { treeSideMinWidth } from "../layout";
 import type { TreeFocusRequest } from "./file-tree";
 import { useFileTree } from "./use-file-tree";
 
@@ -21,6 +21,8 @@ type FileTreePanelOptions = {
   current: boolean;
   // セルの実際の幅。広ければ会話と並べ、狭ければ重ねる。
   frameWidth: number | null;
+  // 並べるときのツリーの幅（px）。並べるのに要るセルの幅はここから決まる。
+  treeWidth: number;
 };
 
 type FileTreePanel = {
@@ -45,13 +47,13 @@ type FileTreePanel = {
 // ファイルツリーの開閉。開閉の動きは store ではなくここが持ち、store の close は
 // アニメーションの後にだけ呼ぶ。表示側は返り値のとおりに描く。
 export function useFileTreePanel(options: FileTreePanelOptions): FileTreePanel {
-  const { paneId, current, frameWidth } = options;
+  const { paneId, current, frameWidth, treeWidth } = options;
   // ツリーの状態は store に持つ。プレビューでこのセルが外れても開閉を保つ。
   const fileTree = useFileTree(paneId);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   const open = fileTree.open;
-  const sideBySide = open && frameWidth !== null && frameWidth >= TREE_SIDE_MIN_WIDTH;
+  const sideBySide = open && frameWidth !== null && frameWidth >= treeSideMinWidth(treeWidth);
   const overlay = open && !sideBySide;
 
   // 開閉の動きは開いた瞬間だけ。ペインを切り替えて戻ったときは store が開いたままでも

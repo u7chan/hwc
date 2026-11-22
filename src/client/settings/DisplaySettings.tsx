@@ -1,6 +1,14 @@
+import {
+  FILE_TREE_SIZES,
+  FILE_TREE_WIDTHS,
+  fileTreeWidthPx,
+  type FileTreeSize,
+  type FileTreeWidth,
+} from "../file-tree-display";
 import { FILE_TREE_SIDES, type FileTreeSide } from "../file-tree-side";
 import type { ThemePreference } from "../theme";
 import { Segmented } from "../Segmented";
+import { FileTreeSample } from "./FileTreeSample";
 import { ThemePicker } from "./ThemePicker";
 
 type DisplaySettingsProps = {
@@ -8,6 +16,10 @@ type DisplaySettingsProps = {
   onThemeChange: (theme: ThemePreference) => void;
   treeSide: FileTreeSide;
   onTreeSideChange: (side: FileTreeSide) => void;
+  treeSize: FileTreeSize;
+  onTreeSizeChange: (size: FileTreeSize) => void;
+  treeWidth: FileTreeWidth;
+  onTreeWidthChange: (width: FileTreeWidth) => void;
 };
 
 export function DisplaySettings(props: DisplaySettingsProps) {
@@ -25,6 +37,35 @@ export function DisplaySettings(props: DisplaySettingsProps) {
       />
       <p class="hwc-section-note">
         広いセルでツリーを会話の左右どちらに並べるかです。狭いセルでは会話の上に重ねます。
+      </p>
+
+      <p class="hwc-subtitle">ファイルツリーの文字の大きさ</p>
+      <Segmented
+        label="ファイルツリーの文字の大きさ"
+        options={FILE_TREE_SIZES}
+        value={props.treeSize}
+        onChange={props.onTreeSizeChange}
+      />
+      <p class="hwc-section-note">
+        行の高さは変わりません。大きくすると、1 行に入る文字が減ります。
+      </p>
+
+      <p class="hwc-subtitle">ファイルツリーの幅</p>
+      <Segmented
+        label="ファイルツリーの幅"
+        options={FILE_TREE_WIDTHS}
+        value={props.treeWidth}
+        onChange={props.onTreeWidthChange}
+      />
+      <p class="hwc-section-note">
+        広いセルでツリーを並べるときの幅です。広くするほど、並べるのに必要なセルの幅も増えます。狭いセルでは会話の上に重ねるので、幅は変わりません。
+      </p>
+
+      <p class="hwc-subtitle">サンプル</p>
+      <FileTreeSample />
+      <p class="hwc-section-note">
+        選んだ幅は {fileTreeWidthPx(props.treeWidth)}px
+        です。この画面に収まらないときは、サンプルだけ狭めて表示します。
       </p>
     </section>
   );

@@ -58,7 +58,7 @@ export type TreeFocusRequest = { token: number; focus: boolean };
 
 // 深さごとの字下げ。行の右側は揃えたいので、左だけを inline で決める。
 // 12px は --space-3。深い階層でも名前に幅が残るよう、字下げは 1 段だけにする。
-function indent(depth: number) {
+export function indent(depth: number) {
   return { paddingLeft: `calc(var(--space-4) + ${depth} * var(--space-3))` };
 }
 
