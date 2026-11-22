@@ -594,6 +594,19 @@ export function ClockIcon({ size = 20 }: IconProps) {
   );
 }
 
+// 減っていく残り時間。ClockIcon は時刻や経過にも読めて、カウントダウンに見えない。
+export function TimerIcon({ size = 20 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="13.5" r="7" />
+      <path d="M9.5 3h5" />
+      <path d="M12 3v3.5" />
+      <path d="M12 13.5V10" />
+      <path d="M18 7.5l1.3-1.3" />
+    </Svg>
+  );
+}
+
 // アプリの外（新しいタブ）へ渡す。
 export function ExternalIcon({ size = 20 }: IconProps) {
   return (

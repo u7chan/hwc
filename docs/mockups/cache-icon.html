@@ -1,0 +1,1482 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>キャッシュ残り時間のアイコン — デザインモック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+
+      :root {
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --text-secondary: 0.8125rem;
+      }
+
+      /* アプリのテーマ値をそのまま写す。モックの地は暗い面に固定し、明暗は帯ごとに持つ。 */
+      .scheme-dark {
+        color-scheme: dark;
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-line: #32373f;
+        --color-control-line: #606976;
+        --color-attention: #f6c57f;
+        --color-agent-claude: #d97757;
+      }
+
+      .scheme-light {
+        color-scheme: light;
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-attention: #a34c0a;
+        --color-agent-claude: #c15f3c;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #101215;
+        color: #f2f4f7;
+        font-family: var(--font-ui);
+        font-size: 15px;
+        line-height: 1.5;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: var(--space-5) var(--space-4) 48px;
+      }
+
+      .mock-head h1 {
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .mock-head p {
+        margin-top: var(--space-2);
+        color: #a3aab5;
+        font-size: var(--text-secondary);
+      }
+
+      .mock-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+        gap: var(--space-4);
+        margin-top: var(--space-5);
+      }
+
+      .mock-card {
+        display: grid;
+        gap: var(--space-3);
+        padding: var(--space-4);
+        border: 1px solid #32373f;
+        border-radius: 16px;
+        background: #1b1e23;
+      }
+
+      .mock-card[data-reference] {
+        border-style: dashed;
+      }
+
+      .mock-card-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+      }
+
+      .mock-card-icon {
+        display: grid;
+        flex: none;
+        place-items: center;
+        min-width: 64px;
+        height: 64px;
+        padding: 0 var(--space-2);
+        white-space: nowrap;
+        border-radius: 12px;
+        background: #262a31;
+        color: #f2f4f7;
+      }
+
+      .mock-card-title {
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .mock-card-note {
+        color: #a3aab5;
+        font-size: var(--text-secondary);
+      }
+
+      .mock-sizes {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        margin-top: var(--space-1);
+        color: #f2f4f7;
+        font-size: 11px;
+      }
+
+      .mock-sizes span {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        color: #a3aab5;
+      }
+
+      /* 入力欄の「モデル・effort・キャッシュ・使用量」の帯。実物は .hwc-input-info。 */
+      .band {
+        display: grid;
+        gap: var(--space-2);
+        padding: var(--space-3);
+        border-radius: 12px;
+        background: var(--color-bg);
+        color: var(--color-secondary);
+      }
+
+      .band-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        font-family: var(--font-mono);
+        font-size: var(--text-secondary);
+        white-space: nowrap;
+      }
+
+      .band-label {
+        flex: none;
+        width: 28px;
+        color: var(--color-secondary);
+        font-family: var(--font-ui);
+        font-size: 11px;
+        opacity: 0.7;
+      }
+
+      .band-agent {
+        display: inline-flex;
+        color: var(--color-agent-claude);
+      }
+
+      .band-effort {
+        padding: 0 var(--space-2);
+        border: 1px solid var(--color-control-line);
+        border-radius: 999px;
+        font-size: 12px;
+      }
+
+      .band-cache {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+      }
+
+      .band-cache[data-expired] {
+        color: var(--color-attention);
+      }
+
+      .band-bar {
+        width: 48px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--color-line);
+        overflow: hidden;
+      }
+
+      .band-bar::after {
+        display: block;
+        width: 11%;
+        height: 100%;
+        background: currentColor;
+        content: "";
+      }
+
+      .gauge-states {
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+        color: #a3aab5;
+        font-size: 11px;
+      }
+
+      .gauge-states span {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+      }
+
+      .mock-foot {
+        margin-top: var(--space-5);
+        padding: var(--space-4);
+        border: 1px solid #32373f;
+        border-radius: 16px;
+        color: #a3aab5;
+        font-size: var(--text-secondary);
+      }
+
+      .mock-foot li + li {
+        margin-top: var(--space-1);
+      }
+
+      .mock-foot ul {
+        margin: var(--space-2) 0 0;
+        padding-left: var(--space-5);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- アプリの icons.tsx と同じ流儀: 24 グリッド・線幅 1.7・丸端・currentColor。 -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="ic-clock" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7.5V12l3 2" />
+        </symbol>
+        <symbol id="ic-hourglass" viewBox="0 0 24 24">
+          <path d="M6.5 3.5h11" />
+          <path d="M6.5 20.5h11" />
+          <path d="M8 3.5v3.2c0 1.3.6 2.4 1.7 3.2L12 12l-2.3 2.1C8.6 14.9 8 16 8 17.3v3.2" />
+          <path d="M16 3.5v3.2c0 1.3-.6 2.4-1.7 3.2L12 12l2.3 2.1c1.1.8 1.7 1.9 1.7 3.2v3.2" />
+        </symbol>
+        <symbol id="ic-timer" viewBox="0 0 24 24">
+          <circle cx="12" cy="13.5" r="7" />
+          <path d="M9.5 3h5" />
+          <path d="M12 3v3.5" />
+          <path d="M12 13.5V10" />
+          <path d="M18 7.5l1.3-1.3" />
+        </symbol>
+        <symbol id="ic-bolt" viewBox="0 0 24 24">
+          <path d="M13 3L5 13.5h6.5L10.5 21 19 10h-6.5z" />
+        </symbol>
+        <symbol id="ic-stack-clock" viewBox="0 0 24 24">
+          <ellipse cx="10.5" cy="6" rx="6.5" ry="2.5" />
+          <path d="M4 6v11" />
+          <path d="M17 6v3.5" />
+          <path d="M4 11.5c0 1.4 2.9 2.5 6.5 2.5" />
+          <path d="M4 17c0 1.4 2.9 2.5 5.5 2.5" />
+          <circle cx="17.5" cy="17.5" r="4.5" />
+          <path d="M17.5 15v2.7l1.6 1" />
+        </symbol>
+        <!-- 残りを弧の長さで見せる。pathLength=100 なので dasharray は残りの割合（%）そのまま。 -->
+        <symbol id="ic-ring-90" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8.5" opacity="0.28" />
+          <circle
+            cx="12"
+            cy="12"
+            r="8.5"
+            pathLength="100"
+            stroke-dasharray="90 100"
+            transform="rotate(-90 12 12)"
+          />
+        </symbol>
+        <symbol id="ic-ring-63" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8.5" opacity="0.28" />
+          <circle
+            cx="12"
+            cy="12"
+            r="8.5"
+            pathLength="100"
+            stroke-dasharray="63 100"
+            transform="rotate(-90 12 12)"
+          />
+        </symbol>
+        <symbol id="ic-ring-25" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8.5" opacity="0.28" />
+          <circle
+            cx="12"
+            cy="12"
+            r="8.5"
+            pathLength="100"
+            stroke-dasharray="25 100"
+            transform="rotate(-90 12 12)"
+          />
+        </symbol>
+        <symbol id="ic-ring-0" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8.5" opacity="0.28" />
+        </symbol>
+        <symbol id="ic-agent" viewBox="0 0 24 24">
+          <path
+            d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"
+            stroke="currentColor"
+            stroke-width="2.2"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <main>
+      <header class="mock-head">
+        <h1>キャッシュ残り時間のアイコン案</h1>
+        <p>
+          入力欄の「キャッシュ
+          56:36」の文字を、アイコン＋残り時間に置き換える。幅が足りないときの「42m」と
+          満了後の「切れ」も同じアイコンで揃う。各案は
+          14px（実寸）の帯を暗い地と明るい地で並べている。
+        </p>
+      </header>
+
+      <div class="mock-grid">
+        <!-- 0: 現状 -->
+        <section class="mock-card" data-reference>
+          <div class="mock-card-head">
+            <div class="mock-card-icon" style="font-size: 13px">キャッシュ</div>
+            <div>
+              <h2 class="mock-card-title">0. 現状（文字ラベル）</h2>
+              <p class="mock-card-note">
+                広い幅は文字、狭い幅は時計。同じ値なのに見た目が二通りある。
+              </p>
+            </div>
+          </div>
+          <div class="scheme-dark band">
+            <div class="band-row">
+              <span class="band-label">通常</span>
+              <span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg
+              ></span>
+              <span>Sonnet 5.5</span><span class="band-effort">xhigh</span>
+              <span class="band-cache">キャッシュ 56:36</span>
+              <span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">狭い</span>
+              <span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg
+              ></span>
+              <span>Sonnet 5.5</span><span class="band-effort">xhigh</span>
+              <span class="band-cache">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-clock" /></svg
+                >42m
+              </span>
+              <span>109k</span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span>
+              <span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg
+              ></span>
+              <span>Sonnet 5.5</span><span class="band-effort">xhigh</span>
+              <span class="band-cache" data-expired>キャッシュ切れ</span>
+              <span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 1: 時計 -->
+        <section class="mock-card">
+          <div class="mock-card-head">
+            <div class="mock-card-icon">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <use href="#ic-clock" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="mock-card-title">1. 時計（ClockIcon）</h2>
+              <p class="mock-card-note">
+                既存の部品がそのまま使える。ただし「時刻」「経過」とも読めて、残り時間の意味は出ない。
+              </p>
+              <div class="mock-sizes">
+                <span
+                  ><svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-clock" /></svg
+                  >14</span
+                >
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-clock" /></svg
+                  >16</span
+                >
+                <span
+                  ><svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-clock" /></svg
+                  >20</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="scheme-dark band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-clock" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">狭い</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-clock" /></svg
+                >42m</span
+              ><span>109k</span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-clock" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+          <div class="scheme-light band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-clock" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-clock" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2: 砂時計 -->
+        <section class="mock-card">
+          <div class="mock-card-head">
+            <div class="mock-card-icon">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <use href="#ic-hourglass" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="mock-card-title">2. 砂時計</h2>
+              <p class="mock-card-note">
+                「減っていく残り時間」が一番素直に伝わる。時計と見分けがつき、細部は 14px
+                でやや詰まる。
+              </p>
+              <div class="mock-sizes">
+                <span
+                  ><svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-hourglass" /></svg
+                  >14</span
+                >
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-hourglass" /></svg
+                  >16</span
+                >
+                <span
+                  ><svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-hourglass" /></svg
+                  >20</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="scheme-dark band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-hourglass" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">狭い</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-hourglass" /></svg
+                >42m</span
+              ><span>109k</span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-hourglass" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+          <div class="scheme-light band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-hourglass" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-hourglass" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3: タイマー -->
+        <section class="mock-card">
+          <div class="mock-card-head">
+            <div class="mock-card-icon">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <use href="#ic-timer" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="mock-card-title">3. タイマー（ストップウォッチ）</h2>
+              <p class="mock-card-note">
+                時計より「カウントダウン」が出て、輪郭が円なので 14px でも潰れにくい。
+              </p>
+              <div class="mock-sizes">
+                <span
+                  ><svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-timer" /></svg
+                  >14</span
+                >
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-timer" /></svg
+                  >16</span
+                >
+                <span
+                  ><svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-timer" /></svg
+                  >20</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="scheme-dark band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-timer" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">狭い</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-timer" /></svg
+                >42m</span
+              ><span>109k</span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-timer" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+          <div class="scheme-light band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-timer" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-timer" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4: 稲妻 -->
+        <section class="mock-card">
+          <div class="mock-card-head">
+            <div class="mock-card-icon">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <use href="#ic-bolt" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="mock-card-title">4. 稲妻</h2>
+              <p class="mock-card-note">
+                「キャッシュ＝速くて安い」を表す。時間の印ではないので、数字だけでは何の残りか読めない。
+              </p>
+              <div class="mock-sizes">
+                <span
+                  ><svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-bolt" /></svg
+                  >14</span
+                >
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-bolt" /></svg
+                  >16</span
+                >
+                <span
+                  ><svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-bolt" /></svg
+                  >20</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="scheme-dark band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-bolt" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">狭い</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-bolt" /></svg
+                >42m</span
+              ><span>109k</span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-bolt" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+          <div class="scheme-light band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-bolt" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-bolt" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5: スタック＋時計 -->
+        <section class="mock-card">
+          <div class="mock-card-head">
+            <div class="mock-card-icon">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <use href="#ic-stack-clock" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="mock-card-title">5. データ＋時計</h2>
+              <p class="mock-card-note">
+                「保持しているものの寿命」を二つの記号で言い切る。一番意味が正確だが、14px
+                では情報過多で潰れ気味。
+              </p>
+              <div class="mock-sizes">
+                <span
+                  ><svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-stack-clock" /></svg
+                  >14</span
+                >
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-stack-clock" /></svg
+                  >16</span
+                >
+                <span
+                  ><svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-stack-clock" /></svg
+                  >20</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="scheme-dark band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-stack-clock" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">狭い</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-stack-clock" /></svg
+                >42m</span
+              ><span>109k</span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-stack-clock" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+          <div class="scheme-light band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-stack-clock" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-stack-clock" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6: リング -->
+        <section class="mock-card">
+          <div class="mock-card-head">
+            <div class="mock-card-icon">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <use href="#ic-ring-63" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="mock-card-title">6. 残量リング</h2>
+              <p class="mock-card-note">
+                弧が残り時間に合わせて減る。数字を読まなくても減り具合が分かる唯一の案。描画のたびに弧を計算する。
+              </p>
+              <div class="gauge-states">
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-ring-90" /></svg
+                  >54m</span
+                >
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-ring-63" /></svg
+                  >38m</span
+                >
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-ring-25" /></svg
+                  >15m</span
+                >
+                <span
+                  ><svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <use href="#ic-ring-0" /></svg
+                  >切れ</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="scheme-dark band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-ring-63" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">狭い</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-ring-25" /></svg
+                >15m</span
+              ><span>109k</span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-ring-0" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+          <div class="scheme-light band">
+            <div class="band-row">
+              <span class="band-label">通常</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache"
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-ring-63" /></svg
+                >56:36</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+            <div class="band-row">
+              <span class="band-label">切れ</span
+              ><span class="band-agent"
+                ><svg width="14" height="14"><use href="#ic-agent" /></svg></span
+              ><span>Sonnet 5.5</span><span class="band-effort">xhigh</span
+              ><span class="band-cache" data-expired
+                ><svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <use href="#ic-ring-0" /></svg
+                >切れ</span
+              ><span>109k/1.0M (10.9%)</span><span class="band-bar"></span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="mock-foot">
+        <p>どの案でも共通で決めること</p>
+        <ul>
+          <li>
+            文字ラベルが消えるので、入力欄の要素に <code>aria-label</code>（例:
+            「プロンプトキャッシュの残り」）を付ける。
+          </li>
+          <li>
+            広い幅と狭い幅で同じアイコンを使い、違いは値（<code>56:36</code> /
+            <code>42m</code>）だけにする。
+          </li>
+          <li>満了後は色（attention）と「切れ」で示す。アイコンは変えない。</li>
+          <li>モデル詳細パネルの「キャッシュ」の行も、同じアイコンに揃えるかは別途決める。</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

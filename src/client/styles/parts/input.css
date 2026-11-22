@@ -558,6 +558,7 @@
   flex: none;
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   white-space: nowrap;
 }
 
@@ -567,8 +568,6 @@
 
 .hwc-cache-narrow {
   display: none;
-  align-items: center;
-  gap: var(--space-1);
 }
 
 @container hwc-input-tail (max-width: 340px) {
@@ -585,7 +584,7 @@
   }
 
   .hwc-cache-narrow {
-    display: inline-flex;
+    display: inline;
   }
 
   /* スマホの 1 ペイン表示には hwc-cell の容器が無い。入力欄の幅でも、バーがモデル名を
