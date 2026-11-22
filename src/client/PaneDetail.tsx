@@ -976,6 +976,11 @@ export function PaneDetail(props: PaneDetailProps) {
       onDragStart={startTreeDrag}
       onCreateSpace={props.onCreateSpace}
       workspacePath={props.context.workspacePath}
+      onOpenMenu={(path, name, trigger) =>
+        fileTreeStore.openRowMenu(pane.id, { path, name, trigger })
+      }
+      onCloseMenu={(path) => fileTreeStore.closeRowMenu(pane.id, path)}
+      onClearMenu={(path) => fileTreeStore.clearRowMenu(pane.id, path)}
     />
   ) : null;
 

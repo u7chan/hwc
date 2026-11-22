@@ -217,3 +217,48 @@ test("a root change while the tree is closed clears the selected file", async ()
   store.syncRoot("w1:p1", "/work");
   expect(store.preview("w1:p1")).toBeNull();
 });
+
+test("opens the row menu in one pane at a time", () => {
+  const store = createFileTreeStore(async () => rootListing);
+  store.open("w1:p1");
+  store.open("w1:p2");
+
+  const trigger = {} as HTMLElement;
+  store.openRowMenu("w1:p1", { path: "docs", name: "docs", trigger });
+  expect(store.view("w1:p1").menu).toEqual({ path: "docs", name: "docs", trigger, open: true });
+
+  // 分割セルがそれぞれメニューを持つと、同じ id の面が 2 つ残る。開けるのは 1 つだけ。
+  store.openRowMenu("w1:p2", { path: "src", name: "src", trigger });
+  expect(store.view("w1:p1").menu).toBeNull();
+  expect(store.view("w1:p2").menu?.path).toBe("src");
+});
+
+test("closing keeps the row menu for the fade and clearing drops it", () => {
+  const store = createFileTreeStore(async () => rootListing);
+  store.open("w1:p1");
+  store.openRowMenu("w1:p1", { path: "docs", name: "docs", trigger: {} as HTMLElement });
+
+  store.closeRowMenu("w1:p1", "docs");
+  expect(store.view("w1:p1").menu?.open).toBe(false);
+
+  // フェードアウトの途中で開き直したら、消さない。
+  store.openRowMenu("w1:p1", { path: "docs", name: "docs", trigger: {} as HTMLElement });
+  store.clearRowMenu("w1:p1", "docs");
+  expect(store.view("w1:p1").menu?.open).toBe(true);
+
+  store.closeRowMenu("w1:p1", "docs");
+  store.clearRowMenu("w1:p1", "docs");
+  expect(store.view("w1:p1").menu).toBeNull();
+});
+
+test("a root change drops the open row menu", async () => {
+  const store = createFileTreeStore(async () => rootListing);
+  store.syncRoot("w1:p1", "/work/scratch");
+  store.open("w1:p1");
+  await flush();
+  store.openRowMenu("w1:p1", { path: "docs", name: "docs", trigger: {} as HTMLElement });
+
+  // 相対パスは根が変わると別の場所を指す。消えた行のメニューは残さない。
+  store.syncRoot("w1:p1", "/work");
+  expect(store.view("w1:p1").menu).toBeNull();
+});

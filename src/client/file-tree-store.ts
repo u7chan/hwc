@@ -15,6 +15,18 @@ export type FileTreeView = {
   dirs: ReadonlyMap<string, FileTreeListing>;
   loading: ReadonlySet<string>;
   failed: ReadonlySet<string>;
+  // 行のメニュー。アプリ全体で 1 つだけ持ち、分割セルでも同時に開かない。
+  menu: FileTreeRowMenu | null;
+};
+
+// フォルダの行から開くメニュー 1 つ分。
+export type FileTreeRowMenu = {
+  path: string;
+  name: string;
+  // 位置合わせに使う行のボタン。行が作り直されたら開き直す。
+  trigger: HTMLElement;
+  // 閉じる合図のあとも、フェードアウトの間は面を残す。
+  open: boolean;
 };
 
 const CLOSED: FileTreeView = {
@@ -23,6 +35,7 @@ const CLOSED: FileTreeView = {
   dirs: new Map(),
   loading: new Set(),
   failed: new Set(),
+  menu: null,
 };
 
 export type FileTreeReader = (
@@ -46,6 +59,11 @@ export type FileTreeStore = {
   preview: (paneId: string) => string | null;
   selectFile: (paneId: string, path: string) => void;
   clearPreview: (paneId: string) => void;
+  // 行のメニュー。開くときに他のペインのメニューを捨て、常に 1 つに保つ。
+  openRowMenu: (paneId: string, menu: Omit<FileTreeRowMenu, "open">) => void;
+  // 閉じる合図。フェードアウトが終わったら clearRowMenu で捨てる。
+  closeRowMenu: (paneId: string, path: string) => void;
+  clearRowMenu: (paneId: string, path: string) => void;
   prune: (isAlive: (paneId: string) => boolean) => void;
 };
 
@@ -191,6 +209,30 @@ export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
     notify(paneId);
   };
 
+  // 分割セルがそれぞれメニューを持つと、同じ id の面が 2 つ描かれ、外側を 1 回押しても
+  // 片方だけが閉じる。開ける場所は 1 つに限る。
+  const openRowMenu = (paneId: string, menu: Omit<FileTreeRowMenu, "open">) => {
+    for (const id of panes.keys()) {
+      if (id === paneId || panes.get(id)?.view.menu === null) continue;
+      update(id, (current) => ({ ...current, menu: null }));
+    }
+    update(paneId, (current) => ({ ...current, menu: { ...menu, open: true } }));
+  };
+
+  const closeRowMenu = (paneId: string, path: string) => {
+    update(paneId, (current) =>
+      current.menu?.path === path && current.menu.open
+        ? { ...current, menu: { ...current.menu, open: false } }
+        : current,
+    );
+  };
+
+  const clearRowMenu = (paneId: string, path: string) => {
+    update(paneId, (current) =>
+      current.menu?.path === path && !current.menu.open ? { ...current, menu: null } : current,
+    );
+  };
+
   const prune = (isAlive: (paneId: string) => boolean) => {
     // Map の反復中に現在の要素を消しても、次へ進む。
     for (const paneId of panes.keys()) {
@@ -217,6 +259,9 @@ export function createFileTreeStore(read: FileTreeReader): FileTreeStore {
     preview,
     selectFile,
     clearPreview,
+    openRowMenu,
+    closeRowMenu,
+    clearRowMenu,
     prune,
   };
 }

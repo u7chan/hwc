@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import {
   FILE_TREE_LIMIT,
   type FileTreeDir,
@@ -12,9 +12,12 @@ import { fileReference } from "../file-reference";
 import type { FileTreeView } from "../file-tree-store";
 import { treeArrowIntent } from "../file-tree-key";
 import { ChevronRightIcon, CopyGlyph, MoreIcon, PlusIcon } from "../icons";
-import { MENU_ID, Menu } from "../Menu";
+import { Menu } from "../Menu";
 import { shortenPath } from "../select";
 import { Spinner } from "../Spinner";
+
+// ツリーの行メニュー。一覧のメニューとは別の要素なので、id も分ける。
+const TREE_MENU_ID = "hwc-tree-menu";
 
 type FileTreeProps = {
   paneId: string;
@@ -41,12 +44,13 @@ type FileTreeProps = {
   // 行のメニューでコピーする絶対パスを組み立てる。ツリーの根はペインの cwd ではなく
   // スペースのチェックアウトなので、根からの相対パスだけでは貼り付け先で開けない。
   workspacePath: string | null;
+  // 開けるメニューは常に 1 つ。分割セルのもう一方が開いていれば、そちらは閉じる。
+  onOpenMenu: (path: string, name: string, trigger: HTMLElement) => void;
+  onCloseMenu: (path: string) => void;
+  onClearMenu: (path: string) => void;
 };
 
-// フォルダの行から開くメニュー。開いている 1 つだけを描く。
-type RowMenu = { path: string; name: string; trigger: HTMLElement; open: boolean };
-
-// ツリーの行へ渡すもの。メニューの開閉は FileTree が持ち、行は開く合図だけを送る。
+// ツリーの行へ渡すもの。メニューの開閉は store が持ち、行は開く合図だけを送る。
 type TreeContext = FileTreeProps & {
   openMenu: (entry: FileTreeDir, trigger: HTMLElement) => void;
   // 開いているメニューのフォルダ。行の「…」の aria-expanded に使う。
@@ -172,7 +176,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext
             aria-label={`${entry.path} のメニュー`}
             aria-haspopup="menu"
             aria-expanded={tree.openMenuPath === entry.path}
-            aria-controls={MENU_ID}
+            aria-controls={TREE_MENU_ID}
             onClick={(event) => tree.openMenu(entry, event.currentTarget)}
           >
             <MoreIcon />
@@ -351,17 +355,9 @@ function RowMenuCard(props: { name: string; copyTarget: string; onNewSpace: () =
 export function FileTree(props: FileTreeProps) {
   const list = useRef<HTMLUListElement>(null);
   const handled = useRef(0);
-  const [rowMenu, setRowMenu] = useState<RowMenu | null>(null);
-
-  const openMenu = (entry: FileTreeDir, trigger: HTMLElement) => {
-    setRowMenu({ path: entry.path, name: entry.name, trigger, open: true });
-  };
-
-  // 閉じた合図を受けてからも、フェードアウトが終わるまで面を残す。Menu は unmount で
-  // 消さず、animation の完了を待って onExited を返す。
-  const closeMenu = () => {
-    setRowMenu((current) => (current === null ? null : { ...current, open: false }));
-  };
+  // 開いているメニューは store が 1 つだけ持つ。根が変わると store が一覧ごと捨てるので、
+  // 消えた行の相対パスを新しい根と結合しない。
+  const menu = props.view.menu;
 
   // 根の一覧は開いた後に届く。行が無い間は待ち、届いたら 1 度だけ焦点を合わせる。
   // 展開のたびに dirs が変わっても、同じ開閉で焦点を取り直さない。
@@ -382,8 +378,8 @@ export function FileTree(props: FileTreeProps) {
 
   const tree: TreeContext = {
     ...props,
-    openMenu,
-    openMenuPath: rowMenu?.open === true ? rowMenu.path : null,
+    openMenu: (entry, trigger) => props.onOpenMenu(entry.path, entry.name, trigger),
+    openMenuPath: menu?.open === true ? menu.path : null,
   };
 
   // メニューはスクロールする面の外に置く。行と同じ面に入れると、ツリーを閉じる間の inert で
@@ -402,21 +398,22 @@ export function FileTree(props: FileTreeProps) {
           {renderChildren(tree, "", 0)}
         </ul>
       </div>
-      {rowMenu === null ? null : (
+      {menu === null ? null : (
         <Menu
-          label={`${rowMenu.name} の操作`}
-          trigger={rowMenu.trigger}
-          open={rowMenu.open}
-          onClose={closeMenu}
-          onExited={() => setRowMenu((current) => (current?.open === false ? null : current))}
+          id={TREE_MENU_ID}
+          label={`${menu.name} の操作`}
+          trigger={menu.trigger}
+          open={menu.open}
+          onClose={() => props.onCloseMenu(menu.path)}
+          onExited={() => props.onClearMenu(menu.path)}
           closeOnScroll
         >
           <RowMenuCard
-            name={rowMenu.name}
-            copyTarget={fileReference(props.workspacePath, rowMenu.path, true)}
+            name={menu.name}
+            copyTarget={fileReference(props.workspacePath, menu.path, true)}
             onNewSpace={() => {
-              closeMenu();
-              props.onCreateSpace(rowMenu.path);
+              props.onCloseMenu(menu.path);
+              props.onCreateSpace(menu.path);
             }}
           />
         </Menu>
