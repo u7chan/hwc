@@ -110,6 +110,9 @@ export type ChatSnapshot = {
   context: ChatContext | null;
   usage?: ChatUsage;
   compaction: ChatCompaction | null;
+  // 1 時間プロンプトキャッシュの期限（Unix ミリ秒）。transcript の完了応答から導いた目安で、
+  // 次の要求がヒットする保証ではない。判断できないときは持たない。
+  cacheExpiresAt?: number;
   // 応答待ちの tool_use。解決するか、末尾が tool_use でなくなると消える。
   pending?: ChatPending;
   // pi 拡張が hwc-capabilities を残したペインだけ true。他のエージェントは未設定。

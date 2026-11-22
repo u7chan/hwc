@@ -50,12 +50,26 @@ export const CLAUDE_VERSION = "2.1.328";
 
 type ClaudeEntry = Record<string, unknown>;
 
+// 実機の message.usage のうち、1h キャッシュの判定に使う項目だけ。
+export function oneHourCache(tokens: number) {
+  return {
+    cache_creation_input_tokens: tokens,
+    cache_read_input_tokens: 0,
+    cache_creation: {
+      ephemeral_1h_input_tokens: tokens,
+      ephemeral_5m_input_tokens: 0,
+    },
+  };
+}
+
 // 1 つの API メッセージを block ごとに複数の entry へ分けて書く形を、実物に寄せて作る。
 // user の文字列は本文、配列は tool_result、attachment / system は parentUuid を辿るためだけに通す。
 function claudeEntries(
   build: (add: {
     user: (content: unknown, extra?: ClaudeEntry) => void;
     assistant: (messageId: string, blocks: unknown[], extra?: ClaudeEntry) => void;
+    // uuid を持たない api-request の行。parentUuid は直前の entry のまま。
+    request: (id: string, at: string) => void;
     other: (entry: ClaudeEntry) => void;
   }) => void,
 ): ClaudeEntry[] {
@@ -93,6 +107,15 @@ function claudeEntries(
         ...extra,
       });
     },
+    request(id, at) {
+      push({
+        type: "api-request",
+        id,
+        querySource: "repl_main_thread",
+        timestamp: at,
+        version: CLAUDE_VERSION,
+      });
+    },
     other(entry) {
       push({ ...next(), ...entry });
     },
@@ -101,7 +124,7 @@ function claudeEntries(
 }
 
 function claudeChatTranscript(): ClaudeEntry[] {
-  return claudeEntries(({ user, assistant, other }) => {
+  return claudeEntries(({ user, assistant, request, other }) => {
     // 500 件の上限を超える長い履歴。先頭が truncated になり、末尾だけが Web に出る。
     for (let index = 1; index <= 248; index += 1) {
       user(`確認 ${index} の結果をまとめてください。`);
@@ -164,6 +187,21 @@ function claudeChatTranscript(): ClaudeEntry[] {
     assistant("msg-review-3", [
       { type: "text", text: "2 点を反映しました。手順の差分は次のとおりです。" },
     ]);
+    // 1h キャッシュの残り時間を確かめるための、直近の完了応答（[E2E](../e2e.md)）。
+    // 要求は 5 分前に送った形にして、開いたときにおよそ 55 分から始まるようにする。
+    request("api-quickstart-cache", new Date(Date.now() - 5 * 60_000).toISOString());
+    assistant("msg-review-4", [{ type: "text", text: "キャッシュの残り時間を確認しました。" }], {
+      requestRef: "api-quickstart-cache",
+      timestamp: new Date().toISOString(),
+      message: {
+        id: "msg-review-4",
+        role: "assistant",
+        model: "claude-sonnet-5-5",
+        content: [{ type: "text", text: "キャッシュの残り時間を確認しました。" }],
+        stop_reason: "end_turn",
+        usage: oneHourCache(24_000),
+      },
+    });
   });
 }
 

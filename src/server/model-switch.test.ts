@@ -468,6 +468,19 @@ describe("what the screen shows until the next reply", () => {
     expect(t.switcher.apply(PANE, SESSION, t.snapshot()).model).toBe("claude-opus-5-5");
   });
 
+  test("the cache expiry of the old model is hidden until a newer reply is recorded", async () => {
+    const t = setup();
+    await t.switcher.switch(t.input({ model: OPUS, effort: "xhigh" }));
+
+    const withCache: ChatSnapshot = { ...t.snapshot(), cacheExpiresAt: 12_345 };
+    expect(t.switcher.apply(PANE, SESSION, withCache).cacheExpiresAt).toBeUndefined();
+
+    // 新しい応答が載ったら、その応答から導いた期限は消さない。
+    t.world.messages = [{ id: "m1", role: "agent", text: "はい", at: 10_000_000_000_000 }];
+    const replied: ChatSnapshot = { ...withCache, messages: t.world.messages };
+    expect(t.switcher.apply(PANE, SESSION, replied).cacheExpiresAt).toBe(12_345);
+  });
+
   test("another session of the same pane is left as it is", async () => {
     const t = setup();
     await t.switcher.switch(t.input({ model: OPUS, effort: "xhigh" }));

@@ -553,6 +553,24 @@
   display: none;
 }
 
+/* 1h プロンプトキャッシュの残り。モデルと使用量の間に、押さなくても読める形で置く。 */
+.hwc-input-cache {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.hwc-input-cache[data-expired] {
+  color: var(--color-attention);
+}
+
+.hwc-cache-narrow {
+  display: none;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 @container hwc-input-tail (max-width: 340px) {
   .hwc-context-wide {
     display: none;
@@ -560,6 +578,20 @@
 
   .hwc-context-narrow {
     display: inline;
+  }
+
+  .hwc-cache-wide {
+    display: none;
+  }
+
+  .hwc-cache-narrow {
+    display: inline-flex;
+  }
+
+  /* スマホの 1 ペイン表示には hwc-cell の容器が無い。入力欄の幅でも、バーがモデル名を
+     押し出すので数値だけにする。 */
+  .hwc-context-bar {
+    display: none;
   }
 }
 
@@ -729,6 +761,11 @@
 
 .hwc-split-cell[data-compact="true"] .hwc-context-narrow {
   display: inline;
+}
+
+/* キャッシュは幅を読めないセルでは入力欄から外す。モデル詳細パネルにだけ残す。 */
+.hwc-split-cell[data-compact="true"] .hwc-input-cache {
+  display: none;
 }
 
 /* 折り返して複数行になった入力欄は読み幅いっぱいに使う。情報と送信は次の行へ回し、

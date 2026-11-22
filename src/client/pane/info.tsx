@@ -1,7 +1,7 @@
 import { useId, useState } from "preact/hooks";
 import type { ChatContext, ChatUsage } from "../../server/chat/contract";
 import { claudeModelName, isClaudeAlias } from "../../shared/agents";
-import { type AgentInfo, type ContextMeterView, contextDetails } from "../chat";
+import { type AgentInfo, type CacheView, type ContextMeterView, contextDetails } from "../chat";
 import { type CommandId, commandLabel, commandText } from "../commands";
 import { useCopy } from "../copy";
 import { useHint } from "../hint";
@@ -88,9 +88,15 @@ export function ContextMeter(props: {
 
 // チップは Claude だけ表示名にする。パネルは省略されない全体と、持ち出す識別子を出す。
 // エイリアスは起動時に頼んだ値で、実際のモデルは最初の応答で分かる。
-export function AgentInfoHint(props: { agent: string | null; info: AgentInfo }) {
+export function AgentInfoHint(props: {
+  agent: string | null;
+  info: AgentInfo;
+  // 1h プロンプトキャッシュの残り。入力欄に収まらない幅では、このパネルだけで見せる。
+  cache: CacheView | null;
+}) {
   const model = props.info.model;
   const effort = props.info.effort;
+  const cache = props.cache;
   const claude = props.agent === "claude" && model !== null;
   const provisional = claude && isClaudeAlias(model);
   const hint = useHint();
@@ -145,6 +151,12 @@ export function AgentInfoHint(props: { agent: string | null; info: AgentInfo }) 
           <span class="hwc-hint-row">
             <span>エフォート</span>
             <span>{effort}</span>
+          </span>
+        )}
+        {cache === null ? null : (
+          <span class="hwc-hint-row">
+            <span>キャッシュ</span>
+            <span>{cache.expired ? "切れ" : cache.wide}</span>
           </span>
         )}
       </span>

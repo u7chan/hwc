@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { CLAUDE_VERSION, claudeTranscriptPath } from "../fixtures/scenario";
+import { dirname, join } from "node:path";
+import { CLAUDE_VERSION, claudeTranscriptPath, oneHourCache } from "../fixtures/scenario";
 import type { FakeContext } from "./context";
 import type { SetAgentStatus } from "./workspaces";
 
@@ -26,6 +26,7 @@ export function createClaude(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   const { root, findPane, later } = ctx;
   let count = 0;
   let sequence = 0;
+  let sessionSerial = 0;
 
   const sessionOf = (paneId: string): string | null => {
     const session = findPane(paneId)?.agent_session ?? null;
@@ -140,6 +141,8 @@ export function createClaude(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
             role: "assistant",
             model: "claude-sonnet-5-5",
             content: [{ type: "text", text: "手順を確認しています。" }],
+            stop_reason: "end_turn",
+            usage: oneHourCache(24_000),
           },
           perTurnEffort: "xhigh",
         },
@@ -159,6 +162,8 @@ export function createClaude(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
                 input: { file_path: "docs/quickstart.md" },
               },
             ],
+            stop_reason: "end_turn",
+            usage: oneHourCache(24_000),
           },
           perTurnEffort: "xhigh",
         },
@@ -182,6 +187,79 @@ export function createClaude(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
 
   return {
     start,
+
+    // フィクスチャ専用の入力 `/cache` `/cache-soon` `/cache-expire` `/cache-renew` `/cache-off`。
+    // 1h キャッシュの表示を、1 時間待たずに確かめるための完了応答を書く（[E2E](../e2e.md)）。
+    async cacheTurn(paneId: string, text: string): Promise<boolean> {
+      const sessionId = sessionOf(paneId);
+      const match = /^\/cache(?:-(expire|soon|renew|off))?$/.exec(text.trim());
+      if (sessionId === null || match === null) return false;
+      const scenario = match[1] ?? "fresh";
+      sequence += 1;
+      const requestId = `api-cache-${sequence}`;
+      // expire は 2 時間前、soon は 55 分前に送った要求にして、失効と期限間近の表示を作る。
+      const age = scenario === "expire" ? 2 * 60 * 60_000 : scenario === "soon" ? 55 * 60_000 : 0;
+      const sentAt = new Date(Date.now() - age);
+      const usage =
+        scenario === "off"
+          ? {
+              cache_creation_input_tokens: 24_000,
+              cache_read_input_tokens: 0,
+              cache_creation: {
+                ephemeral_1h_input_tokens: 0,
+                ephemeral_5m_input_tokens: 24_000,
+              },
+            }
+          : scenario === "renew"
+            ? {
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 24_000,
+                cache_creation: {
+                  ephemeral_1h_input_tokens: 0,
+                  ephemeral_5m_input_tokens: 0,
+                },
+              }
+            : oneHourCache(24_000);
+      await appendEntry(sessionId, {
+        type: "api-request",
+        id: requestId,
+        querySource: "repl_main_thread",
+        timestamp: sentAt.toISOString(),
+        version: CLAUDE_VERSION,
+      });
+      await append(sessionId, (next) => [
+        {
+          ...next(),
+          type: "assistant",
+          requestRef: requestId,
+          message: {
+            id: `msg-cache-${sequence}`,
+            role: "assistant",
+            model: "claude-sonnet-5-5",
+            content: [{ type: "text", text: "キャッシュの期限を記録しました。" }],
+            stop_reason: "end_turn",
+            usage,
+          },
+          perTurnEffort: "xhigh",
+        },
+      ]);
+      return true;
+    },
+
+    // フィクスチャ専用の `/new`。実物と同じく、会話を空にした新しいセッションへ切り替える。
+    // 旧セッションの transcript は残すが、ペインの参照は新しい空のファイルへ向ける。
+    async startNewSession(paneId: string): Promise<boolean> {
+      const pane = findPane(paneId);
+      const session = pane?.agent_session ?? null;
+      if (pane === null || session?.agent !== "claude" || session.kind !== "id") return false;
+      sessionSerial += 1;
+      const sessionId = `00000000-0000-4000-8000-${String(sessionSerial).padStart(12, "0")}`;
+      const path = claudeTranscriptPath(root, sessionId);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, "");
+      pane.agent_session = { ...session, value: sessionId };
+      return true;
+    },
 
     // Esc で質問を閉じる。応答待ちが sidecar にあるペインだけ。sidecar は残す（hook が無いので）。
     async dismissQuestion(paneId: string): Promise<void> {

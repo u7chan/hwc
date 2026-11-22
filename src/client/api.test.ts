@@ -839,3 +839,15 @@ test("only an explicit creation failure or a busy checkout can be retried", () =
 test("the worktree timeout covers the worktree creation", () => {
   expect(CREATE_WORKTREE_TIMEOUT_MS).toBeGreaterThan(90_000);
 });
+
+test("a cache expiry is kept only when it is a finite absolute time", () => {
+  expect(toChatSnapshot({ ...chatBody, cacheExpiresAt: 12_345 })).toMatchObject({
+    cacheExpiresAt: 12_345,
+  });
+  // 飾りの値が壊れても会話は捨てず、期限だけを出さない。
+  for (const value of [null, "soon", Number.NaN, Number.POSITIVE_INFINITY]) {
+    const snapshot = toChatSnapshot({ ...chatBody, cacheExpiresAt: value });
+    expect(snapshot?.messages).toHaveLength(1);
+    expect(snapshot?.cacheExpiresAt).toBeUndefined();
+  }
+});

@@ -64,6 +64,16 @@ transcript だけでは足りないものがある。
 - 生成速度と使用量は、同梱の mod が状態ディレクトリの `claude/live/<session id>.json` に書く。速度は `turn.step` の差分から推定した見えている出力の tok/s（pi の sidecar と同じ意味）、使用量は `$.session.usage()` の `{ tokens, window }`。速度は 2.5 秒より古ければ捨て、使用量は鮮度で捨てない
 - 読めない版・形の違うファイルは無いものとして扱い、会話・段階・端末出力は止めない
 
+### プロンプトキャッシュの期限
+
+- 1h プロンプトキャッシュの期限は、CLI の statusline や mod ではなく、transcript の完了応答から導く。active branch の assistant のうち、`requestRef` が `repl_main_thread` の `api-request.id` に対応し、`message.stop_reason` があるものだけを使う。`<synthetic>` と `isApiErrorMessage: true` の行は、`stop_reason` があっても失敗として除く。起点は応答の `timestamp` ではなく、対応する要求の `timestamp`
+- 応答の block が複数行に分かれていても、完了した要求ごとに 1 回だけ扱う。`message.usage.cache_creation_input_tokens` が正で、`cache_creation` がすべて 1h（`ephemeral_1h_input_tokens` が総数と一致し、`ephemeral_5m_input_tokens` が 0）なら、要求の `timestamp` から 1 時間を期限にする
+- 書き込みが 0 で `cache_read_input_tokens` が正のときは、同じ会話・モデル・エフォートを追跡中で、要求の送信時点で期限内だったときだけ延長する。読取だけではどのキャッシュに当たったか分からないので、未確認・失効済みを 1h 扱いにしない
+- 5m を含む書き込み、無キャッシュ、時刻や使用量を確かめられない完了応答、対応する `api-request` が読めない完了応答では、前の期限を取り下げる。失敗・中断・サブエージェント・別の枝は前の期限を変えない
+- active branch の圧縮境界（`system` の `subtype: "compact_boundary"`）と圧縮要約（`isCompactSummary`）、`Set model to …` / `Set effort level to …` のローカルコマンド結果より前の期限は使わない。取り消し（`Kept model as …`）は変更にしない。応答で初めて分かったモデル・エフォートの変更でも、それ以前の 1h は延長しない。hwc の切り替えの補い（上の「モデルと effort の切り替え」）が有効な間も旧期限を返さない
+- 期限はチャットのスナップショットに絶対時刻（Unix ミリ秒）だけを載せる。設定・更新・取り下げは etag に反映し、時間が進むだけでは etag を変えない。`/new` の画面リセット中と取得失敗時は出さず、セッションが変われば別の transcript から導き直す
+- クライアントは入力欄のモデル・エフォートの隣に残り時間を出す。狭い幅では時計と分（1 分未満は秒）に縮め、入力欄を 1 行に畳むセルではモデル詳細パネルだけに出す。時間はサーバー同期の時計から描画のたびに計算し、通信は増やさない
+
 ## Consequences
 
 - 会話・段階・待ちの表示は transcript と hook の内部形式に依存する。版で形が変われば読めなくなり、端末出力や段階なしの表示へ戻る。理由は画面に出ない
@@ -77,6 +87,7 @@ transcript だけでは足りないものがある。
 - 切り替えの許可と記録は、hwc が `--settings` で渡す hook に依る。hook を持たないペイン（`PreModelSwitch` / `PostModelSwitch` を足す前に起動したペイン、hwc 外で起動した Claude）では、キャッシュが温かいと `/model` が確認ダイアログで止まり、8 秒待って確かめられずに失敗する（Esc で閉じる）。キャッシュが冷えていればダイアログが出ず、transcript の結果で確かめられて通る。hwc から作り直したペインから確実に使える
 - `/effort` の結果の文言は CLI の版で変わり得る。変わると、切り替えは通るが hwc は確かめられず、端末で確かめるよう案内する
 - 5.5 系以外のモデルでは `/effort` もキャッシュを切るので、確認ダイアログが開き得る。hook は `/effort` を許可しないため、確かめられずに失敗して Esc で閉じる
+- 1h キャッシュの残り時間は、transcript に載った完了応答から導く目安で、次の要求がヒットする保証ではない。補助リクエストや transcript に結果が残らない操作は、次の応答まで反映しない。そのため実際より短くも長くも出得る。表示の更新も既存のチャット取得間隔に従う
 
 ## Alternatives
 
@@ -90,3 +101,4 @@ transcript だけでは足りないものがある。
 - **ピッカーの `s` キーでセッション限定にする**: 既定を書き換えずに済むが、ピッカーのキー操作になる。スマホには矢印キーも無い
 - **切り替えの後に、書き換わった既定を元へ戻す**: hwc がユーザーの `~/.claude` の設定を書き換えることになる。ユーザーの設定は書き換えない
 - **`ConfigChange` の hook で既定の保存を止める**: `/model` の保存では呼ばれなかった
+- **statusline や mod が書くキャッシュ情報を読む**: 端末の設定と CLI の版に依存し、hwc 外で起動した Claude では読めない。transcript には要求の時刻と `usage` が残るので、同じ記録から導ける

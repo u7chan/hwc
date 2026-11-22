@@ -375,6 +375,39 @@ export type ContextMeterView = {
   tone: "secondary" | "attention";
 };
 
+// 1h プロンプトキャッシュの残り。期限は BFF が返した絶対時刻で、描画のたびにサーバーの
+// 時計から引く。時間の表示だけで通信は増やさない（docs/adr/claude-integration.md）。
+export type CacheView = {
+  // 満了しているか。
+  expired: boolean;
+  // 入力欄・詳細パネルの値。例: `42:18`、満了後は `切れ`。
+  wide: string;
+  // 狭い表記。例: `42m`、1 分未満は秒、満了後は `切れ`。
+  narrow: string;
+};
+
+// 期限が無い・不正なら出さない。1 分未満は秒で出し、満了後は「切れ」にする。
+export function cacheView(expiresAt: number | null | undefined, now: number): CacheView | null {
+  if (expiresAt === null || expiresAt === undefined || !Number.isFinite(expiresAt)) return null;
+  const remainingMs = expiresAt - now;
+  if (remainingMs <= 0) return { expired: true, wide: "切れ", narrow: "切れ" };
+  const totalSeconds = Math.ceil(remainingMs / 1_000);
+  if (totalSeconds < 60) {
+    return {
+      expired: false,
+      wide: `0:${String(totalSeconds).padStart(2, "0")}`,
+      narrow: `${totalSeconds}s`,
+    };
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return {
+    expired: false,
+    wide: `${minutes}:${String(seconds).padStart(2, "0")}`,
+    narrow: `${minutes}m`,
+  };
+}
+
 // 両方が不明なら何も出さない。片方だけ分かるなら分かる方を出す。
 export function contextMeter(context: ChatContext | null): ContextMeterView | null {
   if (context === null) return null;

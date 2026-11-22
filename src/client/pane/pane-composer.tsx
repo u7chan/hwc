@@ -5,13 +5,14 @@ import type { ProjectEntry } from "../../shared/projects";
 import { attachmentUrl } from "../api";
 import type { AttachedFile } from "../attachment-store";
 import { dropActionFrom } from "../attachments";
-import type { AgentInfo, ContextMeterView } from "../chat";
+import type { AgentInfo, CacheView, ContextMeterView } from "../chat";
 import { type CommandId, commandText } from "../commands";
 import { ComposerAdd, type ComposerCommand } from "../ComposerAdd";
 import { enterInsertsNewline } from "../input";
 import {
   AgentGlyphIcon,
   AgentIcon,
+  ClockIcon,
   CloseIcon,
   CollapseIcon,
   ExpandIcon,
@@ -60,6 +61,8 @@ export type ComposerView = {
   info: AgentInfo | null;
   infoLoading: boolean;
   meter: ContextMeterView | null;
+  // 1h プロンプトキャッシュの残り。判断できないときは null。
+  cache: CacheView | null;
   context: ChatContext | null;
   usage: ChatUsage | undefined;
   sendable: boolean;
@@ -357,7 +360,19 @@ export function PaneComposer(props: PaneComposerProps) {
                 {view.infoLoading ? (
                   <AgentInfoSkeleton />
                 ) : view.info === null ? null : (
-                  <AgentInfoHint agent={pane.agent} info={view.info} />
+                  <AgentInfoHint agent={pane.agent} info={view.info} cache={view.cache} />
+                )}
+                {view.cache === null ? null : (
+                  // 幅が足りないセルでは入力欄に出さない。値はモデル詳細パネルに残る。
+                  <span class="hwc-input-cache" data-expired={view.cache.expired || undefined}>
+                    <span class="hwc-cache-wide">
+                      {view.cache.expired ? "キャッシュ切れ" : `キャッシュ ${view.cache.wide}`}
+                    </span>
+                    <span class="hwc-cache-narrow">
+                      {view.cache.expired ? null : <ClockIcon size={14} />}
+                      <span>{view.cache.narrow}</span>
+                    </span>
+                  </span>
                 )}
                 {view.meter === null || view.context === null ? null : (
                   <ContextMeter

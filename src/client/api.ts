@@ -346,6 +346,11 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
   }
   const usage = toChatUsage(snapshot.usage);
   const pending = toChatPending(snapshot.pending);
+  // 飾りの値が壊れても会話は捨てない。期限を出さないだけにする。
+  const cacheExpiresAt =
+    typeof snapshot.cacheExpiresAt === "number" && Number.isFinite(snapshot.cacheExpiresAt)
+      ? snapshot.cacheExpiresAt
+      : undefined;
   return {
     etag: snapshot.etag,
     messages,
@@ -356,6 +361,7 @@ export function toChatSnapshot(value: unknown): ChatSnapshot | null {
     context: toChatContext(snapshot.context),
     ...(usage === undefined ? {} : { usage }),
     compaction: toChatCompaction(snapshot.compaction),
+    ...(cacheExpiresAt === undefined ? {} : { cacheExpiresAt }),
     ...(pending === undefined ? {} : { pending }),
     canRewind: snapshot.canRewind === true,
     ...(typeof snapshot.leafId === "string" ? { leafId: snapshot.leafId } : {}),
