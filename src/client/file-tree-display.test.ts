@@ -26,8 +26,9 @@ function memory() {
 test("an empty value keeps today's size and width", () => {
   expect(parseFileTreeSize(null)).toBe("normal");
   expect(parseFileTreeWidth(null)).toBe("normal");
-  // 標準は、設定を足す前の見た目（--text-body と 260px）のまま。
-  expect(fileTreeFontSize("normal")).toBe("1.0625rem");
+  // 標準は、設定を足す前の見た目（--text-body と 260px）のまま。--text-body は画面幅で変わるので、
+  // 値ではなくトークンを指す。
+  expect(fileTreeFontSize("normal")).toBe("var(--text-body)");
   expect(fileTreeWidthPx("normal")).toBe(260);
 });
 

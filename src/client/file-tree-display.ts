@@ -5,11 +5,13 @@
 export type FileTreeSize = "small" | "normal" | "large";
 export type FileTreeWidth = "narrow" | "normal" | "wide";
 
-// 行の高さは変えない（--tap の下限）。変わるのは 1 行に入る文字数だけ。標準は従来の --text-body。
+// 行の高さは変えない（--tap の下限）。変わるのは 1 行に入る文字数だけ。標準は従来の --text-body
+// そのもので、画面幅で変わる（900px 以上は 0.9375rem）。小と大はその倍率にして、どの幅でも
+// 標準との比が同じになるようにする。固定の rem にすると、広い画面で標準との差が揃わない。
 const SIZES: Record<FileTreeSize, { label: string; fontSize: string }> = {
-  small: { label: "小", fontSize: "0.875rem" },
-  normal: { label: "標準", fontSize: "1.0625rem" },
-  large: { label: "大", fontSize: "1.25rem" },
+  small: { label: "小", fontSize: "calc(var(--text-body) * 0.85)" },
+  normal: { label: "標準", fontSize: "var(--text-body)" },
+  large: { label: "大", fontSize: "calc(var(--text-body) * 1.2)" },
 };
 
 // 並べるときだけ効く。狭いセルでは会話の上に重ねるので、幅はセルいっぱいになる。

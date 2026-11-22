@@ -64,7 +64,8 @@ export function DisplaySettings(props: DisplaySettingsProps) {
       <p class="hwc-subtitle">サンプル</p>
       <FileTreeSample />
       <p class="hwc-section-note">
-        幅 {fileTreeWidthPx(props.treeWidth)}px。画面より広い幅は、画面の幅で止まります。
+        選んだ幅は {fileTreeWidthPx(props.treeWidth)}px
+        です。この画面に収まらないときは、サンプルだけ狭めて表示します。
       </p>
     </section>
   );
