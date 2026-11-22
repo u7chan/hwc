@@ -69,7 +69,7 @@ transcript だけでは足りないものがある。
 - 1h プロンプトキャッシュの期限は、CLI の statusline や mod ではなく、transcript の完了応答から導く。active branch の assistant のうち、`requestRef` が `repl_main_thread` の `api-request.id` に対応し、`message.stop_reason` があるものだけを使う。`<synthetic>` と `isApiErrorMessage: true` の行は、`stop_reason` があっても失敗として除く。起点は応答の `timestamp` ではなく、対応する要求の `timestamp`
 - 応答の block が複数行に分かれていても、完了した要求ごとに 1 回だけ扱う。`message.usage.cache_creation_input_tokens` が正で、`cache_creation` がすべて 1h（`ephemeral_1h_input_tokens` が総数と一致し、`ephemeral_5m_input_tokens` が 0）なら、要求の `timestamp` から 1 時間を期限にする
 - 書き込みが 0 で `cache_read_input_tokens` が正のときは、同じ会話・モデル・エフォートを追跡中で、要求の送信時点で期限内だったときだけ延長する。読取だけではどのキャッシュに当たったか分からないので、未確認・失効済みを 1h 扱いにしない
-- 5m を含む書き込み、無キャッシュ、時刻や使用量を確かめられない完了応答では、前の期限を取り下げる。失敗・中断・サブエージェント・別の枝は前の期限を変えない
+- 5m を含む書き込み、無キャッシュ、時刻や使用量を確かめられない完了応答、対応する `api-request` が読めない完了応答では、前の期限を取り下げる。失敗・中断・サブエージェント・別の枝は前の期限を変えない
 - active branch の圧縮境界（`system` の `subtype: "compact_boundary"`）と圧縮要約（`isCompactSummary`）、`Set model to …` / `Set effort level to …` のローカルコマンド結果より前の期限は使わない。取り消し（`Kept model as …`）は変更にしない。応答で初めて分かったモデル・エフォートの変更でも、それ以前の 1h は延長しない。hwc の切り替えの補い（上の「モデルと effort の切り替え」）が有効な間も旧期限を返さない
 - 期限はチャットのスナップショットに絶対時刻（Unix ミリ秒）だけを載せる。設定・更新・取り下げは etag に反映し、時間が進むだけでは etag を変えない。`/new` の画面リセット中と取得失敗時は出さず、セッションが変われば別の transcript から導き直す
 - クライアントは入力欄のモデル・エフォートの隣に残り時間を出す。狭い幅では時計と分（1 分未満は秒）に縮め、入力欄を 1 行に畳むセルではモデル詳細パネルだけに出す。時間はサーバー同期の時計から描画のたびに計算し、通信は増やさない

@@ -147,7 +147,7 @@ pi のペインでは、あわせてセッションの隣に live の sidecar（
 
 Claude のペインでは、フィクスチャ専用の入力 `/activity`（添付注記なし）が同じ役割を持つ。実物と同じく prompt・`api-request`・assistant・`tool_use`・`tool_result` を時間差で架空の transcript へ追記し、段階の切り替わりと 10 秒の保持を確かめられるようにする（[Claude 連携](adr/claude-integration.md)）。完了する assistant は 1h キャッシュの書き込みを持つので、応答が載ると残り時間が約 60 分へ戻る。架空の transcript の `version` は 2.1.328 に揃えてある。
 
-`/cache` `/cache-renew` `/cache-expire` `/cache-off`（添付注記なし）もフィクスチャ専用で、1h キャッシュの表示を 1 時間待たずに確かめる。それぞれ 1h の書き込み、期限内の読取だけの応答、2 時間前に送った要求の 1h 書き込み、5m の書き込みを追記する。`/new` は Claude のペインを空の新しいセッションへ切り替える（旧 transcript は残るが参照しない）。`/model` の結果を書くと期限が取り下げられ、表示が消える。
+`/cache` `/cache-soon` `/cache-renew` `/cache-expire` `/cache-off`（添付注記なし）もフィクスチャ専用で、1h キャッシュの表示を 1 時間待たずに確かめる。それぞれ 1h の書き込み、約 5 分後に切れる 1h 書き込み、期限内の読取だけの応答、2 時間前に送った要求の 1h 書き込み、5m の書き込みを追記する。`/cache-soon` のあとに `/cache-renew` を送ると、残り時間が約 5 分から約 60 分へ延びることが見える。`/new` は Claude のペインを空の新しいセッションへ切り替える（旧 transcript は残るが参照しない）。`/model` の結果を書くと期限が取り下げられ、表示が消える。
 
 `/done`（添付注記なし）はフィクスチャ専用の入力で、実 Herdr には無い。受け取ったペインを `done` にする。実 Herdr の `done` は既読でしか `idle` に戻らず、hwc からは作れないため、一覧の終了時刻と端末間の一致を確かめる入口として置く。
 

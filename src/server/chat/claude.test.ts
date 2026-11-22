@@ -1419,19 +1419,16 @@ test("a reply to a request sent before the boundary does not bring the expiry ba
   });
 });
 
-test("a completed reply whose request line is missing does not move the last expiry", async () => {
+test("a completed reply whose request line is missing withdraws the last expiry", async () => {
   await withRoot(async (root) => {
     const prompt = user("u1", null, "続けてください。");
     const req = request("api-1");
     const answer = reply("a1", "u1", "msg-1", "api-1", cacheUsage(12_000));
-    // 要求の行が無い応答は、対象の要求と対応しない。時刻を確かめられないので推測せず、
-    // 最後に確かめた期限をそのまま残す。
+    // 要求の行が無い応答は、送信時刻を確かめられない。前の期限を根拠なく残さず取り下げる。
     const unpaired = reply("a2", "a1", "msg-2", "api-missing", cacheUsage(0, 12_000));
     await writeTranscript(root, [prompt, req, answer, unpaired]);
 
-    expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBe(
-      Date.parse(req.timestamp) + HOUR_MS,
-    );
+    expect((await createClaudeChatClient().snapshot(SESSION)).cacheExpiresAt).toBeUndefined();
   });
 });
 

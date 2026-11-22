@@ -580,8 +580,13 @@ function promptCacheExpiry(
     counted.add(requestRef);
 
     const request = requests.get(requestRef);
-    // 要求の行が読めない・区切りより前なら、推測せずに前の期限を残す（区切り後なら既に消えている）。
-    if (request === undefined || request.index <= cut) continue;
+    // 要求の行が読めない完了応答は、送信時刻を確かめられない。それ以前に確かめた期限を
+    // 根拠なく残さない。区切りより前の要求なら、期限は既に消えている。
+    if (request === undefined) {
+      withdraw(entry.index);
+      continue;
+    }
+    if (request.index <= cut) continue;
 
     const entryModel = entry.message?.model ?? null;
     if (entryModel === null || entryModel === SYNTHETIC_MODEL) continue;
