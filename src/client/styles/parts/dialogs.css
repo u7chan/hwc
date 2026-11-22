@@ -644,6 +644,16 @@
   margin-top: var(--space-4);
 }
 
+/* モデルを変えるときの、キャッシュが切れる注意。既定の更新の注記より目に入るようにする。 */
+.hwc-switch-warning {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-accent);
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+}
+
 .hwc-project-dialog {
   display: flex;
   flex-direction: column;

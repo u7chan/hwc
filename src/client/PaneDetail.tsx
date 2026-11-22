@@ -55,6 +55,8 @@ import {
 } from "./commands";
 import { useCopy } from "./copy";
 import { filterProjects, highlightedProject } from "./projects";
+import { ModelSwitchDialog } from "./ModelSwitchDialog";
+import { modelSwitchBlockReason } from "./model-switch";
 import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
 import { useProjects } from "./use-projects";
@@ -208,6 +210,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const chatHidden = treeOverlay || previewOpen;
   const [expandedOpen, setExpandedOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [switchOpen, setSwitchOpen] = useState(false);
   const { outputVersion, requestOutputRefresh } = useOutputVersion();
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const [sessionReset, setSessionReset] = useState<NewSessionReset | null>(null);
@@ -852,6 +855,30 @@ export function PaneDetail(props: PaneDetailProps) {
     return id === "new" ? "このペインで会話を始め直す" : "履歴を要約して縮める";
   };
 
+  // モデルと effort の切り替えは、メニューの項目から開くダイアログで行う。コマンド文字列を
+  // 入力欄から送る /new・/compact とは違い、選んだ内容を BFF へ渡す。
+  const modelSwitchReason =
+    pane.agent === "claude" &&
+    (composer.edit !== null ||
+      inputDisabled ||
+      launchBlocked ||
+      sending ||
+      replying ||
+      compactionRun !== null)
+      ? "操作中は使えません"
+      : modelSwitchBlockReason(pane);
+  const modelSwitch =
+    pane.agent === "claude"
+      ? {
+          label: "モデルとエフォートを変更",
+          available: modelSwitchReason === null,
+          hint: modelSwitchReason ?? "会話を保ったまま、次の応答から切り替える",
+          run: () => {
+            if (modelSwitchReason === null) setSwitchOpen(true);
+          },
+        }
+      : null;
+
   const composerCommands = isCommandPane(pane)
     ? {
         newSession: {
@@ -868,6 +895,7 @@ export function PaneDetail(props: PaneDetailProps) {
           hint: menuCommandHint("compact"),
           run: () => void runMenuCommand("compact"),
         },
+        modelSwitch,
       }
     : null;
 
@@ -1247,6 +1275,17 @@ export function PaneDetail(props: PaneDetailProps) {
           onPick={composer.pickTemplate}
         />
       )}
+      {switchOpen
+        ? createPortal(
+            <ModelSwitchDialog
+              paneId={pane.id}
+              current={info}
+              onSwitched={refreshChat}
+              onClose={() => setSwitchOpen(false)}
+            />,
+            document.querySelector(".hwc-app") ?? document.body,
+          )
+        : null}
       {composer.confirmNew
         ? createPortal(
             <NewSessionConfirm

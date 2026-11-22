@@ -54,6 +54,7 @@ import { defaultPreviewRoots } from "../message-files";
 import type { AgentModelsClient } from "../agent-models";
 import type { ClaudeModelLabelsReader } from "../claude-model-labels";
 import { createQuestionAnswerer } from "../answer-question";
+import { createModelSwitcher, hasLocalCommandOutputs } from "../model-switch";
 import type { ClaudeSettingsProvider } from "../create-pane";
 import { HerdrError } from "../herdr/socket";
 
@@ -91,6 +92,9 @@ export type CreateAppOptions = {
   // Claude の起動に足す hook の設定ファイルを用意する。テストでは実ファイルを書かないよう、
   // 渡さない（hook なしで起動する）。
   claudeSettings?: ClaudeSettingsProvider;
+  // モデルの切り替えで hook と受け渡す置き場（docs/adr/claude-integration.md）。無い構成では
+  // 切り替えない。
+  claudeSwitchRoot?: string;
   // pi の既定モデルは、チャット画面を開いたときに読む。テストでは実プロセスを
   // 起動しないよう差し替える。
   loadPiDefaults?: PiDefaultsReader;
@@ -137,6 +141,7 @@ export function createAppContext(options: CreateAppOptions) {
     models,
     modelLabels,
     claudeSettings,
+    claudeSwitchRoot,
     pullRequests,
     git,
     projects = createProjectLister(),
@@ -223,6 +228,11 @@ export function createAppContext(options: CreateAppOptions) {
   const questionAnswerer =
     claude === undefined ? null : createQuestionAnswerer({ panes, chat: claude });
   const launchModels = createLaunchModels();
+  // モデルの切り替えは、会話とローカルコマンドの結果を読める Claude のペインだけ。
+  const modelSwitcher =
+    hasLocalCommandOutputs(claude) && models !== undefined && claudeSwitchRoot !== undefined
+      ? createModelSwitcher({ panes, chat: claude, models, launchModels, root: claudeSwitchRoot })
+      : null;
   const piDefaults = createPiDefaults(readPiDefaults);
 
   const paneFailure = (c: Context, error: unknown) => {
@@ -456,6 +466,7 @@ export function createAppContext(options: CreateAppOptions) {
     launchModels,
     piDefaults,
     questionAnswerer,
+    modelSwitcher,
     paneFailure,
     worktreeFailure,
     workspaceFailure,

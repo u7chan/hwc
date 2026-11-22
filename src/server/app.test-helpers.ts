@@ -364,6 +364,7 @@ export type TestAppOptions = {
     | "opencode"
     | "codex"
     | "claude"
+    | "claudeSwitchRoot"
     | "pullRequests"
     | "git"
     | "projects"

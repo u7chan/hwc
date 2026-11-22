@@ -427,6 +427,30 @@ test("local command echoes are not part of the conversation", async () => {
   });
 });
 
+test("local command output is readable for the commands sent after a given time", async () => {
+  await withRoot(async (root) => {
+    const stdout = (uuid: string, parent: string | null, body: string) =>
+      user(uuid, parent, `<local-command-stdout>${body}</local-command-stdout>`);
+    const before = stdout("c1", null, "Set effort level to high");
+    const since = BASE + clock * 1_000 + 500;
+    const after = stdout("c2", "c1", "Set effort level to low (saved as your default)");
+    const talk = user("u1", "c2", "本文は読まない");
+    await writeTranscript(root, [before, after, talk]);
+
+    const outputs = await createClaudeChatClient().localCommandOutputs(SESSION, since);
+
+    expect(outputs).toEqual(["Set effort level to low (saved as your default)"]);
+  });
+});
+
+test("local command output is empty when no command has run since", async () => {
+  await withRoot(async (root) => {
+    await writeTranscript(root, [user("u1", null, "こんにちは")]);
+
+    expect(await createClaudeChatClient().localCommandOutputs(SESSION, 0)).toEqual([]);
+  });
+});
+
 test("a session id is resolved under any project directory", async () => {
   await withRoot(async (root) => {
     // プロジェクト名は cwd のエンコードで内部形式。id だけで探せれば名前は問わない。

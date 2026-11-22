@@ -14,7 +14,15 @@ transcript だけでは足りないものがある。
 
 一方、hwc が起動する Claude には `--settings`（hook を足せる。ユーザーの設定と併存する）と `--plugin-dir`（mod を読ませる）を渡せる。mod API には応答のチャンクを流す `turn.step` と、`/context` と同じ計算の `$.session.usage()` がある。どちらも early access で、形は版で変わり得る。
 
-ここに書いた形は Claude Code 2.1.327〜2.1.328 と Herdr 0.9.5 の実機で確かめた。
+実行中のモデルと effort の切り替えには、次の事情がある（Claude Code 2.1.330 の実機で確かめた）。
+
+- `/model <alias>` と `/effort <level>` は入力欄から打てるが、選んだ値をユーザー設定（`~/.claude/settings.json` の `model` と `modelSettings.<モデル>.effortLevel`）へ既定として保存する。セッション限定にできるのはピッカーの `s` キーだけで、キー操作になる
+- キャッシュが温かく、現在のモデルが直前の応答を返したときは、`/model` が確認ダイアログ（「Switch model?」）を開いて `blocked` になる。キャッシュはモデルごとなので、切り替えた次の応答は会話全体を読み直す。`/effort` は 5.5 系ではキャッシュが残るので、ダイアログは出ない
+- CLI は `PreModelSwitch` と `PostModelSwitch` の hook を呼ぶ。`PreModelSwitch` は `allow` を返すとダイアログを開かずに切り替わる。1 回の `/model` で 2 回呼ばれ、`to_model` は違うが `requested_model` は同じ。`source` は `command` / `picker` / `sdk` / `auto` / `resume`
+- effort を明示していないセッションでモデルを切り替えると、effort はそのモデルの保存値へ動く。明示済みなら引き継がれる
+- 結果は transcript の user 行（`<local-command-stdout>`）に残る。`/model` は `Set model to ...` か、取り消しなら `Kept model as ...`
+
+ここに書いた形は Claude Code 2.1.327〜2.1.330 と Herdr 0.9.5 の実機で確かめた。
 
 ## Decision
 
@@ -39,6 +47,17 @@ transcript だけでは足りないものがある。
 - 質問には Web から答えられる。Esc でダイアログを閉じ、`tool_result` が現れてから、選んだ内容を `質問への回答:` で始まる本文として送る（[入力](agent-input.md)）。先頭の行を固定するのは、モデルが書いた質問文が `/` や `!` で始まるとコマンドとして解釈され得るため
 - 承認は Web から送らない。Esc は拒否として働き、本文は承認の返事にならない
 
+### モデルと effort の切り替え
+
+- hwc から起動した Claude の、待機中（`idle` / `done`）のペインだけ。`POST /api/panes/:id/switch-model` が `{ model, effort }` を受け、BFF は起動のときと同じ候補（エイリアスと 5 段階）にあることを確かめてから、入力欄へ `/model <alias>` と `/effort <level>` を通常の送信として送る。コマンドに混ぜる値は候補にあるものだけで、キーは送らない
+- 現在のモデルと同じ系統なら `/model` は送らない。モデルを変えるときは、effort が保存値へ動かないよう、画面に見えていた値でも必ず `/effort` を送る。順序はモデルが先
+- モデルの確認ダイアログは、hwc の画面で確かめたものだけ hook が許可する。BFF が `claude/model-switch/<session id>.allow.json` に頼むエイリアスと期限（15 秒）を置いてから送り、`PreModelSwitch` の hook が `source` が `command` で `requested_model` が印と一致するときだけ `allow` を返す。印の無い切り替え（端末で打った `/model`、ピッカー、自動）は何も返さず、CLI の確認に任せる。ダイアログを閉じるために Enter は送らない
+- モデルの完了は `PostModelSwitch` の hook が `<session id>.done.json` に解決済みのモデル id を書いて知らせる。すでにそのモデルのセッション（BFF の再起動や端末での切り替えで、transcript の画面とセッションのモデルがずれたとき）では、CLI は切り替えず hook も呼ばないが、`Set model to ...` は書くので、transcript のローカルコマンドの結果でも確かめる（取り消しの `Kept model as ...` は成功にしない）。effort の完了は同じく `Set effort level to <level>` で確かめる。どちらも 100ms 間隔で、モデルは 8 秒、effort は 5 秒まで待つ。確かめられなければ成功にしない
+- 確かめられず、`agent_status` が `blocked` のままなら、BFF が開いたままの確認ダイアログを Esc で閉じる（hwc からは答えられないため）。`blocked` でなければ何も送らない
+- 切り替えた値は、次の応答が transcript に載るまでの間だけ、会話のスナップショットの `model` / `effort` を補い、etag も変える。応答が載ったら transcript の値が正になる。`/new` の後に備えて、起動時の指定の預かり（[起動](agent-launch.md)）も切り替えた値にする
+- ペインごとに 1 本。重ねた要求は 409
+- Claude は選んだ値をユーザー設定の既定にも保存する。hwc は止められず、UI に注記する（hwc の画面から起動するときは起動時に値を指定するので、hwc の起動には及ばない）
+
 ### 実行中の様子と使用量
 
 - 段階（考えている・ツール実行中）は transcript から導く。現在のターンの起点（最後の prompt）より後ろの `api-request` と assistant の `requestRef`、`tool_use` と `tool_result` の `tool_use_id` を突き合わせる。ターンはファイルの位置で切り、時刻では切らない
@@ -54,6 +73,10 @@ transcript だけでは足りないものがある。
 - エイリアスは CLI が最新モデルへ解決するので、hwc はリリースごとの対応表を持たない。CLI がエイリアスや段階を変えたら hwc も更新する
 - `--plugin-dir` を知らない古い CLI（2.1.265 未満）では hwc からの起動が失敗する。段階の導出は 2.1.327 以降を前提にする
 - transcript は BFF と CLI が同じユーザー・同じホストで動いている前提
+- モデルと effort の切り替えは、端末から素で起動する `claude` の既定のモデルと effort も書き換える。hwc の画面から起動するペインは起動時に値を指定するので、影響を受けない
+- 切り替えの許可と記録は、hwc が `--settings` で渡す hook に依る。`PreModelSwitch` / `PostModelSwitch` を足す前に起動したペインには無く、`/model` が確認ダイアログで止まるため、確かめられずに失敗する（Esc で閉じる）。作り直したペインから使える
+- `/effort` の結果の文言は CLI の版で変わり得る。変わると、切り替えは通るが hwc は確かめられず、端末で確かめるよう案内する
+- 5.5 系以外のモデルでは `/effort` もキャッシュを切るので、確認ダイアログが開き得る。hook は `/effort` を許可しないため、確かめられずに失敗して Esc で閉じる
 
 ## Alternatives
 
@@ -63,3 +86,7 @@ transcript だけでは足りないものがある。
 - **版付きのモデル id や表示名の対応表を hwc に持つ**: リリースごとに更新が要り、既定が最新に追従しなくなる
 - **transcript の `usage` とエイリアスから window を出す**: 呼び出しごとの値で文脈量と意味が違い、window も名前から決まらない（`--model haiku` の応答が 1M だった）
 - **TUI のフォームをキー操作で再現して答える**: 汎用のキー入力を持たない方針に反し、タブの状態も読めない
+- **確認ダイアログに Enter を送る**: 新しいキーを足し、ダイアログの文言を画面から照合する必要がある。hook の許可なら、hwc の確認を通った切り替えだけを許可でき、画面を解釈しない
+- **ピッカーの `s` キーでセッション限定にする**: 既定を書き換えずに済むが、ピッカーのキー操作になる。スマホには矢印キーも無い
+- **切り替えの後に、書き換わった既定を元へ戻す**: hwc がユーザーの `~/.claude` の設定を書き換えることになる。ユーザーの設定は書き換えない
+- **`ConfigChange` の hook で既定の保存を止める**: `/model` の保存では呼ばれなかった

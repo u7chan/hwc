@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { claudeSettingsJson, ensureClaudeSettings } from "./claude-settings";
 
-test("every hook calls the same command with the sidecar root as its argument", () => {
+test("every hook calls the same command with the sidecar and model-switch roots as arguments", () => {
   const settings = JSON.parse(
     claudeSettingsJson({
       runtime: "/opt/bun/bin/bun",
       script: "/srv/hwc/src/server/claude-hook.ts",
       root: "/var/state/hwc/claude/pending",
+      switches: "/var/state/hwc/claude/model-switch",
       live: "/var/state/hwc/claude/live",
     }),
   );
@@ -17,8 +18,10 @@ test("every hook calls the same command with the sidecar root as its argument", 
   expect(Object.keys(settings.hooks).sort()).toEqual(
     [
       "PermissionRequest",
+      "PostModelSwitch",
       "PostToolUse",
       "PostToolUseFailure",
+      "PreModelSwitch",
       "PreToolUse",
       "SessionEnd",
       "Stop",
@@ -31,7 +34,7 @@ test("every hook calls the same command with the sidecar root as its argument", 
     ),
   );
   expect([...commands]).toEqual([
-    "'/opt/bun/bin/bun' '/srv/hwc/src/server/claude-hook.ts' '/var/state/hwc/claude/pending'",
+    "'/opt/bun/bin/bun' '/srv/hwc/src/server/claude-hook.ts' '/var/state/hwc/claude/pending' '/var/state/hwc/claude/model-switch'",
   ]);
   expect(settings.env).toEqual({ HWC_CLAUDE_LIVE_DIR: "/var/state/hwc/claude/live" });
 });
@@ -42,12 +45,13 @@ test("paths with spaces and quotes stay one word each", () => {
       runtime: "/opt/my bun/bun",
       script: "/srv/it's/claude-hook.ts",
       root: "/var/state/pending",
+      switches: "/var/state/switch",
       live: "/var/state/live",
     }),
   );
 
   expect(settings.hooks.Stop[0].hooks[0].command).toBe(
-    `'/opt/my bun/bun' '/srv/it'\\''s/claude-hook.ts' '/var/state/pending'`,
+    `'/opt/my bun/bun' '/srv/it'\\''s/claude-hook.ts' '/var/state/pending' '/var/state/switch'`,
   );
 });
 
@@ -61,6 +65,9 @@ test("the settings file is written under the state directory and left alone when
     const settings = JSON.parse(await readFile(launch.settings, "utf8"));
     expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain(
       join(stateRoot, "claude", "pending"),
+    );
+    expect(settings.hooks.PreModelSwitch[0].hooks[0].command).toContain(
+      join(stateRoot, "claude", "model-switch"),
     );
     expect(settings.env.HWC_CLAUDE_LIVE_DIR).toBe(join(stateRoot, "claude", "live"));
     expect((await stat(join(stateRoot, "claude", "live"))).mode & 0o777).toBe(0o700);
