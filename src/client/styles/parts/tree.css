@@ -48,7 +48,7 @@
   transition: opacity 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* 開閉の動き。面はフェードし、中身だけ並べる側から 8px 収める。幅（260px）は補間しない。
+/* 開閉の動き。面はフェードし、中身だけ並べる側から 8px 収める。幅は補間しない。
    本文が毎フレーム折り返して文字が揺れ、長い端末出力では重いため、レイアウトは
    1 フレームで確定させる。 */
 .hwc-tree-view[data-shown="true"] {
@@ -75,7 +75,7 @@
 }
 
 /* 広いセルでは会話の脇に並べる。幅は token、切り替えの閾値は layout.ts の
-   TREE_SIDE_MIN_WIDTH。区切り線は並べた側に引く。 */
+   treeSideMinWidth。区切り線は並べた側に引く。 */
 .hwc-tree-view[data-side="true"] {
   position: static;
   z-index: auto;
@@ -97,6 +97,23 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* 設定のサンプル。行は本物と同じクラスで描き、幅も並べるときのツリーと同じ変数にする。 */
+.hwc-tree-sample {
+  width: var(--hwc-tree-width);
+  max-width: 100%;
+  padding: var(--space-2) 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-content);
+}
+
+/* 本物はポインタの画面では行に乗ったときだけ出す。サンプルは、フォルダの行から引かれる
+   幅が分かるよう常に出す。 */
+.hwc-tree-sample .hwc-tree-action {
+  opacity: 1;
 }
 
 .hwc-tree-item {
@@ -156,7 +173,7 @@
   background: transparent;
   color: var(--color-text);
   font-family: var(--font-mono);
-  font-size: var(--text-body);
+  font-size: var(--hwc-tree-font-size);
   text-align: left;
   text-decoration: none;
 }

@@ -3,6 +3,7 @@ import type { AppState, PaneState } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
 import { PaneDetail } from "./PaneDetail";
 import { attachmentStore } from "./attachment-store";
+import { fileTreeFontSize, fileTreeWidthPx } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
 import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
@@ -27,6 +28,7 @@ import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
 import { useFavicon } from "./app/hooks/use-favicon";
+import { useFileTreeDisplay } from "./app/hooks/use-file-tree-display";
 import { useFileTreeSide } from "./app/hooks/use-file-tree-side";
 import { useListScope } from "./app/hooks/use-list-scope";
 import { useLiveUpdate } from "./app/hooks/use-live-update";
@@ -326,6 +328,12 @@ export function App() {
   const { theme, scheme, changeTheme } = useThemePreference();
   const { prefs: splitPrefs, change: changeSplitPrefs } = useSplitPreference();
   const { side: treeSide, change: changeTreeSide } = useFileTreeSide();
+  const {
+    size: treeSize,
+    width: treeWidth,
+    changeSize: changeTreeSize,
+    changeWidth: changeTreeWidth,
+  } = useFileTreeDisplay();
   const { interval: liveUpdate, change: changeLiveUpdate } = useLiveUpdate();
   useLiveUpdateTick(liveUpdateMs(liveUpdate));
   // 委譲の検知は「エージェントが付いたペインが前回のスナップショットに無かった」で行う。
@@ -1186,6 +1194,7 @@ export function App() {
         compact={compact}
         scheme={scheme}
         treeSide={treeSide}
+        treeWidth={fileTreeWidthPx(treeWidth)}
         current={isCurrent}
         // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
         labeled={splitCells}
@@ -1391,6 +1400,8 @@ export function App() {
       style={{
         "--hwc-sidebar-width": `${sidebarWidth}px`,
         "--hwc-split-duration": `${splitMotionDuration(splitPrefs.motion)}ms`,
+        "--hwc-tree-width": `${fileTreeWidthPx(treeWidth)}px`,
+        "--hwc-tree-font-size": fileTreeFontSize(treeSize),
       }}
     >
       <div class="hwc-body">
@@ -1515,6 +1526,10 @@ export function App() {
               onLiveUpdateChange={changeLiveUpdate}
               treeSide={treeSide}
               onTreeSideChange={changeTreeSide}
+              treeSize={treeSize}
+              onTreeSizeChange={changeTreeSize}
+              treeWidth={treeWidth}
+              onTreeWidthChange={changeTreeWidth}
               revision={revision}
               connection={connection}
               wide={wide}

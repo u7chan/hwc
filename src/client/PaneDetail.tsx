@@ -105,6 +105,8 @@ type PaneDetailProps = {
   scheme: "light" | "dark";
   // 広いセルでツリーを会話の左右どちらに並べるか。狭いセルでは重ねるので効かない。
   treeSide: FileTreeSide;
+  // 並べるときのツリーの幅（px）。並べるのに要るセルの幅はここから決まる。
+  treeWidth: number;
   // 枠線がハイライトしている、操作の対象になっているセルか。キーの対象を 1 つに絞る。
   current: boolean;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
@@ -161,6 +163,7 @@ export function PaneDetail(props: PaneDetailProps) {
     compact,
     scheme,
     treeSide,
+    treeWidth,
     current,
     labeled,
     showSpace,
@@ -200,7 +203,7 @@ export function PaneDetail(props: PaneDetailProps) {
     focusRequest: treeFocus,
     close: closeTree,
     toggle: toggleTree,
-  } = useFileTreePanel({ paneId: pane.id, current, frameWidth });
+  } = useFileTreePanel({ paneId: pane.id, current, frameWidth, treeWidth });
   const previewPath = useFilePreview(pane.id);
   // ライブ更新でスペースの根が変わると、取得済みの相対パスと選択中のファイルの意味が
   // 変わる。次の取得から新しい根で解決するよう、store の根を合わせる。

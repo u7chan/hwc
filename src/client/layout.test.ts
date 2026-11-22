@@ -13,6 +13,7 @@ import {
   parseSidebarWidth,
   saveSidebarCollapsed,
   saveSidebarWidth,
+  treeSideMinWidth,
 } from "./layout";
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -119,4 +120,10 @@ test("an unreadable collapsed flag leaves the list open", () => {
   expect(loadSidebarCollapsed(null)).toBe(false);
   expect(() => saveSidebarCollapsed(deniedStorage(), true)).not.toThrow();
   expect(() => saveSidebarCollapsed(null, true)).not.toThrow();
+});
+
+test("the file tree sits beside the chat only when 420px of the chat is left", () => {
+  expect(treeSideMinWidth(260)).toBe(680);
+  expect(treeSideMinWidth(220)).toBe(640);
+  expect(treeSideMinWidth(340)).toBe(760);
 });
