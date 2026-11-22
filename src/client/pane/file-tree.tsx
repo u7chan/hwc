@@ -57,11 +57,9 @@ type TreeContext = FileTreeProps & {
 export type TreeFocusRequest = { token: number; focus: boolean };
 
 // 深さごとの字下げ。行の右側は揃えたいので、左だけを inline で決める。
-// 行は左右 8px の透明な枠で面を内側へ引いているので、字下げの基準は残りの 8px
-// （--space-2）にする。12px は --space-3。深い階層でも名前に幅が残るよう、字下げは
-// 1 段だけにする。
+// 12px は --space-3。深い階層でも名前に幅が残るよう、字下げは 1 段だけにする。
 export function indent(depth: number) {
-  return { paddingLeft: `calc(var(--space-2) + ${depth} * var(--space-3))` };
+  return { paddingLeft: `calc(var(--space-4) + ${depth} * var(--space-3))` };
 }
 
 // 開ける行も開けない行も、同じように composer へ運べる。淡色は hwc が配信できない

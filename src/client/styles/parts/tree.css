@@ -123,6 +123,10 @@
 /* フォルダの開閉。高さは grid の 0fr / 1fr で動かし、子は折りたたみ中も
    クリップして保持する（再展開で取り直さない）。 */
 .hwc-tree-slot {
+  /* 開いた中身は、親の行より上の層に置く。main では子の行（ブロック）が
+     親の行（フレックスの項目）より後に描かれ、行の境界 1px は子が受け取る。 */
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 160ms cubic-bezier(0.2, 0, 0, 1);
@@ -159,27 +163,22 @@
 }
 
 /* 行はボタンと開けない行の 2 種で同じ形にする。左の字下げだけ inline で
-   深さに合わせ、行の右端を揃える。
-
-   面は箱ではなく背景で内側へ引く。透明な枠（上下 4px・左右 8px）と
-   background-clip で塗る範囲だけを狭め、箱・当たり判定・描画順は main と同じに
-   保つ。position や isolation を行に与えると行の描画が位置指定の段へ上がり、
-   隣り合う行の境界の当たり先が main と変わってしまう。 */
+   深さに合わせ、行の右端を揃える。 */
 .hwc-tree-row {
+  position: relative;
+  /* 面は疑似要素で行の内側に描く。負の z-index を行の中で閉じ込め、パネルの
+     背景の後ろへ回り込ませない。 */
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
   min-height: var(--tap);
   margin: 0;
-  padding: 0 var(--space-2) 0 var(--space-2);
-  border-style: solid;
-  border-width: var(--space-1) var(--space-2);
-  border-color: transparent;
-  /* 内側の角を --radius-sm の円にする。外側は枠のぶんだけ足す。 */
-  border-radius: calc(var(--radius-sm) + var(--space-2)) / calc(var(--radius-sm) + var(--space-1));
-  background-clip: padding-box;
-  background-color: transparent;
+  padding: 0 var(--space-4) 0 var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--color-text);
   font-family: var(--font-mono);
   font-size: var(--hwc-tree-font-size);
@@ -187,20 +186,31 @@
   text-decoration: none;
 }
 
+/* 行の面はパネルの端と隣の行から内側へ引く。塗るのは疑似要素だけにして、
+   行の箱・字下げ・当たり判定・角の当たり先は変えない。 */
+.hwc-tree-item > .hwc-tree-row::before,
+.hwc-tree-line::before {
+  content: "";
+  position: absolute;
+  inset: var(--space-1) var(--space-2);
+  z-index: -1;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
 button.hwc-tree-row {
   cursor: pointer;
 }
 
-/* 行の面はポインタが行にも「…」にも乗っている間涂る。操作は行の兄弟なので、
-   行の :hover だけでは「…」に乗ったときに行の面が消える。 */
-button.hwc-tree-row:hover,
-.hwc-tree-line:hover > .hwc-tree-row {
-  background-color: var(--color-raised);
+/* フォルダの行は右端の操作とひとつの面に見せるため、行ではなく line を塗る。 */
+.hwc-tree-item > button.hwc-tree-row:hover::before,
+.hwc-tree-line:hover::before {
+  background: var(--color-raised);
 }
 
-button.hwc-tree-row:active,
-.hwc-tree-line:active > .hwc-tree-row {
-  background-color: var(--color-line);
+.hwc-tree-item > button.hwc-tree-row:active::before,
+.hwc-tree-line:active::before {
+  background: var(--color-line);
 }
 
 .hwc-tree-row:focus-visible {
@@ -208,9 +218,13 @@ button.hwc-tree-row:active,
 }
 
 /* フォルダの行と、その右端の操作。行はボタンなので、操作は入れ子にせず並べる。
-   行は操作の下まで伸ばして面を 1 枚で塗り、重なった 44px は後ろの兄弟である
-   操作が受け取る（描画順は main と同じ）。 */
+   line は重ね順を 1 つ上げる。main ではフォルダの行（フレックスの項目）が後続の
+   行（ブロック）より上に描かれるので、行の境界 1px の当たり先を合わせるには、
+   line を後続の行より上の層に置く必要がある。 */
 .hwc-tree-line {
+  position: relative;
+  isolation: isolate;
+  z-index: 1;
   display: flex;
   align-items: center;
 }
@@ -218,36 +232,47 @@ button.hwc-tree-row:active,
 .hwc-tree-line > .hwc-tree-row {
   flex: 1;
   min-width: 0;
-  padding-right: calc(var(--tap) - var(--space-2));
+  padding-right: 0;
 }
 
-/* 操作の当たり判定は 44px のまま、枠だけを 28px に縮めて面の内側に置く。
+/* 操作の当たり判定は 44px のまま、枠だけを --space-2 ぶん縮めて面の内側に置く。
    行の面は raised で塗られるので、操作は surface に落として押せる範囲を示す
    （一覧の開閉と同じ）。 */
 .hwc-tree-action {
+  position: relative;
+  isolation: isolate;
   flex: none;
   display: grid;
   place-items: center;
   width: var(--tap);
   height: var(--tap);
-  /* 行の箱の上へ重ね、面を 1 枚に見せる。 */
-  margin: 0 0 0 calc(-1 * var(--tap));
+  margin: 0;
   padding: 0;
-  border: var(--space-2) solid transparent;
-  border-radius: calc(var(--radius-sm) + var(--space-2));
-  background-clip: padding-box;
-  background-color: transparent;
+  border: 0;
+  background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
 }
 
+.hwc-tree-action::before {
+  content: "";
+  position: absolute;
+  inset: var(--space-2);
+  z-index: -1;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+.hwc-tree-action:hover::before {
+  background: var(--color-surface);
+}
+
 .hwc-tree-action:hover {
-  background-color: var(--color-surface);
   color: var(--color-text);
 }
 
-.hwc-tree-action:active {
-  background-color: var(--color-line);
+.hwc-tree-action:active::before {
+  background: var(--color-line);
 }
 
 .hwc-tree-action:focus-visible {
@@ -267,8 +292,8 @@ button.hwc-tree-row:active,
 }
 
 /* 選択中のファイル。会話のプレビューと同じ対象を示す。 */
-.hwc-tree-row[data-selected="true"] {
-  background-color: var(--color-selected);
+.hwc-tree-item > .hwc-tree-row[data-selected="true"]::before {
+  background: var(--color-selected);
 }
 
 /* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。
@@ -295,16 +320,13 @@ button.hwc-tree-row:active,
   white-space: nowrap;
 }
 
-/* 読み込み中・空・打ち切り・失敗の 1 行。行の高さと字下げはツリーの行と揃える。 */
+/* 読み込み中・空・打ち切り・失敗の 1 行。行の高さはツリーの行と揃える。 */
 .hwc-tree-status {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-height: var(--tap);
-  padding: 0 var(--space-2) 0 var(--space-2);
-  border-style: solid;
-  border-width: var(--space-1) var(--space-2);
-  border-color: transparent;
+  padding: 0 var(--space-4) 0 var(--space-4);
   color: var(--color-secondary);
   font-size: var(--text-secondary);
 }
