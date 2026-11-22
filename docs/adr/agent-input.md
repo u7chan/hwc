@@ -17,7 +17,7 @@ Herdr は最後のタブの最後のペインを閉じると、スペースご�
   - 停止: エージェントには Esc を、`agentStatus === "working"` のときだけ送る。シェルには C-c を、前景プロセスがシェルと別のときだけ送る。条件を満たさない要求はキーを送らずに成功として返す
   - 既知のフォルダ信頼確認への回答: Enter を 1 回だけ送る。BFF が `pane.read` の `detection` から確認画面を照合して識別子を発行し、回答 API は識別子だけを受ける。照合の条件はエージェントごとの ADR（[Codex](codex-integration.md)、[pi](pi-integration.md)）が定める。同じペインの判定と回答は直列化し、送信結果が不明でも再送しない
   - Claude の AskUserQuestion への回答: Esc でダイアログを閉じ、閉じたことを transcript で確かめてから本文を送る（[Claude](claude-integration.md)）
-  - Claude のモデルと effort の切り替えで、確かめられずに開いたままの確認ダイアログを閉じる: Esc を、切り替えを頼んだ直後に `agentStatus === "blocked"` のときだけ送る。ダイアログの確認に Enter は送らない。hwc の確認を通った切り替えだけを、hook が許可する（[Claude](claude-integration.md)）
+  - Claude のモデルと effort の切り替えで、確かめられなかったときに、開いたままの確認ダイアログを閉じる: Esc を、`agentStatus === "blocked"` で、頼んでから新しい発言も応答待ち（pending）も現れていないときだけ送る。`blocked` には権限確認や質問の待ちも含まれ、待つ間に別のクライアントが発言していれば、その待ちを拒否してしまうため。会話を読めないときも送らない。ダイアログの確認に Enter は送らない。hwc の確認を通った切り替えだけを、hook が許可する（[Claude](claude-integration.md)）
 - スペースの最後のペインは `pane.close` しない。エージェントがいれば終了だけを要求してシェルとペインを残し、シェルだけのペインは閉じさせない
 - エージェントの終了は `agent.prompt` で `/quit` を送る。`pane.process_info` で、シェルがエージェントを前景ジョブとして待っていると確かめたときだけ送る。Ctrl+D は送らない。失敗しても `pane.close`・シグナル・別のキーへフォールバックしない
 - 確認中のペインへの通常入力と停止は `confirmation_pending` で拒否する。確認への回答に通常入力の経路を使わせない

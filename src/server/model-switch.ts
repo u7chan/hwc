@@ -90,9 +90,19 @@ export function createModelSwitcher(
   const switched = new Map<string, Switched>();
 
   // 確認ダイアログが開いたままなら閉じる。開いたままだと、hwc からは答えられず、端末へ戻るしか
-  // なくなる。Esc は blocked のときだけ送る（docs/adr/agent-input.md）。
-  const dismissDialog = async (input: SwitchInput) => {
+  // なくなる。Esc は blocked のときだけ、さらに頼んだ後に新しい発言か応答待ちが現れていないときだけ
+  // 送る（docs/adr/agent-input.md）。blocked には権限確認や質問の待ちも含まれ、待っている間に
+  // 別のクライアントが発言して権限確認に入っていると、その確認を Esc で拒否してしまう。
+  // 質問への回答が pending を照合してから Esc を送るのと同じく、確かめられないときは送らない。
+  const dismissDialog = async (input: SwitchInput, since: number) => {
     if (!input.blocked()) return;
+    try {
+      const snapshot = await clients.chat.snapshot(input.sessionId);
+      if (snapshot.pending !== undefined) return;
+      if (snapshot.messages.some((message) => message.at >= since)) return;
+    } catch {
+      return;
+    }
     await clients.panes.sendKeys({ paneId: input.paneId, keys: ["esc"] }).catch(() => {});
   };
 
@@ -139,7 +149,7 @@ export function createModelSwitcher(
       if (now() >= deadline) break;
     }
     await clearSwitch(clients.root, sessionId).catch(() => {});
-    await dismissDialog(input);
+    await dismissDialog(input, sentAt);
     return { ok: false, outcome: failure("switch_unconfirmed") };
   };
 
@@ -166,7 +176,7 @@ export function createModelSwitcher(
       }
       if (now() >= deadline) break;
     }
-    await dismissDialog(input);
+    await dismissDialog(input, sentAt);
     return failure("switch_unconfirmed");
   };
 

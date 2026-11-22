@@ -40,6 +40,13 @@ type World = {
   snapshot: Error | null;
   sendFails: string | null;
   blocked: boolean;
+  // `/model` を送った後に、会話の取得が失敗するか。
+  chatBreaksAfterSend: boolean;
+  // `/model` を取り消したときの結果（`Kept model as ...`）を CLI が書くか。確認ダイアログを
+  // 開いたまま Esc で閉じた場合に起きる。
+  modelCancel: boolean;
+  // 応答待ち（権限確認など）が会話に現れているか。
+  pending: boolean;
 };
 
 function setup(overrides: Partial<World> = {}) {
@@ -55,6 +62,9 @@ function setup(overrides: Partial<World> = {}) {
     snapshot: null,
     sendFails: null,
     blocked: false,
+    chatBreaksAfterSend: false,
+    modelCancel: false,
+    pending: false,
     ...overrides,
   };
   const calls: string[] = [];
@@ -104,6 +114,10 @@ function setup(overrides: Partial<World> = {}) {
             throw new Error("socket");
           const model = /^\/model (\w+)$/.exec(text)?.[1];
           if (model !== undefined && world.hook) await runHook(sessionOf(paneId), model);
+          if (model !== undefined && world.chatBreaksAfterSend) world.snapshot = new Error("gone");
+          if (model !== undefined && world.modelCancel) {
+            outputs.push("Kept model as `Haiku 5.5`");
+          }
           if (model !== undefined && world.modelEcho) {
             outputs.push(`Set model to \`${model}\` and saved as your default for new sessions`);
           }
@@ -128,6 +142,9 @@ function setup(overrides: Partial<World> = {}) {
             truncated: false,
             context: null,
             compaction: null,
+            ...(world.pending
+              ? { pending: { kind: "tool", toolUseId: "t1", tool: "Bash", summary: "ls" } }
+              : {}),
           } satisfies ChatSnapshot;
         },
         localCommandOutputs: async () => [...outputs],
@@ -303,11 +320,55 @@ describe("when the switch cannot be confirmed", () => {
   });
 
   test("a cancelled switch is not a confirmation", async () => {
-    const t = setup({ hook: false, blocked: true });
+    // 確認ダイアログを閉じると、CLI は `Set model to` ではなく `Kept model as` を書く。
+    const t = setup({ hook: false, modelCancel: true });
 
     const outcome = await t.switcher.switch(t.input({ model: OPUS, effort: "xhigh" }));
 
     expect(outcome).toEqual({ ok: false, status: 502, error: "switch_unconfirmed" });
+    expect(sends(t.calls)).toEqual(["/model opus"]);
+  });
+
+  test("Esc is not sent when a new message arrived while waiting, which may be another prompt", async () => {
+    // 待っている間に別のクライアントが発言して、権限確認に入った場合。
+    const t = setup({
+      hook: false,
+      blocked: true,
+      messages: [{ id: "m1", role: "user", text: "続けて", at: 10_000_000_000_000 }],
+    });
+
+    const outcome = await t.switcher.switch(t.input({ model: OPUS, effort: "xhigh" }));
+
+    expect(outcome).toEqual({ ok: false, status: 502, error: "switch_unconfirmed" });
+    expect(t.calls).toEqual([`send:${PANE}:true:/model opus`]);
+  });
+
+  test("Esc is not sent while a question or permission wait is pending", async () => {
+    const t = setup({ hook: false, blocked: true, pending: true });
+
+    await t.switcher.switch(t.input({ model: OPUS, effort: "xhigh" }));
+
+    expect(t.calls).toEqual([`send:${PANE}:true:/model opus`]);
+  });
+
+  test("Esc is not sent when the conversation can no longer be read", async () => {
+    const t = setup({ hook: false, blocked: true, chatBreaksAfterSend: true });
+
+    await t.switcher.switch(t.input({ model: OPUS, effort: "xhigh" }));
+
+    expect(t.calls).toEqual([`send:${PANE}:true:/model opus`]);
+  });
+
+  test("a message from before the request does not hold Esc back", async () => {
+    const t = setup({
+      hook: false,
+      blocked: true,
+      messages: [{ id: "m0", role: "agent", text: "前の応答", at: 1 }],
+    });
+
+    await t.switcher.switch(t.input({ model: OPUS, effort: "xhigh" }));
+
+    expect(t.calls.at(-1)).toBe("keys:esc");
   });
 
   test("Esc is not sent when the pane is not waiting on a dialog", async () => {
