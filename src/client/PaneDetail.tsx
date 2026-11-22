@@ -975,6 +975,7 @@ export function PaneDetail(props: PaneDetailProps) {
       onOpenImage={onOpenImage}
       onDragStart={startTreeDrag}
       onCreateSpace={props.onCreateSpace}
+      workspacePath={props.context.workspacePath}
     />
   ) : null;
 

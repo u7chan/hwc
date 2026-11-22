@@ -1,10 +1,19 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef } from "preact/hooks";
-import { FILE_TREE_LIMIT, type FileTreeEntry, type FileTreeListing } from "../../shared/file-tree";
+import { useEffect, useRef, useState } from "preact/hooks";
+import {
+  FILE_TREE_LIMIT,
+  type FileTreeDir,
+  type FileTreeEntry,
+  type FileTreeListing,
+} from "../../shared/file-tree";
 import { previewUrl } from "../api";
+import { useCopy } from "../copy";
+import { fileReference } from "../file-reference";
 import type { FileTreeView } from "../file-tree-store";
 import { treeArrowIntent } from "../file-tree-key";
-import { ChevronRightIcon, PlusIcon } from "../icons";
+import { ChevronRightIcon, CopyGlyph, MoreIcon, PlusIcon } from "../icons";
+import { MENU_ID, Menu } from "../Menu";
+import { shortenPath } from "../select";
 import { Spinner } from "../Spinner";
 
 type FileTreeProps = {
@@ -29,6 +38,19 @@ type FileTreeProps = {
   onDragStart: (event: DragEvent, entry: FileTreeEntry) => void;
   // フォルダを作業ディレクトリにした新しいスペースを作る。
   onCreateSpace: (path: string) => void;
+  // 行のメニューでコピーする絶対パスを組み立てる。ツリーの根はペインの cwd ではなく
+  // スペースのチェックアウトなので、根からの相対パスだけでは貼り付け先で開けない。
+  workspacePath: string | null;
+};
+
+// フォルダの行から開くメニュー。開いている 1 つだけを描く。
+type RowMenu = { path: string; name: string; trigger: HTMLElement; open: boolean };
+
+// ツリーの行へ渡すもの。メニューの開閉は FileTree が持ち、行は開く合図だけを送る。
+type TreeContext = FileTreeProps & {
+  openMenu: (entry: FileTreeDir, trigger: HTMLElement) => void;
+  // 開いているメニューのフォルダ。行の「…」の aria-expanded に使う。
+  openMenuPath: string | null;
 };
 
 export type TreeFocusRequest = { token: number; focus: boolean };
@@ -48,7 +70,7 @@ function dragProps(tree: FileTreeProps, entry: FileTreeEntry) {
   };
 }
 
-function renderChildren(props: FileTreeProps, path: string, depth: number): ComponentChildren[] {
+function renderChildren(props: TreeContext, path: string, depth: number): ComponentChildren[] {
   const listing: FileTreeListing | undefined = props.view.dirs.get(path);
   if (listing === undefined) {
     const failed = props.view.failed.has(path);
@@ -92,7 +114,7 @@ function renderChildren(props: FileTreeProps, path: string, depth: number): Comp
   return rows;
 }
 
-function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreeProps }) {
+function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext }) {
   const { entry, depth, tree } = props;
   const style = indent(depth);
 
@@ -147,11 +169,13 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: FileTreePro
           <button
             type="button"
             class="hwc-tree-action"
-            aria-label={`${entry.path} で新しいスペース`}
-            title="新しいスペース"
-            onClick={() => tree.onCreateSpace(entry.path)}
+            aria-label={`${entry.path} のメニュー`}
+            aria-haspopup="menu"
+            aria-expanded={tree.openMenuPath === entry.path}
+            aria-controls={MENU_ID}
+            onClick={(event) => tree.openMenu(entry, event.currentTarget)}
           >
-            <PlusIcon size={16} />
+            <MoreIcon />
           </button>
         </div>
         {expanded || loaded || failed ? (
@@ -290,10 +314,54 @@ function onTreeKey(event: KeyboardEvent, list: HTMLUListElement, onToggle: (path
   }
 }
 
+// フォルダ 1 つの操作。行の右端にあった「+」の新しいスペースをここへ移し、パスのコピーを並べる。
+// コピーする文字列はメニューの中に出す。行が持つのは根からの相対パスだけなので、
+// 行の名前だけでは何がクリップボードに入るか分からない。
+function RowMenuCard(props: { name: string; copyTarget: string; onNewSpace: () => void }) {
+  const { copiedId, copy } = useCopy();
+  const copied = copiedId === "tree-path";
+  return (
+    <>
+      <div class="hwc-menu-head hwc-menu-space-head">
+        <span class="hwc-menu-space-text">
+          <span class="hwc-menu-space-name">{props.name}</span>
+          <span class="hwc-menu-space-path" title={props.copyTarget}>
+            {shortenPath(props.copyTarget)}
+          </span>
+        </span>
+        <button
+          type="button"
+          role="menuitem"
+          class="hwc-menu-copy"
+          aria-label={copied ? "コピーしました" : "パスをコピー"}
+          onClick={() => copy("tree-path", props.copyTarget)}
+        >
+          <CopyGlyph copied={copied} />
+        </button>
+      </div>
+      <button type="button" role="menuitem" class="hwc-menu-item" onClick={props.onNewSpace}>
+        <PlusIcon size={14} />
+        新しいスペース
+      </button>
+    </>
+  );
+}
+
 // 根の行は出さない。ペイン見出しにリポジトリ名があり、直下から並べた方が浅く読める。
 export function FileTree(props: FileTreeProps) {
   const list = useRef<HTMLUListElement>(null);
   const handled = useRef(0);
+  const [rowMenu, setRowMenu] = useState<RowMenu | null>(null);
+
+  const openMenu = (entry: FileTreeDir, trigger: HTMLElement) => {
+    setRowMenu({ path: entry.path, name: entry.name, trigger, open: true });
+  };
+
+  // 閉じた合図を受けてからも、フェードアウトが終わるまで面を残す。Menu は unmount で
+  // 消さず、animation の完了を待って onExited を返す。
+  const closeMenu = () => {
+    setRowMenu((current) => (current === null ? null : { ...current, open: false }));
+  };
 
   // 根の一覧は開いた後に届く。行が無い間は待ち、届いたら 1 度だけ焦点を合わせる。
   // 展開のたびに dirs が変わっても、同じ開閉で焦点を取り直さない。
@@ -312,18 +380,47 @@ export function FileTree(props: FileTreeProps) {
     if (root !== null) onTreeKey(event, root, props.onToggle);
   };
 
+  const tree: TreeContext = {
+    ...props,
+    openMenu,
+    openMenuPath: rowMenu?.open === true ? rowMenu.path : null,
+  };
+
+  // メニューはスクロールする面の外に置く。行と同じ面に入れると、ツリーを閉じる間の inert で
+  // メニューごと押せなくなる。
   return (
-    <div
-      class="hwc-tree-view"
-      data-side={props.side ? "true" : undefined}
-      data-shown={props.shown ? "true" : "false"}
-      data-closing={props.closing ? "true" : undefined}
-      inert={props.closing}
-      aria-hidden={props.closing ? "true" : undefined}
-    >
-      <ul class="hwc-tree" aria-label="ファイルツリー" ref={list} onKeyDown={onKeyDown}>
-        {renderChildren(props, "", 0)}
-      </ul>
-    </div>
+    <>
+      <div
+        class="hwc-tree-view"
+        data-side={props.side ? "true" : undefined}
+        data-shown={props.shown ? "true" : "false"}
+        data-closing={props.closing ? "true" : undefined}
+        inert={props.closing}
+        aria-hidden={props.closing ? "true" : undefined}
+      >
+        <ul class="hwc-tree" aria-label="ファイルツリー" ref={list} onKeyDown={onKeyDown}>
+          {renderChildren(tree, "", 0)}
+        </ul>
+      </div>
+      {rowMenu === null ? null : (
+        <Menu
+          label={`${rowMenu.name} の操作`}
+          trigger={rowMenu.trigger}
+          open={rowMenu.open}
+          onClose={closeMenu}
+          onExited={() => setRowMenu((current) => (current?.open === false ? null : current))}
+          closeOnScroll
+        >
+          <RowMenuCard
+            name={rowMenu.name}
+            copyTarget={fileReference(props.workspacePath, rowMenu.path, true)}
+            onNewSpace={() => {
+              closeMenu();
+              props.onCreateSpace(rowMenu.path);
+            }}
+          />
+        </Menu>
+      )}
+    </>
   );
 }
