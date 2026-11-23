@@ -481,8 +481,8 @@ export async function createScenario(root: string): Promise<Scenario> {
         "| 一覧 | 空 |",
         "| 詳細 | 読み込み中 |",
         "",
-        // 1 列目と 2 列目の識別子が折り返せず、PC レイアウトの本文幅（832px）では最小幅の合計が
-        // わずかに超える。横スクロールになる表を確かめるための表。
+        // 識別子が折り返せず、表の最小幅が約 800px になる。プレビューの本文幅がそれを下回る
+        // （ビューポート 1280px で 636px）と横スクロールになる、確認用の表。
         "| JSON path | live（`~/.config/demo/settings.json`） | リポ（`config/settings.json`） | 管理状態 |",
         "| --- | --- | --- | --- |",
         '| `theme` | `"dark"` | `"dark"` | ✅ 管理（一致） |',

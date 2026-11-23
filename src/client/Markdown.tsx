@@ -191,7 +191,7 @@ function Table({ block }: { block: Extract<MdBlock, { kind: "table" }> }) {
       element.toggleAttribute("data-squeeze", element.scrollWidth > element.clientWidth);
     };
 
-    // 最初の 1 回は描画前に測る。遅れると、広い画面で一瞬だけ横スクロールの形が見える。
+    // 最初の 1 回は描画前に測る。遅れると、入りきらない PC 幅で一瞬だけ横スクロールの形が見える。
     fit();
 
     // 監視中の再計測は次のフレームへ送る。同じフレームで寸法を変えると、ブラウザが
