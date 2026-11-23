@@ -1,3 +1,4 @@
+import type { FileKind } from "./file-kind";
 import { agentGlyph } from "./select";
 
 type IconProps = { size?: number };
@@ -188,6 +189,82 @@ export function FolderIcon({ size = 16 }: IconProps) {
       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
     </Svg>
   );
+}
+
+// 開いたフォルダ。シェブロンの代わりに置くので、開閉が形で分かるようにする。
+// 前の面が倒れた線だけだと 16px では閉じた形と見分けにくいため、面もうっすら塗る。
+export function FolderOpenIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path
+        d="M6.6 14.1 8 11.7a1.8 1.8 0 0 1 1.5-.9H19.3a1.8 1.8 0 0 1 1.7 2.1l-1.4 5a1.8 1.8 0 0 1-1.7 1.2H4.8a1.8 1.8 0 0 1-1.8-1.6V6.6a1.8 1.8 0 0 1 1.8-1.6h3.5a1.8 1.8 0 0 1 1.6.7l.7 1a1.8 1.8 0 0 0 1.5.8h5.3a1.8 1.8 0 0 1 1.8 1.5v1.6z"
+        fill="currentColor"
+        fill-opacity="0.16"
+      />
+    </Svg>
+  );
+}
+
+// データと設定。中括弧 1 対で表す。
+export function DataIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M9.1 4.5c-1.4 0-2.2.8-2.2 2.2v3.4c0 1.2-.9 1.9-1.8 2.3.9.4 1.8 1.1 1.8 2.4v3.4c0 1.4.8 2.2 2.2 2.2" />
+      <path d="M14.9 4.5c1.4 0 2.2.8 2.2 2.2v3.4c0 1.2.9 1.9 1.8 2.3-.9.4-1.8 1.1-1.8 2.4v3.4c0 1.4-.8 2.2-2.2 2.2" />
+    </Svg>
+  );
+}
+
+// スタイルシート。CSS の記号をそのまま使う。
+export function StyleIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M10 4.8 8.3 19.2" />
+      <path d="M15.7 4.8 14 19.2" />
+      <path d="M4.9 9.3h14.5" />
+      <path d="M4.3 14.7h14.5" />
+    </Svg>
+  );
+}
+
+// シェルスクリプト。プロンプト 1 つで表す。
+export function ShellIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M5.2 7.4 9.6 12 5.2 16.6" />
+      <path d="M12 16.6h6.8" />
+    </Svg>
+  );
+}
+
+// ロックファイル。
+export function LockIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="4.5" y="10.5" width="15" height="9.5" rx="2.4" />
+      <path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7" />
+    </Svg>
+  );
+}
+
+// ファイルツリーの行と設定のサンプルで同じ割り当てを使う。
+export function FileKindIcon({ kind, size = 16 }: IconProps & { kind: FileKind }) {
+  switch (kind) {
+    case "code":
+      return <CodeIcon size={size} />;
+    case "data":
+      return <DataIcon size={size} />;
+    case "style":
+      return <StyleIcon size={size} />;
+    case "image":
+      return <ImageIcon size={size} />;
+    case "shell":
+      return <ShellIcon size={size} />;
+    case "lock":
+      return <LockIcon size={size} />;
+    case "file":
+      return <FileIcon size={size} />;
+  }
 }
 
 // 新しい会話。同じペインで会話だけを作り直すが、円を描き直す矢印は更新に見えるので、会話の吹き出しに + を添える。
@@ -417,11 +494,12 @@ export function StopIcon({ size = 20 }: IconProps) {
 }
 
 // Markdown のソース表示。プレビューの目と対になる山括弧で表す。
+// ツリーの行では 16px の 1 列に置くため、記号の欄いっぱいに広げる。
 export function CodeIcon({ size = 16 }: IconProps) {
   return (
     <Svg size={size}>
-      <path d="M9 8l-4 4 4 4" />
-      <path d="M15 8l4 4-4 4" />
+      <path d="M8.8 6.4 4.4 12l4.4 5.6" />
+      <path d="M15.2 6.4 19.6 12l-4.4 5.6" />
     </Svg>
   );
 }

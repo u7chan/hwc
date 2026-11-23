@@ -1,0 +1,1157 @@
+<!doctype html>
+<html lang="ja" data-theme="dark" data-icons="none" data-layout="files">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ファイルツリーのアイコン — デザインモック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Nerd Symbols Mono";
+        src: url("../../src/client/assets/fonts/NerdSymbolsMono.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      /* アプリのテーマ値をそのまま写す。種類の色は、テーマごとに調整済みの ANSI 色を使う。 */
+      :root {
+        color-scheme: light;
+
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-content: #ffffff;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-muted: #69707c;
+        --color-accent: #255cd6;
+        --color-selected: #e9f0ff;
+        --color-line: #dce0e7;
+        --color-control-line: #8490a1;
+        --color-attention: #a34c0a;
+        --color-attention-bg: #fff0da;
+        --color-success: #216549;
+        --color-success-bg: #e6f3ed;
+
+        --ansi-2: #216549;
+        --ansi-6: #0b6b7c;
+        --ansi-11: #a06c00;
+        --ansi-12: #3b6fe0;
+        --ansi-13: #a542b0;
+
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+
+        --radius-sm: 8px;
+        --radius-control: 12px;
+        --radius-panel: 16px;
+
+        --text-body: 1.0625rem;
+        --text-secondary: 0.8125rem;
+        --line-body: 1.5;
+        --tap: 44px;
+        --row-head: 56px;
+
+        /* 設定が上書きする 2 つ。値は選択肢の表と同じ。 */
+        --hwc-tree-width: 260px;
+        --hwc-tree-font-size: 17px;
+
+        --type-code: var(--ansi-12);
+        --type-data: var(--ansi-11);
+        --type-style: var(--ansi-13);
+        --type-image: var(--ansi-2);
+        --type-shell: var(--ansi-6);
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-content: #131619;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-muted: #8e97a1;
+        --color-accent: #94baff;
+        --color-selected: #23334e;
+        --color-line: #32373f;
+        --color-control-line: #606976;
+        --color-attention: #f6c57f;
+        --color-attention-bg: #352b1e;
+        --color-success: #8fdbb1;
+        --color-success-bg: #20392e;
+
+        --ansi-2: #98c379;
+        --ansi-6: #56b6c2;
+        --ansi-11: #f0d090;
+        --ansi-12: #7cc0ff;
+        --ansi-13: #d98fe8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      /* 開いたフォルダは、面をうっすら塗って開閉を分かりやすくする。 */
+      .glyph .tint {
+        fill: currentColor;
+        fill-opacity: 0.16;
+      }
+
+      .glyph {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        line-height: var(--line-body);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 24px 96px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.5rem;
+        font-weight: 600;
+        line-height: 1.3;
+        letter-spacing: -0.02em;
+      }
+
+      h2 {
+        margin: 0 0 8px;
+        font-size: 1.125rem;
+        font-weight: 600;
+      }
+
+      section {
+        margin-top: 40px;
+      }
+
+      .hero p,
+      .lead {
+        max-width: 82ch;
+        margin: 0 0 8px;
+        color: var(--color-secondary);
+      }
+
+      .theme-toggle {
+        flex: none;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .mock-banner {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        margin: 0 0 24px;
+        padding: 12px 16px;
+        border: 1px solid var(--color-attention);
+        border-radius: var(--radius-panel);
+        background: var(--color-attention-bg);
+        font-size: 14px;
+      }
+
+      .mock-banner strong {
+        flex: none;
+        color: var(--color-attention);
+        font-weight: 600;
+      }
+
+      /* ---- 見本の切り替え。設定の Segmented と同じ見た目にそろえる ---- */
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px 24px;
+        align-items: flex-end;
+        padding: 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+      }
+
+      .toolbar-field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .toolbar-label {
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .toolbar-label small {
+        color: var(--color-secondary);
+        font-size: 12px;
+      }
+
+      .segmented {
+        --segments: 1;
+        --segment: 0;
+
+        position: relative;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 2px;
+        min-width: 208px;
+        padding: 2px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-raised);
+      }
+
+      .segmented-thumb {
+        position: absolute;
+        top: 2px;
+        bottom: 2px;
+        left: 2px;
+        width: calc((100% - 4px - (var(--segments) - 1) * 2px) / var(--segments));
+        border-radius: calc(var(--radius-control) - 2px);
+        background: var(--color-surface);
+        box-shadow: inset 0 0 0 1px var(--color-line);
+        transform: translateX(calc(var(--segment) * (100% + 2px)));
+        transition: transform 180ms ease;
+        pointer-events: none;
+      }
+
+      .segment {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: var(--tap);
+        padding: 0 var(--space-2);
+        border: 0;
+        border-radius: calc(var(--radius-control) - 2px);
+        background: transparent;
+        color: var(--color-secondary);
+        font: inherit;
+        font-size: var(--text-secondary);
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .segment[aria-checked="true"] {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      .segment:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: -2px;
+      }
+
+      /* ---- アイコンの案を並べる枠 ---- */
+
+      .panels {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      figure {
+        margin: 0;
+      }
+
+      figcaption {
+        display: grid;
+        gap: 2px;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+
+      figcaption strong {
+        font-weight: 600;
+      }
+
+      figcaption small {
+        color: var(--color-secondary);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .frame {
+        overflow: hidden;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-content);
+      }
+
+      .frame[data-width="normal"] {
+        width: var(--hwc-tree-width);
+      }
+
+      /* ---- ファイルツリーの行。tree.css と同じ寸法 ---- */
+
+      .tree {
+        margin: 0;
+        padding: var(--space-2) 0;
+        list-style: none;
+        color: var(--color-text);
+        font-family: var(--font-mono);
+        font-size: var(--hwc-tree-font-size);
+      }
+
+      .tree-item {
+        margin: 0;
+      }
+
+      .tree-line {
+        position: relative;
+        isolation: isolate;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+      }
+
+      .tree-row {
+        position: relative;
+        isolation: isolate;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        width: 100%;
+        min-height: var(--tap);
+        margin: 0;
+        padding: 0 var(--space-4);
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font: inherit;
+        text-align: left;
+      }
+
+      .tree-line > .tree-row {
+        flex: 1;
+        min-width: 0;
+        padding-right: 0;
+      }
+
+      .tree-item > .tree-row::before,
+      .tree-line::before {
+        content: "";
+        position: absolute;
+        inset: var(--space-1) var(--space-2);
+        z-index: -1;
+        border-radius: var(--radius-sm);
+        pointer-events: none;
+      }
+
+      .tree-item > .tree-row[data-selected="true"]::before {
+        background: var(--color-selected);
+      }
+
+      .tree-mark {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--space-4);
+        height: var(--space-4);
+        color: var(--color-secondary);
+      }
+
+      .tree-mark[data-open="true"] .glyph {
+        transform: rotate(90deg);
+      }
+
+      .tree-icon {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--space-4);
+        height: var(--space-4);
+        color: var(--color-secondary);
+      }
+
+      .tree-name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tree-action {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        color: var(--color-secondary);
+      }
+
+      .tree-action circle {
+        fill: currentColor;
+        stroke: none;
+      }
+
+      .tree-row[data-blocked="true"] {
+        color: var(--color-muted);
+      }
+
+      /* 種類の色。フォルダと開けない行は地の secondary / muted のまま。 */
+      :root[data-icons="color"] .tree-mark[data-type="code"],
+      :root[data-icons="color"] .tree-icon[data-type="code"],
+      .frame[data-icons="color"] .tree-mark[data-type="code"],
+      .frame[data-icons="color"] .tree-icon[data-type="code"] {
+        color: var(--type-code);
+      }
+
+      :root[data-icons="color"] .tree-mark[data-type="data"],
+      :root[data-icons="color"] .tree-icon[data-type="data"],
+      .frame[data-icons="color"] .tree-mark[data-type="data"],
+      .frame[data-icons="color"] .tree-icon[data-type="data"] {
+        color: var(--type-data);
+      }
+
+      :root[data-icons="color"] .tree-mark[data-type="style"],
+      :root[data-icons="color"] .tree-icon[data-type="style"],
+      .frame[data-icons="color"] .tree-mark[data-type="style"],
+      .frame[data-icons="color"] .tree-icon[data-type="style"] {
+        color: var(--type-style);
+      }
+
+      :root[data-icons="color"] .tree-mark[data-type="image"],
+      :root[data-icons="color"] .tree-icon[data-type="image"],
+      .frame[data-icons="color"] .tree-mark[data-type="image"],
+      .frame[data-icons="color"] .tree-icon[data-type="image"] {
+        color: var(--type-image);
+      }
+
+      :root[data-icons="color"] .tree-mark[data-type="shell"],
+      :root[data-icons="color"] .tree-icon[data-type="shell"],
+      .frame[data-icons="color"] .tree-mark[data-type="shell"],
+      .frame[data-icons="color"] .tree-icon[data-type="shell"] {
+        color: var(--type-shell);
+      }
+
+      :root[data-icons="color"] .tree-row[data-blocked="true"] .tree-mark,
+      :root[data-icons="color"] .tree-row[data-blocked="true"] .tree-icon,
+      .frame[data-icons="color"] .tree-row[data-blocked="true"] .tree-mark,
+      .frame[data-icons="color"] .tree-row[data-blocked="true"] .tree-icon {
+        color: var(--color-muted);
+      }
+
+      /* ---- 設定の画面（スマホ幅） ---- */
+
+      .settings-layout {
+        display: grid;
+        grid-template-columns: 390px minmax(0, 1fr);
+        gap: 40px;
+        align-items: start;
+      }
+
+      @media (max-width: 860px) {
+        .settings-layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+
+      .phone {
+        width: 390px;
+        max-width: 100%;
+        border: 1px solid var(--color-line);
+        border-radius: 24px;
+        overflow: hidden;
+        background: var(--color-bg);
+      }
+
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: var(--row-head);
+        padding: 0 var(--space-2);
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-surface);
+      }
+
+      .bar-icon {
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        color: var(--color-text);
+      }
+
+      .bar-title {
+        margin: 0;
+        font-size: 1.0625rem;
+        font-weight: 600;
+      }
+
+      .scroll {
+        padding: 0 var(--space-4) var(--space-8);
+      }
+
+      .stub {
+        display: grid;
+        place-items: center;
+        min-height: 64px;
+        margin-top: var(--space-6);
+        border: 1px dashed var(--color-control-line);
+        border-radius: var(--radius-control);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .subtitle {
+        margin: var(--space-6) 0 var(--space-2);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .section-note {
+        margin: var(--space-3) 0 0;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .settings-layout .segmented {
+        min-width: 0;
+      }
+
+      .notes {
+        display: grid;
+        gap: 12px;
+        align-content: start;
+        max-width: 62ch;
+      }
+
+      .notes h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .notes p {
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 14px;
+      }
+
+      /* ---- 拡張子との対応表 ---- */
+
+      .icon-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .icon-card {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+      }
+
+      .icon-card-mark {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-sm);
+        background: var(--color-raised);
+        color: var(--color-secondary);
+      }
+
+      .icon-card-mark[data-wide="true"] {
+        width: auto;
+        grid-auto-flow: column;
+        gap: 2px;
+        padding: 0 6px;
+      }
+
+      .icon-card[data-type="code"] .icon-card-mark {
+        color: var(--type-code);
+      }
+
+      .icon-card[data-type="data"] .icon-card-mark {
+        color: var(--type-data);
+      }
+
+      .icon-card[data-type="style"] .icon-card-mark {
+        color: var(--type-style);
+      }
+
+      .icon-card[data-type="image"] .icon-card-mark {
+        color: var(--type-image);
+      }
+
+      .icon-card[data-type="shell"] .icon-card-mark {
+        color: var(--type-shell);
+      }
+
+      .icon-card-text {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .icon-card-text strong {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .icon-card-text code {
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .decisions {
+        margin: 16px 0 0;
+        padding: 16px 20px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+        font-size: 14px;
+      }
+
+      .decisions ol {
+        margin: 8px 0 0;
+        padding-left: 20px;
+        color: var(--color-secondary);
+      }
+
+      .decisions li + li {
+        margin-top: 8px;
+      }
+
+      .decisions strong {
+        color: var(--color-text);
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--color-success-bg);
+        color: var(--color-success);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .tag[data-tone="muted"] {
+        background: var(--color-raised);
+        color: var(--color-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" /></symbol>
+      <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></symbol>
+      <symbol id="i-more" viewBox="0 0 24 24">
+        <circle cx="12" cy="5" r="1.6" />
+        <circle cx="12" cy="12" r="1.6" />
+        <circle cx="12" cy="19" r="1.6" />
+      </symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24">
+        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      </symbol>
+      <symbol id="i-folder-open" viewBox="0 0 24 24">
+        <path
+          class="tint"
+          d="M6.6 14.1 8 11.7a1.8 1.8 0 0 1 1.5-.9H19.3a1.8 1.8 0 0 1 1.7 2.1l-1.4 5a1.8 1.8 0 0 1-1.7 1.2H4.8a1.8 1.8 0 0 1-1.8-1.6V6.6a1.8 1.8 0 0 1 1.8-1.6h3.5a1.8 1.8 0 0 1 1.6.7l.7 1a1.8 1.8 0 0 0 1.5.8h5.3a1.8 1.8 0 0 1 1.8 1.5v1.6z"
+        />
+      </symbol>
+      <symbol id="i-file" viewBox="0 0 24 24">
+        <path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z" />
+        <path d="M13 3v6h6" />
+      </symbol>
+      <symbol id="i-code" viewBox="0 0 24 24">
+        <path d="M8.8 6.4 4.4 12l4.4 5.6" />
+        <path d="M15.2 6.4 19.6 12l-4.4 5.6" />
+      </symbol>
+      <symbol id="i-data" viewBox="0 0 24 24">
+        <path
+          d="M9.1 4.5c-1.4 0-2.2.8-2.2 2.2v3.4c0 1.2-.9 1.9-1.8 2.3.9.4 1.8 1.1 1.8 2.4v3.4c0 1.4.8 2.2 2.2 2.2"
+        />
+        <path
+          d="M14.9 4.5c1.4 0 2.2.8 2.2 2.2v3.4c0 1.2.9 1.9 1.8 2.3-.9.4-1.8 1.1-1.8 2.4v3.4c0 1.4-.8 2.2-2.2 2.2"
+        />
+      </symbol>
+      <symbol id="i-style" viewBox="0 0 24 24">
+        <path d="M10 4.8L8.3 19.2" />
+        <path d="M15.7 4.8L14 19.2" />
+        <path d="M4.9 9.3h14.5" />
+        <path d="M4.3 14.7h14.5" />
+      </symbol>
+      <symbol id="i-image" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <circle cx="9" cy="10" r="1.5" />
+        <path d="M21 15l-5-5L7 20" />
+      </symbol>
+      <symbol id="i-shell" viewBox="0 0 24 24">
+        <path d="M5.2 7.4 9.6 12 5.2 16.6" />
+        <path d="M12 16.6h6.8" />
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect x="4.5" y="10.5" width="15" height="9.5" rx="2.4" />
+        <path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7" />
+      </symbol>
+    </svg>
+
+    <main class="page">
+      <div class="hero">
+        <div>
+          <h1>ファイルツリーのアイコン — デザインモック</h1>
+          <p>
+            ツリーの行の左に SVG
+            のアイコンを付け、設定で見た目を選べるようにする案です。既定は今の見た目（アイコンなし）で、切り替えない限り何も変わりません。
+          </p>
+        </div>
+        <button type="button" class="theme-toggle" id="theme-toggle">ライトにする</button>
+      </div>
+
+      <div class="mock-banner">
+        <strong>モック</strong>
+        <span
+          >実装ではありません。アイコンの形・割り当て・色は暫定です。本番のトークンと寸法（行の高さ
+          44px、字下げ 12px、記号の欄 16px、線 1.7）に合わせ、色はテーマごとに調整済みの ANSI
+          色を借りています。採用したのは「矢印なし＋色分け」で、ほかの案は比べるために残しています。</span
+        >
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-field">
+          <span class="toolbar-label">アイコン（設定に入れる項目）</span>
+          <div
+            class="segmented"
+            data-key="icons"
+            role="radiogroup"
+            aria-label="ファイルツリーのアイコン"
+          ></div>
+        </div>
+      </div>
+
+      <section>
+        <h2>1. 2 つの段階 — 同じツリーで比べる</h2>
+        <p class="lead">
+          「なし」が既定で今の見た目です。「色分け」は種類ごとに色を変えます。形はどちらも同じで、印を出すかどうかだけが違います。
+        </p>
+        <div class="panels" id="panels-style"></div>
+      </section>
+
+      <section>
+        <h2>2. 置き方 — 矢印なしに決定</h2>
+        <p class="lead">
+          シェブロンの位置にフォルダを置く「矢印なし」を採りました。幅も名前の位置も今のままで、開閉はフォルダの形で分かります。「フォルダも」は記号の欄が
+          1 つ増えて名前が 24px 右へ寄り、「ファイルだけ」はフォルダの形が出ません。
+        </p>
+        <div class="panels" id="panels-layout"></div>
+      </section>
+
+      <section>
+        <h2>3. 設定 › 表示（スマホ幅）</h2>
+        <p class="lead">
+          「ファイルツリーの幅」の下に 1 つ足します。段階は 2
+          つで、既定は「なし」です。サンプルは選ぶとその場で変わります。
+        </p>
+        <div class="settings-layout">
+          <div class="phone">
+            <header class="bar">
+              <span class="bar-icon"
+                ><svg class="glyph" width="24" height="24"><use href="#i-back" /></svg
+              ></span>
+              <h3 class="bar-title">表示</h3>
+            </header>
+            <div class="scroll">
+              <div class="stub">テーマの選択（変更なし）</div>
+              <div class="stub">位置・文字の大きさ・幅（既存のまま）</div>
+
+              <p class="subtitle">ファイルツリーのアイコン</p>
+              <div
+                class="segmented"
+                data-key="icons"
+                role="radiogroup"
+                aria-label="ファイルツリーのアイコン"
+              ></div>
+              <p class="section-note">
+                ファイルとフォルダの行の左に印を付けます。フォルダは開くと形が変わります。既定の「なし」は今の見た目です。
+              </p>
+
+              <p class="subtitle">サンプル</p>
+              <div class="frame" data-width="normal" data-icons="none"></div>
+              <p class="section-note">サンプルは幅 260px・文字 17px です。</p>
+            </div>
+          </div>
+
+          <div class="notes">
+            <h3>実装するときの置き場所</h3>
+            <p>
+              値は端末ごとの見え方なので、文字の大きさ・幅と同じく localStorage
+              に置きます（<code>hwc-file-tree-icons</code>）。BFF には送りません。
+            </p>
+            <p>
+              種類は、行が持つ名前の拡張子から決めます。開けない行（<code>open === null</code
+              >）は今までどおり淡色で、記号も地の色のままです。
+            </p>
+            <p>
+              ファイルの種類は、<code>src/client/icons.tsx</code> に足します。<code>file</code> /
+              <code>folder</code> / <code>image</code> は既存のものをそのまま使え、<code>code</code>
+              は木の中で少し大きくします。フォルダは開閉の 2 形を用意し、行の
+              <code>aria-expanded</code>
+              で入れ替えます。開いた形は面も塗ります（今のシェブロンの回転のような動きは付けません）。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>4. アイコンと拡張子</h2>
+        <p class="lead">
+          8 種類だけに絞ります。細かく分けるほど 16px
+          では見分けられず、拡張子が増えるたびに手入れも要るためです。当てはまらないものは書類 1
+          枚にします。
+        </p>
+        <div class="icon-grid" id="icon-grid"></div>
+      </section>
+
+      <section>
+        <h2>5. 決めたこと</h2>
+        <div class="decisions">
+          <ol>
+            <li>
+              <strong>置き方は「矢印なし」</strong
+              >。シェブロンの位置にフォルダを置くので、名前の幅は今のままで、開閉もフォルダの形で分かります。「押すと開く」の合図はフォルダの形だけになりますが、行そのものがボタンなので、当たり判定は変わりません。
+            </li>
+            <li>
+              <strong>色分けは独自の色を足さず、ANSI 色を借ります</strong>。ANSI 色は明暗 2
+              通りに調整済みで、20 テーマすべてに付いて回ります。アイコン専用の色を 20
+              テーマぶん足すのは手入れが重すぎます。その代わり、端末の文字用の値なので画面では少しすくんで見えます。ロックだけは黄がデータと重なるので色を付けません。
+            </li>
+            <li>
+              <strong>「文字（バッジ）」案は作りませんでした</strong>。16px の枠に 2〜3
+              文字を収めると 7px
+              前後になり、スマホでは読めません。読ませるなら枠を広げる必要があり、名前の幅を削ります。
+            </li>
+            <li>
+              <strong>拡張子の割り当ては 4 節の表のとおり</strong
+              >。テスト（<code>*.test.ts</code>）はコードと同じ扱い、Markdown は書類に寄せます。
+            </li>
+            <li>
+              <strong>設定の段階は「なし / 色分け」の 2 つ</strong>。「単色」は落としました。テーマ
+              20 種すべてで地の文字色に寄り、種類を見分ける役に立たないためです。
+            </li>
+          </ol>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // 設定に入れる段階は 2 つ。「単色」はテーマ 20 種すべてで地の文字色に寄り、
+      // 種類を見分ける役に立たないため落とした。
+      const OPTIONS = {
+        icons: [
+          { id: "none", label: "なし" },
+          { id: "color", label: "色分け" },
+        ],
+      };
+
+      // 置き方は「矢印なし」に決定。シェブロンの位置にフォルダを置くので、名前の幅は今のまま。
+      const state = { icons: "none" };
+      const root = document.documentElement;
+
+      // 実ファイルの名前ではない。長い名前は、置き方でどこまで残るかを見るために入れてある。
+      const ROWS = [
+        { name: "src", kind: "dir", depth: 0, open: true },
+        { name: "server", kind: "dir", depth: 1, open: true },
+        { name: "app.ts", kind: "file", depth: 2, type: "code", selected: true },
+        { name: "app.test.ts", kind: "file", depth: 2, type: "code" },
+        { name: "routes", kind: "dir", depth: 2 },
+        { name: "client", kind: "dir", depth: 1 },
+        { name: "pane", kind: "dir", depth: 2 },
+        { name: "invoice-summary.test.tsx", kind: "file", depth: 3, type: "code" },
+        { name: "styles", kind: "dir", depth: 2 },
+        { name: "tree.css", kind: "file", depth: 3, type: "style" },
+        { name: "icons.tsx", kind: "file", depth: 2, type: "code" },
+        { name: "docs", kind: "dir", depth: 0 },
+        { name: "e2e.md", kind: "file", depth: 1, type: "file" },
+        { name: "package.json", kind: "file", depth: 0, type: "data" },
+        { name: "bun.lock", kind: "file", depth: 0, type: "lock" },
+        { name: "public", kind: "dir", depth: 0 },
+        { name: "logo.svg", kind: "file", depth: 1, type: "image" },
+        { name: "scripts", kind: "dir", depth: 0 },
+        { name: "dev.sh", kind: "file", depth: 1, type: "shell" },
+        { name: "notes.local.txt", kind: "file", depth: 0, type: "file", blocked: true },
+      ];
+
+      // 設定のサンプル。本物と同じ行の作りで、選択中・淡色・深い階層・長い名前を 1 画面に入れる。
+      const SAMPLE = [
+        { name: "src", kind: "dir", depth: 0, open: true },
+        { name: "server", kind: "dir", depth: 1, open: true },
+        { name: "routes", kind: "dir", depth: 2 },
+        { name: "invoice-summary.test.ts", kind: "file", depth: 2, type: "code", selected: true },
+        { name: "styles", kind: "dir", depth: 2 },
+        { name: "tree.css", kind: "file", depth: 3, type: "style" },
+        { name: "docs", kind: "dir", depth: 0 },
+        { name: "package.json", kind: "file", depth: 0, type: "data" },
+        { name: "notes.local.txt", kind: "file", depth: 0, type: "file", blocked: true },
+      ];
+
+      const ICON_DEFS = [
+        {
+          type: "folder",
+          label: "フォルダ（閉 / 開）",
+          exts: "ディレクトリ・開ける symlink",
+          note: "開くと面が塗られ、折り目が付く",
+          wide: true,
+        },
+        {
+          type: "code",
+          label: "コード",
+          exts: ".ts .tsx .mts .cts .js .jsx .mjs .cjs .py .go .rs .rb .php .java .kt .kts .swift .cs .lua .pl .html .htm .vue .svelte .astro",
+          note: "既存の CodeIcon を少し大きく",
+        },
+        {
+          type: "data",
+          label: "データ・設定",
+          exts: ".json .jsonc .yaml .yml .toml .ini .csv .env .env.*",
+          note: "中括弧 1 対",
+        },
+        {
+          type: "style",
+          label: "スタイル",
+          exts: ".css .scss .less .sass",
+          note: "シャープ 1 つ",
+        },
+        {
+          type: "file",
+          label: "書類・その他",
+          exts: ".md .mdx .txt .rst .log と、当てはまらない全部",
+          note: "既存の FileIcon",
+        },
+        {
+          type: "image",
+          label: "画像",
+          exts: ".png .jpg .jpeg .gif .webp .avif .ico .bmp .svg",
+          note: "既存の ImageIcon",
+        },
+        {
+          type: "shell",
+          label: "シェル",
+          exts: ".sh .bash .zsh .fish .ps1",
+          note: "プロンプト 1 つ",
+        },
+        {
+          type: "lock",
+          label: "ロックファイル",
+          exts: "bun.lock bun.lockb package-lock.json npm-shrinkwrap.json pnpm-lock.yaml yarn.lock Cargo.lock composer.lock flake.lock Gemfile.lock poetry.lock uv.lock（ほかに *.lock）",
+          note: "拡張子ではなく名前で判定・色は付けない",
+        },
+      ];
+
+      const seg = (id) => `<svg class="glyph" width="16" height="16"><use href="#i-${id}" /></svg>`;
+
+      function mark(kind, layout, row) {
+        const isDir = row.kind === "dir";
+        const chevron = isDir && row.expandable !== false ? seg("chev") : "";
+        const open = row.open ? ' data-open="true"' : "";
+        // フォルダは、開いているかで別の形を使う。
+        const folderType = row.open ? "folder-open" : "folder";
+        const type = isDir ? folderType : row.type;
+        const extra =
+          layout === "all"
+            ? `<span class="tree-icon" data-type="${isDir ? "folder" : row.type}">${seg(isDir ? folderType : row.type)}</span>`
+            : "";
+
+        // なし と、アイコンを出さないフォルダは、今までどおりシェブロン 1 つ。
+        if (isDir && (kind === "none" || layout !== "replace")) {
+          return `<span class="tree-mark"${open}>${chevron}</span>${extra}`;
+        }
+        if (!isDir && kind === "none") return '<span class="tree-mark"></span>';
+        if (!isDir && layout === "all") {
+          return `<span class="tree-mark"></span>${extra}`;
+        }
+        // 「矢印なし」のフォルダは、シェブロンの位置にフォルダの形を置く。
+        return `<span class="tree-mark" data-type="${isDir ? "folder" : row.type}">${seg(type)}</span>`;
+      }
+
+      function rowHtml(row, kind, layout) {
+        const style = `--depth:${row.depth}`;
+        const blocked = row.blocked ? ' data-blocked="true"' : "";
+        const body = `${mark(kind, layout, row)}<span class="tree-name">${row.name}</span>`;
+        if (row.kind === "dir") {
+          return `<li class="tree-item"><div class="tree-line">
+            <div class="tree-row" style="${style}"${blocked}>${body}</div>
+            <span class="tree-action"><svg class="glyph" width="20" height="20"><use href="#i-more" /></svg></span>
+          </div></li>`;
+        }
+        const selected = row.selected ? ' data-selected="true"' : "";
+        return `<li class="tree-item"><div class="tree-row" style="${style}"${selected}${blocked}>${body}</div></li>`;
+      }
+
+      // アイコンの有無と置き方は、見本ごとに枠へ持たせる。設定の 1
+      // 項目だけで、比較用の 3 案と 2 案が同居するため。
+      function frame(rows, { kind = state.icons, layout = "replace" } = {}) {
+        return `<div class="frame" data-width="normal" data-icons="${kind}"><ul class="tree" aria-hidden="true">${rows
+          .map((row) => rowHtml(row, kind, layout))
+          .join("")}</ul></div>`;
+      }
+
+      // 設定の Segmented。見本と設定の 2 か所が同じ状態を見る。
+      for (const group of document.querySelectorAll(".segmented")) {
+        const key = group.dataset.key;
+        group.style.setProperty("--segments", String(OPTIONS[key].length));
+        group.innerHTML =
+          '<span class="segmented-thumb" aria-hidden="true"></span>' +
+          OPTIONS[key]
+            .map(
+              (option) =>
+                `<button type="button" role="radio" class="segment" data-key="${key}" data-id="${option.id}">${option.label}</button>`,
+            )
+            .join("");
+        group.addEventListener("click", (event) => {
+          const button = event.target.closest(".segment");
+          if (!button) return;
+          state[key] = button.dataset.id;
+          render();
+        });
+      }
+
+      const panelsStyle = document.getElementById("panels-style");
+      const panelsLayout = document.getElementById("panels-layout");
+      const iconGrid = document.getElementById("icon-grid");
+      const sampleFrame = document.querySelector(".settings-layout .frame");
+
+      // 採用したのは「なし / 色分け」の 2 案。色が違うだけで、形と置き方は同じ。
+      function renderPanels() {
+        panelsStyle.innerHTML = OPTIONS.icons
+          .map(
+            (option) =>
+              `<figure><figcaption><strong>${option.label}</strong><small>${
+                option.id === "none" ? "今の見た目（既定）" : "種類ごとに色を変える（採用）"
+              }</small></figcaption>${frame(ROWS, { kind: option.id })}</figure>`,
+          )
+          .join("");
+
+        // 検討した 3 つの置き方。採用は「矢印なし」で、ほかは幅かフォルダの形を諦める。
+        const LAYOUTS = [
+          {
+            id: "replace",
+            label: "矢印なし（採用）",
+            note: "名前の始まり 64px・幅 180px（今のまま）・矢印の代わりにフォルダ",
+          },
+          {
+            id: "all",
+            label: "フォルダも（不採用）",
+            note: "名前の始まり 88px・幅 156px（24px 短い）・矢印とフォルダの 2 つ",
+          },
+          {
+            id: "files",
+            label: "ファイルだけ（不採用）",
+            note: "名前の始まり 64px・幅 180px（今のまま）・フォルダの形は出ない",
+          },
+        ];
+        panelsLayout.innerHTML = LAYOUTS.map(
+          (option) =>
+            `<figure><figcaption><strong>${option.label}</strong><small>${
+              option.note
+            }</small></figcaption>${frame(ROWS, { kind: "color", layout: option.id })}</figure>`,
+        ).join("");
+      }
+
+      function renderIconGrid() {
+        iconGrid.innerHTML = ICON_DEFS.map((def) => {
+          const glyphs = def.wide
+            ? `<svg class="glyph" width="22" height="22"><use href="#i-folder" /></svg><svg class="glyph" width="22" height="22"><use href="#i-folder-open" /></svg>`
+            : `<svg class="glyph" width="24" height="24"><use href="#i-${def.type}" /></svg>`;
+          return `<div class="icon-card" data-type="${def.type}">
+            <span class="icon-card-mark"${def.wide ? ' data-wide="true"' : ""}>${glyphs}</span>
+            <span class="icon-card-text">
+              <strong>${def.label}</strong>
+              <code>${def.exts}</code>
+              <code>${def.note}</code>
+            </span>
+          </div>`;
+        }).join("");
+      }
+
+      function render() {
+        root.dataset.icons = state.icons;
+
+        for (const group of document.querySelectorAll(".segmented")) {
+          const key = group.dataset.key;
+          const index = OPTIONS[key].findIndex((option) => option.id === state[key]);
+          group.style.setProperty("--segment", String(index));
+          const segments = group.querySelectorAll(".segment");
+          segments.forEach((button, i) => button.setAttribute("aria-checked", String(i === index)));
+        }
+
+        renderPanels();
+        renderIconGrid();
+        sampleFrame.dataset.icons = state.icons;
+        sampleFrame.innerHTML = `<ul class="tree" aria-hidden="true">${SAMPLE.map((row) =>
+          rowHtml(row, state.icons, "replace"),
+        ).join("")}</ul>`;
+      }
+
+      const toggle = document.getElementById("theme-toggle");
+      toggle.addEventListener("click", () => {
+        const dark = root.dataset.theme === "dark";
+        root.dataset.theme = dark ? "light" : "dark";
+        toggle.textContent = dark ? "ダークにする" : "ライトにする";
+      });
+
+      render();
+    </script>
+  </body>
+</html>

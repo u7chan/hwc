@@ -8,9 +8,19 @@ import {
 } from "../../shared/file-tree";
 import { previewUrl } from "../api";
 import { useCopy } from "../copy";
+import { fileKind } from "../file-kind";
+import type { FileTreeIcons } from "../file-tree-display";
 import type { FileTreeView } from "../file-tree-store";
 import { treeArrowIntent } from "../file-tree-key";
-import { ChevronRightIcon, CopyGlyph, MoreIcon, PlusIcon } from "../icons";
+import {
+  ChevronRightIcon,
+  CopyGlyph,
+  FileKindIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  MoreIcon,
+  PlusIcon,
+} from "../icons";
 import { Menu } from "../Menu";
 import { shortenPath } from "../select";
 import { Spinner } from "../Spinner";
@@ -21,6 +31,8 @@ const TREE_MENU_ID = "hwc-tree-menu";
 type FileTreeProps = {
   paneId: string;
   view: FileTreeView;
+  // 行の左に種類の印を出すか。出さないときは、フォルダは今までどおりのシェブロン 1 つ。
+  icons: FileTreeIcons;
   // 広いセルでは会話の左右どちらか（設定で選ぶ）、狭いセルでは会話の上に重ねる。
   // 見た目だけの違い。
   side: boolean;
@@ -60,6 +72,36 @@ export type TreeFocusRequest = { token: number; focus: boolean };
 // 12px は --space-3。深い階層でも名前に幅が残るよう、字下げは 1 段だけにする。
 export function indent(depth: number) {
   return { paddingLeft: `calc(var(--space-4) + ${depth} * var(--space-3))` };
+}
+
+// 行の左の印。アイコンを出すときは開閉をフォルダの形で示し、出さないときは
+// 今までどおり開閉のシェブロン 1 つにする（印を出さないだけで、開閉の合図は残す）。
+function TreeMark(props: { entry: FileTreeEntry; expanded: boolean; icons: FileTreeIcons }) {
+  const { entry, expanded, icons } = props;
+  if (entry.kind === "dir") {
+    if (icons === "none") {
+      return (
+        <span class="hwc-tree-mark" aria-hidden="true">
+          {entry.expandable ? (
+            <span class="hwc-tree-chevron" data-open={expanded}>
+              <ChevronRightIcon size={16} />
+            </span>
+          ) : null}
+        </span>
+      );
+    }
+    return (
+      <span class="hwc-tree-mark" aria-hidden="true">
+        {expanded ? <FolderOpenIcon size={16} /> : <FolderIcon size={16} />}
+      </span>
+    );
+  }
+  const kind = fileKind(entry.name);
+  return (
+    <span class="hwc-tree-mark" data-kind={icons === "none" ? undefined : kind} aria-hidden="true">
+      {icons === "none" ? null : <FileKindIcon kind={kind} />}
+    </span>
+  );
 }
 
 // 開ける行も開けない行も、同じように composer へ運べる。淡色は hwc が配信できない
@@ -127,13 +169,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext
     const failed = tree.view.failed.has(entry.path);
     const content = (
       <>
-        <span class="hwc-tree-mark">
-          {entry.expandable ? (
-            <span class="hwc-tree-chevron" data-open={expanded}>
-              <ChevronRightIcon size={16} />
-            </span>
-          ) : null}
-        </span>
+        <TreeMark entry={entry} expanded={expanded} icons={tree.icons} />
         <span class="hwc-tree-name">{entry.name}</span>
       </>
     );
@@ -195,7 +231,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext
 
   const content = (
     <>
-      <span class="hwc-tree-mark" aria-hidden="true" />
+      <TreeMark entry={entry} expanded={false} icons={tree.icons} />
       <span class="hwc-tree-name">{entry.name}</span>
     </>
   );
@@ -411,7 +447,13 @@ export function FileTree(props: FileTreeProps) {
         inert={props.closing}
         aria-hidden={props.closing ? "true" : undefined}
       >
-        <ul class="hwc-tree" aria-label="ファイルツリー" ref={list} onKeyDown={onKeyDown}>
+        <ul
+          class="hwc-tree"
+          aria-label="ファイルツリー"
+          data-icons={props.icons}
+          ref={list}
+          onKeyDown={onKeyDown}
+        >
           {renderChildren(tree, "", 0)}
         </ul>
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useElementWidth } from "../app/use-element-width";
 import type { ConnectionStatus } from "../connection";
-import type { FileTreeSize, FileTreeWidth } from "../file-tree-display";
+import type { FileTreeIcons, FileTreeSize, FileTreeWidth } from "../file-tree-display";
 import type { FileTreeSide } from "../file-tree-side";
 import type { ModelLabels } from "../../shared/agents";
 import { useModelLabels } from "../launch-candidates";
@@ -36,6 +36,8 @@ type SettingsProps = {
   onTreeSizeChange: (size: FileTreeSize) => void;
   treeWidth: FileTreeWidth;
   onTreeWidthChange: (width: FileTreeWidth) => void;
+  treeIcons: FileTreeIcons;
+  onTreeIconsChange: (icons: FileTreeIcons) => void;
   revision: string | null;
   connection: ConnectionStatus;
   wide: boolean;
@@ -60,6 +62,8 @@ function section(
           onTreeSizeChange={props.onTreeSizeChange}
           treeWidth={props.treeWidth}
           onTreeWidthChange={props.onTreeWidthChange}
+          treeIcons={props.treeIcons}
+          onTreeIconsChange={props.onTreeIconsChange}
         />
       );
     case "split":

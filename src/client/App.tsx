@@ -331,8 +331,10 @@ export function App() {
   const {
     size: treeSize,
     width: treeWidth,
+    icons: treeIcons,
     changeSize: changeTreeSize,
     changeWidth: changeTreeWidth,
+    changeIcons: changeTreeIcons,
   } = useFileTreeDisplay();
   const { interval: liveUpdate, change: changeLiveUpdate } = useLiveUpdate();
   useLiveUpdateTick(liveUpdateMs(liveUpdate));
@@ -1195,6 +1197,7 @@ export function App() {
         scheme={scheme}
         treeSide={treeSide}
         treeWidth={fileTreeWidthPx(treeWidth)}
+        treeIcons={treeIcons}
         current={isCurrent}
         // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
         labeled={splitCells}
@@ -1530,6 +1533,8 @@ export function App() {
               onTreeSizeChange={changeTreeSize}
               treeWidth={treeWidth}
               onTreeWidthChange={changeTreeWidth}
+              treeIcons={treeIcons}
+              onTreeIconsChange={changeTreeIcons}
               revision={revision}
               connection={connection}
               wide={wide}
