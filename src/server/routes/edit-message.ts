@@ -82,6 +82,9 @@ export function createEditMessageHandlers(ctx: AppContext) {
     }
     if (fresh === null || fresh.agent !== "pi" || !fresh.chat) return false;
     if (fresh.agentStatus === "blocked") return false;
+    // 再取得でセッションが変わっていたら、前の会話の本文を新しい会話へ送らない。
+    const latest = store.chatSource(paneId);
+    if (latest === null || latest.agent !== "pi" || latest.path !== path) return false;
     try {
       await panes.send({ paneId, text, submit: true });
       return true;
@@ -99,19 +102,7 @@ export function createEditMessageHandlers(ctx: AppContext) {
 
       const resolved = await resolvePane(c);
       if (!resolved.ok) return resolved.response;
-      const { paneId } = resolved;
-      let pane = resolved.pane;
-      // pi は質問の待ちで blocked になる。状態のキャッシュが古いままでも、実際に blocked なら
-      // 巻き戻しのコマンドを送らない。送信の直前に Herdr から取り直す。
-      if (pane.agent === "pi" || store.chatSource(paneId)?.agent === "pi") {
-        try {
-          const fresh = await freshPane(paneId);
-          if (fresh === null) return c.json({ error: "pane_not_found" }, 404);
-          pane = fresh;
-        } catch (error) {
-          return paneFailure(c, error);
-        }
-      }
+      const { paneId, pane } = resolved;
       if (pane.agent !== "pi" || !pane.chat) return c.json({ error: "no_chat" }, 404);
       // blocked の pi は質問の待ち。TUI のダイアログへ本文を流さない。
       if (pane.agentStatus === "working" || pane.agentStatus === "blocked") {
@@ -187,6 +178,24 @@ export function createEditMessageHandlers(ctx: AppContext) {
           snapshot.leafId === messageId
         ) {
           return c.json({ error: "not_editable" }, 409);
+        }
+        try {
+          // 状態の照合は送信の直前に行う。folderTrust の確認中に blocked へ変わる競合や、
+          // 状態のキャッシュが古いままの送信を防ぐ。
+          const fresh = await freshPane(paneId);
+          if (fresh === null) return c.json({ error: "pane_not_found" }, 404);
+          if (fresh.agent !== "pi" || !fresh.chat) {
+            return c.json({ error: "no_chat" }, 404);
+          }
+          if (fresh.agentStatus === "working" || fresh.agentStatus === "blocked") {
+            return c.json({ error: "not_editable" }, 409);
+          }
+          const latest = store.chatSource(paneId);
+          if (latest === null || latest.agent !== "pi" || latest.path !== source.path) {
+            return c.json({ error: "edit_failed" }, 502);
+          }
+        } catch (error) {
+          return paneFailure(c, error);
         }
         try {
           await panes.send({

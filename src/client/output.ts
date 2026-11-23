@@ -20,7 +20,12 @@ export function usePaneOutput(
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (paneId === null) return;
+    if (paneId === null) {
+      // 購読していない間の失敗は表示に使わない。古い failed が次の表示を端末のまま固定
+      // しないようにする。
+      setFailed(false);
+      return;
+    }
     const id = paneId;
 
     const poll = startPoll({

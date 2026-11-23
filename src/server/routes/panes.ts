@@ -97,19 +97,7 @@ export function createPanesHandlers(ctx: AppContext) {
       const paneId = c.req.param("id");
       const paths: string[] = [];
       const state = await current();
-      let pane = state === null ? null : findPane(state, paneId);
-      // pi は質問の待ちで blocked になる。状態のキャッシュが古いままでも、実際に blocked なら
-      // TUI のダイアログが入力を待っている。送信の直前に Herdr から取り直す。
-      if (pane?.agent === "pi" || store.chatSource(paneId)?.agent === "pi") {
-        try {
-          pane = await freshPane(paneId);
-        } catch (error) {
-          return paneFailure(c, error);
-        }
-      }
-      if (pane !== null && pane.agent === "pi" && pane.agentStatus === "blocked") {
-        return c.json({ error: "not_waiting" }, 409);
-      }
+      const pane = state === null ? null : findPane(state, paneId);
       if (pane !== null && supportsFolderTrust(pane.agent)) {
         try {
           if (await folderTrust.inspect(pane))
@@ -143,6 +131,20 @@ export function createPanesHandlers(ctx: AppContext) {
           { error: paths.length === 0 ? TEXT_TOO_LONG : TEXT_WITH_ATTACHMENTS_TOO_LONG },
           413,
         );
+      }
+
+      // 状態の照合は送信の直前に行う。確認の途中で blocked に変わる競合や、状態の
+      // キャッシュが古いままの送信を防ぐ。pi と分かるペインだけを対象にする。
+      if (pane?.agent === "pi" || store.chatSource(paneId)?.agent === "pi") {
+        try {
+          const fresh = await freshPane(paneId);
+          if (fresh === null) return c.json({ error: "pane_not_found" }, 404);
+          if (fresh.agent === "pi" && fresh.agentStatus === "blocked") {
+            return c.json({ error: "not_waiting" }, 409);
+          }
+        } catch (error) {
+          return paneFailure(c, error);
+        }
       }
 
       try {
