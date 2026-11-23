@@ -1167,14 +1167,31 @@ p.hwc-compaction,
   }
 }
 
-/* 人間の応答待ち。会話の末尾に 1 枚だけ置く。面も枠も持たせず、記号・余白・
-   文字の階層で質問票として読ませる。状態は見出しの記号と文言で区別する。 */
+/* 人間の応答待ち。会話の末尾に 1 枚だけ置く。面は外側の帯 1 枚だけで、中の選択肢や確認の
+   行は罫線で区切る。帯の中にさらに枠や面を重ねない（入れ子のカードにしない）。
+   状態は見出しの記号と文言で区別する。 */
 .hwc-pending {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   /* 直前の発話と地続きに見えないよう、会話の行間より少し広く取る。 */
   margin-top: var(--space-2);
+}
+
+/* 帯は会話の左右へ 16px はみ出させる。狭い画面では余白と同じ幅なので画面端まで届き、
+   広い画面では本文の外へ張り出す。余白まで正確に広げないのは、広い画面の --hwc-gutter が
+   % を含む式で、子孫の負のマージンでは親と同じ幅に解けないため。 */
+.hwc-pending-band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-inline: calc(var(--space-4) * -1);
+  padding: var(--space-4);
+  border-block: 1px solid var(--color-control-line);
+  /* 面は content に文字色を少し混ぜて作る。surface はライトで会話の地と同じ白になって面が
+     見えず、raised は solarized-dark などで補助文字が 3.3:1 まで落ちる（content 上の最小は 4.1:1）。 */
+  --hwc-pending-band: color-mix(in srgb, var(--color-text) 5%, var(--color-content));
+  background: var(--hwc-pending-band);
 }
 
 .hwc-pending-head {
@@ -1213,14 +1230,24 @@ p.hwc-compaction,
   font-variant-numeric: tabular-nums;
 }
 
-.hwc-pending-questions {
+/* 質問は 1 ページに 1 問。ページが変わるたびに作り直し、短いフェードで切り替えを見せる。 */
+.hwc-pending-page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  /* 見出しから質問までを空ける。カードの内側の余白の代わり。 */
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  list-style: none;
+  gap: var(--space-3);
+  animation: hwc-pending-page-in 160ms ease-out;
+}
+
+@keyframes hwc-pending-page-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hwc-pending-page {
+    animation: none;
+  }
 }
 
 .hwc-pending-question {
@@ -1246,15 +1273,20 @@ p.hwc-compaction,
   white-space: pre-wrap;
 }
 
-/* 質問の選択肢。枠と区切り線を持たず、行そのものを押せる面にする。選択とホバーは
-   行の面で示し、行は左右へ 8px はみ出させて押しやすくする。選択の印は丸/四角と
+/* 質問の選択肢。1 つずつを箱にせず、行を罫線で区切る。行そのものを押せる面にし、選択と
+   ホバーは行の面で示す。行は左右へ 8px はみ出させて押しやすくする。選択の印は丸/四角と
    チェックで示し、色だけに頼らない。 */
 .hwc-pending-options {
   display: flex;
   flex-direction: column;
   margin: var(--space-3) calc(var(--space-2) * -1) 0;
   padding: 0;
+  border-block: 1px solid var(--color-control-line);
   list-style: none;
+}
+
+.hwc-pending-options > li + li {
+  border-top: 1px solid var(--color-control-line);
 }
 
 .hwc-pending-choice {
@@ -1273,9 +1305,9 @@ p.hwc-compaction,
   transition: background-color var(--duration-hover) ease;
 }
 
-/* 選択中の行はホバーでも選択の面を保つ。 */
+/* 選択中の行はホバーでも選択の面を保つ。帯の面に文字色を重ねて沈める。 */
 .hwc-pending-choice:hover:not(:disabled):not([data-selected="true"]) {
-  background: var(--color-raised);
+  background: color-mix(in srgb, var(--color-text) 6%, var(--hwc-pending-band));
 }
 
 /* 選択中の枠は内側に描く。外側に出すと、押した瞬間だけ枠が膨らんで見える。 */
@@ -1284,8 +1316,10 @@ p.hwc-compaction,
   outline-offset: -2px;
 }
 
+/* --color-selected はテーマによって帯の面と見分けにくい（ライトで特に近い）ので、
+   accent を混ぜて塗る。 */
 .hwc-pending-choice[data-selected="true"] {
-  background: var(--color-selected);
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--hwc-pending-band));
 }
 
 .hwc-pending-choice[data-selected="true"] .hwc-pending-option-label {
@@ -1379,14 +1413,175 @@ p.hwc-compaction,
   opacity: 0.6;
 }
 
-/* 答える操作。全幅にして、片手のタップが外れにくいようにする。 */
-.hwc-pending-submit {
+/* 質問タブと確認の帯。見出しは開いているタブだけに出し、ほかは番号かチェックだけにして
+   幅を節約する。つまみは 44px を下回らせない。スクロールバーは帯の見た目を崩すので隠す。 */
+.hwc-pending-tabs {
+  position: relative;
+  display: flex;
+  gap: var(--space-1);
+  margin-inline: calc(var(--space-2) * -1);
+  padding-inline: var(--space-2);
+  border-bottom: 1px solid var(--color-control-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.hwc-pending-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.hwc-pending-tab {
+  display: inline-flex;
   flex: none;
+  align-items: center;
   gap: var(--space-2);
+  min-height: var(--tap);
+  margin-bottom: -1px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-secondary);
+  font: inherit;
+  font-size: var(--text-supporting);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hwc-pending-tab[aria-selected="true"] {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.hwc-pending-tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-pending-tab:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.hwc-pending-tab-mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-control-line);
+  border-radius: 50%;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hwc-pending-tab[aria-selected="true"] .hwc-pending-tab-mark {
+  border-color: var(--color-accent);
+}
+
+.hwc-pending-tab[data-done="true"] .hwc-pending-tab-mark {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+/* 確認ページの答えの一覧。選択肢と同じく、箱にせず罫線で区切った行にする。 */
+.hwc-pending-review {
+  margin: var(--space-1) calc(var(--space-2) * -1) 0;
+  padding: 0;
+  border-block: 1px solid var(--color-control-line);
+  list-style: none;
+}
+
+.hwc-pending-review > li + li {
+  border-top: 1px solid var(--color-control-line);
+}
+
+.hwc-pending-review-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   width: 100%;
   min-height: 56px;
+  padding: var(--space-3) var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
+}
+
+.hwc-pending-review-row:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 6%, var(--hwc-pending-band));
+}
+
+.hwc-pending-review-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.hwc-pending-review-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.hwc-pending-review-row > svg {
+  flex: none;
+  color: var(--color-secondary);
+}
+
+.hwc-pending-review-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hwc-pending-review-head {
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-pending-review-answer {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hwc-pending-review-answer[data-empty="true"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-attention);
+}
+
+/* 戻る・次へ・答える。全幅にして、片手のタップが外れにくいようにする。先頭のページには
+   戻る先が無いので、次へだけを全幅にする。 */
+.hwc-pending-foot {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--space-2);
   /* 直前の選択肢との間に 16px を取る（親の gap と合わせる）。 */
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.hwc-pending-foot[data-solo="true"] {
+  grid-template-columns: 1fr;
+}
+
+.hwc-pending-foot .hwc-dialog-button {
+  gap: var(--space-2);
+  min-height: 56px;
+}
+
+/* 帯の面の上では、無効なボタンの面と戻るの枠が溶けるので 1 段つける。 */
+.hwc-pending-foot .hwc-dialog-button:disabled {
+  background: var(--color-content);
+}
+
+.hwc-pending-foot .hwc-dialog-cancel {
+  border-color: var(--color-control-line);
 }
 
 .hwc-pending-error {

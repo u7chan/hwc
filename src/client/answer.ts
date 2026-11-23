@@ -31,6 +31,48 @@ export function typeOther(choice: Choice, text: string): Choice {
   return { ...choice, text };
 }
 
+// 質問 1 問に答えが揃っているか。answersOf が答えを組み立てる基準と同じにする。
+export function isAnswered(question: ChatPendingQuestion, choice: Choice): boolean {
+  if (choice.other) return flatText(choice.text) !== "";
+  return question.options.some((option) => choice.labels.includes(option.label));
+}
+
+export function unansweredIndexes(
+  questions: readonly ChatPendingQuestion[],
+  choices: readonly Choice[],
+): number[] {
+  return questions.flatMap((question, index) =>
+    isAnswered(question, choices[index] ?? NO_CHOICE) ? [] : [index],
+  );
+}
+
+// 単一選択を選んだ直後に開くページ。全問に答えてあれば確認ページ（質問数番目）へ戻し、
+// そうでなければ次の質問へ進む。確認ページから 1 問だけ直したときに、残りを通らせない。
+export function pageAfterPick(
+  questions: readonly ChatPendingQuestion[],
+  choices: readonly Choice[],
+  index: number,
+): number {
+  return unansweredIndexes(questions, choices).length === 0 ? questions.length : index + 1;
+}
+
+// タブと確認ページに出す質問の名前。見出しの無い質問は番号で呼ぶ。
+export function questionLabel(question: ChatPendingQuestion, index: number): string {
+  return question.header ?? `質問 ${index + 1}`;
+}
+
+// 確認ページに出す答え。答えが無ければ null。選択肢は選択肢の並び順に並べる。
+export function answerSummary(question: ChatPendingQuestion, choice: Choice): string | null {
+  if (choice.other) {
+    const text = flatText(choice.text);
+    return text === "" ? null : text;
+  }
+  const labels = question.options
+    .map((option) => option.label)
+    .filter((label) => choice.labels.includes(label));
+  return labels.length === 0 ? null : labels.join("、");
+}
+
 // 全質問に答えが揃ったときだけ回答の本体を返す。送れない間は「この内容で答える」を無効にする。
 // 選択肢は選択肢の並び順で返し、入れた順に依存させない。
 export function answersOf(
