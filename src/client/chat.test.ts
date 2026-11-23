@@ -5,6 +5,9 @@ import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
 import { MARKDOWN_MAX_LENGTH } from "./markdown/parse";
 import {
   agentInfo,
+  ANSWER_ECHO_GRACE_MS,
+  answerEchoReleaseAt,
+  answerEchoReleased,
   cacheView,
   chatPollDelay,
   compactionLabel,
@@ -451,7 +454,182 @@ test("a pending message is confirmed by a new user message after its baseline", 
   expect(
     isPendingConfirmed(pending, [{ id: "m2", role: "agent", text: "steer", at: pending.from + 1 }]),
   ).toBe(false);
+  // ask_user の回答として合成された user 行は、通常送信の確定に使わない。
+  expect(
+    isPendingConfirmed(pending, [
+      { id: "m2", role: "user", text: "steer", at: pending.from + 1, synthetic: true },
+    ]),
+  ).toBe(false);
   expect(isPendingConfirmed(pending, [])).toBe(false);
+});
+
+test("an answer echo leaves only when the same question is synthesized", () => {
+  const answer: PendingMessage = {
+    ...pending,
+    waiting: false,
+    text: "青",
+    answer: true,
+    toolUseId: "q2",
+    question: "Q2",
+  };
+  expect(
+    isPendingConfirmed(answer, [
+      {
+        id: "a2",
+        role: "user",
+        text: " 青 ",
+        at: pending.from + 1,
+        synthetic: true,
+        askId: "q2",
+      },
+    ]),
+  ).toBe(true);
+  // TUI が別の回答を採用しても、同じ質問の結果なら畳む。
+  expect(
+    isPendingConfirmed(answer, [
+      {
+        id: "a2",
+        role: "user",
+        text: "赤",
+        at: pending.from + 1,
+        synthetic: true,
+        askId: "q2",
+      },
+    ]),
+  ).toBe(true);
+  // 別の質問の合成回答では畳まない。
+  expect(
+    isPendingConfirmed(answer, [
+      {
+        id: "a1",
+        role: "user",
+        text: "赤",
+        at: pending.from + 1,
+        synthetic: true,
+        askId: "q1",
+      },
+    ]),
+  ).toBe(false);
+  // 同じ本文の通常 user 発話では畳まない。
+  expect(
+    isPendingConfirmed(answer, [{ id: "a2", role: "user", text: "青", at: pending.from + 1 }]),
+  ).toBe(false);
+});
+
+test("an answer echo from an old mypi falls back to the question text", () => {
+  const answer: PendingMessage = {
+    ...pending,
+    waiting: false,
+    text: "Blue",
+    answer: true,
+    question: "Q2",
+  };
+  expect(
+    isPendingConfirmed(answer, [
+      {
+        id: "ask:old-q1:question",
+        role: "agent",
+        text: "Q1",
+        at: pending.from + 1,
+        synthetic: true,
+      },
+      {
+        id: "ask:old-q1:answer",
+        role: "user",
+        text: "Red",
+        at: pending.from + 2,
+        synthetic: true,
+      },
+    ]),
+  ).toBe(false);
+  const oldAnswer = [
+    {
+      id: "ask:old-q2:question",
+      role: "agent" as const,
+      text: "Q2",
+      at: pending.from + 1,
+      synthetic: true as const,
+    },
+    {
+      id: "ask:old-q2:answer",
+      role: "user" as const,
+      text: "Blue",
+      at: pending.from + 2,
+      synthetic: true as const,
+    },
+  ];
+  expect(isPendingConfirmed(answer, oldAnswer)).toBe(true);
+  // 同じ質問がまだ pending の間は、古い結果の推測で消さない。
+  expect(isPendingConfirmed({ ...answer, toolUseId: "q2" }, oldAnswer, "q2")).toBe(false);
+  expect(isPendingConfirmed({ ...answer, toolUseId: "q2" }, oldAnswer, "other")).toBe(true);
+});
+
+test("old mypi batch answers pair by synthetic id, not adjacency", () => {
+  const answer: PendingMessage = {
+    ...pending,
+    waiting: false,
+    text: "New",
+    answer: true,
+    toolUseId: "q2",
+    question: "Same?",
+  };
+  const batch = [
+    {
+      id: "ask:k1:question",
+      role: "agent" as const,
+      text: "Same?",
+      at: pending.from - 10,
+      synthetic: true as const,
+    },
+    {
+      id: "ask:k2:question",
+      role: "agent" as const,
+      text: "Same?",
+      at: pending.from - 10,
+      synthetic: true as const,
+    },
+    {
+      id: "ask:k1:answer",
+      role: "user" as const,
+      text: "Old",
+      at: pending.from - 1,
+      synthetic: true as const,
+    },
+    {
+      id: "ask:k2:answer",
+      role: "user" as const,
+      text: "New",
+      at: pending.from + 1,
+      synthetic: true as const,
+    },
+  ];
+  expect(isPendingConfirmed(answer, batch, "q2")).toBe(false);
+  expect(isPendingConfirmed(answer, batch)).toBe(true);
+  // 別の質問の古い回答だけでは消さない。
+  expect(isPendingConfirmed(answer, batch.slice(0, 3))).toBe(false);
+});
+
+test("an answer echo is released when its question is no longer pending", () => {
+  const answer: PendingMessage = {
+    ...pending,
+    waiting: false,
+    answer: true,
+    toolUseId: "q1",
+  };
+  expect(answerEchoReleased(answer, "q1")).toBe(false);
+  expect(answerEchoReleased(answer, "q2")).toBe(true);
+  expect(answerEchoReleased(answer, undefined)).toBe(true);
+  // 通常の送信控えは pending の質問 ID を持たないので対象外。
+  expect(answerEchoReleased({ ...pending, toolUseId: "q1" }, "q2")).toBe(false);
+
+  // 一度解放した期限は、次の質問が来ても延びない。
+  const released = { ...answer, answerReleaseAt: 5_000 };
+  expect(answerEchoReleaseAt(released, "q2", 9_000)).toBe(5_000);
+  expect(answerEchoReleaseAt({ ...answer, answerReleaseAt: undefined }, "q2", 9_000)).toBe(
+    9_000 + ANSWER_ECHO_GRACE_MS,
+  );
+  // pending が同じ質問に戻ったら期限を外す。
+  expect(answerEchoReleaseAt(released, "q1", 9_000)).toBeUndefined();
 });
 
 test("an echo whose pane never started working expires after the turn grace", () => {
@@ -475,6 +653,18 @@ test("a command echo leaves only when the session records the same text", () => 
       { id: "m2", role: "user", text: " /reload ", at: pending.from + 1 },
     ]),
   ).toBe(true);
+  // ask_user の合成回答が同じ文言でも、コマンド控えは消さない。
+  expect(
+    isPendingConfirmed(command, [
+      {
+        id: "m2",
+        role: "user",
+        text: "/reload",
+        at: pending.from + 1,
+        synthetic: true,
+      },
+    ]),
+  ).toBe(false);
   // 送信前からあった同じ文言は、そのコマンドの発話ではない。
   expect(
     isPendingConfirmed(command, [{ id: "m2", role: "user", text: "/reload", at: pending.from }]),

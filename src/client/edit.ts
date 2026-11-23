@@ -35,6 +35,8 @@ export function canEditMessage(args: EditEligibility): boolean {
   // 質問の待ちの間は、TUI のダイアログが入力を受け取る。
   if (pane.agentStatus === "working" || pane.agentStatus === "blocked") return false;
   if (row.echo !== "none") return false;
+  // ask_user の Q&A は会話の実体ではない。navigateTree の対象にしない。
+  if (row.message.synthetic === true) return false;
   if (row.message.role !== "user") return false;
   if (row.message.text.trim() === "") return false;
   if ((row.message.attachments?.length ?? 0) > 0) return false;

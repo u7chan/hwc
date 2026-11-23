@@ -101,6 +101,15 @@ export function askUserAnswers(
   return [{ question: question.question, labels: [label] }];
 }
 
+// ask_user の回答は 1 問 1 答。楽観表示に使う本文を返す。
+export function askUserAnswerText(answers: readonly QuestionAnswer[]): string | null {
+  if (answers.length !== 1) return null;
+  const answer = answers[0];
+  if (answer === undefined) return null;
+  if ("text" in answer) return answer.text.trim() === "" ? null : answer.text;
+  return answer.labels[0] ?? null;
+}
+
 // status は BFF の応答。0 はネットワークの失敗と打ち切り。
 export function answerFailure(status: number): string {
   if (status === 413) return "回答が長すぎて送れません。短くしてください。";

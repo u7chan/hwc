@@ -6,6 +6,7 @@ import {
   ASK_FREE_TEXT_LABEL,
   askOptionLabels,
   askOptionLabelsForQuestions,
+  askUserAnswerText,
   askUserAnswers,
   NO_CHOICE,
   pickLabel,
@@ -158,6 +159,18 @@ test("each question uses its own option labels", () => {
     ["クイックスタート", "コマンド"],
     ["範囲 A", "範囲 B"],
   ]);
+});
+
+test("the optimistic answer text mirrors the pi answer", () => {
+  expect(askUserAnswerText([{ question: "色", labels: ["青"] }])).toBe("青");
+  expect(askUserAnswerText([{ question: "色", text: " 自由入力 " }])).toBe(" 自由入力 ");
+  expect(askUserAnswerText([{ question: "色", text: " " }])).toBeNull();
+  expect(
+    askUserAnswerText([
+      { question: "色", labels: ["青"] },
+      { question: "範囲", labels: ["コマンド"] },
+    ]),
+  ).toBeNull();
 });
 
 test("a pi option answer is exactly one label from the question", () => {

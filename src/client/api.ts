@@ -261,6 +261,9 @@ function toChatMessage(value: unknown): ChatMessage | null {
   const links = toChatLinks(message.links);
   const outsideFile = toOutsideFile(message.outsideFile);
   const count = message.role === "error" ? toRetryCount(message.count) : undefined;
+  const synthetic = message.synthetic === true ? true : undefined;
+  const askId =
+    typeof message.askId === "string" && message.askId !== "" ? message.askId : undefined;
   return {
     id: message.id,
     role: message.role,
@@ -271,6 +274,8 @@ function toChatMessage(value: unknown): ChatMessage | null {
     ...(files === undefined ? {} : { files }),
     ...(links === undefined ? {} : { links }),
     ...(outsideFile === undefined ? {} : { outsideFile }),
+    ...(synthetic === undefined ? {} : { synthetic }),
+    ...(askId === undefined ? {} : { askId }),
   };
 }
 

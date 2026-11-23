@@ -8,6 +8,7 @@ import type { GitSync } from "../shared/git";
 import { attachmentKindOfFileName } from "../shared/attachments";
 import { activityLabel, activitySnippet, showActivityFrame, usePaneActivity } from "./activity";
 import { OUTPUT_LINES, answerQuestion, editMessage, uploadAttachment } from "./api";
+import { askUserAnswerText } from "./answer";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference } from "./file-reference";
 import { fileTreeStore } from "./file-tree-store";
@@ -24,6 +25,7 @@ import {
   cacheView,
   contextMeter,
   idleEchoExpired,
+  answerEchoReleaseAt,
   isPendingConfirmed,
   latestUserAt,
   newSessionPending,
@@ -220,6 +222,38 @@ export function PaneDetail(props: PaneDetailProps) {
   const [switchOpen, setSwitchOpen] = useState(false);
   const { outputVersion, requestOutputRefresh } = useOutputVersion();
   const [pending, setPending] = useState<PendingMessage[]>([]);
+  // 送った本文や ask_user の回答を、ポーリングが返すまでの控えとして積む。入力欄からの送信と、
+  // 会話の行から送る依頼で形を揃える。
+  const echoPending = (echo: {
+    text: string;
+    at: number;
+    from: number;
+    waiting: boolean;
+    after: number;
+    attachments: ChatAttachment[];
+    answer?: boolean;
+    toolUseId?: string;
+    question?: string;
+  }) => {
+    setPending((items) => [
+      ...items,
+      {
+        id: `pending-${echo.at}-${items.length}`,
+        role: "user",
+        text: echo.text,
+        at: echo.at,
+        from: echo.from,
+        waiting: echo.waiting,
+        after: echo.after,
+        command: false,
+        ...(echo.attachments.length === 0 ? {} : { attachments: echo.attachments }),
+        ...(echo.answer === true ? { answer: true } : {}),
+        ...(echo.toolUseId === undefined ? {} : { toolUseId: echo.toolUseId }),
+        ...(echo.question === undefined ? {} : { question: echo.question }),
+      },
+    ]);
+  };
+
   const [sessionReset, setSessionReset] = useState<NewSessionReset | null>(null);
   // 入力欄の状態と遷移は useComposer が持つ。ここは添付と定型文の取得だけを残す。
   const attachments = useAttachments(pane.id);
@@ -268,7 +302,34 @@ export function PaneDetail(props: PaneDetailProps) {
     target: Extract<ChatPending, { kind: "question" }>,
     answers: QuestionAnswer[],
   ) => {
+    // pi の ask_user は answer ファイルだけを書き、user 発話をセッションに残さない。
+    // POST の応答を待たず、押した瞬間に同じ本文を控えとして積む。失敗したらこの控えだけを
+    // 取り消す。成功時は BFF が tool result から合成した user メッセージが届くと畳む。
+    const text = target.tool === "ask_user" ? askUserAnswerText(answers) : null;
+    const echoAt = Date.now();
+    if (text !== null) {
+      echoPending({
+        text,
+        at: echoAt,
+        from: latestUserAt(snapshot?.messages ?? []),
+        waiting: false,
+        after: snapshot?.messages.length ?? 0,
+        attachments: [],
+        answer: true,
+        toolUseId: target.toolUseId,
+        question: target.questions[0]?.question,
+      });
+    }
     const result = await answerQuestion(pane.id, { toolUseId: target.toolUseId, answers });
+    if (!result.ok && text !== null) {
+      setPending((items) => {
+        const next = items.filter(
+          (item) =>
+            !(item.answer === true && item.toolUseId === target.toolUseId && item.at === echoAt),
+        );
+        return next.length === items.length ? items : next;
+      });
+    }
     refreshChat();
     return result;
   };
@@ -282,7 +343,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const pendingMessages = pending.filter(
     (item) =>
       (!resetting || sessionReset === null || item.at >= sessionReset.at) &&
-      !isPendingConfirmed(item, snapshot?.messages ?? []),
+      !isPendingConfirmed(item, snapshot?.messages ?? [], snapshot?.pending?.toolUseId),
   );
 
   useEffect(() => {
@@ -622,10 +683,45 @@ export function PaneDetail(props: PaneDetailProps) {
     if (pending.length === 0) return;
     const messages = snapshot?.messages ?? [];
     setPending((items) => {
-      const next = items.filter((item) => !isPendingConfirmed(item, messages));
+      const next = items.filter(
+        (item) => !isPendingConfirmed(item, messages, snapshot?.pending?.toolUseId),
+      );
       return next.length === items.length ? items : next;
     });
   }, [snapshot, pending.length]);
+
+  useEffect(() => {
+    const activeToolUseId = snapshot?.pending?.toolUseId;
+    const now = Date.now();
+    setPending((items) => {
+      let changed = false;
+      const next = items.map((item) => {
+        const releaseAt = answerEchoReleaseAt(item, activeToolUseId, now);
+        if (releaseAt === item.answerReleaseAt) return item;
+        changed = true;
+        return { ...item, answerReleaseAt: releaseAt };
+      });
+      return changed ? next : items;
+    });
+  }, [snapshot?.pending?.toolUseId, pending.length]);
+
+  useEffect(() => {
+    const deadlines = pending.flatMap((item) =>
+      item.answerReleaseAt === undefined ? [] : [item.answerReleaseAt],
+    );
+    if (deadlines.length === 0) return;
+    const delay = Math.max(0, Math.min(...deadlines) - Date.now());
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      setPending((items) => {
+        const next = items.filter(
+          (item) => item.answerReleaseAt === undefined || item.answerReleaseAt > now,
+        );
+        return next.length === items.length ? items : next;
+      });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [pending]);
 
   useEffect(() => {
     if (replying) return;
@@ -639,7 +735,7 @@ export function PaneDetail(props: PaneDetailProps) {
   // 入力を受け取らなかったものとして、ローカルのコマンド控えに切り替える。コマンドは
   // user 発話を残さないため、セッションを待っても確定しない。
   useEffect(() => {
-    const idle = pending.filter((item) => !item.waiting && !item.command);
+    const idle = pending.filter((item) => !item.waiting && !item.command && item.answer !== true);
     if (idle.length === 0 || replying) return;
     const oldest = Math.min(...idle.map((item) => item.at));
     const delay = Math.max(0, oldest + PENDING_TURN_GRACE_MS - Date.now());
@@ -648,7 +744,7 @@ export function PaneDetail(props: PaneDetailProps) {
       setPending((items) => {
         let changed = false;
         const next = items.map((item) => {
-          if (item.command || !idleEchoExpired(item, now)) return item;
+          if (item.command || item.answer === true || !idleEchoExpired(item, now)) return item;
           changed = true;
           return { ...item, command: true };
         });
@@ -680,32 +776,6 @@ export function PaneDetail(props: PaneDetailProps) {
     names.length === 0 &&
     isCommandPane(pane) &&
     isNewSessionCommand(text);
-
-  // 送った本文を、ポーリングが返すまでの控えとして積む。入力欄からの送信と、会話の行から
-  // 送る依頼で形を揃える。
-  const echoPending = (echo: {
-    text: string;
-    at: number;
-    from: number;
-    waiting: boolean;
-    after: number;
-    attachments: ChatAttachment[];
-  }) => {
-    setPending((items) => [
-      ...items,
-      {
-        id: `pending-${echo.at}-${items.length}`,
-        role: "user",
-        text: echo.text,
-        at: echo.at,
-        from: echo.from,
-        waiting: echo.waiting,
-        after: echo.after,
-        command: false,
-        ...(echo.attachments.length === 0 ? {} : { attachments: echo.attachments }),
-      },
-    ]);
-  };
 
   const submitInput = async (text: string, names: string[]): Promise<boolean> => {
     const newSession = startsNewSession(text, names);

@@ -224,6 +224,73 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
     await rm(`${session}.ask.answer.json`, { force: true }).catch(() => {});
   };
 
+  // 回答後のセッションに ask_user の tool call/result を残す。BFF が Q&A を会話へ
+  // 合成する経路を E2E で確かめるためで、実 mypi の tool result と同じ形にする。
+  const appendAskExchange = async (
+    sessionPath: string,
+    toolCallId: string,
+    askId: string,
+    question: string,
+    options: string[] | null,
+    recommended: string | null,
+    answer: string,
+    kind: "option" | "text",
+  ): Promise<void> => {
+    let raw: string;
+    try {
+      raw = await readFile(sessionPath, "utf8");
+    } catch {
+      return;
+    }
+    let parentId: string | null = null;
+    for (const line of raw.split("\n")) {
+      if (line.trim() === "") continue;
+      try {
+        const entry = JSON.parse(line) as { id?: unknown };
+        if (typeof entry.id === "string") parentId = entry.id;
+      } catch {
+        // 壊れた行は無視する。
+      }
+    }
+    if (parentId === null) return;
+    const assistantId = `e2e-ask-a-${toolCallId}`;
+    const assistant = {
+      type: "message",
+      id: assistantId,
+      parentId,
+      timestamp: new Date().toISOString(),
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: toolCallId,
+            name: "ask_user",
+            arguments: { question, options, recommended },
+          },
+        ],
+        stopReason: "toolUse",
+        timestamp: Date.now(),
+      },
+    };
+    const result = {
+      type: "message",
+      id: `e2e-ask-r-${toolCallId}`,
+      parentId: assistantId,
+      timestamp: new Date().toISOString(),
+      message: {
+        role: "toolResult",
+        toolCallId,
+        toolName: "ask_user",
+        content: [{ type: "text", text: `ユーザーの回答: ${answer}` }],
+        details: { status: "answered", askId, winner: "file", kind },
+        isError: false,
+        timestamp: Date.now(),
+      },
+    };
+    await appendFile(sessionPath, `${JSON.stringify(assistant)}\n${JSON.stringify(result)}\n`);
+  };
+
   const startAsk = async (paneId: string, options: string[] | null): Promise<void> => {
     const session = askSessionPath(paneId);
     if (session === null) return;
@@ -233,6 +300,9 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
     const pendingPath = `${session}.ask.json`;
     const answerPath = `${session}.ask.answer.json`;
     const id = crypto.randomUUID();
+    const toolCallId = `call_ask_${id}`;
+    const question = "E2E: この変更をどう進めますか？\n選択肢か自由入力で答えてください。";
+    const recommended = options === null ? null : (options[0] ?? null);
     const epoch = (askEpochs.get(paneId) ?? 0) + 1;
     askEpochs.set(paneId, epoch);
     await rm(answerPath, { force: true }).catch(() => {});
@@ -241,9 +311,9 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
       `${JSON.stringify({
         v: 1,
         id,
-        question: "E2E: この変更をどう進めますか？\n選択肢か自由入力で答えてください。",
+        question,
         options,
-        recommended: options === null ? null : options[0],
+        recommended,
         freeText: true,
       })}\n`,
       { mode: 0o600 },
@@ -260,9 +330,24 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
         return;
       }
       let answered = false;
+      let answerText: string | null = null;
+      let answerKind: "option" | "text" = "option";
       try {
-        const value = JSON.parse(raw) as { v?: unknown; id?: unknown };
-        answered = value.v === 1 && value.id === id;
+        const value = JSON.parse(raw) as {
+          v?: unknown;
+          id?: unknown;
+          answer?: { kind?: unknown; label?: unknown; text?: unknown };
+        };
+        if (value.v === 1 && value.id === id) {
+          const answer = value.answer;
+          if (answer?.kind === "text" && typeof answer.text === "string") {
+            answerText = answer.text;
+            answerKind = "text";
+          } else if (answer?.kind === "option" && typeof answer.label === "string") {
+            answerText = answer.label;
+          }
+          answered = answerText !== null;
+        }
       } catch {
         // 壊れた回答は読まなかったことにする。実 mypi も無視する。
       }
@@ -273,7 +358,17 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
       // カードが「送信済み」になるのを見せるため、pending を少し残してから消す。
       askEpochs.delete(paneId);
       later(async () => {
-        if (findPane(paneId) === null) return;
+        if (findPane(paneId) === null || answerText === null) return;
+        await appendAskExchange(
+          session,
+          toolCallId,
+          id,
+          question,
+          options,
+          recommended,
+          answerText,
+          answerKind,
+        );
         await rm(pendingPath, { force: true }).catch(() => {});
         await rm(answerPath, { force: true }).catch(() => {});
         setAgentStatus(paneId, "working");
