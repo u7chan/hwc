@@ -536,10 +536,20 @@ html:not([data-input-modality="pointer"])
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
-.hwc-skill-head:hover {
-  background: var(--color-raised);
+/* タッチでは、タップした行にホバーが残り続ける。 */
+@media (hover: hover) {
+  .hwc-skill-head:hover {
+    background: var(--color-raised);
+  }
+}
+
+/* 輪郭を外へ出すと、開いたときに下の一覧へ重なる。設定一覧の行と同じく内側に収める。 */
+.hwc-skill-head:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
 }
 
 .hwc-skill-summary {
