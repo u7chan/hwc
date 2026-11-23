@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { createAppContext, type CreateAppOptions } from "./routes/context";
+import { createAgentSkillsHandlers } from "./routes/agent-skills";
 import { createChatHandlers } from "./routes/chat";
 import { createEditMessageHandlers } from "./routes/edit-message";
 import { createFilesHandlers } from "./routes/files";
@@ -26,6 +27,7 @@ const requireJson = createMiddleware(async (c, next) => {
 
 export function createApp(options: CreateAppOptions) {
   const ctx = createAppContext(options);
+  const agentSkillsHandlers = createAgentSkillsHandlers(ctx);
   const chatHandlers = createChatHandlers(ctx);
   const editMessageHandlers = createEditMessageHandlers(ctx);
   const filesHandlers = createFilesHandlers(ctx);
@@ -53,6 +55,8 @@ export function createApp(options: CreateAppOptions) {
       .post("/api/notifications/discord/test", requireJson, notificationsHandlers.testDiscord)
       .get("/api/launch-defaults", launchDefaultsHandlers.get)
       .put("/api/launch-defaults", requireJson, launchDefaultsHandlers.put)
+      // 設定画面のエージェント詳細に出す、その CLI がグローバルに認識するスキル。
+      .get("/api/agents/:agent/skills", agentSkillsHandlers.get)
       // 設定画面の候補。ペインを持たないので、BFF がホームディレクトリで読む。
       .get("/api/models", chatHandlers.homeModels)
       .get("/api/model-labels", chatHandlers.homeModelLabels)

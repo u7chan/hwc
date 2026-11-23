@@ -127,6 +127,8 @@ export type CreateAppOptions = {
   launchDefaults?: LaunchDefaultsStore;
   // 設定画面の候補を読むディレクトリ。テストでは実ホームを渡さないよう差し替える。
   homeDirectory?: string;
+  // グローバルスキルを探すホーム。E2E では架空のホームへ振り向け、実ホームのスキルを画面に出さない。
+  skillsHome?: string;
 };
 
 export function createAppContext(options: CreateAppOptions) {
@@ -159,6 +161,7 @@ export function createAppContext(options: CreateAppOptions) {
     templates = createTemplatesStore({ read: () => null, write: () => {} }),
     launchDefaults = createLaunchDefaultsStore({ read: () => null, write: () => {} }),
     homeDirectory = homedir(),
+    skillsHome = homeDirectory,
     loadPiDefaults: readPiDefaults = loadPiDefaults,
   } = options;
 
@@ -468,6 +471,7 @@ export function createAppContext(options: CreateAppOptions) {
     templates,
     launchDefaults,
     homeDirectory,
+    skillsHome,
     stateMessage,
     current,
     freshPane,

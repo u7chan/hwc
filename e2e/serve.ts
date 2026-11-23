@@ -17,6 +17,8 @@ process.env.PI_CODING_AGENT_DIR = join(fake.root, "agent");
 process.env.CODEX_HOME = join(fake.root, "codex");
 // Claude の transcript も架空の root だけを読む。実ホームの ~/.claude は見ない。
 process.env.CLAUDE_CONFIG_DIR = join(fake.root, "claude");
+// グローバルスキルも架空のホームだけを読む。実ホームのスキルを画面に出さない。
+process.env.HWC_SKILLS_HOME = join(fake.root, "home");
 process.env.HOST = "127.0.0.1";
 process.env.PORT ??= "31000";
 

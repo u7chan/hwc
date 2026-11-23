@@ -15,6 +15,7 @@ import type {
 import type { PaneRead } from "../server/herdr/contract";
 import type { AppState } from "../server/herdr/state";
 import { parseFileTree, type FileTreeListing } from "../shared/file-tree";
+import type { AgentSkills } from "../shared/agent-skills";
 import { parsePaneActivity, type PaneActivity } from "../shared/activity";
 import type { AnswerRequest } from "../shared/answer";
 import type { ModelSwitchRequest } from "../shared/model-switch";
@@ -1153,6 +1154,23 @@ export async function readLaunchDefaults(signal: AbortSignal): Promise<LaunchDef
 }
 
 export type LaunchDefaultSaveResult = { ok: true; defaults: LaunchDefaults } | { ok: false };
+
+// その CLI がグローバルに認識するスキル。読めなかったときは null（保存値ではなく、毎回読む）。
+export async function readAgentSkills(
+  agent: ModelAgentKind,
+  signal: AbortSignal,
+): Promise<AgentSkills | null> {
+  try {
+    const response = await client.api.agents[":agent"].skills.$get(
+      { param: { agent } },
+      { init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) } },
+    );
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
 // value が null なら、そのエージェントの既定を解除する。
 export async function saveLaunchDefault(

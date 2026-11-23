@@ -20,6 +20,7 @@ import { SettingsIndex } from "./SettingsIndex";
 import { SplitSettings } from "./SplitSettings";
 import { agentOfCategory, settingsCategoryLabel, type SettingsCategoryId } from "./categories";
 import { AgentSettings } from "./AgentSettings";
+import { AgentSkills } from "./AgentSkills";
 import { TemplateSettings } from "./TemplateSettings";
 
 type SettingsProps = {
@@ -83,7 +84,11 @@ function section(
     default: {
       const agent = agentOfCategory(id);
       return agent === null ? null : (
-        <AgentSettings agent={agent} labels={labels} onSaved={callbacks.onSaved} />
+        <>
+          <AgentSettings agent={agent} labels={labels} onSaved={callbacks.onSaved} />
+          {/* エージェントを移ったら、開いていた一覧も閉じた状態に戻す。 */}
+          <AgentSkills key={agent} agent={agent} />
+        </>
       );
     }
   }
