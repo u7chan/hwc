@@ -60,6 +60,16 @@ export type ChatMessage = {
   synthetic?: true;
   // mypi の pending 質問 id。回答直後の控えと同じ質問かを照合するためにだけ使う。
   askId?: string;
+  // ask_user の選択肢。合成した質問にだけ載せ、選択済み・推奨を表示する。
+  askOptions?: ChatAskOption[];
+  // 合成した回答が選択肢か自由入力か。回答バブルの種別表示に使う。
+  answerKind?: "option" | "text";
+};
+
+export type ChatAskOption = {
+  label: string;
+  recommended: boolean;
+  selected: boolean;
 };
 
 export type ChatContext = {

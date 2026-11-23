@@ -49,12 +49,21 @@ type SessionCompaction = {
   at: number;
 };
 
-type SessionAskQuestion = { toolCallId: string; question: string; at: number };
+type SessionAskQuestion = {
+  toolCallId: string;
+  question: string;
+  // 質問カードと同じ生のラベル。履歴では選択済み・推奨を表示する。
+  options: string[] | null;
+  recommended: string | null;
+  at: number;
+};
 type SessionAskResult = {
   toolCallId: string;
   status: string;
   // mypi が pending 質問 id を details に残す。古い mypi は null。
   askId: string | null;
+  // 回答が選択肢か自由入力か。古い mypi や不明な値は null。
+  kind: "option" | "text" | null;
   // answered 以外は null。Esc・中断・失敗も呼び出しを消費するために保持する。
   answer: string | null;
   at: number;
@@ -479,6 +488,25 @@ function normalizeQuestionText(value: string): string {
   return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
 }
 
+// 選択肢は表示用。mypi が検証済みでも、壊れた値で履歴を失わないよう文字列だけを拾う。
+function askOptionsFromArgs(args: Record<string, unknown> | null): {
+  options: string[] | null;
+  recommended: string | null;
+} {
+  if (args === null || !Array.isArray(args.options)) {
+    return { options: null, recommended: null };
+  }
+  const options = args.options.flatMap((value) =>
+    typeof value === "string" && value.trim() !== "" ? [value.trim()] : [],
+  );
+  if (options.length === 0) return { options: null, recommended: null };
+  const recommended =
+    typeof args.recommended === "string" && options.includes(args.recommended.trim())
+      ? args.recommended.trim()
+      : null;
+  return { options, recommended };
+}
+
 // toolCall の arguments は通常オブジェクト。壊れた文字列は質問なしとして扱う。
 function askQuestionsFromContent(content: unknown, at: number): SessionAskQuestion[] {
   if (!Array.isArray(content)) return [];
@@ -490,7 +518,7 @@ function askQuestionsFromContent(content: unknown, at: number): SessionAskQuesti
     const args = asRecord(record.arguments);
     const question = typeof args?.question === "string" ? normalizeQuestionText(args.question) : "";
     if (toolCallId === null || question === "") continue;
-    questions.push({ toolCallId, question, at });
+    questions.push({ toolCallId, ...askOptionsFromArgs(args), question, at });
   }
   return questions;
 }
@@ -514,7 +542,8 @@ function askResultsFromMessage(message: Record<string, unknown>, at: number): Se
   const details = asRecord(message.details);
   const status = typeof details?.status === "string" ? details.status : "other";
   const askId = nonEmptyText(details?.askId);
-  if (status !== "answered") return [{ toolCallId, status, askId, answer: null, at }];
+  const kind = details?.kind === "option" || details?.kind === "text" ? details.kind : null;
+  if (status !== "answered") return [{ toolCallId, status, askId, kind, answer: null, at }];
   const text = toolResultText(message.content);
   const prefix = "ユーザーの回答: ";
   const answer = text.startsWith(prefix) ? text.slice(prefix.length) : text;
@@ -523,6 +552,7 @@ function askResultsFromMessage(message: Record<string, unknown>, at: number): Se
       toolCallId,
       status,
       askId,
+      kind,
       answer: answer.trim() === "" ? null : answer,
       at,
     },
@@ -581,6 +611,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   const askCallKeys = new Map<SessionAskQuestion, string>();
   const askResultKeys = new Map<SessionAskResult, string>();
   const askIdsByKey = new Map<string, string>();
+  const askResultsByKey = new Map<string, SessionAskResult>();
   const answeredAskKeys = new Set<string>();
   const waitingAskCalls = new Map<string, SessionAskQuestion[]>();
   let askCallSeq = 0;
@@ -605,6 +636,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
       const key = askCallKeys.get(call);
       if (key === undefined) continue;
       askResultKeys.set(result, key);
+      askResultsByKey.set(key, result);
       if (result.askId !== null) askIdsByKey.set(key, result.askId);
       if (result.status === "answered" && result.answer !== null) answeredAskKeys.add(key);
     }
@@ -637,6 +669,13 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
         const key = askCallKeys.get(ask);
         if (key === undefined || !answeredAskKeys.has(key)) continue;
         const askId = askIdsByKey.get(key);
+        const result = askResultsByKey.get(key);
+        const selected = result?.kind === "option" ? result.answer : null;
+        const askOptions = ask.options?.map((label) => ({
+          label,
+          recommended: label === ask.recommended,
+          selected: label === selected,
+        }));
         messages.push({
           id: `ask:${key}:question`,
           role: "agent",
@@ -644,6 +683,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
           at: ask.at,
           synthetic: true,
           ...(askId === undefined ? {} : { askId }),
+          ...(askOptions === undefined ? {} : { askOptions }),
         });
         emittedAskKeys.add(key);
         addedAsk = true;
@@ -658,6 +698,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
           at: result.at,
           synthetic: true,
           ...(result.askId == null ? {} : { askId: result.askId }),
+          ...(result.kind === null ? {} : { answerKind: result.kind }),
         });
         addedAsk = true;
       }

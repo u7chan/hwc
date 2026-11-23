@@ -112,6 +112,70 @@ p.hwc-compaction,
   justify-content: flex-end;
 }
 
+/* 合成した ask_user の質問に残す選択肢。選んだものと推奨を、色だけでなく記号と
+   ラベルでも示す。 */
+.hwc-ask-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  max-width: 100%;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hwc-ask-option {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-raised);
+  color: var(--color-text);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+}
+
+.hwc-ask-option[data-selected="true"] {
+  border-color: var(--color-accent);
+  background: var(--color-active-bg);
+}
+
+.hwc-ask-option-mark {
+  flex: none;
+  color: var(--color-secondary);
+}
+
+.hwc-ask-option[data-selected="true"] .hwc-ask-option-mark {
+  color: var(--color-accent);
+}
+
+.hwc-ask-option-label {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.hwc-ask-option-badge,
+.hwc-msg-kind {
+  flex: none;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-mark);
+  background: var(--color-raised);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  line-height: var(--line-tight);
+  white-space: nowrap;
+}
+
+.hwc-ask-option[data-selected="true"] .hwc-ask-option-badge {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .hwc-msg-copy,
 .hwc-msg-edit {
   display: grid;

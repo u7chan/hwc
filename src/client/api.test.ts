@@ -306,8 +306,34 @@ test("a synthetic ask_user answer keeps its flag", () => {
     at: 1,
     synthetic: true as const,
     askId: "ask-1",
+    askOptions: [
+      { label: "赤", recommended: true, selected: false },
+      { label: "青", recommended: false, selected: true },
+    ],
+    answerKind: "option" as const,
   };
   expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
+});
+
+test("malformed ask options are dropped without dropping the question", () => {
+  const message = {
+    id: "ask:call_ask:question",
+    role: "agent" as const,
+    text: "Q",
+    at: 1,
+    synthetic: true as const,
+    askOptions: [
+      { label: "   ", recommended: true, selected: false },
+      { label: "A", recommended: "yes", selected: false },
+      { label: "B", recommended: true, selected: "no" },
+      { label: " C ", recommended: true, selected: false },
+    ],
+  };
+  const kept = toChatSnapshot({ ...chatBody, messages: [message] })?.messages[0];
+  expect(kept).toEqual({
+    ...message,
+    askOptions: [{ label: "C", recommended: true, selected: false }],
+  });
 });
 
 test("a pending prompt is kept as the contract describes it", () => {
