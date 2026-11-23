@@ -5,6 +5,7 @@ import {
   answersOf,
   ASK_FREE_TEXT_LABEL,
   askOptionLabels,
+  askOptionLabelsForQuestions,
   askUserAnswers,
   NO_CHOICE,
   pickLabel,
@@ -141,6 +142,21 @@ test("model options that collide with free text and each other get unique displa
   const picked = pickLabel(question, NO_CHOICE, ASK_FREE_TEXT_LABEL);
   expect(askUserAnswers(question, picked)).toEqual([
     { question: "好きな色は？", labels: [ASK_FREE_TEXT_LABEL] },
+  ]);
+});
+
+test("each question uses its own option labels", () => {
+  const questions = [
+    {
+      options: [{ label: "クイックスタート" }, { label: "コマンド" }],
+    },
+    {
+      options: [{ label: "範囲 A" }, { label: "範囲 B" }],
+    },
+  ];
+  expect(askOptionLabelsForQuestions(questions, true)).toEqual([
+    ["クイックスタート", "コマンド"],
+    ["範囲 A", "範囲 B"],
   ]);
 });
 

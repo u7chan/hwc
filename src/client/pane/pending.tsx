@@ -6,7 +6,7 @@ import {
   answerFailure,
   answersOf,
   ASK_FREE_TEXT_LABEL,
-  askOptionLabels,
+  askOptionLabelsForQuestions,
   askUserAnswers,
   type Choice,
   NO_CHOICE,
@@ -81,7 +81,7 @@ function QuestionForm(props: {
   // Claude は今までどおり常に「その他」を出せる。pi は pending の freeText に従う。
   const freeText = pending.tool === "ask_user" ? pending.freeText : true;
   const question = pending.questions[0];
-  const optionLabels = askOptionLabels(question.options, freeText);
+  const optionLabels = askOptionLabelsForQuestions(pending.questions, freeText);
   const [choices, setChoices] = useState<Choice[]>(() =>
     // options が無い自由入力は「その他」を選ばせず、最初から入力欄を出す。
     freeText && question !== undefined && question.options.length === 0
@@ -144,7 +144,7 @@ function QuestionForm(props: {
                         multi={question.multiSelect}
                         selected={choice.labels.includes(option.label)}
                         disabled={locked}
-                        label={optionLabels[optionIndex] ?? option.label}
+                        label={optionLabels[index]?.[optionIndex] ?? option.label}
                         description={option.description}
                         onClick={() => update(index, pickLabel(question, choice, option.label))}
                       />

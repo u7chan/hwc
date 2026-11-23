@@ -74,6 +74,13 @@ export function askOptionLabels(
   });
 }
 
+export function askOptionLabelsForQuestions(
+  questions: readonly { options: readonly { label: string }[] }[],
+  freeText: boolean,
+): string[][] {
+  return questions.map((question) => askOptionLabels(question.options, freeText));
+}
+
 // pi の ask_user の回答。Claude の flatText と違い、trim と長さだけを見て、内部の改行・タブを
 // 保つ（docs/adr/pi-integration.md）。選択肢は 1 つだけ。自由入力は選択肢があっても使える。
 // 制御文字は BFF が 400 で拒否する。
