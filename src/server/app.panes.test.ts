@@ -3,6 +3,7 @@ import { createApp } from "./app";
 import type { PaneClient } from "./herdr/panes";
 import type { AppState } from "./herdr/state";
 import { HerdrError } from "./herdr/socket";
+import { FOLDER_TRUST_SCREEN } from "../../e2e/fixtures/folder-trust";
 import {
   state,
   workingState,
@@ -22,6 +23,23 @@ function piState(agentStatus: "idle" | "blocked"): AppState {
       tabs: workspace.tabs.map((tab) => ({
         ...tab,
         panes: tab.panes.map((pane) => ({ ...pane, agentStatus })),
+      })),
+    })),
+  };
+}
+
+function codexTrustState(): AppState {
+  return {
+    ...chatState,
+    workspaces: chatState.workspaces.map((workspace) => ({
+      ...workspace,
+      tabs: workspace.tabs.map((tab) => ({
+        ...tab,
+        panes: tab.panes.map((pane) => ({
+          ...pane,
+          agent: "codex" as const,
+          agentStatus: "blocked" as const,
+        })),
       })),
     })),
   };
@@ -56,8 +74,8 @@ test("GET /api/panes/:id/output forwards the parsed query to the pane client", a
 // 規則は BFF 側に 1 つしかないので、テストもルート横断で 1 つにする。
 const paneActionCases = [
   { action: "output", method: "GET", call: "read", state, body: {}, guardsPane: true },
-  // 添付の無い input は状態を読まずに Herdr へ送る。ペインの有無は Herdr が決める。
-  { action: "input", method: "POST", call: "send", state, body: { text: "hi" }, guardsPane: false },
+  // 添付の有無によらず、送信の直前にペインの状態を確かめる。
+  { action: "input", method: "POST", call: "send", state, body: { text: "hi" }, guardsPane: true },
   { action: "stop", method: "POST", call: "stop", state: workingState, body: {}, guardsPane: true },
   {
     action: "clear-output",
@@ -280,7 +298,7 @@ test.each(["stop", "clear-output", "focus", "split"])(
   },
 );
 
-test("POST /api/panes/:id/input without attachments does not need a snapshot", async () => {
+test("POST /api/panes/:id/input does not send when the state cannot be read", async () => {
   const seen: unknown[] = [];
   const { app } = createTestApp({
     state: null,
@@ -297,8 +315,10 @@ test("POST /api/panes/:id/input without attachments does not need a snapshot", a
     body: JSON.stringify({ text: "hello", submit: true }),
   });
 
-  expect(response.status).toBe(200);
-  expect(seen).toEqual([{ paneId: "w1:p1", text: "hello", submit: true }]);
+  // ペインを確認できないまま TUI のダイアログへ本文を送らない。
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+  expect(seen).toEqual([]);
 });
 
 test("POST /api/panes/:id/input sends the text and submits it", async () => {
@@ -390,6 +410,38 @@ test("POST /api/panes/:id/input does not send when the fresh state cannot be rea
   });
 
   expect(response.status).toBe(502);
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/input rechecks a changed agent before sending", async () => {
+  const store = createFakeStore(piState("idle"));
+  store.setChatSource("w1:p1", { agent: "pi", path: "/tmp/session.jsonl" });
+  store.refresh = async () => codexTrustState();
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    store,
+    panes: {
+      read: async ({ paneId, source }) => ({
+        paneId,
+        text: source === "detection" ? FOLDER_TRUST_SCREEN : "terminal output",
+        truncated: false,
+        revision: 0,
+      }),
+      send: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+
+  // キャッシュ上の pi ではなく、取り直した Codex の信頼確認で止める。
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "confirmation_pending" });
   expect(seen).toEqual([]);
 });
 
