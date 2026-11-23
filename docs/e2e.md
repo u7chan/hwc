@@ -574,7 +574,7 @@ Herdr がイベントを出さない cwd とブランチを、可視中だけ取
 1. 設定 → エージェント → Pi を開く。「グローバルスキル 3 件」が出て、押すと `gh` / `imagegen` / `review` が並ぶ。由来は `~/.agents/skills` と `~/.pi/agent/skills` に分かれる。
 2. Claude を開くと 2 件で、`xlsx` に「無効」が付く（`settings.local.json` の `skillOverrides`）。
 3. Codex を開くと 2 件で、`gh` に「無効」が付く（`config.toml` の `[[skills.config]]`）。
-4. OpenCode を開くと 3 件で、無効は無い。`review` は `~/.claude/skills` と `~/.agents/skills` の両方にあるが、同名は後の置き場が勝つので `~/.agents/skills` の 1 行だけになる。一覧の行は押せず、スキルの追加・削除はできない。
+4. OpenCode を開くと 3 件で、無効は無い。`review` は `~/.claude/skills` と `~/.agents/skills` の両方にあるが、ID が同じなので優先順位の高い `~/.claude/skills` の 1 行だけになる。一覧の行は押せず、スキルの追加・削除はできない。
 5. 一覧を開いたまま別のエージェントへ移ると、一覧は畳まれた状態に戻る。
 
 ## ファイルツリーの表示

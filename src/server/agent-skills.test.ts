@@ -106,6 +106,21 @@ test("Pi はパッケージの manifest が宣言する置き場も読む", asyn
   }
 });
 
+test("Pi は同名のスキルを先に見つかった置き場だけ残す", async () => {
+  const home = await tempHome();
+  try {
+    // Pi のコリジョンは宣言した name で判定する。先に見つかった置き場だけが残る。
+    await writeSkill(join(home, ".pi/agent/skills/gh"), "gh", "先に見つかる方");
+    await writeSkill(join(home, ".agents/skills/gh"), "gh", "後に見つかる方");
+
+    const view = await loadAgentSkills("pi", home, NO_ENV);
+
+    expect(view.skills).toEqual([{ name: "gh", source: "~/.pi/agent/skills", state: "on" }]);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("Pi は PI_CODING_AGENT_DIR のスキルを読む", async () => {
   const home = await tempHome();
   try {
@@ -232,7 +247,7 @@ test("Codex は symlink 側の path で書いた無効化も実体へ解決し�
   }
 });
 
-test("OpenCode は互換の置き場を重複させず、同名は後から見つけた方が勝つ", async () => {
+test("OpenCode はパス由来の ID で選び、優先順位の高い置き場だけを残す", async () => {
   const home = await tempHome();
   try {
     await writeSkill(join(home, ".agents/skills/gh"), "gh");
@@ -243,13 +258,14 @@ test("OpenCode は互換の置き場を重複させず、同名は後から見�
       join(home, ".config/opencode/skills/note.md"),
       "---\nname: note\ndescription: x\n---\n",
     );
-    // 同じ名前のスキルを別の置き場にも置く。OpenCode は ID で選び、後の置き場が勝つ。
-    await writeSkill(join(home, ".config/opencode/skills/gh"), "gh");
+    // 同じ ID のスキルを互換の置き場にも置く。OpenCode は ID で選び、優先順位の高い
+    // ~/.config/opencode/skills が勝つ。
+    await writeSkill(join(home, ".config/opencode/skills/gh"), "GitHub 操作");
 
     const view = await loadAgentSkills("opencode", home, NO_ENV);
 
     expect(view.skills.map((skill) => [skill.name, skill.source])).toEqual([
-      ["gh", "~/.agents/skills"],
+      ["GitHub 操作", "~/.config/opencode/skills"],
       ["note", "~/.config/opencode/skills"],
     ]);
   } finally {

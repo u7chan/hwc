@@ -16,7 +16,10 @@
   - Codex: `~/.agents/skills`、`/etc/codex/skills`、`config.toml` の `[[skills.config]]`
   - OpenCode: `~/.config/opencode/skills`、`~/.claude/skills`、`~/.agents/skills`、`opencode.json` の `skills`（ローカルパスのみ）
 - 設定ルートは CLI 自身の環境変数を優先する（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`）。hwc が起動するペインと同じ設定を見るため
-- 同名スキルの扱いは CLI に合わせる。OpenCode は ID で選び後の置き場が勝つので、一覧も勝った方だけを残す。他の CLI は同名を併記する
+- 同名スキルの扱いは CLI に合わせる
+  - OpenCode: パス由来の ID で選び、優先順位の高い置き場（`~/.config/opencode/skills` → `~/.claude/skills` → `~/.agents/skills`）が勝つ。一覧も勝った方だけを残す
+  - Pi: 宣言した `name` が衝突したら、先に見つかった置き場だけを残す
+  - Codex: 同名を併記する（公式にマージしない）。Claude も実体パスの重複だけを消し、同名は併記する
 - 次のものは対象外にする。CLI 側の解決規則が未文書か、hwc から正否を確かめられないため
   - Claude のプラグイン（有効・無効が別管理）、Codex の同梱 system スキル
   - Pi の `settings.json` の `skills`（glob・除外記法を解釈しないと、載せないスキルを載せてしまう）

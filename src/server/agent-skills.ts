@@ -9,10 +9,11 @@ const MAX_SKILLS = 200;
 // あるディレクトリの下で見つけたスキル。realPath は同じ実体を 2 回数えないために持つ
 // （~/.claude/skills は ~/.agents/skills への symlink なので、CLI によっては両方から見える）。
 type Candidate = {
+  // 表示名。frontmatter の name が無ければ id を使う。
   name: string;
+  // OpenCode がスキルを選ぶ単位。パス由来なので、表示名が同じでも別のスキルになりうる。
+  id: string;
   source: string;
-  // 見つけたときのパス。symlink を辿る前の文字列で、設定側の path と突き合わせる。
-  path: string;
   realPath: string;
   disabled: boolean;
 };
@@ -72,8 +73,8 @@ async function skillAt(
   if (requireDescription && !front.described) return null;
   return {
     name: front.name ?? basename(path),
+    id: basename(path),
     source,
-    path: file,
     realPath: await realpath(file).catch(() => file),
     disabled: false,
   };
@@ -88,8 +89,14 @@ async function markdownSkillAt(
   if (text === null) return null;
   const front = parseSkillFrontmatter(text);
   if (requireDescription && !front.described) return null;
-  const name = front.name ?? basename(path, ".md");
-  return { name, source, path, realPath: await realpath(path).catch(() => path), disabled: false };
+  const id = basename(path, ".md");
+  return {
+    name: front.name ?? id,
+    id,
+    source,
+    realPath: await realpath(path).catch(() => path),
+    disabled: false,
+  };
 }
 
 // 1 つのルートを辿る。SKILL.md を持つディレクトリは 1 スキルとして扱い、その中へは降りない
@@ -347,12 +354,15 @@ function byRealPath(candidates: Candidate[]): Candidate[] {
   });
 }
 
-// OpenCode はスキルを ID（パス由来）で選び、同じ名前は後から登録された置き場が勝つ。
-// 一覧でも勝った方だけを残す。
-function lastByName(candidates: Candidate[]): Candidate[] {
-  const byName = new Map<string, Candidate>();
-  for (const skill of candidates) byName.set(skill.name, skill);
-  return [...byName.values()];
+// 同じキーは先に見つかった方だけを残す。探索は CLI の優先順で並べてある。
+function firstBy(candidates: Candidate[], key: (skill: Candidate) => string): Candidate[] {
+  const seen = new Set<string>();
+  return candidates.filter((skill) => {
+    const value = key(skill);
+    if (seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  });
 }
 
 export async function loadAgentSkills(
@@ -361,7 +371,15 @@ export async function loadAgentSkills(
   env: Record<string, string | undefined> = process.env,
 ): Promise<AgentSkills> {
   const found = await READERS[agent](skillRoots(home, env));
-  const unique = agent === "opencode" ? lastByName(found) : byRealPath(found);
+  // 同名・同 ID の扱いは CLI ごとに違う（docs/adr/agent-skills.md）。
+  const unique =
+    agent === "opencode"
+      ? // OpenCode はパス由来の ID で選び、優先順位の高い置き場が勝つ。
+        firstBy(found, (skill) => skill.id)
+      : agent === "pi"
+        ? // Pi は先に見つかった方を残し、後のコリジョンは捨てる。
+          firstBy(found, (skill) => skill.name)
+        : byRealPath(found);
   unique.sort((a, b) => a.name.localeCompare(b.name) || a.source.localeCompare(b.source));
   const kept = unique.slice(0, MAX_SKILLS);
   return {
