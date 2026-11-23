@@ -54,6 +54,7 @@ import { defaultPreviewRoots } from "../message-files";
 import type { AgentModelsClient } from "../agent-models";
 import type { ClaudeModelLabelsReader } from "../claude-model-labels";
 import { createQuestionAnswerer } from "../answer-question";
+import { createAskAnswerer } from "../answer-ask";
 import { createModelSwitcher, hasLocalCommandOutputs } from "../model-switch";
 import type { ClaudeSettingsProvider } from "../create-pane";
 import { HerdrError } from "../herdr/socket";
@@ -173,6 +174,14 @@ export function createAppContext(options: CreateAppOptions) {
       return null;
     });
 
+  // 状態のキャッシュはイベントが届くまで古い。送信の直前だけ Herdr から取り直し、
+  // キャッシュが idle のままでも実際に blocked なら送らない。取得できなければ呼び出し側が
+  // fail closed にする。
+  const freshPane = async (paneId: string): Promise<PaneState | null> => {
+    const state = await store.refresh();
+    return findPane(state, paneId);
+  };
+
   // 状態とペインの前提は、応答の形（ステータスと error 文字列）ごとここで決める。
   // ルート固有の条件（会話やエージェント種別など）は、解決できた後に呼び出し側が足す。
   const resolveState = async (
@@ -227,6 +236,8 @@ export function createAppContext(options: CreateAppOptions) {
   // 質問への回答は、会話を読める Claude のペインだけ。読み取り口が無い構成では答えない。
   const questionAnswerer =
     claude === undefined ? null : createQuestionAnswerer({ panes, chat: claude });
+  // pi の ask_user は answer ファイルだけを書く。キーも本文も送らない。
+  const askAnswerer = createAskAnswerer();
   const launchModels = createLaunchModels();
   // モデルの切り替えは、会話とローカルコマンドの結果を読める Claude のペインだけ。
   const modelSwitcher =
@@ -459,6 +470,7 @@ export function createAppContext(options: CreateAppOptions) {
     homeDirectory,
     stateMessage,
     current,
+    freshPane,
     resolveState,
     resolvePane,
     rootsFor,
@@ -466,6 +478,7 @@ export function createAppContext(options: CreateAppOptions) {
     launchModels,
     piDefaults,
     questionAnswerer,
+    askAnswerer,
     modelSwitcher,
     paneFailure,
     worktreeFailure,

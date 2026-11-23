@@ -1664,3 +1664,101 @@ test("readRewindMarker rejects a marker whose parent does not match leafId", asy
   );
   expect((await readRewindMarker(path, 0, "req-1")).marker).toBeNull();
 });
+
+const ASK_ID = "11111111-1111-4111-8111-111111111111";
+const ASK_OTHER = "22222222-2222-4222-8222-222222222222";
+
+const askFile = (id: string, options: string[] | null = ["赤", "青"]): string =>
+  JSON.stringify({ v: 1, id, question: "どれにしますか？", options });
+
+test("the snapshot carries the pending ask and includes it in the etag", async () => {
+  const path = await writeSession(header(), user("u1", null, "one"));
+  const client = createChatClient();
+
+  const before = await client.snapshot(path);
+  expect(before.pending).toBeUndefined();
+  expect(before.etag.endsWith("-ask-none")).toBe(true);
+
+  await writeFile(`${path}.ask.json`, askFile(ASK_ID));
+  const withAsk = await client.snapshot(path);
+  expect(withAsk.pending).toEqual({
+    kind: "question",
+    toolUseId: ASK_ID,
+    tool: "ask_user",
+    questions: [
+      {
+        question: "どれにしますか？",
+        header: null,
+        multiSelect: false,
+        options: [
+          { label: "赤", description: null },
+          { label: "青", description: null },
+        ],
+      },
+    ],
+  });
+  expect(withAsk.etag.endsWith(`-ask-${ASK_ID}`)).toBe(true);
+  expect(withAsk.etag).not.toBe(before.etag);
+
+  // 同じ pending なら etag は動かない。動くと 304 の意味が壊れる。
+  expect((await client.snapshot(path)).etag).toBe(withAsk.etag);
+
+  await writeFile(`${path}.ask.json`, askFile(ASK_OTHER));
+  const replaced = await client.snapshot(path);
+  expect(replaced.pending?.toolUseId).toBe(ASK_OTHER);
+  expect(replaced.etag.endsWith(`-ask-${ASK_OTHER}`)).toBe(true);
+
+  await rm(`${path}.ask.json`);
+  const removed = await client.snapshot(path);
+  expect(removed.pending).toBeUndefined();
+  expect(removed.etag.endsWith("-ask-none")).toBe(true);
+  expect(removed.etag).not.toBe(withAsk.etag);
+});
+
+test("a free-text ask has no options and keeps the question newlines", async () => {
+  const path = await writeSession(header(), user("u1", null, "one"));
+  await writeFile(
+    `${path}.ask.json`,
+    JSON.stringify({ v: 1, id: ASK_ID, question: "1 行目\n2 行目", options: null }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.pending).toEqual({
+    kind: "question",
+    toolUseId: ASK_ID,
+    tool: "ask_user",
+    questions: [
+      {
+        question: "1 行目\n2 行目",
+        header: null,
+        multiSelect: false,
+        options: [],
+      },
+    ],
+  });
+});
+
+test("a broken or oversized ask file costs the card, not the conversation", async () => {
+  const path = await writeSession(header(), user("u1", null, "one"));
+  const client = createChatClient();
+
+  await writeFile(`${path}.ask.json`, "{");
+  const broken = await client.snapshot(path);
+  expect(broken.messages.map((message) => message.text)).toEqual(["one"]);
+  expect(broken.pending).toBeUndefined();
+  expect(broken.etag.endsWith("-ask-none")).toBe(true);
+
+  await writeFile(`${path}.ask.json`, "x".repeat(8 * 1024 + 1));
+  const oversized = await client.snapshot(path);
+  expect(oversized.messages.map((message) => message.text)).toEqual(["one"]);
+  expect(oversized.pending).toBeUndefined();
+});
+
+test("an ask file is visible before the session file exists", async () => {
+  const path = join(dir, "not-written.jsonl");
+  await writeFile(`${path}.ask.json`, askFile(ASK_ID));
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages).toEqual([]);
+  expect(snapshot.pending?.toolUseId).toBe(ASK_ID);
+});

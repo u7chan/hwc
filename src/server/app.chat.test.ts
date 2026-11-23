@@ -581,3 +581,77 @@ test("GET /api/panes/:id/activity returns no step for other agents or panes with
     session: null,
   });
 });
+
+test("GET /api/panes/:id/chat returns 200 as the ask pending appears, changes, or disappears", async () => {
+  const askId = "11111111-1111-4111-8111-111111111111";
+  const otherId = "22222222-2222-4222-8222-222222222222";
+  const directory = await mkdtemp(join(tmpdir(), "hwc-app-ask-"));
+  try {
+    const path = join(directory, "session.jsonl");
+    await writeFile(
+      path,
+      `${JSON.stringify({
+        type: "session",
+        version: 3,
+        id: "session-1",
+        cwd: "/work/acme",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      })}\n${JSON.stringify({
+        type: "message",
+        id: "u1",
+        parentId: null,
+        timestamp: "2026-01-01T00:00:01.000Z",
+        message: { role: "user", content: "hello", timestamp: 1 },
+      })}\n`,
+    );
+    const store = createFakeStore(chatState);
+    store.setChatSource("w1:p1", { agent: "pi", path });
+    const { app } = createTestApp({ store, chat: createChatClient() });
+    const askFile = (id: string) =>
+      JSON.stringify({ v: 1, id, question: "どれにしますか？", options: ["赤", "青"] });
+
+    const first = await app.request("/api/panes/w1:p1/chat");
+    expect(first.status).toBe(200);
+    expect((await first.json()).pending).toBeUndefined();
+    const initialEtag = first.headers.get("etag") ?? "";
+    expect(initialEtag).toContain("-ask-none");
+
+    // pending が無いままなら 304。
+    const unchanged = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": initialEtag },
+    });
+    expect(unchanged.status).toBe(304);
+
+    await writeFile(`${path}.ask.json`, askFile(askId));
+    const appeared = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": initialEtag },
+    });
+    expect(appeared.status).toBe(200);
+    expect((await appeared.json()).pending.toolUseId).toBe(askId);
+    const askEtag = appeared.headers.get("etag") ?? "";
+    expect(askEtag).not.toBe(initialEtag);
+
+    const same = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": askEtag },
+    });
+    expect(same.status).toBe(304);
+
+    await writeFile(`${path}.ask.json`, askFile(otherId));
+    const replaced = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": askEtag },
+    });
+    expect(replaced.status).toBe(200);
+    expect((await replaced.json()).pending.toolUseId).toBe(otherId);
+    const replacedEtag = replaced.headers.get("etag") ?? "";
+
+    await rm(`${path}.ask.json`);
+    const removed = await app.request("/api/panes/w1:p1/chat", {
+      headers: { "if-none-match": replacedEtag },
+    });
+    expect(removed.status).toBe(200);
+    expect((await removed.json()).pending).toBeUndefined();
+    expect(removed.headers.get("etag")).toContain("-ask-none");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

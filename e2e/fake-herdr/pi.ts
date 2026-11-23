@@ -205,6 +205,84 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
     }, 6_000);
   };
 
+  // mypi の ask_user を模す。pending を置いて blocked にし、answer が現れたら
+  // pending / answer を消して working → idle に戻す（docs/adr/pi-integration.md）。
+  const askEpochs = new Map<string, number>();
+
+  const askSessionPath = (paneId: string): string | null => {
+    const session = findPane(paneId)?.agent_session ?? null;
+    return session?.agent === "pi" && session.kind === "path" && session.value
+      ? session.value
+      : null;
+  };
+
+  const cancelAsk = async (paneId: string): Promise<void> => {
+    const session = askSessionPath(paneId);
+    askEpochs.delete(paneId);
+    if (session === null) return;
+    await rm(`${session}.ask.json`, { force: true }).catch(() => {});
+    await rm(`${session}.ask.answer.json`, { force: true }).catch(() => {});
+  };
+
+  const startAsk = async (paneId: string, options: string[] | null): Promise<void> => {
+    const session = askSessionPath(paneId);
+    if (session === null) return;
+    // 前のターンの activity タイマーが、質問待ちの状態を idle に戻さないようにする。
+    activityEpochs.set(paneId, (activityEpochs.get(paneId) ?? 0) + 1);
+    await clearPiActivity(paneId);
+    const pendingPath = `${session}.ask.json`;
+    const answerPath = `${session}.ask.answer.json`;
+    const id = crypto.randomUUID();
+    const epoch = (askEpochs.get(paneId) ?? 0) + 1;
+    askEpochs.set(paneId, epoch);
+    await rm(answerPath, { force: true }).catch(() => {});
+    await writeFile(
+      pendingPath,
+      `${JSON.stringify({
+        v: 1,
+        id,
+        question: "E2E: この変更をどう進めますか？\n選択肢か自由入力で答えてください。",
+        options,
+      })}\n`,
+      { mode: 0o600 },
+    );
+    setAgentStatus(paneId, "blocked");
+
+    const poll = async () => {
+      if (askEpochs.get(paneId) !== epoch || findPane(paneId) === null) return;
+      let raw: string;
+      try {
+        raw = await readFile(answerPath, "utf8");
+      } catch {
+        later(poll, 300);
+        return;
+      }
+      let answered = false;
+      try {
+        const value = JSON.parse(raw) as { v?: unknown; id?: unknown };
+        answered = value.v === 1 && value.id === id;
+      } catch {
+        // 壊れた回答は読まなかったことにする。実 mypi も無視する。
+      }
+      if (!answered) {
+        later(poll, 300);
+        return;
+      }
+      // カードが「送信済み」になるのを見せるため、pending を少し残してから消す。
+      askEpochs.delete(paneId);
+      later(async () => {
+        if (findPane(paneId) === null) return;
+        await rm(pendingPath, { force: true }).catch(() => {});
+        await rm(answerPath, { force: true }).catch(() => {});
+        setAgentStatus(paneId, "working");
+        later(async () => {
+          if (findPane(paneId)?.agent_status === "working") setAgentStatus(paneId, "idle");
+        }, 1_200);
+      }, 3_000);
+    };
+    later(poll, 300);
+  };
+
   // 応答を止めると、実 pi は本文の無い assistant をセッションへ追記して葉にする。hwc は
   // それを描画しないので、止めた直後は送った発言が末尾に見える（docs/adr/pi-integration.md）。
   const appendAbort = async (paneId: string): Promise<void> => {
@@ -292,6 +370,8 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
     appendRewindMarker,
     appendUserEntry,
     appendAbort,
+    startAsk,
+    cancelAsk,
     piActivityPath,
     clearPiActivity,
     writePiActivity,

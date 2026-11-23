@@ -12,11 +12,14 @@ export function projectMentionAllowed(match: (query: string) => boolean): boolea
   return !match("(pointer: coarse)");
 }
 
-// 入力欄を閉じるか。Claude は質問・承認の待ちで blocked になり、その間の TUI はダイアログが
-// 入力を受け取る。hwc の本文がダイアログへ流れないよう、入力欄ごと閉じる。
-// readOnly（folder trust）と違い、本文は端末出力のままにする（Issue #335）。
+// 入力欄を閉じるか。Claude は質問・承認の待ちで、pi は質問の待ちで blocked になり、
+// その間の TUI はダイアログが入力を受け取る。hwc の本文がダイアログへ流れないよう、
+// 入力欄ごと閉じる。readOnly（folder trust）と違い、本文は端末出力のままにする
+// （Issue #335、docs/adr/pi-integration.md）。
 export function composerDisabled(pane: PaneState, readOnly: boolean): boolean {
-  return readOnly || (pane.agent === "claude" && pane.agentStatus === "blocked");
+  return (
+    readOnly || ((pane.agent === "claude" || pane.agent === "pi") && pane.agentStatus === "blocked")
+  );
 }
 
 export type Insertion = {

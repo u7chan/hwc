@@ -75,7 +75,7 @@ BFF の unit で確かめる）。`pane.rename` はラベルを変えて `pane.u
 フォーカスを移して `pane.focused` を流す。実 Herdr と同じく seen も進むので、対象が `done` の
 ときは `idle` に戻し、そのタブとスペースの集約状態を残りのペインから引き直して `pane.updated`
 を流す。hwc の既読はこの遷移で完了から待機に変わる（行そのものは残る）。
-`pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。pi のペインが `working` の間なら、実 pi と同じく本文の無い `stopReason: "aborted"` の assistant をセッションへ追記して葉にする（hwc は描画しないので、会話は止めた発言で終わって見える）。Claude のペインで応答待ちの sidecar（`<root>/claude/pending/<session uuid>.json`）に質問があれば、実機の Claude Code と同じく、assistant の tool_use と `is_error` の tool_result と user の `[Request interrupted by user for tool use]` を transcript へ書く（sidecar は残す。Esc は hook を呼ばないため）。`pane.send_input` は Claude のペインでは送信 text を transcript の user として追記し、sidecar を消す（`UserPromptSubmit` の hook に相当）。質問への回答（[Claude 連携](adr/claude-integration.md)）は、この 2 つを通して確かめられる。Claude のペインが `/model <alias>` を受けたとき、BFF が置いた許可の印（`<root>/claude/model-switch/<session uuid>.allow.json`）があれば、確認ダイアログを開かずに、`PostModelSwitch` の hook と同じ完了の記録（`<session uuid>.done.json`）と、`/model` の `<local-command-stdout>` を transcript へ書く。印が無い `/model` は何もしない（実機では確認ダイアログが開く。失敗の経路はリクエストの差し替えで確かめる）。`/effort <level>` は `Set effort level to <level>` の `<local-command-stdout>` を transcript へ書く。どちらも会話の発言にはならない。
+`pane.send_keys` は `esc` を受けるとペインの `agent_status` を `idle` に戻し、`pane.updated` を流す。pi のペインが `working` の間なら、実 pi と同じく本文の無い `stopReason: "aborted"` の assistant をセッションへ追記して葉にする（hwc は描画しないので、会話は止めた発言で終わって見える）。Claude のペインで応答待ちの sidecar（`<root>/claude/pending/<session uuid>.json`）に質問があれば、実機の Claude Code と同じく、assistant の tool_use と `is_error` の tool_result と user の `[Request interrupted by user for tool use]` を transcript へ書く（sidecar は残す。Esc は hook を呼ばないため）。`pane.send_input` は Claude のペインでは送信 text を transcript の user として追記し、sidecar を消す（`UserPromptSubmit` の hook に相当）。質問への回答（[Claude 連携](adr/claude-integration.md)）は、この 2 つを通して確かめられる。pi のペインでは、フィクスチャ専用の `/ask` と `/ask-text` が pending を置いて `blocked` にし、answer が現れると pending を消して `working → idle` に戻す（下の「pi の ask_user」）。Claude のペインが `/model <alias>` を受けたとき、BFF が置いた許可の印（`<root>/claude/model-switch/<session uuid>.allow.json`）があれば、確認ダイアログを開かずに、`PostModelSwitch` の hook と同じ完了の記録（`<session uuid>.done.json`）と、`/model` の `<local-command-stdout>` を transcript へ書く。印が無い `/model` は何もしない（実機では確認ダイアログが開く。失敗の経路はリクエストの差し替えで確かめる）。`/effort <level>` は `Set effort level to <level>` の `<local-command-stdout>` を transcript へ書く。どちらも会話の発言にはならない。
 `workspace.move_block` は `workspaces` を並べ替えて `workspace.reordered` を流す。実 Herdr と同じく、
 渡された id の列を 1 ブロックとしてアンカーの前へ置く。
 `workspace.close` はスペース・タブ・ペインをスナップショットから取り除き、`workspace.closed` を流す。
@@ -600,6 +600,16 @@ Herdr がイベントを出さない cwd とブランチを、可視中だけ取
 7. 読み込み失敗は、ブラウザのリクエスト差し替えで `/api/notifications` に 502 を返して確かめる。「通知の設定を読み込めませんでした。」と「再試行」が出て、「未登録」とは出さない。
 8. 自動送信は、`acme-dashboard` で通知を有効にし、`/done` を送って親と子を `done` にする。山ごとに 1 回だけ sink に追記され、`done` のまま留まっても増えない。実 Herdr には `/done` が無いので、フィクスチャ専用の入力で確かめる。
 9. 要対応は、`acme-dashboard` の `review` を開き、フィクスチャ専用の `/blocked` を送る。`hwc: acme-dashboard が対応を待っています\nペイン: review\nブランチ: feat/empty-state` が 1 行追記される。`/blocked` をもう一度送っても増えない。`/done` で解除してから `/blocked` を送ると、もう 1 行追記される。「完了通知の対象」が「PR がある作業だけ」でも送られる。
+
+## pi の ask_user
+
+mypi の `ask_user` は、セッションの隣の pending `<session path>.ask.json` をカードにし、answer `<session path>.ask.answer.json` で答える（[pi 連携](adr/pi-integration.md)）。E2E では `new`（`w1:p4`、pi、空の会話）の入力欄にフィクスチャ専用の `/ask` または `/ask-text` を送る。架空 Herdr が pending を置いて `blocked` を流し、answer が現れると pending を消して `blocked → working → idle` を流す。
+
+1. `new` を開き、`/ask` を送る。会話の末尾に「pi からの質問」のカードが出て、質問文の改行が保たれ、「そのまま進める」「いったん止める」の 2 つの選択肢が並ぶ。「その他（自由入力）」は出ない。入力欄・引用・添付・`/` の候補は閉じ、「pi の質問です。カードから答えると、入力欄が戻ります。」が出る。
+2. 選択肢を 1 つ選んで「この内容で答える」を押す。「回答を送りました。応答を待っています。」に変わり、3 秒ほどで pending が消えてカードが閉じ、`blocked → working → idle` のあと入力欄が戻る。`<root>/agent/sessions/empty/session.jsonl.ask.answer.json` が、答えている間に `{ "v": 1, "id": ..., "answer": { "kind": "option", "label": "そのまま進める" } }` になっていることを確かめる（架空 Herdr は 3 秒後に消す）。
+3. `/ask-text` を送る。カードには選択肢が無く、最初から textarea が出る。改行とタブを含む本文を入れて答えると、answer は `{ "kind": "text", "text": "..." }` になり、前後の空白だけが trim される。空欄では「この内容で答える」を押せない。
+4. カードの「端末出力を見る」で端末出力に切り替わり、「会話に戻る」でカードへ戻る。端末出力を見ている間は「pi の応答待ちです。回答は Herdr のターミナルで行ってください。」になる。
+5. 回答の送信に失敗したときは、カードに入力と失敗の行が残る（書き込み失敗はブラウザのリクエスト差し替えで確かめる）。同じ質問への 2 回目の送信は 409 になり、answer は上書きされない。
 
 ## データを変える
 

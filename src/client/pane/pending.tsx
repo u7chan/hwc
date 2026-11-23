@@ -5,6 +5,7 @@ import type { AnswerResult } from "../api";
 import {
   answerFailure,
   answersOf,
+  askUserAnswers,
   type Choice,
   NO_CHOICE,
   pickLabel,
@@ -16,8 +17,9 @@ import { Spinner } from "../Spinner";
 
 type Question = Extract<ChatPending, { kind: "question" }>;
 
-// 人間の応答待ち。会話の末尾に 1 枚だけ置く。質問には選択肢か自由入力で答えられる。承認は
-// 端末で行う（docs/adr/claude-integration.md）。
+// 人間の応答待ち。会話の末尾に 1 枚だけ置く。質問には選択肢か自由入力で答えられる。
+// pi の ask_user は 1 問だけで、自由入力のときは options が空になる。
+// 承認は端末で行う（docs/adr/claude-integration.md / docs/adr/pi-integration.md）。
 export function PendingCard(props: {
   pending: ChatPending;
   onShowTerminal: () => void;
@@ -73,7 +75,14 @@ function QuestionForm(props: {
   onAnswer: (pending: Question, answers: QuestionAnswer[]) => Promise<AnswerResult>;
 }) {
   const { pending } = props;
-  const [choices, setChoices] = useState<Choice[]>([]);
+  const askUser = pending.tool === "ask_user";
+  const question = pending.questions[0];
+  const [choices, setChoices] = useState<Choice[]>(() =>
+    // pi の自由入力は「その他」を選ばせず、最初から入力欄を出す。
+    askUser && question !== undefined && question.options.length === 0
+      ? [{ ...NO_CHOICE, other: true }]
+      : [],
+  );
   const [phase, setPhase] = useState<Phase>("editing");
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -87,7 +96,10 @@ function QuestionForm(props: {
     });
   };
   // 答えが揃っているかは、選択から毎回導く。
-  const answers = answersOf(pending.questions, choices);
+  const answers =
+    askUser && question !== undefined
+      ? askUserAnswers(question, choiceAt(0))
+      : answersOf(pending.questions, choices);
   const locked = phase !== "editing";
 
   const submit = async () => {
@@ -105,7 +117,11 @@ function QuestionForm(props: {
 
   return (
     <>
-      <PendingHead state="回答待ち" who="Claude からの質問" count={pending.questions.length} />
+      <PendingHead
+        state="回答待ち"
+        who={askUser ? "pi からの質問" : "Claude からの質問"}
+        count={askUser ? undefined : pending.questions.length}
+      />
       <ol class="hwc-pending-questions">
         {pending.questions.map((question, index) => {
           const choice = choiceAt(index);
@@ -115,45 +131,62 @@ function QuestionForm(props: {
                 <span class="hwc-pending-label-head">{question.header}</span>
               )}
               <p class="hwc-pending-text">{question.question}</p>
-              <ul class="hwc-pending-options">
-                {question.options.map((option, optionIndex) => (
-                  <li key={optionIndex}>
-                    <ChoiceButton
-                      multi={question.multiSelect}
-                      selected={choice.labels.includes(option.label)}
-                      disabled={locked}
-                      label={option.label}
-                      description={option.description}
-                      onClick={() => update(index, pickLabel(question, choice, option.label))}
-                    />
-                  </li>
-                ))}
-                <li>
-                  <ChoiceButton
-                    multi={false}
-                    selected={choice.other}
-                    disabled={locked}
-                    label="その他（自由入力）"
-                    description={null}
-                    onClick={() => update(index, pickOther(choice))}
-                  />
-                  {choice.other ? (
-                    <div class="hwc-pending-other-field">
-                      <textarea
-                        class="hwc-pending-other"
-                        rows={2}
-                        value={choice.text}
-                        placeholder="回答を入力"
+              {askUser && question.options.length === 0 ? null : (
+                <ul class="hwc-pending-options">
+                  {question.options.map((option, optionIndex) => (
+                    <li key={optionIndex}>
+                      <ChoiceButton
+                        multi={question.multiSelect}
+                        selected={choice.labels.includes(option.label)}
                         disabled={locked}
-                        aria-label={`${question.question} の自由入力`}
-                        onInput={(event) =>
-                          update(index, typeOther(choice, event.currentTarget.value))
-                        }
+                        label={option.label}
+                        description={option.description}
+                        onClick={() => update(index, pickLabel(question, choice, option.label))}
                       />
-                    </div>
-                  ) : null}
-                </li>
-              </ul>
+                    </li>
+                  ))}
+                  {askUser ? null : (
+                    <li>
+                      <ChoiceButton
+                        multi={false}
+                        selected={choice.other}
+                        disabled={locked}
+                        label="その他（自由入力）"
+                        description={null}
+                        onClick={() => update(index, pickOther(choice))}
+                      />
+                      {choice.other ? (
+                        <div class="hwc-pending-other-field">
+                          <textarea
+                            class="hwc-pending-other"
+                            rows={2}
+                            value={choice.text}
+                            placeholder="回答を入力"
+                            disabled={locked}
+                            aria-label={`${question.question} の自由入力`}
+                            onInput={(event) =>
+                              update(index, typeOther(choice, event.currentTarget.value))
+                            }
+                          />
+                        </div>
+                      ) : null}
+                    </li>
+                  )}
+                </ul>
+              )}
+              {askUser && choice.other ? (
+                <div class="hwc-pending-other-field">
+                  <textarea
+                    class="hwc-pending-other"
+                    rows={2}
+                    value={choice.text}
+                    placeholder="回答を入力"
+                    disabled={locked}
+                    aria-label={`${question.question} の自由入力`}
+                    onInput={(event) => update(index, typeOther(choice, event.currentTarget.value))}
+                  />
+                </div>
+              ) : null}
               {question.multiSelect ? <p class="hwc-pending-note">複数選べます</p> : null}
             </li>
           );
@@ -170,7 +203,9 @@ function QuestionForm(props: {
       </button>
       {phase === "sent" ? (
         <p class="hwc-pending-note" role="status">
-          回答を送りました。Claude の応答を待っています。
+          {askUser
+            ? "回答を送りました。応答を待っています。"
+            : "回答を送りました。Claude の応答を待っています。"}
         </p>
       ) : failure === null ? null : (
         <p class="hwc-pending-error" role="status">

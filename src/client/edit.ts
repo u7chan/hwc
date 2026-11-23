@@ -32,7 +32,8 @@ export function canEditMessage(args: EditEligibility): boolean {
   const { snapshot, pane, row } = args;
   if (snapshot === null || snapshot.canRewind !== true) return false;
   if (pane.agent !== "pi" || !pane.chat) return false;
-  if (pane.agentStatus === "working") return false;
+  // 質問の待ちの間は、TUI のダイアログが入力を受け取る。
+  if (pane.agentStatus === "working" || pane.agentStatus === "blocked") return false;
   if (row.echo !== "none") return false;
   if (row.message.role !== "user") return false;
   if (row.message.text.trim() === "") return false;

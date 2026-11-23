@@ -230,8 +230,9 @@ export function PaneDetail(props: PaneDetailProps) {
   const expanded = expandedOpen && !compact;
 
   // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
-  // ただし Claude の要対応は質問・承認の待ちで、内容は transcript にある。応答待ちを出す
-  // ために、blocked の間も 5 秒間隔（chatPollDelay の idle と同じ）で読み続ける。
+  // ただし Claude と pi の要対応は質問の待ちで、内容は transcript か ask ファイルにある。
+  // 応答待ちを出すために、blocked の間も 5 秒間隔（chatPollDelay の idle と同じ）で
+  // 読み続ける。
   const blocked = pane.agentStatus === "blocked";
   const {
     snapshot: serverSnapshot,
@@ -240,7 +241,7 @@ export function PaneDetail(props: PaneDetailProps) {
   } = usePaneChat(
     pane.id,
     pane.chat,
-    pane.chat && (!blocked || pane.agent === "claude"),
+    pane.chat && (!blocked || pane.agent === "claude" || pane.agent === "pi"),
     pane.agentStatus,
   );
   // 実行中の段階は pi 拡張の sidecar、Claude は transcript の進行行から取る（docs/adr/pi-integration.md / docs/adr/claude-integration.md）。
@@ -299,7 +300,13 @@ export function PaneDetail(props: PaneDetailProps) {
     outputVersion,
   );
   const interaction = read?.interaction ?? null;
-  const view = confirmationView({ pane, interaction, dismissedId: dismissedConfirmation, failed });
+  const view = confirmationView({
+    pane,
+    interaction,
+    dismissedId: dismissedConfirmation,
+    failed,
+    pending: snapshot?.pending !== undefined,
+  });
   const readOnly = view !== "normal";
   // 入力欄を閉じるか。folder trust の readOnly と、Claude の blocked（質問・権限確認の
   // 待ち）を同じ扱いにする。readOnly と違い、Claude の blocked は本文を端末出力のまま
@@ -1225,11 +1232,16 @@ export function PaneDetail(props: PaneDetailProps) {
             ) : null
           ) : inputDisabled ? (
             // 質問・承認の待ちは TUI のダイアログが入力を受け取る。入力欄ごと閉じる。質問は
-            // カードから答えられる。承認と、待ちが読めないときは端末で行う（docs/adr/claude-integration.md）。
+            // カードから答えられる。承認と、待ちが読めないときは端末で行う
+            // （docs/adr/claude-integration.md / docs/adr/pi-integration.md）。
             <p class="hwc-terminal-note" role="status">
               {pendingView?.kind === "question" && !showTerminal
-                ? "Claude の質問です。カードから答えると、入力欄が戻ります。"
-                : "Claude の応答待ちです。承認と、カードに出ない質問への回答は Herdr のターミナルで行ってください。"}
+                ? pane.agent === "pi"
+                  ? "pi の質問です。カードから答えると、入力欄が戻ります。"
+                  : "Claude の質問です。カードから答えると、入力欄が戻ります。"
+                : pane.agent === "pi"
+                  ? "pi の応答待ちです。回答は Herdr のターミナルで行ってください。"
+                  : "Claude の応答待ちです。承認と、カードに出ない質問への回答は Herdr のターミナルで行ってください。"}
             </p>
           ) : (
             <PaneComposer

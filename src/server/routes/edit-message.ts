@@ -30,6 +30,7 @@ export function createEditMessageHandlers(ctx: AppContext) {
     panes,
     chat,
     current,
+    freshPane,
     folderTrust,
     resolvePane,
     paneFailure,
@@ -69,7 +70,21 @@ export function createEditMessageHandlers(ctx: AppContext) {
     const state = await current();
     const pane = state === null ? null : findPane(state, paneId);
     if (pane === null || pane.agent !== "pi" || !pane.chat) return false;
-    if (pane.agentStatus === "working") return false;
+    // 質問の待ちの間に送ると、TUI のダイアログが入力を受け取る。
+    if (pane.agentStatus === "working" || pane.agentStatus === "blocked") return false;
+    // キャッシュが idle のままでも、Herdr が既に blocked なら送らない。working は巻き戻しの
+    // 途中で立つことがあるため、ここでは blocked だけを見る。
+    let fresh;
+    try {
+      fresh = await freshPane(paneId);
+    } catch {
+      return false;
+    }
+    if (fresh === null || fresh.agent !== "pi" || !fresh.chat) return false;
+    if (fresh.agentStatus === "blocked") return false;
+    // 再取得でセッションが変わっていたら、前の会話の本文を新しい会話へ送らない。
+    const latest = store.chatSource(paneId);
+    if (latest === null || latest.agent !== "pi" || latest.path !== path) return false;
     try {
       await panes.send({ paneId, text, submit: true });
       return true;
@@ -89,7 +104,10 @@ export function createEditMessageHandlers(ctx: AppContext) {
       if (!resolved.ok) return resolved.response;
       const { paneId, pane } = resolved;
       if (pane.agent !== "pi" || !pane.chat) return c.json({ error: "no_chat" }, 404);
-      if (pane.agentStatus === "working") return c.json({ error: "not_editable" }, 409);
+      // blocked の pi は質問の待ち。TUI のダイアログへ本文を流さない。
+      if (pane.agentStatus === "working" || pane.agentStatus === "blocked") {
+        return c.json({ error: "not_editable" }, 409);
+      }
       if (inFlight.has(paneId)) return c.json({ error: "edit_in_flight" }, 409);
 
       const source = store.chatSource(paneId);
@@ -160,6 +178,24 @@ export function createEditMessageHandlers(ctx: AppContext) {
           snapshot.leafId === messageId
         ) {
           return c.json({ error: "not_editable" }, 409);
+        }
+        try {
+          // 状態の照合は送信の直前に行う。folderTrust の確認中に blocked へ変わる競合や、
+          // 状態のキャッシュが古いままの送信を防ぐ。
+          const fresh = await freshPane(paneId);
+          if (fresh === null) return c.json({ error: "pane_not_found" }, 404);
+          if (fresh.agent !== "pi" || !fresh.chat) {
+            return c.json({ error: "no_chat" }, 404);
+          }
+          if (fresh.agentStatus === "working" || fresh.agentStatus === "blocked") {
+            return c.json({ error: "not_editable" }, 409);
+          }
+          const latest = store.chatSource(paneId);
+          if (latest === null || latest.agent !== "pi" || latest.path !== source.path) {
+            return c.json({ error: "edit_failed" }, 502);
+          }
+        } catch (error) {
+          return paneFailure(c, error);
         }
         try {
           await panes.send({

@@ -287,6 +287,75 @@ test("rejects the leaf, an attachment, a missing capability, and a busy pane", a
 
   const busy = createEditApp({ state: panesState({ agentStatus: "working" }) });
   expect((await post(busy.app, { messageId: "u2", requestId: "r3", text: "x" })).status).toBe(409);
+
+  // 質問の待ちの間は、TUI のダイアログが本文を受け取る。
+  const blocked = createEditApp({ state: panesState({ agentStatus: "blocked" }) });
+  const blockedResponse = await post(blocked.app, { messageId: "u2", requestId: "r4", text: "x" });
+  expect(blockedResponse.status).toBe(409);
+  expect(await blockedResponse.json()).toEqual({ error: "not_editable" });
+  expect(blocked.sent).toEqual([]);
+});
+
+test("an edit refreshes a stale state before sending the rewind command", async () => {
+  const { app, store, sent } = createEditApp();
+  store.refresh = async () => panesState({ agentStatus: "blocked" });
+
+  const response = await post(app, { messageId: "u2", requestId: "r1", text: "edited" });
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_editable" });
+  expect(sent).toEqual([]);
+});
+
+test("an edit does not send the text when the fresh state turns blocked after the rewind", async () => {
+  let refreshes = 0;
+  const { app, store, sent } = createEditApp();
+  store.refresh = async () => {
+    refreshes += 1;
+    return panesState({ agentStatus: refreshes === 1 ? "idle" : "blocked" });
+  };
+
+  const response = await post(app, { messageId: "u2", requestId: "r1", text: "edited" });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "send_failed", rewound: true });
+  expect(sent).toEqual(["/hwc-rewind u2 r1"]);
+  expect(refreshes).toBe(2);
+});
+
+test("an edit does not send the text to a session that changed during the rewind", async () => {
+  let refreshes = 0;
+  const { app, store, sent } = createEditApp();
+  const originalSource = store.chatSource;
+  store.refresh = async () => {
+    refreshes += 1;
+    return panesState({ agentStatus: "idle" });
+  };
+  store.chatSource = (paneId) => {
+    const source = originalSource(paneId);
+    if (source === null) return null;
+    return refreshes >= 2 ? { ...source, path: join(dir, "next-session.jsonl") } : source;
+  };
+
+  const response = await post(app, { messageId: "u2", requestId: "r1", text: "edited" });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "send_failed", rewound: true });
+  expect(sent).toEqual(["/hwc-rewind u2 r1"]);
+  expect(refreshes).toBe(2);
+});
+
+test("an edit does not send when the fresh state cannot be read", async () => {
+  const { app, store, sent } = createEditApp();
+  store.refresh = async () => {
+    throw new Error("socket closed");
+  };
+
+  const response = await post(app, { messageId: "u2", requestId: "r1", text: "edited" });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+  expect(sent).toEqual([]);
 });
 
 test("rejects a pane that is not pi and a request with a message id from another shape", async () => {
