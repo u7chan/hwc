@@ -41,9 +41,9 @@ pi は会話を v3 の JSONL で保存する。`user` / `assistant` のメッセ
 - 制限値は `src/shared/ask-user.ts` に置く。question は CRLF / CR を LF に直して trim 後 1〜500 コードポイントで、`\n` 以外の制御文字を拒否する。options は 2〜6 個、各 trim 後 1〜120 コードポイントで、制御文字・改行を含まず、trim 後の重複を拒否する。text は trim 後 1〜2000 コードポイントで、`\n` と `\t` 以外の制御文字を拒否する。読み取りは JSON を parse する前にサイズを見る（pending は 8KB、answer は 16KB）。`v` が違う・壊れた・形が合わないファイルは無いものとして扱い、会話の取得を止めない
 - answer は tmp に書いて rename する atomic write で、権限 0600、1 行 JSON + 末尾の改行 1 つ。失敗した tmp は消す。既存の answer は置き換える
 - 会話のスナップショットは pending を `kind: "question"` / `tool: "ask_user"` の 1 問として載せる。`toolUseId` は pending の `id`、`header` は `null`、`multiSelect` は `false`、選択肢は `{ label, description: null }` の配列で、自由入力は空配列にする。etag には実際に返す pending から `ask-<id>` または `ask-none` を足す。JSONL が不変でも、pending の出現・差し替え・削除で 200 を返し、変化が無いときだけ 304 にする
-- カードを出すかは Herdr の `blocked` と重ねる。pending は TUI のダイアログが開いている間も存在するので、pending だけでは人間待ちと決めない。`blocked` で pending があるときだけ会話の末尾にカードを出し、入力欄と過去発言の編集を閉じる。pending が消えたらカードを閉じる
-- 回答は `POST /api/panes/:id/answer-question` の pi 分岐だけで受ける。`blocked` と pending の `id`・`question`・回答の形を確かめ、既存 answer の `id` と pending を書き込み直前に再照合してから answer を書く。受理は最初の 1 回だけで、キーも本文も送らない。書き込みの失敗は 502 にし、成功に見せない。200 は「answer に書いた」の意味で、pi が採用した意味ではない
-- mypi は pending を書けたときだけ Herdr に `blocked` を報告し、TUI の回答・Esc・中断・Web の回答のいずれかで pending を消す。hwc は pending が消えたらカードを閉じる。pending が残っていても `blocked` でなければカードを出さず、端末出力へ戻る
+- カードを出すかは Herdr の `blocked` と重ねる。pending は TUI のダイアログが開いている間も存在するので、pending だけでは人間待ちと決めない。`blocked` で pending があるときだけ会話の末尾にカードを出し、入力欄と過去発言の編集を閉じる。pending が消えたらカードを閉じ、`blocked` が解けたら会話表示と入力欄に戻る。pending が消えても `blocked` のままなら端末出力に倒し、入力欄は戻らない
+- 回答は `POST /api/panes/:id/answer-question` の pi 分岐だけで受ける。`blocked` と pending の `id`・`question`・回答の形を確かめ、既存 answer が同じ質問への有効な回答でないことと pending を書き込み直前に再照合してから answer を書く。壊れた answer は無いものとして扱う。受理は最初の 1 回だけで、キーも本文も送らない。書き込みの失敗は 502 にし、成功に見せない。200 は「answer に書いた」の意味で、pi が採用した意味ではない
+- mypi は pending を書けたときだけ Herdr に `blocked` を報告し、TUI の回答・Esc・中断・Web の回答のいずれかで pending を消す。hwc は pending が消えたらカードを閉じる。`blocked` が解けたら会話表示に戻り、pending が残っていてもカードは出さない
 
 ### 過去の発言の編集
 
@@ -69,6 +69,7 @@ pi は会話を v3 の JSONL で保存する。`user` / `assistant` のメッセ
 - 質問と回答はセッションのツール結果に残るが、hwc は描画しない。何を答えたかを会話で見たい場合は別の設計が要る
 - TUI と Web がほぼ同時に答えると、mypi が先に読んだ方が勝つ。ack は無く、後から書いた answer は残骸になる。次の質問の開始前に mypi が消す。二重回答の調停はしない
 - pending は pi の強制終了で残ることがある。Herdr の状態は `blocked` でなくなるのでカードは出ず、次の質問の開始前に mypi が消す。鮮度のための TTL は契約に無い
+- pending が残っていても `blocked` でなければカードを出さず、会話表示に戻る。逆に、pending だけ消えてまだ `blocked` なら、カードは閉じても端末出力のままで入力欄は戻らない
 - answer を書けない場合（agent dir が読み取り専用など）は 502 になり、カードは残る。端末で答える案内が必要
 
 ## Alternatives

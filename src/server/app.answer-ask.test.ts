@@ -175,6 +175,18 @@ test("the same question cannot be answered twice", async () => {
   expect(await readFile(`${f.path}.ask.answer.json`, "utf8")).toContain('"label":"青"');
 });
 
+test("a broken answer for the same id is treated as absent and overwritten", async () => {
+  const f = await fixture();
+  await f.writePending();
+  await writeFile(
+    `${f.path}.ask.answer.json`,
+    `${JSON.stringify({ v: 1, id: ID, answer: "broken" })}\n`,
+  );
+
+  expect((await f.post(f.optionBody())).status).toBe(200);
+  expect(await readFile(`${f.path}.ask.answer.json`, "utf8")).toContain('"label":"青"');
+});
+
 test("an answer left by another question is replaced", async () => {
   const f = await fixture();
   await f.writePending();

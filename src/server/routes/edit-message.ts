@@ -30,6 +30,7 @@ export function createEditMessageHandlers(ctx: AppContext) {
     panes,
     chat,
     current,
+    freshPane,
     folderTrust,
     resolvePane,
     paneFailure,
@@ -71,6 +72,16 @@ export function createEditMessageHandlers(ctx: AppContext) {
     if (pane === null || pane.agent !== "pi" || !pane.chat) return false;
     // 質問の待ちの間に送ると、TUI のダイアログが入力を受け取る。
     if (pane.agentStatus === "working" || pane.agentStatus === "blocked") return false;
+    // キャッシュが idle のままでも、Herdr が既に blocked なら送らない。working は巻き戻しの
+    // 途中で立つことがあるため、ここでは blocked だけを見る。
+    let fresh;
+    try {
+      fresh = await freshPane(paneId);
+    } catch {
+      return false;
+    }
+    if (fresh === null || fresh.agent !== "pi" || !fresh.chat) return false;
+    if (fresh.agentStatus === "blocked") return false;
     try {
       await panes.send({ paneId, text, submit: true });
       return true;
@@ -88,7 +99,19 @@ export function createEditMessageHandlers(ctx: AppContext) {
 
       const resolved = await resolvePane(c);
       if (!resolved.ok) return resolved.response;
-      const { paneId, pane } = resolved;
+      const { paneId } = resolved;
+      let pane = resolved.pane;
+      // pi は質問の待ちで blocked になる。状態のキャッシュが古いままでも、実際に blocked なら
+      // 巻き戻しのコマンドを送らない。送信の直前に Herdr から取り直す。
+      if (pane.agent === "pi" || store.chatSource(paneId)?.agent === "pi") {
+        try {
+          const fresh = await freshPane(paneId);
+          if (fresh === null) return c.json({ error: "pane_not_found" }, 404);
+          pane = fresh;
+        } catch (error) {
+          return paneFailure(c, error);
+        }
+      }
       if (pane.agent !== "pi" || !pane.chat) return c.json({ error: "no_chat" }, 404);
       // blocked の pi は質問の待ち。TUI のダイアログへ本文を流さない。
       if (pane.agentStatus === "working" || pane.agentStatus === "blocked") {

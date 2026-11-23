@@ -91,6 +91,23 @@ test("a blocked Pi pane with a question card keeps the conversation", () => {
   expect(confirmationView({ ...base, pending: false })).toBe("terminal");
 });
 
+test("a question card survives a failed output read", () => {
+  const blocked = { ...pane, agent: "pi" as const, chat: true, agentStatus: "blocked" as const };
+  const base = { pane: blocked, interaction: null, dismissedId: null };
+  // /output が失敗しても、会話から読めた質問カードを端末表示で隠さない。
+  expect(confirmationView({ ...base, failed: true, pending: true })).toBe("normal");
+  expect(confirmationView({ ...base, failed: true, pending: false })).toBe("terminal");
+  // 信頼確認と terminal の interaction は従来どおり優先する。
+  expect(
+    confirmationView({
+      ...base,
+      failed: true,
+      pending: true,
+      interaction: { kind: "terminal" },
+    }),
+  ).toBe("terminal");
+});
+
 test("agents without a known trust prompt keep their existing view behavior", () => {
   for (const agent of ["claude", "opencode", null] as const) {
     expect(

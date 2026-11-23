@@ -112,14 +112,16 @@ export async function readAsk(sessionPath: string): Promise<AskPending | null> {
   }
 }
 
-// 書き込み前の再照合に使う。answer の本文が壊れていても id だけは読む。
-export async function readAnswerId(sessionPath: string): Promise<string | null> {
+// 書き込み前の再照合に使う。壊れた answer や、別の質問への answer は無いものとして扱い、
+// 同じ id でも契約に合わない本文なら重複とみなさない。
+export async function readAskAnswer(
+  sessionPath: string,
+  pending: AskPending,
+): Promise<AskAnswer | null> {
   const raw = await readBounded(askAnswerPath(sessionPath), ASK_ANSWER_MAX_BYTES);
   if (raw === null) return null;
   try {
-    const record = asRecord(JSON.parse(raw));
-    if (record === null || record.v !== 1) return null;
-    return askId(record.id);
+    return parseAskAnswer(JSON.parse(raw), pending);
   } catch {
     return null;
   }

@@ -9,8 +9,8 @@ import {
   askText,
   parseAskAnswer,
   parseAskPending,
-  readAnswerId,
   readAsk,
+  readAskAnswer,
   writeAskAnswer,
 } from "./pi-ask";
 
@@ -156,24 +156,27 @@ test("a missing, broken, or oversized pending ask is read as absent", async () =
   expect(await readAsk(sessionPath())).toBeNull();
 });
 
-test("an answer id is read without trusting the rest of the body", async () => {
-  expect(await readAnswerId(sessionPath())).toBeNull();
+test("an existing answer is read only when it is a valid answer for the pending question", async () => {
+  const ask = parseAskPending(pending());
+  if (ask === null) throw new Error("fixture is broken");
+  expect(await readAskAnswer(sessionPath(), ask)).toBeNull();
 
   await writeFile(askAnswerPath(sessionPath()), JSON.stringify(answer()));
-  expect(await readAnswerId(sessionPath())).toBe(ID);
+  expect(await readAskAnswer(sessionPath(), ask)).toEqual({ kind: "option", label: "青" });
 
-  // 本体が壊れていても、id が読めれば書き込み前の照合に使える。
+  // 同じ id でも本文が契約に合わない answer は無いものとして扱う。
   await writeFile(askAnswerPath(sessionPath()), JSON.stringify({ v: 1, id: ID, answer: "broken" }));
-  expect(await readAnswerId(sessionPath())).toBe(ID);
+  expect(await readAskAnswer(sessionPath(), ask)).toBeNull();
 
-  await writeFile(askAnswerPath(sessionPath()), JSON.stringify({ v: 2, id: ID }));
-  expect(await readAnswerId(sessionPath())).toBeNull();
+  await writeFile(askAnswerPath(sessionPath()), JSON.stringify(answer({ v: 2 })));
+  expect(await readAskAnswer(sessionPath(), ask)).toBeNull();
 
-  await writeFile(askAnswerPath(sessionPath()), JSON.stringify(answer({ id: "not-a-uuid" })));
-  expect(await readAnswerId(sessionPath())).toBeNull();
+  // 別の質問への answer は、今の pending に対する重複ではない。
+  await writeFile(askAnswerPath(sessionPath()), JSON.stringify(answer({ id: OTHER })));
+  expect(await readAskAnswer(sessionPath(), ask)).toBeNull();
 
   await writeFile(askAnswerPath(sessionPath()), "x".repeat(16 * 1024 + 1));
-  expect(await readAnswerId(sessionPath())).toBeNull();
+  expect(await readAskAnswer(sessionPath(), ask)).toBeNull();
 });
 
 test("an answer is written as one JSON line with mode 0600 and replaces the old one", async () => {
@@ -186,7 +189,13 @@ test("an answer is written as one JSON line with mode 0600 and replaces the old 
   expect((await stat(path)).mode & 0o777).toBe(0o600);
 
   await writeAskAnswer(sessionPath(), OTHER, { kind: "text", text: "1 行目\n2 行目" });
-  expect(await readAnswerId(sessionPath())).toBe(OTHER);
+  expect(
+    await readAskAnswer(sessionPath(), {
+      id: OTHER,
+      question: "自由入力",
+      options: null,
+    }),
+  ).toEqual({ kind: "text", text: "1 行目\n2 行目" });
   expect((await readFile(path, "utf8")).endsWith("\n")).toBe(true);
   expect((await readdir(dir)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
 });

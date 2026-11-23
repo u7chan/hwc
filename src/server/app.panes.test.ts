@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createApp } from "./app";
 import type { PaneClient } from "./herdr/panes";
+import type { AppState } from "./herdr/state";
 import { HerdrError } from "./herdr/socket";
 import {
   state,
@@ -11,6 +12,20 @@ import {
   createTestApp,
   emptyChat,
 } from "./app.test-helpers";
+
+// キャッシュの状態と Herdr の最新状態を分けて渡せるようにする。
+function piState(agentStatus: "idle" | "blocked"): AppState {
+  return {
+    ...chatState,
+    workspaces: chatState.workspaces.map((workspace) => ({
+      ...workspace,
+      tabs: workspace.tabs.map((tab) => ({
+        ...tab,
+        panes: tab.panes.map((pane) => ({ ...pane, agentStatus })),
+      })),
+    })),
+  };
+}
 
 test("GET /api/panes/:id/output returns the pane output", async () => {
   const output = { paneId: "w1:p1", text: "hello\n", truncated: true, revision: 3 };
@@ -307,22 +322,9 @@ test("POST /api/panes/:id/input sends the text and submits it", async () => {
 });
 
 test("POST /api/panes/:id/input refuses a blocked pi pane", async () => {
-  const blocked = {
-    ...chatState,
-    workspaces: chatState.workspaces.map((workspace) => ({
-      ...workspace,
-      tabs: workspace.tabs.map((tab) => ({
-        ...tab,
-        panes: tab.panes.map((pane) => ({
-          ...pane,
-          agentStatus: "blocked" as const,
-        })),
-      })),
-    })),
-  };
   const seen: unknown[] = [];
   const { app } = createTestApp({
-    state: blocked,
+    state: piState("blocked"),
     panes: {
       send: async (options) => {
         seen.push(options);
@@ -338,6 +340,56 @@ test("POST /api/panes/:id/input refuses a blocked pi pane", async () => {
   // 古い画面からの直接 POST でも、TUI のダイアログへ本文を流さない。
   expect(response.status).toBe(409);
   expect(await response.json()).toEqual({ error: "not_waiting" });
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/input refreshes a stale state before refusing a blocked pi pane", async () => {
+  const store = createFakeStore(piState("idle"));
+  store.setChatSource("w1:p1", { agent: "pi", path: "/tmp/session.jsonl" });
+  store.refresh = async () => piState("blocked");
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    store,
+    panes: {
+      send: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+
+  expect(response.status).toBe(409);
+  expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/input does not send when the fresh state cannot be read", async () => {
+  const store = createFakeStore(piState("idle"));
+  store.setChatSource("w1:p1", { agent: "pi", path: "/tmp/session.jsonl" });
+  store.refresh = async () => {
+    throw new Error("socket closed");
+  };
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    store,
+    panes: {
+      send: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+
+  expect(response.status).toBe(502);
   expect(seen).toEqual([]);
 });
 

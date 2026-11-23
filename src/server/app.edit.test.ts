@@ -296,6 +296,46 @@ test("rejects the leaf, an attachment, a missing capability, and a busy pane", a
   expect(blocked.sent).toEqual([]);
 });
 
+test("an edit refreshes a stale state before sending the rewind command", async () => {
+  const { app, store, sent } = createEditApp();
+  store.refresh = async () => panesState({ agentStatus: "blocked" });
+
+  const response = await post(app, { messageId: "u2", requestId: "r1", text: "edited" });
+
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_editable" });
+  expect(sent).toEqual([]);
+});
+
+test("an edit does not send the text when the fresh state turns blocked after the rewind", async () => {
+  let refreshes = 0;
+  const { app, store, sent } = createEditApp();
+  store.refresh = async () => {
+    refreshes += 1;
+    return panesState({ agentStatus: refreshes === 1 ? "idle" : "blocked" });
+  };
+
+  const response = await post(app, { messageId: "u2", requestId: "r1", text: "edited" });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "send_failed", rewound: true });
+  expect(sent).toEqual(["/hwc-rewind u2 r1"]);
+  expect(refreshes).toBe(2);
+});
+
+test("an edit does not send when the fresh state cannot be read", async () => {
+  const { app, store, sent } = createEditApp();
+  store.refresh = async () => {
+    throw new Error("socket closed");
+  };
+
+  const response = await post(app, { messageId: "u2", requestId: "r1", text: "edited" });
+
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ error: "herdr_unavailable" });
+  expect(sent).toEqual([]);
+});
+
 test("rejects a pane that is not pi and a request with a message id from another shape", async () => {
   const codex = createEditApp({ state: panesState({ agent: "codex" }) });
   expect((await post(codex.app, { messageId: "u2", requestId: "r1", text: "x" })).status).toBe(404);

@@ -23,7 +23,7 @@ Herdr は最後のタブの最後のペインを閉じると、スペースご�
 - エージェントの終了は `agent.prompt` で `/quit` を送る。`pane.process_info` で、シェルがエージェントを前景ジョブとして待っていると確かめたときだけ送る。Ctrl+D は送らない。失敗しても `pane.close`・シグナル・別のキーへフォールバックしない
 - 確認中のペインへの通常入力と停止は `confirmation_pending` で拒否する。確認への回答に通常入力の経路を使わせない
 - 承認（permission prompt）は Web から送らない。端末で行う
-- 待ちの間に TUI のダイアログが入力を受け取るエージェント（Claude の `blocked`、pi の `ask_user` の待ち）は、hwc の入力欄と過去発言の編集を閉じ、BFF でも通常入力と編集を 409 で拒否する
+- 待ちの間に TUI のダイアログが入力を受け取るエージェントは、hwc の入力欄と過去発言の編集を閉じる。Claude の `blocked` は画面だけを制限し、pi の `ask_user` の待ちは BFF でも通常入力と編集を 409 で拒否する
 - 送る文字列にコマンドを組み立てる場合（[pi](pi-integration.md) の `/hwc-rewind`、Claude への回答の本文、Claude の `/model` と `/effort`）は、埋め込む値の形を BFF が検証し、改行や先頭の記号でコマンドを注入できないようにする
 
 ## Consequences

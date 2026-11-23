@@ -29,7 +29,7 @@ function harness(
   options: {
     pending?: AskPending | null;
     pendings?: (AskPending | null)[];
-    existing?: string | null;
+    existing?: AskAnswer | null;
     write?: (sessionPath: string, id: string, answer: AskAnswer) => Promise<void>;
   } = {},
 ) {
@@ -43,7 +43,7 @@ function harness(
       if (next !== undefined) return next;
       return options.pending === undefined ? OPTIONS : options.pending;
     },
-    readAnswerId: async () => options.existing ?? null,
+    readAnswer: async () => options.existing ?? null,
     writeAnswer: async (path, id, answer) => {
       writes.push({ path, id, answer });
       await options.write?.(path, id, answer);
@@ -133,7 +133,7 @@ test("a text longer than the contract is a bad request", async () => {
 });
 
 test("an answer already written for this question is not written again", async () => {
-  const h = harness({ existing: ID });
+  const h = harness({ existing: { kind: "option", label: "赤" } });
   expect(await h.answer(option())).toEqual({
     ok: false,
     status: 409,
@@ -143,8 +143,9 @@ test("an answer already written for this question is not written again", async (
   expect(h.writes).toEqual([]);
 });
 
-test("an answer left by another question is replaced", async () => {
-  const h = harness({ existing: OTHER });
+test("a broken existing answer is treated as absent", async () => {
+  // readAnswer は壊れたファイルを null にする。ここでは route が書き込みを続けることを見る。
+  const h = harness({ existing: null });
   expect(await h.answer(option())).toEqual({ ok: true });
   expect(h.writes).toHaveLength(1);
 });

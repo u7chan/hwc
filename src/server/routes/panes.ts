@@ -25,6 +25,7 @@ export function createPanesHandlers(ctx: AppContext) {
     claudeSettings,
     attachmentsRoot,
     current,
+    freshPane,
     folderTrust,
     launchModels,
     piDefaults,
@@ -96,9 +97,16 @@ export function createPanesHandlers(ctx: AppContext) {
       const paneId = c.req.param("id");
       const paths: string[] = [];
       const state = await current();
-      const pane = state === null ? null : findPane(state, paneId);
-      // pi は質問の待ちで blocked になる。古い画面からの直接 POST で、TUI のダイアログへ
-      // 本文が流れないようにする。回答は answer ファイルだけを受け付ける。
+      let pane = state === null ? null : findPane(state, paneId);
+      // pi は質問の待ちで blocked になる。状態のキャッシュが古いままでも、実際に blocked なら
+      // TUI のダイアログが入力を待っている。送信の直前に Herdr から取り直す。
+      if (pane?.agent === "pi" || store.chatSource(paneId)?.agent === "pi") {
+        try {
+          pane = await freshPane(paneId);
+        } catch (error) {
+          return paneFailure(c, error);
+        }
+      }
       if (pane !== null && pane.agent === "pi" && pane.agentStatus === "blocked") {
         return c.json({ error: "not_waiting" }, 409);
       }

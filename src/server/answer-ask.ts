@@ -3,8 +3,8 @@ import {
   type AskAnswer,
   type AskPending,
   askText,
-  readAnswerId,
   readAsk,
+  readAskAnswer,
   writeAskAnswer,
 } from "./chat/pi-ask";
 
@@ -27,7 +27,7 @@ export type AskAnswerer = ReturnType<typeof createAskAnswerer>;
 
 type Clients = {
   readPending?: (sessionPath: string) => Promise<AskPending | null>;
-  readAnswerId?: (sessionPath: string) => Promise<string | null>;
+  readAnswer?: (sessionPath: string, pending: AskPending) => Promise<AskAnswer | null>;
   writeAnswer?: (sessionPath: string, id: string, answer: AskAnswer) => Promise<void>;
 };
 
@@ -35,7 +35,7 @@ type Clients = {
 // （docs/adr/pi-integration.md / docs/adr/agent-input.md）。
 export function createAskAnswerer(clients: Clients = {}) {
   const readPending = clients.readPending ?? readAsk;
-  const readExisting = clients.readAnswerId ?? readAnswerId;
+  const readExisting = clients.readAnswer ?? readAskAnswer;
   const writeAnswer = clients.writeAnswer ?? writeAskAnswer;
 
   // 判定から書き込みまでをペインごとに直列化する。完了した id は覚えない。覚えると、
@@ -51,9 +51,11 @@ export function createAskAnswerer(clients: Clients = {}) {
     const answer = answerOf(pending, request.answers);
     if (answer === null) return { ok: false, status: 400, error: "invalid_answer" };
 
-    // 既存の answer に同じ id があれば、この質問にはもう書いている。BFF を再起動しても
-    // 最初の 1 回を保つため、pending の再照合より先に見る。
-    if ((await readExisting(sessionPath)) === pending.id) return conflict("already_answered");
+    // 既存の answer がこの質問への有効な回答なら、もう書いている。BFF を再起動しても
+    // 最初の 1 回を保つため、pending の再照合より先に見る。壊れた answer は無いものとする。
+    if ((await readExisting(sessionPath, pending)) !== null) {
+      return conflict("already_answered");
+    }
 
     // 書き込み直前に pending を読み直す。mypi が TUI の回答や中断で質問を終えていたら、
     // 次の質問の残骸を消さないよう、ここで止める。

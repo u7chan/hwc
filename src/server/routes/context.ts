@@ -174,6 +174,14 @@ export function createAppContext(options: CreateAppOptions) {
       return null;
     });
 
+  // 状態のキャッシュはイベントが届くまで古い。送信の直前だけ Herdr から取り直し、
+  // キャッシュが idle のままでも実際に blocked なら送らない。取得できなければ呼び出し側が
+  // fail closed にする。
+  const freshPane = async (paneId: string): Promise<PaneState | null> => {
+    const state = await store.refresh();
+    return findPane(state, paneId);
+  };
+
   // 状態とペインの前提は、応答の形（ステータスと error 文字列）ごとここで決める。
   // ルート固有の条件（会話やエージェント種別など）は、解決できた後に呼び出し側が足す。
   const resolveState = async (
@@ -462,6 +470,7 @@ export function createAppContext(options: CreateAppOptions) {
     homeDirectory,
     stateMessage,
     current,
+    freshPane,
     resolveState,
     resolvePane,
     rootsFor,

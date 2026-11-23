@@ -227,6 +227,9 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
   const startAsk = async (paneId: string, options: string[] | null): Promise<void> => {
     const session = askSessionPath(paneId);
     if (session === null) return;
+    // 前のターンの activity タイマーが、質問待ちの状態を idle に戻さないようにする。
+    activityEpochs.set(paneId, (activityEpochs.get(paneId) ?? 0) + 1);
+    await clearPiActivity(paneId);
     const pendingPath = `${session}.ask.json`;
     const answerPath = `${session}.ask.answer.json`;
     const id = crypto.randomUUID();
