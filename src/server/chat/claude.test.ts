@@ -1337,31 +1337,49 @@ test("a question still waiting for an answer is left to the pending card", async
   ]);
 });
 
-test("when the oldest messages are cut, an answer is not left without its question", async () => {
+test("when the cut falls between a question and its answer, the answer is not left alone", async () => {
   await withRoot(async (root) => {
-    const entries: unknown[] = [];
-    let parent: string | null = null;
-    for (let index = 0; index < MAX_CHAT_MESSAGES; index += 1) {
-      const uuid = `p${index}`;
-      entries.push(user(uuid, parent, `発話 ${index}`));
-      parent = uuid;
-    }
-    const ask = assistant("a1", parent, "msg_a", [
+    const first = user("u0", null, "確認してください。");
+    const ask = assistant("a1", "u0", "msg_a", [
       askUse("t1", [question("好きな色は？", ["赤", "青"])]),
     ]);
     const answered = user("u2", "a1", [toolResult("t1")], {
       toolUseResult: { answers: { "好きな色は？": "青" } },
     });
-    await writeTranscript(root, [...entries, ask, answered]);
+    // 後ろに上限より 1 件少ない発話が続くと、古い側の切り捨ては質問だけを落とし、回答は
+    // 上限の先頭に残る。
+    const later: unknown[] = [];
+    let parent = "u2";
+    for (let index = 0; index < MAX_CHAT_MESSAGES - 1; index += 1) {
+      const uuid = `p${index}`;
+      later.push(user(uuid, parent, `発話 ${index}`));
+      parent = uuid;
+    }
+    await writeTranscript(root, [first, ask, answered, ...later]);
 
     const snapshot = await createClaudeChatClient().snapshot(SESSION);
 
     expect(snapshot.truncated).toBe(true);
-    const ids = snapshot.messages.map((message) => message.id);
-    expect(ids.at(-2)).toBe("ask:t1:0:question");
-    expect(ids.at(-1)).toBe("ask:t1:0:answer");
-    expect(snapshot.messages.length).toBeLessThanOrEqual(MAX_CHAT_MESSAGES);
+    expect(snapshot.messages.map((message) => message.id)).not.toContain("ask:t1:0:answer");
+    expect(snapshot.messages.some((message) => message.synthetic === true)).toBe(false);
+    expect(snapshot.messages).toHaveLength(MAX_CHAT_MESSAGES - 1);
   });
+});
+
+test("a question and its answer both within the limit are kept together", async () => {
+  const snapshot = await askConversation(
+    () => [
+      user("u2", "a1", [toolResult("t1")], {
+        toolUseResult: { answers: { "好きな色は？": "青" } },
+      }),
+    ],
+    [question("好きな色は？", ["赤", "青"])],
+  );
+
+  expect(snapshot.messages.map((message) => message.id).slice(-2)).toEqual([
+    "ask:t1:0:question",
+    "ask:t1:0:answer",
+  ]);
 });
 
 test("a completed main-thread reply that wrote the whole prompt cache for 1h sets the expiry", async () => {
