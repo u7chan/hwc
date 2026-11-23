@@ -6,6 +6,8 @@ export type AgentSkill = {
   name: string;
   source: string;
   state: AgentSkillState;
+  // frontmatter の description。長いものは BFF で切る。無い・空なら null。
+  description: string | null;
 };
 
 export type AgentSkills = {

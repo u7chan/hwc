@@ -16,6 +16,7 @@ type Candidate = {
   source: string;
   realPath: string;
   disabled: boolean;
+  description: string | null;
 };
 
 // CLI が見るホーム配下の根。CLI 自身の環境変数が設定されていれば、その CLI と同じ場所を見る。
@@ -43,22 +44,67 @@ type WalkOptions = {
   requireDescription: boolean;
 };
 
-// SKILL.md の frontmatter から name と description の有無だけを読む。YAML 全体は要らない。
-export function parseSkillFrontmatter(text: string): { name: string | null; described: boolean } {
-  const normalized = text.replace(/\r\n/g, "\n");
-  if (!normalized.startsWith("---")) return { name: null, described: false };
-  const end = normalized.indexOf("\n---", 3);
-  if (end === -1) return { name: null, described: false };
-  let name: string | null = null;
-  let described = false;
-  for (const line of normalized.slice(3, end).split("\n")) {
-    const match = /^([A-Za-z0-9_-]+):[ \t]*(.*)$/.exec(line);
-    if (match === null) continue;
-    const value = match[2].trim().replace(/^["']|["']$/g, "");
-    if (match[1] === "name" && value !== "") name = value;
-    if (match[1] === "description" && value !== "") described = true;
+// frontmatter の最上位キーごとに、値の行を集める。同じ行の残りに加えて、続くインデント行と
+// 空行も値に含める（折り返した plain、引用、`>` / `|` の本文はすべてここに入る）。
+function frontmatterEntries(block: string): Map<string, string[]> {
+  const entries = new Map<string, string[]>();
+  let current: string[] | null = null;
+  for (const line of block.split("\n")) {
+    const key = /^([A-Za-z0-9_-]+):[ \t]*(.*)$/.exec(line);
+    if (key !== null) {
+      current = [key[2]];
+      entries.set(key[1], current);
+    } else if (current !== null && (line.trim() === "" || /^[ \t]/.test(line))) {
+      current.push(line.trim());
+    } else {
+      current = null;
+    }
   }
-  return { name, described };
+  return entries;
+}
+
+const BLOCK_SCALAR_HEADER = /^[|>][+-]?\d?[+-]?$/;
+
+// 値は 1 行の文字列にそろえる。一覧では畳んで見せるだけなので、`>` と `|` の改行の違いや
+// 引用内のエスケープ（`\n` など）は解釈しない。
+function scalarText(lines: string[]): string {
+  const [first = "", ...rest] = lines;
+  const body = BLOCK_SCALAR_HEADER.test(first.trim()) ? rest : [first, ...rest];
+  const joined = body.join(" ").replace(/\s+/g, " ").trim();
+  const double = /^"(.*)"$/.exec(joined);
+  if (double !== null) return double[1].replace(/\\(["\\])/g, "$1");
+  const single = /^'(.*)'$/.exec(joined);
+  if (single !== null) return single[1].replace(/''/g, "'");
+  return joined;
+}
+
+// 一覧に載せる説明の長さ。UI は数行で畳んで見せるので、それより先は運ばない。
+const MAX_DESCRIPTION = 240;
+
+function clip(text: string): string {
+  // サロゲートペアの途中で切らない。
+  const chars = [...text];
+  return chars.length > MAX_DESCRIPTION ? `${chars.slice(0, MAX_DESCRIPTION).join("")}…` : text;
+}
+
+// SKILL.md の frontmatter から name と description を読む。YAML 全体は解釈せず、最上位の
+// スカラー（1 行・引用・複数行）だけを扱う。
+export function parseSkillFrontmatter(text: string): {
+  name: string | null;
+  description: string | null;
+} {
+  const normalized = text.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---")) return { name: null, description: null };
+  const end = normalized.indexOf("\n---", 3);
+  if (end === -1) return { name: null, description: null };
+  const entries = frontmatterEntries(normalized.slice(3, end));
+  const read = (key: string): string | null => {
+    const lines = entries.get(key);
+    const value = lines === undefined ? "" : scalarText(lines);
+    return value === "" ? null : value;
+  };
+  const description = read("description");
+  return { name: read("name"), description: description === null ? null : clip(description) };
 }
 
 async function skillAt(
@@ -70,13 +116,14 @@ async function skillAt(
   const text = await readFile(file, "utf8").catch(() => null);
   if (text === null) return null;
   const front = parseSkillFrontmatter(text);
-  if (requireDescription && !front.described) return null;
+  if (requireDescription && front.description === null) return null;
   return {
     name: front.name ?? basename(path),
     id: basename(path),
     source,
     realPath: await realpath(file).catch(() => file),
     disabled: false,
+    description: front.description,
   };
 }
 
@@ -88,7 +135,7 @@ async function markdownSkillAt(
   const text = await readFile(path, "utf8").catch(() => null);
   if (text === null) return null;
   const front = parseSkillFrontmatter(text);
-  if (requireDescription && !front.described) return null;
+  if (requireDescription && front.description === null) return null;
   const id = basename(path, ".md");
   return {
     name: front.name ?? id,
@@ -96,6 +143,7 @@ async function markdownSkillAt(
     source,
     realPath: await realpath(path).catch(() => path),
     disabled: false,
+    description: front.description,
   };
 }
 
@@ -398,6 +446,7 @@ export async function loadAgentSkills(
       name: skill.name,
       source: skill.source,
       state: skill.disabled ? "off" : "on",
+      description: skill.description,
     })),
   };
 }

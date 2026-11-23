@@ -5,6 +5,19 @@
   border-radius: var(--radius-panel);
 }
 
+/* 押せる行はホバーで地の色を塗る。端の行が角丸を持たないと、塗りがグループの丸みを
+   越えて四角く見える。overflow: hidden で切る手は採らない。行の外向きのフォーカス輪郭まで
+   切れる。 */
+.hwc-setting-group > :first-child {
+  border-top-left-radius: var(--radius-panel);
+  border-top-right-radius: var(--radius-panel);
+}
+
+.hwc-setting-group > :last-child {
+  border-bottom-left-radius: var(--radius-panel);
+  border-bottom-right-radius: var(--radius-panel);
+}
+
 .hwc-setting-row {
   display: flex;
   align-items: center;

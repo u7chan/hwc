@@ -10,6 +10,7 @@
 
 - 設定画面のエージェント詳細に、その CLI がグローバルに認識するスキルを読み取り専用で並べる。有効・無効は CLI の設定に従って表示し、hwc からは書き換えない。ユーザーの `~/.claude` や `~/.agents` を変更しない（[Claude 連携](claude-integration.md)の方針と同じ）
 - 対象はグローバルのみ。ペインの cwd に依存するプロジェクトのスキルは含めない。設定画面に cwd が無いため
+- 名前・由来・有効無効に加えて、`SKILL.md` の frontmatter の `description` を返す。何のスキルかの見当を付けるためなので、長いものは BFF で 240 文字に切る。frontmatter は YAML 全体を解釈せず、最上位の `name` と `description` だけを、1 行・引用・折り返し（plain / `>` / `|`）のスカラーとして読む
 - 探索先と規則は各 CLI のドキュメントに従い、BFF がファイルを直接読む。CLI のプロセスは起動しない（Pi の RPC は数秒かかり、セッションの副作用もあるため）
   - Pi: `~/.pi/agent/skills`、`~/.agents/skills`、`settings.json` の `packages` が持つ `skills/`・`.agents/skills/`・manifest の `pi.skills`
   - Claude: `~/.claude/skills`（バンドルは `skillOverrides` の名前空間で引く）、`settings.json` と `settings.local.json` の `skillOverrides`
@@ -30,6 +31,7 @@
 - CLI が探索規則を変えると、表示が実際の読み込みとずれる。ずれた場合は ADR を直すのではなく、その CLI のドキュメントを正として BFF を直す
 - ホーム配下を毎回走査する。一覧は件数で打ち切り、切ったことを画面に返す
 - 読み取り専用なので、無効になっているスキルを hwc から有効にはできない
+- アンカー・タグ・引用内のエスケープなど、上の範囲を外れる YAML は解釈しない。説明が記号のまま出るか、欠けて見える
 
 ## Alternatives
 
