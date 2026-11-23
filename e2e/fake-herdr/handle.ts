@@ -229,6 +229,21 @@ export function createHandle(
           setAgentStatus(paneId, "blocked");
           return;
         }
+        // フィクスチャ専用の入力。mypi の ask_user を模し、セッションの隣に pending を置いて
+        // blocked にする。`/ask` は選択肢、`/ask-text` は自由入力（docs/e2e.md）。
+        if (
+          !text.includes(ATTACHED_FILES_OPEN) &&
+          (text.trim() === "/ask" || text.trim() === "/ask-text")
+        ) {
+          send(socket, { id, result: { type: "ok" } });
+          // 送信の控えが「送信中」のまま残らないよう、実セッションにも発言として残す。
+          await pi.appendUserEntry(paneId, text);
+          await pi.startAsk(
+            paneId,
+            text.trim() === "/ask-text" ? null : ["そのまま進める", "いったん止める"],
+          );
+          return;
+        }
         // フィクスチャ専用の入力。Claude のペインを working にし、transcript の進行行を
         // 時間差で追記する（docs/e2e.md、docs/adr/claude-integration.md）。
         if (!text.includes(ATTACHED_FILES_OPEN) && text.trim() === "/activity") {
@@ -344,6 +359,8 @@ export function createHandle(
         // idle に戻ったものとして次のスナップショットを作る。
         if (keys.some((key) => key === "esc" || key === "escape")) {
           await pi.appendAbort(paneId);
+          // Esc は TUI のダイアログを閉じる。mypi も pending と answer を消す。
+          await pi.cancelAsk(paneId);
           await claude.dismissQuestion(paneId);
           activityEpochs.set(paneId, (activityEpochs.get(paneId) ?? 0) + 1);
           void clearPiActivity(paneId);

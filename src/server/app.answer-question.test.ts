@@ -114,7 +114,7 @@ test("an unknown pane is 404", async () => {
   expect((await post(body, "w9:p9")).status).toBe(404);
 });
 
-test.each(["pi", "codex", "opencode"] as const)("a %s pane is refused as 400", async (agent) => {
+test.each(["codex", "opencode"] as const)("a %s pane is refused as 400", async (agent) => {
   const { post, calls } = fixture({ pane: claudePane({ agent }) });
 
   const response = await post(body);

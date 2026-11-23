@@ -306,6 +306,41 @@ test("POST /api/panes/:id/input sends the text and submits it", async () => {
   expect(seen).toEqual([{ paneId: "w1:p1", text: "ls -la", submit: true }]);
 });
 
+test("POST /api/panes/:id/input refuses a blocked pi pane", async () => {
+  const blocked = {
+    ...chatState,
+    workspaces: chatState.workspaces.map((workspace) => ({
+      ...workspace,
+      tabs: workspace.tabs.map((tab) => ({
+        ...tab,
+        panes: tab.panes.map((pane) => ({
+          ...pane,
+          agentStatus: "blocked" as const,
+        })),
+      })),
+    })),
+  };
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    state: blocked,
+    panes: {
+      send: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+
+  // 古い画面からの直接 POST でも、TUI のダイアログへ本文を流さない。
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_waiting" });
+  expect(seen).toEqual([]);
+});
+
 test("POST /api/panes/:id/input rejects a body that is not JSON", async () => {
   const { app } = createTestApp();
   const response = await app.request("/api/panes/w1:p1/input", {

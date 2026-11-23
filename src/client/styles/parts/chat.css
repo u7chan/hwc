@@ -1181,6 +1181,8 @@ p.hwc-compaction,
   font-weight: 600;
   line-height: var(--line-body);
   overflow-wrap: anywhere;
+  /* 質問文の改行をそのまま見せる。モデルが書いた複数行の質問を 1 行に潰さない。 */
+  white-space: pre-wrap;
 }
 
 /* 質問の選択肢。枠と区切り線を持たず、行そのものを押せる面にする。選択とホバーは

@@ -33,9 +33,14 @@ test("a blocked Claude pane closes the composer", () => {
   expect(composerDisabled(pane("claude", "blocked"), false)).toBe(true);
 });
 
+test("a blocked Pi pane closes the composer", () => {
+  // ask_user の質問待ち。この間の Enter は TUI のダイアログへ流れる。
+  expect(composerDisabled(pane("pi", "blocked"), false)).toBe(true);
+});
+
 test("other agents keep the composer while they are blocked", () => {
-  // Codex と Pi の信頼確認は専用ビューが回答する。OpenCode は blocked を使わない。
-  for (const agent of ["pi", "codex", "opencode", null]) {
+  // Codex の信頼確認は専用ビューが回答する。OpenCode は blocked を使わない。
+  for (const agent of ["codex", "opencode", null]) {
     expect(composerDisabled(pane(agent, "blocked"), false)).toBe(false);
   }
 });

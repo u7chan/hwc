@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
 import type { ChatPendingQuestion } from "../server/chat/contract";
-import { answerFailure, answersOf, NO_CHOICE, pickLabel, pickOther, typeOther } from "./answer";
+import {
+  answerFailure,
+  answersOf,
+  askUserAnswers,
+  NO_CHOICE,
+  pickLabel,
+  pickOther,
+  typeOther,
+} from "./answer";
 
 const single: ChatPendingQuestion = {
   question: "好きな色は？",
@@ -90,4 +98,25 @@ test("a too long answer asks for a shorter one and any other failure sends the p
   for (const status of [0, 400, 409, 502]) {
     expect(answerFailure(status)).toBe("回答できませんでした。端末で答えてください。");
   }
+});
+
+test("a pi free-text answer is trimmed and keeps inner newlines and tabs", () => {
+  const question = { ...single, options: [] };
+  const text = typeOther({ ...NO_CHOICE, other: true }, "  1 行目\n\t2 行目  ");
+  expect(askUserAnswers(question, text)).toEqual([
+    { question: "好きな色は？", text: "1 行目\n\t2 行目" },
+  ]);
+  // trim して空になる入力は送らない。
+  expect(askUserAnswers(question, typeOther(text, " \n\t "))).toBeNull();
+  // 長さはコードポイントで見る。
+  expect(askUserAnswers(question, typeOther(text, "😀".repeat(2_000)))).not.toBeNull();
+  expect(askUserAnswers(question, typeOther(text, "😀".repeat(2_001)))).toBeNull();
+});
+
+test("a pi option answer is exactly one label from the question", () => {
+  const picked = pickLabel(single, NO_CHOICE, "青");
+  expect(askUserAnswers(single, picked)).toEqual([{ question: "好きな色は？", labels: ["青"] }]);
+  expect(askUserAnswers(single, NO_CHOICE)).toBeNull();
+  expect(askUserAnswers(single, { ...picked, labels: ["赤", "青"] })).toBeNull();
+  expect(askUserAnswers(single, { ...picked, labels: ["黄"] })).toBeNull();
 });

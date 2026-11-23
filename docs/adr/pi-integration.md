@@ -33,6 +33,18 @@ pi は会話を v3 の JSONL で保存する。`user` / `assistant` のメッセ
 - 契約の正は `src/shared/activity.ts` の `parsePaneActivity` で、書き手と読み手が同じ関数で検証する。`v` が合わない・壊れた・大きすぎる・30 分より古いファイルは無いものとして扱い、会話の取得も表示も止めない
 - 会話のスナップショットには混ぜない。差分のたびに etag が動いて 304 の意味が壊れるため
 
+### 質問と回答（ask_user）
+
+- mypi の `ask_user` は、モデルが利用者へ 1 問だけ質問し、回答を待つ。hwc はセッションの隣に置かれた pending をカードにし、answer を書いて答える。TUI のキー操作は使わない
+- 契約は mypi と共有する。pending は `<session path>.ask.json`、answer は `<session path>.ask.answer.json`。セッション path に接尾辞を足すだけで、設定は持たない。BFF がペイン id から path を導き、クライアントからは受け取らない
+- pending は `{ v: 1, id, question, options }`。`id` は UUID で、pending とツール呼び出しは 1 対 1。`options` は自由入力のとき必ず `null`。answer は `{ v: 1, id, answer: { kind: "option", label } }` または `{ v: 1, id, answer: { kind: "text", text } }` で、`id` は pending と完全一致させる。option の label は pending の選択肢と完全一致させ、前後の空白を付けない。text は `options` が `null` のときだけ使う
+- 制限値は `src/shared/ask-user.ts` に置く。question は CRLF / CR を LF に直して trim 後 1〜500 コードポイントで、`\n` 以外の制御文字を拒否する。options は 2〜6 個、各 trim 後 1〜120 コードポイントで、制御文字・改行を含まず、trim 後の重複を拒否する。text は trim 後 1〜2000 コードポイントで、`\n` と `\t` 以外の制御文字を拒否する。読み取りは JSON を parse する前にサイズを見る（pending は 8KB、answer は 16KB）。`v` が違う・壊れた・形が合わないファイルは無いものとして扱い、会話の取得を止めない
+- answer は tmp に書いて rename する atomic write で、権限 0600、1 行 JSON + 末尾の改行 1 つ。失敗した tmp は消す。既存の answer は置き換える
+- 会話のスナップショットは pending を `kind: "question"` / `tool: "ask_user"` の 1 問として載せる。`toolUseId` は pending の `id`、`header` は `null`、`multiSelect` は `false`、選択肢は `{ label, description: null }` の配列で、自由入力は空配列にする。etag には実際に返す pending から `ask-<id>` または `ask-none` を足す。JSONL が不変でも、pending の出現・差し替え・削除で 200 を返し、変化が無いときだけ 304 にする
+- カードを出すかは Herdr の `blocked` と重ねる。pending は TUI のダイアログが開いている間も存在するので、pending だけでは人間待ちと決めない。`blocked` で pending があるときだけ会話の末尾にカードを出し、入力欄と過去発言の編集を閉じる。pending が消えたらカードを閉じる
+- 回答は `POST /api/panes/:id/answer-question` の pi 分岐だけで受ける。`blocked` と pending の `id`・`question`・回答の形を確かめ、既存 answer の `id` と pending を書き込み直前に再照合してから answer を書く。受理は最初の 1 回だけで、キーも本文も送らない。書き込みの失敗は 502 にし、成功に見せない。200 は「answer に書いた」の意味で、pi が採用した意味ではない
+- mypi は pending を書けたときだけ Herdr に `blocked` を報告し、TUI の回答・Esc・中断・Web の回答のいずれかで pending を消す。hwc は pending が消えたらカードを閉じる。pending が残っていても `blocked` でなければカードを出さず、端末出力へ戻る
+
 ### 過去の発言の編集
 
 - mypi が `/hwc-rewind <entryId> <requestId>` を提供し、hwc はそれを通常の入力として送る（[入力](agent-input.md)）。mypi は対象の親へ戻り、`customType: "hwc-rewind"` の marker を追記する。BFF は marker を確かめてから、編集後の本文を通常の入力で送る（2 相）
@@ -52,6 +64,12 @@ pi は会話を v3 の JSONL で保存する。`user` / `assistant` のメッセ
 - sidecar と rewind の契約を変えるときは、mypi と hwc の両方を直す。`v` で弾くので、読み手は古い形式を無視して従来表示に戻るだけ
 - 編集で戻すのは会話だけで、ファイル変更・ツール実行・シェルの状態は戻らない。元の枝はファイルに残るが表示されない
 - Herdr 0.9.5 の pi 検出は信頼確認の画面を `blocked` にしないため、一覧は `idle` のまま。確認が要ることは、開いているペインの確認ビューだけが知らせる。Discord の要対応通知も届かない
+- `ask_user` が入っていない mypi のペインでは pending が無く、今までどおり端末出力になる。`v` と形を弾くので、古い拡張でも会話の取得は壊れない
+- `blocked` は Herdr の pi integration（v9）が拡張のイベントを受けて報告する。integration が無い・古い・イベント名が変わるとカードは出ない（会話と入力欄は通常どおり）
+- 質問と回答はセッションのツール結果に残るが、hwc は描画しない。何を答えたかを会話で見たい場合は別の設計が要る
+- TUI と Web がほぼ同時に答えると、mypi が先に読んだ方が勝つ。ack は無く、後から書いた answer は残骸になる。次の質問の開始前に mypi が消す。二重回答の調停はしない
+- pending は pi の強制終了で残ることがある。Herdr の状態は `blocked` でなくなるのでカードは出ず、次の質問の開始前に mypi が消す。鮮度のための TTL は契約に無い
+- answer を書けない場合（agent dir が読み取り専用など）は 502 になり、カードは残る。端末で答える案内が必要
 
 ## Alternatives
 
@@ -61,3 +79,6 @@ pi は会話を v3 の JSONL で保存する。`user` / `assistant` のメッセ
 - **編集で TUI のキー操作（`/tree`）を送る**: ピッカーを閉じる保証が無く、汎用のキー入力を持たない方針に反する
 - **pi に HTTP エンドポイントを立てる**: BFF から pi のプロセスへ直接要求する経路が増え、Herdr のペインとの対応が二重になる
 - **拡張の `project_trust` イベントから BFF へ問い合わせる**: 拡張の注入と起動時の待ち合わせが要り、既知の 1 画面には過剰
+- **`ask_user` の受け渡しに HTTP / socket を立てる**: BFF から pi のプロセスへ直接要求する経路が増え、Herdr のペインとの対応が二重になる。ファイルなら pi のクラッシュ後も残骸を次の質問で消せる
+- **`blocked` だけで質問カードを出す**: 承認・権限確認・フォルダ信頼など、質問以外の `blocked` と区別できない。pending を正本にする
+- **TUI のキー操作で質問に答える**: 選択肢を画面から読む必要があり、スマホに矢印キーも無い

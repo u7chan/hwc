@@ -54,6 +54,7 @@ import { defaultPreviewRoots } from "../message-files";
 import type { AgentModelsClient } from "../agent-models";
 import type { ClaudeModelLabelsReader } from "../claude-model-labels";
 import { createQuestionAnswerer } from "../answer-question";
+import { createAskAnswerer } from "../answer-ask";
 import { createModelSwitcher, hasLocalCommandOutputs } from "../model-switch";
 import type { ClaudeSettingsProvider } from "../create-pane";
 import { HerdrError } from "../herdr/socket";
@@ -227,6 +228,8 @@ export function createAppContext(options: CreateAppOptions) {
   // 質問への回答は、会話を読める Claude のペインだけ。読み取り口が無い構成では答えない。
   const questionAnswerer =
     claude === undefined ? null : createQuestionAnswerer({ panes, chat: claude });
+  // pi の ask_user は answer ファイルだけを書く。キーも本文も送らない。
+  const askAnswerer = createAskAnswerer();
   const launchModels = createLaunchModels();
   // モデルの切り替えは、会話とローカルコマンドの結果を読める Claude のペインだけ。
   const modelSwitcher =
@@ -466,6 +469,7 @@ export function createAppContext(options: CreateAppOptions) {
     launchModels,
     piDefaults,
     questionAnswerer,
+    askAnswerer,
     modelSwitcher,
     paneFailure,
     worktreeFailure,

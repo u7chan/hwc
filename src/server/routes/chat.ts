@@ -30,6 +30,7 @@ export function createChatHandlers(ctx: AppContext) {
     launchModels,
     piDefaults,
     questionAnswerer,
+    askAnswerer,
     modelSwitcher,
     resolvePane,
     paneFailure,
@@ -152,7 +153,8 @@ export function createChatHandlers(ctx: AppContext) {
         return c.json({ error: "chat_unavailable" }, 502);
       }
     },
-    // AskUserQuestion に Esc で閉じて本文で答える（docs/adr/claude-integration.md）。Claude だけ。
+    // 質問への回答。Claude は Esc で閉じて本文で答え、pi はセッションの隣の answer ファイルを
+    // 書く（docs/adr/claude-integration.md / docs/adr/pi-integration.md）。
     answerQuestion: async (c: IdContext) => {
       const request = parseAnswerRequest(await c.req.json().catch(() => null));
       if (request === null) return c.json({ error: "invalid_request" }, 400);
@@ -160,6 +162,23 @@ export function createChatHandlers(ctx: AppContext) {
       const resolved = await resolvePane(c);
       if (!resolved.ok) return resolved.response;
       const { paneId, pane } = resolved;
+
+      // ask_user の回答はキーでも本文でもない。TUI のダイアログが開いていても、
+      // ファイルだけを置いて待ちを解かせる。
+      if (pane.agent === "pi") {
+        const source = store.chatSource(paneId);
+        if (!pane.chat || source?.agent !== "pi") {
+          return c.json({ error: "not_waiting" }, 409);
+        }
+        const outcome = await askAnswerer.answer({
+          paneId,
+          sessionPath: source.path,
+          blocked: pane.agentStatus === "blocked",
+          request,
+        });
+        return outcome.ok ? c.json({ ok: true }) : c.json({ error: outcome.error }, outcome.status);
+      }
+
       if (pane.agent !== "claude") return c.json({ error: "not_claude" }, 400);
 
       // セッションの在り処はクライアントから受け取らず、BFF がペイン id から引く。

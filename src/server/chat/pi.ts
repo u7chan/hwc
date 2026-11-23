@@ -5,6 +5,7 @@ import type {
   ChatCompaction,
   ChatContext,
   ChatMessage,
+  ChatPending,
   ChatSnapshot,
   ChatUsage,
   SessionChatClient,
@@ -13,6 +14,7 @@ import { stripAttachedFiles } from "../../shared/attachments";
 import { isRewindCapability, parseRewindMarker, type RewindMarker } from "../../shared/rewind";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
+import { type AskPending, readAsk } from "./pi-ask";
 import { loadPiModelWindows, type PiModelWindow } from "./pi-models";
 
 // 40MB のセッションを一度に読まないよう、追記分はチャンクに分けて読む。
@@ -535,6 +537,9 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   // window は表示中のモデルで引く。usage を採った assistant のモデルで引くと、切り替え直後に
   // 新しい model 名と古いモデルの window が混ざる。
   const windowTokens = await windowFor(reader.path, provider, model);
+  // ask ファイルは毎回読む。セッションの追記が無くても、pending の出現・差し替え・削除で
+  // etag を変えないと、クライアントが 304 でカードの変化を取りこぼす。
+  const ask = await readAsk(reader.path);
   const limited = limitMessages(messages);
   // limitMessages は古い側から落とす。落ちた分だけ区切りの位置も手前へずらす。
   const dropped = messages.length - limited.messages.length;
@@ -543,7 +548,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
       ? 0
       : Math.max(0, Math.min(limited.messages.length, beforeCompaction - dropped));
   return {
-    etag: `${reader.etagPrefix}-${reader.generation}-${windowTokens ?? "unknown"}`,
+    etag: `${reader.etagPrefix}-${reader.generation}-${windowTokens ?? "unknown"}-${ask === null ? "ask-none" : `ask-${ask.id}`}`,
     messages: limited.messages,
     model,
     effort,
@@ -552,6 +557,7 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
     ...(usage === null ? {} : { usage }),
     compaction: compacted === null ? null : { ...compacted.compaction, index: compactionIndex },
     canRewind: reader.canRewind,
+    ...(ask === null ? {} : { pending: askPending(ask) }),
     // 追記型なので、最後に読んだエントリが葉。表示に無い entry でも葉になりうる。
     ...(reader.leafId === null ? {} : { leafId: reader.leafId }),
   };
@@ -587,6 +593,24 @@ function compactionWindow(
 function foldContext(tokens: number | null, window: number | null): ChatContext | null {
   if (tokens === null && window === null) return null;
   return { tokens, window };
+}
+
+// モデルが書いた質問として、Claude の AskUserQuestion と同じカードの形に載せる。
+// ask_user は 1 問だけなので、header と複数選択は持たない。
+function askPending(ask: AskPending): ChatPending {
+  return {
+    kind: "question",
+    toolUseId: ask.id,
+    tool: "ask_user",
+    questions: [
+      {
+        question: ask.question,
+        header: null,
+        multiSelect: false,
+        options: (ask.options ?? []).map((label) => ({ label, description: null })),
+      },
+    ],
+  };
 }
 
 function createWindowResolver(

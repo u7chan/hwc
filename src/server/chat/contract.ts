@@ -96,7 +96,9 @@ export type ChatPending =
   | {
       kind: "question";
       toolUseId: string;
-      tool: "AskUserQuestion";
+      // ask_user は mypi の 1 問だけの質問。AskUserQuestion とは回答の経路が違う
+      // （docs/adr/pi-integration.md）。
+      tool: "AskUserQuestion" | "ask_user";
       questions: ChatPendingQuestion[];
     }
   | { kind: "tool"; toolUseId: string; tool: string; summary: string | null };

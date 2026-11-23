@@ -97,6 +97,11 @@ export function createPanesHandlers(ctx: AppContext) {
       const paths: string[] = [];
       const state = await current();
       const pane = state === null ? null : findPane(state, paneId);
+      // pi は質問の待ちで blocked になる。古い画面からの直接 POST で、TUI のダイアログへ
+      // 本文が流れないようにする。回答は answer ファイルだけを受け付ける。
+      if (pane !== null && pane.agent === "pi" && pane.agentStatus === "blocked") {
+        return c.json({ error: "not_waiting" }, 409);
+      }
       if (pane !== null && supportsFolderTrust(pane.agent)) {
         try {
           if (await folderTrust.inspect(pane))

@@ -69,7 +69,8 @@ export function createEditMessageHandlers(ctx: AppContext) {
     const state = await current();
     const pane = state === null ? null : findPane(state, paneId);
     if (pane === null || pane.agent !== "pi" || !pane.chat) return false;
-    if (pane.agentStatus === "working") return false;
+    // 質問の待ちの間に送ると、TUI のダイアログが入力を受け取る。
+    if (pane.agentStatus === "working" || pane.agentStatus === "blocked") return false;
     try {
       await panes.send({ paneId, text, submit: true });
       return true;
@@ -89,7 +90,10 @@ export function createEditMessageHandlers(ctx: AppContext) {
       if (!resolved.ok) return resolved.response;
       const { paneId, pane } = resolved;
       if (pane.agent !== "pi" || !pane.chat) return c.json({ error: "no_chat" }, 404);
-      if (pane.agentStatus === "working") return c.json({ error: "not_editable" }, 409);
+      // blocked の pi は質問の待ち。TUI のダイアログへ本文を流さない。
+      if (pane.agentStatus === "working" || pane.agentStatus === "blocked") {
+        return c.json({ error: "not_editable" }, 409);
+      }
       if (inFlight.has(paneId)) return c.json({ error: "edit_in_flight" }, 409);
 
       const source = store.chatSource(paneId);

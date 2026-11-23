@@ -1,5 +1,6 @@
 import type { ChatPendingQuestion } from "../server/chat/contract";
 import type { QuestionAnswer } from "../shared/answer";
+import { ASK_TEXT_MAX } from "../shared/ask-user";
 import { flatText } from "../shared/flat-text";
 
 // 質問 1 問ぶんの選択状態。選択肢と自由入力は同時に答えにならない（契約は labels か text の
@@ -52,6 +53,25 @@ export function answersOf(
     answers.push({ question: question.question, labels });
   }
   return answers;
+}
+
+// pi の ask_user の回答。Claude の flatText と違い、trim と長さだけを見て、内部の改行・タブを
+// 保つ（docs/adr/pi-integration.md）。選択肢は 1 つだけ。制御文字は BFF が 400 で拒否する。
+export function askUserAnswers(
+  question: ChatPendingQuestion,
+  choice: Choice,
+): QuestionAnswer[] | null {
+  if (choice.other) {
+    const text = choice.text.trim();
+    const length = Array.from(text).length;
+    if (length === 0 || length > ASK_TEXT_MAX) return null;
+    return [{ question: question.question, text }];
+  }
+  if (choice.labels.length !== 1) return null;
+  const label = choice.labels[0];
+  if (label === undefined) return null;
+  if (!question.options.some((option) => option.label === label)) return null;
+  return [{ question: question.question, labels: [label] }];
 }
 
 // status は BFF の応答。0 はネットワークの失敗と打ち切り。

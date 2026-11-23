@@ -331,6 +331,36 @@ test("a pending prompt is kept as the contract describes it", () => {
   });
 });
 
+test("a pi ask_user prompt is kept with empty options for free input", () => {
+  const ask = {
+    kind: "question" as const,
+    toolUseId: "11111111-1111-4111-8111-111111111111",
+    tool: "ask_user" as const,
+    questions: [{ question: "どうしますか？", header: null, multiSelect: false, options: [] }],
+  };
+  expect(toChatSnapshot({ ...chatBody, pending: ask })?.pending).toEqual(ask);
+
+  const withOptions = {
+    ...ask,
+    questions: [
+      {
+        question: "どれにしますか？",
+        header: null,
+        multiSelect: false,
+        options: [
+          { label: "赤", description: null },
+          { label: "青", description: null },
+        ],
+      },
+    ],
+  };
+  expect(toChatSnapshot({ ...chatBody, pending: withOptions })?.pending).toEqual(withOptions);
+
+  // ask_user は 1 問だけ。複数ある形は壊れた値として捨てる。
+  const two = { ...ask, questions: [ask.questions[0], ask.questions[0]] };
+  expect(toChatSnapshot({ ...chatBody, pending: two })).toEqual(chatBody);
+});
+
 test("a pending prompt that breaks the contract costs the card, not the conversation", () => {
   const questions = [
     { question: "好きな色は？", header: "色", multiSelect: false, options: [{ label: "赤" }] },

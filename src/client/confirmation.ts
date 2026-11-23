@@ -9,11 +9,14 @@ export function confirmationView(props: {
   interaction: PaneInteraction | null;
   dismissedId: string | null;
   failed: boolean;
+  // 会話の末尾に応答待ちのカードがあるか。カードから答えられる pi は端末へ倒さない。
+  pending: boolean;
 }): "confirm" | "terminal" | "normal" {
   if (!supportsFolderTrust(props.pane.agent)) return "normal";
   if (props.failed || props.interaction?.kind === "terminal") return "terminal";
   if (props.interaction?.kind === "folder-trust") {
     return props.interaction.id === props.dismissedId ? "terminal" : "confirm";
   }
-  return props.pane.agentStatus === "blocked" ? "terminal" : "normal";
+  if (props.pane.agentStatus !== "blocked") return "normal";
+  return props.pane.agent === "pi" && props.pending ? "normal" : "terminal";
 }

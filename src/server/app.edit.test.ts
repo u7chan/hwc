@@ -287,6 +287,13 @@ test("rejects the leaf, an attachment, a missing capability, and a busy pane", a
 
   const busy = createEditApp({ state: panesState({ agentStatus: "working" }) });
   expect((await post(busy.app, { messageId: "u2", requestId: "r3", text: "x" })).status).toBe(409);
+
+  // 質問の待ちの間は、TUI のダイアログが本文を受け取る。
+  const blocked = createEditApp({ state: panesState({ agentStatus: "blocked" }) });
+  const blockedResponse = await post(blocked.app, { messageId: "u2", requestId: "r4", text: "x" });
+  expect(blockedResponse.status).toBe(409);
+  expect(await blockedResponse.json()).toEqual({ error: "not_editable" });
+  expect(blocked.sent).toEqual([]);
 });
 
 test("rejects a pane that is not pi and a request with a message id from another shape", async () => {

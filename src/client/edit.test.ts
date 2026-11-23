@@ -67,6 +67,8 @@ test("only a pi user message that is not the session leaf is editable", () => {
   expect(canEditMessage({ ...base, sending: true })).toBe(false);
   expect(canEditMessage({ ...base, pane: pane({ agent: "codex" }) })).toBe(false);
   expect(canEditMessage({ ...base, pane: pane({ agentStatus: "working" }) })).toBe(false);
+  // 質問の待ちの間は、TUI のダイアログが入力を受け取る。
+  expect(canEditMessage({ ...base, pane: pane({ agentStatus: "blocked" }) })).toBe(false);
   expect(
     canEditMessage({ ...base, row: row({ ...user("u3"), attachments: [{ name: "x", size: 1 }] }) }),
   ).toBe(false);

@@ -301,14 +301,20 @@ function toChatPending(value: unknown): ChatPending | undefined {
       summary: typeof summary === "string" && summary !== "" ? summary : null,
     };
   }
-  if (pending.kind !== "question" || pending.tool !== "AskUserQuestion") return undefined;
+  if (pending.kind !== "question") return undefined;
+  // pi の ask_user は 1 問だけで、自由入力のときは options が空になる。Claude の
+  // AskUserQuestion は今までどおり、空の options を捨てる。
+  const askUser = pending.tool === "ask_user";
+  if (pending.tool !== "AskUserQuestion" && !askUser) return undefined;
   if (!Array.isArray(pending.questions)) return undefined;
+  if (askUser && pending.questions.length !== 1) return undefined;
   const questions: ChatPendingQuestion[] = [];
   for (const item of pending.questions) {
     if (typeof item !== "object" || item === null) return undefined;
     const question = item as Partial<ChatPendingQuestion>;
     if (typeof question.question !== "string" || question.question === "") return undefined;
-    if (!Array.isArray(question.options) || question.options.length === 0) return undefined;
+    if (!Array.isArray(question.options)) return undefined;
+    if (!askUser && question.options.length === 0) return undefined;
     const options: ChatPendingQuestion["options"] = [];
     for (const option of question.options) {
       if (typeof option !== "object" || option === null) return undefined;
@@ -328,7 +334,12 @@ function toChatPending(value: unknown): ChatPending | undefined {
     });
   }
   if (questions.length === 0) return undefined;
-  return { kind: "question", toolUseId: pending.toolUseId, tool: "AskUserQuestion", questions };
+  return {
+    kind: "question",
+    toolUseId: pending.toolUseId,
+    tool: askUser ? "ask_user" : "AskUserQuestion",
+    questions,
+  };
 }
 
 export function toChatSnapshot(value: unknown): ChatSnapshot | null {
