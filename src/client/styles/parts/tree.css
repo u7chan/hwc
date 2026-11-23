@@ -322,6 +322,38 @@ button.hwc-tree-row {
   color: var(--color-secondary);
 }
 
+/* 種類の色。アイコン専用の色を 20 テーマぶん足さず、明暗 2 通りに調整済みの ANSI 色を
+   借りる。開けない行は行の淡色をそのまま使い、色で「開ける」と誤解させない。 */
+.hwc-tree[data-icons="color"]
+  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-mark[data-kind="code"] {
+  color: var(--ansi-12);
+}
+
+.hwc-tree[data-icons="color"]
+  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-mark[data-kind="data"] {
+  color: var(--ansi-11);
+}
+
+.hwc-tree[data-icons="color"]
+  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-mark[data-kind="style"] {
+  color: var(--ansi-13);
+}
+
+.hwc-tree[data-icons="color"]
+  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-mark[data-kind="image"] {
+  color: var(--ansi-2);
+}
+
+.hwc-tree[data-icons="color"]
+  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-mark[data-kind="shell"] {
+  color: var(--ansi-6);
+}
+
 .hwc-tree-name {
   flex: 1;
   min-width: 0;

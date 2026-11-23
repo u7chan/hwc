@@ -11,6 +11,7 @@ import { OUTPUT_LINES, answerQuestion, editMessage, uploadAttachment } from "./a
 import { askUserAnswerText } from "./answer";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference } from "./file-reference";
+import type { FileTreeIcons } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
 import type { FileTreeSide } from "./file-tree-side";
 import { OutputText } from "./OutputText";
@@ -109,6 +110,8 @@ type PaneDetailProps = {
   treeSide: FileTreeSide;
   // 並べるときのツリーの幅（px）。並べるのに要るセルの幅はここから決まる。
   treeWidth: number;
+  // 行の左に種類の印を出すか。
+  treeIcons: FileTreeIcons;
   // 枠線がハイライトしている、操作の対象になっているセルか。キーの対象を 1 つに絞る。
   current: boolean;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
@@ -166,6 +169,7 @@ export function PaneDetail(props: PaneDetailProps) {
     scheme,
     treeSide,
     treeWidth,
+    treeIcons,
     current,
     labeled,
     showSpace,
@@ -1038,6 +1042,7 @@ export function PaneDetail(props: PaneDetailProps) {
     <FileTree
       paneId={pane.id}
       view={fileTree}
+      icons={treeIcons}
       side={sideBySide}
       shown={treeShown}
       closing={treeClosing}

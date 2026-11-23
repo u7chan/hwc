@@ -1,7 +1,9 @@
 import {
+  FILE_TREE_ICONS,
   FILE_TREE_SIZES,
   FILE_TREE_WIDTHS,
   fileTreeWidthPx,
+  type FileTreeIcons,
   type FileTreeSize,
   type FileTreeWidth,
 } from "../file-tree-display";
@@ -20,6 +22,8 @@ type DisplaySettingsProps = {
   onTreeSizeChange: (size: FileTreeSize) => void;
   treeWidth: FileTreeWidth;
   onTreeWidthChange: (width: FileTreeWidth) => void;
+  treeIcons: FileTreeIcons;
+  onTreeIconsChange: (icons: FileTreeIcons) => void;
 };
 
 export function DisplaySettings(props: DisplaySettingsProps) {
@@ -61,8 +65,19 @@ export function DisplaySettings(props: DisplaySettingsProps) {
         広いセルでツリーを並べるときの幅です。広くするほど、並べるのに必要なセルの幅も増えます。狭いセルでは会話の上に重ねるので、幅は変わりません。
       </p>
 
+      <p class="hwc-subtitle">ファイルツリーのアイコン</p>
+      <Segmented
+        label="ファイルツリーのアイコン"
+        options={FILE_TREE_ICONS}
+        value={props.treeIcons}
+        onChange={props.onTreeIconsChange}
+      />
+      <p class="hwc-section-note">
+        ファイルとフォルダの行の左に、種類の印を付けます。フォルダは開くと形が変わります。既定の「なし」は今の見た目です。
+      </p>
+
       <p class="hwc-subtitle">サンプル</p>
-      <FileTreeSample />
+      <FileTreeSample icons={props.treeIcons} />
       <p class="hwc-section-note">
         選んだ幅は {fileTreeWidthPx(props.treeWidth)}px
         です。この画面に収まらないときは、サンプルだけ狭めて表示します。

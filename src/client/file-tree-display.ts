@@ -4,6 +4,8 @@
 
 export type FileTreeSize = "small" | "normal" | "large";
 export type FileTreeWidth = "narrow" | "normal" | "wide";
+// 行の左に種類の印を出すか。既定は出さない（設定を足す前の見た目）。
+export type FileTreeIcons = "none" | "color";
 
 // 行の高さは変えない（--tap の下限）。変わるのは 1 行に入る文字数だけ。標準は従来の --text-body
 // そのもので、画面幅で変わる（900px 以上は 0.9375rem）。小と大はその倍率にして、どの幅でも
@@ -21,18 +23,28 @@ const WIDTHS: Record<FileTreeWidth, { label: string; width: number }> = {
   wide: { label: "広", width: 340 },
 };
 
+// 印は種類ごとに色を変える 1 通りだけ。色を付けない形だけの案は、テーマ 20 種すべてで
+// 地の文字色に寄ってしまい、種類を見分ける役に立たないため選ばなかった。
+const ICONS: Record<FileTreeIcons, { label: string }> = {
+  none: { label: "なし" },
+  color: { label: "色分け" },
+};
+
 function options<T extends string>(table: Record<T, { label: string }>) {
   return (Object.keys(table) as T[]).map((id) => ({ id, label: table[id].label }));
 }
 
 export const FILE_TREE_SIZES = options(SIZES);
 export const FILE_TREE_WIDTHS = options(WIDTHS);
+export const FILE_TREE_ICONS = options(ICONS);
 
 export const DEFAULT_FILE_TREE_SIZE: FileTreeSize = "normal";
 export const DEFAULT_FILE_TREE_WIDTH: FileTreeWidth = "normal";
+export const DEFAULT_FILE_TREE_ICONS: FileTreeIcons = "none";
 
 export const FILE_TREE_SIZE_STORAGE_KEY = "hwc-file-tree-size";
 export const FILE_TREE_WIDTH_STORAGE_KEY = "hwc-file-tree-width";
+export const FILE_TREE_ICONS_STORAGE_KEY = "hwc-file-tree-icons";
 
 export function fileTreeFontSize(size: FileTreeSize): string {
   return SIZES[size].fontSize;
@@ -52,6 +64,10 @@ export function parseFileTreeSize(value: string | null): FileTreeSize {
 
 export function parseFileTreeWidth(value: string | null): FileTreeWidth {
   return FILE_TREE_WIDTHS.find((option) => option.id === value)?.id ?? DEFAULT_FILE_TREE_WIDTH;
+}
+
+export function parseFileTreeIcons(value: string | null): FileTreeIcons {
+  return FILE_TREE_ICONS.find((option) => option.id === value)?.id ?? DEFAULT_FILE_TREE_ICONS;
 }
 
 function load<T extends string>(
@@ -84,10 +100,18 @@ export function loadFileTreeWidth(storage: StorageLike | null): FileTreeWidth {
   return load(storage, FILE_TREE_WIDTH_STORAGE_KEY, parseFileTreeWidth);
 }
 
+export function loadFileTreeIcons(storage: StorageLike | null): FileTreeIcons {
+  return load(storage, FILE_TREE_ICONS_STORAGE_KEY, parseFileTreeIcons);
+}
+
 export function saveFileTreeSize(storage: WritableStorage | null, size: FileTreeSize): void {
   save(storage, FILE_TREE_SIZE_STORAGE_KEY, size);
 }
 
 export function saveFileTreeWidth(storage: WritableStorage | null, width: FileTreeWidth): void {
   save(storage, FILE_TREE_WIDTH_STORAGE_KEY, width);
+}
+
+export function saveFileTreeIcons(storage: WritableStorage | null, icons: FileTreeIcons): void {
+  save(storage, FILE_TREE_ICONS_STORAGE_KEY, icons);
 }
