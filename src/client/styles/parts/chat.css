@@ -865,6 +865,19 @@ p.hwc-compaction,
   font-size: var(--text-body);
 }
 
+/* PC レイアウトでは、横スクロールになる表（Markdown.tsx が data-squeeze を付ける）
+   だけ、長い語を途中で折って収める。識別子の列が長い語で最小幅を押し上げ、わずかに
+   入らないだけで表全体が横スクロールになるため。
+   常には効かせない。折れる位置が増えると列幅が内容の最大幅に比例して配られ、収まって
+   いた表でも短い語の列が途中で折れる。スマホでは列が 5em まで細くなるので、語を崩さず
+   横スクロールのままにする。 */
+@media (min-width: 900px) {
+  .hwc-md-table-wrap[data-squeeze] .hwc-md-table th,
+  .hwc-md-table-wrap[data-squeeze] .hwc-md-table td {
+    overflow-wrap: anywhere;
+  }
+}
+
 .hwc-md-table th,
 .hwc-md-table td {
   min-width: 5em;

@@ -1,5 +1,5 @@
 import { createContext, Fragment, type ComponentChildren } from "preact";
-import { useContext, useMemo, useState } from "preact/hooks";
+import { useContext, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ChatFile } from "../server/chat/contract";
 import type { MessageImageSource, MessageLinkSource } from "./chat";
 import { useCopy } from "./copy";
@@ -167,35 +167,75 @@ function Block({
     case "code":
       return <CodeBlock lang={block.lang} text={block.text} />;
     case "table":
-      return (
-        <div class="hwc-md-table-wrap">
-          <table class="hwc-md-table">
-            <thead>
-              <tr>
-                {block.header.map((cell, index) => (
-                  <th data-align={block.align[index]} key={index}>
-                    <InlineSource source={cell} />
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {block.rows.map((row, rowIndex) => (
-                <tr key={rowIndex}>
-                  {row.map((cell, index) => (
-                    <td data-align={block.align[index]} key={index}>
-                      <InlineSource source={cell} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
+      return <Table block={block} />;
     case "hr":
       return <hr />;
   }
+}
+
+// 横スクロールになる表にだけ data-squeeze を付ける（効くのは PC レイアウトだけ。chat.css）。
+// state にしないのは、収まるかを測るために一度外して戻す必要があり、再描画を挟むと
+// 外したまま 1 フレーム描かれるため。data-squeeze は Preact の管理する props に無く、
+// 再描画で消えない。
+function Table({ block }: { block: Extract<MdBlock, { kind: "table" }> }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const table = useRef<HTMLTableElement>(null);
+
+  useLayoutEffect(() => {
+    const element = wrap.current;
+    const content = table.current;
+    if (element === null || content === null) return;
+
+    const fit = () => {
+      element.removeAttribute("data-squeeze");
+      element.toggleAttribute("data-squeeze", element.scrollWidth > element.clientWidth);
+    };
+
+    // 最初の 1 回は描画前に測る。遅れると、広い画面で一瞬だけ横スクロールの形が見える。
+    fit();
+
+    // 監視中の再計測は次のフレームへ送る。同じフレームで寸法を変えると、ブラウザが
+    // "ResizeObserver loop" として警告する。表の中身は逐次表示で伸びるので表も見る。
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    });
+    observer.observe(element);
+    observer.observe(content);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
+
+  return (
+    <div class="hwc-md-table-wrap" ref={wrap}>
+      <table class="hwc-md-table" ref={table}>
+        <thead>
+          <tr>
+            {block.header.map((cell, index) => (
+              <th data-align={block.align[index]} key={index}>
+                <InlineSource source={cell} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, index) => (
+                <td data-align={block.align[index]} key={index}>
+                  <InlineSource source={cell} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function taskLabel(source: string, fallback: string): string {
