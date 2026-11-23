@@ -11,7 +11,7 @@ import {
   answerSummary,
   isAnswered,
   NO_CHOICE,
-  pageAfterPick,
+  nextPage,
   pickLabel,
   pickOther,
   questionLabel,
@@ -212,16 +212,20 @@ test("the unanswered questions are listed by index, including the ones with no c
   expect(unansweredIndexes(questions, choices)).toEqual([1]);
 });
 
-test("picking an option moves on to the next question until everything is answered, then to the review", () => {
+test("the next page is the following question until everything is answered, then the review", () => {
   const questions = [single, multi, single];
   const red = pickLabel(single, NO_CHOICE, "赤");
 
-  expect(pageAfterPick(questions, [red], 0)).toBe(1);
-  expect(pageAfterPick(questions, [red, pickLabel(multi, NO_CHOICE, "青")], 1)).toBe(2);
+  expect(nextPage(questions, [red], 0)).toBe(1);
+  expect(nextPage(questions, [red, pickLabel(multi, NO_CHOICE, "青")], 1)).toBe(2);
   // 最後の質問で答え終えたら、確認ページ（質問数番目）。
-  expect(pageAfterPick(questions, [red, pickLabel(multi, NO_CHOICE, "青"), red], 2)).toBe(3);
+  expect(nextPage(questions, [red, pickLabel(multi, NO_CHOICE, "青"), red], 2)).toBe(3);
   // 確認から 1 問だけ直したときは、次の質問ではなく確認へ戻る。
-  expect(pageAfterPick(questions, [red, pickLabel(multi, NO_CHOICE, "青"), red], 0)).toBe(3);
+  expect(nextPage(questions, [red, pickLabel(multi, NO_CHOICE, "青"), red], 0)).toBe(3);
+  // 直した質問が複数選択や自由入力でも同じ。
+  const typed = typeOther(pickOther(NO_CHOICE), "紫");
+  expect(nextPage(questions, [typed, pickLabel(multi, NO_CHOICE, "青"), red], 0)).toBe(3);
+  expect(nextPage(questions, [red, pickLabel(multi, NO_CHOICE, "青"), red], 1)).toBe(3);
 });
 
 test("a question without a header is called by its number", () => {

@@ -46,9 +46,10 @@ export function unansweredIndexes(
   );
 }
 
-// 単一選択を選んだ直後に開くページ。全問に答えてあれば確認ページ（質問数番目）へ戻し、
-// そうでなければ次の質問へ進む。確認ページから 1 問だけ直したときに、残りを通らせない。
-export function pageAfterPick(
+// 単一選択の選択直後と「次へ」で開くページ。全問に答えてあれば確認ページ（質問数番目）へ
+// 戻し、そうでなければ次の質問へ進む。確認ページから 1 問だけ直したときに、選択の種類
+// （単一・複数・自由入力）によらず残りを通らせない。
+export function nextPage(
   questions: readonly ChatPendingQuestion[],
   choices: readonly Choice[],
   index: number,

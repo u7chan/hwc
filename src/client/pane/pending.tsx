@@ -12,7 +12,7 @@ import {
   type Choice,
   isAnswered,
   NO_CHOICE,
-  pageAfterPick,
+  nextPage,
   pickLabel,
   pickOther,
   questionLabel,
@@ -127,7 +127,7 @@ function QuestionForm(props: {
     update(index, next);
     // 複数選択は選び終わりが分からないので、自動では進めない。
     if (!paged || question.multiSelect) return;
-    const to = pageAfterPick(questions, withChoice(index, next), index);
+    const to = nextPage(questions, withChoice(index, next), index);
     // 待つ間に別のページへ移っていたら、そのページを動かさない。
     window.setTimeout(() => setPage((current) => (current === index ? to : current)), ADVANCE_MS);
   };
@@ -141,6 +141,8 @@ function QuestionForm(props: {
   const locked = phase !== "editing";
   const reviewing = paged && page === questions.length;
   const current = questions[page];
+  // 「次へ」も自動送りと同じ行き先にする。全問に答えてある（確認から直しに来た）ときは確認へ戻る。
+  const next = nextPage(questions, choices, page);
 
   const submit = async () => {
     if (answers === null || locked) return;
@@ -206,9 +208,9 @@ function QuestionForm(props: {
             type="button"
             class="hwc-dialog-button hwc-dialog-primary"
             disabled={locked || current === undefined || !isAnswered(current, choiceAt(page))}
-            onClick={() => setPage(page + 1)}
+            onClick={() => setPage(next)}
           >
-            {page === questions.length - 1 ? "確認へ" : "次へ"}
+            {next === questions.length ? "確認へ" : "次へ"}
           </button>
         ) : (
           <button
