@@ -322,6 +322,11 @@ button.hwc-tree-row {
   color: var(--color-secondary);
 }
 
+/* 開けない行は、名前と同じ淡色に印も落とす。印だけ濃いと、名前より目に入る。 */
+.hwc-tree-row[data-blocked="true"] .hwc-tree-mark {
+  color: var(--color-muted);
+}
+
 /* 種類の色。アイコン専用の色を 20 テーマぶん足さず、明暗 2 通りに調整済みの ANSI 色を
    借りる。開けない行は行の淡色をそのまま使い、色で「開ける」と誤解させない。 */
 .hwc-tree[data-icons="color"]
