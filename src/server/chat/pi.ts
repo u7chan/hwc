@@ -598,16 +598,26 @@ function foldContext(tokens: number | null, window: number | null): ChatContext 
 // モデルが書いた質問として、Claude の AskUserQuestion と同じカードの形に載せる。
 // ask_user は 1 問だけなので、header と複数選択は持たない。
 function askPending(ask: AskPending): ChatPending {
+  const options = ask.options ?? [];
+  // 推奨は先頭に置く。並び順は表示の都合で、回答の照合には使わない。
+  const ordered =
+    ask.recommended === null
+      ? options
+      : [ask.recommended, ...options.filter((label) => label !== ask.recommended)];
   return {
     kind: "question",
     toolUseId: ask.id,
     tool: "ask_user",
+    freeText: ask.freeText,
     questions: [
       {
         question: ask.question,
         header: null,
         multiSelect: false,
-        options: (ask.options ?? []).map((label) => ({ label, description: null })),
+        options: ordered.map((label) => ({
+          label,
+          description: label === ask.recommended ? "推奨💡" : null,
+        })),
       },
     ],
   };

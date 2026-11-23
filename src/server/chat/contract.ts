@@ -98,7 +98,15 @@ export type ChatPending =
       toolUseId: string;
       // ask_user は mypi の 1 問だけの質問。AskUserQuestion とは回答の経路が違う
       // （docs/adr/pi-integration.md）。
-      tool: "AskUserQuestion" | "ask_user";
+      tool: "ask_user";
+      // 選択肢があっても自由入力を受け付ける。古い mypi の pending は false。
+      freeText: boolean;
+      questions: ChatPendingQuestion[];
+    }
+  | {
+      kind: "question";
+      toolUseId: string;
+      tool: "AskUserQuestion";
       questions: ChatPendingQuestion[];
     }
   | { kind: "tool"; toolUseId: string; tool: string; summary: string | null };

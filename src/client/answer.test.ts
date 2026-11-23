@@ -3,6 +3,9 @@ import type { ChatPendingQuestion } from "../server/chat/contract";
 import {
   answerFailure,
   answersOf,
+  ASK_FREE_TEXT_LABEL,
+  askOptionLabels,
+  askOptionLabelsForQuestions,
   askUserAnswers,
   NO_CHOICE,
   pickLabel,
@@ -111,6 +114,50 @@ test("a pi free-text answer is trimmed and keeps inner newlines and tabs", () =>
   // 長さはコードポイントで見る。
   expect(askUserAnswers(question, typeOther(text, "😀".repeat(2_000)))).not.toBeNull();
   expect(askUserAnswers(question, typeOther(text, "😀".repeat(2_001)))).toBeNull();
+});
+
+test("model options that collide with free text and each other get unique display labels", () => {
+  const options = [
+    { label: ASK_FREE_TEXT_LABEL },
+    { label: `${ASK_FREE_TEXT_LABEL}（選択肢）` },
+    { label: "Beta" },
+  ];
+  expect(askOptionLabels(options, true)).toEqual([
+    `${ASK_FREE_TEXT_LABEL}（選択肢）`,
+    `${ASK_FREE_TEXT_LABEL}（選択肢）…`,
+    "Beta",
+  ]);
+  expect(new Set(askOptionLabels(options, true)).size).toBe(3);
+  // 自由入力行がないときは元のラベルをそのまま使う。
+  expect(askOptionLabels(options, false)).toEqual([
+    ASK_FREE_TEXT_LABEL,
+    `${ASK_FREE_TEXT_LABEL}（選択肢）`,
+    "Beta",
+  ]);
+  // 表示だけを変え、送るラベルは元のまま。
+  const question = {
+    ...single,
+    options: options.map((option) => ({ ...option, description: null })),
+  };
+  const picked = pickLabel(question, NO_CHOICE, ASK_FREE_TEXT_LABEL);
+  expect(askUserAnswers(question, picked)).toEqual([
+    { question: "好きな色は？", labels: [ASK_FREE_TEXT_LABEL] },
+  ]);
+});
+
+test("each question uses its own option labels", () => {
+  const questions = [
+    {
+      options: [{ label: "クイックスタート" }, { label: "コマンド" }],
+    },
+    {
+      options: [{ label: "範囲 A" }, { label: "範囲 B" }],
+    },
+  ];
+  expect(askOptionLabelsForQuestions(questions, true)).toEqual([
+    ["クイックスタート", "コマンド"],
+    ["範囲 A", "範囲 B"],
+  ]);
 });
 
 test("a pi option answer is exactly one label from the question", () => {

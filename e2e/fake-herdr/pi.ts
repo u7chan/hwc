@@ -243,6 +243,8 @@ export function createPi(ctx: FakeContext, setAgentStatus: SetAgentStatus) {
         id,
         question: "E2E: この変更をどう進めますか？\n選択肢か自由入力で答えてください。",
         options,
+        recommended: options === null ? null : options[0],
+        freeText: true,
       })}\n`,
       { mode: 0o600 },
     );
