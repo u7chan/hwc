@@ -59,8 +59,19 @@ export function answersOf(
 // 変えて回答は元のラベルで送る（重複したボタンを作らない）。
 export const ASK_FREE_TEXT_LABEL = "その他（自由入力）";
 
-export function askOptionLabel(label: string, freeText: boolean): string {
-  return freeText && label === ASK_FREE_TEXT_LABEL ? `${label}（選択肢）` : label;
+export function askOptionLabels(
+  options: readonly { label: string }[],
+  freeText: boolean,
+): string[] {
+  const reserved = freeText ? ASK_FREE_TEXT_LABEL : null;
+  const used = new Set<string>();
+  return options.map((option) => {
+    let label = option.label;
+    if (reserved !== null && label === reserved) label = `${label}（選択肢）`;
+    while (used.has(label) || label === reserved) label = `${label}…`;
+    used.add(label);
+    return label;
+  });
 }
 
 // pi の ask_user の回答。Claude の flatText と違い、trim と長さだけを見て、内部の改行・タブを

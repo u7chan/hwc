@@ -4,7 +4,7 @@ import {
   answerFailure,
   answersOf,
   ASK_FREE_TEXT_LABEL,
-  askOptionLabel,
+  askOptionLabels,
   askUserAnswers,
   NO_CHOICE,
   pickLabel,
@@ -115,14 +115,28 @@ test("a pi free-text answer is trimmed and keeps inner newlines and tabs", () =>
   expect(askUserAnswers(question, typeOther(text, "😀".repeat(2_001)))).toBeNull();
 });
 
-test("a model option named like free text gets a distinct display label", () => {
-  expect(askOptionLabel(ASK_FREE_TEXT_LABEL, true)).toBe(`${ASK_FREE_TEXT_LABEL}（選択肢）`);
-  expect(askOptionLabel(ASK_FREE_TEXT_LABEL, false)).toBe(ASK_FREE_TEXT_LABEL);
-  expect(askOptionLabel("赤", true)).toBe("赤");
+test("model options that collide with free text and each other get unique display labels", () => {
+  const options = [
+    { label: ASK_FREE_TEXT_LABEL },
+    { label: `${ASK_FREE_TEXT_LABEL}（選択肢）` },
+    { label: "Beta" },
+  ];
+  expect(askOptionLabels(options, true)).toEqual([
+    `${ASK_FREE_TEXT_LABEL}（選択肢）`,
+    `${ASK_FREE_TEXT_LABEL}（選択肢）…`,
+    "Beta",
+  ]);
+  expect(new Set(askOptionLabels(options, true)).size).toBe(3);
+  // 自由入力行がないときは元のラベルをそのまま使う。
+  expect(askOptionLabels(options, false)).toEqual([
+    ASK_FREE_TEXT_LABEL,
+    `${ASK_FREE_TEXT_LABEL}（選択肢）`,
+    "Beta",
+  ]);
   // 表示だけを変え、送るラベルは元のまま。
   const question = {
     ...single,
-    options: [{ label: ASK_FREE_TEXT_LABEL, description: null }],
+    options: options.map((option) => ({ ...option, description: null })),
   };
   const picked = pickLabel(question, NO_CHOICE, ASK_FREE_TEXT_LABEL);
   expect(askUserAnswers(question, picked)).toEqual([
