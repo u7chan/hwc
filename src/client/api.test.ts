@@ -336,6 +336,7 @@ test("a pi ask_user prompt is kept with empty options for free input", () => {
     kind: "question" as const,
     toolUseId: "11111111-1111-4111-8111-111111111111",
     tool: "ask_user" as const,
+    freeText: true,
     questions: [{ question: "どうしますか？", header: null, multiSelect: false, options: [] }],
   };
   expect(toChatSnapshot({ ...chatBody, pending: ask })?.pending).toEqual(ask);
@@ -355,6 +356,19 @@ test("a pi ask_user prompt is kept with empty options for free input", () => {
     ],
   };
   expect(toChatSnapshot({ ...chatBody, pending: withOptions })?.pending).toEqual(withOptions);
+
+  // freeText を返さない古い BFF でも、options が無ければ text だけなので自由入力を出す。
+  const { freeText: _ignored, ...oldAsk } = ask;
+  expect(toChatSnapshot({ ...chatBody, pending: oldAsk })?.pending).toEqual({
+    ...oldAsk,
+    freeText: true,
+  });
+  // 選択肢ありの古い BFF では、今までどおり自由入力を出さない。
+  const { freeText: _alsoIgnored, ...oldOptions } = withOptions;
+  expect(toChatSnapshot({ ...chatBody, pending: oldOptions })?.pending).toEqual({
+    ...oldOptions,
+    freeText: false,
+  });
 
   // ask_user は 1 問だけ。複数ある形は壊れた値として捨てる。
   const two = { ...ask, questions: [ask.questions[0], ask.questions[0]] };

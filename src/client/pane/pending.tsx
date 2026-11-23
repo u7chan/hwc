@@ -18,7 +18,7 @@ import { Spinner } from "../Spinner";
 type Question = Extract<ChatPending, { kind: "question" }>;
 
 // 人間の応答待ち。会話の末尾に 1 枚だけ置く。質問には選択肢か自由入力で答えられる。
-// pi の ask_user は 1 問だけで、自由入力のときは options が空になる。
+// pi の ask_user は 1 問だけで、options が空なら自由入力だけになる。
 // 承認は端末で行う（docs/adr/claude-integration.md / docs/adr/pi-integration.md）。
 export function PendingCard(props: {
   pending: ChatPending;
@@ -76,10 +76,12 @@ function QuestionForm(props: {
 }) {
   const { pending } = props;
   const askUser = pending.tool === "ask_user";
+  // Claude は今までどおり常に「その他」を出せる。pi は pending の freeText に従う。
+  const freeText = pending.tool === "ask_user" ? pending.freeText : true;
   const question = pending.questions[0];
   const [choices, setChoices] = useState<Choice[]>(() =>
-    // pi の自由入力は「その他」を選ばせず、最初から入力欄を出す。
-    askUser && question !== undefined && question.options.length === 0
+    // options が無い自由入力は「その他」を選ばせず、最初から入力欄を出す。
+    freeText && question !== undefined && question.options.length === 0
       ? [{ ...NO_CHOICE, other: true }]
       : [],
   );
@@ -131,7 +133,7 @@ function QuestionForm(props: {
                 <span class="hwc-pending-label-head">{question.header}</span>
               )}
               <p class="hwc-pending-text">{question.question}</p>
-              {askUser && question.options.length === 0 ? null : (
+              {question.options.length === 0 ? null : (
                 <ul class="hwc-pending-options">
                   {question.options.map((option, optionIndex) => (
                     <li key={optionIndex}>
@@ -145,7 +147,7 @@ function QuestionForm(props: {
                       />
                     </li>
                   ))}
-                  {askUser ? null : (
+                  {freeText ? (
                     <li>
                       <ChoiceButton
                         multi={false}
@@ -171,10 +173,10 @@ function QuestionForm(props: {
                         </div>
                       ) : null}
                     </li>
-                  )}
+                  ) : null}
                 </ul>
               )}
-              {askUser && choice.other ? (
+              {question.options.length === 0 && freeText && choice.other ? (
                 <div class="hwc-pending-other-field">
                   <textarea
                     class="hwc-pending-other"

@@ -23,6 +23,10 @@ export type AskPending = {
   id: string;
   question: string;
   options: string[] | null;
+  // options があるときの推奨ラベル。表示の飾りなので、壊れていても質問は捨てない。
+  recommended: string | null;
+  // 選択肢があっても text 回答を受け付けるか。options が null なら text だけなので true。
+  freeText: boolean;
 };
 
 export type AskAnswer = { kind: "option"; label: string } | { kind: "text"; text: string };
@@ -44,7 +48,16 @@ export function parseAskPending(value: unknown): AskPending | null {
   if (question === null) return null;
   const options = askOptions(record.options);
   if (options === undefined) return null;
-  return { id, question, options };
+  // recommended は飾りなので、形が違えば無いものとして扱う。freeText は機能の可否なので
+  // 明示的な true だけを採用し、古い pending（options あり）では今までどおり text を拒否する。
+  const recommended =
+    options !== null &&
+    typeof record.recommended === "string" &&
+    options.includes(record.recommended)
+      ? record.recommended
+      : null;
+  const freeText = options === null || record.freeText === true;
+  return { id, question, options, recommended, freeText };
 }
 
 // pending.options は自由入力のとき必ず null。省略や空配列は形の不一致として捨てる。
@@ -85,7 +98,7 @@ export function parseAskAnswer(value: unknown, pending: AskPending): AskAnswer |
     return { kind: "option", label: answer.label };
   }
   if (answer.kind === "text") {
-    if (pending.options !== null) return null;
+    if (!pending.freeText) return null;
     const text = askText(answer.text);
     return text === null ? null : { kind: "text", text };
   }

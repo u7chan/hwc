@@ -56,7 +56,8 @@ export function answersOf(
 }
 
 // pi の ask_user の回答。Claude の flatText と違い、trim と長さだけを見て、内部の改行・タブを
-// 保つ（docs/adr/pi-integration.md）。選択肢は 1 つだけ。制御文字は BFF が 400 で拒否する。
+// 保つ（docs/adr/pi-integration.md）。選択肢は 1 つだけ。自由入力は選択肢があっても使える。
+// 制御文字は BFF が 400 で拒否する。
 export function askUserAnswers(
   question: ChatPendingQuestion,
   choice: Choice,

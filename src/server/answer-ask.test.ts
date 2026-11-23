@@ -10,11 +10,15 @@ const OPTIONS: AskPending = {
   id: ID,
   question: "どれにしますか？",
   options: ["赤", "青"],
+  recommended: "青",
+  freeText: true,
 };
 const FREE: AskPending = {
   id: ID,
   question: "自由に書いてください",
   options: null,
+  recommended: null,
+  freeText: true,
 };
 
 function request(answers: AnswerRequest["answers"], toolUseId = ID): AnswerRequest {
@@ -111,9 +115,22 @@ test.each([
   ["without any label", request([{ question: OPTIONS.question, labels: [] }])],
   ["with two labels", request([{ question: OPTIONS.question, labels: ["赤", "青"] }])],
   ["with an unknown label", request([{ question: OPTIONS.question, labels: ["緑"] }])],
-  ["with text on an options question", request([{ question: OPTIONS.question, text: "青" }])],
 ])("an answer %s is a bad request", async (_name, payload) => {
   const h = harness();
+  expect(await h.answer(payload)).toEqual({ ok: false, status: 400, error: "invalid_answer" });
+  expect(h.writes).toEqual([]);
+});
+
+test("a text answer is accepted for an options question when freeText is true", async () => {
+  const h = harness();
+  const payload = request([{ question: OPTIONS.question, text: "  自由入力  " }]);
+  expect(await h.answer(payload)).toEqual({ ok: true });
+  expect(h.writes[0]?.answer).toEqual({ kind: "text", text: "自由入力" });
+});
+
+test("a text answer is refused for an options question without freeText", async () => {
+  const h = harness({ pending: { ...OPTIONS, freeText: false } });
+  const payload = request([{ question: OPTIONS.question, text: "自由入力" }]);
   expect(await h.answer(payload)).toEqual({ ok: false, status: 400, error: "invalid_answer" });
   expect(h.writes).toEqual([]);
 });

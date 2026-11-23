@@ -33,6 +33,8 @@ const pending = (overrides: Record<string, unknown> = {}) => ({
   id: ID,
   question: "どれにしますか？",
   options: ["赤", "青"],
+  recommended: "赤",
+  freeText: true,
   ...overrides,
 });
 const answer = (overrides: Record<string, unknown> = {}) => ({
@@ -47,6 +49,8 @@ test("a pending ask is accepted with its options", () => {
     id: ID,
     question: "どれにしますか？",
     options: ["赤", "青"],
+    recommended: "赤",
+    freeText: true,
   });
 });
 
@@ -55,6 +59,8 @@ test("a pending ask for free text keeps options as null", () => {
     id: ID,
     question: "どれにしますか？",
     options: null,
+    recommended: null,
+    freeText: true,
   });
 });
 
@@ -96,7 +102,27 @@ test("options are trimmed before the duplicate check", () => {
     id: ID,
     question: "どれにしますか？",
     options: ["赤", "青"],
+    recommended: "赤",
+    freeText: true,
   });
+});
+
+test("an old pending without the new fields keeps text disabled while options exist", () => {
+  expect(
+    parseAskPending({ v: 1, id: ID, question: "どれにしますか？", options: ["赤", "青"] }),
+  ).toEqual({
+    id: ID,
+    question: "どれにしますか？",
+    options: ["赤", "青"],
+    recommended: null,
+    freeText: false,
+  });
+});
+
+test("a recommendation outside the options is a decoration error, not a broken question", () => {
+  expect(parseAskPending(pending({ recommended: "緑" }))?.recommended).toBeNull();
+  expect(parseAskPending(pending({ recommended: 1 }))?.recommended).toBeNull();
+  expect(parseAskPending(pending({ options: null, recommended: "赤" }))?.recommended).toBeNull();
 });
 
 test("an option answer must be one of the pending labels", () => {
@@ -106,6 +132,16 @@ test("an option answer must be one of the pending labels", () => {
   // 前後の空白を付けたラベルは一致しない。
   expect(parseAskAnswer(answer({ answer: { kind: "option", label: " 青" } }), ask)).toBeNull();
   expect(parseAskAnswer(answer({ answer: { kind: "option", label: "緑" } }), ask)).toBeNull();
+  // freeText が true なら、選択肢がある質問でも text を使ってよい。
+  expect(parseAskAnswer(answer({ answer: { kind: "text", text: "青" } }), ask)).toEqual({
+    kind: "text",
+    text: "青",
+  });
+});
+
+test("a text answer is refused for an options question without freeText", () => {
+  const ask = parseAskPending(pending({ freeText: false }));
+  if (ask === null) throw new Error("fixture is broken");
   expect(parseAskAnswer(answer({ answer: { kind: "text", text: "青" } }), ask)).toBeNull();
 });
 
@@ -149,6 +185,8 @@ test("a missing, broken, or oversized pending ask is read as absent", async () =
     id: ID,
     question: "どれにしますか？",
     options: ["赤", "青"],
+    recommended: "赤",
+    freeText: true,
   });
 
   // 8KB を超えるファイルは JSON を parse する前に捨てる。
@@ -194,6 +232,8 @@ test("an answer is written as one JSON line with mode 0600 and replaces the old 
       id: OTHER,
       question: "自由入力",
       options: null,
+      recommended: null,
+      freeText: true,
     }),
   ).toEqual({ kind: "text", text: "1 行目\n2 行目" });
   expect((await readFile(path, "utf8")).endsWith("\n")).toBe(true);

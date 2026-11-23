@@ -1668,8 +1668,13 @@ test("readRewindMarker rejects a marker whose parent does not match leafId", asy
 const ASK_ID = "11111111-1111-4111-8111-111111111111";
 const ASK_OTHER = "22222222-2222-4222-8222-222222222222";
 
-const askFile = (id: string, options: string[] | null = ["赤", "青"]): string =>
-  JSON.stringify({ v: 1, id, question: "どれにしますか？", options });
+const askFile = (
+  id: string,
+  options: string[] | null = ["赤", "青"],
+  recommended: string | null = "赤",
+  freeText = true,
+): string =>
+  JSON.stringify({ v: 1, id, question: "どれにしますか？", options, recommended, freeText });
 
 test("the snapshot carries the pending ask and includes it in the etag", async () => {
   const path = await writeSession(header(), user("u1", null, "one"));
@@ -1685,13 +1690,14 @@ test("the snapshot carries the pending ask and includes it in the etag", async (
     kind: "question",
     toolUseId: ASK_ID,
     tool: "ask_user",
+    freeText: true,
     questions: [
       {
         question: "どれにしますか？",
         header: null,
         multiSelect: false,
         options: [
-          { label: "赤", description: null },
+          { label: "赤", description: "推奨💡" },
           { label: "青", description: null },
         ],
       },
@@ -1727,12 +1733,33 @@ test("a free-text ask has no options and keeps the question newlines", async () 
     kind: "question",
     toolUseId: ASK_ID,
     tool: "ask_user",
+    freeText: true,
     questions: [
       {
         question: "1 行目\n2 行目",
         header: null,
         multiSelect: false,
         options: [],
+      },
+    ],
+  });
+});
+
+test("the recommended option moves first and carries the marker", async () => {
+  const path = await writeSession(header(), user("u1", null, "one"));
+  await writeFile(`${path}.ask.json`, askFile(ASK_ID, ["赤", "青", "緑"], "青"));
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.pending).toMatchObject({
+    tool: "ask_user",
+    freeText: true,
+    questions: [
+      {
+        options: [
+          { label: "青", description: "推奨💡" },
+          { label: "赤", description: null },
+          { label: "緑", description: null },
+        ],
       },
     ],
   });

@@ -90,7 +90,7 @@ export function createAskAnswerer(clients: Clients = {}) {
   };
 }
 
-// ask_user は 1 問 1 答。選択肢がある質問はラベル 1 つ、自由入力は text だけを受ける。
+// ask_user は 1 問 1 答。ラベルは選択肢にあるものだけ、text は freeText のときだけ受ける。
 function answerOf(pending: AskPending, answers: readonly QuestionAnswer[]): AskAnswer | null {
   if (answers.length !== 1) return null;
   const answer = answers[0];
@@ -101,7 +101,7 @@ function answerOf(pending: AskPending, answers: readonly QuestionAnswer[]): AskA
     if (label === undefined || !pending.options.includes(label)) return null;
     return { kind: "option", label };
   }
-  if (pending.options !== null) return null;
+  if (!pending.freeText) return null;
   const text = askText(answer.text);
   return text === null ? null : { kind: "text", text };
 }
