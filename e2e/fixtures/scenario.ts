@@ -485,6 +485,15 @@ export async function createScenario(root: string): Promise<Scenario> {
         "| 一覧 | 空 |",
         "| 詳細 | 読み込み中 |",
         "",
+        // 識別子が折り返せず、表の最小幅が約 800px になる。プレビューの本文幅がそれを下回る
+        // （ビューポート 1280px で 636px）と横スクロールになる、確認用の表。
+        "| JSON path | live（`~/.config/demo/settings.json`） | リポ（`config/settings.json`） | 管理状態 |",
+        "| --- | --- | --- | --- |",
+        '| `theme` | `"dark"` | `"dark"` | ✅ 管理（一致） |',
+        "| `statusLine.refreshInterval` | `1` | `1` | ✅ 管理（一致） |",
+        "| `hooks.SessionStart[0]` | `matcher: ^(startup\\|resume\\|clear\\|compact\\|fork)$` → `demo-agent-state.sh session`（timeout 10） | なし | 🟡 外部所有（意図的にリポ外） |",
+        '| `permissions.defaultMode` | `"auto"` | なし | ❌ 未管理 |',
+        "",
         "![app icon](docs/preview/app-icon.png)",
         "",
         "設計メモは [notes](docs/notes.md) にあります。",
