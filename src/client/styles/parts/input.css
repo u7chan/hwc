@@ -54,7 +54,9 @@
   background: transparent;
   color: var(--color-text);
   cursor: pointer;
-  transition: background-color var(--duration-hover) ease;
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease;
 }
 
 .hwc-command:hover {
@@ -868,7 +870,10 @@
   font-size: var(--text-body);
   text-align: left;
   cursor: pointer;
-  transition: background-color var(--duration-hover) ease;
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-template-chip:hover {
@@ -1061,6 +1066,7 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-mention[aria-selected="true"] {

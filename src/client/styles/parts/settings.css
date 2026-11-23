@@ -286,7 +286,9 @@ html:not([data-input-modality="pointer"])
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--duration-hover) ease;
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease;
 }
 
 .hwc-notify-scope:hover:not(:disabled) {
@@ -313,13 +315,20 @@ html:not([data-input-modality="pointer"])
   width: 16px;
   height: 16px;
   margin-top: 2px;
+  /* 選択の点は枠と同じく色を移す。background-image（gradient）は補間できないため、
+     点は内容面の background-color で描く。 */
+  padding: 3px;
   border: 1px solid var(--color-control-line);
   border-radius: 50%;
+  background-clip: content-box;
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease;
 }
 
 .hwc-notify-scope[data-selected="true"] .hwc-notify-scope-mark {
   border-color: var(--color-accent);
-  background: radial-gradient(circle, var(--color-accent) 0 4px, transparent 4.5px);
+  background-color: var(--color-accent);
 }
 
 .hwc-notify-scope-text {

@@ -462,6 +462,7 @@ a.hwc-active-band-repo-link:focus-visible {
 .hwc-active-name {
   flex: 0 1 auto;
   font-weight: 400;
+  transition: color var(--duration-hover) ease;
 }
 
 /* 記号と名前、名前と印の間隔はツリーの行（.hwc-pane-title）と揃える。 */

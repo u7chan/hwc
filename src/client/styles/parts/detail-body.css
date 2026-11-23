@@ -179,7 +179,9 @@
   border-radius: var(--radius-control);
   background: var(--color-raised);
   cursor: pointer;
-  transition: background-color var(--duration-hover) ease;
+  transition:
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-icon-button:hover {

@@ -36,6 +36,7 @@
   cursor: pointer;
   transition:
     border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease,
     color var(--duration-hover) ease;
 }
 
@@ -99,6 +100,7 @@
   width: var(--space-8);
   height: var(--space-6);
   color: var(--color-agent, var(--color-secondary));
+  transition: color var(--duration-hover) ease;
 }
 
 /* ブランド色を持たないマークだけ、選んだ面で文字色へ寄せる。 */

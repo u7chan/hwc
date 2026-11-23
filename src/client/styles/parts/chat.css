@@ -124,6 +124,10 @@ p.hwc-compaction,
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    opacity var(--duration-hover) ease,
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-msg-copy:hover,
@@ -169,10 +173,6 @@ p.hwc-compaction,
   .hwc-msg-copy,
   .hwc-msg-edit {
     opacity: 0;
-    transition:
-      opacity var(--duration-hover) ease,
-      background-color var(--duration-hover) ease,
-      color var(--duration-hover) ease;
   }
 
   .hwc-msg:hover .hwc-msg-copy,
@@ -1246,6 +1246,9 @@ p.hwc-compaction,
   border: 1px solid var(--color-control-line);
   border-radius: 50%;
   color: var(--color-on-accent);
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease;
 }
 
 .hwc-pending-mark[data-multi="true"] {
@@ -1270,6 +1273,7 @@ p.hwc-compaction,
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
+  transition: color var(--duration-hover) ease;
 }
 
 /* 選ぶ根拠になる説明は、補助情報の 13px より一段大きく読ませる。 */
