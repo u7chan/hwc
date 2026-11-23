@@ -97,6 +97,8 @@ const app = createApp({
   restartSettings,
   templates,
   launchDefaults,
+  // E2E 専用。実ホームのスキルを画面に出さず、架空のホームを読む（docs/e2e.md）。
+  skillsHome: process.env.HWC_SKILLS_HOME,
 });
 
 // Herdr の応答を待つルート（ワークツリー作成・削除・モデル指定の起動）は数十秒返さない。

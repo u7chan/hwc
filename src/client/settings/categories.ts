@@ -11,7 +11,8 @@ import { connectionLabel, type ConnectionStatus } from "../connection";
 import { liveUpdateLabel, type LiveUpdateInterval } from "../live-update";
 import { themeLabel, type ThemePreference } from "../theme";
 
-// エージェントごとの画面。いまは新しいペインの既定モデルと effort だけを持つ（docs/adr/agent-launch.md）。
+// エージェントごとの画面。新しいペインの既定モデル・effort を持ち、その CLI が認識する
+// グローバルスキルを読み取り専用で見せる（docs/adr/agent-launch.md、docs/adr/agent-skills.md）。
 export type AgentCategoryId = `agent-${ModelAgentKind}`;
 
 export type SettingsCategoryId =

@@ -524,3 +524,81 @@ html:not([data-input-modality="pointer"])
   font-size: var(--text-secondary);
   line-height: var(--line-body);
 }
+
+/* エージェントのグローバルスキル一覧。読み取り専用なので、行は押せず値だけを並べる。 */
+
+/* 見出し行は押して開く。hwc-setting-row の見た目をそのまま使うため、ボタンの既定だけ消す。 */
+.hwc-skill-head {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hwc-skill-head:hover {
+  background: var(--color-raised);
+}
+
+.hwc-skill-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.hwc-skill-chevron {
+  display: grid;
+  place-items: center;
+  transition: transform 180ms ease;
+}
+
+.hwc-skill-chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+
+.hwc-skill-list {
+  border-top: 1px solid var(--color-line);
+}
+
+.hwc-skill-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.hwc-skill-row + .hwc-skill-row {
+  border-top: 1px solid var(--color-line);
+}
+
+.hwc-skill-name {
+  min-width: 0;
+  /* 空白のない長い名前でも、一覧の幅を押し広げずに折り返す。 */
+  overflow-wrap: anywhere;
+}
+
+.hwc-skill-source {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hwc-skill-off {
+  flex: none;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-mark);
+  color: var(--color-secondary);
+  font-size: var(--text-secondary);
+}
+
+.hwc-skill-empty {
+  padding: var(--space-4);
+}
