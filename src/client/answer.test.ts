@@ -8,10 +8,15 @@ import {
   askOptionLabelsForQuestions,
   askUserAnswerText,
   askUserAnswers,
+  answerSummary,
+  isAnswered,
   NO_CHOICE,
+  nextPage,
   pickLabel,
   pickOther,
+  questionLabel,
   typeOther,
+  unansweredIndexes,
 } from "./answer";
 
 const single: ChatPendingQuestion = {
@@ -179,4 +184,61 @@ test("a pi option answer is exactly one label from the question", () => {
   expect(askUserAnswers(single, NO_CHOICE)).toBeNull();
   expect(askUserAnswers(single, { ...picked, labels: ["赤", "青"] })).toBeNull();
   expect(askUserAnswers(single, { ...picked, labels: ["黄"] })).toBeNull();
+});
+
+test("a question counts as answered by a picked option or by non-blank free text", () => {
+  expect(isAnswered(single, NO_CHOICE)).toBe(false);
+  expect(isAnswered(single, pickLabel(single, NO_CHOICE, "赤"))).toBe(true);
+  // 自由入力の行を開いただけでは答えにならない。
+  expect(isAnswered(single, pickOther(NO_CHOICE))).toBe(false);
+  expect(isAnswered(single, typeOther(pickOther(NO_CHOICE), " \n "))).toBe(false);
+  expect(isAnswered(single, typeOther(pickOther(NO_CHOICE), "紫"))).toBe(true);
+  // 選択肢に無いラベルは答えにしない。
+  expect(isAnswered(single, { labels: ["黄"], other: false, text: "" })).toBe(false);
+});
+
+test("the unanswered questions are listed by index, including the ones with no choice yet", () => {
+  const third: ChatPendingQuestion = { ...single, question: "好きな数は？" };
+  const questions = [single, multi, third];
+
+  expect(unansweredIndexes(questions, [])).toEqual([0, 1, 2]);
+  expect(unansweredIndexes(questions, [pickLabel(single, NO_CHOICE, "赤")])).toEqual([1, 2]);
+  // 間の質問だけ空いていても、その番号が分かる。
+  const choices = [
+    pickLabel(single, NO_CHOICE, "赤"),
+    NO_CHOICE,
+    pickLabel(third, NO_CHOICE, "青"),
+  ];
+  expect(unansweredIndexes(questions, choices)).toEqual([1]);
+});
+
+test("the next page is the following question until everything is answered, then the review", () => {
+  const questions = [single, multi, single];
+  const red = pickLabel(single, NO_CHOICE, "赤");
+
+  expect(nextPage(questions, [red], 0)).toBe(1);
+  expect(nextPage(questions, [red, pickLabel(multi, NO_CHOICE, "青")], 1)).toBe(2);
+  // 最後の質問で答え終えたら、確認ページ（質問数番目）。
+  expect(nextPage(questions, [red, pickLabel(multi, NO_CHOICE, "青"), red], 2)).toBe(3);
+  // 確認から 1 問だけ直したときは、次の質問ではなく確認へ戻る。
+  expect(nextPage(questions, [red, pickLabel(multi, NO_CHOICE, "青"), red], 0)).toBe(3);
+  // 直した質問が複数選択や自由入力でも同じ。
+  const typed = typeOther(pickOther(NO_CHOICE), "紫");
+  expect(nextPage(questions, [typed, pickLabel(multi, NO_CHOICE, "青"), red], 0)).toBe(3);
+  expect(nextPage(questions, [red, pickLabel(multi, NO_CHOICE, "青"), red], 1)).toBe(3);
+});
+
+test("a question without a header is called by its number", () => {
+  expect(questionLabel(single, 0)).toBe("色");
+  expect(questionLabel({ ...single, header: null }, 1)).toBe("質問 2");
+});
+
+test("the review shows the options in their order, the free text, or nothing", () => {
+  let choice = pickLabel(multi, NO_CHOICE, "緑");
+  choice = pickLabel(multi, choice, "赤");
+  expect(answerSummary(multi, choice)).toBe("赤、緑");
+
+  expect(answerSummary(single, typeOther(pickOther(NO_CHOICE), " 紫\n"))).toBe("紫");
+  expect(answerSummary(single, pickOther(NO_CHOICE))).toBeNull();
+  expect(answerSummary(single, NO_CHOICE)).toBeNull();
 });

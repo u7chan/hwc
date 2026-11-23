@@ -1,0 +1,1675 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>質問カードの境界とページ切り替え — モック</title>
+    <!-- 色・余白・角丸は本物のトークンをそのまま使う。モックで値を持たない。 -->
+    <link rel="stylesheet" href="../../src/client/styles/tokens.css" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: 16px;
+        line-height: var(--line-body);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      textarea,
+      select {
+        font: inherit;
+        color: inherit;
+      }
+
+      svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* ───────── モックの枠（本物には無い） ───────── */
+
+      .mk-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-3) var(--space-6);
+        padding: var(--space-3) var(--space-5);
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-surface);
+      }
+
+      @media (min-width: 900px) {
+        .mk-head {
+          position: sticky;
+          top: 0;
+          z-index: 5;
+        }
+      }
+
+      .mk-title {
+        margin: 0;
+        font-size: var(--text-body);
+        font-weight: 700;
+      }
+
+      .mk-ctl {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--space-2);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .mk-seg {
+        display: inline-flex;
+        flex-wrap: wrap;
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+
+      .mk-seg button {
+        min-height: 36px;
+        padding: 0 var(--space-3);
+        border: 0;
+        background: transparent;
+        font-size: var(--text-secondary);
+        cursor: pointer;
+      }
+
+      .mk-seg button + button {
+        border-left: 1px solid var(--color-control-line);
+      }
+
+      .mk-seg button[aria-checked="true"] {
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+        font-weight: 600;
+      }
+
+      .mk-select,
+      .mk-reset {
+        min-height: 36px;
+        padding: 0 var(--space-3);
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        font-size: var(--text-secondary);
+      }
+
+      .mk-reset {
+        cursor: pointer;
+      }
+
+      .mk-check {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: 36px;
+      }
+
+      .mk-stage {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: center;
+        gap: var(--space-8);
+        padding: var(--space-6) var(--space-5);
+      }
+
+      .mk-col {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        width: min(var(--mk-w, 390px), 100%);
+      }
+
+      .mk-cap {
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        font-weight: 600;
+      }
+
+      /* 会話の地。本物のチャット領域に見立てる。 */
+      .mk-phone {
+        --mk-pad: var(--space-4);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+        padding: var(--mk-pad);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-mark);
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      .mk-user {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: var(--space-1);
+      }
+
+      .mk-bubble {
+        max-width: 85%;
+        padding: var(--space-2) var(--space-3);
+        border-radius: var(--radius-panel) var(--radius-panel) var(--radius-sm) var(--radius-panel);
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+      }
+
+      .mk-time {
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .mk-agent {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+
+      .mk-agent p,
+      .mk-agent ul {
+        margin: 0;
+      }
+
+      .mk-agent ul {
+        padding-left: var(--space-5);
+      }
+
+      .mk-code {
+        padding: 1px 6px;
+        border-radius: 6px;
+        background: var(--color-raised);
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+      }
+
+      .mk-notes {
+        display: grid;
+        gap: var(--space-6);
+        max-width: 64rem;
+        margin: 0 auto;
+        padding: var(--space-4) var(--space-5) var(--space-8);
+      }
+
+      .mk-notes h2 {
+        margin: 0 0 var(--space-2);
+        font-size: var(--text-body);
+      }
+
+      .mk-notes p,
+      .mk-notes ul,
+      .mk-notes ol {
+        margin: 0;
+      }
+
+      .mk-notes ul,
+      .mk-notes ol {
+        display: grid;
+        gap: var(--space-1);
+        padding-left: var(--space-5);
+      }
+
+      .mk-notes li,
+      .mk-notes p {
+        color: var(--color-secondary);
+        font-size: var(--text-supporting);
+      }
+
+      .mk-notes strong {
+        color: var(--color-text);
+      }
+
+      .mk-pick {
+        padding: var(--space-3) var(--space-4);
+        border: 1px solid var(--color-accent);
+        border-radius: var(--radius-control);
+        background: var(--color-selected);
+      }
+
+      .mk-pick li,
+      .mk-pick p {
+        color: var(--color-text);
+      }
+
+      /* ───────── 質問カード（提案する部品） ─────────
+         既定（data-frame="now" / data-pager="now"）は現行の chat.css をそのまま写している。 */
+
+      .q-card {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        margin-top: var(--space-2);
+      }
+
+      /* 領域の入れ物は、flex の gap を数えさせない。 */
+      [data-r] {
+        display: contents;
+      }
+
+      .q-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        line-height: var(--line-tight);
+      }
+
+      .q-state {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: var(--space-1);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .q-state svg {
+        color: var(--color-attention);
+      }
+
+      .q-who {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .q-count {
+        flex: none;
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .q-questions {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-8);
+        margin: var(--space-2) 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .q-question {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+      }
+
+      .q-label {
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+        line-height: var(--line-tight);
+      }
+
+      .q-text {
+        margin: 0;
+        font-size: var(--text-body);
+        font-weight: 600;
+        line-height: var(--line-body);
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+
+      .q-options {
+        display: flex;
+        flex-direction: column;
+        margin: var(--space-3) calc(var(--space-2) * -1) 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .q-choice {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-3);
+        width: 100%;
+        min-height: 56px;
+        padding: var(--space-3) var(--space-2);
+        border: 0;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+        transition:
+          background-color var(--duration-hover) ease,
+          border-color var(--duration-hover) ease,
+          box-shadow var(--duration-hover) ease;
+      }
+
+      .q-choice:hover:not(:disabled):not([data-selected="true"]) {
+        background: var(--color-raised);
+      }
+
+      .q-choice:focus-visible,
+      .q-textarea:focus-visible,
+      .q-tab:focus-visible,
+      .q-seg:focus-visible,
+      .q-review-row:focus-visible,
+      .q-btn:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: -2px;
+      }
+
+      .q-choice[data-selected="true"] {
+        background: var(--color-selected);
+      }
+
+      .q-choice[data-selected="true"] .q-opt-label {
+        color: var(--color-accent);
+      }
+
+      .q-choice:disabled {
+        cursor: default;
+        opacity: 0.6;
+      }
+
+      .q-mark {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        margin-top: 3px;
+        border: 1px solid var(--color-control-line);
+        border-radius: 50%;
+        color: var(--color-on-accent);
+        transition:
+          border-color var(--duration-hover) ease,
+          background-color var(--duration-hover) ease;
+      }
+
+      .q-mark[data-multi="true"] {
+        border-radius: 4px;
+      }
+
+      .q-choice[data-selected="true"] .q-mark {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+      }
+
+      .q-choice-text {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+        min-width: 0;
+      }
+
+      .q-opt-label {
+        font-weight: 600;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+        transition: color var(--duration-hover) ease;
+      }
+
+      .q-opt-desc {
+        color: var(--color-secondary);
+        font-size: var(--text-supporting);
+        line-height: var(--line-body);
+        overflow-wrap: anywhere;
+      }
+
+      .q-other {
+        padding: 0 var(--space-2) var(--space-3);
+      }
+
+      .q-textarea {
+        display: block;
+        width: 100%;
+        margin-top: var(--space-2);
+        padding: var(--space-2);
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-control);
+        background: var(--color-content);
+        font-size: max(16px, var(--text-body));
+        resize: none;
+      }
+
+      .q-textarea:disabled {
+        opacity: 0.6;
+      }
+
+      .q-note,
+      .q-warn {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .q-warn {
+        color: var(--color-attention);
+      }
+
+      .q-foot {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: var(--space-2);
+        margin-top: var(--space-2);
+      }
+
+      .q-foot[data-solo] {
+        grid-template-columns: 1fr;
+      }
+
+      .q-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        min-height: 56px;
+        border-radius: var(--radius-control);
+        font-size: var(--text-body);
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .q-btn:active:not(:disabled) {
+        transform: scale(0.98);
+      }
+
+      .q-primary {
+        border: 0;
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+      }
+
+      .q-ghost {
+        border: 1px solid var(--color-control-line);
+        background: transparent;
+      }
+
+      .q-btn:disabled {
+        border: 1px solid var(--color-line);
+        background: var(--color-raised);
+        color: var(--color-secondary);
+        cursor: default;
+      }
+
+      .q-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        align-self: flex-start;
+        min-height: var(--tap);
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--color-secondary);
+        font-size: var(--text-supporting);
+        cursor: pointer;
+      }
+
+      /* ───────── 枠の案 ───────── */
+
+      /* 案1 タイル / 案2 グループ: 面と枠のカードにして、会話から切り離す。 */
+      [data-frame="tile"] .q-card,
+      [data-frame="group"] .q-card {
+        gap: var(--space-3);
+        padding: var(--space-4);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-panel);
+        background: var(--color-surface);
+      }
+
+      /* 状態の見出しは本文と線で分け、「誰が何を待っているか」と「質問」を別の区画にする。 */
+      [data-frame="tile"] .q-head,
+      [data-frame="group"] .q-head {
+        padding-bottom: var(--space-3);
+        border-bottom: 1px solid var(--color-line);
+      }
+
+      [data-frame="tile"] .q-questions,
+      [data-frame="group"] .q-questions {
+        gap: var(--space-5);
+        margin: 0;
+      }
+
+      [data-frame="tile"] .q-question + .q-question,
+      [data-frame="group"] .q-question + .q-question {
+        padding-top: var(--space-5);
+        border-top: 1px solid var(--color-line);
+      }
+
+      [data-frame="tile"] .q-options,
+      [data-frame="rail"] .q-options {
+        gap: var(--space-2);
+        margin: var(--space-3) 0 0;
+      }
+
+      /* 選択肢 1 つごとに枠を持たせる。押せる範囲＝枠の範囲。 */
+      [data-frame="tile"] .q-choice,
+      [data-frame="rail"] .q-choice {
+        padding: var(--space-3) var(--space-4);
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-control);
+        background: var(--color-content);
+      }
+
+      [data-frame="tile"] .q-choice[data-selected="true"],
+      [data-frame="rail"] .q-choice[data-selected="true"] {
+        border-color: var(--color-accent);
+        /* 枠を太らせると押した瞬間に中身が動く。内側の影で 2px 相当に見せる。 */
+        box-shadow: inset 0 0 0 1px var(--color-accent);
+        background: var(--color-selected);
+      }
+
+      [data-frame="tile"] .q-other,
+      [data-frame="rail"] .q-other {
+        padding: 0;
+      }
+
+      [data-frame="tile"] .q-note,
+      [data-frame="group"] .q-note,
+      [data-frame="rail"] .q-note {
+        margin-top: var(--space-1);
+      }
+
+      /* 案2: 選択肢を 1 つの枠にまとめ、行を細い線で区切る。 */
+      [data-frame="group"] .q-options {
+        margin: var(--space-3) 0 0;
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-control);
+        background: var(--color-content);
+        overflow: hidden;
+      }
+
+      [data-frame="group"] .q-options > li + li {
+        border-top: 1px solid var(--color-line);
+      }
+
+      [data-frame="group"] .q-choice {
+        padding: var(--space-3) var(--space-4);
+      }
+
+      [data-frame="group"] .q-other {
+        padding: 0 var(--space-4) var(--space-3);
+      }
+
+      /* 案3 レール: 面を持たせず、左の線だけで会話と切り離す。現行の方針に一番近い。 */
+      [data-frame="rail"] .q-card {
+        gap: var(--space-3);
+        margin-top: var(--space-4);
+        padding-left: var(--space-4);
+        border-left: 3px solid var(--color-attention);
+      }
+
+      [data-frame="rail"] .q-questions {
+        gap: var(--space-6);
+        margin: 0;
+      }
+
+      [data-frame="tile"] .q-foot,
+      [data-frame="group"] .q-foot,
+      [data-frame="rail"] .q-foot {
+        margin-top: var(--space-1);
+      }
+
+      /* ───────── 容器を 1 階層にする案（カードの中にカードを作らない） ─────────
+         区切りは「罫線」「面」「塗り」のどれか 1 つだけで作る。外枠と内側の枠を同時に持たせない。 */
+
+      /* 案4 罫線: 容器を持たない。会話との境目は全幅の罫線、選択肢の境目は行の罫線。 */
+      [data-frame="rules"] .q-card {
+        gap: var(--space-3);
+        padding-top: var(--space-4);
+        border-top: 1px solid var(--color-control-line);
+      }
+
+      /* 案5 帯: 面は外側の 1 枚だけ。会話の左右いっぱいに広げ、角丸も側面の枠も持たない。
+         中の選択肢は案4と同じ罫線の行で、箱にしない。 */
+      [data-frame="band"] .q-card {
+        gap: var(--space-3);
+        margin: var(--space-2) calc(var(--mk-pad) * -1) 0;
+        padding: var(--space-4) var(--mk-pad);
+        border-block: 1px solid var(--color-control-line);
+        /* surface はライトで会話の地と同じ白になり、raised は一部テーマで補助文字の対比が落ちる。
+           content に文字色を少し混ぜた面にする（実装と同じ）。 */
+        --mk-band: color-mix(in srgb, var(--color-text) 5%, var(--color-content));
+        background: var(--mk-band);
+      }
+
+      /* 行の選択は accent を混ぜて塗る（selected だとライトで面と同化する）。 */
+      [data-frame="band"] .q-choice[data-selected="true"] {
+        background: color-mix(in srgb, var(--color-accent) 16%, var(--mk-band));
+      }
+
+      [data-frame="band"] .q-choice:hover:not(:disabled):not([data-selected="true"]) {
+        background: color-mix(in srgb, var(--color-text) 6%, var(--mk-band));
+      }
+
+      [data-frame="rules"] .q-questions,
+      [data-frame="band"] .q-questions,
+      [data-frame="fill"] .q-questions {
+        gap: var(--space-5);
+        margin: 0;
+      }
+
+      [data-frame="rules"] .q-question + .q-question,
+      [data-frame="band"] .q-question + .q-question {
+        padding-top: var(--space-5);
+        border-top: 1px solid var(--color-line);
+      }
+
+      [data-frame="rules"] .q-options,
+      [data-frame="band"] .q-options {
+        margin: var(--space-3) calc(var(--space-2) * -1) 0;
+        border-block: 1px solid var(--color-line);
+      }
+
+      [data-frame="rules"] .q-options > li + li,
+      [data-frame="band"] .q-options > li + li {
+        border-top: 1px solid var(--color-line);
+      }
+
+      [data-frame="band"] .q-options,
+      [data-frame="band"] .q-options > li + li,
+      [data-frame="band"] .q-review,
+      [data-frame="band"] .q-review li + li,
+      [data-frame="band"] .q-tabs {
+        border-color: var(--color-control-line);
+      }
+
+      [data-frame="rules"] .q-review,
+      [data-frame="band"] .q-review {
+        margin: var(--space-3) calc(var(--space-2) * -1) 0;
+        border: 0;
+        border-block: 1px solid var(--color-line);
+        border-radius: 0;
+        background: none;
+      }
+
+      [data-frame="rules"] .q-review-row,
+      [data-frame="band"] .q-review-row {
+        padding: var(--space-3) var(--space-2);
+      }
+
+      /* 案6 塗り: 外枠を持たない。見出しの罫線で会話と切り離し、選択肢は枠の無い塗りの行にする。
+         見出しの罫線は、会話の「圧縮の境目」と同じ語彙。 */
+      [data-frame="fill"] .q-card {
+        gap: var(--space-3);
+      }
+
+      [data-frame="fill"] .q-who {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      [data-frame="fill"] .q-who::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--color-control-line);
+      }
+
+      [data-frame="fill"] .q-options {
+        gap: var(--space-2);
+        margin: var(--space-3) 0 0;
+      }
+
+      [data-frame="fill"] .q-choice {
+        padding: var(--space-3) var(--space-4);
+        border-radius: var(--radius-control);
+        background: var(--color-raised);
+      }
+
+      [data-frame="fill"] .q-choice:hover:not(:disabled):not([data-selected="true"]) {
+        background: color-mix(in srgb, var(--color-text) 8%, var(--color-raised));
+      }
+
+      /* selected は raised と近いテーマがある（ライトで見分けにくい）ので、accent を混ぜて塗る。 */
+      [data-frame="fill"] .q-choice[data-selected="true"] {
+        background: color-mix(in srgb, var(--color-accent) 22%, var(--color-raised));
+      }
+
+      [data-frame="fill"] .q-other {
+        padding: 0;
+      }
+
+      [data-frame="fill"] .q-review {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        border: 0;
+        background: none;
+        overflow: visible;
+      }
+
+      [data-frame="fill"] .q-review li + li {
+        border-top: 0;
+      }
+
+      [data-frame="fill"] .q-review-row {
+        border-radius: var(--radius-control);
+        background: var(--color-raised);
+      }
+
+      /* ───────── ページ切り替えの案 ───────── */
+
+      /* 案A タブ: 見出しがタブ。自由に行き来でき、最後に確認ページを置く。 */
+      .q-tabs {
+        position: relative;
+        display: flex;
+        gap: var(--space-1);
+        margin: 0 calc(var(--space-2) * -1);
+        padding: 0 var(--space-2);
+        border-bottom: 1px solid var(--color-line);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .q-tabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      .q-tab {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: var(--space-2);
+        min-height: var(--tap);
+        margin-bottom: -1px;
+        padding: 0 var(--space-3);
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        color: var(--color-secondary);
+        font-size: var(--text-supporting);
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .q-tab[aria-selected="true"] {
+        border-bottom-color: var(--color-accent);
+        color: var(--color-accent);
+      }
+
+      .q-tab:disabled {
+        cursor: default;
+        opacity: 0.6;
+      }
+
+      .q-tab-mark {
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        border: 1px solid var(--color-control-line);
+        border-radius: 50%;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .q-tab[aria-selected="true"] .q-tab-mark {
+        border-color: var(--color-accent);
+      }
+
+      .q-tab[data-done="true"] .q-tab-mark {
+        border-color: var(--color-accent);
+        background: var(--color-accent);
+        color: var(--color-on-accent);
+      }
+
+      .q-review {
+        margin: var(--space-3) 0 0;
+        padding: 0;
+        border: 1px solid var(--color-control-line);
+        border-radius: var(--radius-control);
+        background: var(--color-content);
+        list-style: none;
+        overflow: hidden;
+      }
+
+      .q-review li + li {
+        border-top: 1px solid var(--color-line);
+      }
+
+      .q-review-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        width: 100%;
+        min-height: 56px;
+        padding: var(--space-3) var(--space-4);
+        border: 0;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .q-review-row:disabled {
+        cursor: default;
+        opacity: 0.6;
+      }
+
+      .q-review-text {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .q-review-head {
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .q-review-answer {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+
+      .q-review-answer[data-empty] {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        color: var(--color-attention);
+      }
+
+      .q-review-row > svg {
+        flex: none;
+        color: var(--color-secondary);
+      }
+
+      /* 案B ステップ: 進捗バーと「2 / 3」。順番に進み、最後のページがそのまま送信。 */
+      .q-steps-title {
+        display: flex;
+        align-items: baseline;
+        gap: var(--space-2);
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: var(--text-supporting);
+      }
+
+      .q-steps-n {
+        color: var(--color-text);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .q-bar {
+        display: flex;
+        gap: var(--space-1);
+      }
+
+      /* 見た目は 4px の帯だが、押せる高さは 24px 取る。 */
+      .q-seg {
+        position: relative;
+        flex: 1;
+        height: 24px;
+        padding: 0;
+        border: 0;
+        background: none;
+        cursor: pointer;
+      }
+
+      .q-seg::before {
+        content: "";
+        position: absolute;
+        right: 0;
+        left: 0;
+        top: 10px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--color-control-line);
+      }
+
+      .q-seg[data-state="done"]::before {
+        background: var(--color-accent);
+      }
+
+      .q-seg[data-state="current"]::before {
+        top: 9px;
+        height: 6px;
+        background: var(--color-accent);
+      }
+
+      .q-seg:disabled {
+        cursor: default;
+        opacity: 0.5;
+      }
+
+      @keyframes q-in-fwd {
+        from {
+          opacity: 0;
+          transform: translateX(16px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @keyframes q-in-back {
+        from {
+          opacity: 0;
+          transform: translateX(-16px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      .q-page[data-enter="fwd"] {
+        animation: q-in-fwd 180ms ease-out;
+      }
+
+      .q-page[data-enter="back"] {
+        animation: q-in-back 180ms ease-out;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .q-page[data-enter] {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body data-frame="tile" data-pager="tabs">
+    <header class="mk-head">
+      <h1 class="mk-title">質問カード — 境界とページ切り替え</h1>
+      <div id="controls" class="mk-ctl"></div>
+    </header>
+
+    <main>
+      <div id="stage" class="mk-stage"></div>
+
+      <section class="mk-notes">
+        <div>
+          <h2>いま困っているところ（スクリーンショットから）</h2>
+          <ul>
+            <li>
+              <strong>会話との境目がない。</strong
+              >質問が直前の発話の時刻（21:58）からそのまま続き、区切りは見出しの小さな 1 行だけ。
+            </li>
+            <li>
+              <strong>選択肢の境目がない。</strong>行に枠も線もなく、どこまでが 1
+              つか分からない。説明の「推奨 💡」が別の項目に見える。
+            </li>
+            <li><strong>押せる面に見えない。</strong>細い空の丸だけで、選んだ後の面も薄い。</li>
+            <li>
+              <strong>Claude の複数質問が縦に積まれる。</strong>3 問で画面 2〜3
+              枚ぶんになり、どこまで答えたかが分からない。
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h2>枠の案（上の「枠」で切り替え）</h2>
+          <p>
+            「カードの中にカード」（外枠＋枠付きの選択肢）は、容器が二重になって AI
+            が作った画面に見えやすい。案4〜6 は容器を 1 階層に絞り、区切りは罫線・面・塗りのどれか 1
+            つに決める。
+          </p>
+          <ul>
+            <li>
+              <strong>案4 罫線</strong> —
+              容器なし。会話との境目は全幅の罫線、選択肢の境目は行の罫線。選択は行の塗り＋印＋文字色で示す。一番軽く、現行の「面も枠も持たせない」方針に近い。境目が罫線
+              1 本なので、弱いと感じたら案5。
+            </li>
+            <li>
+              <strong>案5 帯</strong> — 面は外側の 1
+              枚だけ。会話列の左右いっぱいに広げ、角丸も側面の枠も持たない。中は案4と同じ罫線の行で、箱にしない。境目が一番はっきり。
+            </li>
+            <li>
+              <strong>案6 塗り</strong> —
+              外枠なし。見出しの罫線（会話の「圧縮の境目」と同じ語彙）で切り離し、選択肢は枠の無い塗りの行にする。押せる範囲が塗りで分かる。縦は一番食う。
+            </li>
+            <li>
+              <strong>参考:</strong> 案1 タイル・案2 グループ（枠の中に枠）、案3
+              レール（左の線＋枠付きタイル）。比較用に残しているだけで、採らない。
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h2>ページ切り替えの案（「ページ」で切り替え。Claude の複数質問だけに効く）</h2>
+          <ul>
+            <li>
+              <strong>案A タブ＋確認</strong> — Claude Code
+              のダイアログと同じ。見出しがタブで、どの質問へも行き来できる。最後に確認ページ（答えの一覧。行を押すと直せる）。
+            </li>
+            <li>
+              <strong>案B ステップ</strong> — 「2 /
+              3」と進捗バー。順番に進み、最後のページがそのまま送信。タップ数は少ないが、送る前に見直す場所はない。
+            </li>
+            <li>
+              共通:
+              単一選択は選ぶと自動で次へ（上のチェックで切替）。複数選択と自由入力は「次へ」で進む。質問が
+              1 つのとき（pi の ask_user は常に 1 問）はページを出さない。
+            </li>
+          </ul>
+        </div>
+
+        <div class="mk-pick">
+          <h2>採用（実装済み）</h2>
+          <ul>
+            <li>
+              <strong>枠は案5（帯）。</strong>元の「境界がわかりづらい」に一番直接効き、容器は 1
+              つだけで入れ子にならない。選択肢が罫線の行なので、説明つきの 2〜4
+              択でも縦が増えにくい。もっと軽くしたいときは案4。
+            </li>
+            <li>
+              <strong>ページは案A（タブ＋確認）。</strong>Claude
+              側の「見出し」を活かせ、間違えて自動で進んでも戻れる。確認ページが誤送信の最後の砦になる。
+              単一選択は選ぶと自動で次へ進む（実装では常に ON）。
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h2>実装への影響</h2>
+          <ul>
+            <li>
+              変更は <span class="mk-code">src/client/pane/pending.tsx</span> と
+              <span class="mk-code">src/client/styles/parts/chat.css</span>
+              だけ。回答は今までどおり全問まとめて 1 回送るので、契約・BFF・ADR は変えない。
+            </li>
+            <li>
+              案5 の帯は、会話の左右へ 16px はみ出させる。狭い画面（余白
+              16px）では画面端まで届き、広い画面では本文の外へ張り出す。広い画面の
+              <span class="mk-code">--hwc-gutter</span>
+              は %
+              を含む式で、子孫の負のマージンでは親と同じ幅に解けないため、余白いっぱいには広げない。
+              面は <span class="mk-code">--color-content</span> に文字色を 5% 混ぜた色（<span
+                class="mk-code"
+                >--color-surface</span
+              >
+              はライトで会話の地と同じ白、<span class="mk-code">--color-raised</span>
+              は一部テーマで補助文字が 3.3:1 まで落ちる）。
+            </li>
+            <li>
+              持つ state はページの番号だけ。回答済み・未回答・次へ進めるかは選択から毎回導く。
+            </li>
+            <li>
+              「最初の未回答」「そのページへ進めるか」は純関数にして
+              <span class="mk-code">answer.ts</span> に置き、unit で確かめる（DOM
+              のテストは書かない）。
+            </li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const SCENARIOS = [
+          {
+            id: "pi",
+            cap: "① pi の ask_user（常に 1 問）",
+            who: "pi からの質問",
+            chat: `
+              <div class="mk-user"><span class="mk-bubble">スカッシュしてデプロイ？必要ならお願い</span><span class="mk-time">21:57</span></div>
+              <div class="mk-agent">
+                <p>マージは必要です（この PR の変更を反映する唯一の経路）。デプロイは <b>api</b> だけで足ります — <span class="mk-code">status.example.com</span> の site は設定ファイル側にあり、worker は既に動いているためです。</p>
+                <p>副作用:</p>
+                <ul>
+                  <li>マージは main に 1 コミット（squash）で不可逆</li>
+                  <li>api の deploy は設定を作り直すため、数十秒中断</li>
+                  <li>deploy 直後から管理画面が PIN ログイン画面になる</li>
+                </ul>
+                <p>どれで進めますか？</p>
+                <span class="mk-time">21:58</span>
+              </div>`,
+            questions: [
+              {
+                header: null,
+                question: "マージとデプロイの範囲はどうしますか？",
+                multi: false,
+                options: [
+                  { label: "スカッシュマージ + api を deploy（推奨）", description: "推奨💡" },
+                  { label: "スカッシュマージだけ", description: null },
+                  { label: "スカッシュマージ + api / worker を deploy", description: null },
+                ],
+              },
+            ],
+          },
+          {
+            id: "claude3",
+            cap: "② Claude の AskUserQuestion（3 問）",
+            who: "Claude からの質問",
+            chat: `
+              <div class="mk-user"><span class="mk-bubble">リリースの準備をお願い</span><span class="mk-time">10:02</span></div>
+              <div class="mk-agent">
+                <p>release ブランチは作れます。進める前に、3 点だけ確認させてください。</p>
+                <span class="mk-time">10:03</span>
+              </div>`,
+            questions: [
+              {
+                header: "環境",
+                question: "どの環境へ出しますか？",
+                multi: false,
+                options: [
+                  { label: "staging", description: "検証用。利用者には影響しません。" },
+                  { label: "production", description: "利用者に公開されます。" },
+                ],
+              },
+              {
+                header: "デプロイ範囲",
+                question: "どこまで deploy しますか？",
+                multi: false,
+                options: [
+                  { label: "api だけ", description: "変更が及ぶのは api のみ。" },
+                  { label: "api と worker", description: "ジョブの定義も変わるとき。" },
+                  { label: "全部", description: null },
+                ],
+              },
+              {
+                header: "通知先",
+                question: "完了をどこへ知らせますか？",
+                multi: true,
+                options: [
+                  { label: "Discord", description: null },
+                  { label: "メール", description: null },
+                  { label: "通知しない", description: null },
+                ],
+              },
+            ],
+          },
+          {
+            id: "claude1",
+            cap: "③ Claude（1 問・複数選択）",
+            who: "Claude からの質問",
+            chat: `
+              <div class="mk-user"><span class="mk-bubble">テストを回して</span><span class="mk-time">14:20</span></div>
+              <div class="mk-agent">
+                <p>全部だと 10 分ほどかかります。対象を選んでください。</p>
+                <span class="mk-time">14:21</span>
+              </div>`,
+            questions: [
+              {
+                header: "対象",
+                question: "どのテストを実行しますか？",
+                multi: true,
+                options: [
+                  { label: "unit", description: "数秒。まず通したいときに。" },
+                  { label: "e2e", description: "架空 Herdr で約 5 分。" },
+                  { label: "lint / typecheck", description: null },
+                ],
+              },
+            ],
+          },
+        ];
+
+        const CONTROLS = [
+          {
+            key: "frame",
+            label: "枠",
+            items: [
+              ["now", "現状"],
+              ["rules", "案4 罫線"],
+              ["band", "案5 帯"],
+              ["fill", "案6 塗り"],
+              ["tile", "案1 タイル（入れ子）"],
+              ["group", "案2 グループ（入れ子）"],
+              ["rail", "案3 レール"],
+            ],
+          },
+          {
+            key: "pager",
+            label: "ページ",
+            items: [
+              ["now", "現状（縦並び）"],
+              ["tabs", "案A タブ＋確認"],
+              ["steps", "案B ステップ"],
+            ],
+          },
+          {
+            key: "width",
+            label: "幅",
+            items: [
+              ["360", "360"],
+              ["390", "390"],
+              ["560", "560"],
+            ],
+          },
+        ];
+
+        const THEMES = [
+          ["dark", "ダーク"],
+          ["", "ライト"],
+          ["gruvbox", "gruvbox"],
+          ["nord", "nord"],
+          ["catppuccin-mocha", "catppuccin mocha"],
+          ["tokyo-night", "tokyo night"],
+          ["one-light", "one light"],
+          ["sakura", "sakura"],
+        ];
+
+        const params = new URLSearchParams(location.search);
+        const view = {
+          frame: params.get("frame") ?? "band",
+          pager: params.get("pager") ?? "tabs",
+          width: params.get("w") ?? "390",
+          theme: params.get("theme") ?? "dark",
+          auto: params.get("auto") !== "0",
+        };
+
+        const esc = (value) =>
+          String(value).replace(
+            /[&<>"]/g,
+            (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char],
+          );
+
+        const ICON = {
+          diamond:
+            '<svg width="12" height="12" viewBox="0 0 12 12" stroke-width="1.5" aria-hidden="true"><path d="M6 1.5L10.5 6 6 10.5 1.5 6z"/></svg>',
+          check: (px) =>
+            `<svg width="${px}" height="${px}" viewBox="0 0 24 24" stroke-width="3" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>`,
+          chevron:
+            '<svg width="16" height="16" viewBox="0 0 24 24" stroke-width="1.7" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+          terminal:
+            '<svg width="16" height="16" viewBox="0 0 24 24" stroke-width="1.7" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M7.5 10l2.5 2-2.5 2"/><path d="M13 14h3.5"/></svg>',
+        };
+
+        const cards = [];
+
+        function createCard(host, scenario) {
+          const questions = scenario.questions;
+          const count = questions.length;
+          const state = { page: 0, choices: [], phase: "editing", enter: null };
+
+          const reset = () => {
+            state.page = 0;
+            state.choices = questions.map(() => ({ labels: [], other: false, text: "" }));
+            state.phase = "editing";
+            state.enter = null;
+            render();
+          };
+
+          // 答えが揃っているかは、選択から毎回導く。
+          const answered = (index) => {
+            const choice = state.choices[index];
+            return choice.other ? choice.text.trim() !== "" : choice.labels.length > 0;
+          };
+          const missing = () => questions.map((_, i) => i).filter((i) => !answered(i));
+          // ステップは、手前が全部答えてあるページにだけ進める。
+          const reachable = (index) => questions.slice(0, index).every((_, i) => answered(i));
+          const paged = () => view.pager !== "now" && count > 1;
+          // タブは確認ページ（番号 count）まで、ステップは最後の質問まで。
+          const lastPage = () => (view.pager === "tabs" ? count : count - 1);
+          const locked = () => state.phase !== "editing";
+
+          const answerText = (index) => {
+            const choice = state.choices[index];
+            if (choice.other) return choice.text.trim();
+            return questions[index].options
+              .map((option) => option.label)
+              .filter((label) => choice.labels.includes(label))
+              .join("、");
+          };
+          const labelOf = (index) => questions[index].header ?? `質問 ${index + 1}`;
+
+          function choiceButton({ act, q, o, selected, multi, label, description }) {
+            return `<button type="button" class="q-choice" data-act="${act}" data-q="${q}"${
+              o === undefined ? "" : ` data-o="${o}"`
+            } data-selected="${selected}" aria-pressed="${selected}"${locked() ? " disabled" : ""}>
+              <span class="q-mark" data-multi="${multi}" aria-hidden="true">${
+                selected ? ICON.check(12) : ""
+              }</span>
+              <span class="q-choice-text"><span class="q-opt-label">${esc(label)}</span>${
+                description ? `<span class="q-opt-desc">${esc(description)}</span>` : ""
+              }</span>
+            </button>`;
+          }
+
+          function questionInner(index, showLabel) {
+            const question = questions[index];
+            const choice = state.choices[index];
+            const options = question.options
+              .map(
+                (option, optionIndex) =>
+                  `<li>${choiceButton({
+                    act: "pick",
+                    q: index,
+                    o: optionIndex,
+                    selected: choice.labels.includes(option.label),
+                    multi: question.multi,
+                    label: option.label,
+                    description: option.description,
+                  })}</li>`,
+              )
+              .join("");
+            const other = `<li>${choiceButton({
+              act: "other",
+              q: index,
+              selected: choice.other,
+              multi: false,
+              label: "その他（自由入力）",
+              description: null,
+            })}${
+              choice.other
+                ? `<div class="q-other"><textarea class="q-textarea" rows="2" data-q="${index}" placeholder="回答を入力" aria-label="${esc(
+                    question.question,
+                  )} の自由入力"${locked() ? " disabled" : ""}>${esc(choice.text)}</textarea></div>`
+                : ""
+            }</li>`;
+            return `${
+              showLabel && question.header
+                ? `<span class="q-label">${esc(question.header)}</span>`
+                : ""
+            }<p class="q-text">${esc(question.question)}</p>
+              <ul class="q-options">${options}${other}</ul>
+              ${question.multi ? '<p class="q-note">複数選べます</p>' : ""}`;
+          }
+
+          function reviewHtml() {
+            const rows = questions
+              .map((_, index) => {
+                const text = answerText(index);
+                return `<li><button type="button" class="q-review-row" data-act="go" data-to="${index}"${
+                  locked() ? " disabled" : ""
+                }>
+                  <span class="q-review-text">
+                    <span class="q-review-head">${esc(labelOf(index))}</span>
+                    ${
+                      text === ""
+                        ? `<span class="q-review-answer" data-empty>${ICON.diamond}未回答</span>`
+                        : `<span class="q-review-answer">${esc(text)}</span>`
+                    }
+                  </span>${ICON.chevron}
+                </button></li>`;
+              })
+              .join("");
+            return `<p class="q-text">この内容で答えますか？</p><ul class="q-review">${rows}</ul>`;
+          }
+
+          function headHtml() {
+            return `<p class="q-head"><span class="q-state">${ICON.diamond}回答待ち</span><span class="q-who">${esc(
+              scenario.who,
+            )}</span>${
+              !paged() && count > 1
+                ? `<span class="q-count" aria-hidden="true">${count} 問</span>`
+                : ""
+            }</p>`;
+          }
+
+          function chromeHtml() {
+            if (!paged()) return "";
+            if (view.pager === "tabs") {
+              const tabs = questions
+                .map((_, index) => {
+                  const done = answered(index);
+                  // 幅が足りないので、見出しは開いているタブだけに出す。ほかは番号か ✓ だけ。
+                  const open = state.page === index;
+                  return `<button type="button" role="tab" class="q-tab" data-act="go" data-to="${index}" aria-label="${esc(
+                    labelOf(index),
+                  )}" aria-selected="${open}" data-done="${done}"${
+                    locked() ? " disabled" : ""
+                  }><span class="q-tab-mark">${done ? ICON.check(11) : index + 1}</span>${
+                    open ? esc(labelOf(index)) : ""
+                  }</button>`;
+                })
+                .join("");
+              const allDone = missing().length === 0;
+              const review = `<button type="button" role="tab" class="q-tab" data-act="go" data-to="${count}" aria-selected="${
+                state.page === count
+              }" data-done="${allDone}"${locked() ? " disabled" : ""}><span class="q-tab-mark">${
+                allDone
+                  ? ICON.check(11)
+                  : ICON.chevron.replace('width="16" height="16"', 'width="11" height="11"')
+              }</span>確認</button>`;
+              return `<div class="q-tabs" role="tablist" aria-label="質問">${tabs}${review}</div>`;
+            }
+            const segments = questions
+              .map((_, index) => {
+                const current = index === state.page;
+                const tone = current ? "current" : answered(index) ? "done" : "todo";
+                return `<button type="button" class="q-seg" data-act="go" data-to="${index}" data-state="${tone}" aria-label="質問 ${
+                  index + 1
+                }"${current ? ' aria-current="step"' : ""}${
+                  !reachable(index) || locked() ? " disabled" : ""
+                }></button>`;
+              })
+              .join("");
+            return `<p class="q-steps-title"><span class="q-steps-n">${state.page + 1} / ${count}</span><span>${esc(
+              labelOf(state.page),
+            )}</span></p><div class="q-bar" role="group" aria-label="進み具合">${segments}</div>`;
+          }
+
+          function pagesHtml(enter) {
+            if (!paged()) {
+              const items = questions
+                .map((_, index) => `<li class="q-question">${questionInner(index, true)}</li>`)
+                .join("");
+              return `<ol class="q-questions">${items}</ol>`;
+            }
+            const attr = enter === null ? "" : ` data-enter="${enter}"`;
+            if (view.pager === "tabs" && state.page === count) {
+              return `<div class="q-page q-question"${attr}>${reviewHtml()}</div>`;
+            }
+            return `<div class="q-page q-question" role="tabpanel"${attr}>${questionInner(
+              state.page,
+              false,
+            )}</div>`;
+          }
+
+          function footHtml() {
+            const submitLabel = "この内容で答える";
+            if (!paged()) {
+              return `<div class="q-foot" data-solo><button type="button" class="q-btn q-primary" data-act="submit"${
+                missing().length > 0 || locked() ? " disabled" : ""
+              }>${submitLabel}</button></div>`;
+            }
+            const isSubmit = state.page === lastPage();
+            const canGo = isSubmit ? missing().length === 0 : answered(state.page);
+            const label = isSubmit
+              ? submitLabel
+              : view.pager === "tabs" && state.page === count - 1
+                ? "確認へ"
+                : "次へ";
+            const first = state.page === 0;
+            return `<div class="q-foot"${first ? " data-solo" : ""}>
+              ${
+                first
+                  ? ""
+                  : `<button type="button" class="q-btn q-ghost" data-act="prev"${
+                      locked() ? " disabled" : ""
+                    }>戻る</button>`
+              }
+              <button type="button" class="q-btn q-primary" data-act="${isSubmit ? "submit" : "next"}"${
+                !canGo || locked() ? " disabled" : ""
+              }>${label}</button>
+            </div>`;
+          }
+
+          function noteHtml() {
+            if (state.phase === "sent") {
+              return `<p class="q-note" role="status">回答を送りました。${
+                scenario.id === "pi" ? "" : "Claude の"
+              }応答を待っています。</p>`;
+            }
+            if (paged() && view.pager === "tabs" && state.page === count && missing().length > 0) {
+              return `<p class="q-warn" role="status">${ICON.diamond}未回答が ${missing().length} 問あります</p>`;
+            }
+            return "";
+          }
+
+          function centerTab() {
+            const strip = host.querySelector(".q-tabs");
+            const tab = host.querySelector('.q-tab[aria-selected="true"]');
+            if (strip === null || tab === null) return;
+            strip.scrollLeft = tab.offsetLeft - (strip.clientWidth - tab.offsetWidth) / 2;
+          }
+
+          function render() {
+            state.page = Math.min(state.page, lastPage());
+            const enter = state.enter;
+            state.enter = null;
+            host.innerHTML = `<section class="q-card" aria-label="${esc(scenario.who)}">
+                ${headHtml()}
+                <div data-r="chrome">${chromeHtml()}</div>
+                <div data-r="pages">${pagesHtml(enter)}</div>
+                <div data-r="foot">${footHtml()}</div>
+                <div data-r="note">${noteHtml()}</div>
+              </section>
+              <button type="button" class="q-toggle">${ICON.terminal}端末出力を見る</button>`;
+            centerTab();
+          }
+
+          // 入力中はページを作り直さない（textarea のフォーカスを保つ）。
+          function syncChrome() {
+            host.querySelector('[data-r="chrome"]').innerHTML = chromeHtml();
+            host.querySelector('[data-r="foot"]').innerHTML = footHtml();
+            host.querySelector('[data-r="note"]').innerHTML = noteHtml();
+            centerTab();
+          }
+
+          function go(target) {
+            const to = Math.max(0, Math.min(target, lastPage()));
+            if (to === state.page) return;
+            if (view.pager === "steps" && !reachable(to)) return;
+            state.enter = to > state.page ? "fwd" : "back";
+            state.page = to;
+            render();
+          }
+
+          function pick(index, optionIndex) {
+            const question = questions[index];
+            const choice = state.choices[index];
+            const label = question.options[optionIndex].label;
+            if (question.multi) {
+              const labels = choice.labels.includes(label)
+                ? choice.labels.filter((value) => value !== label)
+                : [...choice.labels, label];
+              state.choices[index] = { labels, other: false, text: choice.text };
+            } else {
+              state.choices[index] = { labels: [label], other: false, text: choice.text };
+            }
+            render();
+
+            if (question.multi || !paged() || !view.auto) return;
+            // 全部答えてある（確認から直しに来た）ときは確認へ戻し、それ以外は次の質問へ。
+            const next = view.pager === "tabs" && missing().length === 0 ? count : index + 1;
+            if (next > lastPage()) return;
+            const at = state.page;
+            setTimeout(() => {
+              if (state.page === at && !locked()) go(next);
+            }, 260);
+          }
+
+          function toggleOther(index) {
+            const choice = state.choices[index];
+            state.choices[index] = choice.other
+              ? { ...choice, other: false }
+              : { labels: [], other: true, text: choice.text };
+            render();
+          }
+
+          host.addEventListener("click", (event) => {
+            const target = event.target.closest("[data-act]");
+            if (target === null || target.disabled || locked()) return;
+            const { act } = target.dataset;
+            if (act === "pick") pick(Number(target.dataset.q), Number(target.dataset.o));
+            else if (act === "other") toggleOther(Number(target.dataset.q));
+            else if (act === "go") go(Number(target.dataset.to));
+            else if (act === "next") go(state.page + 1);
+            else if (act === "prev") go(state.page - 1);
+            else if (act === "submit" && missing().length === 0) {
+              state.phase = "sent";
+              render();
+            }
+          });
+
+          host.addEventListener("input", (event) => {
+            const area = event.target.closest("textarea");
+            if (area === null) return;
+            state.choices[Number(area.dataset.q)].text = area.value;
+            syncChrome();
+          });
+
+          reset();
+          return { render, reset };
+        }
+
+        function buildStage() {
+          const stage = document.getElementById("stage");
+          for (const scenario of SCENARIOS) {
+            const column = document.createElement("div");
+            column.className = "mk-col";
+            column.innerHTML = `<p class="mk-cap">${esc(scenario.cap)}</p>
+              <div class="mk-phone">${scenario.chat}<div data-card></div></div>`;
+            stage.append(column);
+            cards.push(createCard(column.querySelector("[data-card]"), scenario));
+          }
+        }
+
+        function apply() {
+          document.body.dataset.frame = view.frame;
+          document.body.dataset.pager = view.pager;
+          if (view.theme === "") delete document.documentElement.dataset.theme;
+          else document.documentElement.dataset.theme = view.theme;
+          document.documentElement.style.setProperty("--mk-w", `${view.width}px`);
+          for (const button of document.querySelectorAll("[data-key]")) {
+            button.setAttribute(
+              "aria-checked",
+              String(String(view[button.dataset.key]) === button.dataset.value),
+            );
+          }
+          for (const card of cards) card.render();
+        }
+
+        function buildControls() {
+          const root = document.getElementById("controls");
+          const groups = CONTROLS.map(
+            (control) => `<div class="mk-ctl"><span>${control.label}</span>
+              <div class="mk-seg" role="radiogroup" aria-label="${control.label}">${control.items
+                .map(
+                  ([value, text]) =>
+                    `<button type="button" role="radio" data-key="${control.key}" data-value="${value}" aria-checked="false">${text}</button>`,
+                )
+                .join("")}</div></div>`,
+          ).join("");
+          root.outerHTML = `<div class="mk-ctl" style="gap: var(--space-3) var(--space-6)">${groups}
+            <div class="mk-ctl"><span>テーマ</span><select class="mk-select" id="theme" aria-label="テーマ">${THEMES.map(
+              ([value, text]) => `<option value="${value}">${text}</option>`,
+            ).join("")}</select></div>
+            <label class="mk-check mk-ctl"><input type="checkbox" id="auto" /> 単一選択は自動で次へ</label>
+            <button type="button" class="mk-reset" id="reset">回答をリセット</button></div>`;
+
+          document.querySelector(".mk-head").addEventListener("click", (event) => {
+            const button = event.target.closest("[data-key]");
+            if (button === null) return;
+            view[button.dataset.key] = button.dataset.value;
+            apply();
+          });
+          const theme = document.getElementById("theme");
+          theme.value = view.theme;
+          theme.addEventListener("change", () => {
+            view.theme = theme.value;
+            apply();
+          });
+          const auto = document.getElementById("auto");
+          auto.checked = view.auto;
+          auto.addEventListener("change", () => {
+            view.auto = auto.checked;
+          });
+          document.getElementById("reset").addEventListener("click", () => {
+            for (const card of cards) card.reset();
+          });
+        }
+
+        buildControls();
+        buildStage();
+        apply();
+      })();
+    </script>
+  </body>
+</html>
