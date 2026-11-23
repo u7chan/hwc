@@ -1,10 +1,56 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ModelAgentKind } from "../../shared/agents";
-import type { AgentSkills as AgentSkillsView } from "../../shared/agent-skills";
+import type { AgentSkill, AgentSkills as AgentSkillsView } from "../../shared/agent-skills";
 import { readAgentSkills } from "../api";
 import { ChevronRightIcon } from "../icons";
+import { groupSkillsBySource } from "./skill-groups";
 
 type LoadState = "loading" | "ready" | "failed";
+
+const skillKey = (skill: AgentSkill) => `${skill.source}:${skill.name}`;
+
+// description を持つ行だけが押せる。無い行は、押しても見せるものが無いので押せない。
+function SkillRow(props: { skill: AgentSkill; expanded: boolean; onToggle: () => void }) {
+  const { skill, expanded } = props;
+  const name = (
+    <span class="hwc-skill-name" data-state={skill.state}>
+      {skill.name}
+    </span>
+  );
+  const off = skill.state === "off" ? <span class="hwc-skill-off">無効</span> : null;
+
+  if (skill.description === null) {
+    return (
+      <li class="hwc-skill-item">
+        <div class="hwc-skill-line">
+          <span class="hwc-skill-line-head">
+            {name}
+            {off}
+          </span>
+        </div>
+      </li>
+    );
+  }
+  return (
+    <li class="hwc-skill-item">
+      <button
+        type="button"
+        class="hwc-skill-line hwc-skill-toggle"
+        aria-expanded={expanded}
+        onClick={props.onToggle}
+      >
+        <span class="hwc-skill-line-head">
+          {name}
+          {off}
+          <span class="hwc-skill-chevron" data-open={expanded}>
+            <ChevronRightIcon size={16} />
+          </span>
+        </span>
+        {expanded ? <span class="hwc-skill-description">{skill.description}</span> : null}
+      </button>
+    </li>
+  );
+}
 
 // その CLI がグローバルに認識するスキルの一覧。読み取り専用で、保存はしない
 // （docs/adr/agent-skills.md）。数が多いので既定では畳み、件数だけを見せる。
@@ -13,6 +59,8 @@ export function AgentSkills(props: { agent: ModelAgentKind }) {
   const [load, setLoad] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
   const [open, setOpen] = useState(false);
+  // 説明を開いている行の識別子。同時に開くのは 1 行だけにする。
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -50,6 +98,7 @@ export function AgentSkills(props: { agent: ModelAgentKind }) {
   }
 
   const count = view === null ? null : view.skills.length;
+  const offCount = view === null ? 0 : view.skills.filter((skill) => skill.state === "off").length;
 
   return (
     <section>
@@ -63,6 +112,7 @@ export function AgentSkills(props: { agent: ModelAgentKind }) {
           <span class="hwc-setting-label">グローバルスキル</span>
           <span class="hwc-setting-value hwc-skill-summary">
             {count === null ? "読み込み中" : `${count} 件`}
+            {offCount > 0 ? <span class="hwc-skill-off-count">· 無効 {offCount}</span> : null}
             <span class="hwc-skill-chevron" data-open={open}>
               <ChevronRightIcon size={16} />
             </span>
@@ -73,11 +123,26 @@ export function AgentSkills(props: { agent: ModelAgentKind }) {
             {view.skills.length === 0 ? (
               <p class="hwc-section-note hwc-skill-empty">スキルはありません。</p>
             ) : (
-              view.skills.map((skill) => (
-                <div class="hwc-skill-row" key={`${skill.source}:${skill.name}`}>
-                  <span class="hwc-skill-name">{skill.name}</span>
-                  <span class="hwc-skill-source">{skill.source}</span>
-                  {skill.state === "off" ? <span class="hwc-skill-off">無効</span> : null}
+              groupSkillsBySource(view.skills).map((group) => (
+                <div class="hwc-skill-group" key={group.source}>
+                  <div class="hwc-skill-group-head">
+                    <span class="hwc-skill-source">{group.source}</span>
+                    <span>{group.skills.length}</span>
+                  </div>
+                  <ul class="hwc-skill-rows">
+                    {group.skills.map((skill) => (
+                      <SkillRow
+                        key={skillKey(skill)}
+                        skill={skill}
+                        expanded={expanded === skillKey(skill)}
+                        onToggle={() =>
+                          setExpanded((current) =>
+                            current === skillKey(skill) ? null : skillKey(skill),
+                          )
+                        }
+                      />
+                    ))}
+                  </ul>
                 </div>
               ))
             )}

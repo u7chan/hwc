@@ -23,14 +23,53 @@ async function writeSkill(path: string, name: string, description = "説明"): P
   await writeFile(join(path, "SKILL.md"), frontmatter);
 }
 
-test("frontmatter から name と description の有無を読む", () => {
+test("frontmatter から name と description を読む", () => {
   expect(parseSkillFrontmatter("---\nname: gh\ndescription: x\n---\n")).toEqual({
     name: "gh",
-    described: true,
+    description: "x",
   });
   // description が無いスキルは Pi / Codex が読み込まない。
-  expect(parseSkillFrontmatter("---\nname: gh\n---\n")).toEqual({ name: "gh", described: false });
-  expect(parseSkillFrontmatter("# 見出しだけ")).toEqual({ name: null, described: false });
+  expect(parseSkillFrontmatter("---\nname: gh\n---\n")).toEqual({
+    name: "gh",
+    description: null,
+  });
+  expect(parseSkillFrontmatter("# 見出しだけ")).toEqual({ name: null, description: null });
+});
+
+test("description は 1 行・引用・折り返しのどの書き方でも 1 行にそろえて読む", () => {
+  const read = (frontmatter: string) =>
+    parseSkillFrontmatter(`---\n${frontmatter}\n---\n`).description;
+
+  expect(read("description: コードを読む")).toBe("コードを読む");
+  expect(read('description: "引用: コロンを含む \\"説明\\""')).toBe('引用: コロンを含む "説明"');
+  expect(read("description: 'it''s fine'")).toBe("it's fine");
+  // 折り返した plain と、`>` / `|` の本文。後ろのキーまでは巻き込まない。
+  expect(read("description: 一行目\n  二行目\nname: gh")).toBe("一行目 二行目");
+  expect(read("description: >-\n  first line\n  second line\nname: gh")).toBe(
+    "first line second line",
+  );
+  expect(read("description: |\n  first\n\n  second\nname: gh")).toBe("first second");
+});
+
+test("入れ子のキーや中身の無い description は、description として読まない", () => {
+  const read = (frontmatter: string) =>
+    parseSkillFrontmatter(`---\n${frontmatter}\n---\n`).description;
+
+  expect(read("name: gh\nmetadata:\n  description: 入れ子")).toBeNull();
+  expect(read("description: >\nname: gh")).toBeNull();
+  expect(read('description: ""')).toBeNull();
+});
+
+test("長い description は、文字の途中で切らずに末尾へ … を付ける", () => {
+  const long = "あ".repeat(300);
+  const description = parseSkillFrontmatter(`---\ndescription: ${long}\n---\n`).description;
+
+  expect(description).toBe(`${"あ".repeat(240)}…`);
+  // サロゲートペアの 𠮷 を 1 文字として数える。
+  const pairs = "𠮷".repeat(241);
+  expect(parseSkillFrontmatter(`---\ndescription: ${pairs}\n---\n`).description).toBe(
+    `${"𠮷".repeat(240)}…`,
+  );
 });
 
 test("設定ルートは CLI の環境変数を優先する", () => {
@@ -100,7 +139,9 @@ test("Pi はパッケージの manifest が宣言する置き場も読む", asyn
 
     const view = await loadAgentSkills("pi", home, NO_ENV);
 
-    expect(view.skills).toEqual([{ name: "release", source: "npm:demo-pkg", state: "on" }]);
+    expect(view.skills).toEqual([
+      { name: "release", source: "npm:demo-pkg", state: "on", description: "説明" },
+    ]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -115,7 +156,9 @@ test("Pi は同名のスキルを先に見つかった置き場だけ残す", as
 
     const view = await loadAgentSkills("pi", home, NO_ENV);
 
-    expect(view.skills).toEqual([{ name: "gh", source: "~/.pi/agent/skills", state: "on" }]);
+    expect(view.skills).toEqual([
+      { name: "gh", source: "~/.pi/agent/skills", state: "on", description: "先に見つかる方" },
+    ]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -130,7 +173,9 @@ test("Pi は PI_CODING_AGENT_DIR のスキルを読む", async () => {
       PI_CODING_AGENT_DIR: join(home, "agent"),
     });
 
-    expect(view.skills).toEqual([{ name: "local", source: "~/.pi/agent/skills", state: "on" }]);
+    expect(view.skills).toEqual([
+      { name: "local", source: "~/.pi/agent/skills", state: "on", description: "説明" },
+    ]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -158,10 +203,10 @@ test("Claude は description の無いスキルも読み、バンドルは skill
     const view = await loadAgentSkills("claude", home, NO_ENV);
 
     expect(view.skills).toEqual([
-      { name: "named", source: "~/.claude/skills", state: "on" },
-      { name: "pdf", source: "~/.claude/skills/synced", state: "on" },
-      { name: "review", source: "~/.claude/skills", state: "on" },
-      { name: "xlsx", source: "~/.claude/skills/synced", state: "off" },
+      { name: "named", source: "~/.claude/skills", state: "on", description: null },
+      { name: "pdf", source: "~/.claude/skills/synced", state: "on", description: "説明" },
+      { name: "review", source: "~/.claude/skills", state: "on", description: "説明" },
+      { name: "xlsx", source: "~/.claude/skills/synced", state: "off", description: "説明" },
     ]);
   } finally {
     await rm(home, { recursive: true, force: true });
@@ -180,7 +225,9 @@ test("Claude は CLAUDE_CONFIG_DIR を読む", async () => {
 
     const view = await loadAgentSkills("claude", home, { CLAUDE_CONFIG_DIR: configDir });
 
-    expect(view.skills).toEqual([{ name: "review", source: "~/.claude/skills", state: "off" }]);
+    expect(view.skills).toEqual([
+      { name: "review", source: "~/.claude/skills", state: "off", description: "説明" },
+    ]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -216,8 +263,8 @@ test("Codex は ~/.agents/skills を読み、config.toml の設定を反映す�
     const view = await loadAgentSkills("codex", home, NO_ENV);
 
     expect(view.skills).toEqual([
-      { name: "gh", source: "~/.agents/skills", state: "on" },
-      { name: "xlsx", source: "~/.agents/skills", state: "off" },
+      { name: "gh", source: "~/.agents/skills", state: "on", description: "説明" },
+      { name: "xlsx", source: "~/.agents/skills", state: "off", description: "説明" },
     ]);
   } finally {
     await rm(home, { recursive: true, force: true });
@@ -241,7 +288,9 @@ test("Codex は symlink 側の path で書いた無効化も実体へ解決し�
 
     const view = await loadAgentSkills("codex", home, NO_ENV);
 
-    expect(view.skills).toEqual([{ name: "gh", source: "~/.agents/skills", state: "off" }]);
+    expect(view.skills).toEqual([
+      { name: "gh", source: "~/.agents/skills", state: "off", description: "説明" },
+    ]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -284,7 +333,9 @@ test("OpenCode は ~/.config/opencode/skills を ~/.agents/skills より優先�
 
     const view = await loadAgentSkills("opencode", home, NO_ENV);
 
-    expect(view.skills).toEqual([{ name: "gh", source: "~/.config/opencode/skills", state: "on" }]);
+    expect(view.skills).toEqual([
+      { name: "gh", source: "~/.config/opencode/skills", state: "on", description: "config" },
+    ]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -303,7 +354,9 @@ test("OpenCode は絶対パスの設定 skills を最優先で読む", async () 
 
     const view = await loadAgentSkills("opencode", home, NO_ENV);
 
-    expect(view.skills).toEqual([{ name: "gh", source: join(home, "shared"), state: "on" }]);
+    expect(view.skills).toEqual([
+      { name: "gh", source: join(home, "shared"), state: "on", description: "settings" },
+    ]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -336,7 +389,7 @@ test("GET /api/agents/:agent/skills は一覧をキャッシュさせずに返�
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({
-      skills: [{ name: "gh", source: "~/.agents/skills", state: "on" }],
+      skills: [{ name: "gh", source: "~/.agents/skills", state: "on", description: "説明" }],
       truncated: false,
     });
   } finally {

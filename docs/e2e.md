@@ -571,11 +571,13 @@ Herdr がイベントを出さない cwd とブランチを、可視中だけ取
 
 設定画面のエージェント詳細は、その CLI がグローバルに認識するスキルを読み取り専用で並べる（[グローバルスキル](adr/agent-skills.md)）。E2E では `HWC_SKILLS_HOME` により、起動ログの `hwc e2e fixture: <root>` の下の `home/` だけを読み、実ホームのスキルは出さない。
 
-1. 設定 → エージェント → Pi を開く。「グローバルスキル 3 件」が出て、押すと `gh` / `imagegen` / `review` が並ぶ。由来は `~/.agents/skills` と `~/.pi/agent/skills` に分かれる。
-2. Claude を開くと 2 件で、`xlsx` に「無効」が付く（`settings.local.json` の `skillOverrides`）。
-3. Codex を開くと 2 件で、`gh` に「無効」が付く（`config.toml` の `[[skills.config]]`）。
-4. OpenCode を開くと 3 件で、無効は無い。`review` は `~/.claude/skills` と `~/.agents/skills` の両方にあるが、ID が同じなので登録順で後に来る `~/.agents/skills` の 1 行だけになる。一覧の行は押せず、スキルの追加・削除はできない。
-5. 一覧を開いたまま別のエージェントへ移ると、一覧は畳まれた状態に戻る。
+1. 設定 → エージェント → Pi を開く。「グローバルスキル 3 件」が出て、押すと由来ごとの見出し（`~/.agents/skills` に 2、`~/.pi/agent/skills` に 1）の下に、`gh` / `review` と `imagegen` が並ぶ。見出しにホバーしても、塗りが角丸からはみ出さない。
+2. `review` を押すと、その行に説明が 3 行で畳まれて出る（SKILL.md では `>-` で折り返している）。`gh` を押すと `review` は閉じ、`gh` の 1 行の説明が出る。もう一度押すと閉じる。
+3. Claude を開くと「2 件 · 無効 1」で、`xlsx` に「無効」が付き、名前が沈む（`settings.local.json` の `skillOverrides`）。`review` は description を書いていないので、行は押せず矢印も出ない。`xlsx` は押すと説明が出る。
+4. Codex を開くと「2 件 · 無効 1」で、`gh` に「無効」が付く（`config.toml` の `[[skills.config]]`）。
+5. OpenCode を開くと 3 件で、無効は無い。`review` は `~/.claude/skills` と `~/.agents/skills` の両方にあるが、ID が同じなので登録順で後に来る `~/.agents/skills` の 1 行だけになる。スキルの追加・削除はできない。
+6. 一覧を開いたまま別のエージェントへ移ると、一覧は畳まれた状態に戻る。
+7. キーボードで見出しや行へフォーカスすると、輪郭は行の内側に収まる。
 
 ## ファイルツリーの表示
 

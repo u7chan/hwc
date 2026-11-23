@@ -371,21 +371,25 @@ export const DEFAULT_PI_EFFORT = "high";
 // CLI 自身の設定ディレクトリ（PI_CODING_AGENT_DIR / CLAUDE_CONFIG_DIR / CODEX_HOME）にも置く。
 export async function writeSkillHome(root: string): Promise<void> {
   const home = join(root, "home");
-  const skill = async (dir: string, name: string, description = "説明") => {
+  // description が null なら frontmatter に書かない（Claude は無くても読み込む）。
+  const skill = async (dir: string, name: string, description: string | null = "説明") => {
     await mkdir(dir, { recursive: true });
-    await writeFile(
-      join(dir, "SKILL.md"),
-      `---\nname: ${name}\ndescription: ${description}\n---\n`,
-    );
+    const described = description === null ? "" : `description: ${description}\n`;
+    await writeFile(join(dir, "SKILL.md"), `---\nname: ${name}\n${described}---\n`);
   };
+  // 3 行で畳まれる長さの説明。YAML の折り返し（>-）で書き、複数行の読み取りも通す。
+  const longDescription =
+    ">-\n  PR またはローカルの差分を読み、正しさと設計の観点から指摘を返す。\n" +
+    "  指摘には根拠となる行を添え、直す前に影響範囲を確認する。\n" +
+    "  レビュー後は修正案を示し、確認が取れるまで変更を加えない。";
   // manifest.json はバンドルのディレクトリができてから書く。並べて書くと先に走って落ちる。
   await mkdir(join(root, "claude/skills/synced/demo"), { recursive: true });
   await mkdir(join(root, "codex"), { recursive: true });
   await Promise.all([
-    skill(join(home, ".agents/skills/review"), "review", "コードをレビューする。"),
+    skill(join(home, ".agents/skills/review"), "review", longDescription),
     skill(join(home, ".agents/skills/gh"), "gh", "GitHub を操作する。"),
     skill(join(root, "agent/skills/imagegen"), "imagegen", "画像を作る。"),
-    skill(join(root, "claude/skills/review"), "review", "コードをレビューする。"),
+    skill(join(root, "claude/skills/review"), "review", null),
     // 同期されたスキルは manifest.json を持つバンドルとして置き、設定側で無効にする。
     skill(join(root, "claude/skills/synced/demo/xlsx"), "xlsx", "表計算を扱う。"),
     writeFile(
