@@ -56,11 +56,11 @@ export type ChatMessage = {
   // 本文が指していたが、配信の根（チェックアウトと追加根）の外にあったファイル名。
   // プレビューできないことを 1 行で伝えるためだけに持つ。絶対パスは渡さない。
   outsideFile?: string;
-  // ask_user の tool call/result から作った表示用の Q&A。会話の実体ではないので編集しない。
+  // ask_user（pi）と AskUserQuestion（Claude）の回答から作った表示用の Q&A。会話の実体ではないので編集しない。
   synthetic?: true;
   // mypi の pending 質問 id。回答直後の控えと同じ質問かを照合するためにだけ使う。
   askId?: string;
-  // ask_user の選択肢。合成した質問にだけ載せ、選択済み・推奨を表示する。
+  // 質問の選択肢。合成した質問にだけ載せ、選択済み・推奨を表示する。
   askOptions?: ChatAskOption[];
   // 合成した回答が選択肢か自由入力か。回答バブルの種別表示に使う。
   answerKind?: "option" | "text";

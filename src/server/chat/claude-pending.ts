@@ -31,6 +31,11 @@ export function questionPending(toolUseId: string, input: unknown): ChatPending 
   return { kind: "question", toolUseId, tool: ASK_USER_QUESTION, questions };
 }
 
+// 質問文の突き合わせ用。カードと履歴の質問文と同じ正規化を通す。
+export function normalizeQuestionText(value: string): string {
+  return pendingText(value, PENDING_QUESTION_MAX);
+}
+
 // summary は toolSummary の結果か、保存された値。どちらも上限と正規化を通す。
 export function toolPending(toolUseId: string, name: string, summary: unknown): ChatPending | null {
   const tool = pendingText(name, PENDING_TOOL_MAX);

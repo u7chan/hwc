@@ -1147,6 +1147,223 @@ test("the marker the CLI writes when Esc interrupts a turn is not a user message
   });
 });
 
+// 質問の tool_use と、それに続く記録。Web から答えると tool_result は却下され、Esc の記録の後に
+// `質問への回答:` で始まる発話が残る。TUI で答えると tool_result が答えを持つ。
+const rejected = (id: string) => ({ ...toolResult(id), is_error: true });
+
+async function askConversation(
+  entries: (parent: string) => unknown[],
+  questions: unknown,
+): Promise<Awaited<ReturnType<ReturnType<typeof createClaudeChatClient>["snapshot"]>>> {
+  let result:
+    | Awaited<ReturnType<ReturnType<typeof createClaudeChatClient>["snapshot"]>>
+    | undefined;
+  await withRoot(async (root) => {
+    const first = user("u1", null, "確認してください。");
+    const lead = assistant("a0", "u1", "msg_0", [text("質問します。")]);
+    const ask = assistant("a1", "a0", "msg_0", [askUse("t1", questions)]);
+    await writeTranscript(root, [first, lead, ask, ...entries("a1")]);
+    result = await createClaudeChatClient().snapshot(SESSION);
+  });
+  if (result === undefined) throw new Error("snapshot was not taken");
+  return result;
+}
+
+const interrupt = (uuid: string, parent: string) =>
+  user(uuid, parent, [text("[Request interrupted by user for tool use]")]);
+
+test("a question answered from the web becomes the question with its options and the answer", async () => {
+  const snapshot = await askConversation(
+    (parent) => [
+      user("u2", parent, [rejected("t1")]),
+      interrupt("u3", "u2"),
+      user("u4", "u3", "質問への回答:\n好きな色は？: 青\nどれを使いますか？: りんご, もも"),
+    ],
+    [
+      question("好きな色は？", ["赤", "青"]),
+      question("どれを使いますか？", ["りんご", "なし", "もも"], { multiSelect: true }),
+    ],
+  );
+
+  // 質問文は text と同じ assistant の応答の後ろ、回答は質問の直後。素の回答本文は残さない。
+  expect(snapshot.messages.map((message) => [message.role, message.text])).toEqual([
+    ["user", "確認してください。"],
+    ["agent", "質問します。"],
+    ["agent", "好きな色は？"],
+    ["user", "青"],
+    ["agent", "どれを使いますか？"],
+    ["user", "りんご, もも"],
+  ]);
+  const [, , colorQuestion, colorAnswer, fruitQuestion, fruitAnswer] = snapshot.messages;
+  expect(colorQuestion?.askOptions).toEqual([
+    { label: "赤", recommended: false, selected: false },
+    { label: "青", recommended: false, selected: true },
+  ]);
+  expect(fruitQuestion?.askOptions?.map((option) => option.selected)).toEqual([true, false, true]);
+  expect([colorQuestion, colorAnswer, fruitQuestion, fruitAnswer].map((m) => m?.synthetic)).toEqual(
+    [true, true, true, true],
+  );
+  expect([colorAnswer?.answerKind, fruitAnswer?.answerKind]).toEqual(["option", "option"]);
+  expect(snapshot.pending).toBeUndefined();
+});
+
+test("a free text answer from the web selects no option", async () => {
+  const snapshot = await askConversation(
+    (parent) => [
+      user("u2", parent, [rejected("t1")]),
+      interrupt("u3", "u2"),
+      user("u4", "u3", "質問への回答:\n好きな色は？: 緑に近い 青です"),
+    ],
+    [question("好きな色は？", ["赤", "青"])],
+  );
+
+  const [, , asked, answered] = snapshot.messages;
+  expect(asked?.askOptions?.map((option) => option.selected)).toEqual([false, false]);
+  expect(answered).toMatchObject({ role: "user", text: "緑に近い 青です", answerKind: "text" });
+});
+
+test("the answer Claude Code wraps as a paste is still read as the answer", async () => {
+  const snapshot = await askConversation(
+    (parent) => [
+      user("u2", parent, [rejected("t1")]),
+      interrupt("u3", "u2"),
+      user(
+        "u4",
+        "u3",
+        '<pasted_content id="p1">\n質問への回答:\n好きな色は？: 赤\n</pasted_content id="p1">',
+      ),
+    ],
+    [question("好きな色は？", ["赤", "青"])],
+  );
+
+  expect(snapshot.messages.map((message) => message.text)).toEqual([
+    "確認してください。",
+    "質問します。",
+    "好きな色は？",
+    "赤",
+  ]);
+});
+
+test("a question answered in the terminal dialog becomes the question and the answer", async () => {
+  const snapshot = await askConversation(
+    (parent) => [
+      user("u2", parent, [toolResult("t1")], {
+        toolUseResult: {
+          questions: [],
+          answers: { "好きな色は？": "青", "どれを使いますか？": "りんご, もも" },
+          annotations: {},
+        },
+      }),
+    ],
+    [
+      question("好きな色は？", ["赤", "青"]),
+      question("どれを使いますか？", ["りんご", "なし", "もも"], { multiSelect: true }),
+    ],
+  );
+
+  expect(snapshot.messages.map((message) => [message.role, message.text])).toEqual([
+    ["user", "確認してください。"],
+    ["agent", "質問します。"],
+    ["agent", "好きな色は？"],
+    ["user", "青"],
+    ["agent", "どれを使いますか？"],
+    ["user", "りんご, もも"],
+  ]);
+  expect(snapshot.messages[2]?.askOptions?.map((option) => option.selected)).toEqual([false, true]);
+  expect(snapshot.messages[4]?.askOptions?.map((option) => option.selected)).toEqual([
+    true,
+    false,
+    true,
+  ]);
+});
+
+test("an answer typed as Other in the terminal dialog is free text", async () => {
+  const snapshot = await askConversation(
+    (parent) => [
+      user("u2", parent, [toolResult("t1")], {
+        toolUseResult: { questions: [], answers: { "好きな色は？": "緑に近い青" } },
+      }),
+    ],
+    [question("好きな色は？", ["赤", "青"])],
+  );
+
+  const [, , asked, answered] = snapshot.messages;
+  expect(asked?.askOptions?.map((option) => option.selected)).toEqual([false, false]);
+  expect(answered).toMatchObject({ text: "緑に近い青", answerKind: "text" });
+});
+
+test("a question that was rejected and not answered by the heading is not synthesized", async () => {
+  const snapshot = await askConversation(
+    (parent) => [
+      user("u2", parent, [rejected("t1")]),
+      interrupt("u3", "u2"),
+      user("u4", "u3", "やっぱり別の方法にしましょう。"),
+    ],
+    [question("好きな色は？", ["赤", "青"])],
+  );
+
+  // 質問も回答も会話の実体ではない。普通の発話は、これまでどおりそのまま残る。
+  expect(snapshot.messages.map((message) => message.text)).toEqual([
+    "確認してください。",
+    "質問します。",
+    "やっぱり別の方法にしましょう。",
+  ]);
+  expect(snapshot.messages.some((message) => message.synthetic === true)).toBe(false);
+});
+
+test("an answer that does not match the questions stays as the user's message", async () => {
+  const snapshot = await askConversation(
+    (parent) => [
+      user("u2", parent, [rejected("t1")]),
+      interrupt("u3", "u2"),
+      user("u4", "u3", "質問への回答:\n別の質問: 青"),
+    ],
+    [question("好きな色は？", ["赤", "青"])],
+  );
+
+  expect(snapshot.messages.at(-1)).toMatchObject({
+    role: "user",
+    text: "質問への回答:\n別の質問: 青",
+  });
+  expect(snapshot.messages.some((message) => message.synthetic === true)).toBe(false);
+});
+
+test("a question still waiting for an answer is left to the pending card", async () => {
+  const snapshot = await askConversation(() => [], [question("好きな色は？", ["赤", "青"])]);
+
+  expect(snapshot.messages.map((message) => message.text)).toEqual([
+    "確認してください。",
+    "質問します。",
+  ]);
+});
+
+test("when the oldest messages are cut, an answer is not left without its question", async () => {
+  await withRoot(async (root) => {
+    const entries: unknown[] = [];
+    let parent: string | null = null;
+    for (let index = 0; index < MAX_CHAT_MESSAGES; index += 1) {
+      const uuid = `p${index}`;
+      entries.push(user(uuid, parent, `発話 ${index}`));
+      parent = uuid;
+    }
+    const ask = assistant("a1", parent, "msg_a", [
+      askUse("t1", [question("好きな色は？", ["赤", "青"])]),
+    ]);
+    const answered = user("u2", "a1", [toolResult("t1")], {
+      toolUseResult: { answers: { "好きな色は？": "青" } },
+    });
+    await writeTranscript(root, [...entries, ask, answered]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.truncated).toBe(true);
+    const ids = snapshot.messages.map((message) => message.id);
+    expect(ids.at(-2)).toBe("ask:t1:0:question");
+    expect(ids.at(-1)).toBe("ask:t1:0:answer");
+    expect(snapshot.messages.length).toBeLessThanOrEqual(MAX_CHAT_MESSAGES);
+  });
+});
+
 test("a completed main-thread reply that wrote the whole prompt cache for 1h sets the expiry", async () => {
   await withRoot(async (root) => {
     const prompt = user("u1", null, "続けてください。");

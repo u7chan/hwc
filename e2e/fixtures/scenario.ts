@@ -159,6 +159,43 @@ function claudeChatTranscript(): ClaudeEntry[] {
     assistant("msg-review-2", [
       { type: "text", text: "\n\nそのあと `bun run dev` で起動します。" },
     ]);
+    // TUI のダイアログで答えた質問。tool_result が答えを持ち、hwc は質問と回答に合成する。
+    assistant("msg-review-ask", [
+      {
+        type: "tool_use",
+        id: "ask-tool-1",
+        name: "AskUserQuestion",
+        input: {
+          questions: [
+            {
+              question: "どちらから直しますか？",
+              header: "順序",
+              multiSelect: false,
+              options: [
+                { label: "セットアップ", description: "手順の目的を先に出す" },
+                { label: "スクリーンショット", description: "alt を足す" },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    user(
+      [
+        {
+          type: "tool_result",
+          tool_use_id: "ask-tool-1",
+          content: 'Your questions have been answered: "どちらから直しますか？"="セットアップ".',
+        },
+      ],
+      {
+        toolUseResult: {
+          questions: [],
+          answers: { "どちらから直しますか？": "セットアップ" },
+          annotations: {},
+        },
+      },
+    );
     // 実機と同じく、貼り付けた入力は Claude Code が `<pasted_content>` で包んで書く。
     // hwc はこの包みを外し、中の添付の注記を名前のチップにする（docs/adr/claude-integration.md）。
     user(
