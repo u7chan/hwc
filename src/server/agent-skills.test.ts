@@ -3,7 +3,15 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestApp } from "./app.test-helpers";
-import { loadAgentSkills, parseCodexSkillRules, parseSkillFrontmatter } from "./agent-skills";
+import {
+  loadAgentSkills,
+  parseCodexSkillRules,
+  parseSkillFrontmatter,
+  skillRoots,
+} from "./agent-skills";
+
+// CLI の環境変数がテスト実行元から漏れないよう、明示的に空の env を渡す。
+const NO_ENV = {};
 
 async function tempHome(): Promise<string> {
   return await mkdtemp(join(tmpdir(), "hwc-skills-"));
@@ -25,6 +33,27 @@ test("frontmatter から name と description の有無を読む", () => {
   expect(parseSkillFrontmatter("# 見出しだけ")).toEqual({ name: null, described: false });
 });
 
+test("設定ルートは CLI の環境変数を優先する", () => {
+  const roots = skillRoots("/home/example", {
+    PI_CODING_AGENT_DIR: "/tmp/pi-agent",
+    CLAUDE_CONFIG_DIR: "/tmp/claude",
+    CODEX_HOME: "/tmp/codex",
+  });
+  expect(roots).toEqual({
+    home: "/home/example",
+    piAgent: "/tmp/pi-agent",
+    claude: "/tmp/claude",
+    codex: "/tmp/codex",
+  });
+  // 環境変数が無ければホーム配下。
+  expect(skillRoots("/home/example", NO_ENV)).toEqual({
+    home: "/home/example",
+    piAgent: "/home/example/.pi/agent",
+    claude: "/home/example/.claude",
+    codex: "/home/example/.codex",
+  });
+});
+
 test("Pi は 2 つのスキル置き場と packages のスキルをまとめる", async () => {
   const home = await tempHome();
   try {
@@ -41,7 +70,7 @@ test("Pi は 2 つのスキル置き場と packages のスキルをまとめる"
     // 説明の無い SKILL.md は一覧に載せない。
     await writeSkill(join(home, ".agents/skills/broken"), "broken", "");
 
-    const view = await loadAgentSkills("pi", home);
+    const view = await loadAgentSkills("pi", home, NO_ENV);
 
     expect(view.skills.map((skill) => [skill.name, skill.source, skill.state])).toEqual([
       ["gh", "~/.agents/skills", "on"],
@@ -54,15 +83,56 @@ test("Pi は 2 つのスキル置き場と packages のスキルをまとめる"
   }
 });
 
-test("Claude はバンドルのスキルを skillOverrides の名前空間で無効にする", async () => {
+test("Pi はパッケージの manifest が宣言する置き場も読む", async () => {
   const home = await tempHome();
   try {
+    const pkg = join(home, ".pi/agent/npm/node_modules/demo-pkg");
+    await writeSkill(join(pkg, "resources/skills/release"), "release");
+    await writeFile(
+      join(pkg, "package.json"),
+      JSON.stringify({ pi: { skills: ["./resources/skills"] } }),
+    );
+    await mkdir(join(home, ".pi/agent"), { recursive: true });
+    await writeFile(
+      join(home, ".pi/agent/settings.json"),
+      JSON.stringify({ packages: ["npm:demo-pkg"] }),
+    );
+
+    const view = await loadAgentSkills("pi", home, NO_ENV);
+
+    expect(view.skills).toEqual([{ name: "release", source: "npm:demo-pkg", state: "on" }]);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("Pi は PI_CODING_AGENT_DIR のスキルを読む", async () => {
+  const home = await tempHome();
+  try {
+    await writeSkill(join(home, "agent/skills/local"), "local");
+
+    const view = await loadAgentSkills("pi", home, {
+      PI_CODING_AGENT_DIR: join(home, "agent"),
+    });
+
+    expect(view.skills).toEqual([{ name: "local", source: "~/.pi/agent/skills", state: "on" }]);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("Claude は description の無いスキルも読み、バンドルは skillOverrides で無効にする", async () => {
+  const home = await tempHome();
+  try {
+    // Claude は description を必須にしない。名前だけで読み込まれる。
+    const named = join(home, ".claude/skills/named");
+    await mkdir(named, { recursive: true });
+    await writeFile(join(named, "SKILL.md"), "---\nname: named\n---\n本文\n");
     await writeSkill(join(home, ".claude/skills/review"), "review");
     const bundle = join(home, ".claude/skills/synced/bundle");
     await writeSkill(join(bundle, "xlsx"), "xlsx");
     await writeSkill(join(bundle, "pdf"), "pdf");
     await writeFile(join(bundle, "manifest.json"), JSON.stringify({ skills: [] }));
-    await mkdir(join(home, ".claude"), { recursive: true });
     await writeFile(
       join(home, ".claude/settings.local.json"),
       JSON.stringify({
@@ -70,13 +140,32 @@ test("Claude はバンドルのスキルを skillOverrides の名前空間で無
       }),
     );
 
-    const view = await loadAgentSkills("claude", home);
+    const view = await loadAgentSkills("claude", home, NO_ENV);
 
     expect(view.skills).toEqual([
+      { name: "named", source: "~/.claude/skills", state: "on" },
       { name: "pdf", source: "~/.claude/skills/synced", state: "on" },
       { name: "review", source: "~/.claude/skills", state: "on" },
       { name: "xlsx", source: "~/.claude/skills/synced", state: "off" },
     ]);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("Claude は CLAUDE_CONFIG_DIR を読む", async () => {
+  const home = await tempHome();
+  try {
+    const configDir = join(home, "claude-config");
+    await writeSkill(join(configDir, "skills/review"), "review");
+    await writeFile(
+      join(configDir, "settings.json"),
+      JSON.stringify({ skillOverrides: { review: "off" } }),
+    );
+
+    const view = await loadAgentSkills("claude", home, { CLAUDE_CONFIG_DIR: configDir });
+
+    expect(view.skills).toEqual([{ name: "review", source: "~/.claude/skills", state: "off" }]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
@@ -109,7 +198,7 @@ test("Codex は ~/.agents/skills を読み、config.toml の設定を反映す�
       '[[skills.config]]\nname = "xlsx"\nenabled = false\n',
     );
 
-    const view = await loadAgentSkills("codex", home);
+    const view = await loadAgentSkills("codex", home, NO_ENV);
 
     expect(view.skills).toEqual([
       { name: "gh", source: "~/.agents/skills", state: "on" },
@@ -120,7 +209,30 @@ test("Codex は ~/.agents/skills を読み、config.toml の設定を反映す�
   }
 });
 
-test("OpenCode は互換の置き場を重複させず、ルート直下の .md も読む", async () => {
+test("Codex は symlink 側の path で書いた無効化も実体へ解決して効かせる", async () => {
+  const home = await tempHome();
+  try {
+    const real = join(home, "checkout/skills/gh");
+    await writeSkill(real, "gh");
+    await mkdir(join(home, ".agents/skills"), { recursive: true });
+    const link = join(home, ".agents/skills/gh");
+    await symlink(real, link, "dir");
+    await mkdir(join(home, ".codex"), { recursive: true });
+    // 設定は symlink 側のパスで書く。実体へ解決して照合しないと効かない。
+    await writeFile(
+      join(home, ".codex/config.toml"),
+      `[[skills.config]]\npath = "${join(link, "SKILL.md")}"\nenabled = false\n`,
+    );
+
+    const view = await loadAgentSkills("codex", home, NO_ENV);
+
+    expect(view.skills).toEqual([{ name: "gh", source: "~/.agents/skills", state: "off" }]);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode は互換の置き場を重複させず、同名は後から見つけた方が勝つ", async () => {
   const home = await tempHome();
   try {
     await writeSkill(join(home, ".agents/skills/gh"), "gh");
@@ -131,11 +243,13 @@ test("OpenCode は互換の置き場を重複させず、ルート直下の .md 
       join(home, ".config/opencode/skills/note.md"),
       "---\nname: note\ndescription: x\n---\n",
     );
+    // 同じ名前のスキルを別の置き場にも置く。OpenCode は ID で選び、後の置き場が勝つ。
+    await writeSkill(join(home, ".config/opencode/skills/gh"), "gh");
 
-    const view = await loadAgentSkills("opencode", home);
+    const view = await loadAgentSkills("opencode", home, NO_ENV);
 
     expect(view.skills.map((skill) => [skill.name, skill.source])).toEqual([
-      ["gh", "~/.claude/skills"],
+      ["gh", "~/.agents/skills"],
       ["note", "~/.config/opencode/skills"],
     ]);
   } finally {
@@ -150,7 +264,7 @@ test("一覧が上限を超えたら切ったことを返す", async () => {
       await writeSkill(join(home, ".agents/skills", `s${index}`), `s${index}`);
     }
 
-    const view = await loadAgentSkills("codex", home);
+    const view = await loadAgentSkills("codex", home, NO_ENV);
 
     expect(view.skills.length).toBe(200);
     expect(view.truncated).toBe(true);
@@ -163,7 +277,7 @@ test("GET /api/agents/:agent/skills は一覧をキャッシュさせずに返�
   const home = await tempHome();
   try {
     await writeSkill(join(home, ".agents/skills/gh"), "gh");
-    const { app } = createTestApp({ homeDirectory: home });
+    const { app } = createTestApp({ homeDirectory: home, skillsHome: home });
 
     const response = await app.request("/api/agents/codex/skills");
 

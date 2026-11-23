@@ -330,9 +330,11 @@ export const DEFAULT_PI_EFFORT = "high";
 
 // 実在のユーザー名・リポジトリ名・パスを fixture に写さない。E2E のスクリーンショットは
 // ここで作ったデータだけを見せる。
-// 設定画面に出すグローバルスキル。実ホームを読まないよう HWC_SKILLS_HOME をこのホームへ向ける。
-export async function writeSkillHome(home: string): Promise<void> {
-  const skill = async (dir: string, name: string, description: string) => {
+// 設定画面に出すグローバルスキル。実ホームを読まないよう HWC_SKILLS_HOME をこのホームへ向け、
+// CLI 自身の設定ディレクトリ（PI_CODING_AGENT_DIR / CLAUDE_CONFIG_DIR / CODEX_HOME）にも置く。
+export async function writeSkillHome(root: string): Promise<void> {
+  const home = join(root, "home");
+  const skill = async (dir: string, name: string, description = "説明") => {
     await mkdir(dir, { recursive: true });
     await writeFile(
       join(dir, "SKILL.md"),
@@ -340,28 +342,24 @@ export async function writeSkillHome(home: string): Promise<void> {
     );
   };
   // manifest.json はバンドルのディレクトリができてから書く。並べて書くと先に走って落ちる。
-  await mkdir(join(home, ".claude/skills/synced/demo"), { recursive: true });
+  await mkdir(join(root, "claude/skills/synced/demo"), { recursive: true });
+  await mkdir(join(root, "codex"), { recursive: true });
   await Promise.all([
     skill(join(home, ".agents/skills/review"), "review", "コードをレビューする。"),
     skill(join(home, ".agents/skills/gh"), "gh", "GitHub を操作する。"),
-    skill(join(home, ".pi/agent/skills/imagegen"), "imagegen", "画像を作る。"),
-    skill(join(home, ".claude/skills/review"), "review", "コードをレビューする。"),
+    skill(join(root, "agent/skills/imagegen"), "imagegen", "画像を作る。"),
+    skill(join(root, "claude/skills/review"), "review", "コードをレビューする。"),
     // 同期されたスキルは manifest.json を持つバンドルとして置き、設定側で無効にする。
-    skill(join(home, ".claude/skills/synced/demo/xlsx"), "xlsx", "表計算を扱う。"),
+    skill(join(root, "claude/skills/synced/demo/xlsx"), "xlsx", "表計算を扱う。"),
     writeFile(
-      join(home, ".claude/skills/synced/demo/manifest.json"),
+      join(root, "claude/skills/synced/demo/manifest.json"),
       JSON.stringify({ lastUpdated: 0, skills: [] }),
     ),
     writeFile(
-      join(home, ".claude/settings.local.json"),
+      join(root, "claude/settings.local.json"),
       JSON.stringify({ skillOverrides: { "anthropic-skills:xlsx": "off" } }),
     ),
-    mkdir(join(home, ".codex"), { recursive: true }).then(() =>
-      writeFile(
-        join(home, ".codex/config.toml"),
-        '[[skills.config]]\nname = "gh"\nenabled = false\n',
-      ),
-    ),
+    writeFile(join(root, "codex/config.toml"), '[[skills.config]]\nname = "gh"\nenabled = false\n'),
   ]);
 }
 
@@ -483,7 +481,7 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeFile(join(dashboard, "src", "main.ts"), "export const ready = true;\n"),
   ]);
 
-  await writeSkillHome(join(root, "home"));
+  await writeSkillHome(root);
 
   // 添付チップは保存済みファイルの実バイト数を出す。会話の注記は basename しか使わないが、
   // 大きさを出すために実ファイルを状態ディレクトリへ置く。

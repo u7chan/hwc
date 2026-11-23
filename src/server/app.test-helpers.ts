@@ -378,6 +378,7 @@ export type TestAppOptions = {
     | "restart"
     | "launchDefaults"
     | "homeDirectory"
+    | "skillsHome"
     | "restartDelayMs"
     | "editMarkerTimeoutMs"
     | "templates"

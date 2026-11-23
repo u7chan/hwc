@@ -11,13 +11,16 @@
 - 設定画面のエージェント詳細に、その CLI がグローバルに認識するスキルを読み取り専用で並べる。有効・無効は CLI の設定に従って表示し、hwc からは書き換えない。ユーザーの `~/.claude` や `~/.agents` を変更しない（[Claude 連携](claude-integration.md)の方針と同じ）
 - 対象はグローバルのみ。ペインの cwd に依存するプロジェクトのスキルは含めない。設定画面に cwd が無いため
 - 探索先と規則は各 CLI のドキュメントに従い、BFF がファイルを直接読む。CLI のプロセスは起動しない（Pi の RPC は数秒かかり、セッションの副作用もあるため）
-  - Pi: `~/.pi/agent/skills`、`~/.agents/skills`、`settings.json` の `packages` が持つ `skills/` と `.agents/skills/`
+  - Pi: `~/.pi/agent/skills`、`~/.agents/skills`、`settings.json` の `packages` が持つ `skills/`・`.agents/skills/`・manifest の `pi.skills`
   - Claude: `~/.claude/skills`（バンドルは `skillOverrides` の名前空間で引く）、`settings.json` と `settings.local.json` の `skillOverrides`
-  - Codex: `~/.agents/skills`、`/etc/codex/skills`、`~/.codex/config.toml` の `[[skills.config]]`
+  - Codex: `~/.agents/skills`、`/etc/codex/skills`、`config.toml` の `[[skills.config]]`
   - OpenCode: `~/.config/opencode/skills`、`~/.claude/skills`、`~/.agents/skills`、`opencode.json` の `skills`（ローカルパスのみ）
+- 設定ルートは CLI 自身の環境変数を優先する（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`）。hwc が起動するペインと同じ設定を見るため
+- 同名スキルの扱いは CLI に合わせる。OpenCode は ID で選び後の置き場が勝つので、一覧も勝った方だけを残す。他の CLI は同名を併記する
 - 次のものは対象外にする。CLI 側の解決規則が未文書か、hwc から正否を確かめられないため
   - Claude のプラグイン（有効・無効が別管理）、Codex の同梱 system スキル
-  - OpenCode の相対パス（cwd 基準）と HTTP カタログ
+  - Pi の `settings.json` の `skills`（glob・除外記法を解釈しないと、載せないスキルを載せてしまう）
+  - OpenCode の相対パス（cwd 基準）、HTTP カタログ、`opencode.jsonc`（コメントの解釈を持たない）
 
 ## Consequences
 

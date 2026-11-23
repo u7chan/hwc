@@ -11,19 +11,38 @@ const MAX_SKILLS = 200;
 type Candidate = {
   name: string;
   source: string;
+  // 見つけたときのパス。symlink を辿る前の文字列で、設定側の path と突き合わせる。
+  path: string;
   realPath: string;
   disabled: boolean;
 };
+
+// CLI が見るホーム配下の根。CLI 自身の環境変数が設定されていれば、その CLI と同じ場所を見る。
+type Roots = { home: string; piAgent: string; claude: string; codex: string };
+
+export function skillRoots(
+  home: string,
+  env: Record<string, string | undefined> = process.env,
+): Roots {
+  return {
+    home,
+    piAgent: env.PI_CODING_AGENT_DIR ?? join(home, ".pi/agent"),
+    claude: env.CLAUDE_CONFIG_DIR ?? join(home, ".claude"),
+    codex: env.CODEX_HOME ?? join(home, ".codex"),
+  };
+}
 
 type WalkOptions = {
   // ルートから辿るディレクトリの深さ。CLI ごとの探索規則に合わせる。
   maxDepth: number;
   // ルート直下の `.md` もスキルとして扱うか（OpenCode だけがこの形を受ける）。
   rootMarkdown: boolean;
+  // description の無いスキルを載せないか。Pi と Codex は description を必須にし、
+  // Claude と OpenCode は名前だけで読み込む。
+  requireDescription: boolean;
 };
 
 // SKILL.md の frontmatter から name と description の有無だけを読む。YAML 全体は要らない。
-// description が無いスキルは Pi / Codex が読み込まないので、こちらも一覧に載せない。
 export function parseSkillFrontmatter(text: string): { name: string | null; described: boolean } {
   const normalized = text.replace(/\r\n/g, "\n");
   if (!normalized.startsWith("---")) return { name: null, described: false };
@@ -41,26 +60,36 @@ export function parseSkillFrontmatter(text: string): { name: string | null; desc
   return { name, described };
 }
 
-async function skillAt(path: string, source: string): Promise<Candidate | null> {
-  const text = await readFile(join(path, "SKILL.md"), "utf8").catch(() => null);
+async function skillAt(
+  path: string,
+  source: string,
+  requireDescription: boolean,
+): Promise<Candidate | null> {
+  const file = join(path, "SKILL.md");
+  const text = await readFile(file, "utf8").catch(() => null);
   if (text === null) return null;
   const front = parseSkillFrontmatter(text);
-  if (!front.described) return null;
+  if (requireDescription && !front.described) return null;
   return {
     name: front.name ?? basename(path),
     source,
-    realPath: await realpath(join(path, "SKILL.md")).catch(() => join(path, "SKILL.md")),
+    path: file,
+    realPath: await realpath(file).catch(() => file),
     disabled: false,
   };
 }
 
-async function markdownSkillAt(path: string, source: string): Promise<Candidate | null> {
+async function markdownSkillAt(
+  path: string,
+  source: string,
+  requireDescription: boolean,
+): Promise<Candidate | null> {
   const text = await readFile(path, "utf8").catch(() => null);
   if (text === null) return null;
   const front = parseSkillFrontmatter(text);
-  if (!front.described) return null;
+  if (requireDescription && !front.described) return null;
   const name = front.name ?? basename(path, ".md");
-  return { name, source, realPath: await realpath(path).catch(() => path), disabled: false };
+  return { name, source, path, realPath: await realpath(path).catch(() => path), disabled: false };
 }
 
 // 1 つのルートを辿る。SKILL.md を持つディレクトリは 1 スキルとして扱い、その中へは降りない
@@ -79,7 +108,7 @@ async function walk(
     if (visited.has(real)) return;
     visited.add(real);
 
-    const own = await skillAt(dir, source);
+    const own = await skillAt(dir, source, options.requireDescription);
     if (own !== null) {
       out.push(own);
       return;
@@ -97,7 +126,7 @@ async function walk(
         continue;
       }
       if (options.rootMarkdown && depth === 0 && entry.name.endsWith(".md")) {
-        const skill = await markdownSkillAt(full, source);
+        const skill = await markdownSkillAt(full, source, options.requireDescription);
         if (skill !== null) out.push(skill);
       }
     }
@@ -123,16 +152,16 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 // Pi の packages は `npm:<name>` か `git:<host>/<path>@<ref>`。インストール先は
-// ~/.pi/agent 配下の 2 つの置き場に分かれる。
-async function piPackages(home: string): Promise<{ dir: string; source: string }[]> {
-  const settings = asRecord(await readJson(join(home, ".pi/agent/settings.json")));
+// <agent dir> 配下の 2 つの置き場に分かれる。
+async function piPackages(agentDir: string): Promise<{ dir: string; source: string }[]> {
+  const settings = asRecord(await readJson(join(agentDir, "settings.json")));
   const packages = settings?.packages;
   if (!Array.isArray(packages)) return [];
   const found: { dir: string; source: string }[] = [];
   for (const entry of packages) {
     if (typeof entry !== "string") continue;
     if (entry.startsWith("npm:")) {
-      found.push({ dir: join(home, ".pi/agent/npm/node_modules", entry.slice(4)), source: entry });
+      found.push({ dir: join(agentDir, "npm/node_modules", entry.slice(4)), source: entry });
       continue;
     }
     if (entry.startsWith("git:")) {
@@ -140,30 +169,45 @@ async function piPackages(home: string): Promise<{ dir: string; source: string }
       const spec = entry.slice(4);
       const at = spec.lastIndexOf("@");
       const path = at > spec.lastIndexOf("/") ? spec.slice(0, at) : spec;
-      found.push({ dir: join(home, ".pi/agent/git", path), source: entry });
+      found.push({ dir: join(agentDir, "git", path), source: entry });
     }
   }
   return found;
 }
 
-async function piSkills(home: string): Promise<Candidate[]> {
+// パッケージが manifest で宣言する置き場。`skills/` の規約に乗らないスキルはここに並ぶ。
+async function piManifestSkills(dir: string): Promise<string[]> {
+  const manifest = asRecord(await readJson(join(dir, "package.json")));
+  const pi = asRecord(manifest?.pi);
+  const skills = pi?.skills;
+  if (!Array.isArray(skills)) return [];
+  return skills
+    .filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "")
+    .map((entry) => join(dir, entry));
+}
+
+async function piSkills(roots: Roots): Promise<Candidate[]> {
   const out: Candidate[] = [];
-  const options = { maxDepth: 4, rootMarkdown: false };
-  await walk(join(home, ".pi/agent/skills"), options, "~/.pi/agent/skills", out);
-  await walk(join(home, ".agents/skills"), options, "~/.agents/skills", out);
-  for (const pkg of await piPackages(home)) {
+  const options = { maxDepth: 4, rootMarkdown: false, requireDescription: true };
+  await walk(join(roots.piAgent, "skills"), options, "~/.pi/agent/skills", out);
+  await walk(join(roots.home, ".agents/skills"), options, "~/.agents/skills", out);
+  for (const pkg of await piPackages(roots.piAgent)) {
     await walk(join(pkg.dir, "skills"), options, pkg.source, out);
     await walk(join(pkg.dir, ".agents/skills"), options, pkg.source, out);
+    for (const dir of await piManifestSkills(pkg.dir)) {
+      await walk(dir, options, pkg.source, out);
+    }
   }
   return out;
 }
 
 // Claude の skillOverrides は "on" / "name-only" / "user-invocable-only" / "off"。
-// モデルから見えなくなるのは "off" だけなので、それ以外は認識している扱いにする。
-async function claudeOverrides(home: string): Promise<Record<string, string>> {
+// off だけがモデルと `/` の両方から外す。user-invocable-only は `/` に残るので、
+// 一覧では「読み込まれている」として扱う。
+async function claudeOverrides(claudeDir: string): Promise<Record<string, string>> {
   const merged: Record<string, string> = {};
   for (const name of ["settings.json", "settings.local.json"]) {
-    const settings = asRecord(await readJson(join(home, ".claude", name)));
+    const settings = asRecord(await readJson(join(claudeDir, name)));
     const overrides = asRecord(settings?.skillOverrides);
     if (overrides === null) continue;
     for (const [key, value] of Object.entries(overrides)) {
@@ -188,9 +232,9 @@ async function childDirs(dir: string, only?: string): Promise<string[]> {
   return found;
 }
 
-async function claudeSkills(home: string): Promise<Candidate[]> {
-  const root = join(home, ".claude/skills");
-  const overrides = await claudeOverrides(home);
+async function claudeSkills(roots: Roots): Promise<Candidate[]> {
+  const root = join(roots.claude, "skills");
+  const overrides = await claudeOverrides(roots.claude);
   // バンドル（manifest.json を持つ同期済みスキル群）の名前空間は設定側のキーから読み取る。
   // 実体の manifest.json には名前空間が無いため、これが唯一の手掛かりになる。
   const prefixes = new Set(
@@ -202,7 +246,8 @@ async function claudeSkills(home: string): Promise<Candidate[]> {
 
   const out: Candidate[] = [];
   const push = async (dir: string, prefix: string, source: string): Promise<void> => {
-    const skill = await skillAt(dir, source);
+    // description は Claude では必須ではない。
+    const skill = await skillAt(dir, source, false);
     if (skill === null) return;
     skill.disabled = overrides[`${prefix}${skill.name}`] === "off";
     out.push(skill);
@@ -241,18 +286,20 @@ export function parseCodexSkillRules(
     });
 }
 
-async function codexSkills(home: string): Promise<Candidate[]> {
+async function codexSkills(roots: Roots): Promise<Candidate[]> {
   const out: Candidate[] = [];
-  const options = { maxDepth: 4, rootMarkdown: false };
-  await walk(join(home, ".agents/skills"), options, "~/.agents/skills", out);
+  const options = { maxDepth: 4, rootMarkdown: false, requireDescription: true };
+  await walk(join(roots.home, ".agents/skills"), options, "~/.agents/skills", out);
   // 管理者用の置き場。無い環境や読めない環境では何も出ない。
   await walk("/etc/codex/skills", options, "/etc/codex/skills", out);
 
-  const config = await readFile(join(home, ".codex/config.toml"), "utf8").catch(() => null);
+  const config = await readFile(join(roots.codex, "config.toml"), "utf8").catch(() => null);
   if (config === null) return out;
   for (const rule of parseCodexSkillRules(config)) {
+    // 設定の path は実体へ解決してから比べる。symlink 側のパスで書かれていても効かせる。
+    const resolved = rule.path === null ? null : await realpath(rule.path).catch(() => rule.path);
     for (const skill of out) {
-      const matchesPath = rule.path !== null && rule.path === skill.realPath;
+      const matchesPath = resolved !== null && resolved === skill.realPath;
       const matchesName = rule.name !== null && rule.name === skill.name;
       if (matchesPath || matchesName) skill.disabled = !rule.enabled;
     }
@@ -260,42 +307,61 @@ async function codexSkills(home: string): Promise<Candidate[]> {
   return out;
 }
 
-async function opencodeSkills(home: string): Promise<Candidate[]> {
+async function opencodeSkills(roots: Roots): Promise<Candidate[]> {
   const out: Candidate[] = [];
   // 公式の探索先はグローバルと互換の 3 つ。深さは 6 まで。
-  const options = { maxDepth: 6, rootMarkdown: true };
-  for (const dir of [".config/opencode/skills", ".claude/skills", ".agents/skills"]) {
-    await walk(join(home, dir), options, `~/${dir}`, out);
-  }
+  const options = { maxDepth: 6, rootMarkdown: true, requireDescription: false };
+  const dirs = [
+    [join(roots.home, ".config/opencode/skills"), "~/.config/opencode/skills"],
+    [join(roots.claude, "skills"), "~/.claude/skills"],
+    [join(roots.home, ".agents/skills"), "~/.agents/skills"],
+  ] as const;
+  for (const [dir, source] of dirs) await walk(dir, options, source, out);
   // opencode.json の `skills` はローカルパスだけを対象にする。相対パス（cwd 基準）と
-  // HTTP カタログは設定画面に cwd が無いので読まない。
-  const config = asRecord(await readJson(join(home, ".config/opencode/opencode.json")));
+  // HTTP カタログは設定画面に cwd が無いので読まない（docs/adr/agent-skills.md）。
+  const config = asRecord(await readJson(join(roots.home, ".config/opencode/opencode.json")));
   const extra = config?.skills;
   if (Array.isArray(extra)) {
     for (const entry of extra) {
       if (typeof entry !== "string") continue;
-      if (entry.startsWith("~/")) await walk(join(home, entry.slice(2)), options, entry, out);
+      if (entry.startsWith("~/")) await walk(join(roots.home, entry.slice(2)), options, entry, out);
       else if (entry.startsWith("/")) await walk(entry, options, entry, out);
     }
   }
   return out;
 }
 
-const READERS: Record<ModelAgentKind, (home: string) => Promise<Candidate[]>> = {
+const READERS: Record<ModelAgentKind, (roots: Roots) => Promise<Candidate[]>> = {
   pi: piSkills,
   claude: claudeSkills,
   codex: codexSkills,
   opencode: opencodeSkills,
 };
 
-export async function loadAgentSkills(agent: ModelAgentKind, home: string): Promise<AgentSkills> {
+function byRealPath(candidates: Candidate[]): Candidate[] {
   const seen = new Set<string>();
-  const unique: Candidate[] = [];
-  for (const skill of await READERS[agent](home)) {
-    if (seen.has(skill.realPath)) continue;
+  return candidates.filter((skill) => {
+    if (seen.has(skill.realPath)) return false;
     seen.add(skill.realPath);
-    unique.push(skill);
-  }
+    return true;
+  });
+}
+
+// OpenCode はスキルを ID（パス由来）で選び、同じ名前は後から登録された置き場が勝つ。
+// 一覧でも勝った方だけを残す。
+function lastByName(candidates: Candidate[]): Candidate[] {
+  const byName = new Map<string, Candidate>();
+  for (const skill of candidates) byName.set(skill.name, skill);
+  return [...byName.values()];
+}
+
+export async function loadAgentSkills(
+  agent: ModelAgentKind,
+  home: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<AgentSkills> {
+  const found = await READERS[agent](skillRoots(home, env));
+  const unique = agent === "opencode" ? lastByName(found) : byRealPath(found);
   unique.sort((a, b) => a.name.localeCompare(b.name) || a.source.localeCompare(b.source));
   const kept = unique.slice(0, MAX_SKILLS);
   return {
