@@ -13,7 +13,7 @@ import type {
 import { stripAttachedFiles } from "../../shared/attachments";
 import { isRewindCapability, parseRewindMarker, type RewindMarker } from "../../shared/rewind";
 import { ChatUnavailableError } from "./errors";
-import { limitMessages } from "./limit";
+import { limitMessages, pruneOrphanAskAnswers } from "./limit";
 import { type AskPending, readAsk } from "./pi-ask";
 import { loadPiModelWindows, type PiModelWindow } from "./pi-models";
 
@@ -557,16 +557,6 @@ function askResultsFromMessage(message: Record<string, unknown>, at: number): Se
       at,
     },
   ];
-}
-
-// 古い側の切り捨てで質問だけが落ちたとき、対応する回答を単独で残さない。
-function pruneOrphanAskAnswers(messages: readonly ChatMessage[]): ChatMessage[] {
-  const ids = new Set(messages.map((message) => message.id));
-  return messages.filter((message) => {
-    if (message.synthetic !== true || message.role !== "user") return true;
-    const match = /^ask:(.+):answer$/.exec(message.id);
-    return match === null || ids.has(`ask:${match[1]}:question`);
-  });
 }
 
 function messageAt(value: unknown, entryTimestamp: unknown): number {

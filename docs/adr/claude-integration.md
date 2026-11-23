@@ -29,7 +29,7 @@ transcript だけでは足りないものがある。
 ### 会話
 
 - 会話は transcript の JSONL を読み取り専用で射影する。`projects/*/<session uuid>.jsonl` を id で探し、cwd からプロジェクト名を組み立てない（エンコードは CLI の内部形式）。同じ id が複数のプロジェクトにあれば、どれが会話か決められないので `chat_unavailable` にする
-- 最後の entry から `parentUuid` を辿って active branch を作る。assistant は `message.id` ごとに束ねて text block を連結し、`thinking` と `tool_use` は捨てる。サブエージェント（`isSidechain`）、`isMeta`、圧縮の要約、TUI のローカルコマンドの記録は行にしない
+- 最後の entry から `parentUuid` を辿って active branch を作る。assistant は `message.id` ごとに束ねて text block を連結し、`thinking` と `tool_use` は捨てる（回答済みの AskUserQuestion だけは下の項で Q&A にする）。サブエージェント（`isSidechain`）、`isMeta`、圧縮の要約、TUI のローカルコマンドの記録は行にしない
 - `model` は branch の最後の assistant の `message.model`、`effort` は最後の非 null の `perTurnEffort`
 - transcript が見つからない・読めないときは端末出力へフォールバックする。pi と違い、ENOENT を空の会話にしない（セッション参照はあるのにファイルが無い状態と取り違えない）。見つからなかった結果は短い期限（4 秒）だけ覚え、ENTER 付きの送信を通したら捨てる。最初の送信まで transcript は存在しないため
 - ファイルは全読みし、16MB を超えるときは末尾 16MB だけ読んで `truncated` を立てる
@@ -45,6 +45,7 @@ transcript だけでは足りないものがある。
 - `--settings` の hook が、待ちを状態ディレクトリの `claude/pending/<session id>.json` に書く。AskUserQuestion は `PreToolUse` で、承認待ちは `PermissionRequest` で書き、`PostToolUse` などで消す。表示に要る項目だけを正規化して保存し、`tool_input` 全体は残さない。hook は何も出力せず、失敗しても 0 で終わる（stdout の JSON は `PreToolUse` の判定として解釈されるため）
 - BFF は sidecar を transcript の射影に重ねて `pending` にする。待ちが解けたかは transcript の `tool_result` で知る。Esc で閉じたときはどの hook も呼ばれないため
 - 質問には Web から答えられる。Esc でダイアログを閉じ、`tool_result` が現れてから、選んだ内容を `質問への回答:` で始まる本文として送る（[入力](agent-input.md)）。先頭の行を固定するのは、モデルが書いた質問文が `/` や `!` で始まるとコマンドとして解釈され得るため
+- 回答済みの AskUserQuestion は、質問を agent、回答を user のメッセージとして会話に合成する。質問ごとに 1 組で、質問には選択肢と、選ばれたものを残す。TUI のダイアログで答えたときは tool_result の `toolUseResult.answers`（質問文 → 答え）から、Web から答えたときは却下された tool_result の後に続く最初の本物の user 発話（`質問への回答:` で始まる）から答えを読む。後者の発話は Q&A の回答に置き換え、会話の行にしない。選択肢に無い答えは自由入力として扱う。回答の無い質問（却下・中断）は合成せず、合成した行は編集の対象にしない
 - 承認は Web から送らない。Esc は拒否として働き、本文は承認の返事にならない
 
 ### モデルと effort の切り替え

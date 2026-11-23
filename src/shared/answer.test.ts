@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type AnswerQuestion, composeAnswer, parseAnswerRequest } from "./answer";
+import { type AnswerQuestion, composeAnswer, parseAnswerRequest, parseAnswerText } from "./answer";
 
 const color: AnswerQuestion = {
   question: "好きな色は？",
@@ -162,4 +162,51 @@ test.each([
   expect(text?.startsWith("/")).toBe(false);
   expect(text?.startsWith("!")).toBe(false);
   expect(text?.startsWith("#")).toBe(false);
+});
+
+// 履歴に残るのは回答の本文だけ。そこから、何を選んだかを読み戻せる。
+test("a composed answer reads back as the same labels and free text", () => {
+  const formats: AnswerQuestion = {
+    question: "どの形式？",
+    multiSelect: true,
+    options: [
+      { label: "JSON, 整形あり" },
+      { label: "key: value" },
+      { label: '"生"' },
+      { label: "CSV" },
+    ],
+  };
+  const answers = [
+    { question: "好きな色は？", labels: ["青"] },
+    { question: "どれを使いますか？", labels: ["りんご", "もも"] },
+    { question: "どの形式？", labels: ["JSON, 整形あり", "key: value", '"生"', "CSV"] },
+  ];
+  const text = composeAnswer([color, fruits, formats], answers);
+
+  expect(parseAnswerText([color, fruits, formats], text ?? "")).toEqual(answers);
+  expect(
+    parseAnswerText(
+      [color],
+      composeAnswer([color], [{ question: "好きな色は？", text: "緑に近い 青です" }]) ?? "",
+    ),
+  ).toEqual([{ question: "好きな色は？", text: "緑に近い 青です" }]);
+});
+
+test("a body that does not match the questions is not an answer", () => {
+  expect(parseAnswerText([color], "好きな色は？: 青")).toBeNull();
+  expect(parseAnswerText([color], "質問への回答:\n別の質問: 青")).toBeNull();
+  expect(parseAnswerText([color, fruits], "質問への回答:\n好きな色は？: 青")).toBeNull();
+  expect(parseAnswerText([color], "質問への回答:\n好きな色は？: ")).toBeNull();
+});
+
+test("text that is not one of the options reads as free text, even when it looks like a list", () => {
+  expect(parseAnswerText([fruits], "質問への回答:\nどれを使いますか？: りんご, ぶどう")).toEqual([
+    { question: "どれを使いますか？", text: "りんご, ぶどう" },
+  ]);
+  expect(parseAnswerText([color], '質問への回答:\n好きな色は？: "青')).toEqual([
+    { question: "好きな色は？", text: '"青' },
+  ]);
+  expect(parseAnswerText([color], "質問への回答:\n好きな色は？: 赤, 青")).toEqual([
+    { question: "好きな色は？", text: "赤, 青" },
+  ]);
 });

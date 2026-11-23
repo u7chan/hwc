@@ -34,3 +34,13 @@ export function limitMessages(messages: readonly ChatMessage[]): {
 
   return { messages: kept.reverse(), truncated: false };
 }
+
+// 古い側の切り捨てで質問だけが落ちたとき、対応する回答を単独で残さない。
+export function pruneOrphanAskAnswers(messages: readonly ChatMessage[]): ChatMessage[] {
+  const ids = new Set(messages.map((message) => message.id));
+  return messages.filter((message) => {
+    if (message.synthetic !== true || message.role !== "user") return true;
+    const match = /^ask:(.+):answer$/.exec(message.id);
+    return match === null || ids.has(`ask:${match[1]}:question`);
+  });
+}

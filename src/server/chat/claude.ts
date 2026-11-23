@@ -15,6 +15,8 @@ import {
   ATTACHED_FILES_OPEN,
   stripAttachedFiles,
 } from "../../shared/attachments";
+import { ANSWER_HEADING, parseAnswerText, type QuestionAnswer } from "../../shared/answer";
+import { answersFromToolResult, askMessages } from "./claude-ask";
 import { ASK_USER_QUESTION, questionPending, toolPending, toolSummary } from "./claude-pending";
 import { readLive } from "./claude-live";
 import { readSidecar, SESSION_ID, SIDECAR_TTL_MS } from "./claude-sidecar";
@@ -26,7 +28,7 @@ import type {
   SessionChatClient,
 } from "./contract";
 import { ChatUnavailableError } from "./errors";
-import { limitMessages } from "./limit";
+import { limitMessages, pruneOrphanAskAnswers } from "./limit";
 
 // transcript は追記され続ける。16MB を超えるセッションは末尾だけを読み、先頭を切ったことを
 // truncated で知らせる。増分読みは、大きなセッションで表示が重いと分かってから別 Issue で足す。
@@ -133,6 +135,8 @@ type TranscriptEntry = {
   requestId: string | null;
   querySource: string | null;
   requestRef: string | null;
+  // TUI のダイアログで答えた AskUserQuestion の tool_result が持つ、質問文 → 答え。
+  askAnswers: Readonly<Record<string, string>> | null;
 };
 
 // resolved は active branch で tool_result が書かれた tool_use の id。transcript と一緒に
@@ -469,7 +473,18 @@ function toEntry(record: Record<string, unknown>, index: number): TranscriptEntr
     requestId: type === "api-request" ? nonEmptyText(record.id) : null,
     querySource: type === "api-request" ? nonEmptyText(record.querySource) : null,
     requestRef: nonEmptyText(record.requestRef),
+    askAnswers: askAnswersOf(record.toolUseResult),
   };
+}
+
+function askAnswersOf(value: unknown): Record<string, string> | null {
+  const answers = asRecord(asRecord(value)?.answers);
+  if (answers === null) return null;
+  const result: Record<string, string> = {};
+  for (const [question, answer] of Object.entries(answers)) {
+    if (typeof answer === "string") result[question] = answer;
+  }
+  return result;
 }
 
 function snapshotOf(
@@ -492,7 +507,7 @@ function snapshotOf(
   const pending = projectPending(branch, resolved);
   const cacheExpiresAt = promptCacheExpiry(entries, branch);
   const body: Omit<ChatSnapshot, "etag"> = {
-    messages: limited.messages,
+    messages: pruneOrphanAskAnswers(limited.messages),
     model,
     effort,
     truncated: clipped || limited.truncated,
@@ -789,36 +804,118 @@ function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {
     if (entry.apiError && entry.error !== null) group.error = entry.error;
   }
 
+  const asks = askExchanges(branch);
   const messages: ChatMessage[] = [];
   const emitted = new Set<string>();
   for (const entry of branch) {
     if (entry.sidechain) continue;
     if (entry.type === "user") {
+      if (entry.uuid !== null && asks.consumed.has(entry.uuid)) continue;
       const message = projectUser(entry);
       if (message !== null) messages.push(message);
       continue;
     }
     if (entry.type !== "assistant") continue;
     const key = groupKey(entry);
-    if (emitted.has(key)) continue;
-    emitted.add(key);
-    const group = groups.get(key);
-    if (group === undefined) continue;
-    // 失敗したターンは本文が無くても行にする。本文が空だと、送ったのに何も返らないまま
-    // idle に戻り、送信が届いていないように見える。
-    const text =
-      group.error === null
-        ? group.text
-        : [group.error, group.text].filter((part) => part !== "").join("\n");
-    if (text.trim() === "") continue;
-    messages.push({
-      id: group.id,
-      role: group.error === null ? "agent" : "error",
-      text,
-      at: group.at,
-    });
+    if (!emitted.has(key)) {
+      emitted.add(key);
+      const message = projectAssistant(groups.get(key));
+      if (message !== null) messages.push(message);
+    }
+    // tool_use は text と別の entry にある。質問は、それを書いた entry の位置に置く。
+    const exchange = entry.uuid === null ? undefined : asks.byEntry.get(entry.uuid);
+    if (exchange !== undefined) messages.push(...exchange);
   }
   return messages;
+}
+
+function projectAssistant(group: AssistantGroup | undefined): ChatMessage | null {
+  if (group === undefined) return null;
+  // 失敗したターンは本文が無くても行にする。本文が空だと、送ったのに何も返らないまま
+  // idle に戻り、送信が届いていないように見える。
+  const text =
+    group.error === null
+      ? group.text
+      : [group.error, group.text].filter((part) => part !== "").join("\n");
+  if (text.trim() === "") return null;
+  return {
+    id: group.id,
+    role: group.error === null ? "agent" : "error",
+    text,
+    at: group.at,
+  };
+}
+
+// 回答済みの AskUserQuestion を、tool_use の entry ごとの Q&A にする。tool_use と tool_result は
+// ダイアログを閉じた瞬間に同時に書かれるので、回答が無い質問（却下された、中断された）は
+// 合成しない。Web から答えたときの回答は、実際の user 発話として後ろに残っている。Q&A に
+// 置き換えるので、その発話は会話の行にしない（docs/adr/claude-integration.md）。
+function askExchanges(branch: readonly TranscriptEntry[]): {
+  byEntry: ReadonlyMap<string, ChatMessage[]>;
+  consumed: ReadonlySet<string>;
+} {
+  const byEntry = new Map<string, ChatMessage[]>();
+  const consumed = new Set<string>();
+  for (const [index, entry] of branch.entries()) {
+    if (entry.sidechain || entry.type !== "assistant" || entry.uuid === null) continue;
+    for (const tool of toolUses(entry.message?.content)) {
+      if (tool.name !== ASK_USER_QUESTION) continue;
+      const pending = questionPending(tool.id, tool.input);
+      if (pending === null || pending.kind !== "question") continue;
+      const found = askAnswerAfter(branch, index, tool.id, pending.questions);
+      if (found === null) continue;
+      const messages = askMessages({
+        toolUseId: tool.id,
+        questions: pending.questions,
+        answers: found.answers,
+        questionAt: entry.at,
+        answerAt: found.at,
+      });
+      byEntry.set(entry.uuid, [...(byEntry.get(entry.uuid) ?? []), ...messages]);
+      if (found.consumed !== null) consumed.add(found.consumed);
+    }
+  }
+  return { byEntry, consumed };
+}
+
+// TUI で答えると、tool_result が答えを持つ。Web から答えると tool_result は却下になり、その後の
+// 最初の本物の user 発話（Esc の記録は除く）が `質問への回答:` で始まる回答になる。
+function askAnswerAfter(
+  branch: readonly TranscriptEntry[],
+  from: number,
+  toolUseId: string,
+  questions: Extract<ChatPending, { kind: "question" }>["questions"],
+): { answers: QuestionAnswer[]; at: number; consumed: string | null } | null {
+  let rejected = false;
+  for (let index = from + 1; index < branch.length; index += 1) {
+    const entry = branch[index];
+    if (entry === undefined || entry.sidechain) continue;
+    if (rejected && entry.type === "assistant") return null;
+    if (entry.type !== "user") continue;
+
+    const result = blocksOf(entry.message?.content).find(
+      (block) => block.type === "tool_result" && block.toolUseId === toolUseId,
+    );
+    if (result !== undefined) {
+      if (result.isError === true) {
+        rejected = true;
+        continue;
+      }
+      if (entry.askAnswers === null) return null;
+      const answers = answersFromToolResult(questions, entry.askAnswers);
+      return answers === null ? null : { answers, at: entry.at, consumed: null };
+    }
+
+    if (!rejected || entry.meta || entry.compactSummary) continue;
+    const body = stripPastedContent(userText(entry.message?.content));
+    if (body.trim() === "" || INTERRUPT_MARKERS.has(body.trim()) || isLocalCommandEcho(body)) {
+      continue;
+    }
+    if (!body.startsWith(`${ANSWER_HEADING}\n`) || entry.uuid === null) return null;
+    const answers = parseAnswerText(questions, body);
+    return answers === null ? null : { answers, at: entry.at, consumed: entry.uuid };
+  }
+  return null;
 }
 
 function groupKey(entry: TranscriptEntry): string {
