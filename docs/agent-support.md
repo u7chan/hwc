@@ -2,7 +2,7 @@
 
 hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 ページで把握するための表。仕様の正は実装と ADR で、この表は俯瞰用。実装や ADR を変えたら、同じ変更でこの表も更新する。
 
-最終確認: 2026-11-22（Herdr 0.9.5、`bun run e2e:serve` の架空 Herdr）
+最終確認: 2026-11-23（Herdr 0.9.5、`bun run e2e:serve` の架空 Herdr）
 
 凡例:
 
@@ -36,8 +36,8 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - 添付ファイルの UI 自体は会話を持つペインで使えるが、hwc は実体を CLI へ渡さず、本文に `<attached_files>` のパス注記を足すだけ。Pi はこの経路を前提にしている（[添付](adr/attachments.md)）。Codex と OpenCode は、それぞれの CLI がそのパスを読めるか次第（[OpenCode 連携](adr/opencode-integration.md)、[Codex 連携](adr/codex-integration.md)）。Claude の注記は `$HWC_STATE_DIR/attachments/<pane-id>/` を指し、チェックアウトの外なので、CLI が読むときに権限確認が出たら端末で承認する（[添付](adr/attachments.md)）。
 - Pi と Codex のフォルダ信頼確認は、専用ビューで「信頼して続行」だけを回答できる（[Codex 連携](adr/codex-integration.md)、[pi 連携](adr/pi-integration.md)）。それ以外の選択肢は端末で行う。
 - Claude の `blocked` 中（起動時の信頼確認・質問・権限確認の待ち）は、hwc の入力欄を閉じる。待ちが読めないとき（起動時の信頼確認、hwc 外で起動した Claude など）は、本文は端末出力のままで、応答は Herdr のターミナルで行う。hwc から起動した Claude の質問は、待ちが読めればカードから答えられ（下）、権限確認（承認）は端末で行う。入力欄が戻れば `blocked` は解けている。Pi と Codex の信頼確認は、これまでどおり専用ビューで「信頼して続行」を答える。
-- Claude の質問・承認の応答待ちは、hwc から起動したペインだけ、`blocked` の間に会話の末尾へカードを出す（[Claude 連携](adr/claude-integration.md)）。hwc が起動時に渡す hook が待ちを状態ディレクトリへ書き、会話を読むときに重ねる。待ちが読めれば会話を維持し、入力欄・引用・添付・コマンドを閉じる。質問は、カードの選択肢か「その他（自由入力）」で全問に答えて「この内容で答える」を押す。質問が 2 つ以上のときは 1 問ずつのページ（タブ）に分かれ、最後の「確認」ページで答えを見直してから押す。hwc は Esc でダイアログを閉じ、transcript に tool_result が現れてから、選んだ内容を通常の発言として送る（[Claude 連携](adr/claude-integration.md)）。閉じたと確かめられなければ本文は送らず、「端末で答えてください」を出す。承認は hwc からは送らない。カードの「端末出力を見る」で端末の画面を見て、「会話に戻る」で戻る。待ちが読めないとき（hwc 外で起動した Claude など）は今までどおり端末出力になり、応答は端末で行う。回答後は、Web でも TUI でも、質問と回答が会話のバブルとして残る。質問には選択肢と選択済みが付き、回答には選択肢か自由入力かの種別が付く。
-- pi の `ask_user` は、mypi 拡張があるペインで、セッションの隣の pending ファイル（`<session path>.ask.json`）を会話の末尾のカードにする（[pi 連携](adr/pi-integration.md)）。Herdr が `blocked` の間だけカードを出し、入力欄・引用・添付・コマンド・過去発言の編集を閉じる。選択肢がある質問は 1 つ選ぶか「その他（自由入力）」から textarea に答え、自由入力だけの質問は最初から textarea に答える。「この内容で答える」を押すと、hwc はキーも本文も送らず、answer ファイル（`<session path>.ask.answer.json`）を書く。pending が消えるとカードが閉じる。`blocked` が解けると入力欄が戻る。pending が消えても `blocked` のままなら端末出力になり、入力欄は戻らない。回答を書けなかったときはカードに失敗を出し、端末で答える。mypi の無いペインは pending が無いので、このカードは出ない。回答後は、セッションの ask_user の tool call / tool result から、質問と回答が会話のバブルとして残る。質問には選択肢・選択済み・推奨が付き、回答には選択肢か自由入力かの種別が付く。
+- Claude の質問・承認の応答待ちは、hwc から起動したペインだけ、`blocked` の間に会話の末尾へカードを出す（[Claude 連携](adr/claude-integration.md)）。hwc が起動時に渡す hook が待ちを状態ディレクトリへ書き、会話を読むときに重ねる。待ちが読めれば会話を維持し、入力欄・引用・添付・コマンドを閉じる。質問は、カードの選択肢か「その他（自由入力）」で全問に答えて「この内容で答える」を押す。質問が 2 つ以上のときは 1 問ずつのページ（タブ）に分かれ、最後の「確認」ページで答えを見直してから押す。単一選択は選ぶと次のページへ自動で進み、確認から直したときは確認へ戻る。hwc は Esc でダイアログを閉じ、transcript に tool_result が現れてから、選んだ内容を通常の発言として送る（[Claude 連携](adr/claude-integration.md)）。閉じたと確かめられなければ本文は送らず、「端末で答えてください」を出す。承認は hwc からは送らない。カードの「端末出力を見る」で端末の画面を見て、「会話に戻る」で戻る。待ちが読めないとき（hwc 外で起動した Claude など）は今までどおり端末出力になり、応答は端末で行う。回答後は、Web でも TUI でも、質問と回答が会話のバブルとして残る。質問には選択肢と選択済みが付き、回答には選択肢か自由入力かの種別が付く。
+- pi の `ask_user` は、mypi 拡張があるペインで、セッションの隣の pending ファイル（`<session path>.ask.json`）を会話の末尾のカードにする（[pi 連携](adr/pi-integration.md)）。Herdr が `blocked` の間だけカードを出し、入力欄・引用・添付・コマンド・過去発言の編集を閉じる。選択肢は推奨を先頭に並べ、その説明に `推奨💡` を付ける。選択肢がある質問は 1 つ選ぶか、`freeText` が true なら「その他（自由入力）」から textarea に答え、自由入力だけの質問は最初から textarea に答える。「この内容で答える」を押すと、押した間だけスピナーを出し、pending が消えるまでカードを無効のまま残す。hwc はキーも本文も送らず、answer ファイル（`<session path>.ask.answer.json`）を書く。pending が消えるとカードが閉じる。`blocked` が解けると入力欄が戻る。pending が消えても `blocked` のままなら端末出力になり、入力欄は戻らない。回答を書けなかったときはカードに失敗を出し、端末で答える。mypi の無いペインは pending が無いので、このカードは出ない。回答後は、セッションの ask_user の tool call / tool result から、質問と回答が会話のバブルとして残る。質問には選択肢・選択済み・推奨が付き、回答には選択肢か自由入力かの種別が付く。
 - Claude のモデルと effort は、入力欄の + メニューの「モデルとエフォートを変更」から、会話を読める待機中のペインで切り替えられる。確認ダイアログを許可する hook を持つのは hwc 起動のペインだけで、hwc 外で起動した Claude は、キャッシュが温かいと確認ダイアログで止まり、8 秒待って失敗する。選んだ値を BFF が `/model` と `/effort` にして送り、確認ダイアログは hwc の確認を通ったものだけ hook が許可する（[Claude 連携](adr/claude-integration.md)）。モデルを変えるときは「次の応答は会話全体を読み直すため、遅く、使用量も増える」を出す。Claude は選んだ値を自分の既定にも保存するので、端末から起動する `claude` の既定も変わる（hwc から起動するペインは起動時に指定するので影響を受けない）。`PreModelSwitch` の hook を足す前に起動したペインも同じで、作り直すまで失敗し得る。
 - Codex の会話表示は、hwc が `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインだけ。既に起動している Codex や hwc 外で起動した Codex は端末出力になる（[Codex 連携](adr/codex-integration.md)）。
 - ライブ activity は、pi は拡張がセッションの隣に sidecar を書く場合だけ（[pi 連携](adr/pi-integration.md)）、Claude は transcript の進行行から導く（[Claude 連携](adr/claude-integration.md)）。pi は拡張が無いペイン、Claude は形式が読めない版のペインでは表示されない。Claude の生成中の `tok/s` は、hwc が `--plugin-dir` で渡す mod が状態ディレクトリへ書いた速度を重ねる（hwc 起動のペインだけ。[Claude 連携](adr/claude-integration.md)）。
@@ -87,25 +87,25 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 
 ## 実装の入口
 
-| 項目                                    | 場所                                                                                                                               |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| エージェント種別、モデル・effort の対応 | `src/shared/agents.ts`                                                                                                             |
-| 会話の読み取り口の解決                  | `src/server/herdr/state.ts` の `ChatSource`                                                                                        |
-| 質問への回答（Esc → 本文）              | `src/server/answer-question.ts`、`src/shared/answer.ts`、`src/client/answer.ts`                                                    |
-| pi の `ask_user` のカードと回答         | `src/server/chat/pi-ask.ts`、`src/server/answer-ask.ts`、`src/shared/ask-user.ts`、`src/client/pane/pending.tsx`                   |
-| モデル・effort の切り替え               | `src/server/model-switch.ts`、`src/server/chat/claude-switch.ts`、`src/shared/model-switch.ts`、`src/client/ModelSwitchDialog.tsx` |
-| 応答待ちの hook・sidecar・カード        | `src/server/claude-hook.ts`、`claude-settings.ts`、`src/server/chat/claude-sidecar.ts`、`src/client/pane/pending.tsx`              |
-| 各 CLI の会話 reader                    | `src/server/chat/pi.ts`、`claude.ts`、`codex.ts`、`opencode.ts`                                                                    |
-| 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`                                                                          |
-| Claude のモデルラベル                   | `src/server/claude-model-labels.ts`、`src/client/launch-candidates.ts`                                                             |
-| 新しいペインの既定と初期選択            | `src/server/launch-defaults.ts`、`src/client/launch-choice.ts`、`src/client/settings/AgentSettings.tsx`                            |
-| 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts`                                                                |
-| コマンド候補とガード                    | `src/client/commands.ts`                                                                                                           |
-| ライブ activity                         | `src/server/chat/activity.ts`（pi）、`src/server/chat/claude.ts`、`src/server/chat/claude-live.ts`（Claude）                       |
-| フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`                                                                         |
-| 過去の発言の編集                        | `src/server/routes/edit-message.ts`、`src/client/edit.ts`、`src/shared/rewind.ts`                                                  |
-| 添付・引用・activity の UI 分岐         | `src/client/PaneDetail.tsx`                                                                                                        |
-| E2E の架空データ                        | `e2e/fixtures/scenario.ts`、`e2e/fake-*.ts`、[docs/e2e.md](e2e.md)                                                                 |
+| 項目                                    | 場所                                                                                                                                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| エージェント種別、モデル・effort の対応 | `src/shared/agents.ts`                                                                                                                                                                                 |
+| 会話の読み取り口の解決                  | `src/server/herdr/state.ts` の `ChatSource`                                                                                                                                                            |
+| 質問への回答（Esc → 本文）              | `src/server/answer-question.ts`、`src/shared/answer.ts`、`src/client/answer.ts`                                                                                                                        |
+| pi の `ask_user` のカードと回答         | `src/server/chat/pi-ask.ts`、`src/server/answer-ask.ts`、`src/shared/ask-user.ts`、`src/client/pane/pending.tsx`                                                                                       |
+| モデル・effort の切り替え               | `src/server/model-switch.ts`、`src/server/chat/claude-switch.ts`、`src/shared/model-switch.ts`、`src/client/ModelSwitchDialog.tsx`                                                                     |
+| 応答待ちの hook・sidecar・カード        | `src/server/claude-hook.ts`、`src/server/claude-settings.ts`、`src/server/chat/claude-sidecar.ts`、`src/server/chat/claude-pending.ts`、`src/server/chat/claude-ask.ts`、`src/client/pane/pending.tsx` |
+| 各 CLI の会話 reader                    | `src/server/chat/pi.ts`、`claude.ts`、`codex.ts`、`opencode.ts`                                                                                                                                        |
+| 起動引数と部分成功                      | `src/server/create-pane.ts`、`src/server/agent-models.ts`                                                                                                                                              |
+| Claude のモデルラベル                   | `src/server/claude-model-labels.ts`、`src/client/launch-candidates.ts`                                                                                                                                 |
+| 新しいペインの既定と初期選択            | `src/server/launch-defaults.ts`、`src/client/launch-choice.ts`、`src/client/settings/AgentSettings.tsx`                                                                                                |
+| 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts`                                                                                                                                    |
+| コマンド候補とガード                    | `src/client/commands.ts`                                                                                                                                                                               |
+| ライブ activity                         | `src/server/chat/activity.ts`（pi）、`src/server/chat/claude.ts`、`src/server/chat/claude-live.ts`（Claude）                                                                                           |
+| フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`                                                                                                                                             |
+| 過去の発言の編集                        | `src/server/routes/edit-message.ts`、`src/client/edit.ts`、`src/shared/rewind.ts`                                                                                                                      |
+| 添付・引用・activity の UI 分岐         | `src/client/PaneDetail.tsx`                                                                                                                                                                            |
+| E2E の架空データ                        | `e2e/fixtures/scenario.ts`、`e2e/fake-*.ts`、[docs/e2e.md](e2e.md)                                                                                                                                     |
 
 ## 更新のしかた
 
