@@ -114,6 +114,10 @@
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease,
+    opacity var(--duration-hover) ease;
 }
 
 .hwc-tab-close:hover {
@@ -307,6 +311,7 @@
   color: var(--color-text);
   font: inherit;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-launch-action:hover {
@@ -420,6 +425,7 @@
   font: inherit;
   font-size: var(--text-secondary);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-selection-button:hover {

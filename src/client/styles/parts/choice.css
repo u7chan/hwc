@@ -34,6 +34,9 @@
   color: var(--color-secondary);
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-choice-visual {
@@ -153,7 +156,7 @@
   font-size: var(--text-secondary);
   white-space: nowrap;
   cursor: pointer;
-  transition: color 140ms ease;
+  transition: color var(--duration-hover) ease;
 }
 
 .hwc-segment:hover:not(:disabled) {

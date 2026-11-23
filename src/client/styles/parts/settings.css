@@ -286,6 +286,7 @@ html:not([data-input-modality="pointer"])
   background: transparent;
   text-align: left;
   cursor: pointer;
+  transition: border-color var(--duration-hover) ease;
 }
 
 .hwc-notify-scope:hover:not(:disabled) {
@@ -389,6 +390,7 @@ html:not([data-input-modality="pointer"])
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-template-row + .hwc-template-row {

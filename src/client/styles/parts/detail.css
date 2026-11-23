@@ -366,8 +366,8 @@
   font-size: var(--text-secondary);
   cursor: pointer;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-pane-head-branch-menu:hover,
@@ -416,8 +416,8 @@ a.hwc-pane-head-repo {
   border-radius: var(--radius-sm);
   text-decoration: none;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 a.hwc-pane-head-repo:hover {
@@ -478,7 +478,7 @@ a.hwc-pane-head-repo:focus-visible {
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color 140ms ease;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-pane-head-pr:hover {
@@ -582,8 +582,8 @@ a.hwc-pane-head-repo:focus-visible {
   color: inherit;
   cursor: pointer;
   transition:
-    background-color 140ms ease,
-    color 140ms ease,
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease,
     transform 120ms ease;
 }
 
@@ -639,8 +639,8 @@ a.hwc-pane-head-repo:focus-visible {
   font-size: var(--text-secondary);
   cursor: pointer;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-pane-files-label {
@@ -775,6 +775,7 @@ a.hwc-pane-head-repo:focus-visible {
   color: var(--color-secondary);
   white-space: nowrap;
   cursor: pointer;
+  transition: color var(--duration-hover) ease;
 }
 
 /* 切り替えと × を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */
@@ -785,6 +786,6 @@ a.hwc-pane-head-repo:focus-visible {
   align-items: center;
   border-radius: var(--radius-sm);
   transition:
-    background-color 120ms ease,
+    background-color var(--duration-hover) ease,
     opacity 120ms ease;
 }
