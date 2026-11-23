@@ -5,6 +5,8 @@ import type { AnswerResult } from "../api";
 import {
   answerFailure,
   answersOf,
+  ASK_FREE_TEXT_LABEL,
+  askOptionLabel,
   askUserAnswers,
   type Choice,
   NO_CHOICE,
@@ -141,7 +143,7 @@ function QuestionForm(props: {
                         multi={question.multiSelect}
                         selected={choice.labels.includes(option.label)}
                         disabled={locked}
-                        label={option.label}
+                        label={askOptionLabel(option.label, freeText)}
                         description={option.description}
                         onClick={() => update(index, pickLabel(question, choice, option.label))}
                       />
@@ -153,7 +155,7 @@ function QuestionForm(props: {
                         multi={false}
                         selected={choice.other}
                         disabled={locked}
-                        label="その他（自由入力）"
+                        label={ASK_FREE_TEXT_LABEL}
                         description={null}
                         onClick={() => update(index, pickOther(choice))}
                       />

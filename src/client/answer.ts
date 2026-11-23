@@ -55,6 +55,14 @@ export function answersOf(
   return answers;
 }
 
+// 自由入力の行は常にこのラベルにする。モデルの選択肢が同じラベルでも、表示だけを
+// 変えて回答は元のラベルで送る（重複したボタンを作らない）。
+export const ASK_FREE_TEXT_LABEL = "その他（自由入力）";
+
+export function askOptionLabel(label: string, freeText: boolean): string {
+  return freeText && label === ASK_FREE_TEXT_LABEL ? `${label}（選択肢）` : label;
+}
+
 // pi の ask_user の回答。Claude の flatText と違い、trim と長さだけを見て、内部の改行・タブを
 // 保つ（docs/adr/pi-integration.md）。選択肢は 1 つだけ。自由入力は選択肢があっても使える。
 // 制御文字は BFF が 400 で拒否する。

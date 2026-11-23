@@ -3,6 +3,8 @@ import type { ChatPendingQuestion } from "../server/chat/contract";
 import {
   answerFailure,
   answersOf,
+  ASK_FREE_TEXT_LABEL,
+  askOptionLabel,
   askUserAnswers,
   NO_CHOICE,
   pickLabel,
@@ -111,6 +113,21 @@ test("a pi free-text answer is trimmed and keeps inner newlines and tabs", () =>
   // 長さはコードポイントで見る。
   expect(askUserAnswers(question, typeOther(text, "😀".repeat(2_000)))).not.toBeNull();
   expect(askUserAnswers(question, typeOther(text, "😀".repeat(2_001)))).toBeNull();
+});
+
+test("a model option named like free text gets a distinct display label", () => {
+  expect(askOptionLabel(ASK_FREE_TEXT_LABEL, true)).toBe(`${ASK_FREE_TEXT_LABEL}（選択肢）`);
+  expect(askOptionLabel(ASK_FREE_TEXT_LABEL, false)).toBe(ASK_FREE_TEXT_LABEL);
+  expect(askOptionLabel("赤", true)).toBe("赤");
+  // 表示だけを変え、送るラベルは元のまま。
+  const question = {
+    ...single,
+    options: [{ label: ASK_FREE_TEXT_LABEL, description: null }],
+  };
+  const picked = pickLabel(question, NO_CHOICE, ASK_FREE_TEXT_LABEL);
+  expect(askUserAnswers(question, picked)).toEqual([
+    { question: "好きな色は？", labels: [ASK_FREE_TEXT_LABEL] },
+  ]);
 });
 
 test("a pi option answer is exactly one label from the question", () => {
