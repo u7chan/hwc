@@ -199,6 +199,7 @@
   z-index: -1;
   border-radius: var(--radius-sm);
   pointer-events: none;
+  transition: background-color var(--duration-hover) ease;
 }
 
 button.hwc-tree-row {
@@ -257,6 +258,9 @@ button.hwc-tree-row {
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    color var(--duration-hover) ease,
+    opacity var(--duration-hover) ease;
 }
 
 .hwc-tree-action::before {
@@ -266,6 +270,7 @@ button.hwc-tree-row {
   z-index: -1;
   border-radius: var(--radius-sm);
   pointer-events: none;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-tree-action:hover::before {
@@ -390,6 +395,7 @@ button.hwc-tree-row {
   font: inherit;
   font-size: var(--text-secondary);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-file-preview-back:hover {
@@ -416,6 +422,7 @@ button.hwc-tree-row {
   font: inherit;
   font-size: var(--text-secondary);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-file-preview-mode:hover {
@@ -471,6 +478,9 @@ button.hwc-tree-row {
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-file-preview-copy::after {

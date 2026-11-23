@@ -69,6 +69,9 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition:
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-settings-nav + .hwc-settings-nav {
@@ -177,15 +180,11 @@
   min-height: var(--tap);
   padding: 0 var(--space-2) 0 var(--space-3);
   border-radius: var(--radius-control);
-  /* 選んだ行が移るときは、面と文字の色だけを本文の入れ替わりに合わせて移す。 */
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
 }
 
 /* アイコンは補助文字の色を持つので、行の色だけでは追従しない。 */
 .hwc-settings-side .hwc-settings-nav-icon {
-  transition: color 120ms ease;
+  transition: color var(--duration-hover) ease;
 }
 
 .hwc-settings-side .hwc-settings-nav + .hwc-settings-nav {

@@ -107,6 +107,7 @@
   border: 1px solid var(--color-line);
   border-radius: var(--radius-icon);
   color: var(--color-secondary);
+  transition: color var(--duration-hover) ease;
 }
 
 .hwc-active-band-main {
@@ -152,7 +153,7 @@ a.hwc-active-band-repo-link {
   border-radius: var(--radius-sm);
   color: var(--color-text);
   text-decoration: none;
-  transition: background-color 140ms ease;
+  transition: background-color var(--duration-hover) ease;
 }
 
 /* 見た目の高さは行のまま、タップ領域だけ 32px に広げる。左右はリンクの箱で止め、
@@ -238,7 +239,7 @@ a.hwc-active-band-repo-link:focus-visible {
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   white-space: nowrap;
-  transition: background-color 140ms ease;
+  transition: background-color var(--duration-hover) ease;
 }
 
 /* マージ済みは終わったタスク。開いている PR と同じ青にせず、完了と同じ緑に記号を添える。 */
@@ -296,8 +297,8 @@ a.hwc-active-band-repo-link:focus-visible {
   color: var(--color-secondary);
   cursor: pointer;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-active-band-jump::after {
@@ -385,6 +386,7 @@ a.hwc-active-band-repo-link:focus-visible {
   align-items: center;
   min-height: var(--row-pane);
   padding-right: var(--space-2);
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-active-pane:hover {
@@ -460,6 +462,7 @@ a.hwc-active-band-repo-link:focus-visible {
 .hwc-active-name {
   flex: 0 1 auto;
   font-weight: 400;
+  transition: color var(--duration-hover) ease;
 }
 
 /* 記号と名前、名前と印の間隔はツリーの行（.hwc-pane-title）と揃える。 */

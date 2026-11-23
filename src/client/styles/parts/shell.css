@@ -257,6 +257,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   color: var(--color-secondary);
   cursor: pointer;
   transform: translateY(-50%);
+  transition: color var(--duration-hover) ease;
 }
 
 /* 境目の線を掴んでいる間、取っ手が線の右半分を覆って線が欠ける。線を取っ手より手前へ出すには
@@ -390,7 +391,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   cursor: pointer;
-  transition: color 140ms ease;
+  transition: color var(--duration-hover) ease;
 }
 
 .hwc-scope-option[aria-pressed="true"] {

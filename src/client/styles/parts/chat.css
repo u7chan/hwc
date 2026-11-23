@@ -124,6 +124,10 @@ p.hwc-compaction,
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    opacity var(--duration-hover) ease,
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-msg-copy:hover,
@@ -169,7 +173,6 @@ p.hwc-compaction,
   .hwc-msg-copy,
   .hwc-msg-edit {
     opacity: 0;
-    transition: opacity 140ms ease;
   }
 
   .hwc-msg:hover .hwc-msg-copy,
@@ -430,6 +433,7 @@ p.hwc-compaction,
   font-size: var(--text-secondary);
   opacity: 0.85;
   cursor: pointer;
+  transition: opacity var(--duration-hover) ease;
 }
 
 .hwc-msg-expand:hover {
@@ -614,6 +618,9 @@ p.hwc-compaction,
   border-radius: 3px;
   background: transparent;
   color: var(--color-on-accent);
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease;
 }
 
 .hwc-md-task:hover .hwc-md-task-box {
@@ -750,9 +757,9 @@ p.hwc-compaction,
   cursor: pointer;
   opacity: 1;
   transition:
-    opacity 150ms ease,
-    color 150ms ease,
-    background-color 150ms ease;
+    opacity var(--duration-hover) ease,
+    color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -1034,6 +1041,7 @@ p.hwc-compaction,
   font: inherit;
   font-size: var(--text-secondary);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-compaction-cancel:hover {
@@ -1199,6 +1207,7 @@ p.hwc-compaction,
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 /* 選択中の行はホバーでも選択の面を保つ。 */
@@ -1237,6 +1246,9 @@ p.hwc-compaction,
   border: 1px solid var(--color-control-line);
   border-radius: 50%;
   color: var(--color-on-accent);
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease;
 }
 
 .hwc-pending-mark[data-multi="true"] {
@@ -1261,6 +1273,7 @@ p.hwc-compaction,
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
+  transition: color var(--duration-hover) ease;
 }
 
 /* 選ぶ根拠になる説明は、補助情報の 13px より一段大きく読ませる。 */
@@ -1341,6 +1354,7 @@ p.hwc-compaction,
   font: inherit;
   font-size: var(--text-supporting);
   cursor: pointer;
+  transition: color var(--duration-hover) ease;
 }
 
 .hwc-pending-toggle:hover {

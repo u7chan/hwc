@@ -122,6 +122,10 @@
   --row-head: 56px;
   --icon-frame: 32px;
 
+  /* 面・文字・枠の色を変える時間。ホバーや選択への反応を部品ごとに変えないよう、
+     ここで揃える。 */
+  --duration-hover: 140ms;
+
   /* 一覧の幅。広い画面では JS が実際の幅で上書きする。 */
   --hwc-sidebar-width: 352px;
   --hwc-sidebar-duration: 220ms;

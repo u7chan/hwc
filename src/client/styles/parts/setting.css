@@ -96,6 +96,7 @@
   color: var(--color-text);
   font-size: var(--text-secondary);
   cursor: pointer;
+  transition: border-color var(--duration-hover) ease;
 }
 
 .hwc-setting-button:hover:not(:disabled) {

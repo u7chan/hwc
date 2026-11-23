@@ -198,6 +198,7 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 .hwc-group-row {
   display: flex;
   align-items: center;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-group-row[data-menu="true"] {
@@ -246,6 +247,9 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-icon);
   color: var(--color-secondary);
+  transition:
+    border-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 /* 先頭の種類アイコンはスペースメニューの入口。32px の枠を 44px のタップ領域に置く。
@@ -263,8 +267,8 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   color: var(--color-secondary);
   cursor: pointer;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-group-row .hwc-space-icon {
@@ -440,8 +444,8 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   border-radius: var(--radius-control);
   color: var(--color-secondary);
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 /* 回すのは中の記号だけ。枠まで回すと、開閉のたびに角丸の四角が振れて見える。 */
@@ -496,6 +500,7 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-tabrow:hover {
@@ -546,6 +551,7 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   align-items: center;
   min-height: var(--row-pane);
   padding-right: var(--space-2);
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-pane-open {
@@ -569,6 +575,11 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   background: var(--color-selected);
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+}
+
+/* 名前は選択とスロット位置で色が変わる。面と一緒に色も移す。 */
+.hwc-pane-name {
+  transition: color var(--duration-hover) ease;
 }
 
 .hwc-pane[data-current="true"] .hwc-pane-name {
@@ -685,9 +696,9 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   color: var(--color-secondary);
   cursor: pointer;
   transition:
-    opacity 140ms ease,
-    background-color 140ms ease,
-    color 140ms ease;
+    opacity var(--duration-hover) ease,
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-pane-more:hover {

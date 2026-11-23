@@ -153,6 +153,9 @@
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-menu-copy:hover {
@@ -175,6 +178,7 @@
   text-align: left;
   text-decoration: none;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-menu-item:hover {
@@ -402,6 +406,7 @@
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-image-close:hover {
@@ -703,6 +708,7 @@
   color: var(--color-text);
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-project-row:hover {

@@ -54,6 +54,9 @@
   background: transparent;
   color: var(--color-text);
   cursor: pointer;
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease;
 }
 
 .hwc-command:hover {
@@ -98,6 +101,7 @@
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-command-clear:hover {
@@ -176,6 +180,7 @@
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-input-toggle:hover {
@@ -506,6 +511,9 @@
   background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
+  transition:
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -662,6 +670,7 @@
   background: var(--color-raised);
   color: var(--color-text);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-add:hover {
@@ -682,6 +691,7 @@
   color: var(--color-text);
   font-size: var(--text-body);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-agent-start > svg {
@@ -860,6 +870,10 @@
   font-size: var(--text-body);
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color var(--duration-hover) ease,
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
 .hwc-template-chip:hover {
@@ -1052,6 +1066,7 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
 }
 
 .hwc-mention[aria-selected="true"] {
