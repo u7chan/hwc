@@ -166,6 +166,9 @@
   border-bottom: 1px solid var(--color-line);
 }
 
+/* 面を持つ操作。押せる面は raised で塗り、ホバーでは選択面に寄せる（入力の + と
+   エージェント起動と同じ）。line は raised と同じ値のテーマがあり、濃さでは
+   ホバーを表せない。 */
 .hwc-icon-button {
   flex: none;
   display: grid;
@@ -176,6 +179,11 @@
   border-radius: var(--radius-control);
   background: var(--color-raised);
   cursor: pointer;
+  transition: background-color var(--duration-hover) ease;
+}
+
+.hwc-icon-button:hover {
+  background: var(--color-selected);
 }
 
 .hwc-icon-button:active {
