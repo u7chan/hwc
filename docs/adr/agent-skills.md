@@ -17,7 +17,7 @@
   - OpenCode: `~/.config/opencode/skills`、`~/.claude/skills`、`~/.agents/skills`、`opencode.json` の `skills`（ローカルパスのみ）
 - 設定ルートは CLI 自身の環境変数を優先する（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`）。hwc が起動するペインと同じ設定を見るため
 - 同名スキルの扱いは CLI に合わせる
-  - OpenCode: パス由来の ID で選び、優先順位の高い置き場（`~/.config/opencode/skills` → `~/.claude/skills` → `~/.agents/skills`）が勝つ。一覧も勝った方だけを残す
+  - OpenCode: パス由来の ID で選び、登録順の後勝ち（弱い順に `~/.claude/skills` → `~/.agents/skills` → `~/.config/opencode/skills` → 設定 `skills`）。一覧も勝った方だけを残す
   - Pi: 宣言した `name` が衝突したら、先に見つかった置き場だけを残す
   - Codex: 同名を併記する（公式にマージしない）。Claude も実体パスの重複だけを消し、同名は併記する
 - 次のものは対象外にする。CLI 側の解決規則が未文書か、hwc から正否を確かめられないため

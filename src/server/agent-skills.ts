@@ -316,12 +316,14 @@ async function codexSkills(roots: Roots): Promise<Candidate[]> {
 
 async function opencodeSkills(roots: Roots): Promise<Candidate[]> {
   const out: Candidate[] = [];
-  // 公式の探索先はグローバルと互換の 3 つ。深さは 6 まで。
   const options = { maxDepth: 6, rootMarkdown: true, requireDescription: false };
+  // 公式の優先順位は、低い方から順に `.claude/skills` → `.agents/skills` →
+  // `~/.config/opencode/skills` → 設定 `skills`。この順に積み、同じ ID は後勝ちにする
+  // （OpenCode の登録順そのもの）。
   const dirs = [
-    [join(roots.home, ".config/opencode/skills"), "~/.config/opencode/skills"],
     [join(roots.claude, "skills"), "~/.claude/skills"],
     [join(roots.home, ".agents/skills"), "~/.agents/skills"],
+    [join(roots.home, ".config/opencode/skills"), "~/.config/opencode/skills"],
   ] as const;
   for (const [dir, source] of dirs) await walk(dir, options, source, out);
   // opencode.json の `skills` はローカルパスだけを対象にする。相対パス（cwd 基準）と
@@ -365,6 +367,14 @@ function firstBy(candidates: Candidate[], key: (skill: Candidate) => string): Ca
   });
 }
 
+// 同じキーは後に見つかった方だけを残す。CLI が「後から登録された方が勝つ」順で
+// 積まれているときに使う。
+function lastBy(candidates: Candidate[], key: (skill: Candidate) => string): Candidate[] {
+  const byKey = new Map<string, Candidate>();
+  for (const skill of candidates) byKey.set(key(skill), skill);
+  return [...byKey.values()];
+}
+
 export async function loadAgentSkills(
   agent: ModelAgentKind,
   home: string,
@@ -374,8 +384,8 @@ export async function loadAgentSkills(
   // 同名・同 ID の扱いは CLI ごとに違う（docs/adr/agent-skills.md）。
   const unique =
     agent === "opencode"
-      ? // OpenCode はパス由来の ID で選び、優先順位の高い置き場が勝つ。
-        firstBy(found, (skill) => skill.id)
+      ? // OpenCode はパス由来の ID で選び、後から登録された置き場が勝つ。
+        lastBy(found, (skill) => skill.id)
       : agent === "pi"
         ? // Pi は先に見つかった方を残し、後のコリジョンは捨てる。
           firstBy(found, (skill) => skill.name)

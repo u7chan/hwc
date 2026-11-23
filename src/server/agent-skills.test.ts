@@ -247,27 +247,63 @@ test("Codex は symlink 側の path で書いた無効化も実体へ解決し�
   }
 });
 
-test("OpenCode はパス由来の ID で選び、優先順位の高い置き場だけを残す", async () => {
+test("OpenCode はパス由来の ID で選び、登録順の後勝ちで置き場を決める", async () => {
   const home = await tempHome();
   try {
-    await writeSkill(join(home, ".agents/skills/gh"), "gh");
-    await mkdir(join(home, ".claude"), { recursive: true });
-    await symlink(join(home, ".agents/skills"), join(home, ".claude/skills"), "dir");
-    await mkdir(join(home, ".config/opencode/skills"), { recursive: true });
+    // 公式の登録順（低い → 高い）: ~/.claude/skills → ~/.agents/skills →
+    // ~/.config/opencode/skills → 設定 `skills`。同じ ID は後から登録された方が勝つ。
+    await writeSkill(join(home, ".claude/skills/gh"), "gh", "claude");
+    await writeSkill(join(home, ".agents/skills/gh"), "gh", "agents");
+    await writeSkill(join(home, ".config/opencode/skills/other"), "other");
+    await mkdir(join(home, "shared"), { recursive: true });
+    await writeSkill(join(home, "shared/gh"), "gh", "settings");
+    await mkdir(join(home, ".config/opencode"), { recursive: true });
     await writeFile(
-      join(home, ".config/opencode/skills/note.md"),
-      "---\nname: note\ndescription: x\n---\n",
+      join(home, ".config/opencode/opencode.json"),
+      JSON.stringify({ skills: ["./shared"] }),
     );
-    // 同じ ID のスキルを互換の置き場にも置く。OpenCode は ID で選び、優先順位の高い
-    // ~/.config/opencode/skills が勝つ。
-    await writeSkill(join(home, ".config/opencode/skills/gh"), "GitHub 操作");
+
+    const view = await loadAgentSkills("opencode", home, { HOME_UNUSED: home });
+
+    // 設定 `skills` の ./shared は cwd 基準なので読まない。次に強い
+    // ~/.config/opencode/skills には gh が無いので、勝つのは ~/.agents/skills。
+    expect(view.skills.map((skill) => [skill.name, skill.source])).toEqual([
+      ["gh", "~/.agents/skills"],
+      ["other", "~/.config/opencode/skills"],
+    ]);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode は ~/.config/opencode/skills を ~/.agents/skills より優先する", async () => {
+  const home = await tempHome();
+  try {
+    await writeSkill(join(home, ".agents/skills/gh"), "gh", "agents");
+    await writeSkill(join(home, ".config/opencode/skills/gh"), "gh", "config");
 
     const view = await loadAgentSkills("opencode", home, NO_ENV);
 
-    expect(view.skills.map((skill) => [skill.name, skill.source])).toEqual([
-      ["GitHub 操作", "~/.config/opencode/skills"],
-      ["note", "~/.config/opencode/skills"],
-    ]);
+    expect(view.skills).toEqual([{ name: "gh", source: "~/.config/opencode/skills", state: "on" }]);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode は絶対パスの設定 skills を最優先で読む", async () => {
+  const home = await tempHome();
+  try {
+    await writeSkill(join(home, "shared/gh"), "gh", "settings");
+    await writeSkill(join(home, ".config/opencode/skills/gh"), "gh", "config");
+    await mkdir(join(home, ".config/opencode"), { recursive: true });
+    await writeFile(
+      join(home, ".config/opencode/opencode.json"),
+      JSON.stringify({ skills: [join(home, "shared")] }),
+    );
+
+    const view = await loadAgentSkills("opencode", home, NO_ENV);
+
+    expect(view.skills).toEqual([{ name: "gh", source: join(home, "shared"), state: "on" }]);
   } finally {
     await rm(home, { recursive: true, force: true });
   }
