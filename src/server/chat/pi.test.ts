@@ -1789,3 +1789,214 @@ test("an ask file is visible before the session file exists", async () => {
   expect(snapshot.messages).toEqual([]);
   expect(snapshot.pending?.toolUseId).toBe(ASK_ID);
 });
+
+const askCall = (id = "call_ask", question = "どれにしますか？") => ({
+  type: "toolCall",
+  id,
+  name: "ask_user",
+  arguments: { question, options: ["赤", "青"], recommended: "赤" },
+});
+
+const askResult = (
+  id: string,
+  parentId: string,
+  toolCallId: string,
+  text: string,
+  details: Record<string, unknown>,
+  timestamp = 1_700_000_000_002,
+): string =>
+  entry("message", id, parentId, {
+    message: {
+      role: "toolResult",
+      toolCallId,
+      toolName: "ask_user",
+      content: [{ type: "text", text }],
+      details,
+      timestamp,
+    },
+  });
+
+test("an answered ask_user becomes a question and a user answer in order", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "start"),
+    assistant("a1", "u1", [{ type: "text", text: "確認します。" }, askCall()]),
+    askResult("r1", "a1", "call_ask", "ユーザーの回答: 青", {
+      status: "answered",
+      askId: "ask-1",
+      winner: "tui",
+      kind: "option",
+    }),
+    assistant("a2", "r1", text("完了しました。"), { timestamp: 1_700_000_000_003 }),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages).toEqual([
+    { id: "u1", role: "user", text: "start", at: 1_700_000_000_000 },
+    { id: "a1", role: "agent", text: "確認します。", at: 1_700_000_000_001 },
+    {
+      id: "ask:a1:call_ask:0:question",
+      role: "agent",
+      text: "どれにしますか？",
+      at: 1_700_000_000_001,
+      synthetic: true,
+      askId: "ask-1",
+    },
+    {
+      id: "ask:a1:call_ask:0:answer",
+      role: "user",
+      text: "青",
+      at: 1_700_000_000_002,
+      synthetic: true,
+      askId: "ask-1",
+    },
+    { id: "a2", role: "agent", text: "完了しました。", at: 1_700_000_000_003 },
+  ]);
+  expect(snapshot.pending).toBeUndefined();
+});
+
+test("a dismissed or failed ask_user does not synthesize history", async () => {
+  for (const details of [
+    { status: "dismissed" },
+    { status: "aborted" },
+    { status: "invalid", error: "bad" },
+  ]) {
+    const path = await writeSession(
+      header(),
+      user("u1", null, "start"),
+      assistant("a1", "u1", [askCall()]),
+      askResult("r1", "a1", "call_ask", "ユーザーは回答しませんでした。", details),
+    );
+    const snapshot = await createChatClient().snapshot(path);
+    expect(snapshot.messages.map((message) => message.id)).toEqual(["u1"]);
+  }
+});
+
+test("an unanswered ask_user is left to the pending card", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "start"),
+    assistant("a1", "u1", [askCall()]),
+  );
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages.map((message) => message.id)).toEqual(["u1"]);
+  expect(snapshot.pending).toBeUndefined();
+});
+
+test("a reused toolCallId is paired with the call that produced each result", async () => {
+  // 1 つ目は回答済み、2 つ目は同じ toolCallId で Esc。2 つ目まで履歴に出ないこと。
+  const path = await writeSession(
+    header(),
+    user("u1", null, "start"),
+    assistant("a1", "u1", [askCall("call_same", "1 つ目")]),
+    askResult("r1", "a1", "call_same", "ユーザーの回答: 赤", {
+      status: "answered",
+      askId: "ask-reused-1",
+      winner: "tui",
+      kind: "option",
+    }),
+    assistant("a2", "r1", [askCall("call_same", "2 つ目")]),
+    askResult("r2", "a2", "call_same", "ユーザーは回答しませんでした。", {
+      status: "dismissed",
+    }),
+    assistant("a3", "r2", text("完了しました。")),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages).toEqual([
+    { id: "u1", role: "user", text: "start", at: 1_700_000_000_000 },
+    {
+      id: "ask:a1:call_same:0:question",
+      role: "agent",
+      text: "1 つ目",
+      at: 1_700_000_000_001,
+      synthetic: true,
+      askId: "ask-reused-1",
+    },
+    {
+      id: "ask:a1:call_same:0:answer",
+      role: "user",
+      text: "赤",
+      at: 1_700_000_000_002,
+      synthetic: true,
+      askId: "ask-reused-1",
+    },
+    { id: "a3", role: "agent", text: "完了しました。", at: 1_700_000_000_001 },
+  ]);
+});
+
+test("a dismissed first call does not make a later reused toolCallId look answered", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "start"),
+    assistant("a1", "u1", [askCall("call_same", "1 つ目")]),
+    askResult("r1", "a1", "call_same", "ユーザーは回答しませんでした。", {
+      status: "dismissed",
+    }),
+    assistant("a2", "r1", [askCall("call_same", "2 つ目")]),
+    askResult("r2", "a2", "call_same", "ユーザーの回答: 青", {
+      status: "answered",
+      askId: "ask-reused-2",
+      winner: "file",
+      kind: "option",
+    }),
+    assistant("a3", "r2", text("完了しました。")),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(
+    snapshot.messages.map((message) => [message.id, message.role, message.text, message.askId]),
+  ).toEqual([
+    ["u1", "user", "start", undefined],
+    ["ask:a2:call_same:1:question", "agent", "2 つ目", "ask-reused-2"],
+    ["ask:a2:call_same:1:answer", "user", "青", "ask-reused-2"],
+    ["a3", "agent", "完了しました。", undefined],
+  ]);
+});
+
+test("an aborted call without a result is not carried into the next turn", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "start"),
+    assistant("a1", "u1", [askCall("call_same", "中断した質問")], {
+      stopReason: "aborted",
+    }),
+    user("u2", "a1", "retry"),
+    assistant("a2", "u2", [askCall("call_same", "2 つ目")]),
+    askResult("r2", "a2", "call_same", "ユーザーの回答: 青", {
+      status: "answered",
+      askId: "ask-aborted-2",
+      winner: "tui",
+      kind: "option",
+    }),
+    assistant("a3", "r2", text("完了しました。")),
+  );
+
+  const snapshot = await createChatClient().snapshot(path);
+  expect(
+    snapshot.messages.map((message) => [message.id, message.role, message.text, message.askId]),
+  ).toEqual([
+    ["u1", "user", "start", undefined],
+    ["u2", "user", "retry", undefined],
+    ["ask:a2:call_same:1:question", "agent", "2 つ目", "ask-aborted-2"],
+    ["ask:a2:call_same:1:answer", "user", "青", "ask-aborted-2"],
+    ["a3", "agent", "完了しました。", undefined],
+  ]);
+});
+
+test("a synthetic question uses the same newline normalization as mypi", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "start"),
+    assistant("a1", "u1", [askCall("call_crlf", "First line\r\nSecond?")]),
+    askResult("r1", "a1", "call_crlf", "ユーザーの回答: 青", {
+      status: "answered",
+      winner: "tui",
+      kind: "option",
+    }),
+  );
+  const snapshot = await createChatClient().snapshot(path);
+  expect(snapshot.messages.find((message) => message.synthetic === true)?.text).toBe(
+    "First line\nSecond?",
+  );
+});

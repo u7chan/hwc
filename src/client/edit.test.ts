@@ -75,6 +75,7 @@ test("only a pi user message that is not the session leaf is editable", () => {
   expect(canEditMessage({ ...base, row: row(user("u3", { text: " " })) })).toBe(false);
   expect(canEditMessage({ ...base, row: row(user("u3"), "pending") })).toBe(false);
   expect(canEditMessage({ ...base, row: row(user("u3"), "command") })).toBe(false);
+  expect(canEditMessage({ ...base, row: row(user("u3", { synthetic: true })) })).toBe(false);
   expect(canEditMessage({ ...base, row: row(agent("a3")) })).toBe(false);
 });
 

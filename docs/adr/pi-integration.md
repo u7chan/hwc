@@ -66,7 +66,7 @@ pi は会話を v3 の JSONL で保存する。`user` / `assistant` のメッセ
 - Herdr 0.9.5 の pi 検出は信頼確認の画面を `blocked` にしないため、一覧は `idle` のまま。確認が要ることは、開いているペインの確認ビューだけが知らせる。Discord の要対応通知も届かない
 - `ask_user` が入っていない mypi のペインでは pending が無く、今までどおり端末出力になる。`v` と形を弾くので、古い拡張でも会話の取得は壊れない
 - `blocked` は Herdr の pi integration（v9）が拡張のイベントを受けて報告する。integration が無い・古い・イベント名が変わるとカードは出ない（会話と入力欄は通常どおり）
-- 質問と回答はセッションのツール結果に残るが、hwc は描画しない。何を答えたかを会話で見たい場合は別の設計が要る
+- hwc は ask_user の tool call / tool result から、質問を agent、回答を user のメッセージとして会話に合成する。dismissed / aborted / invalid は合成しない。合成した user メッセージは編集対象にしない。回答直後はクライアントが同じ本文を控えとして先に表示し、mypi の tool result details の `askId` が pending の `id` と一致する合成回答が届いたら畳む。古い mypi は askId が無いので、pending が外れた後に質問文と、合成 ID で対応づけた回答でフォールバックする
 - TUI と Web がほぼ同時に答えると、mypi が先に読んだ方が勝つ。ack は無く、後から書いた answer は残骸になる。次の質問の開始前に mypi が消す。二重回答の調停はしない
 - pending は pi の強制終了で残ることがある。Herdr の状態は `blocked` でなくなるのでカードは出ず、次の質問の開始前に mypi が消す。鮮度のための TTL は契約に無い
 - pending が残っていても `blocked` でなければカードを出さず、会話表示に戻る。逆に、pending だけ消えてまだ `blocked` なら、カードは閉じても端末出力のままで入力欄は戻らない

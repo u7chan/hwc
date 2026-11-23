@@ -298,6 +298,18 @@ test("a chat body is accepted as the contract describes it", () => {
   expect(toChatSnapshot({ ...chatBody, model: null })).toEqual({ ...chatBody, model: null });
 });
 
+test("a synthetic ask_user answer keeps its flag", () => {
+  const message = {
+    id: "ask:call_ask:answer",
+    role: "user" as const,
+    text: "青",
+    at: 1,
+    synthetic: true as const,
+    askId: "ask-1",
+  };
+  expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
+});
+
 test("a pending prompt is kept as the contract describes it", () => {
   const question = {
     kind: "question" as const,

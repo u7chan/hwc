@@ -56,6 +56,10 @@ export type ChatMessage = {
   // 本文が指していたが、配信の根（チェックアウトと追加根）の外にあったファイル名。
   // プレビューできないことを 1 行で伝えるためだけに持つ。絶対パスは渡さない。
   outsideFile?: string;
+  // ask_user の tool call/result から作った表示用の Q&A。会話の実体ではないので編集しない。
+  synthetic?: true;
+  // mypi の pending 質問 id。回答直後の控えと同じ質問かを照合するためにだけ使う。
+  askId?: string;
 };
 
 export type ChatContext = {

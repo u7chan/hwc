@@ -49,11 +49,25 @@ type SessionCompaction = {
   at: number;
 };
 
+type SessionAskQuestion = { toolCallId: string; question: string; at: number };
+type SessionAskResult = {
+  toolCallId: string;
+  status: string;
+  // mypi が pending 質問 id を details に残す。古い mypi は null。
+  askId: string | null;
+  // answered 以外は null。Esc・中断・失敗も呼び出しを消費するために保持する。
+  answer: string | null;
+  at: number;
+};
+
 type SessionEntry = {
   id: string;
   parentId: string | null;
   // 1 エントリが 1 行とは限らない。失敗した assistant は本文と失敗の 2 行になる。
   messages: ChatMessage[];
+  // ask_user の tool call と result。表示用の Q&A を合成する材料で、messages には含めない。
+  askQuestions: SessionAskQuestion[];
+  askResults: SessionAskResult[];
   model: string | null;
   provider: string | null;
   effort: string | null;
@@ -267,6 +281,8 @@ function applyLine(reader: ChatReader, line: string): void {
     id: record.id,
     parentId: typeof record.parentId === "string" ? record.parentId : null,
     messages: [],
+    askQuestions: [],
+    askResults: [],
     model: null,
     provider: null,
     effort: null,
@@ -288,6 +304,9 @@ function applyLine(reader: ChatReader, line: string): void {
       entry.effort = projected.effort;
       entry.usageTokens = projected.usageTokens;
       entry.usage = projected.usage;
+      const at = messageAt(message.timestamp, record.timestamp);
+      entry.askQuestions = askQuestionsFromContent(message.content, at);
+      entry.askResults = askResultsFromMessage(message, at);
     }
   } else if (record.type === "model_change") {
     entry.model = nonEmptyText(record.modelId);
@@ -455,6 +474,71 @@ function assistantText(content: unknown): string {
   return text;
 }
 
+// mypi の normalizeQuestion と同じ改行正規化。pending の本文と合成質問を同じ形にする。
+function normalizeQuestionText(value: string): string {
+  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+}
+
+// toolCall の arguments は通常オブジェクト。壊れた文字列は質問なしとして扱う。
+function askQuestionsFromContent(content: unknown, at: number): SessionAskQuestion[] {
+  if (!Array.isArray(content)) return [];
+  const questions: SessionAskQuestion[] = [];
+  for (const block of content) {
+    const record = asRecord(block);
+    if (record?.type !== "toolCall" || record.name !== "ask_user") continue;
+    const toolCallId = nonEmptyText(record.id);
+    const args = asRecord(record.arguments);
+    const question = typeof args?.question === "string" ? normalizeQuestionText(args.question) : "";
+    if (toolCallId === null || question === "") continue;
+    questions.push({ toolCallId, question, at });
+  }
+  return questions;
+}
+
+function toolResultText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  let text = "";
+  for (const block of content) {
+    const record = asRecord(block);
+    if (record?.type === "text" && typeof record.text === "string") text += record.text;
+  }
+  return text;
+}
+
+// ask_user の result は、回答済みでなくても呼び出しを消費するために拾う。同じ toolCallId が
+// 別の質問で再利用されても、Esc した質問を回答済みにしないため。合成するのは answered だけ。
+function askResultsFromMessage(message: Record<string, unknown>, at: number): SessionAskResult[] {
+  if (message.role !== "toolResult" || message.toolName !== "ask_user") return [];
+  const toolCallId = nonEmptyText(message.toolCallId);
+  if (toolCallId === null) return [];
+  const details = asRecord(message.details);
+  const status = typeof details?.status === "string" ? details.status : "other";
+  const askId = nonEmptyText(details?.askId);
+  if (status !== "answered") return [{ toolCallId, status, askId, answer: null, at }];
+  const text = toolResultText(message.content);
+  const prefix = "ユーザーの回答: ";
+  const answer = text.startsWith(prefix) ? text.slice(prefix.length) : text;
+  return [
+    {
+      toolCallId,
+      status,
+      askId,
+      answer: answer.trim() === "" ? null : answer,
+      at,
+    },
+  ];
+}
+
+// 古い側の切り捨てで質問だけが落ちたとき、対応する回答を単独で残さない。
+function pruneOrphanAskAnswers(messages: readonly ChatMessage[]): ChatMessage[] {
+  const ids = new Set(messages.map((message) => message.id));
+  return messages.filter((message) => {
+    if (message.synthetic !== true || message.role !== "user") return true;
+    const match = /^ask:(.+):answer$/.exec(message.id);
+    return match === null || ids.has(`ask:${match[1]}:question`);
+  });
+}
+
 function messageAt(value: unknown, entryTimestamp: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof entryTimestamp === "string") {
@@ -492,6 +576,40 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   let beforeCompaction = 0;
 
   const branch = activeBranch(reader);
+  // toolCallId は provider が再利用することがある。branch 順に呼び出しと result を対応づけ、
+  // 回答済みの呼び出しだけを質問と回答のペアにする。未回答は pending カードが受け持つ。
+  const askCallKeys = new Map<SessionAskQuestion, string>();
+  const askResultKeys = new Map<SessionAskResult, string>();
+  const askIdsByKey = new Map<string, string>();
+  const answeredAskKeys = new Set<string>();
+  const waitingAskCalls = new Map<string, SessionAskQuestion[]>();
+  let askCallSeq = 0;
+  for (const entry of branch) {
+    // 呼び出しと result は同じ assistant の tool batch 内でだけ対応づける。中断で result が
+    // 書かれなかった call を、次の user / assistant をまたいで後の result に使わない。
+    const startsAskBatch =
+      entry.askQuestions.length > 0 ||
+      entry.messages.some((message) => message.role === "user" || message.role === "agent");
+    if (startsAskBatch) waitingAskCalls.clear();
+    for (const ask of entry.askQuestions) {
+      // entry id と通し番号を含め、同じ toolCallId が再登場しても合成 ID を一意にする。
+      const key = `${entry.id}:${ask.toolCallId}:${askCallSeq++}`;
+      askCallKeys.set(ask, key);
+      const queue = waitingAskCalls.get(ask.toolCallId) ?? [];
+      queue.push(ask);
+      waitingAskCalls.set(ask.toolCallId, queue);
+    }
+    for (const result of entry.askResults) {
+      const call = waitingAskCalls.get(result.toolCallId)?.shift();
+      if (call === undefined) continue;
+      const key = askCallKeys.get(call);
+      if (key === undefined) continue;
+      askResultKeys.set(result, key);
+      if (result.askId !== null) askIdsByKey.set(key, result.askId);
+      if (result.status === "answered" && result.answer !== null) answeredAskKeys.add(key);
+    }
+  }
+  const emittedAskKeys = new Set<string>();
   const compacted = compactionWindow(branch);
   // pi は自動リトライの試行ごとに同じ失敗を書く。同一文言の error が続く間は 1 行に畳み、
   // 試行回数だけを count に残す。行が減るので区切りの位置は畳んだあとの行数で数える。
@@ -514,6 +632,37 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
         retry = message.role === "error" ? { ...message } : null;
         messages.push(retry ?? message);
       }
+      let addedAsk = false;
+      for (const ask of entry.askQuestions) {
+        const key = askCallKeys.get(ask);
+        if (key === undefined || !answeredAskKeys.has(key)) continue;
+        const askId = askIdsByKey.get(key);
+        messages.push({
+          id: `ask:${key}:question`,
+          role: "agent",
+          text: ask.question,
+          at: ask.at,
+          synthetic: true,
+          ...(askId === undefined ? {} : { askId }),
+        });
+        emittedAskKeys.add(key);
+        addedAsk = true;
+      }
+      for (const result of entry.askResults) {
+        const key = askResultKeys.get(result);
+        if (key === undefined || result.answer === null || !emittedAskKeys.has(key)) continue;
+        messages.push({
+          id: `ask:${key}:answer`,
+          role: "user",
+          text: result.answer,
+          at: result.at,
+          synthetic: true,
+          ...(result.askId == null ? {} : { askId: result.askId }),
+        });
+        addedAsk = true;
+      }
+      // Q&A は error の連続を切る会話の行でもある。
+      if (addedAsk) retry = null;
     }
     if (compacted !== null && index < compacted.entryIndex) {
       beforeCompaction += messages.length - before;
@@ -541,15 +690,14 @@ async function snapshotOf(reader: ChatReader, windowFor: WindowResolver): Promis
   // etag を変えないと、クライアントが 304 でカードの変化を取りこぼす。
   const ask = await readAsk(reader.path);
   const limited = limitMessages(messages);
+  const keptMessages = pruneOrphanAskAnswers(limited.messages);
   // limitMessages は古い側から落とす。落ちた分だけ区切りの位置も手前へずらす。
-  const dropped = messages.length - limited.messages.length;
+  const dropped = messages.length - keptMessages.length;
   const compactionIndex =
-    compacted === null
-      ? 0
-      : Math.max(0, Math.min(limited.messages.length, beforeCompaction - dropped));
+    compacted === null ? 0 : Math.max(0, Math.min(keptMessages.length, beforeCompaction - dropped));
   return {
     etag: `${reader.etagPrefix}-${reader.generation}-${windowTokens ?? "unknown"}-${ask === null ? "ask-none" : `ask-${ask.id}`}`,
-    messages: limited.messages,
+    messages: keptMessages,
     model,
     effort,
     truncated: limited.truncated,
