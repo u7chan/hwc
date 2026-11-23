@@ -28,7 +28,7 @@ function piState(agentStatus: "idle" | "blocked"): AppState {
   };
 }
 
-function codexTrustState(): AppState {
+function codexState(agentStatus: "idle" | "blocked"): AppState {
   return {
     ...chatState,
     workspaces: chatState.workspaces.map((workspace) => ({
@@ -38,7 +38,7 @@ function codexTrustState(): AppState {
         panes: tab.panes.map((pane) => ({
           ...pane,
           agent: "codex" as const,
-          agentStatus: "blocked" as const,
+          agentStatus,
         })),
       })),
     })),
@@ -416,7 +416,7 @@ test("POST /api/panes/:id/input does not send when the fresh state cannot be rea
 test("POST /api/panes/:id/input rechecks a changed agent before sending", async () => {
   const store = createFakeStore(piState("idle"));
   store.setChatSource("w1:p1", { agent: "pi", path: "/tmp/session.jsonl" });
-  store.refresh = async () => codexTrustState();
+  store.refresh = async () => codexState("blocked");
   const seen: unknown[] = [];
   const { app } = createTestApp({
     store,
@@ -443,6 +443,43 @@ test("POST /api/panes/:id/input rechecks a changed agent before sending", async 
   expect(response.status).toBe(409);
   expect(await response.json()).toEqual({ error: "confirmation_pending" });
   expect(seen).toEqual([]);
+});
+
+test("POST /api/panes/:id/input rechecks blocked after a changed-agent trust read", async () => {
+  const store = createFakeStore(codexState("idle"));
+  store.setChatSource("w1:p1", { agent: "codex", sessionId: "session-1" });
+  let refreshes = 0;
+  store.refresh = async () => {
+    refreshes += 1;
+    return piState(refreshes === 1 ? "idle" : "blocked");
+  };
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    store,
+    panes: {
+      read: async ({ paneId, source }) => ({
+        paneId,
+        text: source === "detection" ? "Codex is ready" : "terminal output",
+        truncated: false,
+        revision: 0,
+      }),
+      send: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "hello", submit: true }),
+  });
+
+  // 信頼確認の読み取り中に pi が blocked へ変わっても、送信しない。
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ error: "not_waiting" });
+  expect(seen).toEqual([]);
+  expect(refreshes).toBe(2);
 });
 
 test("POST /api/panes/:id/input rejects a body that is not JSON", async () => {

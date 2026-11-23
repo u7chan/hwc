@@ -145,12 +145,19 @@ export function createPanesHandlers(ctx: AppContext) {
         }
         // 種別が変わっていたら、新しい種別で信頼確認をやり直す。古い種別の確認結果で
         // 信頼ダイアログへ本文を流さない。
-        if (
-          (pane === null || fresh.agent !== pane.agent) &&
-          supportsFolderTrust(fresh.agent) &&
-          (await folderTrust.inspect(fresh))
-        ) {
-          return c.json({ error: "confirmation_pending" }, 409);
+        if ((pane === null || fresh.agent !== pane.agent) && supportsFolderTrust(fresh.agent)) {
+          if (await folderTrust.inspect(fresh)) {
+            return c.json({ error: "confirmation_pending" }, 409);
+          }
+          // 信頼確認の読み取り中に状態が変わる。送信直前にもう一度確かめる。
+          const afterTrust = await freshPane(paneId);
+          if (afterTrust === null) return c.json({ error: "pane_not_found" }, 404);
+          if (afterTrust.agent !== fresh.agent) {
+            return c.json({ error: "not_waiting" }, 409);
+          }
+          if (afterTrust.agent === "pi" && afterTrust.agentStatus === "blocked") {
+            return c.json({ error: "not_waiting" }, 409);
+          }
         }
       } catch (error) {
         return paneFailure(c, error);
