@@ -293,12 +293,15 @@ function toAskOptions(value: unknown): ChatAskOption[] | undefined {
   const options = value.flatMap((item): ChatAskOption[] => {
     if (typeof item !== "object" || item === null) return [];
     const option = item as Partial<ChatAskOption>;
-    if (typeof option.label !== "string" || option.label === "") return [];
+    if (typeof option.label !== "string" || option.label.trim() === "") return [];
+    if (typeof option.recommended !== "boolean" || typeof option.selected !== "boolean") {
+      return [];
+    }
     return [
       {
-        label: option.label,
-        recommended: option.recommended === true,
-        selected: option.selected === true,
+        label: option.label.trim(),
+        recommended: option.recommended,
+        selected: option.selected,
       },
     ];
   });
