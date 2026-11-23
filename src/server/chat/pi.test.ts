@@ -1841,6 +1841,10 @@ test("an answered ask_user becomes a question and a user answer in order", async
       at: 1_700_000_000_001,
       synthetic: true,
       askId: "ask-1",
+      askOptions: [
+        { label: "赤", recommended: true, selected: false },
+        { label: "青", recommended: false, selected: true },
+      ],
     },
     {
       id: "ask:a1:call_ask:0:answer",
@@ -1849,6 +1853,7 @@ test("an answered ask_user becomes a question and a user answer in order", async
       at: 1_700_000_000_002,
       synthetic: true,
       askId: "ask-1",
+      answerKind: "option",
     },
     { id: "a2", role: "agent", text: "完了しました。", at: 1_700_000_000_003 },
   ]);
@@ -1912,6 +1917,10 @@ test("a reused toolCallId is paired with the call that produced each result", as
       at: 1_700_000_000_001,
       synthetic: true,
       askId: "ask-reused-1",
+      askOptions: [
+        { label: "赤", recommended: true, selected: true },
+        { label: "青", recommended: false, selected: false },
+      ],
     },
     {
       id: "ask:a1:call_same:0:answer",
@@ -1920,6 +1929,7 @@ test("a reused toolCallId is paired with the call that produced each result", as
       at: 1_700_000_000_002,
       synthetic: true,
       askId: "ask-reused-1",
+      answerKind: "option",
     },
     { id: "a3", role: "agent", text: "完了しました。", at: 1_700_000_000_001 },
   ]);
@@ -1999,4 +2009,29 @@ test("a synthetic question uses the same newline normalization as mypi", async (
   expect(snapshot.messages.find((message) => message.synthetic === true)?.text).toBe(
     "First line\nSecond?",
   );
+});
+
+test("a free-text answer keeps the options unselected and marks the answer kind", async () => {
+  const path = await writeSession(
+    header(),
+    user("u1", null, "start"),
+    assistant("a1", "u1", [askCall("call_text", "自由入力は？")]),
+    askResult("r1", "a1", "call_text", "ユーザーの回答: 改行\nテスト", {
+      status: "answered",
+      askId: "ask-text",
+      winner: "tui",
+      kind: "text",
+    }),
+  );
+  const snapshot = await createChatClient().snapshot(path);
+  const question = snapshot.messages.find(
+    (message) => message.id === "ask:a1:call_text:0:question",
+  );
+  const answer = snapshot.messages.find((message) => message.id === "ask:a1:call_text:0:answer");
+  expect(question?.askOptions).toEqual([
+    { label: "赤", recommended: true, selected: false },
+    { label: "青", recommended: false, selected: false },
+  ]);
+  expect(answer?.answerKind).toBe("text");
+  expect(answer?.text).toBe("改行\nテスト");
 });

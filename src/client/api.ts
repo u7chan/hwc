@@ -1,6 +1,7 @@
 import { hc } from "hono/client";
 import type { AppType } from "../server/app";
 import type {
+  ChatAskOption,
   ChatAttachment,
   ChatCompaction,
   ChatContext,
@@ -264,6 +265,11 @@ function toChatMessage(value: unknown): ChatMessage | null {
   const synthetic = message.synthetic === true ? true : undefined;
   const askId =
     typeof message.askId === "string" && message.askId !== "" ? message.askId : undefined;
+  const askOptions = toAskOptions(message.askOptions);
+  const answerKind =
+    message.answerKind === "option" || message.answerKind === "text"
+      ? message.answerKind
+      : undefined;
   return {
     id: message.id,
     role: message.role,
@@ -276,7 +282,27 @@ function toChatMessage(value: unknown): ChatMessage | null {
     ...(outsideFile === undefined ? {} : { outsideFile }),
     ...(synthetic === undefined ? {} : { synthetic }),
     ...(askId === undefined ? {} : { askId }),
+    ...(askOptions === undefined ? {} : { askOptions }),
+    ...(answerKind === undefined ? {} : { answerKind }),
   };
+}
+
+// 選択肢は表示だけ。形の壊れた項目は捨て、残りで質問を描く。
+function toAskOptions(value: unknown): ChatAskOption[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const options = value.flatMap((item): ChatAskOption[] => {
+    if (typeof item !== "object" || item === null) return [];
+    const option = item as Partial<ChatAskOption>;
+    if (typeof option.label !== "string" || option.label === "") return [];
+    return [
+      {
+        label: option.label,
+        recommended: option.recommended === true,
+        selected: option.selected === true,
+      },
+    ];
+  });
+  return options.length === 0 ? undefined : options;
 }
 
 // 案内に出すのは名前だけ。区切りを含む値は、サーバーが契約を破ったということなので描かない。

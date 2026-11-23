@@ -306,6 +306,11 @@ test("a synthetic ask_user answer keeps its flag", () => {
     at: 1,
     synthetic: true as const,
     askId: "ask-1",
+    askOptions: [
+      { label: "赤", recommended: true, selected: false },
+      { label: "青", recommended: false, selected: true },
+    ],
+    answerKind: "option" as const,
   };
   expect(toChatSnapshot({ ...chatBody, messages: [message] })?.messages).toEqual([message]);
 });

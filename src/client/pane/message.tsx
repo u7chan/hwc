@@ -1,6 +1,7 @@
 import { type ComponentChildren } from "preact";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import type {
+  ChatAskOption,
   ChatAttachment,
   ChatCompaction,
   ChatFile,
@@ -119,6 +120,29 @@ function OutsideFileNote(props: { name: string }) {
   );
 }
 
+// 合成した ask_user の質問に、選択肢と選択済み・推奨を残す。履歴だけを読む人にも
+// 何から選んだか分かるようにする。
+function AskOptions(props: { options: ChatAskOption[] }) {
+  return (
+    <ul class="hwc-ask-options" aria-label="質問の選択肢">
+      {props.options.map((option, index) => (
+        <li
+          class="hwc-ask-option"
+          data-selected={option.selected ? "true" : undefined}
+          key={`${option.label}-${index}`}
+        >
+          <span class="hwc-ask-option-mark" aria-hidden="true">
+            {option.selected ? "✓" : "・"}
+          </span>
+          <span class="hwc-ask-option-label">{option.label}</span>
+          {option.selected ? <span class="hwc-ask-option-badge">選択</span> : null}
+          {option.recommended ? <span class="hwc-ask-option-badge">推奨💡</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // 画像記法の位置に描いた画像は、末尾の一覧から外す。裸パスだけの画像と HTML は
 // 本文に位置が無いので、今までどおりメッセージの後ろに並べる。
 export function AgentMessage(props: {
@@ -144,6 +168,9 @@ export function AgentMessage(props: {
         onOpenImage={props.onOpenImage}
         onOpenPreview={props.onOpenPreview}
       />
+      {props.message.askOptions === undefined ? null : (
+        <AskOptions options={props.message.askOptions} />
+      )}
       {!complete || rest.length === 0 ? null : (
         <MessageFiles
           paneId={props.paneId}
@@ -239,6 +266,11 @@ export function UserMessage(props: {
       <div class="hwc-msg-meta">
         {props.editButton}
         {props.copyButton}
+        {props.message.answerKind === undefined ? null : (
+          <span class="hwc-msg-kind">
+            {props.message.answerKind === "option" ? "選択肢" : "自由入力"}
+          </span>
+        )}
         <span class="hwc-msg-time">{props.pending ? "送信中" : formatClock(props.message.at)}</span>
       </div>
     </>
