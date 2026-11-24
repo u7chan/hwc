@@ -1,8 +1,6 @@
-import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
-import type { AppState, PaneState } from "../server/herdr/state";
+import type { AppState } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
-import { PaneDetail } from "./PaneDetail";
 import { attachmentStore } from "./attachment-store";
 import { fileTreeFontSize, fileTreeWidthPx } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
@@ -28,6 +26,7 @@ import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
+import { Cell, CellTree, type CellActions, type CellContext } from "./app/cells";
 import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
 import { useFavicon } from "./app/hooks/use-favicon";
 import { useFileTreeDisplay } from "./app/hooks/use-file-tree-display";
@@ -76,7 +75,6 @@ import {
   activeRowName,
   canCloseSpace,
   findPane,
-  findPaneContext,
   findPaneRow,
   groupWorkspaces,
   markedParentPaneIds,
@@ -84,7 +82,6 @@ import {
   tabDisplayName,
   tabLabel,
   tabLabelText,
-  type PaneContext,
 } from "./select";
 import {
   defaultPaneOf,
@@ -109,17 +106,12 @@ import {
   removeTab,
   successorTab,
   syncSplitView,
-  type DropZone,
-  type SplitLeaf,
-  type SplitNode,
   type SplitView,
 } from "./split-view";
 import { pendingReadAfter, shouldFocusOnLeave, type ListScope } from "./scope";
 import { moveToTopPlan, orderUnits } from "./order";
 import { decideSnapshotApply } from "./snapshot-apply";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
-import { type PaneLaunchView, launchPhase } from "./starting";
-import { workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -1009,206 +1001,60 @@ export function App() {
     closeMenu();
   };
 
-  const renderPane = (
-    item: PaneState,
-    where: PaneContext,
-    compact: boolean,
-    isCurrent: boolean,
-  ) => {
-    const launch = launches.get(item.id) ?? null;
-    const phase = launchPhase(launch, item, now);
-    const launchView: PaneLaunchView | null =
-      launch === null || phase === null
-        ? null
-        : {
-            phase,
-            agent: launch.agent,
-            model: launch.model,
-            effort: launch.effort,
-            error: launch.request === "failed" ? launch.error : null,
-          };
-    return (
-      <PaneDetail
-        key={item.id}
-        pane={item}
-        context={where}
-        compact={compact}
-        scheme={scheme}
-        treeSide={treeSide}
-        treeWidth={fileTreeWidthPx(treeWidth)}
-        treeIcons={treeIcons}
-        current={isCurrent}
-        // 親ペインの印はセル見出しに出す。
-        parentPaneIds={parentPaneIds}
-        // セル見出しはブランチと作成元スペースだけを出す。名前はタブ列が言う。
-        branch={where.branch}
-        sync={where.sync}
-        // PR を引く鍵はセルでも要る。表示用の sync とは別に渡し、分割表示のまま
-        // push してもチップが引き直せるようにする。
-        upstreamBranch={where.sync?.upstreamBranch ?? null}
-        workspaceMenuOpen={
-          menu?.open === true &&
-          menu.target.kind === "workspace" &&
-          menu.target.id === where.workspaceId
-        }
-        waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
-        now={now}
-        running={processes.get(item.id)?.running === true}
-        sending={inputsInFlight.current.has(item.id)}
-        launch={launchView}
-        dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
-        confirmationAttempts={confirmationAttempts.current}
-        onConfirmFolderTrust={(id) => void confirmPaneFolderTrust(item.id, id)}
-        onDismissConfirmation={(id) =>
-          setDismissedConfirmations((current) => ({ ...current, [item.id]: id }))
-        }
-        menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
-        outputRef={(handle) => {
-          if (handle === null) outputHandles.current.delete(item.id);
-          else outputHandles.current.set(item.id, handle);
-        }}
-        onOpenMenu={openPaneMenu}
-        onOpenWorkspaceMenu={openWorkspaceMenu}
-        onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
-        onStop={() => stopPane(item.id)}
-        onStartAgent={() => openStartAgentDialog(item.id)}
-        onCreateSpace={(path) => openCreateSpaceDialog(item.id, path)}
-        onRetryLaunch={() => retryLaunch(item.id)}
-        onUseShell={() => useShell(item.id)}
-        onOpenImage={(url, name) => setViewer({ url, name })}
-        onOpenPreview={(file) => openPreview(item.id, file)}
-      />
-    );
+  const cellContext: CellContext = {
+    state,
+    compact,
+    wide,
+    focused,
+    parentPaneIds,
+    menu,
+    menuPaneId,
+    processes,
+    leavingPaneId,
+    entering,
+    dragging,
+    detailStatus,
+    suppressFocusActivation,
+    clearFocusSuppression,
+    scheme,
+    treeSide,
+    treeWidth: fileTreeWidthPx(treeWidth),
+    treeIcons,
+    launches,
+    now,
+    workingSince,
+    inputsInFlight: inputsInFlight.current,
+    dismissedConfirmations,
+    confirmationAttempts: confirmationAttempts.current,
+    preview: { target: preview, inTab: previewInTab, previewing, leaf: previewLeaf },
   };
-
-  // ドラッグ中のプレビューの文言。中央はセルの末尾への移動、端は分割。
-  const dropLabel = (zone: DropZone): string => {
-    if (zone !== "center") {
-      return { top: "上に追加", bottom: "下に追加", left: "左に追加", right: "右に追加" }[zone];
-    }
-    return "ここへ移動";
+  const cellActions: CellActions = {
+    select,
+    selectFromTab,
+    removeFromTabs,
+    finishTabLeave,
+    showPreview,
+    closePreview,
+    back,
+    startPaneDrag,
+    openPaneMenu,
+    openWorkspaceMenu,
+    send: sendToPane,
+    stop: stopPane,
+    startAgent: openStartAgentDialog,
+    createSpace: openCreateSpaceDialog,
+    retryLaunch,
+    useShell,
+    openImage: (url, name) => setViewer({ url, name }),
+    openPreview,
+    confirmFolderTrust: (paneId, id) => void confirmPaneFolderTrust(paneId, id),
+    dismissConfirmation: (paneId, id) =>
+      setDismissedConfirmations((current) => ({ ...current, [paneId]: id })),
+    outputRef: (paneId, handle) => {
+      if (handle === null) outputHandles.current.delete(paneId);
+      else outputHandles.current.set(paneId, handle);
+    },
   };
-
-  // セルは木の葉。タブ列を上端に置き、active のペインを本文に出す。親の分割軸を
-  // data 属性に置き、ドラッグ中の向き判定に使う。
-  const renderCell = (leaf: SplitLeaf, parentDir: "row" | "col" | null) => {
-    if (state === null) return null;
-    const item = findPane(state, leaf.active);
-    if (item === null) return null;
-    const where = findPaneContext(state, item.id);
-    if (where === null) return null;
-    const rows = leaf.tabs.flatMap((paneId) => {
-      const row = findPaneRow(state, paneId);
-      return row === null ? [] : [row];
-    });
-    const isCurrent = focused !== null && leaf === focused;
-    const multi = multiSpace(rows.map((row) => row.workspace.id));
-    const previewTab =
-      previewInTab && preview !== null && previewLeaf === leaf
-        ? { name: messageFileLabel(preview.file.name), selected: preview.shown }
-        : null;
-    // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
-    // HWC から動かせないセルが current のままになる。
-    const activate = () => {
-      if (!isCurrent) select(item.id);
-    };
-    // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
-    // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
-    const activateFromFocus = (event: FocusEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (suppressFocusActivation.current) {
-        clearFocusSuppression();
-        return;
-      }
-      if (
-        target.closest(
-          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-        ) === null
-      ) {
-        return;
-      }
-      activate();
-    };
-    // ドラッグはセルの見出しからだけ始める。出力と入力の選択・操作を奪わない。
-    const dragFromHead = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest(".hwc-pane-head") === null) return;
-      if (
-        target.closest(
-          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-        ) !== null
-      ) {
-        return;
-      }
-      startPaneDrag(event, item.id);
-    };
-    const target =
-      dragging?.target?.kind === "cell" && dragging.target.pane === item.id
-        ? dragging.target
-        : null;
-    const tabDrop =
-      dragging?.target?.kind === "tab" && leaf.tabs.includes(dragging.target.pane)
-        ? { pane: dragging.target.pane, side: dragging.target.side }
-        : null;
-    return (
-      <section
-        class="hwc-split-cell"
-        data-compact={compact}
-        data-drop-pane={item.id}
-        data-drop-parent={parentDir ?? undefined}
-        data-flip-cell={leaf.id}
-        data-split-enter={item.id === entering ? "true" : undefined}
-        key={leaf.id}
-        onPointerDown={(event) => {
-          activate();
-          dragFromHead(event);
-        }}
-        onFocusIn={activateFromFocus}
-      >
-        <TabBar
-          leafId={leaf.id}
-          tabs={rows}
-          currentPaneId={leaf.active}
-          focused={isCurrent}
-          multiSpace={multi}
-          parentPaneIds={parentPaneIds}
-          processes={processes}
-          preview={previewTab}
-          status={wide ? null : detailStatus}
-          leavingPaneId={leavingPaneId}
-          droppable={!previewing}
-          onSelectPane={selectFromTab}
-          onRemoveTab={removeFromTabs}
-          onLeaveFinished={finishTabLeave}
-          onSelectPreview={showPreview}
-          onClosePreview={closePreview}
-          onBack={wide ? null : back}
-          onDragStart={startPaneDrag}
-          tabDrop={tabDrop}
-        />
-        <div class="hwc-cell-body" data-leaving={leavingPaneId === item.id ? "true" : undefined}>
-          {renderPane(item, where, compact, isCurrent)}
-        </div>
-        {target === null ? null : (
-          <div class="hwc-drop" data-zone={target.zone} aria-hidden="true">
-            <span>{dropLabel(target.zone)}</span>
-          </div>
-        )}
-      </section>
-    );
-  };
-
-  // 分割は再帰。子の親方向をそのまま渡し、端の向きを決める。
-  const renderSplit = (node: SplitNode, parentDir: "row" | "col" | null): ComponentChildren =>
-    node.kind === "leaf" ? (
-      renderCell(node, parentDir)
-    ) : (
-      <div class="hwc-split" data-dir={node.dir}>
-        {node.children.map((child) => renderSplit(child, node.dir))}
-      </div>
-    );
 
   const previewRows =
     state === null || previewLeaf === null
@@ -1454,13 +1300,23 @@ export function App() {
                 </>
               ) : (
                 <div class="hwc-detail-grid" data-single={shownLeaves.length === 1}>
-                  {wide
-                    ? split.layout === null
-                      ? null
-                      : renderSplit(split.layout, null)
-                    : projected === null
-                      ? null
-                      : renderCell(projected, null)}
+                  {wide ? (
+                    split.layout === null ? null : (
+                      <CellTree
+                        node={split.layout}
+                        parentDir={null}
+                        context={cellContext}
+                        actions={cellActions}
+                      />
+                    )
+                  ) : projected === null ? null : (
+                    <Cell
+                      leaf={projected}
+                      parentDir={null}
+                      context={cellContext}
+                      actions={cellActions}
+                    />
+                  )}
                 </div>
               )}
             </div>
