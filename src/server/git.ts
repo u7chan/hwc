@@ -1,6 +1,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { parseGitHubRemote, parseUpstream, type GitSync } from "../shared/git";
+import { childEnv } from "./child-process";
 
 // HEAD は "ref: refs/heads/<branch>"、detached なら sha。detached はブランチではないので出さない。
 export function parseBranchHead(text: string): string | null {
@@ -233,12 +234,8 @@ export function createGitClient(
 }
 
 function gitEnv(): Record<string, string | undefined> {
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
-  );
   // 認証プロンプトで固まらない。hwc から呼ぶ git は対話できない。
-  env.GIT_TERMINAL_PROMPT = "0";
-  return env;
+  return childEnv({ set: { GIT_TERMINAL_PROMPT: "0" } });
 }
 
 async function readGit(checkoutPath: string, args: string[]): Promise<string> {

@@ -9,6 +9,7 @@ import {
 } from "../shared/agents";
 import { asRecord } from "../shared/json";
 import { OpencodeServiceNotRunningError, readServiceFile, requestJson } from "./chat/opencode";
+import { childEnv } from "./child-process";
 import { type CodexReader, nextCursor, withCodex } from "./codex";
 import { loadPiEfforts } from "./pi-efforts";
 
@@ -84,17 +85,10 @@ function uniqueModels<T extends AgentModel>(models: T[]): T[] {
   );
 }
 
-// HERDR_ を継ぐとペイン扱いになる。
-function agentEnv(): Record<string, string | undefined> {
-  return Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
-  );
-}
-
 async function listPiModels(directory: string): Promise<string> {
   const child = Bun.spawn(["pi", "--offline", "--list-models"], {
     cwd: directory,
-    env: { ...agentEnv(), NO_COLOR: "1" },
+    env: childEnv({ set: { NO_COLOR: "1" } }),
     stdin: "ignore",
     stdout: "pipe",
     stderr: "ignore",
@@ -110,7 +104,7 @@ async function listPiModels(directory: string): Promise<string> {
 async function startOpencodeService(): Promise<void> {
   const child = Bun.spawn(["opencode", "service", "start"], {
     cwd: homedir(),
-    env: agentEnv(),
+    env: childEnv(),
     stdin: "ignore",
     stdout: "ignore",
     stderr: "ignore",

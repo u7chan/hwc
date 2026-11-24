@@ -2,6 +2,7 @@ import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { type ModelLabels, claudeModelName, isClaudeAlias, modelKey } from "../shared/agents";
 import { asRecord } from "../shared/json";
+import { childEnv, readCappedStdout } from "./child-process";
 
 export const CLAUDE_LABELS_TTL_MS = 5 * 60_000;
 export const CLAUDE_LABELS_FAILURE_TTL_MS = 30_000;
@@ -71,10 +72,6 @@ export function parseClaudeModelLabels(output: string): ModelLabels | null {
 }
 
 async function runClaudeListModels(options: ClaudeModelLabelsOptions): Promise<string> {
-  // HERDR_ を継ぐとペイン扱いになる。
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
-  );
   const child = Bun.spawn(
     [
       options.command ?? "claude",
@@ -89,7 +86,7 @@ async function runClaudeListModels(options: ClaudeModelLabelsOptions): Promise<s
     ],
     {
       cwd: options.homeDirectory ?? homedir(),
-      env,
+      env: childEnv(),
       stdin: "pipe",
       stdout: "pipe",
       stderr: "ignore",
@@ -106,19 +103,12 @@ async function runClaudeListModels(options: ClaudeModelLabelsOptions): Promise<s
       })}\n`,
     );
     child.stdin.end();
-    const reader = child.stdout.getReader();
-    const decoder = new TextDecoder();
-    let text = "";
-    let size = 0;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_OUTPUT_BYTES) throw new Error("Claude model labels are too large");
-      text += decoder.decode(value, { stream: true });
-    }
+    const text = await readCappedStdout(child.stdout, {
+      maxBytes: MAX_OUTPUT_BYTES,
+      tooLarge: "Claude model labels are too large",
+    });
     if ((await child.exited) !== 0) throw new Error("Claude model labels failed");
-    return text + decoder.decode();
+    return text;
   } finally {
     child.kill("SIGKILL");
     await child.exited;
