@@ -72,6 +72,7 @@ import { PaneComposer } from "./pane/pane-composer";
 import { PaneHead } from "./pane/pane-head";
 import { useAttachments } from "./pane/use-attachments";
 import { useComposer } from "./pane/use-composer";
+import { useComposerHeight } from "./pane/use-composer-height";
 import { useFilePreview } from "./pane/use-file-tree";
 import { useFileTreePanel } from "./pane/use-file-tree-panel";
 import { useTemplates } from "./pane/use-templates";
@@ -210,7 +211,6 @@ export function PaneDetail(props: PaneDetailProps) {
   const previewOpen = previewPath !== null;
   // 会話は DOM に残してスクロール位置を保ち、表示だけを差し替える。
   const chatHidden = treeOverlay || previewOpen;
-  const [expandedOpen, setExpandedOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [switchOpen, setSwitchOpen] = useState(false);
   const { outputVersion, requestOutputRefresh } = useOutputVersion();
@@ -220,9 +220,6 @@ export function PaneDetail(props: PaneDetailProps) {
   const attachments = useAttachments(pane.id);
   // + メニューの「定型文を引用」を押せるかだけに使う。読めなければ押せる側に倒す。
   const templates = useTemplates(pane.chat);
-
-  // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
-  const expanded = expandedOpen && !compact;
 
   // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
   // ただし Claude と pi の要対応は質問の待ちで、内容は transcript か ask ファイルにある。
@@ -411,15 +408,11 @@ export function PaneDetail(props: PaneDetailProps) {
   const cache = cacheView(snapshot?.cacheExpiresAt, now);
   const content = body.kind === "chat" ? body.snapshot.messages : output;
 
-  const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
-  // 引用を足した直後、再描画後の入力欄へカーソルを移す位置。
-  const pendingCaret = useRef<number | null>(null);
-  // 開閉を押した時点の入力欄の高さ。開閉後の高さへ動かす始点にする。
-  const toggleFrom = useRef<number | null>(null);
-  // 実行中の開閉アニメーション。高さを測る前に止める。
-  const heightAnimation = useRef<Animation | null>(null);
+  // 入力欄の高さ・キャレット・開閉は hook が持つ。中身に合わせて測り直す条件も
+  // そこに閉じてある（描画の前に合わせないと、iOS で入力欄が跳ねる）。
+  const height = useComposerHeight({ compact, inputDisabled });
   const { selectionToolbar, quoting, dismissSelection, closeToolbar } = useSelectionToolbar({
     paneId: pane.id,
     scroller,
@@ -432,43 +425,12 @@ export function PaneDetail(props: PaneDetailProps) {
   // iOS は非同期の後にキーボードを出さないことがあるので、焦点だけを合わせる。
   useEffect(() => {
     if (launch === null || launch.phase !== "launching") return;
-    input.current?.focus();
+    height.field.current?.focus();
   }, [launch === null ? null : launch.phase]);
 
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
   const copyId = () => copy("pane", pane.id);
-
-  // 入力量に合わせて高さを伸ばす。広げている間は CSS の高さに任せる。
-  // 簡略表示では入力欄と情報・送信を同じ行に置くが、折り返して 2 行以上になったら
-  // 入力欄を読み幅いっぱいに広げたい。広い幅で 1 行に戻ると狭い幅で再び折り返し、
-  // 行の往復が起きるので、空にするまで広い側を保つ。
-  const fit = (field: HTMLTextAreaElement | null, open: boolean) => {
-    if (!field) return;
-    // アニメーション中の rect と scrollHeight は途中の高さになる。計測の前に止める。
-    heightAnimation.current?.cancel();
-    heightAnimation.current = null;
-    const form = field.closest(".hwc-input");
-    field.style.height = "";
-    if (open) {
-      form?.removeAttribute("data-wrapped");
-      return;
-    }
-    field.style.height = "auto";
-    const style = getComputedStyle(field);
-    const line = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2;
-    const oneLine = Math.max(
-      line + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom),
-      Number.parseFloat(style.minHeight) || 0,
-    );
-    if (compact && field.value !== "" && field.scrollHeight > oneLine + 1) {
-      form?.setAttribute("data-wrapped", "");
-    } else if (!compact || field.value === "") {
-      form?.removeAttribute("data-wrapped");
-    }
-    // 属性を変えると入力欄の幅も変わるので、その後の高さで合わせる。
-    field.style.height = `${field.scrollHeight}px`;
-  };
 
   // 添付の保存。ペインを切り替えても止めない。送り先が消えたときだけ App が中断する。
   // 失敗したときだけ、入力欄の上に出す文言を返す（表示は composer が持つ）。
@@ -496,7 +458,12 @@ export function PaneDetail(props: PaneDetailProps) {
     sending,
     attachments,
     selection: { toolbar: selectionToolbar, dismiss: dismissSelection },
-    input: { field: input, pendingCaret, fit, expanded },
+    input: {
+      field: height.field,
+      pendingCaret: height.pendingCaret,
+      fit: height.fit,
+      expanded: height.expanded,
+    },
     upload: uploadFile,
   });
   const editTarget =
@@ -573,52 +540,6 @@ export function PaneDetail(props: PaneDetailProps) {
     }
     props.onStartAgent();
   };
-
-  // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
-  // 前の inline height を残さない。
-  // 描画の後に高さを直すと、改行した 1 フレームだけ箱が低いままになり、
-  // スクロールバーが一瞬出る。描画の前に合わせる。
-  useLayoutEffect(() => {
-    fit(input.current, expanded);
-  }, [composer.inputText, expanded, compact, inputDisabled]);
-
-  // 高さが変わるのは開閉を押したときだけにする。打鍵に合わせた伸縮まで滑らせると、
-  // 1 文字ごとに箱が動いて入力の手応えが鈍る。
-  useLayoutEffect(() => {
-    const field = input.current;
-    const from = toggleFrom.current;
-    toggleFrom.current = null;
-    if (field === null || from === null) return;
-    const to = field.getBoundingClientRect().height;
-    if (Math.abs(to - from) < 1) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    heightAnimation.current = field.animate(
-      [
-        // min-height / max-height も一緒に動かす。状態ごとの制約が残ると、始点の高さが
-        // その範囲へ切り詰められて 1 フレーム目で跳ぶ（開: 42→64px、閉: 293→220px）。
-        { height: `${from}px`, minHeight: `${from}px`, maxHeight: `${from}px` },
-        { height: `${to}px`, minHeight: `${to}px`, maxHeight: `${to}px` },
-      ],
-      { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" },
-    );
-  }, [expanded]);
-
-  const toggleExpanded = () => {
-    toggleFrom.current = input.current?.getBoundingClientRect().height ?? null;
-    setExpandedOpen((current) => !current);
-  };
-
-  // 引用を足したあと、再描画された入力欄の末尾（引用の後の空行）へカーソルを移す。
-  useLayoutEffect(() => {
-    const caret = pendingCaret.current;
-    if (caret === null) return;
-    pendingCaret.current = null;
-    const field = input.current;
-    if (field === null) return;
-    field.focus();
-    field.setSelectionRange(caret, caret);
-    fit(field, expanded);
-  }, [composer.draft, expanded]);
 
   useLayoutEffect(() => {
     if (confirmation !== null && scroller.current) scroller.current.scrollTop = 0;
@@ -1189,7 +1110,7 @@ export function PaneDetail(props: PaneDetailProps) {
               target={{ pane, context }}
               view={{
                 compact,
-                expanded,
+                expanded: height.expanded,
                 shell,
                 inputDisabled,
                 launchBlocked,
@@ -1219,7 +1140,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 submit,
                 stopWorking,
                 startAgent,
-                toggleExpanded,
+                toggleExpanded: height.toggle,
                 retryLaunch: props.onRetryLaunch,
                 useShell: props.onUseShell,
                 openImage: props.onOpenImage,
