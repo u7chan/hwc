@@ -80,6 +80,16 @@
     display: block;
   }
 
+  /* 取っ手は左端に接するセルの上に張り出す。row の分割で 2 番目以降の子は左端でないので、
+     その配下では解く。col の分割は子がすべて親の左端に接するので何もしない。 */
+  .hwc-detail {
+    --hwc-tabbar-inset: calc(var(--sidebar-toggle-width) + var(--space-1) + var(--space-2));
+  }
+
+  .hwc-split[data-dir="row"] > :not(:first-child) {
+    --hwc-tabbar-inset: 0px;
+  }
+
   /* 設定を表示している間は、開いている一覧の取っ手を出さない。設定は読んで 1 つ触る画面で、
      遷移中に一覧を畳む動機がない。取っ手は詳細側へ張り出し、カテゴリ一覧の行の隣に残る。
      畳んだ一覧は inert でも、狭い画面で設定を開いてから広い画面へ入ると畳んだままになる。

@@ -247,7 +247,7 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   left: 0;
   display: grid;
   place-items: center;
-  width: 20px;
+  width: var(--sidebar-toggle-width);
   height: 56px;
   padding: 0;
   border: 1px solid var(--color-line);
