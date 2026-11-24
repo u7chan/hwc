@@ -1,6 +1,15 @@
 import { expect, test } from "bun:test";
 import type { AgentStatus, PaneState } from "../server/herdr/state";
-import { composerDisabled, enterInsertsNewline, projectMentionAllowed } from "./input";
+import {
+  composerDisabled,
+  enterInsertsNewline,
+  enterSubmits,
+  projectMentionAllowed,
+} from "./input";
+
+function enter(overrides: { shiftKey?: boolean; isComposing?: boolean; keyCode?: number } = {}) {
+  return { shiftKey: false, isComposing: false, keyCode: 13, ...overrides };
+}
 
 function pane(agent: string | null, agentStatus: AgentStatus = "idle"): PaneState {
   return {
@@ -21,6 +30,20 @@ test("a touch device inserts a newline on Enter instead of sending", () => {
   // マウスのある端末は従来どおり Enter で送る。
   const fine = () => false;
   expect(enterInsertsNewline(fine)).toBe(false);
+});
+
+test("Enter sends on a fine pointer and stays a newline elsewhere", () => {
+  expect(enterSubmits(enter(), false)).toBe(true);
+  expect(enterSubmits(enter(), true)).toBe(false);
+});
+
+test("Shift+Enter always inserts a newline", () => {
+  expect(enterSubmits(enter({ shiftKey: true }), false)).toBe(false);
+});
+
+test("Enter that confirms an IME conversion does not send", () => {
+  expect(enterSubmits(enter({ isComposing: true }), false)).toBe(false);
+  expect(enterSubmits(enter({ keyCode: 229 }), false)).toBe(false);
 });
 
 test("the @ suggestions are for devices with a fine pointer only", () => {

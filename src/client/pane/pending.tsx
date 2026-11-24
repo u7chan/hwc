@@ -20,6 +20,7 @@ import {
   unansweredIndexes,
 } from "../answer";
 import { CheckIcon, ChevronRightIcon, StatusMark, TerminalIcon } from "../icons";
+import { enterInsertsNewline, enterSubmits } from "../input";
 import { Spinner } from "../Spinner";
 
 type Question = Extract<ChatPending, { kind: "question" }>;
@@ -157,6 +158,17 @@ function QuestionForm(props: {
     setFailure(answerFailure(result.status));
   };
 
+  // Enter はページの主ボタンに合わせる。有効かどうかの判断はボタンと同じ条件に任せる。
+  const pressPrimary = () => {
+    if (locked) return;
+    if (!paged || reviewing) {
+      void submit();
+      return;
+    }
+    if (current === undefined || !isAnswered(current, choiceAt(page))) return;
+    setPage(next);
+  };
+
   return (
     <>
       <PendingHead
@@ -189,6 +201,7 @@ function QuestionForm(props: {
             onPick={(label) => pick(page, label)}
             onOther={() => update(page, pickOther(choiceAt(page)))}
             onType={(text) => update(page, typeOther(choiceAt(page), text))}
+            onSubmitKey={pressPrimary}
           />
         )}
       </div>
@@ -361,6 +374,7 @@ function QuestionFields(props: {
   onPick: (label: string) => void;
   onOther: () => void;
   onType: (text: string) => void;
+  onSubmitKey: () => void;
 }) {
   const { question, choice, locked } = props;
   const otherField = (
@@ -373,6 +387,15 @@ function QuestionFields(props: {
         disabled={locked}
         aria-label={`${question.question} の自由入力`}
         onInput={(event) => props.onType(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") return;
+          // タッチ端末は改行のまま。物理キーボードのある端末でだけ、本文の入力欄と同じく
+          // Enter を主ボタンに重ねる。
+          const match = (query: string) => window.matchMedia(query).matches;
+          if (!enterSubmits(event, enterInsertsNewline(match))) return;
+          event.preventDefault();
+          props.onSubmitKey();
+        }}
       />
     </div>
   );

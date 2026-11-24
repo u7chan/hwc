@@ -6,6 +6,17 @@ export function enterInsertsNewline(match: (query: string) => boolean): boolean 
   return match("(pointer: coarse)");
 }
 
+// Enter を主ボタン（送信・次へ）に使うか。修飾キー付きは改行に残し、変換確定中の Enter は
+// 押させない（日本語入力の確定で送信してしまう）。タッチ端末はソフトキーボードに Shift が
+// 無いので、enterInsertsNewline に従って改行のままにする。
+export function enterSubmits(
+  event: Pick<KeyboardEvent, "shiftKey" | "isComposing" | "keyCode">,
+  touchNewline: boolean,
+): boolean {
+  if (event.isComposing || event.keyCode === 229) return false;
+  return !event.shiftKey && !touchNewline;
+}
+
 // `@` の候補は ↑↓ / Tab / Enter で選ぶ前提で、主ポインタが粗い端末には出さない。
 // 指でタップすると本文がフォーカスを失い、ソフトキーボードが閉じてしまう。
 export function projectMentionAllowed(match: (query: string) => boolean): boolean {
