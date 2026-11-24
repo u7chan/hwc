@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import type { PaneProcess } from "../shared/panes";
 import { readPaneProcess } from "./api";
-import { paneName } from "./select";
+import { paneDisplayName } from "./select";
 
 // Herdr は前景プロセスの変化をイベントで流さない。見えているタブのシェルだけを短い間隔で
 // 読み、隠れている間は止める。開始・終了が数秒遅れて見えることは許容し、ソケットを埋めない。
@@ -19,7 +19,7 @@ export function processPollAllowed(visibility: DocumentVisibilityState): boolean
 // 待ち受けポートが分かれば「bun 30000」のように添える。Web のサーバーかどうかは、
 // ポートが出ているかで見分ける。
 export function paneTabName(pane: PaneState, process: PaneProcess | null): string {
-  const name = paneName(pane);
+  const name = paneDisplayName(pane);
   if (pane.agent !== null || process === null || !process.running) return name;
   if (process.command === null) return name;
   const program = commandName(process.command);

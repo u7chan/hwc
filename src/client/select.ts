@@ -253,17 +253,12 @@ function titleText(title: string | null): string | null {
   return text === "" ? null : text;
 }
 
-// 一覧・タブ・見出しで同じ名前を出す。label は Herdr で付けた作業名、title は端末のタイトル。
-// 端末タイトルは同じリポジトリのペインで同じ値になるので、ラベルがあればそちらを主にする。
+// タブ・セル見出し・一覧の 1 段目で同じ名前を出す。label は Herdr で付けた作業名、agent は
+// Herdr の検出名、title は端末のタイトル。端末タイトルは同じリポジトリのペインで同じ値に
+// なるので、名前が無いペインだけエージェント種別、それも無ければタイトルに倒す。
 // エージェントのいないペインはシェル。ID は詳細ヘッダと読み上げに任せ、名前には出さない。
-export function paneName(pane: PaneState): string {
-  return pane.label ?? titleText(pane.title) ?? pane.agent ?? "シェル";
-}
-
-// 一覧の 1 段目はペイン名。端末タイトルは同じリポジトリで同じ値になるので、
-// 名前が無いペインだけエージェント種別、それも無ければタイトルに倒す。
-export function paneRowTitle(pane: PaneState): string {
-  return pane.label ?? pane.agent ?? paneName(pane);
+export function paneDisplayName(pane: PaneState): string {
+  return pane.label ?? pane.agent ?? titleText(pane.title) ?? "シェル";
 }
 
 // Herdr が linked worktree に付ける `worktree-` は、ワークツリーであることを示すだけで、
@@ -291,8 +286,8 @@ export function shortenBranchName(workspace: WorkspaceState, branch: string): st
   return rest === "" ? branch : rest;
 }
 
-// 名前の無いペインの端末タイトルはワークツリー名そのものになる。狭いタブやセルでは 2 段目や
-// チップのスペース名と同じ文字列になるので、同じ省略形に揃える。別名のペインはそのまま。
+// 端末タイトルしか名前の無いペインは、その値がワークツリー名そのものになる。狭いタブやセル
+// では 2 段目やチップのスペース名と同じ文字列になるので、同じ省略形に揃える。別名はそのまま。
 export function shortenPaneName(
   name: string,
   workspaceLabel: string,
@@ -309,18 +304,18 @@ export type PlaceChip = {
 };
 
 // 分割セルの見出しに出す場所。ワークツリーは作成元のスペースの下にあるので、その順に
-// 並べる。見出しの名前と同じ文字列は繰り返さない。名前の無いペインは見出しが場所そのもの
-// なので、チップを出さない（null）。
+// 並べる。見出しの名前と同じ文字列は繰り返さない。端末タイトルがスペース名と同じペインは
+// 見出しが場所そのものなので、チップを出さない（null）。
 export function placeChip(
-  paneName: string,
+  displayName: string,
   parentSpaceName: string | null,
   spaceName: string,
 ): PlaceChip | null {
-  if (spaceName === "" || spaceName === paneName) return null;
+  if (spaceName === "" || spaceName === displayName) return null;
   const parent =
     parentSpaceName === null ||
     parentSpaceName === "" ||
-    parentSpaceName === paneName ||
+    parentSpaceName === displayName ||
     parentSpaceName === spaceName
       ? null
       : parentSpaceName;

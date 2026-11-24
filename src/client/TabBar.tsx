@@ -136,7 +136,7 @@ export function TabBar(props: TabBarProps) {
           const parent = props.parentPaneIds.has(item.pane.id);
           const process = props.processes.get(item.pane.id) ?? null;
           const name = paneTabName(item.pane, process);
-          // 名前の無いペインの端末タイトルはワークツリー名そのものになる。狭いタブでは
+          // 端末タイトルしか名前の無いペインは、その値がワークツリー名と一致する。狭いタブでは
           // 前置きを落として 2 段目のスペース名と同じ表記に揃える。
           const shownSpace = shortenSpaceName(item.workspace);
           const shownName = tabDisplayName(name, item.workspace);

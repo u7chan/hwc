@@ -760,6 +760,15 @@ export async function createScenario(root: string): Promise<Scenario> {
         agent_status: "idle",
         focused: false,
       },
+      // ラベルの無いエージェントのペイン。端末タイトルはスペース名と同じになり、
+      // タブ・セル見出し・一覧が名前ではなくエージェント名で揃うことを確かめる。
+      {
+        tab_id: "w5:t2",
+        workspace_id: "w5",
+        label: "worker",
+        agent_status: "idle",
+        focused: false,
+      },
       {
         tab_id: "w6:t1",
         workspace_id: "w6",
@@ -954,6 +963,16 @@ export async function createScenario(root: string): Promise<Scenario> {
         agent_session: null,
       },
       {
+        pane_id: "w5:p2",
+        workspace_id: "w5",
+        tab_id: "w5:t2",
+        cwd: plain,
+        label: null,
+        agent_status: "idle",
+        focused: false,
+        agent_session: null,
+      },
+      {
         pane_id: "w6:p1",
         workspace_id: "w6",
         tab_id: "w6:t1",
@@ -1032,6 +1051,13 @@ export async function createScenario(root: string): Promise<Scenario> {
         terminal_title_stripped: "checks",
       },
       {
+        pane_id: "w5:p2",
+        workspace_id: "w5",
+        cwd: plain,
+        agent: "pi",
+        terminal_title_stripped: "plain-checkout",
+      },
+      {
         pane_id: "w3:p5",
         workspace_id: "w3",
         cwd: scratch,
@@ -1059,6 +1085,7 @@ export async function createScenario(root: string): Promise<Scenario> {
       "w3:p4": "› Ask Codex to do anything\n",
       "w3:p5": PI_TRUST_SCREEN,
       "w5:p1": "$ git status\nOn branch feat/plain\nnothing to commit\n$",
+      "w5:p2": "› Ask pi to do anything\n",
       "w6:p1": "$ ",
       "w7:p1": "$ ",
     },

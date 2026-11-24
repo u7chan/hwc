@@ -14,7 +14,7 @@ import {
 import { MENU_ID } from "../Menu";
 import {
   agentGlyph,
-  paneName,
+  paneDisplayName,
   placeChip,
   pullRequestLabel,
   shortenPaneName,
@@ -69,7 +69,7 @@ export function PaneHead(props: PaneHeadProps) {
   const { pane, context, labeled, showSpace, showBranch, branch, sync, pullRequest } = props;
   const repoUrl = sync?.repoUrl ?? null;
   const shownPaneName = shortenPaneName(
-    paneName(pane),
+    paneDisplayName(pane),
     context.workspaceLabel,
     context.workspaceName,
   );
