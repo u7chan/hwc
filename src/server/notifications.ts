@@ -1,12 +1,4 @@
-import {
-  appendFileSync,
-  chmodSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
@@ -17,83 +9,29 @@ import { parentPaneOf } from "../shared/parent-pane";
 import type { PullRequest } from "../shared/pull-request";
 import type { AppState, PaneState, StateStore, WorkspaceState } from "./herdr/state";
 import { pullRequestBranches, type PullRequestReader } from "./pull-request";
+import { createJsonStore, createStateFile, type JsonStore, type StateFile } from "./state-file";
 
 // 設定ファイルの読み書き。中身は JSON のまま扱い、解釈は parseNotificationSettings に任せる。
-export type NotificationSettingsFile = {
-  read: () => string | null;
-  write: (raw: string) => void;
-};
+export type NotificationSettingsFile = StateFile;
 
 export function notificationSettingsPath(root: string): string {
   return join(root, "notifications.json");
 }
 
 // 添付・ペイン時刻と同じ状態ディレクトリ配下の 1 ファイル（docs/adr/state-storage.md）。Webhook URL は
-// 資格情報なので 0600 で書く。固定の tmp 名を使うと、並行した書き込みや前回の残骸と
-// 衝突するため、一意な名前で作ってから rename で置き換える。
+// 資格情報なので 0600 で書く。
 export function createNotificationSettingsFile(root: string): NotificationSettingsFile {
-  const path = notificationSettingsPath(root);
-  let serial = 0;
-  return {
-    read: () => {
-      try {
-        return readFileSync(path, "utf8");
-      } catch {
-        // まだ無い・読めないは既定値で始める。通知を出さないだけで起動は止めない。
-        return null;
-      }
-    },
-    write: (raw) => {
-      mkdirSync(root, { recursive: true });
-      serial += 1;
-      const tmp = `${path}.${process.pid}.${serial}.tmp`;
-      try {
-        writeFileSync(tmp, raw, { mode: 0o600, flag: "wx" });
-        // 既存ファイルの umask に影響されないよう、書き込み後にも明示する。
-        chmodSync(tmp, 0o600);
-        renameSync(tmp, path);
-      } catch (error) {
-        try {
-          rmSync(tmp, { force: true });
-        } catch {
-          // 後片付けの失敗で元のエラーを隠さない。
-        }
-        throw error;
-      }
-    },
-  };
+  return createStateFile(notificationSettingsPath(root), { mode: 0o600 });
 }
 
-// 設定はメモリ上にも持つ。トグル・scope・URL を同時に触られても食い違わないよう、
-// 書き込みが成功したときだけメモリを置き換える。失敗すれば古い設定が残る。
-export type NotificationSettingsStore = {
-  get: () => NotificationSettings;
-  save: (next: NotificationSettings) => void;
-};
+export type NotificationSettingsStore = JsonStore<NotificationSettings>;
 
 export function createNotificationSettingsStore(
   file: NotificationSettingsFile,
 ): NotificationSettingsStore {
-  const loaded = parseJson(file.read());
-  let current =
-    loaded === null ? { ...DEFAULT_NOTIFICATION_SETTINGS } : parseNotificationSettings(loaded);
-  return {
-    get: () => current,
-    save: (next) => {
-      file.write(JSON.stringify(next));
-      current = next;
-    },
-  };
-}
-
-function parseJson(raw: string | null): unknown {
-  if (raw === null) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    // 壊れた JSON は既定値へ落とす。中身を直す入口は設定画面の上書きだけ。
-    return null;
-  }
+  // 壊れた JSON は既定値へ落とす。中身を直す入口は設定画面の上書きだけ。設定はメモリ上にも
+  // 持つので、保存が失敗すれば古い設定が残る。
+  return createJsonStore(file, { ...DEFAULT_NOTIFICATION_SETTINGS }, parseNotificationSettings);
 }
 
 export type DiscordSendError =
