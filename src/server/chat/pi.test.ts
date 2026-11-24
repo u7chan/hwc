@@ -1725,7 +1725,7 @@ test("a free-text ask has no options and keeps the question newlines", async () 
   const path = await writeSession(header(), user("u1", null, "one"));
   await writeFile(
     `${path}.ask.json`,
-    JSON.stringify({ v: 1, id: ASK_ID, question: "1 行目\n2 行目", options: null }),
+    JSON.stringify({ v: 1, id: ASK_ID, question: "1 行目\n2 行目", options: null, freeText: true }),
   );
 
   const snapshot = await createChatClient().snapshot(path);

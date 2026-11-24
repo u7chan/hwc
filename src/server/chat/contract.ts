@@ -113,7 +113,7 @@ export type ChatPending =
       // ask_user は mypi の 1 問だけの質問。AskUserQuestion とは回答の経路が違う
       // （docs/adr/pi-integration.md）。
       tool: "ask_user";
-      // 選択肢があっても自由入力を受け付ける。古い mypi の pending は false。
+      // 選択肢があっても自由入力を受け付ける。pending の freeText をそのまま載せる。
       freeText: boolean;
       questions: ChatPendingQuestion[];
     }

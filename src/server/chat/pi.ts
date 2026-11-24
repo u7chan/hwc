@@ -61,9 +61,9 @@ type SessionAskQuestion = {
 type SessionAskResult = {
   toolCallId: string;
   status: string;
-  // mypi が pending 質問 id を details に残す。古い mypi は null。
+  // mypi が pending 質問 id を details に残す。中断時は空文字なので null になる。
   askId: string | null;
-  // 回答が選択肢か自由入力か。古い mypi や不明な値は null。
+  // 回答が選択肢か自由入力か。不明な値は null。
   kind: "option" | "text" | null;
   // answered 以外は null。Esc・中断・失敗も呼び出しを消費するために保持する。
   answer: string | null;
