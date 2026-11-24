@@ -135,6 +135,11 @@ const REMOVAL_LEAVE_FALLBACK_MS = 800;
 // タブのアニメーションの完了が届かない場合の保険。SSE の適用もこの間だけ遅らせる。
 const TAB_LEAVE_FALLBACK_MS = 400;
 
+// タブを外した直後の、ブラウザによる自動フォーカス移動を無視する時間。消える
+// アニメーション（180ms）とその直後の focusin を覆い、利用者が 350ms 後に
+// フォーカスしたら通る長さにする。
+const FOCUS_SUPPRESS_MS = 250;
+
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
   // 一覧の見出しに出す最新の PR。ペイン見出しのチップとは別に、表示中の一覧ぶんをまとめて持つ。
@@ -214,9 +219,28 @@ export function App() {
   leavingTabRef.current = leavingTab;
   const leaveTabTimer = useRef<number | null>(null);
   // タブを外した直後、消えたボタンからフォーカスが隣のセルへ移ることがある。
-  // その移動で current を変えないよう、最初の focusin だけ無視する。
+  // その移動で current を変えないよう、短い間だけ focusin を無視する。
   const suppressFocusActivation = useRef(false);
   const suppressFocusTimer = useRef<number | null>(null);
+  const clearFocusSuppression = () => {
+    suppressFocusActivation.current = false;
+    if (suppressFocusTimer.current !== null) {
+      window.clearTimeout(suppressFocusTimer.current);
+      suppressFocusTimer.current = null;
+    }
+  };
+  // 利用者が自分で pointerdown / keydown したら、そのフォーカス移動は通す。
+  // × を押した同じ pointerdown は beginTabLeave より前なので、ここでは解除されない。
+  useEffect(() => {
+    const release = () => clearFocusSuppression();
+    window.addEventListener("pointerdown", release, true);
+    window.addEventListener("keydown", release, true);
+    return () => {
+      window.removeEventListener("pointerdown", release, true);
+      window.removeEventListener("keydown", release, true);
+      clearFocusSuppression();
+    };
+  }, []);
   const heldSnapshot = useRef<AppState | null>(null);
   const heldSnapshotTimer = useRef<number | null>(null);
 
@@ -811,14 +835,11 @@ export function App() {
     const target = { paneId, successor };
     leavingTabRef.current = target;
     // 外すタブのボタンが消えると、ブラウザが隣のセルの操作要素へフォーカスを
-    // 移すことがある。レイアウトの後継で current は決めるので、その 1 回は無視する。
-    // フォーカス移動が起きなかったときに、次の操作まで無視し続けないよう期限を置く。
-    if (suppressFocusTimer.current !== null) window.clearTimeout(suppressFocusTimer.current);
+    // 移すことがある。レイアウトの後継で current は決めるので、その短い間だけ
+    // focusin を無視する。連続して外すときは期限を引き直す。
+    clearFocusSuppression();
     suppressFocusActivation.current = true;
-    suppressFocusTimer.current = window.setTimeout(() => {
-      suppressFocusActivation.current = false;
-      suppressFocusTimer.current = null;
-    }, TAB_LEAVE_FALLBACK_MS + 200);
+    suppressFocusTimer.current = window.setTimeout(clearFocusSuppression, FOCUS_SUPPRESS_MS);
     setLeavingTab(target);
     leaveTabTimer.current = window.setTimeout(() => finishTabLeave(paneId), TAB_LEAVE_FALLBACK_MS);
   };
@@ -1286,7 +1307,7 @@ export function App() {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (suppressFocusActivation.current) {
-        suppressFocusActivation.current = false;
+        clearFocusSuppression();
         return;
       }
       if (
