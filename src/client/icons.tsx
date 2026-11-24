@@ -356,15 +356,6 @@ export function InfoIcon({ size = 16 }: IconProps) {
   );
 }
 
-export function TabIcon({ size = 16 }: IconProps) {
-  return (
-    <Svg size={size}>
-      <path d="M4 7h6l2 3h8" />
-      <path d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V10" />
-    </Svg>
-  );
-}
-
 // スペースの親ペイン。左端にいる作業の起点を、状態記号とは別の形で示す。
 export function ParentIcon({ size = 14 }: IconProps) {
   return (
