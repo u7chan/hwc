@@ -1,10 +1,8 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { AppState } from "../server/herdr/state";
-import { messageFileLabel } from "../shared/message-files";
 import { attachmentStore } from "./attachment-store";
 import { fileTreeFontSize, fileTreeWidthPx } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
-import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./settings/Settings";
 import type {
@@ -26,7 +24,8 @@ import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
-import { Cell, CellTree, type CellActions, type CellContext } from "./app/cells";
+import { Cell, CellTree, PreviewCell, type CellActions, type CellContext } from "./app/cells";
+import { tabRows } from "./app/tab-rows";
 import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
 import { useFavicon } from "./app/hooks/use-favicon";
 import { useFileTreeDisplay } from "./app/hooks/use-file-tree-display";
@@ -63,7 +62,6 @@ import { liveUpdateMs } from "./live-update";
 import { allAgentPaneIds, allPaneIds, applyDelegation, newAgentPanes } from "./delegation";
 import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
-import { Preview } from "./Preview";
 import { ChevronLeftIcon, HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
@@ -99,7 +97,6 @@ import {
   layoutKey,
   leafOfPane,
   moveTab,
-  multiSpace,
   openPane,
   openTabs,
   readingOrder,
@@ -924,14 +921,7 @@ export function App() {
   const draggedLeaf =
     draggedRow === null || state === null ? null : leafOfPane(split.layout, draggedRow.pane.id);
   const draggedMultiSpace =
-    draggedLeaf === null || state === null
-      ? false
-      : multiSpace(
-          draggedLeaf.tabs.flatMap((paneId) => {
-            const row = findPaneRow(state, paneId);
-            return row === null ? [] : [row.workspace.id];
-          }),
-        );
+    draggedLeaf === null || state === null ? false : tabRows(state, draggedLeaf.tabs).multiSpace;
   const draggingLabel =
     draggedRow === null
       ? ""
@@ -1055,15 +1045,6 @@ export function App() {
       else outputHandles.current.set(paneId, handle);
     },
   };
-
-  const previewRows =
-    state === null || previewLeaf === null
-      ? []
-      : previewLeaf.tabs.flatMap((paneId) => {
-          const row = findPaneRow(state, paneId);
-          return row === null ? [] : [row];
-        });
-  const previewMulti = multiSpace(previewRows.map((row) => row.workspace.id));
 
   const overlays: AppOverlaysProps = {
     dragging,
@@ -1263,41 +1244,8 @@ export function App() {
             <Placeholder connection={connection} />
           ) : split.layout !== null && shownLeaves.length > 0 ? (
             <div class="hwc-detail-inner">
-              {previewing && preview !== null && previewLeaf !== null ? (
-                <>
-                  <TabBar
-                    leafId={previewLeaf.id}
-                    tabs={previewRows}
-                    currentPaneId={previewLeaf.active}
-                    focused={previewLeaf === focused}
-                    multiSpace={previewMulti}
-                    parentPaneIds={parentPaneIds}
-                    processes={processes}
-                    preview={{
-                      name: messageFileLabel(preview.file.name),
-                      selected: preview.shown,
-                    }}
-                    status={detailStatus}
-                    leavingPaneId={leavingPaneId}
-                    droppable={false}
-                    onSelectPane={selectFromTab}
-                    onRemoveTab={removeFromTabs}
-                    onLeaveFinished={finishTabLeave}
-                    onSelectPreview={showPreview}
-                    onClosePreview={closePreview}
-                    onBack={wide ? null : back}
-                    onDragStart={startPaneDrag}
-                    tabDrop={null}
-                  />
-                  <div class="hwc-detail-body">
-                    <Preview
-                      key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
-                      paneId={preview.paneId}
-                      file={preview.file}
-                      onClose={closePreview}
-                    />
-                  </div>
-                </>
+              {previewing ? (
+                <PreviewCell context={cellContext} actions={cellActions} />
               ) : (
                 <div class="hwc-detail-grid" data-single={shownLeaves.length === 1}>
                   {wide ? (
