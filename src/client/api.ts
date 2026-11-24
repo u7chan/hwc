@@ -372,7 +372,7 @@ function toChatPending(value: unknown): ChatPending | undefined {
   if (!askUser) {
     return { kind: "question", toolUseId: pending.toolUseId, tool: "AskUserQuestion", questions };
   }
-  const { freeText } = pending as { freeText?: unknown };
+  const freeText = pending.freeText;
   // 自由入力の可否は入力欄そのものの差になるので、無い・boolean でない値は options から
   // 補わずに形の不一致として捨てる（BFF は boolean を必ず返す）。
   if (typeof freeText !== "boolean") return undefined;
