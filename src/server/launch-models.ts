@@ -10,12 +10,19 @@ type LaunchSelection = { model: string; effort: string | null };
 export function createLaunchModels() {
   const selections = new Map<string, LaunchSelection>();
 
+  const remember = (paneId: string, model: AgentModel, effort: string | null): void => {
+    selections.set(paneId, { model: model.id, effort });
+  };
+
   return {
-    remember(paneId: string, model: AgentModel, effort: string | null): void {
-      selections.set(paneId, { model: model.id, effort });
-    },
+    remember,
     forget(paneId: string): void {
       selections.delete(paneId);
+    },
+    // 起動の指定が無ければ、同じペインに残っている前回の選択を捨てる（`/new` が既定へ戻るため）。
+    select(paneId: string, model: AgentModel | null | undefined, effort: string | null): void {
+      if (model === null || model === undefined) selections.delete(paneId);
+      else remember(paneId, model, effort);
     },
     read(paneId: string): LaunchSelection | null {
       return selections.get(paneId) ?? null;
