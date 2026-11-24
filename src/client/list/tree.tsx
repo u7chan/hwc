@@ -31,7 +31,7 @@ import {
   groupMembers,
   groupWorkspaces,
   mostUrgentStatus,
-  paneRowTitle,
+  paneDisplayName,
   pullRequestTone,
   soleTab,
   type WorkspaceGroup,
@@ -360,7 +360,6 @@ export function TreePaneList(props: TreePaneListProps) {
         {tab.panes.map((pane) => {
           const startedAt = workingSince.get(pane.id);
           const branch = branchOf.get(pane.id) ?? null;
-          const slot = props.slots.indexOf(pane.id);
           return (
             // 狭い行の判定は、行そのものではなくこの枠の幅で行う。
             <li key={pane.id} class="hwc-pane-row">
@@ -368,7 +367,6 @@ export function TreePaneList(props: TreePaneListProps) {
                 class="hwc-pane"
                 data-pane-id={pane.id}
                 data-current={pane.id === selectedPaneId}
-                data-slot={slot >= 0 ? slot + 1 : undefined}
               >
                 <button
                   type="button"
@@ -387,7 +385,7 @@ export function TreePaneList(props: TreePaneListProps) {
                           <AgentGlyphIcon agent={pane.agent} size={14} />
                         </span>
                       )}
-                      <span class="hwc-pane-name">{paneRowTitle(pane)}</span>
+                      <span class="hwc-pane-name">{paneDisplayName(pane)}</span>
                       {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
                     </span>
                     {branch === null ? null : (

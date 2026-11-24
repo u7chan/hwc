@@ -114,16 +114,11 @@ type PaneDetailProps = {
   treeIcons: FileTreeIcons;
   // 枠線がハイライトしている、操作の対象になっているセルか。キーの対象を 1 つに絞る。
   current: boolean;
-  // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
-  labeled: boolean;
-  // 複数スペースのペインが並ぶときだけ、見出しに場所を添える。
-  showSpace: boolean;
-  // スペースのブランチ。分割セルでも PR のチップを引くために渡す。
-  // 文字として出すかは showBranch が決め、labeled のときは名前を優先する。
+  // 親ペインの印をセル見出しに出す。
+  parentPaneIds: ReadonlySet<string>;
+  // スペースのブランチ。PR のチップもこの値で引く。
   branch: string | null;
-  // 一覧が隠れる狭い画面でだけ、ブランチを名前に代えて出す。
-  showBranch: boolean;
-  // 1 枚表示のときだけ渡す。分割セルは同じ上流の差が並ぶので出さない。
+  // 上流との差。ブランチの横に添える。
   sync: GitSync | null;
   // push 先のブランチ名。sync は分割セルで null になるが、PR を引く鍵はセルでも要る。
   upstreamBranch: string | null;
@@ -171,10 +166,8 @@ export function PaneDetail(props: PaneDetailProps) {
     treeWidth,
     treeIcons,
     current,
-    labeled,
-    showSpace,
+    parentPaneIds,
     branch,
-    showBranch,
     sync,
     upstreamBranch,
     workspaceMenuOpen,
@@ -1097,9 +1090,7 @@ export function PaneDetail(props: PaneDetailProps) {
       <PaneHead
         pane={pane}
         context={context}
-        labeled={labeled}
-        showSpace={showSpace}
-        showBranch={showBranch}
+        parentPaneIds={parentPaneIds}
         branch={branch}
         sync={sync}
         pullRequest={pullRequest}

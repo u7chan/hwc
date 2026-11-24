@@ -120,6 +120,8 @@
   --row-pane: 64px;
   /* 詳細の上部は、タブバーと設定の見出しで高さをそろえる。 */
   --row-head: 56px;
+  /* 詳細のタブバーは 1 行。同じ行に並ぶ戻るボタン（--tap）が収まる高さにする。 */
+  --row-detail-tab: 44px;
   --icon-frame: 32px;
 
   /* 面・文字・枠の色を変える時間。ホバーや選択への反応を部品ごとに変えないよう、
@@ -140,13 +142,6 @@
      設定「ファイルツリー」が JS から上書きする。 */
   --hwc-tree-width: 260px;
   --hwc-tree-font-size: var(--text-body);
-
-  /* スロット位置の 4 色。ステータス色（緑・黄・赤）とは別の色相を使い、
-     濃淡は color-mix で作る。 */
-  --color-slot-1: #2f62c8;
-  --color-slot-2: #7a4fd0;
-  --color-slot-3: #0f6f7d;
-  --color-slot-4: #b4457f;
 }
 
 :root[data-theme="dark"] {
@@ -173,11 +168,6 @@
   --color-neutral-bg: #2b2f36;
   --color-danger: #ff9ca4;
   --color-agent-claude: #e08a68;
-
-  --color-slot-1: #7aa7ff;
-  --color-slot-2: #b79bff;
-  --color-slot-3: #6fcbd6;
-  --color-slot-4: #f38fbe;
 }
 
 :root[data-theme="catppuccin-latte"] {
@@ -204,11 +194,6 @@
   --color-neutral-bg: #e6e9ef;
   --color-danger: #d20f39;
   --color-agent-claude: #c15f3c;
-
-  --color-slot-1: #1e66f5;
-  --color-slot-2: #8839ef;
-  --color-slot-3: #179299;
-  --color-slot-4: #d556a8;
 }
 
 :root[data-theme="catppuccin-frappe"] {
@@ -235,11 +220,6 @@
   --color-neutral-bg: #414559;
   --color-danger: #e78284;
   --color-agent-claude: #e39a7c;
-
-  --color-slot-1: #8caaee;
-  --color-slot-2: #ca9ee6;
-  --color-slot-3: #81c8be;
-  --color-slot-4: #f2a5c9;
 }
 
 :root[data-theme="catppuccin-macchiato"] {
@@ -266,11 +246,6 @@
   --color-neutral-bg: #363a4f;
   --color-danger: #ed8796;
   --color-agent-claude: #e39a7c;
-
-  --color-slot-1: #8aadf4;
-  --color-slot-2: #c6a0f6;
-  --color-slot-3: #8bd5ca;
-  --color-slot-4: #f5bde6;
 }
 
 :root[data-theme="catppuccin-mocha"] {
@@ -297,11 +272,6 @@
   --color-neutral-bg: #313244;
   --color-danger: #f38ba8;
   --color-agent-claude: #e39a7c;
-
-  --color-slot-1: #89b4fa;
-  --color-slot-2: #cba6f7;
-  --color-slot-3: #94e2d5;
-  --color-slot-4: #f5c2e7;
 }
 
 :root[data-theme="nord"] {
@@ -328,11 +298,6 @@
   --color-neutral-bg: #434c5e;
   --color-danger: #bf616a;
   --color-agent-claude: #d08770;
-
-  --color-slot-1: #81a1c1;
-  --color-slot-2: #b48ead;
-  --color-slot-3: #8fbcbb;
-  --color-slot-4: #c98ba4;
 }
 
 :root[data-theme="tokyo-night"] {
@@ -359,11 +324,6 @@
   --color-neutral-bg: #292e42;
   --color-danger: #f7768e;
   --color-agent-claude: #e3906e;
-
-  --color-slot-1: #7aa2f7;
-  --color-slot-2: #bb9af7;
-  --color-slot-3: #7dcfff;
-  --color-slot-4: #f7a1c4;
 }
 
 :root[data-theme="kanagawa"] {
@@ -390,11 +350,6 @@
   --color-neutral-bg: #363646;
   --color-danger: #e46876;
   --color-agent-claude: #e08a68;
-
-  --color-slot-1: #7e9cd8;
-  --color-slot-2: #957fb8;
-  --color-slot-3: #7aa89f;
-  --color-slot-4: #d27e99;
 }
 
 :root[data-theme="gruvbox"] {
@@ -421,11 +376,6 @@
   --color-neutral-bg: #3c3836;
   --color-danger: #fb4934;
   --color-agent-claude: #d65d0e;
-
-  --color-slot-1: #6f9fc8;
-  --color-slot-2: #b16286;
-  --color-slot-3: #89b0ae;
-  --color-slot-4: #d3869b;
 }
 
 :root[data-theme="everforest"] {
@@ -452,11 +402,6 @@
   --color-neutral-bg: #3d484d;
   --color-danger: #e67e80;
   --color-agent-claude: #e08a68;
-
-  --color-slot-1: #7fb2d9;
-  --color-slot-2: #b58fb6;
-  --color-slot-3: #7fbbb3;
-  --color-slot-4: #dc9bb6;
 }
 
 :root[data-theme="dracula"] {
@@ -483,11 +428,6 @@
   --color-neutral-bg: #343746;
   --color-danger: #ff5555;
   --color-agent-claude: #ffb86c;
-
-  --color-slot-1: #7fb0ff;
-  --color-slot-2: #bd93f9;
-  --color-slot-3: #8be9fd;
-  --color-slot-4: #ff79c6;
 }
 
 :root[data-theme="rose-pine-dawn"] {
@@ -515,11 +455,6 @@
   --color-neutral-bg: #f2e9e1;
   --color-danger: #b4637a;
   --color-agent-claude: #c15f3c;
-
-  --color-slot-1: #286983;
-  --color-slot-2: #907aa9;
-  --color-slot-3: #56949f;
-  --color-slot-4: #b4637a;
 }
 
 :root[data-theme="one-light"] {
@@ -547,11 +482,6 @@
   --color-neutral-bg: #f0f0f0;
   --color-danger: #e45649;
   --color-agent-claude: #c15f3c;
-
-  --color-slot-1: #4078f2;
-  --color-slot-2: #a626a4;
-  --color-slot-3: #0184bc;
-  --color-slot-4: #c74e8c;
 }
 
 :root[data-theme="solarized-light"] {
@@ -579,11 +509,6 @@
   --color-neutral-bg: #e7e0cb;
   --color-danger: #dc322f;
   --color-agent-claude: #cb4b16;
-
-  --color-slot-1: #268bd2;
-  --color-slot-2: #6c71c4;
-  --color-slot-3: #2aa198;
-  --color-slot-4: #d33682;
 }
 
 :root[data-theme="solarized-dark"] {
@@ -610,16 +535,10 @@
   --color-neutral-bg: #0f4553;
   --color-danger: #dc322f;
   --color-agent-claude: #cb4b16;
-
-  --color-slot-1: #3f9fe0;
-  --color-slot-2: #8a8fd8;
-  --color-slot-3: #35bdb2;
-  --color-slot-4: #e0579a;
 }
 
 /* 赤系のテーマは、アクセントと danger が同じ色相帯に寄る。アクセントを莓色・ローズに振り、
-   danger は暗い地で淡い赤、明るい地で煉瓦色にして、危険色がテーマ色に見えないようにする。
-   スロット 4 もピンクからマゼンタへずらす。 */
+   danger は暗い地で淡い赤、明るい地で煉瓦色にして、危険色がテーマ色に見えないようにする。 */
 :root[data-theme="sakura"] {
   color-scheme: light;
 
@@ -644,11 +563,6 @@
   --color-neutral-bg: #f4e7ea;
   --color-danger: #b02a1f;
   --color-agent-claude: #c15f3c;
-
-  --color-slot-1: #2f62c8;
-  --color-slot-2: #7a4fd0;
-  --color-slot-3: #0f6f7d;
-  --color-slot-4: #a83a94;
 }
 
 :root[data-theme="rose-pine-moon"] {
@@ -675,11 +589,6 @@
   --color-neutral-bg: #393552;
   --color-danger: #ff8f8f;
   --color-agent-claude: #e08a68;
-
-  --color-slot-1: #8fa9f2;
-  --color-slot-2: #c4a7e7;
-  --color-slot-3: #9ccfd8;
-  --color-slot-4: #d17ab6;
 }
 
 :root[data-theme="gruvbox-light"] {
@@ -706,11 +615,6 @@
   --color-neutral-bg: #f2e5bc;
   --color-danger: #9d0006;
   --color-agent-claude: #c15f3c;
-
-  --color-slot-1: #076678;
-  --color-slot-2: #8f3f71;
-  --color-slot-3: #2f7f74;
-  --color-slot-4: #a84f74;
 }
 
 :root[data-theme="horizon"] {
@@ -737,11 +641,6 @@
   --color-neutral-bg: #2e303e;
   --color-danger: #ff9ca4;
   --color-agent-claude: #ef9062;
-
-  --color-slot-1: #7aa9d6;
-  --color-slot-2: #b877db;
-  --color-slot-3: #59c3c3;
-  --color-slot-4: #cf7bb0;
 }
 
 :root[data-scheme="dark"] {

@@ -50,10 +50,6 @@ const PALETTE_TOKENS = [
   "neutral-bg",
   "danger",
   "agent-claude",
-  "slot-1",
-  "slot-2",
-  "slot-3",
-  "slot-4",
 ];
 
 test("every palette defines the same colour tokens", async () => {

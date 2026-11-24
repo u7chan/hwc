@@ -1,11 +1,38 @@
 import { expect, test } from "bun:test";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { allAgentPaneIds, applyDelegation, newAgentPanes, tabOfPane } from "./delegation";
-import { EMPTY_SPLIT_VIEW, leafPanes, startSplitView, type SplitNode } from "./split-view";
+import {
+  EMPTY_SPLIT_VIEW,
+  leafOfPane,
+  readingOrder,
+  startSplitView,
+  type SplitLeaf,
+  type SplitNode,
+} from "./split-view";
 
-const leaf = (pane: string): SplitNode => ({ kind: "leaf", pane });
+let testLeafSeq = 0;
+const leaf = (tabs: readonly string[], active: string = tabs[0] ?? ""): SplitLeaf => ({
+  kind: "leaf",
+  id: `test-${++testLeafSeq}`,
+  tabs,
+  active,
+});
 const row = (...children: SplitNode[]): SplitNode => ({ kind: "split", dir: "row", children });
 const col = (...children: SplitNode[]): SplitNode => ({ kind: "split", dir: "col", children });
+
+// 新しい葉の id は毎回変わるので、配置の比較では id を落とす。
+const plainNode = (node: SplitNode | null): SplitNode | null => {
+  if (node === null) return null;
+  if (node.kind === "leaf") return { kind: "leaf", id: "", tabs: node.tabs, active: node.active };
+  return {
+    kind: "split",
+    dir: node.dir,
+    children: node.children.flatMap((child) => {
+      const plain = plainNode(child);
+      return plain === null ? [] : [plain];
+    }),
+  };
+};
 
 function pane(id: string, agent: string | null): PaneState {
   return {
@@ -45,9 +72,12 @@ function stateWith(tabs: readonly (readonly PaneState[])[]): AppState {
   };
 }
 
-const view = (layout: SplitNode) => ({
-  ...startSplitView(leafPanes(layout)[0] ?? null),
-  openTabs: leafPanes(layout),
+const view = (
+  layout: SplitNode,
+  current: string | null = readingOrder(layout)[0]?.active ?? null,
+) => ({
+  ...startSplitView(null),
+  current,
   layout,
 });
 
@@ -63,19 +93,34 @@ test("a pane that starts as a shell is delegated when its agent appears", () => 
   expect(newAgentPanes(started, allAgentPaneIds(shell)).map((item) => item.id)).toEqual(["w1:p2"]);
 });
 
-test("an agent in a cell that is already shown does not move the layout", () => {
+test("an agent in a leaf that is already shown does not move the layout", () => {
   const shell = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", null)]]);
   const started = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", "claude")]]);
-  const shown = view(row(leaf("w1:p1"), leaf("w1:p2")));
+  const shown = view(leaf(["w1:p1", "w1:p2"], "w1:p1"));
   expect(
     applyDelegation(started, shown, newAgentPanes(started, allAgentPaneIds(shell))),
   ).toBeNull();
 });
 
-test("a pane found in another tab is not opened", () => {
+test("a leaf counts as visible through a non-active tab", () => {
+  const shell = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", null)]]);
+  // 同じ Herdr タブの p2 は active ではないが、葉の tabs にある。
+  const started = stateWith([
+    [pane("w1:p1", "pi"), pane("w1:p2", "claude"), pane("w1:p3", "codex")],
+  ]);
+  const shown = view(leaf(["w1:p1", "w1:p2"], "w1:p1"));
+  const result = applyDelegation(started, shown, newAgentPanes(started, allAgentPaneIds(shell)));
+  expect(result?.entering).toBe("w1:p3");
+  expect(readingOrder(result?.split.layout ?? null).map((item) => item.tabs)).toEqual([
+    ["w1:p1", "w1:p2"],
+    ["w1:p3"],
+  ]);
+});
+
+test("a pane found in another Herdr tab is not opened", () => {
   const before = stateWith([[pane("w1:p1", "pi")]]);
   const after = stateWith([[pane("w1:p1", "pi")], [pane("w1:p9", "pi")]]);
-  const split = view(leaf("w1:p1"));
+  const split = view(leaf(["w1:p1"]));
   expect(applyDelegation(after, split, newAgentPanes(after, allAgentPaneIds(before)))).toBeNull();
   expect(tabOfPane(after, "w1:p9")?.id).toBe("w1:t2");
 });
@@ -85,31 +130,30 @@ test("the second pane grows to the right and keeps the selection", () => {
   const after = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", "claude")]]);
   const result = applyDelegation(
     after,
-    view(leaf("w1:p1")),
+    view(leaf(["w1:p1"])),
     newAgentPanes(after, allAgentPaneIds(before)),
   );
   expect(result?.entering).toBe("w1:p2");
-  expect(result?.split.layout).toEqual(row(leaf("w1:p1"), leaf("w1:p2")));
+  expect(plainNode(result?.split.layout ?? null)).toEqual(
+    plainNode(row(leaf(["w1:p1"]), leaf(["w1:p2"]))),
+  );
   expect(result?.split.current).toBe("w1:p1");
 });
 
-test("three panes make a T, four make the 2x2 grid", () => {
-  const before = stateWith([[pane("w1:p1", "pi")]]);
-  const after = stateWith([
-    [pane("w1:p1", "pi"), pane("w1:p2", "claude"), pane("w1:p3", "codex"), pane("w1:p4", "pi")],
-  ]);
-  const result = applyDelegation(
-    after,
-    view(leaf("w1:p1")),
-    newAgentPanes(after, allAgentPaneIds(before)),
+test("the new pane splits the focused leaf", () => {
+  const before = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", "claude")]]);
+  const after = stateWith([[pane("w1:p1", "pi"), pane("w1:p2", "claude"), pane("w1:p3", "codex")]]);
+  const shown = view(row(leaf(["w1:p1"]), leaf(["w1:p2"])), "w1:p2");
+  const result = applyDelegation(after, shown, newAgentPanes(after, allAgentPaneIds(before)));
+  expect(result?.entering).toBe("w1:p3");
+  // p2 の葉は親が row なので、右ではなく下へ割る。
+  expect(plainNode(result?.split.layout ?? null)).toEqual(
+    plainNode(row(leaf(["w1:p1"]), col(leaf(["w1:p2"]), leaf(["w1:p3"])))),
   );
-  expect(result?.entering).toBe("w1:p4");
-  expect(result?.split.layout).toEqual(
-    row(col(leaf("w1:p1"), leaf("w1:p3")), col(leaf("w1:p2"), leaf("w1:p4"))),
-  );
+  expect(result?.split.current).toBe("w1:p2");
 });
 
-test("panes beyond four join the tabs without moving the cells", () => {
+test("a fifth pane joins the tabs instead of adding a cell", () => {
   const before = stateWith([[pane("w1:p1", "pi")]]);
   const after = stateWith([
     [
@@ -122,12 +166,12 @@ test("panes beyond four join the tabs without moving the cells", () => {
   ]);
   const result = applyDelegation(
     after,
-    view(leaf("w1:p1")),
+    view(leaf(["w1:p1"])),
     newAgentPanes(after, allAgentPaneIds(before)),
   );
-  expect(leafPanes(result?.split.layout ?? null)).toHaveLength(4);
-  expect(result?.split.openTabs).toContain("w1:p5");
-  // 5 枚目はセルではないので、動きの対象にもしない。
+  expect(readingOrder(result?.split.layout ?? null)).toHaveLength(4);
+  // 4 セルが埋まったので、フォーカス中の葉（p1）の末尾へタブとして足す。
+  expect(leafOfPane(result?.split.layout ?? null, "w1:p1")?.tabs).toContain("w1:p5");
   expect(result?.entering).toBe("w1:p4");
 });
 

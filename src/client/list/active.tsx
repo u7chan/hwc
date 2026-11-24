@@ -16,7 +16,7 @@ import { showsTabName, type ActiveGroup, type ActiveStatus } from "../scope";
 import {
   activeRowName,
   agentGlyph,
-  paneRowTitle,
+  paneDisplayName,
   pullRequestLabel,
   pullRequestTone,
   shortenBranchName,
@@ -251,15 +251,10 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
           <ul class="hwc-active-rows">
             {group.rows.map(({ tab, pane }) => {
               const current = pane.id === props.selectedPaneId;
-              const slot = props.slots.indexOf(pane.id);
-              const name = paneRowTitle(pane);
+              const name = paneDisplayName(pane);
               return (
                 <li key={pane.id} class="hwc-active-row" data-pane-id={pane.id}>
-                  <div
-                    class="hwc-active-pane"
-                    data-current={current}
-                    data-slot={slot >= 0 ? slot + 1 : undefined}
-                  >
+                  <div class="hwc-active-pane" data-current={current}>
                     <button
                       type="button"
                       class="hwc-active-open"
