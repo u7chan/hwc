@@ -190,12 +190,12 @@ export function TabBar(props: TabBarProps) {
                 </span>
                 <span class="hwc-tab-label">
                   {label.space === null ? null : (
-                    <span class="hwc-tab-space">
-                      {label.space}
+                    <>
+                      <span class="hwc-tab-space">{label.space}</span>
                       <span class="hwc-tab-sep" aria-hidden="true">
                         ›
                       </span>
-                    </span>
+                    </>
                   )}
                   <span class="hwc-tab-name">{label.name}</span>
                 </span>

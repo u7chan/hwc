@@ -297,12 +297,13 @@ export function shortenPaneName(
 }
 
 export type PlaceChip = {
-  // 作成元スペース。無い・空・見出しと同じ名前・いまのスペースと同じなら null。
+  // 作成元スペース。チップを出さないときは placeChip が null を返す。
   parent: string;
 };
 
 // 分割セルの見出しに出す場所。タブが現在のスペースを言うので、作成元だけを返す。
-// 名前の無いペインは見出しが場所そのものなので、繰り返しになるチップは出さない（null）。
+// 作成元が無い・空・見出しの名前と同じ・いまのスペースと同じなら、繰り返しになるので
+// チップごと出さない（null）。
 export function placeChip(
   displayName: string,
   parentSpaceName: string | null,
