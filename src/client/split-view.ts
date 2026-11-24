@@ -6,6 +6,9 @@ export type SplitDir = "row" | "col";
 
 export type SplitLeaf = {
   kind: "leaf";
+  // セルの識別子。タブの追加・削除・active の変更では変えない。セルの key と
+  // FLIP の照合に使い、タブを外したときの再マウントを防ぐ。
+  id: string;
   // そのセルのタブ。1 枚以上、木全体で重複しない。
   tabs: readonly string[];
   // 選択中のタブ。tabs のどれか。
@@ -28,11 +31,22 @@ export type SplitView = {
 
 export const EMPTY_SPLIT_VIEW: SplitView = { current: null, layout: null };
 
-function makeLeaf(tabs: readonly string[], active?: string): SplitLeaf {
+// 再読み込みを跨いでも衝突しないよう、モジュールごとの乱数接頭辞を付ける。
+// 同じセッション内では連番。保存値の id は parse / normalize がそのまま使う。
+const LEAF_ID_PREFIX = Math.random().toString(36).slice(2, 10);
+let leafIdSeq = 0;
+
+function newLeafId(): string {
+  leafIdSeq += 1;
+  return `leaf-${LEAF_ID_PREFIX}-${leafIdSeq}`;
+}
+
+function makeLeaf(tabs: readonly string[], active?: string, id = newLeafId()): SplitLeaf {
   const first = tabs[0];
   if (first === undefined) throw new Error("a leaf needs at least one tab");
   return {
     kind: "leaf",
+    id,
     tabs,
     active: active !== undefined && tabs.includes(active) ? active : first,
   };
@@ -238,7 +252,7 @@ function removeTabFromLeaf(layout: SplitNode, leaf: SplitLeaf, paneId: string): 
   const tabs = leaf.tabs.filter((id) => id !== paneId);
   if (tabs.length === 0) return removeLeaf(layout, leaf);
   const active = leaf.active === paneId ? (tabs[at] ?? tabs[at - 1] ?? tabs[0]) : leaf.active;
-  return compactLayout(updateLeaf(layout, leaf, () => makeLeaf(tabs, active)));
+  return compactLayout(updateLeaf(layout, leaf, () => makeLeaf(tabs, active, leaf.id)));
 }
 
 type EdgePlan = { base: SplitNode; anchor: string; dir: SplitDir; before: boolean };
@@ -284,7 +298,11 @@ function dropOnCenter(view: SplitView, source: string, target: string): SplitVie
   const sourceLeaf = leafOfPane(view.layout, source);
   if (sourceLeaf === targetLeaf) {
     const tabs = [...targetLeaf.tabs.filter((id) => id !== source), source];
-    const layout = replaceLeaf(view.layout as SplitNode, targetLeaf, makeLeaf(tabs, source));
+    const layout = replaceLeaf(
+      view.layout as SplitNode,
+      targetLeaf,
+      makeLeaf(tabs, source, targetLeaf.id),
+    );
     return { current: source, layout };
   }
   let base = view.layout;
@@ -295,7 +313,7 @@ function dropOnCenter(view: SplitView, source: string, target: string): SplitVie
   if (base === null) return view;
   const host = leafOfPane(base, target);
   if (host === null) return view;
-  const layout = replaceLeaf(base, host, makeLeaf([...host.tabs, source], source));
+  const layout = replaceLeaf(base, host, makeLeaf([...host.tabs, source], source, host.id));
   return { current: source, layout };
 }
 
@@ -322,7 +340,7 @@ export function openPane(view: SplitView, paneId: string): SplitView {
     if (view.current === paneId && leaf.active === paneId) return view;
     return {
       current: paneId,
-      layout: replaceLeaf(view.layout as SplitNode, leaf, makeLeaf(leaf.tabs, paneId)),
+      layout: replaceLeaf(view.layout as SplitNode, leaf, makeLeaf(leaf.tabs, paneId, leaf.id)),
     };
   }
   const target = focusedLeaf(view);
@@ -330,7 +348,7 @@ export function openPane(view: SplitView, paneId: string): SplitView {
   const layout = replaceLeaf(
     view.layout as SplitNode,
     target,
-    makeLeaf([...target.tabs, paneId], paneId),
+    makeLeaf([...target.tabs, paneId], paneId, target.id),
   );
   return { current: paneId, layout };
 }
@@ -351,7 +369,7 @@ export function moveTab(
     if (leaf === null) return view;
     return {
       current: source,
-      layout: replaceLeaf(view.layout as SplitNode, leaf, makeLeaf(leaf.tabs, source)),
+      layout: replaceLeaf(view.layout as SplitNode, leaf, makeLeaf(leaf.tabs, source, leaf.id)),
     };
   }
   const targetLeaf = leafOfPane(view.layout, target);
@@ -370,7 +388,7 @@ export function moveTab(
       layout: replaceLeaf(
         view.layout as SplitNode,
         targetLeaf,
-        makeLeaf(tabs, select ? source : targetLeaf.active),
+        makeLeaf(tabs, select ? source : targetLeaf.active, targetLeaf.id),
       ),
     };
   }
@@ -387,7 +405,7 @@ export function moveTab(
   const tabs = [...host.tabs.slice(0, cut), source, ...host.tabs.slice(cut)];
   return {
     current: source,
-    layout: replaceLeaf(base, host, makeLeaf(tabs, source)),
+    layout: replaceLeaf(base, host, makeLeaf(tabs, source, host.id)),
   };
 }
 
@@ -414,7 +432,7 @@ export function insertDelegatedPane(
   const layout = replaceLeaf(
     view.layout as SplitNode,
     target,
-    makeLeaf([...target.tabs, paneId], target.active),
+    makeLeaf([...target.tabs, paneId], target.active, target.id),
   );
   return { current: view.current, layout };
 }
@@ -433,7 +451,7 @@ export function successorTab(view: SplitView, paneId: string): string | null {
 }
 
 // タブから外す。ペインは閉じない。空になった葉は畳み、current を外したときだけ
-// 選択を後継へ動かす。後継は同じ葉、葉が消えたら読み順の次（無ければ手前）。
+// 選択を後継へ動かす。後継は同じ葉、葉が消えたら読み順の次（無ければ null）。
 export function removeTab(view: SplitView, paneId: string, successor?: string | null): SplitView {
   const leaf = leafOfPane(view.layout, paneId);
   if (leaf === null) return view;
@@ -449,13 +467,12 @@ export function removeTab(view: SplitView, paneId: string, successor?: string | 
   const layout =
     tabs.length === 0
       ? removeLeaf(view.layout as SplitNode, leaf)
-      : updateLeaf(view.layout as SplitNode, leaf, () => makeLeaf(tabs, active));
+      : updateLeaf(view.layout as SplitNode, leaf, () => makeLeaf(tabs, active, leaf.id));
   if (view.current !== paneId) return { current: view.current, layout };
   if (tabs.length > 0) return { current: active, layout };
   const atLeaf = order.indexOf(leaf);
   const nextLeaf = order.slice(atLeaf + 1).find((item) => item !== leaf);
-  const previous = order[atLeaf - 1];
-  return { current: nextLeaf?.active ?? previous?.active ?? null, layout };
+  return { current: nextLeaf?.active ?? null, layout };
 }
 
 // スナップショットに合わせる。消えたペインはタブから落とし、空の葉は畳む。
@@ -473,8 +490,9 @@ export function normalizeSplitView(
   exists: (paneId: string) => boolean,
 ): SplitView {
   const seen = new Set<string>();
+  const ids = new Set<string>();
   const count = { leaves: 0 };
-  const layout = compactLayout(normalizeNode(view.layout, exists, seen, count));
+  const layout = compactLayout(normalizeNode(view.layout, exists, seen, ids, count));
   return enforceCurrent(layout, view.current, exists);
 }
 
@@ -482,6 +500,7 @@ function normalizeNode(
   node: SplitNode | null,
   exists: (paneId: string) => boolean,
   seen: Set<string>,
+  ids: Set<string>,
   count: { leaves: number },
 ): SplitNode | null {
   if (node === null) return null;
@@ -500,12 +519,16 @@ function normalizeNode(
       const next = kept.find((item) => item.at > activeAt);
       active = (next ?? kept[kept.length - 1])?.id ?? kept[0]?.id ?? active;
     }
+    // id が無い・空・重複の保存値には新しい id を割り当てる。タブを落としても
+    // 残った葉の id は変えない。
+    const id = node.id !== "" && !ids.has(node.id) ? node.id : newLeafId();
+    ids.add(id);
     for (const item of kept) seen.add(item.id);
     count.leaves += 1;
-    return { kind: "leaf", tabs: kept.map((item) => item.id), active };
+    return { kind: "leaf", id, tabs: kept.map((item) => item.id), active };
   }
   const children = node.children
-    .map((child) => normalizeNode(child, exists, seen, count))
+    .map((child) => normalizeNode(child, exists, seen, ids, count))
     .filter((child): child is SplitNode => child !== null);
   if (children.length === 0) return null;
   if (children.length === 1) return children[0] ?? null;
@@ -522,13 +545,17 @@ function enforceCurrent(
   const at = leafOfPane(layout, current);
   if (at !== null && at.active === current) return { current, layout };
   if (at !== null && layout !== null) {
-    return { current, layout: replaceLeaf(layout, at, makeLeaf(at.tabs, current)) };
+    return { current, layout: replaceLeaf(layout, at, makeLeaf(at.tabs, current, at.id)) };
   }
   const first = readingOrder(layout)[0];
   if (first === undefined) return { current, layout: makeLeaf([current]) };
   return {
     current,
-    layout: replaceLeaf(layout as SplitNode, first, makeLeaf([...first.tabs, current], current)),
+    layout: replaceLeaf(
+      layout as SplitNode,
+      first,
+      makeLeaf([...first.tabs, current], current, first.id),
+    ),
   };
 }
 
@@ -539,7 +566,7 @@ export function layoutKey(node: SplitNode | null): string {
 
 function shapeOf(node: SplitNode | null): unknown {
   if (node === null) return null;
-  if (node.kind === "leaf") return { tabs: node.tabs };
+  if (node.kind === "leaf") return { id: node.id, tabs: node.tabs };
   return { dir: node.dir, children: node.children.map(shapeOf) };
 }
 
@@ -557,6 +584,7 @@ function parseNode(value: unknown): SplitNode | null {
     if (first === undefined) return null;
     return {
       kind: "leaf",
+      id: isString(record.id) && record.id !== "" ? record.id : newLeafId(),
       tabs,
       active: tabs.includes(record.active) ? record.active : first,
     };

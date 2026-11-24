@@ -17,6 +17,8 @@ import {
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
+  // このセルの識別子。タブの増減では変わらないので、FLIP の照合に使う。
+  leafId: string;
   // このセルのタブ。並びが正で、active は currentPaneId。
   tabs: readonly PaneRow[];
   // このセルの active。フォーカスの有無とは別に、セルの中で選ばれているタブ。
@@ -61,12 +63,6 @@ const removeOnAuxClick =
 // セルの上端のタブ列。開いたペインの履歴を並べ、タブから外す入口を添える。
 export function TabBar(props: TabBarProps) {
   const tabList = useRef<HTMLDivElement>(null);
-  // 同じ葉を描き直しても並べ替えの位置を比べられるよう、葉の代表をタブ ID の
-  // 最小値にする。active や並び順では変えない。
-  const owner = props.tabs.reduce<string>(
-    (min, item) => (item.pane.id < min ? item.pane.id : min),
-    props.tabs[0]?.pane.id ?? "",
-  );
 
   // 選択中のタブが隠れていたら見える位置まで送る。プレビューを選んだときも、
   // 並べ替えて選択タブが画面外へ出たときも送る。セルごとの列だが、各列が
@@ -145,7 +141,7 @@ export function TabBar(props: TabBarProps) {
         class="hwc-tabs"
         role="tablist"
         aria-label="このセルのタブ"
-        data-tab-list={owner}
+        data-tab-list={props.leafId}
         data-drop-list={props.droppable ? "true" : undefined}
         data-drop-leaf={props.tabs[0]?.pane.id}
         ref={tabList}

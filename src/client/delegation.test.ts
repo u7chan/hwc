@@ -10,13 +10,29 @@ import {
   type SplitNode,
 } from "./split-view";
 
+let testLeafSeq = 0;
 const leaf = (tabs: readonly string[], active: string = tabs[0] ?? ""): SplitLeaf => ({
   kind: "leaf",
+  id: `test-${++testLeafSeq}`,
   tabs,
   active,
 });
 const row = (...children: SplitNode[]): SplitNode => ({ kind: "split", dir: "row", children });
 const col = (...children: SplitNode[]): SplitNode => ({ kind: "split", dir: "col", children });
+
+// 新しい葉の id は毎回変わるので、配置の比較では id を落とす。
+const plainNode = (node: SplitNode | null): SplitNode | null => {
+  if (node === null) return null;
+  if (node.kind === "leaf") return { kind: "leaf", id: "", tabs: node.tabs, active: node.active };
+  return {
+    kind: "split",
+    dir: node.dir,
+    children: node.children.flatMap((child) => {
+      const plain = plainNode(child);
+      return plain === null ? [] : [plain];
+    }),
+  };
+};
 
 function pane(id: string, agent: string | null): PaneState {
   return {
@@ -118,7 +134,9 @@ test("the second pane grows to the right and keeps the selection", () => {
     newAgentPanes(after, allAgentPaneIds(before)),
   );
   expect(result?.entering).toBe("w1:p2");
-  expect(result?.split.layout).toEqual(row(leaf(["w1:p1"]), leaf(["w1:p2"])));
+  expect(plainNode(result?.split.layout ?? null)).toEqual(
+    plainNode(row(leaf(["w1:p1"]), leaf(["w1:p2"]))),
+  );
   expect(result?.split.current).toBe("w1:p1");
 });
 
@@ -129,7 +147,9 @@ test("the new pane splits the focused leaf", () => {
   const result = applyDelegation(after, shown, newAgentPanes(after, allAgentPaneIds(before)));
   expect(result?.entering).toBe("w1:p3");
   // p2 の葉は親が row なので、右ではなく下へ割る。
-  expect(result?.split.layout).toEqual(row(leaf(["w1:p1"]), col(leaf(["w1:p2"]), leaf(["w1:p3"]))));
+  expect(plainNode(result?.split.layout ?? null)).toEqual(
+    plainNode(row(leaf(["w1:p1"]), col(leaf(["w1:p2"]), leaf(["w1:p3"])))),
+  );
   expect(result?.split.current).toBe("w1:p2");
 });
 

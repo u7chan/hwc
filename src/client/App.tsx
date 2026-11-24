@@ -213,6 +213,10 @@ export function App() {
   const leavingTabRef = useRef<LeavingTab | null>(null);
   leavingTabRef.current = leavingTab;
   const leaveTabTimer = useRef<number | null>(null);
+  // タブを外した直後、消えたボタンからフォーカスが隣のセルへ移ることがある。
+  // その移動で current を変えないよう、最初の focusin だけ無視する。
+  const suppressFocusActivation = useRef(false);
+  const suppressFocusTimer = useRef<number | null>(null);
   const heldSnapshot = useRef<AppState | null>(null);
   const heldSnapshotTimer = useRef<number | null>(null);
 
@@ -806,6 +810,15 @@ export function App() {
     if (leafOfPane(splitRef.current.layout, paneId) === null) return;
     const target = { paneId, successor };
     leavingTabRef.current = target;
+    // 外すタブのボタンが消えると、ブラウザが隣のセルの操作要素へフォーカスを
+    // 移すことがある。レイアウトの後継で current は決めるので、その 1 回は無視する。
+    // フォーカス移動が起きなかったときに、次の操作まで無視し続けないよう期限を置く。
+    if (suppressFocusTimer.current !== null) window.clearTimeout(suppressFocusTimer.current);
+    suppressFocusActivation.current = true;
+    suppressFocusTimer.current = window.setTimeout(() => {
+      suppressFocusActivation.current = false;
+      suppressFocusTimer.current = null;
+    }, TAB_LEAVE_FALLBACK_MS + 200);
     setLeavingTab(target);
     leaveTabTimer.current = window.setTimeout(() => finishTabLeave(paneId), TAB_LEAVE_FALLBACK_MS);
   };
@@ -1262,8 +1275,6 @@ export function App() {
       previewInTab && preview !== null && previewLeaf === leaf
         ? { name: messageFileLabel(preview.file.name), selected: preview.shown }
         : null;
-    // 同じ葉の並べ替えでセルを描き直さないよう、セルの目印はタブ ID の最小値にする。
-    const anchor = leaf.tabs.reduce((min, id) => (id < min ? id : min), leaf.tabs[0] ?? item.id);
     // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
     // HWC から動かせないセルが current のままになる。
     const activate = () => {
@@ -1274,6 +1285,10 @@ export function App() {
     const activateFromFocus = (event: FocusEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
+      if (suppressFocusActivation.current) {
+        suppressFocusActivation.current = false;
+        return;
+      }
       if (
         target.closest(
           "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
@@ -1311,9 +1326,9 @@ export function App() {
         data-compact={compact}
         data-drop-pane={item.id}
         data-drop-parent={parentDir ?? undefined}
-        data-flip-cell={anchor}
+        data-flip-cell={leaf.id}
         data-split-enter={item.id === entering ? "true" : undefined}
-        key={anchor}
+        key={leaf.id}
         onPointerDown={(event) => {
           activate();
           dragFromHead(event);
@@ -1321,6 +1336,7 @@ export function App() {
         onFocusIn={activateFromFocus}
       >
         <TabBar
+          leafId={leaf.id}
           tabs={rows}
           currentPaneId={leaf.active}
           focused={isCurrent}
@@ -1578,6 +1594,7 @@ export function App() {
               {previewing && preview !== null && previewLeaf !== null ? (
                 <>
                   <TabBar
+                    leafId={previewLeaf.id}
                     tabs={previewRows}
                     currentPaneId={previewLeaf.active}
                     focused={previewLeaf === focused}
