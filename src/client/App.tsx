@@ -116,6 +116,7 @@ import {
 } from "./split-view";
 import { pendingReadAfter, shouldFocusOnLeave, type ListScope } from "./scope";
 import { moveToTopPlan, orderUnits } from "./order";
+import { decideSnapshotApply } from "./snapshot-apply";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import { type PaneLaunchView, launchPhase } from "./starting";
 import { workingMs } from "./time";
@@ -300,47 +301,39 @@ export function App() {
     armRemovalFallback();
   };
 
-  // 受信したスナップショットで丸ごと置き換える（docs/adr/bff-client-transport.md）。画面から消える対象の
-  // アニメーションが途中で切り落とされないよう、その間だけ適用を保留する。
+  // 受信したスナップショットで丸ごと置き換える（docs/adr/bff-client-transport.md）。適用するか
+  // 保留するかは snapshot-apply が決め、ここは決まった先の後始末だけを行う。
   const applyState = (next: AppState) => {
-    const target = removing.latest.current;
-    if (target?.phase === "leave" || leavingTabRef.current !== null) {
-      heldSnapshot.current = next;
-      return;
-    }
-    // 応答より先にスペースが消えたスナップショットが届くことがある。対象を消して
-    // 見せてから適用する。
-    if (
-      target?.phase === "busy" &&
-      !next.workspaces.some((workspace) => workspace.id === target.target.workspaceId)
-    ) {
-      heldSnapshot.current = next;
-      beginRemovalLeave();
-      return;
-    }
-    // ペインを閉じる要求の応答より先に、ペインが消えたスナップショットが届くことが
-    // ある。消えるタブを先に見せてから適用する。ペインが無い以上 close の目的は
-    // 達しているので、確認は閉じ、遅れて返る応答は捨てる。
-    const closeTarget = closing.latest.current;
-    if (
-      closeTarget?.phase === "busy" &&
-      closeTarget.target.action === "close" &&
-      findPane(next, closeTarget.target.paneId) === null
-    ) {
-      // タブとして開いていないペインはアニメーションできない。保留だけ残すと
-      // 次のスナップショットまで一覧が古いままになるので、その場で適用する。
-      if (leafOfPane(splitRef.current.layout, closeTarget.target.paneId) === null) {
+    const decision = decideSnapshotApply({
+      next,
+      removing: removing.latest.current,
+      closing: closing.latest.current,
+      leavingTab: leavingTabRef.current !== null,
+      layout: splitRef.current.layout,
+    });
+    switch (decision.kind) {
+      case "hold":
+        heldSnapshot.current = next;
+        return;
+      case "leave-space":
+        heldSnapshot.current = next;
+        beginRemovalLeave();
+        return;
+      case "leave-tab":
+        // ペインが無い以上 close の目的は達しているので、確認は閉じ、遅れて返る応答は捨てる。
+        heldSnapshot.current = next;
+        beginTabLeave(decision.paneId, decision.successor);
+        closing.update(() => null);
+        return;
+      case "apply-now":
         heldSnapshot.current = null;
         closing.update(() => null);
         setState(next);
         return;
-      }
-      heldSnapshot.current = next;
-      beginTabLeave(closeTarget.target.paneId, closeTarget.target.next);
-      closing.update(() => null);
-      return;
+      case "apply":
+        setState(next);
+        return;
     }
-    setState(next);
   };
 
   // タブのアニメーションと削除のアニメーションがどちらも終わったら、保留した
