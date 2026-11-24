@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { OUTPUT_POLL_MS } from "./api";
+import { OUTPUT_POLL_MS } from "./requests/panes";
 import { pollDelay } from "./output";
 
 test("the visible pane is read again after the polling interval", () => {

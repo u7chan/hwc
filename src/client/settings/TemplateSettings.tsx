@@ -6,7 +6,7 @@ import {
   MAX_TEMPLATE_TITLE_LENGTH,
   type Template,
 } from "../../shared/templates";
-import { fetchTemplates, saveTemplates, type TemplateSaveResult } from "../api";
+import { fetchTemplates, saveTemplates, type TemplateSaveResult } from "../requests/settings";
 import { Confirm } from "../Confirm";
 import { ChevronRightIcon, PlusIcon, TemplateIcon } from "../icons";
 import { newTemplateId, templatePreview } from "../templates";

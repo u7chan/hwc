@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { AgentStatus } from "../server/herdr/state";
 import type { PaneActivity } from "../shared/activity";
-import { ACTIVITY_POLL_MS, type ActivityRead, readActivity } from "./api";
+import { ACTIVITY_POLL_MS, type ActivityRead, readActivity } from "./requests/chat";
 import { startPoll } from "./poll";
 
 // 末尾 2 行だけ出す。積み上げないので、行数は固定して高さを揺らさない。

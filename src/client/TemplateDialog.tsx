@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { characterCount, type Template } from "../shared/templates";
-import { fetchTemplates } from "./api";
+import { fetchTemplates } from "./requests/settings";
 import { DialogShell } from "./Dialog";
 import { Spinner } from "./Spinner";
 import { filterTemplates } from "./templates";

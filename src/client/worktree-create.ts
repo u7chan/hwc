@@ -1,4 +1,4 @@
-import { canRetryWorktree, type CreateWorktreeFailure } from "./api";
+import { canRetryWorktree, type CreateWorktreeFailure } from "./requests/workspaces";
 import { INVALID_REQUEST_NOTICE } from "./failure-text";
 
 // 作成できたかを確認できない失敗。ワークツリーとエージェントが残っている可能性があるので、

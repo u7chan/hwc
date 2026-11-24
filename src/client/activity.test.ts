@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { ACTIVITY_POLL_MS } from "./api";
+import { ACTIVITY_POLL_MS } from "./requests/chat";
 import {
   ACTIVITY_HOLD_MS,
   activityLabel,

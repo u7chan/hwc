@@ -9,7 +9,7 @@ import type {
 } from "../../server/chat/contract";
 import { attachmentExtFromName, formatFileSize } from "../../shared/attachments";
 import { messageFileLabel } from "../../shared/message-files";
-import { attachmentUrl, chatFileUrl } from "../api";
+import { attachmentUrl, chatFileUrl } from "../requests/panes";
 import { compactionLabel, messageFileKindLabel, messageLinks, splitInlineImages } from "../chat";
 import { CheckIcon, ChevronRightIcon, EyeIcon, StatusMark } from "../icons";
 import { Markdown } from "../Markdown";

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { fetchRevision } from "../../api";
+import { fetchRevision } from "../../requests/workspaces";
 
 // どの版を見ているかを画面で確かめられるようにする。取れなくても表示だけ諦める。
 export function useRevision(): string | null {

@@ -6,7 +6,7 @@ import {
   type FileTreeEntry,
   type FileTreeListing,
 } from "../../shared/file-tree";
-import { previewUrl } from "../api";
+import { previewUrl } from "../requests/panes";
 import { useCopy } from "../copy";
 import { fileKind } from "../file-kind";
 import type { FileTreeIcons } from "../file-tree-display";

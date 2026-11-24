@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import type { ModelInfo } from "../api";
+import type { ModelInfo } from "../requests/panes";
 import type { AgentInfo } from "../chat";
 
 // 会話にモデルが載るまでの表示の補い。取得と打ち切りだけを寄せ、待ちの見せ方（スケルトン）と

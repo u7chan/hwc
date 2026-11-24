@@ -1,5 +1,5 @@
 import type { FileTreeListing } from "../shared/file-tree";
-import { readFileTree } from "./api";
+import { readFileTree } from "./requests/panes";
 
 // ツリーの開閉・展開・取得済みの子。PaneDetail はペイン切り替えやプレビューで
 // アンマウントされるので、コンポーネントの寿命から切り離す。正はこの store だけにし、

@@ -1,6 +1,6 @@
 import type { ChatFile } from "../../server/chat/contract";
 import type { PaneCloseAction } from "../../shared/pane-close";
-import type { GitSyncFailure } from "../api";
+import type { GitSyncFailure } from "../requests/workspaces";
 import type { DropZone, SplitView, TabSide } from "../split-view";
 import type { CreateTarget } from "../CreatePane";
 

@@ -1,6 +1,6 @@
 import type { RefObject } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { StateMessage } from "../../api";
+import type { StateMessage } from "../../requests/workspaces";
 import { clockSkew, serverClockNow } from "../../time";
 
 export type UseServerClock = {

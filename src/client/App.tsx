@@ -43,19 +43,21 @@ import { useSplitPreference } from "./app/hooks/use-split-preference";
 import { useThemePreference } from "./app/hooks/use-theme-preference";
 import {
   fetchState,
-  focusAgent,
-  clearPaneOutput,
-  closePane,
   closeWorkspace,
-  confirmFolderTrust,
   moveWorkspaceBlock,
   parseAppState,
   removeWorktree,
+  syncWorkspace,
+} from "./requests/workspaces";
+import {
+  focusAgent,
+  clearPaneOutput,
+  closePane,
+  confirmFolderTrust,
   sendInput,
   startAgent,
   stopAgent,
-  syncWorkspace,
-} from "./api";
+} from "./requests/panes";
 import { INITIAL_CONNECTION, connectionAfter, type ConnectionStatus } from "./connection";
 import { liveUpdateMs } from "./live-update";
 import { allAgentPaneIds, allPaneIds, applyDelegation, newAgentPanes } from "./delegation";

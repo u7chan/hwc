@@ -1,7 +1,7 @@
 import { Fragment } from "preact";
 import type { ChatFile, ChatMessage, ChatPending, ChatSnapshot } from "../../server/chat/contract";
 import type { QuestionAnswer } from "../../shared/answer";
-import type { AnswerResult } from "../api";
+import type { AnswerResult } from "../requests/panes";
 import {
   chatRows,
   compactionInsertIndex,

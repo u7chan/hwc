@@ -6,7 +6,7 @@ import {
   modelLabel,
 } from "../../shared/agents";
 import type { LaunchDefaults } from "../../shared/launch-defaults";
-import { readLaunchDefaults, saveLaunchDefault } from "../api";
+import { readLaunchDefaults, saveLaunchDefault } from "../requests/settings";
 import { CreatePaneEffort } from "../CreatePaneEffort";
 import { CreatePaneModel } from "../CreatePaneModel";
 import { useEffortCandidates, useModelCandidates } from "../launch-candidates";

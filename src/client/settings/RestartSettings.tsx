@@ -6,7 +6,7 @@ import {
   saveRestartSettings,
   type RestartSaveResult,
   type RunRestartResult,
-} from "../api";
+} from "../requests/settings";
 
 type LoadState = "loading" | "ready" | "failed";
 

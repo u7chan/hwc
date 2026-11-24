@@ -11,14 +11,8 @@ import type {
 } from "../server/chat/contract";
 import type { AgentStatus } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
-import {
-  CHAT_POLL_ACTIVE_MS,
-  CHAT_POLL_IDLE_MS,
-  chatFileUrl,
-  previewTextUrl,
-  previewUrl,
-  readChat,
-} from "./api";
+import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS, readChat } from "./requests/chat";
+import { chatFileUrl, previewTextUrl, previewUrl } from "./requests/panes";
 import { MARKDOWN_MAX_LENGTH, markdownImageHrefs } from "./markdown/parse";
 import { startPoll } from "./poll";
 

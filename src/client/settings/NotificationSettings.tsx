@@ -8,7 +8,7 @@ import {
   testDiscordWebhook,
   type NotificationSaveResult,
   type NotificationTestResult,
-} from "../api";
+} from "../requests/settings";
 import { Confirm } from "../Confirm";
 import { DiscordIcon } from "../icons";
 import {
