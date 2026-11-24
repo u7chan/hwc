@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ChatPendingQuestion } from "../server/chat/contract";
+import type { QuestionAnswer } from "../shared/answer";
 import {
   answerFailure,
   answersOf,
@@ -9,11 +10,13 @@ import {
   askUserAnswerText,
   askUserAnswers,
   answerSummary,
+  type Choice,
   isAnswered,
   NO_CHOICE,
   nextPage,
   pickLabel,
   pickOther,
+  primaryButton,
   questionLabel,
   typeOther,
   unansweredIndexes,
@@ -241,4 +244,117 @@ test("the review shows the options in their order, the free text, or nothing", (
   expect(answerSummary(single, typeOther(pickOther(NO_CHOICE), " 紫\n"))).toBe("紫");
   expect(answerSummary(single, pickOther(NO_CHOICE))).toBeNull();
   expect(answerSummary(single, NO_CHOICE)).toBeNull();
+});
+
+const second: ChatPendingQuestion = { ...single, question: "使う色は？", header: "範囲" };
+
+function pressPrimary(input: {
+  paged?: boolean;
+  page?: number;
+  questions?: readonly ChatPendingQuestion[];
+  choices?: readonly Choice[];
+  answers?: QuestionAnswer[] | null;
+  locked?: boolean;
+}) {
+  const calls = { pages: [] as number[], answers: [] as QuestionAnswer[][] };
+  const primary = primaryButton({
+    paged: input.paged ?? false,
+    page: input.page ?? 0,
+    questions: input.questions ?? [single],
+    choices: input.choices ?? [],
+    answers:
+      input.answers === undefined ? [{ question: single.question, labels: ["赤"] }] : input.answers,
+    locked: input.locked ?? false,
+    onAdvance: (page) => calls.pages.push(page),
+    onSubmit: (answers) => calls.answers.push(answers),
+  });
+  return { primary, calls };
+}
+
+test("the primary button sends the answer it was enabled by, and does not advance a page", () => {
+  const { primary, calls } = pressPrimary({});
+
+  expect(primary.label).toBe("この内容で答える");
+  expect(primary.disabled).toBe(false);
+  primary.press();
+  expect(calls.answers).toEqual([[{ question: "好きな色は？", labels: ["赤"] }]]);
+  expect(calls.pages).toEqual([]);
+});
+
+test("the primary button does nothing while the answer is missing or being sent", () => {
+  const missing = pressPrimary({ answers: null });
+  expect(missing.primary.disabled).toBe(true);
+  missing.primary.press();
+  expect(missing.calls).toEqual({ pages: [], answers: [] });
+
+  const sending = pressPrimary({ locked: true });
+  expect(sending.primary.disabled).toBe(true);
+  sending.primary.press();
+  expect(sending.calls).toEqual({ pages: [], answers: [] });
+});
+
+test("a page without an answer cannot be left, and the same press advances once it is answered", () => {
+  const questions = [single, second];
+  const empty = pressPrimary({ paged: true, questions, page: 0, answers: null });
+  expect(empty.primary.label).toBe("次へ");
+  expect(empty.primary.disabled).toBe(true);
+  empty.primary.press();
+  expect(empty.calls).toEqual({ pages: [], answers: [] });
+
+  // 選択肢の行を開いただけでは答えにならない。
+  const opened = pressPrimary({
+    paged: true,
+    questions,
+    choices: [pickOther(NO_CHOICE)],
+    page: 0,
+    answers: null,
+  });
+  expect(opened.primary.disabled).toBe(true);
+
+  const answered = pressPrimary({
+    paged: true,
+    questions,
+    choices: [pickLabel(single, NO_CHOICE, "赤")],
+    page: 0,
+    answers: null,
+  });
+  expect(answered.primary.disabled).toBe(false);
+  answered.primary.press();
+  expect(answered.calls.pages).toEqual([1]);
+});
+
+test("the page before the review says 確認へ and opens the review", () => {
+  const questions = [single, second];
+  const choices = [pickLabel(single, NO_CHOICE, "赤"), pickLabel(second, NO_CHOICE, "青")];
+  const { primary, calls } = pressPrimary({
+    paged: true,
+    questions,
+    choices,
+    page: 1,
+    answers: null,
+  });
+
+  expect(primary.label).toBe("確認へ");
+  primary.press();
+  expect(calls.pages).toEqual([2]);
+});
+
+test("the review page sends instead of advancing, and waits while an answer is missing", () => {
+  const questions = [single, second];
+  const ready = [
+    { question: "好きな色は？", labels: ["赤"] },
+    { question: "使う色は？", labels: ["青"] },
+  ];
+  const review = pressPrimary({ paged: true, questions, page: 2, answers: ready });
+  expect(review.primary.label).toBe("この内容で答える");
+  review.primary.press();
+  expect(review.calls.answers).toEqual([ready]);
+  expect(review.calls.pages).toEqual([]);
+
+  // 確認から戻らずに 1 問だけ戻したときも、答えが欠けていれば送らない。
+  const missing = pressPrimary({ paged: true, questions, page: 2, answers: null });
+  expect(missing.primary.label).toBe("この内容で答える");
+  expect(missing.primary.disabled).toBe(true);
+  missing.primary.press();
+  expect(missing.calls).toEqual({ pages: [], answers: [] });
 });
