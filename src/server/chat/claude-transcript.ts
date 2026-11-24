@@ -230,7 +230,7 @@ function tokenCount(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-// 分岐（`/rewind` や resume）で古い枝を混ぜない。最後の entry から parentUuid を辿る。
+// 分岐（`/rewind` や resume）で古い枝を混ぜない。
 // サブエージェントの記録（isSidechain）は本流ではないので、葉にも起点にもしない。
 export function activeBranch(entries: readonly TranscriptEntry[]): TranscriptEntry[] {
   const byUuid = new Map<string, TranscriptEntry>();
@@ -303,8 +303,6 @@ export function blocksOf(content: TranscriptContent | undefined): TranscriptBloc
   return Array.isArray(content) ? content : [];
 }
 
-// 会話と段階に使う種類だけを残す。tool_result の本文や画像の base64 は、射影を抱えたまま
-// 大きくならないよう落とす。
 function projectContent(content: unknown): TranscriptContent {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return null;

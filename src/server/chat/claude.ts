@@ -224,7 +224,6 @@ async function findTranscript(root: string, sessionId: string): Promise<string |
   return matches[0] ?? null;
 }
 
-// 見つかった path とミスは CLAUDE_CONFIG_DIR と session id の組で覚える。
 function locationKey(root: string, sessionId: string): string {
   return `${root}\u0000${sessionId}`;
 }

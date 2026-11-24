@@ -217,7 +217,6 @@ function toolTarget(tool: ToolUse): string {
       break;
     }
   }
-  // 改行と制御文字は 1 行に畳む。対象は先頭から 60 文字まで。
   return sliceHead(flattenLine(target), TARGET_LIMIT);
 }
 
