@@ -1,7 +1,5 @@
 import { Confirm } from "./Confirm";
-
-export const REMOVE_WORKTREE_FAILED_NOTICE =
-  "削除できませんでした。Herdr 側の状態を確認してください。";
+import { REMOVE_WORKTREE_FAILED_NOTICE } from "./failure-text";
 
 type RemoveWorktreeConfirmProps = {
   label: string;

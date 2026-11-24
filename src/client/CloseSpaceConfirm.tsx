@@ -1,6 +1,5 @@
 import { Confirm } from "./Confirm";
-
-export const CLOSE_SPACE_FAILED_NOTICE = "閉じられませんでした。Herdr 側の状態を確認してください。";
+import { CLOSE_SPACE_FAILED_NOTICE } from "./failure-text";
 
 type CloseSpaceConfirmProps = {
   label: string;
