@@ -1,11 +1,11 @@
 import { basename } from "node:path";
 import { createSpace } from "../create-space";
 import { createWorktree } from "../create-worktree";
-import { parseCreateSpaceBody, parseWorktreeBody } from "../herdr/panes";
 import { resolveTreeDirectory } from "../message-files";
 import { parseMoveWorkspacesBody } from "../herdr/workspaces";
 import { HerdrError } from "../herdr/socket";
 import { pullRequestBranches } from "../pull-request";
+import { parseCreateSpaceBody, parseWorktreeBody } from "./panes-request";
 import type { AppContext, IdContext, PlainContext } from "./context";
 
 export function createWorkspacesHandlers(ctx: AppContext) {

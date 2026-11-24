@@ -1,15 +1,8 @@
 import { composeInputText } from "../../shared/attachments";
 import { attachmentExists, attachmentFilePath } from "../attachments";
 import { createPane, startAgentInPane } from "../create-pane";
-import {
-  exceedsTextLimit,
-  parseInputBody,
-  parseOutputQuery,
-  parseSplitBody,
-  parseStartBody,
-  TEXT_TOO_LONG,
-  TEXT_WITH_ATTACHMENTS_TOO_LONG,
-} from "../herdr/panes";
+import { exceedsTextLimit, TEXT_TOO_LONG, TEXT_WITH_ATTACHMENTS_TOO_LONG } from "../herdr/panes";
+import { parseInputBody, parseOutputQuery, parseSplitBody, parseStartBody } from "./panes-request";
 import { findPane } from "../herdr/state";
 import { MAX_PANES_PER_TAB } from "../../shared/panes";
 import { supportsFolderTrust } from "../../shared/agents";
