@@ -5,8 +5,6 @@ import type { ListScope } from "../scope";
 export type PaneListProps = {
   state: AppState;
   selectedPaneId: string | null;
-  // グリッドに出ているペインの並び（読み順）。一覧の行をタブ・セルと同じスロット色にする。
-  slots: readonly string[];
   parentPaneIds: ReadonlySet<string>;
   scope: ListScope;
   onScope: (scope: ListScope) => void;

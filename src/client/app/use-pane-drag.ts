@@ -85,7 +85,6 @@ export function usePaneDrag(options: PaneDragOptions): UsePaneDrag {
         event.clientY,
         dragState.paneId,
         split.current,
-        true,
       );
       setDragging({ paneId: dragState.paneId, target: dropTarget.current });
     };

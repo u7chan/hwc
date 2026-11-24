@@ -3,17 +3,10 @@ import type { PaneState } from "../../server/herdr/state";
 import { gitStatusLabel, type GitSync } from "../../shared/git";
 import type { PullRequest } from "../../shared/pull-request";
 import { GitCount } from "../GitCount";
-import { ChevronDownIcon, CopyGlyph, FolderIcon, MoreIcon, paneKindIcon } from "../icons";
+import { ChevronDownIcon, CopyGlyph, FolderIcon, MoreIcon } from "../icons";
 import { MENU_ID } from "../Menu";
 import { ParentMark } from "../ParentMark";
-import {
-  agentGlyph,
-  paneDisplayName,
-  placeChip,
-  pullRequestLabel,
-  shortenPaneName,
-  type PaneContext,
-} from "../select";
+import { placeChip, pullRequestLabel, type PaneContext } from "../select";
 
 // 見出しの「ファイル」ボタン。開閉は呼び出し側の hook が持ち、ここは見た目だけを出す。
 type FilesButton = {
@@ -39,15 +32,9 @@ type HeadMenu = {
 type PaneHeadProps = {
   pane: PaneState;
   context: PaneContext;
-  // 分割セルが並ぶときだけ、セルの名前を出す。
-  labeled: boolean;
-  // 親ペインの印。タブから外したので、セル見出しと 1 枚表示の見出しに出す。
+  // 親ペインの印。セル見出しに出す。
   parentPaneIds: ReadonlySet<string>;
-  // 複数スペースのペインが並ぶときだけ、見出しに場所を添える。
-  showSpace: boolean;
-  // 一覧が隠れる狭い画面でだけ、ブランチを名前に代えて出す。
-  showBranch: boolean;
-  // ブランチの文字。showBranch が false でも、PR のチップはこの値で引く。
+  // ブランチの文字。PR のチップもこの値で引く。
   branch: string | null;
   sync: GitSync | null;
   pullRequest: PullRequest | null;
@@ -60,77 +47,67 @@ type PaneHeadProps = {
   trailing: ComponentChildren;
 };
 
-// ペインの見出し。何を出すかはセルが並ぶかで変わるが、DOM の形は変えない。
+// セルの見出し。名前と種類アイコンはタブ列と重複するので出さない。ブランチ・PR・
+// ファイル・ID・メニューと、作成元スペースだけを残す。
 export function PaneHead(props: PaneHeadProps) {
-  const { pane, context, labeled, showSpace, showBranch, branch, sync, pullRequest } = props;
+  const { pane, context, branch, sync, pullRequest } = props;
   const repoUrl = sync?.repoUrl ?? null;
-  const shownPaneName = shortenPaneName(
-    paneDisplayName(pane),
-    context.workspaceLabel,
-    context.workspaceName,
-  );
-  // セルが並ぶときの場所。タブが現在のスペースを言うので、作成元のスペースだけを出す。
-  // なければチップを出さない。
-  const place = placeChip(shownPaneName, context.parentSpaceName, context.workspaceName);
+  // 作成元スペースだけを出す。現在のスペースはタブ列が言うので、ここでは繰り返さない。
+  const place = placeChip(context.parentSpaceName, context.workspaceName);
   const placeTitle =
-    context.parentSpaceLabel === null
-      ? `${context.workspaceLabel} / ${context.tabLabel}`
-      : `${context.parentSpaceLabel} / ${context.workspaceLabel} / ${context.tabLabel}`;
+    place === null
+      ? ""
+      : `${context.parentSpaceLabel ?? context.parentSpaceName ?? ""} / ${context.workspaceLabel} / ${context.tabLabel}`;
 
   return (
-    <div class="hwc-pane-head" data-bare={!labeled}>
+    <div class="hwc-pane-head">
       {props.leading}
       <div class="hwc-pane-head-main">
         <div class="hwc-pane-head-content">
-          <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
-            {paneKindIcon(pane)}
-          </span>
-          {labeled ? (
-            <span class="hwc-pane-head-name">{shownPaneName}</span>
-          ) : showBranch ? (
-            branch === null ? null : (
-              <button
-                type="button"
-                class="hwc-pane-head-branch-menu"
-                aria-label={`${branch} のスペースメニュー${sync === null ? "" : `、${gitStatusLabel(sync)}`}`}
-                aria-haspopup="menu"
-                aria-expanded={props.spaceMenu.open}
-                aria-controls={MENU_ID}
-                data-open={props.spaceMenu.open}
-                onClick={(event) => props.spaceMenu.onOpen(event.currentTarget)}
+          {branch === null ? (
+            context.repoName === null ? null : repoUrl === null ? (
+              <span class="hwc-pane-head-repo" title={context.repoName}>
+                {context.repoName}
+              </span>
+            ) : (
+              <a
+                class="hwc-pane-head-repo"
+                href={repoUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`${context.repoName} を GitHub で開く`}
+                title={context.repoName}
               >
-                <span class="hwc-pane-head-branch" title={branch}>
-                  {branch}
-                </span>
-                <GitCount sync={sync} />
-                <span class="hwc-chevron-down">
-                  <ChevronDownIcon size={12} />
-                </span>
-              </button>
+                {context.repoName}
+              </a>
             )
-          ) : context.repoName === null ? null : repoUrl === null ? (
-            <span class="hwc-pane-head-repo" title={context.repoName}>
-              {context.repoName}
-            </span>
           ) : (
-            <a
-              class="hwc-pane-head-repo"
-              href={repoUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`${context.repoName} を GitHub で開く`}
-              title={context.repoName}
+            <button
+              type="button"
+              class="hwc-pane-head-branch-menu"
+              aria-label={`${branch} のスペースメニュー${sync === null ? "" : `、${gitStatusLabel(sync)}`}`}
+              aria-haspopup="menu"
+              aria-expanded={props.spaceMenu.open}
+              aria-controls={MENU_ID}
+              data-open={props.spaceMenu.open}
+              onClick={(event) => props.spaceMenu.onOpen(event.currentTarget)}
             >
-              {context.repoName}
-            </a>
+              <span class="hwc-pane-head-branch" title={branch}>
+                {branch}
+              </span>
+              <GitCount sync={sync} />
+              <span class="hwc-chevron-down">
+                <ChevronDownIcon size={12} />
+              </span>
+            </button>
           )}
+          {branch === null ? <GitCount sync={sync} /> : null}
           {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
-          {labeled && showSpace && place !== null ? (
+          {place === null ? null : (
             <span class="hwc-pane-head-space" title={placeTitle}>
               <span class="hwc-pane-head-place">{place.parent}</span>
             </span>
-          ) : null}
-          {labeled || showBranch ? null : <GitCount sync={sync} />}
+          )}
           {pullRequest === null || pullRequest.state !== "OPEN" ? null : (
             <a
               class="hwc-pane-head-pr"

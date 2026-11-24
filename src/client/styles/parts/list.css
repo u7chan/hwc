@@ -222,8 +222,8 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 }
 
 /* 帯から移った直後の目印。現在のペイン行と同じ太さ・内側の枠を accent で引き、
-   どのワークツリーへ来たかを示す。スロット色は使わない。背景は塗らず、選択中の
-   ペイン行と役割を分ける。次のペイン選択・スコープ切り替え・開閉で消える。
+   どのワークツリーへ来たかを示す。背景は塗らず、選択中のペイン行と役割を分ける。
+   次のペイン選択・スコープ切り替え・開閉で消える。
    見出し行はカードの先頭にあるので、上辺の角をカードの角丸に合わせる。丸めないと
    カードの overflow で枠の角が切り取られ、枠が途中で途切れて見える。下辺は子の行が
    続くので丸めない。 */
@@ -577,7 +577,7 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   outline-offset: -2px;
 }
 
-/* 名前は選択とスロット位置で色が変わる。面と一緒に色も移す。 */
+/* 名前は選択で色が変わる。面と一緒に色も移す。 */
 .hwc-pane-name {
   transition: color var(--duration-hover) ease;
 }
@@ -591,60 +591,6 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 .hwc-pane[data-current="true"] .hwc-pane-icon {
   border-color: var(--color-accent);
   color: var(--color-accent);
-}
-
-/* 一覧の行はグリッドのスロット位置の色で示す。ツリーとアクティブの両方に同じ色を置き、
-   タブのバー・セルの枠と同じスロットを指す。グリッドに出ている行なら、
-   現在行でなくても色を付ける。 */
-.hwc-pane[data-slot="1"],
-.hwc-active-pane[data-slot="1"] {
-  --slot-color: var(--color-slot-1);
-}
-
-.hwc-pane[data-slot="2"],
-.hwc-active-pane[data-slot="2"] {
-  --slot-color: var(--color-slot-2);
-}
-
-.hwc-pane[data-slot="3"],
-.hwc-active-pane[data-slot="3"] {
-  --slot-color: var(--color-slot-3);
-}
-
-.hwc-pane[data-slot="4"],
-.hwc-active-pane[data-slot="4"] {
-  --slot-color: var(--color-slot-4);
-}
-
-/* 選択中かどうかは面と枠の強さで分ける。現在行は 2px の枠と選択面、グリッドに出ている
-   だけの行は 1px の控えめな枠にして、どのセルと対になっているかだけを示す。 */
-.hwc-pane[data-slot]:not([data-current="true"]) {
-  outline: 1px solid color-mix(in oklab, var(--slot-color) 60%, transparent);
-  outline-offset: -1px;
-}
-
-/* フォーカス中は行自身の輪郭を外す既存の規則に合わせ、枠も引かない。 */
-.hwc-active-pane[data-slot]:not([data-current="true"]):not(:focus-within) {
-  outline: 1px solid color-mix(in oklab, var(--slot-color) 60%, transparent);
-  outline-offset: -1px;
-}
-
-.hwc-pane[data-slot]:not([data-current="true"]) .hwc-pane-name,
-.hwc-active-pane[data-slot]:not([data-current="true"]) .hwc-active-name {
-  color: var(--slot-color);
-}
-
-.hwc-pane[data-current="true"][data-slot] {
-  outline-color: var(--slot-color);
-}
-
-.hwc-pane[data-current="true"][data-slot] .hwc-pane-name,
-.hwc-active-pane[data-current="true"][data-slot] .hwc-active-name {
-  color: var(--slot-color);
-}
-
-.hwc-active-pane[data-current="true"][data-slot] {
-  outline-color: var(--slot-color);
 }
 
 /* セル見出しの場所。タブが現在のスペースを言うので、作成元のスペースだけを出す。 */
