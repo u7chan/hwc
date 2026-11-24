@@ -369,7 +369,7 @@ test("a pending prompt is kept as the contract describes it", () => {
   });
 });
 
-test("a pi ask_user prompt is kept with empty options for free input", () => {
+test("a pi ask_user prompt is kept with the freeText the BFF sends", () => {
   const ask = {
     kind: "question" as const,
     toolUseId: "11111111-1111-4111-8111-111111111111",
@@ -395,18 +395,14 @@ test("a pi ask_user prompt is kept with empty options for free input", () => {
   };
   expect(toChatSnapshot({ ...chatBody, pending: withOptions })?.pending).toEqual(withOptions);
 
-  // freeText を返さない古い BFF でも、options が無ければ text だけなので自由入力を出す。
-  const { freeText: _ignored, ...oldAsk } = ask;
-  expect(toChatSnapshot({ ...chatBody, pending: oldAsk })?.pending).toEqual({
-    ...oldAsk,
-    freeText: true,
-  });
-  // 選択肢ありの古い BFF では、今までどおり自由入力を出さない。
-  const { freeText: _alsoIgnored, ...oldOptions } = withOptions;
-  expect(toChatSnapshot({ ...chatBody, pending: oldOptions })?.pending).toEqual({
-    ...oldOptions,
-    freeText: false,
-  });
+  // 選択肢があっても自由入力を出さない指定は、そのまま反映する。
+  const optionsOnly = { ...withOptions, freeText: false };
+  expect(toChatSnapshot({ ...chatBody, pending: optionsOnly })?.pending).toEqual(optionsOnly);
+
+  // freeText は BFF が必ず boolean で返す。無い・boolean でない応答は形の不一致として捨てる。
+  const { freeText: _ignored, ...withoutFreeText } = ask;
+  expect(toChatSnapshot({ ...chatBody, pending: withoutFreeText })).toEqual(chatBody);
+  expect(toChatSnapshot({ ...chatBody, pending: { ...ask, freeText: "true" } })).toEqual(chatBody);
 
   // ask_user は 1 問だけ。複数ある形は壊れた値として捨てる。
   const two = { ...ask, questions: [ask.questions[0], ask.questions[0]] };

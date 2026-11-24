@@ -369,19 +369,14 @@ function toChatPending(value: unknown): ChatPending | undefined {
     });
   }
   if (questions.length === 0) return undefined;
-  // 古い BFF は freeText を返さない。options が無ければ text だけなので true にし、
-  // 選択肢があるときは今までどおり text を出さない。
-  const freeText =
-    (pending as { freeText?: unknown }).freeText === true ||
-    questions.some((question) => question.options.length === 0);
-  return askUser
-    ? { kind: "question", toolUseId: pending.toolUseId, tool: "ask_user", freeText, questions }
-    : {
-        kind: "question",
-        toolUseId: pending.toolUseId,
-        tool: "AskUserQuestion",
-        questions,
-      };
+  if (!askUser) {
+    return { kind: "question", toolUseId: pending.toolUseId, tool: "AskUserQuestion", questions };
+  }
+  const { freeText } = pending as { freeText?: unknown };
+  // 自由入力の可否は入力欄そのものの差になるので、無い・boolean でない値は options から
+  // 補わずに形の不一致として捨てる（BFF は boolean を必ず返す）。
+  if (typeof freeText !== "boolean") return undefined;
+  return { kind: "question", toolUseId: pending.toolUseId, tool: "ask_user", freeText, questions };
 }
 
 export function toChatSnapshot(value: unknown): ChatSnapshot | null {
