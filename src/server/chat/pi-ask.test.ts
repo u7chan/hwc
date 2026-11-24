@@ -92,6 +92,8 @@ test.each([
   ["with a long option", pending({ options: ["赤", "あ".repeat(121)] })],
   ["with a newline in an option", pending({ options: ["赤", "青\n緑"] })],
   ["with a non-string option", pending({ options: ["赤", 1] })],
+  ["without freeText", pending({ freeText: undefined })],
+  ["with a non-boolean freeText", pending({ freeText: "true" })],
   ["with extra fields only", { v: 1, id: ID }],
 ])("a pending ask %s is discarded", (_name, value) => {
   expect(parseAskPending(value)).toBeNull();
@@ -107,9 +109,15 @@ test("options are trimmed before the duplicate check", () => {
   });
 });
 
-test("an old pending without the new fields keeps text disabled while options exist", () => {
+test("a missing recommendation is decoration, not a broken question", () => {
   expect(
-    parseAskPending({ v: 1, id: ID, question: "どれにしますか？", options: ["赤", "青"] }),
+    parseAskPending({
+      v: 1,
+      id: ID,
+      question: "どれにしますか？",
+      options: ["赤", "青"],
+      freeText: false,
+    }),
   ).toEqual({
     id: ID,
     question: "どれにしますか？",
@@ -117,6 +125,16 @@ test("an old pending without the new fields keeps text disabled while options ex
     recommended: null,
     freeText: false,
   });
+});
+
+test("a free-text pending is always free text, whatever freeText says", () => {
+  expect(parseAskPending(pending({ options: null, freeText: false }))?.freeText).toBe(true);
+});
+
+test("a pending without freeText is discarded, even for a free-text question", () => {
+  expect(
+    parseAskPending({ v: 1, id: ID, question: "自由に書いてください", options: null }),
+  ).toBeNull();
 });
 
 test("a recommendation outside the options is a decoration error, not a broken question", () => {

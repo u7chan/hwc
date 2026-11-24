@@ -230,7 +230,6 @@ export function PaneDetail(props: PaneDetailProps) {
     attachments: ChatAttachment[];
     answer?: boolean;
     toolUseId?: string;
-    question?: string;
   }) => {
     setPending((items) => [
       ...items,
@@ -246,7 +245,6 @@ export function PaneDetail(props: PaneDetailProps) {
         ...(echo.attachments.length === 0 ? {} : { attachments: echo.attachments }),
         ...(echo.answer === true ? { answer: true } : {}),
         ...(echo.toolUseId === undefined ? {} : { toolUseId: echo.toolUseId }),
-        ...(echo.question === undefined ? {} : { question: echo.question }),
       },
     ]);
   };
@@ -314,7 +312,6 @@ export function PaneDetail(props: PaneDetailProps) {
         attachments: [],
         answer: true,
         toolUseId: target.toolUseId,
-        question: target.questions[0]?.question,
       });
     }
     const result = await answerQuestion(pane.id, { toolUseId: target.toolUseId, answers });
@@ -340,7 +337,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const pendingMessages = pending.filter(
     (item) =>
       (!resetting || sessionReset === null || item.at >= sessionReset.at) &&
-      !isPendingConfirmed(item, snapshot?.messages ?? [], snapshot?.pending?.toolUseId),
+      !isPendingConfirmed(item, snapshot?.messages ?? []),
   );
 
   useEffect(() => {
@@ -680,9 +677,7 @@ export function PaneDetail(props: PaneDetailProps) {
     if (pending.length === 0) return;
     const messages = snapshot?.messages ?? [];
     setPending((items) => {
-      const next = items.filter(
-        (item) => !isPendingConfirmed(item, messages, snapshot?.pending?.toolUseId),
-      );
+      const next = items.filter((item) => !isPendingConfirmed(item, messages));
       return next.length === items.length ? items : next;
     });
   }, [snapshot, pending.length]);

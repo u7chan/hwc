@@ -80,7 +80,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - モデル・effort・context・usage・圧縮・添付ファイル・引用の基準実装
 - デフォルトモデルで起動したペインは、チャット画面を開いたときと `/new` で会話が空に戻ったときに pi の既定モデルと effort を読む。hwc の画面はモデルを指定して起動するので（[起動](adr/agent-launch.md)）、これはモデル未指定の起動 API を直接呼んだ場合だけ。モデルを指定して起動したペインは起動時の指定で補う。どちらも会話にモデルが載っている間はセッションの値を使う。hwc 以外から起動したペインは対象外（[起動](adr/agent-launch.md)）
 - プロジェクトの `Trust project folder?` は、既定の `Trust` だけを専用ビューで回答する。`.pi` や `.agents/skills` など信頼対象のリソースがあるフォルダでは、起動がこの確認で止まる。他の選択肢は端末で行う（[pi 連携](adr/pi-integration.md)）。hwc は `--approve` を渡さない
-- モデルが `ask_user` で 1 問だけ質問すると、mypi がセッションの隣に pending を書き、Herdr に `blocked` を報告する。hwc は `blocked` の間だけカードを出し、選択肢か自由入力で答える。回答はキーでも本文でもなく、answer ファイルを置く（[pi 連携](adr/pi-integration.md)）。mypi の無いペインや、旧版の拡張では pending が無いので、このカードは出ない
+- モデルが `ask_user` で 1 問だけ質問すると、mypi がセッションの隣に pending を書き、Herdr に `blocked` を報告する。hwc は `blocked` の間だけカードを出し、選択肢か自由入力で答える。回答はキーでも本文でもなく、answer ファイルを置く（[pi 連携](adr/pi-integration.md)）。mypi の無いペインや、`freeText` を持たない pending を書く旧版の拡張ではカードは出ず、会話は端末出力のままになる
 - Herdr は Pi の信頼確認を `blocked` としないため、一覧の行は `idle` のまま。確認ビューは、開いているペインの画面から出す
 - ライブ activity は pi 拡張の sidecar がある場合だけ（[pi 連携](adr/pi-integration.md)）。Claude は transcript の段階に、hwc 起動時だけ mod の速度を重ねる（[Claude 連携](adr/claude-integration.md)）
 - 過去の自分の発言は、mypi の `/hwc-rewind` と `hwc-capabilities` があるセッションだけ鉛筆で編集できる。押した時点では戻さず、送信時に会話を対象の親へ戻して本文を送り直す（[pi 連携](adr/pi-integration.md)）
