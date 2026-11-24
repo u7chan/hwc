@@ -88,3 +88,18 @@ test("stops filling a pane that was forgotten", () => {
 
   expect(launch.apply("w1:p2", empty)).toEqual(empty);
 });
+
+test("fills from a selection recorded in one call", () => {
+  const launch = createLaunchModels();
+  launch.select("w1:p2", beam, "low");
+
+  expect(launch.apply("w1:p2", empty)).toMatchObject({ model: "beam", effort: "low" });
+});
+
+test("clears the previous selection when the launch has no model", () => {
+  const launch = createLaunchModels();
+  launch.remember("w1:p2", beam, "low");
+  launch.select("w1:p2", null, null);
+
+  expect(launch.apply("w1:p2", empty)).toEqual(empty);
+});

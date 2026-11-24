@@ -1,14 +1,37 @@
-import { TEST_NOTIFICATION_CONTENT, normalizeDiscordWebhookUrl } from "../../shared/notifications";
+import {
+  isNotificationScope,
+  TEST_NOTIFICATION_CONTENT,
+  normalizeDiscordWebhookUrl,
+  toNotificationView,
+  type NotificationSettings,
+} from "../../shared/notifications";
 import type { AppContext, PlainContext } from "./context";
 
 export function createNotificationsHandlers(ctx: AppContext) {
-  const {
-    notificationSettings,
-    discordSender,
-    notificationView,
-    saveNotificationSettings,
-    parseNotificationUpdate,
-  } = ctx;
+  const { notificationSettings, discordSender } = ctx;
+
+  // 通知設定は 1 つのストアに集約する。トグル・scope・URL が同時に変わっても、
+  // 書き込みが成功した設定だけを返し、クライアントは応答で丸ごと置き換える。
+  const notificationView = () => toNotificationView(notificationSettings.get());
+
+  const saveNotificationSettings = (c: PlainContext, next: NotificationSettings) => {
+    try {
+      notificationSettings.save(next);
+    } catch {
+      // メモリ上の設定は変えない。画面には古い設定が残る。
+      return c.json({ error: "settings_unavailable" }, 500);
+    }
+    return c.json(notificationView());
+  };
+
+  const parseNotificationUpdate = (
+    body: unknown,
+  ): Pick<NotificationSettings, "enabled" | "scope"> | null => {
+    if (typeof body !== "object" || body === null) return null;
+    const raw = body as { enabled?: unknown; scope?: unknown };
+    if (typeof raw.enabled !== "boolean" || !isNotificationScope(raw.scope)) return null;
+    return { enabled: raw.enabled, scope: raw.scope };
+  };
 
   return {
     get: (c: PlainContext) => {
