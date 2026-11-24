@@ -3,7 +3,6 @@ import { type FileHandle, open, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type {
   ChatCompaction,
-  ChatContext,
   ChatMessage,
   ChatPending,
   ChatSnapshot,
@@ -13,6 +12,7 @@ import type {
 import { stripAttachedFiles } from "../../shared/attachments";
 import { asRecord, nonEmptyText } from "../../shared/json";
 import { isRewindCapability, parseRewindMarker, type RewindMarker } from "../../shared/rewind";
+import { foldContext } from "./context";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages, pruneOrphanAskAnswers } from "./limit";
 import { type AskPending, readAsk } from "./pi-ask";
@@ -766,13 +766,6 @@ function compactionWindow(
     entryIndex: newestIndex,
     compaction: { at: found.at, tokensBefore: found.tokensBefore, summary: found.summary },
   };
-}
-
-// 出す材料が無いときだけ context を null にする。{ tokens: null, window: null } は
-// 契約の型では表せるが、BFF はこの形を作らない。
-function foldContext(tokens: number | null, window: number | null): ChatContext | null {
-  if (tokens === null && window === null) return null;
-  return { tokens, window };
 }
 
 // モデルが書いた質問として、Claude の AskUserQuestion と同じカードの形に載せる。

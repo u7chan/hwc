@@ -6,12 +6,12 @@ import { stripAttachedFiles } from "../../shared/attachments";
 import { asRecord, nonEmptyText } from "../../shared/json";
 import type {
   ChatCompaction,
-  ChatContext,
   ChatMessage,
   ChatSnapshot,
   ChatUsage,
   SessionChatClient,
 } from "./contract";
+import { foldContext } from "./context";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
 
@@ -388,11 +388,6 @@ async function loadCatalog(
 
 function catalogKey(provider: string, model: string): string {
   return `${provider}\u0000${model}`;
-}
-
-function foldContext(tokens: number | null, window: number | null): ChatContext | null {
-  if (tokens === null && window === null) return null;
-  return { tokens, window };
 }
 
 function etagOf(sessionId: string, body: SnapshotBody): string {
