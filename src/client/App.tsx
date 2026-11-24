@@ -32,6 +32,7 @@ import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
 import { useFavicon } from "./app/hooks/use-favicon";
 import { useFileTreeDisplay } from "./app/hooks/use-file-tree-display";
 import { useFileTreeSide } from "./app/hooks/use-file-tree-side";
+import { useLaunches } from "./app/hooks/use-launches";
 import { useListScope } from "./app/hooks/use-list-scope";
 import { useLiveUpdate } from "./app/hooks/use-live-update";
 import { useLiveUpdateTick } from "./app/hooks/use-live-update-tick";
@@ -56,7 +57,6 @@ import {
   closePane,
   confirmFolderTrust,
   sendInput,
-  startAgent,
   stopAgent,
 } from "./requests/panes";
 import { INITIAL_CONNECTION, connectionAfter, type ConnectionStatus } from "./connection";
@@ -116,9 +116,10 @@ import {
 } from "./split-view";
 import { pendingReadAfter, shouldFocusOnLeave, type ListScope } from "./scope";
 import { moveToTopPlan, orderUnits } from "./order";
+import { decideSnapshotApply } from "./snapshot-apply";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
-import { type LaunchIntent, type PaneLaunch, type PaneLaunchView, launchPhase } from "./starting";
-import { serverClockNow, workingMs } from "./time";
+import { type PaneLaunchView, launchPhase } from "./starting";
+import { workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -197,12 +198,6 @@ export function App() {
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
-  // 起動を頼んだペイン。ダイアログで選んだ内容だけを持ち、起動したかはスナップショットで決める。
-  // 起動が終わるまでに別のペインも作れるので、ペイン id ごとに持つ。
-  const [launches, setLaunches] = useState<ReadonlyMap<string, PaneLaunch>>(() => new Map());
-  // 要求済みの記録。再試行で記録が置き換わっても、前の要求の完了が新しい要求の
-  // 番人を消さないよう、ペイン id ではなく記録そのもので覚える。
-  const launchRequests = useRef(new Set<PaneLaunch>());
   // 既読の保留。アクティブ一覧で開いたペインだけが入り、選択が離れた時点で判定する。
   const pendingRead = useRef<string | null>(null);
   // 外すタブのアニメーション中も、スナップショットの適用を 1 回だけ保留する。
@@ -306,47 +301,39 @@ export function App() {
     armRemovalFallback();
   };
 
-  // 受信したスナップショットで丸ごと置き換える（docs/adr/bff-client-transport.md）。画面から消える対象の
-  // アニメーションが途中で切り落とされないよう、その間だけ適用を保留する。
+  // 受信したスナップショットで丸ごと置き換える（docs/adr/bff-client-transport.md）。適用するか
+  // 保留するかは snapshot-apply が決め、ここは決まった先の後始末だけを行う。
   const applyState = (next: AppState) => {
-    const target = removing.latest.current;
-    if (target?.phase === "leave" || leavingTabRef.current !== null) {
-      heldSnapshot.current = next;
-      return;
-    }
-    // 応答より先にスペースが消えたスナップショットが届くことがある。対象を消して
-    // 見せてから適用する。
-    if (
-      target?.phase === "busy" &&
-      !next.workspaces.some((workspace) => workspace.id === target.target.workspaceId)
-    ) {
-      heldSnapshot.current = next;
-      beginRemovalLeave();
-      return;
-    }
-    // ペインを閉じる要求の応答より先に、ペインが消えたスナップショットが届くことが
-    // ある。消えるタブを先に見せてから適用する。ペインが無い以上 close の目的は
-    // 達しているので、確認は閉じ、遅れて返る応答は捨てる。
-    const closeTarget = closing.latest.current;
-    if (
-      closeTarget?.phase === "busy" &&
-      closeTarget.target.action === "close" &&
-      findPane(next, closeTarget.target.paneId) === null
-    ) {
-      // タブとして開いていないペインはアニメーションできない。保留だけ残すと
-      // 次のスナップショットまで一覧が古いままになるので、その場で適用する。
-      if (leafOfPane(splitRef.current.layout, closeTarget.target.paneId) === null) {
+    const decision = decideSnapshotApply({
+      next,
+      removing: removing.latest.current,
+      closing: closing.latest.current,
+      leavingTab: leavingTabRef.current !== null,
+      layout: splitRef.current.layout,
+    });
+    switch (decision.kind) {
+      case "hold":
+        heldSnapshot.current = next;
+        return;
+      case "leave-space":
+        heldSnapshot.current = next;
+        beginRemovalLeave();
+        return;
+      case "leave-tab":
+        // ペインが無い以上 close の目的は達しているので、確認は閉じ、遅れて返る応答は捨てる。
+        heldSnapshot.current = next;
+        beginTabLeave(decision.paneId, decision.successor);
+        closing.update(() => null);
+        return;
+      case "apply-now":
         heldSnapshot.current = null;
         closing.update(() => null);
         setState(next);
         return;
-      }
-      heldSnapshot.current = next;
-      beginTabLeave(closeTarget.target.paneId, closeTarget.target.next);
-      closing.update(() => null);
-      return;
+      case "apply":
+        setState(next);
+        return;
     }
-    setState(next);
   };
 
   // タブのアニメーションと削除のアニメーションがどちらも終わったら、保留した
@@ -724,118 +711,8 @@ export function App() {
     setCreating({ paneId, target: { kind: "worktree", workspaceId: workspace.id } });
   };
 
-  // ダイアログが決めた起動の指定を預かる。新しいペインはスナップショットに現れてから、
-  // ペインごとに 1 回だけ起動を頼む。起動したかどうかの正はスナップショットに置く。
-  const beginLaunch = (paneId: string, intent: LaunchIntent | null) => {
-    setLaunches((current) => {
-      const next = new Map(current);
-      if (intent === null) {
-        next.delete(paneId);
-      } else {
-        next.set(paneId, {
-          paneId,
-          at: serverClockNow(Date.now(), skew.current),
-          agent: intent.agent,
-          model: intent.model,
-          effort: intent.effort,
-          request: "waiting",
-          waitForShell: intent.waitForShell,
-          error: null,
-        });
-      }
-      return next;
-    });
-  };
-
-  // 分割の応答より先に Herdr の状態が届かないことがあり、その間は BFF もペインを知らない。
-  // スナップショットに現れてから頼む。要求の結果は記録の同一性で照合し、起動したかは
-  // スナップショットに決めさせる。
-  useEffect(() => {
-    if (state === null) return;
-
-    const run = async (launch: PaneLaunch) => {
-      const result = await startAgent(launch.paneId, {
-        agent: launch.agent,
-        model: launch.model,
-        effort: launch.effort,
-        waitForShell: launch.waitForShell,
-      });
-      launchRequests.current.delete(launch);
-      setLaunches((current) => {
-        // 再試行で別の記録に置き換わっていたら、遅れて返った結果で上書きしない。
-        if (current.get(launch.paneId) !== launch) return current;
-        // 別の経路で起動済みなら待ちを続ける。起動したかはスナップショットが決める。
-        if (result.ok || result.error === "pane_not_shell") {
-          return new Map(current).set(launch.paneId, {
-            ...launch,
-            request: "started",
-            at: serverClockNow(Date.now(), skew.current),
-            error: null,
-          });
-        }
-        return new Map(current).set(launch.paneId, {
-          ...launch,
-          request: "failed",
-          at: serverClockNow(Date.now(), skew.current),
-          error: result.error,
-        });
-      });
-    };
-
-    for (const launch of launches.values()) {
-      if (launch.request !== "waiting") continue;
-      if (launchRequests.current.has(launch)) continue;
-      if (findPane(state, launch.paneId) === null) continue;
-      launchRequests.current.add(launch);
-      void run(launch);
-    }
-  }, [state, launches]);
-
-  // 起動が終わった記録は、スナップショットが起動完了を示した時点で捨てる。記録は起動中だけの
-  // 一時的なもので、残すと後で /exit してシェルに戻ったときに「起動を確認できませんでした」が
-  // 蘇る。now は settle と上限の経過を見るために必要。
-  useEffect(() => {
-    if (launches.size === 0 || state === null) return;
-    setLaunches((current) => {
-      let next: Map<string, PaneLaunch> | null = null;
-      for (const [paneId, launch] of current) {
-        const pane = findPane(state, paneId);
-        if (pane === null) {
-          // 新しいペインは、応答より先に記録だけができていることがある。届くまで残す。
-          if (launch.request === "waiting") continue;
-          next ??= new Map(current);
-          next.delete(paneId);
-          continue;
-        }
-        if (launchPhase(launch, pane, now) !== "ready") continue;
-        next ??= new Map(current);
-        next.delete(paneId);
-      }
-      return next ?? current;
-    });
-  }, [state, launches, now]);
-
-  // 起動に失敗したペインから、同じ指定でもう一度頼む。
-  const retryLaunch = (paneId: string) => {
-    const launch = launches.get(paneId);
-    if (launch === undefined) return;
-    beginLaunch(paneId, {
-      agent: launch.agent,
-      model: launch.model,
-      effort: launch.effort,
-      waitForShell: launch.waitForShell,
-    });
-  };
-
-  // 起動を諦め、残ったシェルとして使う。入力欄もシェルの形に戻る。
-  const useShell = (paneId: string) => {
-    setLaunches((current) => {
-      if (!current.has(paneId)) return current;
-      const next = new Map(current);
-      next.delete(paneId);
-      return next;
-    });
-  };
+  // 起動の記録と要求は hook が持つ。ここは、いま表示しているペインの起動の段階だけを読む。
+  const { launches, beginLaunch, retryLaunch, useShell } = useLaunches({ state, now, skew });
 
   // タブから外す操作は、対象のタブが縮むアニメーションを見せてから履歴に反映する。
   // 先に別のタブを外したときは、前の対象をすぐ反映して 1 つだけ動かす。
