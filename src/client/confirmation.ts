@@ -15,7 +15,7 @@ export function confirmationView(props: {
   if (!supportsFolderTrust(props.pane.agent)) return "normal";
   if (props.interaction?.kind === "terminal") return "terminal";
   if (props.interaction?.kind === "folder-trust") {
-    // 読めなかった信頼確認は、今までどおり端末へ倒す。
+    // 読めなかった信頼確認は端末へ倒す。
     if (props.failed) return "terminal";
     return props.interaction.id === props.dismissedId ? "terminal" : "confirm";
   }

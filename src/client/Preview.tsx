@@ -22,7 +22,7 @@ export function Preview(props: { paneId: string; file: ChatFile; onClose: () => 
   const display = messageFileDisplayName(props.file.name, props.file.rootLabel);
 
   // 開いたときと再読み込みのたびに、同じ URL を HEAD で確かめる。期限切れと失敗は
-  // 案内を出さないだけにして、プレビューは今までどおり動かす。
+  // 案内を出さないだけにして、プレビューは動かす。
   useEffect(() => {
     let stale = false;
     void probePreviewWarning(props.paneId, props.file, AbortSignal.timeout(3_000)).then(

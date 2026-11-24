@@ -343,7 +343,7 @@ function readLink(
   const href = safeUrl(destination.url);
   if (href === null) {
     // 相対パスは、BFF が実在を確かめた表記と一致したときだけリンクになる (docs/adr/client-rendering.md)。
-    // 一致しなければ描画側が原文へ戻す。`//host` と読めない scheme は今までどおり literal。
+    // 一致しなければ描画側が原文へ戻す。`//host` と読めない scheme は literal。
     if (!isRelativeUrl(destination.url)) {
       return { node: { kind: "literal", text: raw }, end: end + 1 };
     }
