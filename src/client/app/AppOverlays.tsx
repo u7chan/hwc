@@ -24,7 +24,9 @@ import type {
   DropTarget,
   OperationMenu,
   Removing,
+  RemovingPhase,
 } from "./types";
+import type { ConfirmFlow } from "./hooks/use-confirm-flow";
 
 export type AppOverlaysProps = {
   dragging: { paneId: string; target: DropTarget | null } | null;
@@ -54,20 +56,11 @@ export type AppOverlaysProps = {
   openCloseSpaceConfirm: () => void;
   moveWorkspaceToTop: () => void;
   runGitSync: (workspaceId: string, action: "fetch" | "pull") => Promise<void>;
-  closing: Closing | null;
+  closing: ConfirmFlow<Closing>;
   closingPane: PaneState | null;
-  closingAvailable: boolean;
-  confirmClose: () => void;
-  cancelClose: () => void;
-  removing: Removing | null;
+  removing: ConfirmFlow<Removing, RemovingPhase>;
   removingWorkspace: WorkspaceState | null;
-  removingAvailable: boolean;
-  confirmRemoveWorktree: () => void;
-  cancelRemoveWorktree: () => void;
-  closingSpace: ClosingSpace | null;
-  closingSpaceAvailable: boolean;
-  confirmCloseSpace: () => void;
-  cancelCloseSpace: () => void;
+  closingSpace: ConfirmFlow<ClosingSpace>;
   creating: CreatingPane | null;
   setCreating: (value: CreatingPane | null) => void;
   setPendingSelect: (value: string | null) => void;
@@ -107,18 +100,9 @@ export function AppOverlays(props: AppOverlaysProps) {
     runGitSync,
     closing,
     closingPane,
-    closingAvailable,
-    confirmClose,
-    cancelClose,
     removing,
     removingWorkspace,
-    removingAvailable,
-    confirmRemoveWorktree,
-    cancelRemoveWorktree,
     closingSpace,
-    closingSpaceAvailable,
-    confirmCloseSpace,
-    cancelCloseSpace,
     creating,
     setCreating,
     setPendingSelect,
@@ -276,39 +260,41 @@ export function AppOverlays(props: AppOverlaysProps) {
         </Menu>
       )}
 
-      {closing === null || closingPane === null ? null : (
+      {closing.state === null || closingPane === null ? null : (
         <CloseConfirm
           pane={closingPane}
-          action={closing.action}
-          available={closingAvailable}
-          busy={closing.phase === "busy"}
-          failed={closing.phase === "failed"}
-          onConfirm={confirmClose}
-          onCancel={cancelClose}
+          action={closing.state.target.action}
+          available={closing.available}
+          busy={closing.state.phase === "busy"}
+          failed={closing.state.phase === "failed"}
+          onConfirm={closing.confirm}
+          onCancel={closing.cancel}
         />
       )}
 
-      {removing === null || removing.phase === "leave" || removingWorkspace === null ? null : (
+      {removing.state === null ||
+      removing.state.phase === "leave" ||
+      removingWorkspace === null ? null : (
         <RemoveWorktreeConfirm
-          label={removing.label}
-          checkoutPath={removing.checkoutPath}
-          available={removingAvailable}
-          busy={removing.phase === "busy"}
-          failed={removing.phase === "failed"}
-          onConfirm={confirmRemoveWorktree}
-          onCancel={cancelRemoveWorktree}
+          label={removing.state.target.label}
+          checkoutPath={removing.state.target.checkoutPath}
+          available={removing.available}
+          busy={removing.state.phase === "busy"}
+          failed={removing.state.phase === "failed"}
+          onConfirm={removing.confirm}
+          onCancel={removing.cancel}
         />
       )}
 
-      {closingSpace === null ? null : (
+      {closingSpace.state === null ? null : (
         <CloseSpaceConfirm
-          label={closingSpace.label}
-          path={closingSpace.path}
-          available={closingSpaceAvailable}
-          busy={closingSpace.phase === "busy"}
-          failed={closingSpace.phase === "failed"}
-          onConfirm={confirmCloseSpace}
-          onCancel={cancelCloseSpace}
+          label={closingSpace.state.target.label}
+          path={closingSpace.state.target.path}
+          available={closingSpace.available}
+          busy={closingSpace.state.phase === "busy"}
+          failed={closingSpace.state.phase === "failed"}
+          onConfirm={closingSpace.confirm}
+          onCancel={closingSpace.cancel}
         />
       )}
 

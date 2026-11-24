@@ -28,6 +28,7 @@ import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
+import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
 import { useFavicon } from "./app/hooks/use-favicon";
 import { useFileTreeDisplay } from "./app/hooks/use-file-tree-display";
 import { useFileTreeSide } from "./app/hooks/use-file-tree-side";
@@ -190,12 +191,7 @@ export function App() {
   // 結果不明の回答は再送できない。詳細の付け外しを越えて、この Map だけに試行状態を残す。
   const confirmationAttempts = useRef(new Map<string, ConfirmationAttempt>());
   const [, confirmationChanged] = useReducer((revision: number) => revision + 1, 0);
-  const [closing, setClosing] = useState<Closing | null>(null);
-  const closingRef = useRef<Closing | null>(null);
-  closingRef.current = closing;
   const [leavingTab, setLeavingTab] = useState<LeavingTab | null>(null);
-  const [removing, setRemoving] = useState<Removing | null>(null);
-  const [closingSpace, setClosingSpace] = useState<ClosingSpace | null>(null);
   const [creating, setCreating] = useState<CreatingPane | null>(null);
   // 拡大中の画像。ダイアログは App 直下。
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
@@ -207,15 +203,8 @@ export function App() {
   // 要求済みの記録。再試行で記録が置き換わっても、前の要求の完了が新しい要求の
   // 番人を消さないよう、ペイン id ではなく記録そのもので覚える。
   const launchRequests = useRef(new Set<PaneLaunch>());
-  const closeInFlight = useRef(false);
-  const removeInFlight = useRef(false);
-  const closeSpaceInFlight = useRef(false);
   // 既読の保留。アクティブ一覧で開いたペインだけが入り、選択が離れた時点で判定する。
   const pendingRead = useRef<string | null>(null);
-  // 削除対象が消えたスナップショットは、一覧の行が消えるアニメーションが終わるまで
-  // 1 回だけ保留する。正は BFF のままで、描画のタイミングだけをずらす。
-  const removingRef = useRef<Removing | null>(null);
-  removingRef.current = removing;
   // 外すタブのアニメーション中も、スナップショットの適用を 1 回だけ保留する。
   const leavingTabRef = useRef<LeavingTab | null>(null);
   leavingTabRef.current = leavingTab;
@@ -246,6 +235,51 @@ export function App() {
   const heldSnapshot = useRef<AppState | null>(null);
   const heldSnapshotTimer = useRef<number | null>(null);
 
+  // 確認の操作は 3 つとも同じ形。対象は開いた時点のスナップショットから写し、
+  // 違いは対象の条件・実行する要求・応答後の後始末だけに残す。
+  const closing = useConfirmFlow<Closing>({
+    present: (target) => state !== null && paneCloseAction(state, target.paneId) === target.action,
+    request: (target) => closePane(target.paneId, target.action),
+    settled: (current, outcome) => {
+      // 閉じたペインはローカルで消さない。一覧とタブは SSE のスナップショットで置き換える。
+      if (outcome !== "done") return "failed";
+      // 選んでいないペインを閉じても、読んでいるペインを動かさない。exit は終了要求で
+      // ペインが残るので、履歴は動かさない（消えたらスナップショットで落とす）。
+      if (current.target.action === "close") {
+        beginTabLeave(current.target.paneId, current.target.next);
+      }
+      return null;
+    },
+  });
+  const removing = useConfirmFlow<Removing, "leave">({
+    // 削除できるのは、Herdr が作った linked worktree だけ。
+    present: (target) => {
+      const workspace = state?.workspaces.find((item) => item.id === target.workspaceId);
+      return workspace?.worktree?.managed === true && workspace.worktree.isLinkedWorktree;
+    },
+    request: (target) => removeWorktree(target.workspaceId),
+    settled: (current, outcome) => {
+      // 消えたスペースはローカルで消さない。一覧の置き換えは SSE のスナップショットに任せる。
+      if (outcome === "done") {
+        // 成功時は確認を閉じ、一覧の対象が消えるアニメーションを先に見せる。
+        armRemovalFallback();
+        return "leave";
+      }
+      // 応答より先に対象が消えていた場合は、削除済みとして扱う。
+      if (current.phase === "leave") {
+        finishRemoval();
+        return null;
+      }
+      return "failed";
+    },
+  });
+  const closingSpace = useConfirmFlow<ClosingSpace>({
+    // 最後の 1 つは残す。それ以外は、重複していなくても閉じられる。
+    present: (target) => state !== null && canCloseSpace(state, target.workspaceId),
+    request: (target) => closeWorkspace(target.workspaceId),
+    settled: (_current, outcome) => (outcome === "done" ? null : "failed"),
+  });
+
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
   const snapshotWriter = useRef<SnapshotOrigin>("initial-fetch");
@@ -257,19 +291,25 @@ export function App() {
       window.clearTimeout(heldSnapshotTimer.current);
       heldSnapshotTimer.current = null;
     }
-    setRemoving((current) => (current?.phase === "leave" ? null : current));
+    removing.update((current) => (current?.phase === "leave" ? null : current));
+  };
+
+  // 削除の後も一覧の行を消えるアニメーションへ渡す間は、スナップショットの適用を
+  // 止める。アニメーションの完了が届かない場合の保険を置く。
+  const armRemovalFallback = () => {
+    heldSnapshotTimer.current ??= window.setTimeout(finishRemoval, REMOVAL_LEAVE_FALLBACK_MS);
   };
 
   // 削除が確定したらダイアログを閉じ、一覧の対象を消えるアニメーションへ渡す。
   const beginRemovalLeave = () => {
-    setRemoving((current) => (current === null ? null : { ...current, phase: "leave" }));
-    heldSnapshotTimer.current ??= window.setTimeout(finishRemoval, REMOVAL_LEAVE_FALLBACK_MS);
+    removing.update((current) => (current === null ? null : { ...current, phase: "leave" }));
+    armRemovalFallback();
   };
 
   // 受信したスナップショットで丸ごと置き換える（docs/adr/bff-client-transport.md）。画面から消える対象の
   // アニメーションが途中で切り落とされないよう、その間だけ適用を保留する。
   const applyState = (next: AppState) => {
-    const target = removingRef.current;
+    const target = removing.latest.current;
     if (target?.phase === "leave" || leavingTabRef.current !== null) {
       heldSnapshot.current = next;
       return;
@@ -278,7 +318,7 @@ export function App() {
     // 見せてから適用する。
     if (
       target?.phase === "busy" &&
-      !next.workspaces.some((workspace) => workspace.id === target.workspaceId)
+      !next.workspaces.some((workspace) => workspace.id === target.target.workspaceId)
     ) {
       heldSnapshot.current = next;
       beginRemovalLeave();
@@ -287,23 +327,23 @@ export function App() {
     // ペインを閉じる要求の応答より先に、ペインが消えたスナップショットが届くことが
     // ある。消えるタブを先に見せてから適用する。ペインが無い以上 close の目的は
     // 達しているので、確認は閉じ、遅れて返る応答は捨てる。
-    const closeTarget = closingRef.current;
+    const closeTarget = closing.latest.current;
     if (
       closeTarget?.phase === "busy" &&
-      closeTarget.action === "close" &&
-      findPane(next, closeTarget.paneId) === null
+      closeTarget.target.action === "close" &&
+      findPane(next, closeTarget.target.paneId) === null
     ) {
       // タブとして開いていないペインはアニメーションできない。保留だけ残すと
       // 次のスナップショットまで一覧が古いままになるので、その場で適用する。
-      if (leafOfPane(splitRef.current.layout, closeTarget.paneId) === null) {
+      if (leafOfPane(splitRef.current.layout, closeTarget.target.paneId) === null) {
         heldSnapshot.current = null;
-        setClosing(null);
+        closing.update(() => null);
         setState(next);
         return;
       }
       heldSnapshot.current = next;
-      beginTabLeave(closeTarget.paneId, closeTarget.next);
-      setClosing(null);
+      beginTabLeave(closeTarget.target.paneId, closeTarget.target.next);
+      closing.update(() => null);
       return;
     }
     setState(next);
@@ -312,13 +352,13 @@ export function App() {
   // タブのアニメーションと削除のアニメーションがどちらも終わったら、保留した
   // スナップショットを 1 回だけ適用する。待つのは描画だけで、状態の正は BFF のまま。
   useEffect(() => {
-    if (leavingTab !== null || removing?.phase === "leave") return;
+    if (leavingTab !== null || removing.state?.phase === "leave") return;
     const held = heldSnapshot.current;
     if (held === null) return;
     heldSnapshot.current = null;
     // 保留中に別の対象が消えていれば、そのアニメーションへもう一度渡す。
     applyState(held);
-  }, [leavingTab, removing?.phase]);
+  }, [leavingTab, removing.state?.phase]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -453,24 +493,13 @@ export function App() {
   }, [state]);
   // 確認の文言は状態を開いた時点で固定しない。ダイアログ中に変わればその値で読む。
   // スナップショットから消えたペインはもう無いので、確認は出さない。
-  const closingPane = state === null || closing === null ? null : findPane(state, closing.paneId);
-  const closingAvailable =
-    state !== null && closing !== null && paneCloseAction(state, closing.paneId) === closing.action;
+  const closingPane =
+    state === null || closing.state === null ? null : findPane(state, closing.state.target.paneId);
+  const removingTarget = removing.state?.target ?? null;
   const removingWorkspace =
-    state === null || removing === null
+    state === null || removingTarget === null
       ? null
-      : (state.workspaces.find((workspace) => workspace.id === removing.workspaceId) ?? null);
-  const removingAvailable =
-    removingWorkspace?.worktree?.managed === true && removingWorkspace.worktree.isLinkedWorktree;
-  const closingSpaceWorkspace =
-    state === null || closingSpace === null
-      ? null
-      : (state.workspaces.find((workspace) => workspace.id === closingSpace.workspaceId) ?? null);
-  const closingSpaceAvailable =
-    state !== null &&
-    closingSpace !== null &&
-    closingSpaceWorkspace !== null &&
-    canCloseSpace(state, closingSpace.workspaceId);
+      : (state.workspaces.find((workspace) => workspace.id === removingTarget.workspaceId) ?? null);
 
   // 既読は Herdr の seen を進めて消す。失敗しても通知しない。次にその行を開いて離れたときに
   // もう一度送られるので、ここで知らせても利用者にできることが無い。
@@ -855,12 +884,7 @@ export function App() {
     if (state === null) return;
     const action = paneCloseAction(state, paneId);
     if (action === null || action === "keep") return;
-    setClosing({
-      paneId,
-      action,
-      next: successorTab(split, paneId),
-      phase: "confirm",
-    });
+    closing.open({ paneId, action, next: successorTab(split, paneId) });
   };
 
   const openCloseConfirm = () => {
@@ -870,124 +894,32 @@ export function App() {
     requestClose(paneId);
   };
 
-  // 送信中は閉じる手段を受け付けない。結果の反映を 1 回に保つ。
-  const cancelClose = () => {
-    if (closing?.phase === "busy") return;
-    setClosing(null);
-  };
-
-  // 閉じたペインはローカルで消さない。表示は SSE のスナップショットで置き換える。
-  const confirmClose = () => {
-    if (closing === null || closing.phase === "busy" || !closingAvailable) return;
-    if (closeInFlight.current) return;
-    closeInFlight.current = true;
-    const target = closing;
-    setClosing({ ...target, phase: "busy" });
-    void closePane(target.paneId, target.action).then((outcome) => {
-      closeInFlight.current = false;
-      // スナップショットが先にペインを落とした場合は、既にタブを外すアニメーションへ
-      // 渡している。遅れて届いた応答で確認や表示を戻さない。
-      if (leavingTabRef.current?.paneId === target.paneId) return;
-      if (outcome !== "done") {
-        setClosing((current) => (current === null ? null : { ...current, phase: "failed" }));
-        return;
-      }
-      // 選んでいないペインを閉じても、読んでいるペインを動かさない。exit は終了要求で
-      // ペインが残るので、履歴は動かさない（消えたらスナップショットで落とす）。
-      if (target.action === "close") {
-        beginTabLeave(target.paneId, target.next);
-      }
-      setClosing(null);
-    });
-  };
-
   // チェックアウトの削除は取り消せない。Herdr の TUI と同じく、確認は 1 回だけにする。
   const openRemoveWorktreeConfirm = () => {
     if (menu === null || menu.target.kind !== "workspace" || state === null) return;
     const workspace = state.workspaces.find((item) => item.id === menu.target.id);
-    if (
-      workspace === undefined ||
-      workspace.worktree?.managed !== true ||
-      !workspace.worktree.isLinkedWorktree
-    ) {
-      return;
-    }
-    closeMenu();
-    setRemoving({
+    if (workspace === undefined) return;
+    // 削除できない対象（Herdr の作った linked worktree でない）なら開かない。
+    // そのときはメニューも開いたままにして、別の操作を選べるようにする。
+    const opened = removing.open({
       workspaceId: workspace.id,
       label: workspace.label,
-      checkoutPath: workspace.worktree.checkoutPath,
-      phase: "confirm",
+      checkoutPath: workspace.worktree?.checkoutPath ?? null,
     });
-  };
-
-  const cancelRemoveWorktree = () => {
-    if (removing?.phase === "busy") return;
-    setRemoving(null);
-  };
-
-  // 消えたスペースはローカルで消さない。一覧の置き換えは SSE のスナップショットに任せる。
-  // 成功時は確認を閉じ、一覧の対象が消えるアニメーションを先に見せる。
-  const confirmRemoveWorktree = () => {
-    if (
-      removing === null ||
-      removing.phase === "busy" ||
-      removing.phase === "leave" ||
-      !removingAvailable
-    ) {
-      return;
-    }
-    if (removeInFlight.current) return;
-    removeInFlight.current = true;
-    const target = removing;
-    setRemoving({ ...target, phase: "busy" });
-    void removeWorktree(target.workspaceId).then((outcome) => {
-      removeInFlight.current = false;
-      if (outcome === "done") {
-        beginRemovalLeave();
-        return;
-      }
-      // 応答より先に対象が消えていた場合は、削除済みとして扱う。
-      if (removingRef.current?.phase === "leave") {
-        finishRemoval();
-        return;
-      }
-      setRemoving((current) => (current === null ? null : { ...current, phase: "failed" }));
-    });
+    if (opened) closeMenu();
   };
 
   // 最後の 1 つは残す。それ以外は、重複していなくても閉じられる。
   const openCloseSpaceConfirm = () => {
     if (menu === null || menu.target.kind !== "workspace" || state === null) return;
     const workspace = state.workspaces.find((item) => item.id === menu.target.id);
-    if (workspace === undefined || !canCloseSpace(state, workspace.id)) return;
-    closeMenu();
-    setClosingSpace({
+    if (workspace === undefined) return;
+    const opened = closingSpace.open({
       workspaceId: workspace.id,
       label: workspace.label,
       path: workspace.path ?? null,
-      phase: "confirm",
     });
-  };
-
-  const cancelCloseSpace = () => {
-    if (closingSpace?.phase === "busy") return;
-    setClosingSpace(null);
-  };
-
-  const confirmCloseSpace = () => {
-    if (closingSpace === null || closingSpace.phase === "busy" || !closingSpaceAvailable) return;
-    if (closeSpaceInFlight.current) return;
-    closeSpaceInFlight.current = true;
-    const target = closingSpace;
-    setClosingSpace({ ...target, phase: "busy" });
-    void closeWorkspace(target.workspaceId).then((outcome) => {
-      closeSpaceInFlight.current = false;
-      setClosingSpace((current) => {
-        if (current === null) return null;
-        return outcome === "done" ? null : { ...current, phase: "failed" };
-      });
-    });
+    if (opened) closeMenu();
   };
 
   const toggle = (groupId: string) => {
@@ -1440,18 +1372,9 @@ export function App() {
     runGitSync,
     closing,
     closingPane,
-    closingAvailable,
-    confirmClose,
-    cancelClose,
     removing,
     removingWorkspace,
-    removingAvailable,
-    confirmRemoveWorktree,
-    cancelRemoveWorktree,
     closingSpace,
-    closingSpaceAvailable,
-    confirmCloseSpace,
-    cancelCloseSpace,
     creating,
     setCreating,
     // hwc から作ったペインは、自動分割の対象にしない。
@@ -1515,9 +1438,12 @@ export function App() {
                 moveWorkspaceBlock(workspaceIds, beforeWorkspaceId)
               }
               removal={
-                removing === null
+                removing.state === null
                   ? null
-                  : { workspaceId: removing.workspaceId, phase: removing.phase }
+                  : {
+                      workspaceId: removing.state.target.workspaceId,
+                      phase: removing.state.phase,
+                    }
               }
               onRemovalFinished={finishRemoval}
               workingSince={workingSince}
