@@ -7,14 +7,13 @@ import type { FileTreeEntry } from "../shared/file-tree";
 import type { GitSync } from "../shared/git";
 import { attachmentKindOfFileName } from "../shared/attachments";
 import { activityLabel, activitySnippet, showActivityFrame, usePaneActivity } from "./activity";
-import { OUTPUT_LINES, answerQuestion, editMessage, uploadAttachment } from "./requests/panes";
+import { answerQuestion, editMessage, uploadAttachment } from "./requests/panes";
 import { askUserAnswerText } from "./answer";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference } from "./file-reference";
 import type { FileTreeIcons } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
 import type { FileTreeSide } from "./file-tree-side";
-import { OutputText } from "./OutputText";
 import {
   SEND_FAILED_NOTICE,
   SHELL_BUSY_NOTICE,
@@ -58,16 +57,17 @@ import { modelSwitchBlockReason } from "./model-switch";
 import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
 import { useProjects } from "./use-projects";
-import { ArrowDownIcon, ChevronLeftIcon, StatusMark } from "./icons";
+import { ArrowDownIcon, StatusMark } from "./icons";
 import { useElementWidth } from "./app/use-element-width";
 import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
-import { OutputEmpty, OutputSkeleton } from "./pane/empty";
+import { OutputSkeleton } from "./pane/empty";
 import { FilePreview } from "./pane/file-preview";
 import { FileTree } from "./pane/file-tree";
 import { LiveStatus } from "./pane/live-status";
 import { PaneComposer } from "./pane/pane-composer";
 import { PaneHead } from "./pane/pane-head";
+import { TerminalOutput } from "./pane/terminal-output";
 import { useAttachments } from "./pane/use-attachments";
 import { useComposer } from "./pane/use-composer";
 import { type ComposerSend, composerSend } from "./pane/composer-send";
@@ -975,41 +975,15 @@ export function PaneDetail(props: PaneDetailProps) {
                     />
                   </>
                 ) : (
-                  <>
-                    {pendingView === null || readOnly ? null : (
-                      // 端末出力を見ている間も、応答待ちであることと戻り先を残す。
-                      <div class="hwc-pending-bar" role="status">
-                        <span>端末で応答してください。</span>
-                        <button
-                          type="button"
-                          class="hwc-pending-toggle hwc-pending-toggle-back"
-                          onClick={() => setTerminalFor(null)}
-                        >
-                          <ChevronLeftIcon size={16} />
-                          会話に戻る
-                        </button>
-                      </div>
-                    )}
-                    {read?.truncated ? (
-                      <p class="hwc-output-notice">最新の {OUTPUT_LINES} 行を表示しています</p>
-                    ) : null}
-                    {failed ? (
-                      <p class="hwc-output-notice" role="status">
-                        出力を取得できません。接続が戻ると自動で更新します。
-                      </p>
-                    ) : null}
-                    {output === null ? (
-                      failed ? null : (
-                        <OutputSkeleton />
-                      )
-                    ) : outputEmpty ? (
-                      <OutputEmpty />
-                    ) : (
-                      <pre class="hwc-output">
-                        <OutputText text={output} scheme={scheme} />
-                      </pre>
-                    )}
-                  </>
+                  <TerminalOutput
+                    waiting={pendingView !== null && !readOnly}
+                    onBack={() => setTerminalFor(null)}
+                    truncated={read?.truncated === true}
+                    failed={failed}
+                    output={output}
+                    empty={outputEmpty}
+                    scheme={scheme}
+                  />
                 )}
               </div>
               {/* 逐次表示の先端を背景へ溶かす。読み返しで上へ離れたら出さない。 */}
