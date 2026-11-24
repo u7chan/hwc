@@ -10,55 +10,106 @@ export async function snapshotOf(
   reader: ChatReader,
   windowFor: WindowResolver,
 ): Promise<ChatSnapshot> {
-  let model: string | null = null;
-  let provider: string | null = null;
-  let effort: string | null = null;
-  // usage は entry 単位で拾う。本文の無い assistant を project が捨てるため、message 側に
-  // 持たせると tool-only の最後の応答を取りこぼす。
-  let tokens: number | null = null;
-  let usage: ChatUsage | null = null;
-  const messages: ChatMessage[] = [];
-  // compaction エントリより前にある、表示対象のメッセージ数。区切りを置く位置になる。
-  let beforeCompaction = 0;
-
   const branch = activeBranch(reader);
+  const pairing = pairAsks(branch);
+  const history = foldMessages(branch, pairing);
+  const latest = latestValues(branch);
+
+  // window は表示中のモデルで引く。usage を採った assistant のモデルで引くと、切り替え直後に
+  // 新しい model 名と古いモデルの window が混ざる。
+  const windowTokens = await windowFor(reader.path, latest.provider, latest.model);
+  // ask ファイルは毎回読む。セッションの追記が無くても、pending の出現・差し替え・削除で
+  // etag を変えないと、クライアントが 304 でカードの変化を取りこぼす。
+  const ask = await readAsk(reader.path);
+  const limited = limitMessages(history.messages);
+  const keptMessages = pruneOrphanAskAnswers(limited.messages);
+  // limitMessages は古い側から落とす。落ちた分だけ区切りの位置も手前へずらす。
+  const dropped = history.messages.length - keptMessages.length;
+  const compactionIndex =
+    history.compaction === null
+      ? 0
+      : Math.max(0, Math.min(keptMessages.length, history.beforeCompaction - dropped));
+  return {
+    etag: `${reader.etagPrefix}-${reader.generation}-${windowTokens ?? "unknown"}-${ask === null ? "ask-none" : `ask-${ask.id}`}`,
+    messages: keptMessages,
+    model: latest.model,
+    effort: latest.effort,
+    truncated: limited.truncated,
+    context: foldContext(latest.tokens, windowTokens),
+    ...(latest.usage === null ? {} : { usage: latest.usage }),
+    compaction:
+      history.compaction === null ? null : { ...history.compaction, index: compactionIndex },
+    canRewind: reader.canRewind,
+    ...(ask === null ? {} : { pending: askPending(ask) }),
+    // 追記型なので、最後に読んだエントリが葉。表示に無い entry でも葉になりうる。
+    ...(reader.leafId === null ? {} : { leafId: reader.leafId }),
+  };
+}
+
+// ask_user の呼び出しと result の対応。合成 id の材料を key ごとに持ち、本文の畳み込みは
+// この索引だけを引く。
+export type AskPairing = {
+  questionKeys: Map<SessionAskQuestion, string>;
+  resultKeys: Map<SessionAskResult, string>;
+  results: Map<string, SessionAskResult>;
+  askIds: Map<string, string>;
+  answered: Set<string>;
+};
+
+export function pairAsks(branch: readonly SessionEntry[]): AskPairing {
+  const pairing: AskPairing = {
+    questionKeys: new Map(),
+    resultKeys: new Map(),
+    results: new Map(),
+    askIds: new Map(),
+    answered: new Set(),
+  };
   // toolCallId は provider が再利用することがある。branch 順に呼び出しと result を対応づけ、
   // 回答済みの呼び出しだけを質問と回答のペアにする。未回答は pending カードが受け持つ。
-  const askCallKeys = new Map<SessionAskQuestion, string>();
-  const askResultKeys = new Map<SessionAskResult, string>();
-  const askIdsByKey = new Map<string, string>();
-  const askResultsByKey = new Map<string, SessionAskResult>();
-  const answeredAskKeys = new Set<string>();
-  const waitingAskCalls = new Map<string, SessionAskQuestion[]>();
-  let askCallSeq = 0;
+  const waiting = new Map<string, SessionAskQuestion[]>();
+  let seq = 0;
   for (const entry of branch) {
     // 呼び出しと result は同じ assistant の tool batch 内でだけ対応づける。中断で result が
     // 書かれなかった call を、次の user / assistant をまたいで後の result に使わない。
     const startsAskBatch =
       entry.askQuestions.length > 0 ||
       entry.messages.some((message) => message.role === "user" || message.role === "agent");
-    if (startsAskBatch) waitingAskCalls.clear();
+    if (startsAskBatch) waiting.clear();
     for (const ask of entry.askQuestions) {
       // entry id と通し番号を含め、同じ toolCallId が再登場しても合成 ID を一意にする。
-      const key = `${entry.id}:${ask.toolCallId}:${askCallSeq++}`;
-      askCallKeys.set(ask, key);
-      const queue = waitingAskCalls.get(ask.toolCallId) ?? [];
+      const key = `${entry.id}:${ask.toolCallId}:${seq++}`;
+      pairing.questionKeys.set(ask, key);
+      const queue = waiting.get(ask.toolCallId) ?? [];
       queue.push(ask);
-      waitingAskCalls.set(ask.toolCallId, queue);
+      waiting.set(ask.toolCallId, queue);
     }
     for (const result of entry.askResults) {
-      const call = waitingAskCalls.get(result.toolCallId)?.shift();
+      const call = waiting.get(result.toolCallId)?.shift();
       if (call === undefined) continue;
-      const key = askCallKeys.get(call);
+      const key = pairing.questionKeys.get(call);
       if (key === undefined) continue;
-      askResultKeys.set(result, key);
-      askResultsByKey.set(key, result);
-      if (result.askId !== null) askIdsByKey.set(key, result.askId);
-      if (result.status === "answered" && result.answer !== null) answeredAskKeys.add(key);
+      pairing.resultKeys.set(result, key);
+      pairing.results.set(key, result);
+      if (result.askId !== null) pairing.askIds.set(key, result.askId);
+      if (result.status === "answered" && result.answer !== null) pairing.answered.add(key);
     }
   }
-  const emittedAskKeys = new Set<string>();
+  return pairing;
+}
+
+export type FoldedHistory = {
+  messages: ChatMessage[];
+  // compaction エントリより前にある、表示対象のメッセージ数。区切りを置く位置になる。
+  beforeCompaction: number;
+  // 表示する区切り。index は limitMessages で落とした後で決まるので、ここでは持たない。
+  compaction: Omit<ChatCompaction, "index"> | null;
+};
+
+export function foldMessages(branch: readonly SessionEntry[], pairing: AskPairing): FoldedHistory {
+  const messages: ChatMessage[] = [];
   const compacted = compactionWindow(branch);
+  const emittedAskKeys = new Set<string>();
+  let beforeCompaction = 0;
   // pi は自動リトライの試行ごとに同じ失敗を書く。同一文言の error が続く間は 1 行に畳み、
   // 試行回数だけを count に残す。行が減るので区切りの位置は畳んだあとの行数で数える。
   let retry: ChatMessage | null = null;
@@ -82,10 +133,10 @@ export async function snapshotOf(
       }
       let addedAsk = false;
       for (const ask of entry.askQuestions) {
-        const key = askCallKeys.get(ask);
-        if (key === undefined || !answeredAskKeys.has(key)) continue;
-        const askId = askIdsByKey.get(key);
-        const result = askResultsByKey.get(key);
+        const key = pairing.questionKeys.get(ask);
+        if (key === undefined || !pairing.answered.has(key)) continue;
+        const askId = pairing.askIds.get(key);
+        const result = pairing.results.get(key);
         const selected = result?.kind === "option" ? result.answer : null;
         const askOptions = ask.options?.map((label) => ({
           label,
@@ -105,7 +156,7 @@ export async function snapshotOf(
         addedAsk = true;
       }
       for (const result of entry.askResults) {
-        const key = askResultKeys.get(result);
+        const key = pairing.resultKeys.get(result);
         if (key === undefined || result.answer === null || !emittedAskKeys.has(key)) continue;
         messages.push({
           id: `ask:${key}:answer`,
@@ -124,56 +175,71 @@ export async function snapshotOf(
     if (compacted !== null && index < compacted.entryIndex) {
       beforeCompaction += messages.length - before;
     }
-    // path 順で新しい方を採る。model_change が assistant より後なら切り替え後の値になる。
-    if (entry.model !== null) {
-      model = entry.model;
-      provider = entry.provider;
-    }
-    if (entry.effort !== null) effort = entry.effort;
-    if (entry.invalidatesUsage) {
-      tokens = null;
-      usage = null;
-    }
-    if (entry.usageTokens !== null) {
-      tokens = entry.usageTokens;
-      usage = entry.usage;
-    }
   }
 
-  // window は表示中のモデルで引く。usage を採った assistant のモデルで引くと、切り替え直後に
-  // 新しい model 名と古いモデルの window が混ざる。
-  const windowTokens = await windowFor(reader.path, provider, model);
-  // ask ファイルは毎回読む。セッションの追記が無くても、pending の出現・差し替え・削除で
-  // etag を変えないと、クライアントが 304 でカードの変化を取りこぼす。
-  const ask = await readAsk(reader.path);
-  const limited = limitMessages(messages);
-  const keptMessages = pruneOrphanAskAnswers(limited.messages);
-  // limitMessages は古い側から落とす。落ちた分だけ区切りの位置も手前へずらす。
-  const dropped = messages.length - keptMessages.length;
-  const compactionIndex =
-    compacted === null ? 0 : Math.max(0, Math.min(keptMessages.length, beforeCompaction - dropped));
-  return {
-    etag: `${reader.etagPrefix}-${reader.generation}-${windowTokens ?? "unknown"}-${ask === null ? "ask-none" : `ask-${ask.id}`}`,
-    messages: keptMessages,
-    model,
-    effort,
-    truncated: limited.truncated,
-    context: foldContext(tokens, windowTokens),
-    ...(usage === null ? {} : { usage }),
-    compaction: compacted === null ? null : { ...compacted.compaction, index: compactionIndex },
-    canRewind: reader.canRewind,
-    ...(ask === null ? {} : { pending: askPending(ask) }),
-    // 追記型なので、最後に読んだエントリが葉。表示に無い entry でも葉になりうる。
-    ...(reader.leafId === null ? {} : { leafId: reader.leafId }),
+  return { messages, beforeCompaction, compaction: compacted?.compaction ?? null };
+}
+
+export type LatestValues = {
+  model: string | null;
+  provider: string | null;
+  effort: string | null;
+  tokens: number | null;
+  usage: ChatUsage | null;
+};
+
+// 表示に出す最新の model と effort、いまのコンテキスト量になる usage を、本文とは別に拾う。
+// 本文の畳み込みと同じ走査に混ぜると、usage を直すときに畳んだ行の状態まで読むことになる。
+// どれも枝の最後に現れた 1 つで決まるので、末尾から揃うまで戻る（3 回目の全走査を作らない）。
+export function latestValues(branch: readonly SessionEntry[]): LatestValues {
+  const latest: LatestValues = {
+    model: null,
+    provider: null,
+    effort: null,
+    tokens: null,
+    usage: null,
   };
+  let foundModel = false;
+  let foundEffort = false;
+  let foundUsage = false;
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (!entry) continue;
+    // usage は entry 単位で拾う。本文の無い assistant を project が捨てるため、message 側に
+    // 持たせると tool-only の最後の応答を取りこぼす。
+    if (!foundUsage) {
+      if (entry.usageTokens !== null) {
+        latest.tokens = entry.usageTokens;
+        latest.usage = entry.usage;
+        foundUsage = true;
+      } else if (entry.invalidatesUsage) {
+        // これより前の usage は現在のコンテキスト量でない。null のまま確定する。
+        foundUsage = true;
+      }
+    }
+    // path 順で新しい方を採る。model_change が assistant より後なら切り替え後の値になる。
+    if (!foundModel && entry.model !== null) {
+      latest.model = entry.model;
+      latest.provider = entry.provider;
+      foundModel = true;
+    }
+    if (!foundEffort && entry.effort !== null) {
+      latest.effort = entry.effort;
+      foundEffort = true;
+    }
+    if (foundModel && foundEffort && foundUsage) break;
+  }
+  return latest;
 }
 
 // 最新の compaction だけを見る。その材料が揃い、firstKeptEntryId が branch にあれば
 // その位置を返す。古い compaction へは遡らない。最新が使えないなら窓を張らず全体を返す。
 // 要約だけ出して古い会話を並べるより、表示と実体が一致する側を選ぶ。
-function compactionWindow(
-  branch: readonly SessionEntry[],
-): { start: number; entryIndex: number; compaction: Omit<ChatCompaction, "index"> } | null {
+function compactionWindow(branch: readonly SessionEntry[]): {
+  start: number;
+  entryIndex: number;
+  compaction: Omit<ChatCompaction, "index">;
+} | null {
   let newestIndex = -1;
   for (let index = branch.length - 1; index >= 0; index -= 1) {
     if (!branch[index]?.compactionEntry) continue;
