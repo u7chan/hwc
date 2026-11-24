@@ -10,6 +10,38 @@ import { pullRequestBranches } from "../pull-request";
 import { parseCreateSpaceBody, parseWorktreeBody } from "./panes-request";
 import type { AppContext, IdContext, PlainContext } from "./context";
 
+type FailureStatus = 400 | 404 | 409 | 502;
+
+// 作成できたか・再試行できるかで分ける。ソケットの期限切れ・切断・応答 parser の失敗は
+// 作成結果が不明なので herdr_unavailable へ畳み、クライアントに再送させない。
+const WORKTREE_FAILURE_STATUS: Record<string, FailureStatus> = {
+  worktree_create_failed: 502,
+  worktree_open_failed: 502,
+  worktree_operation_in_progress: 409,
+  linked_worktree_source: 409,
+  not_git_worktree: 409,
+};
+
+// スペースを閉じる操作は、フォルダを消さない。linked worktree の削除とは
+// エラーコードも入口も分ける。グループを閉じる要求は勝手に通さない。
+const CLOSE_SPACE_FAILURE_STATUS: Record<string, FailureStatus> = {
+  workspace_group_close_required: 409,
+};
+
+const herdrFailure = (c: Context, error: unknown, statuses: Record<string, FailureStatus> = {}) => {
+  if (error instanceof HerdrError) {
+    if (error.code === "workspace_not_found") {
+      return c.json({ error: "workspace_not_found" }, 404);
+    }
+    if (error.code === "invalid_params" || error.code === "invalid_request") {
+      return c.json({ error: "invalid_request" }, 400);
+    }
+    const status = statuses[error.code];
+    if (status !== undefined) return c.json({ error: error.code }, status);
+  }
+  return c.json({ error: "herdr_unavailable" }, 502);
+};
+
 export function createWorkspacesHandlers(ctx: AppContext) {
   const {
     store,
@@ -23,57 +55,6 @@ export function createWorkspacesHandlers(ctx: AppContext) {
     resolveState,
     scheduleRestart,
   } = ctx;
-
-  // 作成できたか・再試行できるかで分ける。ソケットの期限切れ・切断・応答 parser の失敗は
-  // 作成結果が不明なので herdr_unavailable へ畳み、クライアントに再送させない。
-  const worktreeFailure = (c: Context, error: unknown) => {
-    if (error instanceof HerdrError) {
-      switch (error.code) {
-        case "worktree_create_failed":
-        case "worktree_open_failed":
-          return c.json({ error: error.code }, 502);
-        case "worktree_operation_in_progress":
-        case "linked_worktree_source":
-        case "not_git_worktree":
-          return c.json({ error: error.code }, 409);
-        case "workspace_not_found":
-          return c.json({ error: "workspace_not_found" }, 404);
-        case "invalid_params":
-        case "invalid_request":
-          return c.json({ error: "invalid_request" }, 400);
-      }
-    }
-    return c.json({ error: "herdr_unavailable" }, 502);
-  };
-
-  const workspaceFailure = (c: Context, error: unknown) => {
-    if (error instanceof HerdrError) {
-      if (error.code === "workspace_not_found") {
-        return c.json({ error: "workspace_not_found" }, 404);
-      }
-      if (error.code === "invalid_params" || error.code === "invalid_request") {
-        return c.json({ error: "invalid_request" }, 400);
-      }
-    }
-    return c.json({ error: "herdr_unavailable" }, 502);
-  };
-
-  // スペースを閉じる操作は、フォルダを消さない。linked worktree の削除とは
-  // エラーコードも入口も分ける。グループを閉じる要求は勝手に通さない。
-  const closeSpaceFailure = (c: Context, error: unknown) => {
-    if (error instanceof HerdrError) {
-      if (error.code === "workspace_not_found") {
-        return c.json({ error: "workspace_not_found" }, 404);
-      }
-      if (error.code === "workspace_group_close_required") {
-        return c.json({ error: error.code }, 409);
-      }
-      if (error.code === "invalid_params" || error.code === "invalid_request") {
-        return c.json({ error: "invalid_request" }, 400);
-      }
-    }
-    return c.json({ error: "herdr_unavailable" }, 502);
-  };
 
   // close 要求が同時に来ると、両方が「他にもスペースがある」チェックを通って 0 スペースまで
   // 閉じ得る。BFF は 1 プロセスなので、閉じている間と、閉じた直後の状態が届くまでの
@@ -188,7 +169,7 @@ export function createWorkspacesHandlers(ctx: AppContext) {
       try {
         await workspaces.moveBlock(parsed.value);
       } catch (error) {
-        return workspaceFailure(c, error);
+        return herdrFailure(c, error);
       }
 
       // イベントでも取り直すが、応答と SSE の前後で古い順に戻って見えるのを避ける。
@@ -226,7 +207,7 @@ export function createWorkspacesHandlers(ctx: AppContext) {
         // 取り直しは workspace.created / pane.created に任せる。
         return c.json({ workspaceId: result.workspaceId, paneId: result.paneId });
       } catch (error) {
-        return worktreeFailure(c, error);
+        return herdrFailure(c, error, WORKTREE_FAILURE_STATUS);
       }
     },
     // ツリーで選んだフォルダを作業ディレクトリにしたスペースを作る。id は起点のペインで、
@@ -261,7 +242,7 @@ export function createWorkspacesHandlers(ctx: AppContext) {
         // 取り直しは workspace.created / pane.created に任せる。
         return c.json({ workspaceId: result.workspaceId, paneId: result.paneId });
       } catch (error) {
-        return workspaceFailure(c, error);
+        return herdrFailure(c, error);
       }
     },
     removeWorktree: async (c: IdContext) => {
@@ -326,7 +307,7 @@ export function createWorkspacesHandlers(ctx: AppContext) {
         } else {
           releaseClosingSpace(workspaceId);
         }
-        return closeSpaceFailure(c, error);
+        return herdrFailure(c, error, CLOSE_SPACE_FAILURE_STATUS);
       }
     },
   };
