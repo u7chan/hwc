@@ -1,7 +1,7 @@
 import type { PaneState } from "../server/herdr/state";
 import type { AgentKind, AgentModel } from "../shared/agents";
 import { supportsChat } from "../shared/agents";
-import type { StartAgentFailure } from "./api";
+import type { StartAgentFailure } from "./requests/panes";
 import { INVALID_REQUEST_NOTICE, PANE_NOT_FOUND_NOTICE } from "./failure-text";
 
 // hwc が起動を頼んだペイン。ダイアログで選んだ内容だけを持ち、起動したかどうかの正は

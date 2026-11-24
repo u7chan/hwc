@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import { refreshState } from "../../api";
+import { refreshState } from "../../requests/workspaces";
 import { liveUpdateAllowed } from "../../live-update";
 
 // 状態の取り直しを頼むだけで、応答は状態として適用しない。新しい状態は SSE で届く

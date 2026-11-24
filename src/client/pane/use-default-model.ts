@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { readDefaultModel } from "../api";
+import { readDefaultModel } from "../requests/panes";
 import type { AgentInfo } from "../chat";
 import { useModelInfo } from "./use-model-info";
 

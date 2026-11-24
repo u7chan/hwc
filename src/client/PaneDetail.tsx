@@ -7,7 +7,7 @@ import type { FileTreeEntry } from "../shared/file-tree";
 import type { GitSync } from "../shared/git";
 import { attachmentKindOfFileName } from "../shared/attachments";
 import { activityLabel, activitySnippet, showActivityFrame, usePaneActivity } from "./activity";
-import { OUTPUT_LINES, answerQuestion, editMessage, uploadAttachment } from "./api";
+import { OUTPUT_LINES, answerQuestion, editMessage, uploadAttachment } from "./requests/panes";
 import { askUserAnswerText } from "./answer";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference } from "./file-reference";

@@ -5,7 +5,7 @@ import {
   fetchRestartSettings,
   fetchTemplates,
   readLaunchDefaults,
-} from "../api";
+} from "../requests/settings";
 
 export type SettingsSummary = {
   templates: number | null;

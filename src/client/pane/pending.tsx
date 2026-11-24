@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatPending, ChatPendingQuestion } from "../../server/chat/contract";
 import type { QuestionAnswer } from "../../shared/answer";
-import type { AnswerResult } from "../api";
+import type { AnswerResult } from "../requests/panes";
 import {
   answerFailure,
   answersOf,

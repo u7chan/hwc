@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { PaneState } from "../server/herdr/state";
 import type { PaneProcess } from "../shared/panes";
-import { readPaneProcess } from "./api";
+import { readPaneProcess } from "./requests/panes";
 import { paneDisplayName } from "./select";
 
 // Herdr は前景プロセスの変化をイベントで流さない。見えているタブのシェルだけを短い間隔で

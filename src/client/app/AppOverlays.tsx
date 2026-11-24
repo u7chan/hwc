@@ -3,7 +3,7 @@ import type { PaneState, WorkspaceState } from "../../server/herdr/state";
 import { MAX_PANES_PER_TAB } from "../../shared/panes";
 import type { paneCloseAction } from "../../shared/pane-close";
 import type { PullRequest } from "../../shared/pull-request";
-import type { GitSyncFailure } from "../api";
+import type { GitSyncFailure } from "../requests/workspaces";
 import { CloseConfirm } from "../CloseConfirm";
 import { CloseSpaceConfirm } from "../CloseSpaceConfirm";
 import { CreatePane } from "../CreatePane";

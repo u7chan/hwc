@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ChatContext, ChatFile, ChatMessage, ChatSnapshot } from "../server/chat/contract";
 import type { PendingMessage } from "./chat";
-import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./api";
+import { CHAT_POLL_ACTIVE_MS, CHAT_POLL_IDLE_MS } from "./requests/chat";
 import { MARKDOWN_MAX_LENGTH } from "./markdown/parse";
 import {
   agentInfo,

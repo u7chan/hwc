@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ChatFile } from "../server/chat/contract";
 import type { PreviewWarning } from "../shared/message-files";
-import { probePreviewWarning, previewUrl } from "./api";
+import { probePreviewWarning, previewUrl } from "./requests/panes";
 import { messageFileDisplayName } from "./chat";
 import { CloseIcon, ExternalIcon, ReloadIcon } from "./icons";
 

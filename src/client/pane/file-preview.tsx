@@ -7,7 +7,7 @@ import {
   messageLinkKindFromName,
   previewContentType,
 } from "../../shared/message-files";
-import { previewTextUrl, previewUrl } from "../api";
+import { previewTextUrl, previewUrl } from "../requests/panes";
 import type { MessageImageSource, MessageLinkSource } from "../chat";
 import { useCopy } from "../copy";
 import { fileReference } from "../file-reference";

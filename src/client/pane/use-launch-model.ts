@@ -1,4 +1,4 @@
-import { readLaunchModel } from "../api";
+import { readLaunchModel } from "../requests/panes";
 import type { AgentInfo } from "../chat";
 import { useModelInfo } from "./use-model-info";
 

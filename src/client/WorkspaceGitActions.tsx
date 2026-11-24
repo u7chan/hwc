@@ -1,5 +1,5 @@
 import type { GitSync } from "../shared/git";
-import type { GitSyncFailure } from "./api";
+import type { GitSyncFailure } from "./requests/workspaces";
 import { FetchIcon, PullIcon } from "./icons";
 
 type WorkspaceGitActionsProps = {
