@@ -698,7 +698,7 @@ fixture の `w2:p2`（`quickstart`）は、mod が書く live ファイル（`<r
      --status=502 --body='{"error":"worktree_create_failed"}' --content-type=application/json
    ```
 
-   この状態で `acme-dashboard` のメニューから「新しいワークツリー」を作ると、ダイアログに「ワークツリーを作成できませんでした。もう一度お試しください。」が出て、「キャンセル」「作成して起動」が残る（`worktreeFailureNotice` の文言）。スペースは増えない。同じ手順を `worktree_open_failed` に変えると、結果を確認できない失敗になるので「閉じる」だけになる。
+   この状態で `acme-dashboard` のメニューから「新しいワークツリー」を作ると、ダイアログに「ワークツリーを作成できませんでした。もう一度お試しください。」が出て、「キャンセル」「作成して起動」が残る（`worktreeFailureNotice` の文言）。スペースは増えない。同じ手順を `worktree_open_failed` に変えると、文言は「チェックアウトは作成されましたが、スペースを開けませんでした。Herdr のワークツリーを確認してください。」に変わり、`canRetryWorktree` が false なので「閉じる」だけになる。
 
 2. 実応答の中身だけを変えるなら `run-code` の `page.route` で取り直す。`GET /api/panes/:id/chat` は ETag を返すので、ブラウザが付けた `if-none-match` をそのまま送ると BFF は 304（本文なし）を返し、`json()` が落ちる。**`if-none-match` を外して 200 を取り直す。**
 
@@ -714,7 +714,9 @@ fixture の `w2:p2`（`quickstart`）は、mod が書く live ファイル（`<r
 
    最後の行は、ここでは会話の `canRewind` を落としている。変える値を差し替えれば、その応答を使う表示だけが変わる。
 
-3. 確かめ終わったら差し替えを外して実応答に戻す。CLI の `route` は `route-list` で張ったままの URL を確かめて `unroute "<URL>"`、`run-code` の `page.route` は `page.unroute("<URL>")`（まとめて外すなら `page.unrouteAll()`）で外す。`run-code` の実行が終わっても差し替えは残るので、外し忘れると次の確認が偽の応答を見て通る。表示が変わらないときは、まず解除を疑う。
+3. 確かめ終わったら差し替えを外して実応答に戻す。CLI の `route` は `route-list` で張ったままの URL を確かめて `unroute "<URL>"`、`run-code` の `page.route` は `page.unroute("<URL>")`（まとめて外すなら `page.unrouteAll()`）で外す。`run-code` の実行が終わっても差し替えは残るので、外し忘れると次の確認が偽の応答を見て通る。
+
+   本文を差し替えたとき（手順 2）は、解除してから再読み込みする（ペインを開き直すだけでもよい）。`route.fulfill({ response, json })` は元の 200 の `etag` をそのまま返すので、クライアントは差し替え後の本文にその `etag` を結び付け、解除後も `if-none-match` で 304 を取り続けて差し替え後の表示のままになる。表示が元に戻らないときは、解除を疑う前にこの再読み込みを行う。決まった応答に差し替えただけ（手順 1）なら、解除だけで元の表示に戻る。
 
 ## 禁止
 
