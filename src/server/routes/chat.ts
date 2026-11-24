@@ -1,4 +1,6 @@
 import { attachAttachmentSizes } from "../attachments";
+import { createAskAnswerer } from "../answer-ask";
+import { createQuestionAnswerer } from "../answer-question";
 import { readActivity } from "../chat/activity";
 import { OpencodeServiceNotRunningError } from "../chat/opencode";
 import { attachMessageFiles } from "../message-files";
@@ -29,13 +31,30 @@ export function createChatHandlers(ctx: AppContext) {
     attachmentsRoot,
     launchModels,
     piDefaults,
-    questionAnswerer,
-    askAnswerer,
     modelSwitcher,
     resolvePane,
     paneFailure,
-    matchesEtag,
   } = ctx;
+
+  // 質問への回答は、会話を読める Claude のペインだけ。読み取り口が無い構成では答えない。
+  const questionAnswerer =
+    claude === undefined ? null : createQuestionAnswerer({ panes, chat: claude });
+  // pi の ask_user は answer ファイルだけを書く。キーも本文も送らない。
+  const askAnswerer = createAskAnswerer();
+
+  // If-None-Match は弱比較。W/ と引用符を落として比べ、複数値と * も受ける。
+  const matchesEtag = (header: string | undefined, etag: string): boolean => {
+    if (header === undefined) return false;
+    return header.split(",").some((value) => {
+      const trimmed = value.trim();
+      if (trimmed === "*") return true;
+      const unquoted = (trimmed.startsWith("W/") ? trimmed.slice(2) : trimmed).replace(
+        /^"|"$/g,
+        "",
+      );
+      return unquoted === etag;
+    });
+  };
 
   const listModels = async (
     c: PlainContext,

@@ -1,9 +1,11 @@
 import { basename } from "node:path";
+import type { Context } from "hono";
 import { createSpace } from "../create-space";
 import { createWorktree } from "../create-worktree";
 import { resolveTreeDirectory } from "../message-files";
 import { parseMoveWorkspacesBody } from "../herdr/workspaces";
 import { HerdrError } from "../herdr/socket";
+import type { AppState } from "../herdr/state";
 import { pullRequestBranches } from "../pull-request";
 import { parseCreateSpaceBody, parseWorktreeBody } from "./panes-request";
 import type { AppContext, IdContext, PlainContext } from "./context";
@@ -19,14 +21,76 @@ export function createWorkspacesHandlers(ctx: AppContext) {
     restartSettings,
     resolvePane,
     resolveState,
-    worktreeFailure,
-    workspaceFailure,
-    closeSpaceFailure,
     scheduleRestart,
-    closingSpaces,
-    releaseClosingSpace,
-    pruneClosingSpaces,
   } = ctx;
+
+  // 作成できたか・再試行できるかで分ける。ソケットの期限切れ・切断・応答 parser の失敗は
+  // 作成結果が不明なので herdr_unavailable へ畳み、クライアントに再送させない。
+  const worktreeFailure = (c: Context, error: unknown) => {
+    if (error instanceof HerdrError) {
+      switch (error.code) {
+        case "worktree_create_failed":
+        case "worktree_open_failed":
+          return c.json({ error: error.code }, 502);
+        case "worktree_operation_in_progress":
+        case "linked_worktree_source":
+        case "not_git_worktree":
+          return c.json({ error: error.code }, 409);
+        case "workspace_not_found":
+          return c.json({ error: "workspace_not_found" }, 404);
+        case "invalid_params":
+        case "invalid_request":
+          return c.json({ error: "invalid_request" }, 400);
+      }
+    }
+    return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  const workspaceFailure = (c: Context, error: unknown) => {
+    if (error instanceof HerdrError) {
+      if (error.code === "workspace_not_found") {
+        return c.json({ error: "workspace_not_found" }, 404);
+      }
+      if (error.code === "invalid_params" || error.code === "invalid_request") {
+        return c.json({ error: "invalid_request" }, 400);
+      }
+    }
+    return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  // スペースを閉じる操作は、フォルダを消さない。linked worktree の削除とは
+  // エラーコードも入口も分ける。グループを閉じる要求は勝手に通さない。
+  const closeSpaceFailure = (c: Context, error: unknown) => {
+    if (error instanceof HerdrError) {
+      if (error.code === "workspace_not_found") {
+        return c.json({ error: "workspace_not_found" }, 404);
+      }
+      if (error.code === "workspace_group_close_required") {
+        return c.json({ error: error.code }, 409);
+      }
+      if (error.code === "invalid_params" || error.code === "invalid_request") {
+        return c.json({ error: "invalid_request" }, 400);
+      }
+    }
+    return c.json({ error: "herdr_unavailable" }, 502);
+  };
+
+  // close 要求が同時に来ると、両方が「他にもスペースがある」チェックを通って 0 スペースまで
+  // 閉じ得る。BFF は 1 プロセスなので、閉じている間と、閉じた直後の状態が届くまでの
+  // workspace id を覚えておき、残りの数から外して後続の要求を 409 にする。
+  const closingSpaces = new Set<string>();
+
+  const releaseClosingSpace = (workspaceId: string) => {
+    closingSpaces.delete(workspaceId);
+  };
+
+  // 状態から消えた id はもう閉じている。次の close 要求でガードを外す。
+  const pruneClosingSpaces = (state: AppState) => {
+    const live = new Set(state.workspaces.map((workspace) => workspace.id));
+    for (const id of closingSpaces) {
+      if (!live.has(id)) closingSpaces.delete(id);
+    }
+  };
 
   return {
     pullRequest: async (c: IdContext) => {

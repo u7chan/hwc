@@ -1,9 +1,12 @@
 import { composeInputText } from "../../shared/attachments";
 import { attachmentExists, attachmentFilePath } from "../attachments";
+import { createPaneCloser } from "../close-pane";
+import { createExitCleanup } from "../exit-cleanup";
 import { createPane, startAgentInPane } from "../create-pane";
 import { exceedsTextLimit, TEXT_TOO_LONG, TEXT_WITH_ATTACHMENTS_TOO_LONG } from "../herdr/panes";
 import { parseInputBody, parseOutputQuery, parseSplitBody, parseStartBody } from "./panes-request";
-import { findPane } from "../herdr/state";
+import { type AppState, findPane, type TabState } from "../herdr/state";
+import type { PaneCloseAction } from "../../shared/pane-close";
 import { MAX_PANES_PER_TAB } from "../../shared/panes";
 import { supportsFolderTrust } from "../../shared/agents";
 import { HerdrError } from "../herdr/socket";
@@ -25,9 +28,37 @@ export function createPanesHandlers(ctx: AppContext) {
     resolvePane,
     resolveState,
     paneFailure,
-    requestClose,
-    findPaneTab,
   } = ctx;
+
+  const closePane = createPaneCloser(store, panes);
+  const exitCleanup = createExitCleanup(store, panes);
+  const requestClose = async (c: IdContext, action: PaneCloseAction) => {
+    const paneId = c.req.param("id") ?? "";
+    try {
+      const result = await closePane(paneId, action);
+      if (result === "missing") return c.json({ error: "pane_not_found" }, 404);
+      if (result === "changed") return c.json({ error: "pane_action_changed" }, 409);
+      launchModels.forget(paneId);
+      piDefaults.forget(paneId);
+      // シェルに戻ったのを観測してから、終了したエージェントの画面を消す。
+      if (action === "exit") exitCleanup(paneId);
+      return c.json({ ok: true });
+    } catch (error) {
+      if (error instanceof HerdrError && error.code === "agent_exit_unsafe") {
+        return c.json({ error: error.code }, 409);
+      }
+      return paneFailure(c, error);
+    }
+  };
+
+  const findPaneTab = (state: AppState, paneId: string): TabState | null => {
+    for (const workspace of state.workspaces) {
+      for (const tab of workspace.tabs) {
+        if (tab.panes.some((pane) => pane.id === paneId)) return tab;
+      }
+    }
+    return null;
+  };
 
   return {
     output: async (c: IdContext) => {
