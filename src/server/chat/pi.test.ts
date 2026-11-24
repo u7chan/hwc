@@ -2,12 +2,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import {
-  type ChatReader,
-  ChatUnavailableError,
-  createChatClient as createRealChatClient,
-  readRewindMarker,
-} from "./pi";
+import { ChatUnavailableError } from "./errors";
+import { createChatClient as createRealChatClient } from "./pi";
+import type { ChatReader } from "./pi-reader";
+import { readRewindMarker } from "./pi-rewind";
 
 function createChatClient(options: Parameters<typeof createRealChatClient>[0] = {}) {
   return createRealChatClient({ loadPiModels: async () => [], ...options });
