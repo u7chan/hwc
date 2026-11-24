@@ -3,8 +3,15 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { AppState } from "../../../server/herdr/state";
 import { startAgent } from "../../requests/panes";
 import { findPane } from "../../select";
-import { launchPhase, type LaunchIntent, type PaneLaunch } from "../../starting";
+import { type LaunchIntent, type PaneLaunch } from "../../starting";
 import { serverClockNow } from "../../time";
+import {
+  recordLaunch,
+  recordLaunchResult,
+  recordRetry,
+  withoutLaunch,
+  withoutSettledLaunches,
+} from "../launch";
 
 export type LaunchSource = {
   state: AppState | null;
@@ -32,24 +39,9 @@ export function useLaunches(source: LaunchSource): LaunchHandle {
   // ダイアログが決めた起動の指定を預かる。新しいペインはスナップショットに現れてから、
   // ペインごとに 1 回だけ起動を頼む。起動したかどうかの正はスナップショットに置く。
   const beginLaunch = (paneId: string, intent: LaunchIntent | null) => {
-    setLaunches((current) => {
-      const next = new Map(current);
-      if (intent === null) {
-        next.delete(paneId);
-      } else {
-        next.set(paneId, {
-          paneId,
-          at: serverClockNow(Date.now(), skew.current),
-          agent: intent.agent,
-          model: intent.model,
-          effort: intent.effort,
-          request: "waiting",
-          waitForShell: intent.waitForShell,
-          error: null,
-        });
-      }
-      return next;
-    });
+    setLaunches((current) =>
+      recordLaunch(current, paneId, intent, serverClockNow(Date.now(), skew.current)),
+    );
   };
 
   // 分割の応答より先に Herdr の状態が届かないことがあり、その間は BFF もペインを知らない。
@@ -59,32 +51,16 @@ export function useLaunches(source: LaunchSource): LaunchHandle {
     if (state === null) return;
 
     const run = async (launch: PaneLaunch) => {
-      const result = await startAgent(launch.paneId, {
+      const outcome = await startAgent(launch.paneId, {
         agent: launch.agent,
         model: launch.model,
         effort: launch.effort,
         waitForShell: launch.waitForShell,
       });
       launchRequests.current.delete(launch);
-      setLaunches((current) => {
-        // 再試行で別の記録に置き換わっていたら、遅れて返った結果で上書きしない。
-        if (current.get(launch.paneId) !== launch) return current;
-        // 別の経路で起動済みなら待ちを続ける。起動したかはスナップショットが決める。
-        if (result.ok || result.error === "pane_not_shell") {
-          return new Map(current).set(launch.paneId, {
-            ...launch,
-            request: "started",
-            at: serverClockNow(Date.now(), skew.current),
-            error: null,
-          });
-        }
-        return new Map(current).set(launch.paneId, {
-          ...launch,
-          request: "failed",
-          at: serverClockNow(Date.now(), skew.current),
-          error: result.error,
-        });
-      });
+      setLaunches((current) =>
+        recordLaunchResult(current, launch, outcome, serverClockNow(Date.now(), skew.current)),
+      );
     };
 
     for (const launch of launches.values()) {
@@ -96,51 +72,20 @@ export function useLaunches(source: LaunchSource): LaunchHandle {
     }
   }, [state, launches]);
 
-  // 起動が終わった記録は、スナップショットが起動完了を示した時点で捨てる。記録は起動中だけの
-  // 一時的なもので、残すと後で /exit してシェルに戻ったときに「起動を確認できませんでした」が
-  // 蘇る。now は settle と上限の経過を見るために必要。
   useEffect(() => {
     if (launches.size === 0 || state === null) return;
-    setLaunches((current) => {
-      let next: Map<string, PaneLaunch> | null = null;
-      for (const [paneId, launch] of current) {
-        const pane = findPane(state, paneId);
-        if (pane === null) {
-          // 新しいペインは、応答より先に記録だけができていることがある。届くまで残す。
-          if (launch.request === "waiting") continue;
-          next ??= new Map(current);
-          next.delete(paneId);
-          continue;
-        }
-        if (launchPhase(launch, pane, now) !== "ready") continue;
-        next ??= new Map(current);
-        next.delete(paneId);
-      }
-      return next ?? current;
-    });
+    setLaunches((current) => withoutSettledLaunches(current, state, now));
   }, [state, launches, now]);
 
   // 起動に失敗したペインから、同じ指定でもう一度頼む。
   const retryLaunch = (paneId: string) => {
-    const launch = launches.get(paneId);
-    if (launch === undefined) return;
-    beginLaunch(paneId, {
-      agent: launch.agent,
-      model: launch.model,
-      effort: launch.effort,
-      waitForShell: launch.waitForShell,
-    });
+    setLaunches((current) =>
+      recordRetry(current, paneId, serverClockNow(Date.now(), skew.current)),
+    );
   };
 
   // 起動を諦め、残ったシェルとして使う。入力欄もシェルの形に戻る。
-  const useShell = (paneId: string) => {
-    setLaunches((current) => {
-      if (!current.has(paneId)) return current;
-      const next = new Map(current);
-      next.delete(paneId);
-      return next;
-    });
-  };
+  const useShell = (paneId: string) => setLaunches((current) => withoutLaunch(current, paneId));
 
   return { launches, beginLaunch, retryLaunch, useShell };
 }
