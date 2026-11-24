@@ -1,6 +1,5 @@
 import { Confirm } from "./Confirm";
-
-export const CLOSE_SPACE_FAILED_NOTICE = "閉じられませんでした。Herdr 側の状態を確認してください。";
+import { CLOSE_SPACE_FAILED_NOTICE } from "./failure-text";
 
 type CloseSpaceConfirmProps = {
   label: string;
@@ -22,21 +21,12 @@ export function CloseSpaceConfirm(props: CloseSpaceConfirmProps) {
         <>
           スペース <span class="hwc-dialog-id">{props.path ?? props.label}</span> を閉じます。
           実行中のエージェントも終了しますが、チェックアウトのファイルは残ります。
-          {!props.available ? (
-            <span class="hwc-dialog-error" role="status">
-              状態が変わりました。確認を閉じて、もう一度操作してください。
-            </span>
-          ) : null}
-          {props.failed ? (
-            <span class="hwc-dialog-error" role="status">
-              {CLOSE_SPACE_FAILED_NOTICE}
-            </span>
-          ) : null}
         </>
       }
       confirmLabel="閉じる"
       busy={props.busy}
-      disabled={!props.available}
+      available={props.available}
+      failedNotice={props.failed ? CLOSE_SPACE_FAILED_NOTICE : undefined}
       onConfirm={props.onConfirm}
       onCancel={props.onCancel}
     />
