@@ -9,7 +9,7 @@ import type {
 } from "../../server/chat/contract";
 import { attachmentExtFromName, formatFileSize } from "../../shared/attachments";
 import { messageFileLabel } from "../../shared/message-files";
-import { attachmentUrl, chatFileUrl } from "../api";
+import { attachmentUrl, chatFileUrl } from "../requests/panes";
 import { compactionLabel, messageFileKindLabel, messageLinks, splitInlineImages } from "../chat";
 import { CheckIcon, ChevronRightIcon, EyeIcon, StatusMark } from "../icons";
 import { Markdown } from "../Markdown";
@@ -147,7 +147,7 @@ function AskOptions(props: { options: ChatAskOption[] }) {
 }
 
 // 画像記法の位置に描いた画像は、末尾の一覧から外す。裸パスだけの画像と HTML は
-// 本文に位置が無いので、今までどおりメッセージの後ろに並べる。
+// 本文に位置が無いので、メッセージの後ろに並べる。
 export function AgentMessage(props: {
   paneId: string;
   message: ChatMessage;

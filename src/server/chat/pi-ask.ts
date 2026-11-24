@@ -9,6 +9,7 @@ import {
   ASK_QUESTION_MAX,
   ASK_TEXT_MAX,
 } from "../../shared/ask-user";
+import { asRecord } from "../../shared/json";
 
 // mypi の ask_user がセッションの隣に置く pending と、hwc が返す answer の契約
 // （docs/adr/pi-integration.md）。壊れたファイル・未知の v は「無いもの」として扱い、
@@ -48,15 +49,17 @@ export function parseAskPending(value: unknown): AskPending | null {
   if (question === null) return null;
   const options = askOptions(record.options);
   if (options === undefined) return null;
-  // recommended は飾りなので、形が違えば無いものとして扱う。freeText は機能の可否なので
-  // 明示的な true だけを採用し、古い pending（options あり）では今までどおり text を拒否する。
+  // freeText は機能の可否なので、boolean でない pending は形の不一致として捨てる。
+  // options が null でも先に確かめ、そのときは値に関わらず text だけの質問なので true にする。
+  if (typeof record.freeText !== "boolean") return null;
+  // recommended は飾りなので、形が違えば無いものとして扱う。
   const recommended =
     options !== null &&
     typeof record.recommended === "string" &&
     options.includes(record.recommended)
       ? record.recommended
       : null;
-  const freeText = options === null || record.freeText === true;
+  const freeText = options === null || record.freeText;
   return { id, question, options, recommended, freeText };
 }
 
@@ -188,9 +191,4 @@ function askId(value: unknown): string | null {
 
 function codePoints(value: string): number {
   return Array.from(value).length;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
 }

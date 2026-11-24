@@ -4,12 +4,12 @@ import type { LaunchDefaults } from "../shared/launch-defaults";
 import {
   createPane,
   createSpace,
-  createWorktree,
   type CreatePaneFailure,
   type CreatePaneRequest,
   type CreatePaneOutcome,
-  readLaunchDefaults,
-} from "./api";
+} from "./requests/panes";
+import { createWorktree } from "./requests/workspaces";
+import { readLaunchDefaults } from "./requests/settings";
 import { INVALID_REQUEST_NOTICE, PANE_NOT_FOUND_NOTICE } from "./failure-text";
 import { useEffortCandidates, useModelCandidates, useModelLabels } from "./launch-candidates";
 import { canLaunch, chooseEffort, chooseModel, savedEffortFor } from "./launch-choice";

@@ -1,6 +1,7 @@
 import type { ChatFile } from "../../server/chat/contract";
 import type { PaneCloseAction } from "../../shared/pane-close";
-import type { GitSyncFailure } from "../api";
+import type { ConfirmPhase } from "./confirm";
+import type { GitSyncFailure } from "../requests/workspaces";
 import type { DropZone, SplitView, TabSide } from "../split-view";
 import type { CreateTarget } from "../CreatePane";
 
@@ -16,7 +17,6 @@ export type Closing = {
   paneId: string;
   action: PaneCloseAction;
   next: string | null;
-  phase: "confirm" | "busy" | "failed";
 };
 
 export type OperationMenu = {
@@ -27,7 +27,7 @@ export type OperationMenu = {
 };
 
 // ドラッグの落とし先。中央はセルの末尾への移動、端はその方向への分割。
-// kind は落とし先がセルかタブか。枠を出す側を分けるために持つ。
+// kind は枠を出す側を分けるために持つ。
 // タブの side は差し込み位置。gap はタブとタブの間・列の余白で、同じ葉でも
 // 並べ替えたペインを選ぶ。タブの上では並べ替えだけにして選択を動かさない。
 export type DropTarget =
@@ -45,14 +45,15 @@ export type GitAction =
     };
 
 // 削除の確認。対象の名前とパスは開いた時点のスナップショットから取る。SSE が
-// スペースを落とした後では、何を消すのかを引けない。leave は削除が確定し、一覧から
-// 対象が消えるアニメーションを見せている間。確認ダイアログは閉じる。
+// スペースを落とした後では、何を消すのかを引けない。
 export type Removing = {
   workspaceId: string;
   label: string;
   checkoutPath: string | null;
-  phase: "confirm" | "busy" | "leave" | "failed";
 };
+
+// 削除だけは、確認を閉じた後も一覧の行が消えるアニメーションを待つ間（leave）がある。
+export type RemovingPhase = ConfirmPhase | "leave";
 
 // タブから外すアニメーション（TabBar）の対象。完了してから葉のタブへ反映する。
 // successor は閉じる確認で決めた同じ葉の後継。× では省略し、removeTab の既定に任せる。
@@ -63,7 +64,6 @@ export type ClosingSpace = {
   workspaceId: string;
   label: string;
   path: string | null;
-  phase: "confirm" | "busy" | "failed";
 };
 
 // 作成ダイアログ。何を作るかは target が決める。

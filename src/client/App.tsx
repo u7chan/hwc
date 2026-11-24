@@ -1,12 +1,8 @@
-import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
-import type { AppState, PaneState } from "../server/herdr/state";
-import { messageFileLabel } from "../shared/message-files";
-import { PaneDetail } from "./PaneDetail";
+import type { AppState } from "../server/herdr/state";
 import { attachmentStore } from "./attachment-store";
 import { fileTreeFontSize, fileTreeWidthPx } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
-import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./settings/Settings";
 import type {
@@ -28,9 +24,14 @@ import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
+import { CellTree, PreviewCell, type CellActions, type CellContext } from "./app/cells";
+import { menuView } from "./app/menu";
+import { tabRows } from "./app/tab-rows";
+import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
 import { useFavicon } from "./app/hooks/use-favicon";
 import { useFileTreeDisplay } from "./app/hooks/use-file-tree-display";
 import { useFileTreeSide } from "./app/hooks/use-file-tree-side";
+import { useLaunches } from "./app/hooks/use-launches";
 import { useListScope } from "./app/hooks/use-list-scope";
 import { useLiveUpdate } from "./app/hooks/use-live-update";
 import { useLiveUpdateTick } from "./app/hooks/use-live-update-tick";
@@ -43,45 +44,41 @@ import { useSplitPreference } from "./app/hooks/use-split-preference";
 import { useThemePreference } from "./app/hooks/use-theme-preference";
 import {
   fetchState,
-  focusAgent,
-  clearPaneOutput,
-  closePane,
   closeWorkspace,
-  confirmFolderTrust,
   moveWorkspaceBlock,
   parseAppState,
   removeWorktree,
-  sendInput,
-  startAgent,
-  stopAgent,
   syncWorkspace,
-} from "./api";
+} from "./requests/workspaces";
+import {
+  focusAgent,
+  clearPaneOutput,
+  closePane,
+  confirmFolderTrust,
+  sendInput,
+  stopAgent,
+} from "./requests/panes";
 import { INITIAL_CONNECTION, connectionAfter, type ConnectionStatus } from "./connection";
 import { liveUpdateMs } from "./live-update";
 import { allAgentPaneIds, allPaneIds, applyDelegation, newAgentPanes } from "./delegation";
 import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
-import { Preview } from "./Preview";
 import { ChevronLeftIcon, HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import type { PaneOutputHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
-import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { paneCloseAction } from "../shared/pane-close";
 import {
   activeRowName,
   canCloseSpace,
   findPane,
-  findPaneContext,
   findPaneRow,
-  groupWorkspaces,
   markedParentPaneIds,
   shortenSpaceName,
   tabDisplayName,
   tabLabel,
   tabLabelText,
-  type PaneContext,
 } from "./select";
 import {
   defaultPaneOf,
@@ -99,23 +96,17 @@ import {
   layoutKey,
   leafOfPane,
   moveTab,
-  multiSpace,
   openPane,
   openTabs,
   readingOrder,
   removeTab,
   successorTab,
   syncSplitView,
-  type DropZone,
-  type SplitLeaf,
-  type SplitNode,
   type SplitView,
 } from "./split-view";
 import { pendingReadAfter, shouldFocusOnLeave, type ListScope } from "./scope";
-import { moveToTopPlan, orderUnits } from "./order";
+import { decideSnapshotApply } from "./snapshot-apply";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
-import { type LaunchIntent, type PaneLaunch, type PaneLaunchView, launchPhase } from "./starting";
-import { serverClockNow, workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -188,32 +179,14 @@ export function App() {
   // 結果不明の回答は再送できない。詳細の付け外しを越えて、この Map だけに試行状態を残す。
   const confirmationAttempts = useRef(new Map<string, ConfirmationAttempt>());
   const [, confirmationChanged] = useReducer((revision: number) => revision + 1, 0);
-  const [closing, setClosing] = useState<Closing | null>(null);
-  const closingRef = useRef<Closing | null>(null);
-  closingRef.current = closing;
   const [leavingTab, setLeavingTab] = useState<LeavingTab | null>(null);
-  const [removing, setRemoving] = useState<Removing | null>(null);
-  const [closingSpace, setClosingSpace] = useState<ClosingSpace | null>(null);
   const [creating, setCreating] = useState<CreatingPane | null>(null);
   // 拡大中の画像。ダイアログは App 直下。
   const [viewer, setViewer] = useState<{ url: string; name: string } | null>(null);
   // 応答で受け取った新ペインは、スナップショットに現れてから開く。先に選ぶと一覧が一瞬出る。
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
-  // 起動を頼んだペイン。ダイアログで選んだ内容だけを持ち、起動したかはスナップショットで決める。
-  // 起動が終わるまでに別のペインも作れるので、ペイン id ごとに持つ。
-  const [launches, setLaunches] = useState<ReadonlyMap<string, PaneLaunch>>(() => new Map());
-  // 要求済みの記録。再試行で記録が置き換わっても、前の要求の完了が新しい要求の
-  // 番人を消さないよう、ペイン id ではなく記録そのもので覚える。
-  const launchRequests = useRef(new Set<PaneLaunch>());
-  const closeInFlight = useRef(false);
-  const removeInFlight = useRef(false);
-  const closeSpaceInFlight = useRef(false);
   // 既読の保留。アクティブ一覧で開いたペインだけが入り、選択が離れた時点で判定する。
   const pendingRead = useRef<string | null>(null);
-  // 削除対象が消えたスナップショットは、一覧の行が消えるアニメーションが終わるまで
-  // 1 回だけ保留する。正は BFF のままで、描画のタイミングだけをずらす。
-  const removingRef = useRef<Removing | null>(null);
-  removingRef.current = removing;
   // 外すタブのアニメーション中も、スナップショットの適用を 1 回だけ保留する。
   const leavingTabRef = useRef<LeavingTab | null>(null);
   leavingTabRef.current = leavingTab;
@@ -244,6 +217,51 @@ export function App() {
   const heldSnapshot = useRef<AppState | null>(null);
   const heldSnapshotTimer = useRef<number | null>(null);
 
+  // 確認の操作は 3 つとも同じ形。対象は開いた時点のスナップショットから写し、
+  // 違いは対象の条件・実行する要求・応答後の後始末だけに残す。
+  const closing = useConfirmFlow<Closing>({
+    present: (target) => state !== null && paneCloseAction(state, target.paneId) === target.action,
+    request: (target) => closePane(target.paneId, target.action),
+    settled: (current, outcome) => {
+      // 閉じたペインはローカルで消さない。一覧とタブは SSE のスナップショットで置き換える。
+      if (outcome !== "done") return "failed";
+      // 選んでいないペインを閉じても、読んでいるペインを動かさない。exit は終了要求で
+      // ペインが残るので、履歴は動かさない（消えたらスナップショットで落とす）。
+      if (current.target.action === "close") {
+        beginTabLeave(current.target.paneId, current.target.next);
+      }
+      return null;
+    },
+  });
+  const removing = useConfirmFlow<Removing, "leave">({
+    // 削除できるのは、Herdr が作った linked worktree だけ。
+    present: (target) => {
+      const workspace = state?.workspaces.find((item) => item.id === target.workspaceId);
+      return workspace?.worktree?.managed === true && workspace.worktree.isLinkedWorktree;
+    },
+    request: (target) => removeWorktree(target.workspaceId),
+    settled: (current, outcome) => {
+      // 消えたスペースはローカルで消さない。一覧の置き換えは SSE のスナップショットに任せる。
+      if (outcome === "done") {
+        // 成功時は確認を閉じ、一覧の対象が消えるアニメーションを先に見せる。
+        armRemovalFallback();
+        return "leave";
+      }
+      // 応答より先に対象が消えていた場合は、削除済みとして扱う。
+      if (current.phase === "leave") {
+        finishRemoval();
+        return null;
+      }
+      return "failed";
+    },
+  });
+  const closingSpace = useConfirmFlow<ClosingSpace>({
+    // 最後の 1 つは残す。それ以外は、重複していなくても閉じられる。
+    present: (target) => state !== null && canCloseSpace(state, target.workspaceId),
+    request: (target) => closeWorkspace(target.workspaceId),
+    settled: (_current, outcome) => (outcome === "done" ? null : "failed"),
+  });
+
   // 状態の書き込み元は 1 つ。初回の fetch は SSE が最初のスナップショットを届けるまでの
   // つなぎで、届いた後は捨てる（遅れて返った古い応答で上書きしない）。
   const snapshotWriter = useRef<SnapshotOrigin>("initial-fetch");
@@ -255,68 +273,66 @@ export function App() {
       window.clearTimeout(heldSnapshotTimer.current);
       heldSnapshotTimer.current = null;
     }
-    setRemoving((current) => (current?.phase === "leave" ? null : current));
+    removing.update((current) => (current?.phase === "leave" ? null : current));
+  };
+
+  // 削除の後も一覧の行を消えるアニメーションへ渡す間は、スナップショットの適用を
+  // 止める。アニメーションの完了が届かない場合の保険を置く。
+  const armRemovalFallback = () => {
+    heldSnapshotTimer.current ??= window.setTimeout(finishRemoval, REMOVAL_LEAVE_FALLBACK_MS);
   };
 
   // 削除が確定したらダイアログを閉じ、一覧の対象を消えるアニメーションへ渡す。
   const beginRemovalLeave = () => {
-    setRemoving((current) => (current === null ? null : { ...current, phase: "leave" }));
-    heldSnapshotTimer.current ??= window.setTimeout(finishRemoval, REMOVAL_LEAVE_FALLBACK_MS);
+    removing.update((current) => (current === null ? null : { ...current, phase: "leave" }));
+    armRemovalFallback();
   };
 
-  // 受信したスナップショットで丸ごと置き換える（docs/adr/bff-client-transport.md）。画面から消える対象の
-  // アニメーションが途中で切り落とされないよう、その間だけ適用を保留する。
+  // 受信したスナップショットで丸ごと置き換える（docs/adr/bff-client-transport.md）。適用するか
+  // 保留するかは snapshot-apply が決め、ここは決まった先の後始末だけを行う。
   const applyState = (next: AppState) => {
-    const target = removingRef.current;
-    if (target?.phase === "leave" || leavingTabRef.current !== null) {
-      heldSnapshot.current = next;
-      return;
-    }
-    // 応答より先にスペースが消えたスナップショットが届くことがある。対象を消して
-    // 見せてから適用する。
-    if (
-      target?.phase === "busy" &&
-      !next.workspaces.some((workspace) => workspace.id === target.workspaceId)
-    ) {
-      heldSnapshot.current = next;
-      beginRemovalLeave();
-      return;
-    }
-    // ペインを閉じる要求の応答より先に、ペインが消えたスナップショットが届くことが
-    // ある。消えるタブを先に見せてから適用する。ペインが無い以上 close の目的は
-    // 達しているので、確認は閉じ、遅れて返る応答は捨てる。
-    const closeTarget = closingRef.current;
-    if (
-      closeTarget?.phase === "busy" &&
-      closeTarget.action === "close" &&
-      findPane(next, closeTarget.paneId) === null
-    ) {
-      // タブとして開いていないペインはアニメーションできない。保留だけ残すと
-      // 次のスナップショットまで一覧が古いままになるので、その場で適用する。
-      if (leafOfPane(splitRef.current.layout, closeTarget.paneId) === null) {
+    const decision = decideSnapshotApply({
+      next,
+      removing: removing.latest.current,
+      closing: closing.latest.current,
+      leavingTab: leavingTabRef.current !== null,
+      layout: splitRef.current.layout,
+    });
+    switch (decision.kind) {
+      case "hold":
+        heldSnapshot.current = next;
+        return;
+      case "leave-space":
+        heldSnapshot.current = next;
+        beginRemovalLeave();
+        return;
+      case "leave-tab":
+        // ペインが無い以上 close の目的は達しているので、確認は閉じ、遅れて返る応答は捨てる。
+        heldSnapshot.current = next;
+        beginTabLeave(decision.paneId, decision.successor);
+        closing.update(() => null);
+        return;
+      case "apply-now":
         heldSnapshot.current = null;
-        setClosing(null);
+        closing.update(() => null);
         setState(next);
         return;
-      }
-      heldSnapshot.current = next;
-      beginTabLeave(closeTarget.paneId, closeTarget.next);
-      setClosing(null);
-      return;
+      case "apply":
+        setState(next);
+        return;
     }
-    setState(next);
   };
 
   // タブのアニメーションと削除のアニメーションがどちらも終わったら、保留した
   // スナップショットを 1 回だけ適用する。待つのは描画だけで、状態の正は BFF のまま。
   useEffect(() => {
-    if (leavingTab !== null || removing?.phase === "leave") return;
+    if (leavingTab !== null || removing.state?.phase === "leave") return;
     const held = heldSnapshot.current;
     if (held === null) return;
     heldSnapshot.current = null;
     // 保留中に別の対象が消えていれば、そのアニメーションへもう一度渡す。
     applyState(held);
-  }, [leavingTab, removing?.phase]);
+  }, [leavingTab, removing.state?.phase]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -428,6 +444,10 @@ export function App() {
   const shownLeaves = wide ? leaves : projected === null ? [] : [projected];
   const splitCells = wide && leaves.length > 1;
   const compact = splitCells;
+  // セルに描く木。広い画面は木の全部、狭い画面は 1 枚だけ。どちらも同じ部品へ渡す。
+  // 分岐で部品を変えると、画面幅をまたいだ再描画でセルが作り直され、入力中の本文・
+  // フォーカス・スクロール位置が消える。
+  const cellRoot = wide ? split.layout : projected;
 
   // プレビューは一時タブのまま。対象のペインがどこかの葉にある間だけ、タブと本文に出せる。
   const {
@@ -451,24 +471,13 @@ export function App() {
   }, [state]);
   // 確認の文言は状態を開いた時点で固定しない。ダイアログ中に変わればその値で読む。
   // スナップショットから消えたペインはもう無いので、確認は出さない。
-  const closingPane = state === null || closing === null ? null : findPane(state, closing.paneId);
-  const closingAvailable =
-    state !== null && closing !== null && paneCloseAction(state, closing.paneId) === closing.action;
+  const closingPane =
+    state === null || closing.state === null ? null : findPane(state, closing.state.target.paneId);
+  const removingTarget = removing.state?.target ?? null;
   const removingWorkspace =
-    state === null || removing === null
+    state === null || removingTarget === null
       ? null
-      : (state.workspaces.find((workspace) => workspace.id === removing.workspaceId) ?? null);
-  const removingAvailable =
-    removingWorkspace?.worktree?.managed === true && removingWorkspace.worktree.isLinkedWorktree;
-  const closingSpaceWorkspace =
-    state === null || closingSpace === null
-      ? null
-      : (state.workspaces.find((workspace) => workspace.id === closingSpace.workspaceId) ?? null);
-  const closingSpaceAvailable =
-    state !== null &&
-    closingSpace !== null &&
-    closingSpaceWorkspace !== null &&
-    canCloseSpace(state, closingSpace.workspaceId);
+      : (state.workspaces.find((workspace) => workspace.id === removingTarget.workspaceId) ?? null);
 
   // 既読は Herdr の seen を進めて消す。失敗しても通知しない。次にその行を開いて離れたときに
   // もう一度送られるので、ここで知らせても利用者にできることが無い。
@@ -634,6 +643,9 @@ export function App() {
     );
   };
 
+  // 閉じるアニメーションが終わったメニューを落とす。開き直していたら残す。
+  const dropClosedMenu = () => setMenu((current) => (current?.open === false ? null : current));
+
   // fetch / pull の実行中は、背景のタップや Esc でメニューを閉じない。閉じても操作は
   // 続くが、結果の表示先が無くなる。明示的な項目（PR リンクなど）はそのまま閉じられる。
   const dismissMenu = () => {
@@ -693,118 +705,8 @@ export function App() {
     setCreating({ paneId, target: { kind: "worktree", workspaceId: workspace.id } });
   };
 
-  // ダイアログが決めた起動の指定を預かる。新しいペインはスナップショットに現れてから、
-  // ペインごとに 1 回だけ起動を頼む。起動したかどうかの正はスナップショットに置く。
-  const beginLaunch = (paneId: string, intent: LaunchIntent | null) => {
-    setLaunches((current) => {
-      const next = new Map(current);
-      if (intent === null) {
-        next.delete(paneId);
-      } else {
-        next.set(paneId, {
-          paneId,
-          at: serverClockNow(Date.now(), skew.current),
-          agent: intent.agent,
-          model: intent.model,
-          effort: intent.effort,
-          request: "waiting",
-          waitForShell: intent.waitForShell,
-          error: null,
-        });
-      }
-      return next;
-    });
-  };
-
-  // 分割の応答より先に Herdr の状態が届かないことがあり、その間は BFF もペインを知らない。
-  // スナップショットに現れてから頼む。要求の結果は記録の同一性で照合し、起動したかは
-  // スナップショットに決めさせる。
-  useEffect(() => {
-    if (state === null) return;
-
-    const run = async (launch: PaneLaunch) => {
-      const result = await startAgent(launch.paneId, {
-        agent: launch.agent,
-        model: launch.model,
-        effort: launch.effort,
-        waitForShell: launch.waitForShell,
-      });
-      launchRequests.current.delete(launch);
-      setLaunches((current) => {
-        // 再試行で別の記録に置き換わっていたら、遅れて返った結果で上書きしない。
-        if (current.get(launch.paneId) !== launch) return current;
-        // 別の経路で起動済みなら待ちを続ける。起動したかはスナップショットが決める。
-        if (result.ok || result.error === "pane_not_shell") {
-          return new Map(current).set(launch.paneId, {
-            ...launch,
-            request: "started",
-            at: serverClockNow(Date.now(), skew.current),
-            error: null,
-          });
-        }
-        return new Map(current).set(launch.paneId, {
-          ...launch,
-          request: "failed",
-          at: serverClockNow(Date.now(), skew.current),
-          error: result.error,
-        });
-      });
-    };
-
-    for (const launch of launches.values()) {
-      if (launch.request !== "waiting") continue;
-      if (launchRequests.current.has(launch)) continue;
-      if (findPane(state, launch.paneId) === null) continue;
-      launchRequests.current.add(launch);
-      void run(launch);
-    }
-  }, [state, launches]);
-
-  // 起動が終わった記録は、スナップショットが起動完了を示した時点で捨てる。記録は起動中だけの
-  // 一時的なもので、残すと後で /exit してシェルに戻ったときに「起動を確認できませんでした」が
-  // 蘇る。now は settle と上限の経過を見るために必要。
-  useEffect(() => {
-    if (launches.size === 0 || state === null) return;
-    setLaunches((current) => {
-      let next: Map<string, PaneLaunch> | null = null;
-      for (const [paneId, launch] of current) {
-        const pane = findPane(state, paneId);
-        if (pane === null) {
-          // 新しいペインは、応答より先に記録だけができていることがある。届くまで残す。
-          if (launch.request === "waiting") continue;
-          next ??= new Map(current);
-          next.delete(paneId);
-          continue;
-        }
-        if (launchPhase(launch, pane, now) !== "ready") continue;
-        next ??= new Map(current);
-        next.delete(paneId);
-      }
-      return next ?? current;
-    });
-  }, [state, launches, now]);
-
-  // 起動に失敗したペインから、同じ指定でもう一度頼む。
-  const retryLaunch = (paneId: string) => {
-    const launch = launches.get(paneId);
-    if (launch === undefined) return;
-    beginLaunch(paneId, {
-      agent: launch.agent,
-      model: launch.model,
-      effort: launch.effort,
-      waitForShell: launch.waitForShell,
-    });
-  };
-
-  // 起動を諦め、残ったシェルとして使う。入力欄もシェルの形に戻る。
-  const useShell = (paneId: string) => {
-    setLaunches((current) => {
-      if (!current.has(paneId)) return current;
-      const next = new Map(current);
-      next.delete(paneId);
-      return next;
-    });
-  };
+  // 起動の記録と要求は hook が持つ。ここは、いま表示しているペインの起動の段階だけを読む。
+  const { launches, beginLaunch, retryLaunch, useShell } = useLaunches({ state, now, skew });
 
   // タブから外す操作は、対象のタブが縮むアニメーションを見せてから履歴に反映する。
   // 先に別のタブを外したときは、前の対象をすぐ反映して 1 つだけ動かす。
@@ -853,12 +755,7 @@ export function App() {
     if (state === null) return;
     const action = paneCloseAction(state, paneId);
     if (action === null || action === "keep") return;
-    setClosing({
-      paneId,
-      action,
-      next: successorTab(split, paneId),
-      phase: "confirm",
-    });
+    closing.open({ paneId, action, next: successorTab(split, paneId) });
   };
 
   const openCloseConfirm = () => {
@@ -868,124 +765,32 @@ export function App() {
     requestClose(paneId);
   };
 
-  // 送信中は閉じる手段を受け付けない。結果の反映を 1 回に保つ。
-  const cancelClose = () => {
-    if (closing?.phase === "busy") return;
-    setClosing(null);
-  };
-
-  // 閉じたペインはローカルで消さない。表示は SSE のスナップショットで置き換える。
-  const confirmClose = () => {
-    if (closing === null || closing.phase === "busy" || !closingAvailable) return;
-    if (closeInFlight.current) return;
-    closeInFlight.current = true;
-    const target = closing;
-    setClosing({ ...target, phase: "busy" });
-    void closePane(target.paneId, target.action).then((outcome) => {
-      closeInFlight.current = false;
-      // スナップショットが先にペインを落とした場合は、既にタブを外すアニメーションへ
-      // 渡している。遅れて届いた応答で確認や表示を戻さない。
-      if (leavingTabRef.current?.paneId === target.paneId) return;
-      if (outcome !== "done") {
-        setClosing((current) => (current === null ? null : { ...current, phase: "failed" }));
-        return;
-      }
-      // 選んでいないペインを閉じても、読んでいるペインを動かさない。exit は終了要求で
-      // ペインが残るので、履歴は動かさない（消えたらスナップショットで落とす）。
-      if (target.action === "close") {
-        beginTabLeave(target.paneId, target.next);
-      }
-      setClosing(null);
-    });
-  };
-
   // チェックアウトの削除は取り消せない。Herdr の TUI と同じく、確認は 1 回だけにする。
   const openRemoveWorktreeConfirm = () => {
     if (menu === null || menu.target.kind !== "workspace" || state === null) return;
     const workspace = state.workspaces.find((item) => item.id === menu.target.id);
-    if (
-      workspace === undefined ||
-      workspace.worktree?.managed !== true ||
-      !workspace.worktree.isLinkedWorktree
-    ) {
-      return;
-    }
-    closeMenu();
-    setRemoving({
+    if (workspace === undefined) return;
+    // 削除できない対象（Herdr の作った linked worktree でない）なら開かない。
+    // そのときはメニューも開いたままにして、別の操作を選べるようにする。
+    const opened = removing.open({
       workspaceId: workspace.id,
       label: workspace.label,
-      checkoutPath: workspace.worktree.checkoutPath,
-      phase: "confirm",
+      checkoutPath: workspace.worktree?.checkoutPath ?? null,
     });
-  };
-
-  const cancelRemoveWorktree = () => {
-    if (removing?.phase === "busy") return;
-    setRemoving(null);
-  };
-
-  // 消えたスペースはローカルで消さない。一覧の置き換えは SSE のスナップショットに任せる。
-  // 成功時は確認を閉じ、一覧の対象が消えるアニメーションを先に見せる。
-  const confirmRemoveWorktree = () => {
-    if (
-      removing === null ||
-      removing.phase === "busy" ||
-      removing.phase === "leave" ||
-      !removingAvailable
-    ) {
-      return;
-    }
-    if (removeInFlight.current) return;
-    removeInFlight.current = true;
-    const target = removing;
-    setRemoving({ ...target, phase: "busy" });
-    void removeWorktree(target.workspaceId).then((outcome) => {
-      removeInFlight.current = false;
-      if (outcome === "done") {
-        beginRemovalLeave();
-        return;
-      }
-      // 応答より先に対象が消えていた場合は、削除済みとして扱う。
-      if (removingRef.current?.phase === "leave") {
-        finishRemoval();
-        return;
-      }
-      setRemoving((current) => (current === null ? null : { ...current, phase: "failed" }));
-    });
+    if (opened) closeMenu();
   };
 
   // 最後の 1 つは残す。それ以外は、重複していなくても閉じられる。
   const openCloseSpaceConfirm = () => {
     if (menu === null || menu.target.kind !== "workspace" || state === null) return;
     const workspace = state.workspaces.find((item) => item.id === menu.target.id);
-    if (workspace === undefined || !canCloseSpace(state, workspace.id)) return;
-    closeMenu();
-    setClosingSpace({
+    if (workspace === undefined) return;
+    const opened = closingSpace.open({
       workspaceId: workspace.id,
       label: workspace.label,
       path: workspace.path ?? null,
-      phase: "confirm",
     });
-  };
-
-  const cancelCloseSpace = () => {
-    if (closingSpace?.phase === "busy") return;
-    setClosingSpace(null);
-  };
-
-  const confirmCloseSpace = () => {
-    if (closingSpace === null || closingSpace.phase === "busy" || !closingSpaceAvailable) return;
-    if (closeSpaceInFlight.current) return;
-    closeSpaceInFlight.current = true;
-    const target = closingSpace;
-    setClosingSpace({ ...target, phase: "busy" });
-    void closeWorkspace(target.workspaceId).then((outcome) => {
-      closeSpaceInFlight.current = false;
-      setClosingSpace((current) => {
-        if (current === null) return null;
-        return outcome === "done" ? null : { ...current, phase: "failed" };
-      });
-    });
+    if (opened) closeMenu();
   };
 
   const toggle = (groupId: string) => {
@@ -1121,14 +926,7 @@ export function App() {
   const draggedLeaf =
     draggedRow === null || state === null ? null : leafOfPane(split.layout, draggedRow.pane.id);
   const draggedMultiSpace =
-    draggedLeaf === null || state === null
-      ? false
-      : multiSpace(
-          draggedLeaf.tabs.flatMap((paneId) => {
-            const row = findPaneRow(state, paneId);
-            return row === null ? [] : [row.workspace.id];
-          }),
-        );
+    draggedLeaf === null || state === null ? false : tabRows(state, draggedLeaf.tabs).multiSpace;
   const draggingLabel =
     draggedRow === null
       ? ""
@@ -1148,308 +946,93 @@ export function App() {
 
   const leavingPaneId = leavingTab?.paneId ?? null;
 
-  // 4 枚の判定は BFF と同じタブの枚数で行う。
-  const menuPaneId = menu?.target.kind === "pane" ? menu.target.id : null;
-  const menuRow = state === null ? null : findPaneRow(state, menuPaneId);
-  const menuTab = menuRow?.tab ?? null;
-  const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
-  const menuPane = menuRow?.pane ?? null;
-  const menuCloseAction =
-    state === null || menuPaneId === null ? null : paneCloseAction(state, menuPaneId);
-  const menuWorkspace =
-    menu?.target.kind === "workspace"
-      ? (state?.workspaces.find((workspace) => workspace.id === menu.target.id) ?? null)
-      : null;
-  const menuPullRequest =
-    menuWorkspace === null ? null : (pullRequests.get(menuWorkspace.id) ?? null);
-  const menuRepoUrl = menuWorkspace?.sync?.repoUrl ?? null;
-  const menuGitBusy =
-    menuWorkspace !== null &&
-    gitAction !== null &&
-    gitAction.workspaceId === menuWorkspace.id &&
-    gitAction.phase === "busy"
-      ? gitAction.action
-      : null;
-  const menuGitFailed =
-    menuWorkspace !== null &&
-    gitAction !== null &&
-    gitAction.workspaceId === menuWorkspace.id &&
-    gitAction.phase === "failed"
-      ? { action: gitAction.action, error: gitAction.error }
-      : null;
-  // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする。
-  const menuWorktree = menuWorkspace?.worktree ?? null;
-  const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
-  const menuCanCloseSpace =
-    state !== null && menuWorkspace !== null && canCloseSpace(state, menuWorkspace.id);
-  // 並びの正は Herdr。メニューはその移動を 1 タップで呼ぶだけで、hwc 側に順序は持たない。
-  // 既に先頭の束には項目を出さない。
-  const menuCanMoveToTop =
-    state !== null &&
-    menuWorkspace !== null &&
-    moveToTopPlan(
-      orderUnits(groupWorkspaces(state.workspaces), state.workspaces),
-      menuWorkspace.id,
-    ) !== null;
+  // メニューの中身は、開いている対象とスナップショットから導く。閉じていれば空。
+  const menuItems = menuView({ state, menu, pullRequests, gitAction });
   const moveWorkspaceToTop = () => {
-    if (menuWorkspace === null) return;
+    const workspace = menuItems.workspace;
+    if (workspace === null) return;
     moveToTopSeq.current += 1;
-    setMoveToTop({ workspaceId: menuWorkspace.id, token: moveToTopSeq.current });
+    setMoveToTop({ workspaceId: workspace.id, token: moveToTopSeq.current });
     closeMenu();
   };
 
-  const renderPane = (
-    item: PaneState,
-    where: PaneContext,
-    compact: boolean,
-    isCurrent: boolean,
-  ) => {
-    const launch = launches.get(item.id) ?? null;
-    const phase = launchPhase(launch, item, now);
-    const launchView: PaneLaunchView | null =
-      launch === null || phase === null
-        ? null
-        : {
-            phase,
-            agent: launch.agent,
-            model: launch.model,
-            effort: launch.effort,
-            error: launch.request === "failed" ? launch.error : null,
-          };
-    return (
-      <PaneDetail
-        key={item.id}
-        pane={item}
-        context={where}
-        compact={compact}
-        scheme={scheme}
-        treeSide={treeSide}
-        treeWidth={fileTreeWidthPx(treeWidth)}
-        treeIcons={treeIcons}
-        current={isCurrent}
-        // 親ペインの印はセル見出しに出す。
-        parentPaneIds={parentPaneIds}
-        // セル見出しはブランチと作成元スペースだけを出す。名前はタブ列が言う。
-        branch={where.branch}
-        sync={where.sync}
-        // PR を引く鍵はセルでも要る。表示用の sync とは別に渡し、分割表示のまま
-        // push してもチップが引き直せるようにする。
-        upstreamBranch={where.sync?.upstreamBranch ?? null}
-        workspaceMenuOpen={
-          menu?.open === true &&
-          menu.target.kind === "workspace" &&
-          menu.target.id === where.workspaceId
-        }
-        waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
-        now={now}
-        running={processes.get(item.id)?.running === true}
-        sending={inputsInFlight.current.has(item.id)}
-        launch={launchView}
-        dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
-        confirmationAttempts={confirmationAttempts.current}
-        onConfirmFolderTrust={(id) => void confirmPaneFolderTrust(item.id, id)}
-        onDismissConfirmation={(id) =>
-          setDismissedConfirmations((current) => ({ ...current, [item.id]: id }))
-        }
-        menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
-        outputRef={(handle) => {
-          if (handle === null) outputHandles.current.delete(item.id);
-          else outputHandles.current.set(item.id, handle);
-        }}
-        onOpenMenu={openPaneMenu}
-        onOpenWorkspaceMenu={openWorkspaceMenu}
-        onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
-        onStop={() => stopPane(item.id)}
-        onStartAgent={() => openStartAgentDialog(item.id)}
-        onCreateSpace={(path) => openCreateSpaceDialog(item.id, path)}
-        onRetryLaunch={() => retryLaunch(item.id)}
-        onUseShell={() => useShell(item.id)}
-        onOpenImage={(url, name) => setViewer({ url, name })}
-        onOpenPreview={(file) => openPreview(item.id, file)}
-      />
-    );
+  const cellContext: CellContext = {
+    state,
+    compact,
+    wide,
+    focused,
+    parentPaneIds,
+    menu,
+    menuPaneId: menuItems.paneId,
+    processes,
+    leavingPaneId,
+    entering,
+    dragging,
+    detailStatus,
+    suppressFocusActivation,
+    clearFocusSuppression,
+    scheme,
+    treeSide,
+    treeWidth: fileTreeWidthPx(treeWidth),
+    treeIcons,
+    launches,
+    now,
+    workingSince,
+    inputsInFlight: inputsInFlight.current,
+    dismissedConfirmations,
+    confirmationAttempts: confirmationAttempts.current,
+    preview: { target: preview, inTab: previewInTab, previewing, leaf: previewLeaf },
   };
-
-  // ドラッグ中のプレビューの文言。中央はセルの末尾への移動、端は分割。
-  const dropLabel = (zone: DropZone): string => {
-    if (zone !== "center") {
-      return { top: "上に追加", bottom: "下に追加", left: "左に追加", right: "右に追加" }[zone];
-    }
-    return "ここへ移動";
+  const cellActions: CellActions = {
+    select,
+    selectFromTab,
+    removeFromTabs,
+    finishTabLeave,
+    showPreview,
+    closePreview,
+    back,
+    startPaneDrag,
+    openPaneMenu,
+    openWorkspaceMenu,
+    send: sendToPane,
+    stop: stopPane,
+    startAgent: openStartAgentDialog,
+    createSpace: openCreateSpaceDialog,
+    retryLaunch,
+    useShell,
+    openImage: (url, name) => setViewer({ url, name }),
+    openPreview,
+    confirmFolderTrust: (paneId, id) => void confirmPaneFolderTrust(paneId, id),
+    dismissConfirmation: (paneId, id) =>
+      setDismissedConfirmations((current) => ({ ...current, [paneId]: id })),
+    outputRef: (paneId, handle) => {
+      if (handle === null) outputHandles.current.delete(paneId);
+      else outputHandles.current.set(paneId, handle);
+    },
   };
-
-  // セルは木の葉。タブ列を上端に置き、active のペインを本文に出す。親の分割軸を
-  // data 属性に置き、ドラッグ中の向き判定に使う。
-  const renderCell = (leaf: SplitLeaf, parentDir: "row" | "col" | null) => {
-    if (state === null) return null;
-    const item = findPane(state, leaf.active);
-    if (item === null) return null;
-    const where = findPaneContext(state, item.id);
-    if (where === null) return null;
-    const rows = leaf.tabs.flatMap((paneId) => {
-      const row = findPaneRow(state, paneId);
-      return row === null ? [] : [row];
-    });
-    const isCurrent = focused !== null && leaf === focused;
-    const multi = multiSpace(rows.map((row) => row.workspace.id));
-    const previewTab =
-      previewInTab && preview !== null && previewLeaf === leaf
-        ? { name: messageFileLabel(preview.file.name), selected: preview.shown }
-        : null;
-    // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
-    // HWC から動かせないセルが current のままになる。
-    const activate = () => {
-      if (!isCurrent) select(item.id);
-    };
-    // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
-    // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
-    const activateFromFocus = (event: FocusEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (suppressFocusActivation.current) {
-        clearFocusSuppression();
-        return;
-      }
-      if (
-        target.closest(
-          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-        ) === null
-      ) {
-        return;
-      }
-      activate();
-    };
-    // ドラッグはセルの見出しからだけ始める。出力と入力の選択・操作を奪わない。
-    const dragFromHead = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest(".hwc-pane-head") === null) return;
-      if (
-        target.closest(
-          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-        ) !== null
-      ) {
-        return;
-      }
-      startPaneDrag(event, item.id);
-    };
-    const target =
-      dragging?.target?.kind === "cell" && dragging.target.pane === item.id
-        ? dragging.target
-        : null;
-    const tabDrop =
-      dragging?.target?.kind === "tab" && leaf.tabs.includes(dragging.target.pane)
-        ? { pane: dragging.target.pane, side: dragging.target.side }
-        : null;
-    return (
-      <section
-        class="hwc-split-cell"
-        data-compact={compact}
-        data-drop-pane={item.id}
-        data-drop-parent={parentDir ?? undefined}
-        data-flip-cell={leaf.id}
-        data-split-enter={item.id === entering ? "true" : undefined}
-        key={leaf.id}
-        onPointerDown={(event) => {
-          activate();
-          dragFromHead(event);
-        }}
-        onFocusIn={activateFromFocus}
-      >
-        <TabBar
-          leafId={leaf.id}
-          tabs={rows}
-          currentPaneId={leaf.active}
-          focused={isCurrent}
-          multiSpace={multi}
-          parentPaneIds={parentPaneIds}
-          processes={processes}
-          preview={previewTab}
-          status={wide ? null : detailStatus}
-          leavingPaneId={leavingPaneId}
-          droppable={!previewing}
-          onSelectPane={selectFromTab}
-          onRemoveTab={removeFromTabs}
-          onLeaveFinished={finishTabLeave}
-          onSelectPreview={showPreview}
-          onClosePreview={closePreview}
-          onBack={wide ? null : back}
-          onDragStart={startPaneDrag}
-          tabDrop={tabDrop}
-        />
-        <div class="hwc-cell-body" data-leaving={leavingPaneId === item.id ? "true" : undefined}>
-          {renderPane(item, where, compact, isCurrent)}
-        </div>
-        {target === null ? null : (
-          <div class="hwc-drop" data-zone={target.zone} aria-hidden="true">
-            <span>{dropLabel(target.zone)}</span>
-          </div>
-        )}
-      </section>
-    );
-  };
-
-  // 分割は再帰。子の親方向をそのまま渡し、端の向きを決める。
-  const renderSplit = (node: SplitNode, parentDir: "row" | "col" | null): ComponentChildren =>
-    node.kind === "leaf" ? (
-      renderCell(node, parentDir)
-    ) : (
-      <div class="hwc-split" data-dir={node.dir}>
-        {node.children.map((child) => renderSplit(child, node.dir))}
-      </div>
-    );
-
-  const previewRows =
-    state === null || previewLeaf === null
-      ? []
-      : previewLeaf.tabs.flatMap((paneId) => {
-          const row = findPaneRow(state, paneId);
-          return row === null ? [] : [row];
-        });
-  const previewMulti = multiSpace(previewRows.map((row) => row.workspace.id));
 
   const overlays: AppOverlaysProps = {
     dragging,
     draggingLabel,
-    menu,
-    menuPane,
-    menuWorkspace,
-    menuPaneId,
-    menuRow,
-    menuFull,
-    menuCloseAction,
-    menuPullRequest,
-    menuRepoUrl,
-    menuGitBusy,
-    menuGitFailed,
-    menuCanCloseSpace,
-    menuCanMoveToTop,
-    canCreateWorktree,
-    dismissMenu,
-    closeMenu,
-    setMenu,
-    openCreateDialog,
-    clearOutputForMenu,
-    openCloseConfirm,
-    openCreateWorktreeDialog,
-    openRemoveWorktreeConfirm,
-    openCloseSpaceConfirm,
-    moveWorkspaceToTop,
-    runGitSync,
-    closing,
-    closingPane,
-    closingAvailable,
-    confirmClose,
-    cancelClose,
-    removing,
-    removingWorkspace,
-    removingAvailable,
-    confirmRemoveWorktree,
-    cancelRemoveWorktree,
-    closingSpace,
-    closingSpaceAvailable,
-    confirmCloseSpace,
-    cancelCloseSpace,
+    // メニューは中身と、その項目が呼ぶ操作を 1 つのまとまりで渡す。
+    menu: {
+      ...menuItems,
+      operation: menu,
+      dismiss: dismissMenu,
+      close: closeMenu,
+      exited: dropClosedMenu,
+      openCreate: openCreateDialog,
+      clearOutput: clearOutputForMenu,
+      openCloseConfirm,
+      openCreateWorktree: openCreateWorktreeDialog,
+      openRemoveWorktree: openRemoveWorktreeConfirm,
+      openCloseSpace: openCloseSpaceConfirm,
+      moveToTop: moveWorkspaceToTop,
+      runGitSync,
+    },
+    closing: { flow: closing, pane: closingPane },
+    removing: { flow: removing, workspace: removingWorkspace },
+    closingSpace: { flow: closingSpace },
     creating,
     setCreating,
     // hwc から作ったペインは、自動分割の対象にしない。
@@ -1501,8 +1084,8 @@ export function App() {
               reveal={reveal}
               scrollTo={scrollTo}
               onToggle={toggle}
-              openPaneMenuId={menu?.open === true && menu.fromList ? menuPaneId : null}
-              openWorkspaceMenuId={menu?.open === true ? (menuWorkspace?.id ?? null) : null}
+              openPaneMenuId={menu?.open === true && menu.fromList ? menuItems.paneId : null}
+              openWorkspaceMenuId={menu?.open === true ? (menuItems.workspace?.id ?? null) : null}
               onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
               onWorkspaceMenu={(workspaceId, trigger) =>
                 openWorkspaceMenu(workspaceId, trigger, true)
@@ -1513,9 +1096,12 @@ export function App() {
                 moveWorkspaceBlock(workspaceIds, beforeWorkspaceId)
               }
               removal={
-                removing === null
+                removing.state === null
                   ? null
-                  : { workspaceId: removing.workspaceId, phase: removing.phase }
+                  : {
+                      workspaceId: removing.state.target.workspaceId,
+                      phase: removing.state.phase,
+                    }
               }
               onRemovalFinished={finishRemoval}
               workingSince={workingSince}
@@ -1612,50 +1198,18 @@ export function App() {
             <Placeholder connection={connection} />
           ) : split.layout !== null && shownLeaves.length > 0 ? (
             <div class="hwc-detail-inner">
-              {previewing && preview !== null && previewLeaf !== null ? (
-                <>
-                  <TabBar
-                    leafId={previewLeaf.id}
-                    tabs={previewRows}
-                    currentPaneId={previewLeaf.active}
-                    focused={previewLeaf === focused}
-                    multiSpace={previewMulti}
-                    parentPaneIds={parentPaneIds}
-                    processes={processes}
-                    preview={{
-                      name: messageFileLabel(preview.file.name),
-                      selected: preview.shown,
-                    }}
-                    status={detailStatus}
-                    leavingPaneId={leavingPaneId}
-                    droppable={false}
-                    onSelectPane={selectFromTab}
-                    onRemoveTab={removeFromTabs}
-                    onLeaveFinished={finishTabLeave}
-                    onSelectPreview={showPreview}
-                    onClosePreview={closePreview}
-                    onBack={wide ? null : back}
-                    onDragStart={startPaneDrag}
-                    tabDrop={null}
-                  />
-                  <div class="hwc-detail-body">
-                    <Preview
-                      key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
-                      paneId={preview.paneId}
-                      file={preview.file}
-                      onClose={closePreview}
-                    />
-                  </div>
-                </>
+              {previewing ? (
+                <PreviewCell context={cellContext} actions={cellActions} />
               ) : (
                 <div class="hwc-detail-grid" data-single={shownLeaves.length === 1}>
-                  {wide
-                    ? split.layout === null
-                      ? null
-                      : renderSplit(split.layout, null)
-                    : projected === null
-                      ? null
-                      : renderCell(projected, null)}
+                  {cellRoot === null ? null : (
+                    <CellTree
+                      node={cellRoot}
+                      parentDir={null}
+                      context={cellContext}
+                      actions={cellActions}
+                    />
+                  )}
                 </div>
               )}
             </div>

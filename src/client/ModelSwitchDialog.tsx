@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import type { AgentModel } from "../shared/agents";
 import { modelSwitchPlan } from "../shared/model-switch";
-import { switchModel } from "./api";
+import { switchModel } from "./requests/panes";
 import type { AgentInfo } from "./chat";
 import { CreatePaneEffort } from "./CreatePaneEffort";
 import { CreatePaneModel } from "./CreatePaneModel";

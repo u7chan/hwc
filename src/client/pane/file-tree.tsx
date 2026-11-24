@@ -6,7 +6,7 @@ import {
   type FileTreeEntry,
   type FileTreeListing,
 } from "../../shared/file-tree";
-import { previewUrl } from "../api";
+import { previewUrl } from "../requests/panes";
 import { useCopy } from "../copy";
 import { fileKind } from "../file-kind";
 import type { FileTreeIcons } from "../file-tree-display";
@@ -31,7 +31,7 @@ const TREE_MENU_ID = "hwc-tree-menu";
 type FileTreeProps = {
   paneId: string;
   view: FileTreeView;
-  // 行の左に種類の印を出すか。出さないときは、フォルダは今までどおりのシェブロン 1 つ。
+  // 行の左に種類の印を出すか。出さないときは、フォルダはシェブロン 1 つ。
   icons: FileTreeIcons;
   // 広いセルでは会話の左右どちらか（設定で選ぶ）、狭いセルでは会話の上に重ねる。
   // 見た目だけの違い。
@@ -75,7 +75,7 @@ export function indent(depth: number) {
 }
 
 // 行の左の印。アイコンを出すときは開閉をフォルダの形で示し、出さないときは
-// 今までどおり開閉のシェブロン 1 つにする（印を出さないだけで、開閉の合図は残す）。
+// 開閉のシェブロン 1 つにする（印を出さないだけで、開閉の合図は残す）。
 function TreeMark(props: { entry: FileTreeEntry; expanded: boolean; icons: FileTreeIcons }) {
   const { entry, expanded, icons } = props;
   if (entry.kind === "dir") {

@@ -1,6 +1,6 @@
 import { type AgentModel, modelKey } from "../shared/agents";
 import type { LaunchDefault } from "../shared/launch-defaults";
-import type { AgentModelsRead } from "./api";
+import type { AgentModelsRead } from "./requests/settings";
 
 // 候補の読み取り。undefined は取得中、null は取得失敗。
 export type ModelCandidates = AgentModelsRead | undefined;

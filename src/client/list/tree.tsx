@@ -560,7 +560,7 @@ export function TreePaneList(props: TreePaneListProps) {
           0,
         );
         // ホストは自分の見出しを持たない。束の見出しがホストの入口も兼ねるので、
-        // ホストに PR があればそのタイトルを出す。無ければ今までどおりワークツリー数。
+        // ホストに PR があればそのタイトルを出す。無ければワークツリー数。
         const hostPullRequest =
           group.host === null ? null : (props.pullRequests.get(group.host.id) ?? null);
         return (

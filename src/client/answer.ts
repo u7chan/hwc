@@ -74,8 +74,8 @@ export function answerSummary(question: ChatPendingQuestion, choice: Choice): st
   return labels.length === 0 ? null : labels.join("、");
 }
 
-// 全質問に答えが揃ったときだけ回答の本体を返す。送れない間は「この内容で答える」を無効にする。
-// 選択肢は選択肢の並び順で返し、入れた順に依存させない。
+// 全質問に答えが揃ったときだけ回答の本体を返す。選択肢は選択肢の並び順で返し、入れた順に
+// 依存させない。
 export function answersOf(
   questions: readonly ChatPendingQuestion[],
   choices: readonly Choice[],
@@ -96,6 +96,49 @@ export function answersOf(
     answers.push({ question: question.question, labels });
   }
   return answers;
+}
+
+// 主ボタンの見た目・有効条件・押したときの動きを 1 つにまとめる。ボタンと Enter の両方がこの
+// 値を使う。条件を書き写すと、片方だけ直したときに食い違う（#420）。ページ送りと送信の
+// 分岐もここだけで決める。
+export type PrimaryButton = {
+  label: string;
+  disabled: boolean;
+  press: () => void;
+};
+
+// 無効なときの press。Enter はボタンの disabled を見ないので、押せない間はここで止める。
+const inert = (): void => {};
+
+export function primaryButton(input: {
+  paged: boolean;
+  page: number;
+  questions: readonly ChatPendingQuestion[];
+  choices: readonly Choice[];
+  answers: QuestionAnswer[] | null;
+  locked: boolean;
+  onAdvance: (page: number) => void;
+  onSubmit: (answers: QuestionAnswer[]) => void;
+}): PrimaryButton {
+  const { paged, page, questions, choices, answers, locked } = input;
+  // 確認ページだけが送信で、それ以外のページは次へ進む。
+  if (paged && page !== questions.length) {
+    const current = questions[page];
+    // 「次へ」も自動送りと同じ行き先にする。全問に答えてある（確認から直しに来た）ときは
+    // 確認へ戻る。
+    const next = nextPage(questions, choices, page);
+    const label = next === questions.length ? "確認へ" : "次へ";
+    if (current !== undefined && !locked && isAnswered(current, choices[page] ?? NO_CHOICE)) {
+      return { label, disabled: false, press: () => input.onAdvance(next) };
+    }
+    return { label, disabled: true, press: inert };
+  }
+  const label = "この内容で答える";
+  // 送れる答えが揃ったときだけ、揃った答えをそのまま onSubmit へ渡す。
+  if (answers !== null && !locked) {
+    return { label, disabled: false, press: () => input.onSubmit(answers) };
+  }
+  return { label, disabled: true, press: inert };
 }
 
 // 自由入力の行は常にこのラベルにする。モデルの選択肢が同じラベルでも、表示だけを

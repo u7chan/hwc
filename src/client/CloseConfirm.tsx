@@ -1,9 +1,7 @@
 import type { PaneState } from "../server/herdr/state";
 import type { PaneCloseAction } from "../shared/pane-close";
 import { Confirm } from "./Confirm";
-
-export const CLOSE_FAILED_NOTICE = "閉じられませんでした。もう一度お試しください。";
-const EXIT_FAILED_NOTICE = "終了を要求できませんでした。Herdr 側の状態を確認してください。";
+import { closeFailureNotice } from "./failure-text";
 
 type CloseConfirmProps = {
   pane: PaneState;
@@ -55,24 +53,11 @@ export function CloseConfirm(props: CloseConfirmProps) {
   return (
     <Confirm
       title={exiting ? "エージェントを終了しますか？" : "ペインを閉じますか？"}
-      description={
-        <>
-          {copy.description}
-          {!props.available ? (
-            <span class="hwc-dialog-error" role="status">
-              状態が変わりました。確認を閉じて、もう一度操作してください。
-            </span>
-          ) : null}
-          {props.failed ? (
-            <span class="hwc-dialog-error" role="status">
-              {exiting ? EXIT_FAILED_NOTICE : CLOSE_FAILED_NOTICE}
-            </span>
-          ) : null}
-        </>
-      }
+      description={copy.description}
       confirmLabel={copy.confirmLabel}
       busy={props.busy}
-      disabled={!props.available}
+      available={props.available}
+      failedNotice={props.failed ? closeFailureNotice(props.action) : undefined}
       onConfirm={props.onConfirm}
       onCancel={props.onCancel}
     />

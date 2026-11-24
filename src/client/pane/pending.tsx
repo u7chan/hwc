@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatPending, ChatPendingQuestion } from "../../server/chat/contract";
 import type { QuestionAnswer } from "../../shared/answer";
-import type { AnswerResult } from "../api";
+import type { AnswerResult } from "../requests/panes";
 import {
   answerFailure,
   answersOf,
@@ -15,6 +15,7 @@ import {
   nextPage,
   pickLabel,
   pickOther,
+  primaryButton,
   questionLabel,
   typeOther,
   unansweredIndexes,
@@ -90,7 +91,7 @@ function QuestionForm(props: {
   const { pending } = props;
   const { questions } = pending;
   const askUser = pending.tool === "ask_user";
-  // Claude は今までどおり常に「その他」を出せる。pi は pending の freeText に従う。
+  // Claude は常に「その他」を出せる。pi は pending の freeText に従う。
   const freeText = pending.tool === "ask_user" ? pending.freeText : true;
   const first = questions[0];
   const optionLabels = askOptionLabelsForQuestions(questions, freeText);
@@ -142,11 +143,8 @@ function QuestionForm(props: {
   const locked = phase !== "editing";
   const reviewing = paged && page === questions.length;
   const current = questions[page];
-  // 「次へ」も自動送りと同じ行き先にする。全問に答えてある（確認から直しに来た）ときは確認へ戻る。
-  const next = nextPage(questions, choices, page);
 
-  const submit = async () => {
-    if (answers === null || locked) return;
+  const submit = async (answers: QuestionAnswer[]) => {
     setPhase("sending");
     setFailure(null);
     const result = await props.onAnswer(pending, answers);
@@ -158,16 +156,17 @@ function QuestionForm(props: {
     setFailure(answerFailure(result.status));
   };
 
-  // Enter はページの主ボタンに合わせる。有効かどうかの判断はボタンと同じ条件に任せる。
-  const pressPrimary = () => {
-    if (locked) return;
-    if (!paged || reviewing) {
-      void submit();
-      return;
-    }
-    if (current === undefined || !isAnswered(current, choiceAt(page))) return;
-    setPage(next);
-  };
+  // Enter もボタンも、同じ値で同じように動く。
+  const primary = primaryButton({
+    paged,
+    page,
+    questions,
+    choices,
+    answers,
+    locked,
+    onAdvance: setPage,
+    onSubmit: (answers) => void submit(answers),
+  });
 
   return (
     <>
@@ -201,7 +200,7 @@ function QuestionForm(props: {
             onPick={(label) => pick(page, label)}
             onOther={() => update(page, pickOther(choiceAt(page)))}
             onType={(text) => update(page, typeOther(choiceAt(page), text))}
-            onSubmitKey={pressPrimary}
+            onSubmitKey={primary.press}
           />
         )}
       </div>
@@ -216,26 +215,15 @@ function QuestionForm(props: {
             戻る
           </button>
         ) : null}
-        {paged && !reviewing ? (
-          <button
-            type="button"
-            class="hwc-dialog-button hwc-dialog-primary"
-            disabled={locked || current === undefined || !isAnswered(current, choiceAt(page))}
-            onClick={() => setPage(next)}
-          >
-            {next === questions.length ? "確認へ" : "次へ"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            class="hwc-dialog-button hwc-dialog-primary"
-            disabled={answers === null || locked}
-            onClick={() => void submit()}
-          >
-            {phase === "sending" ? <Spinner /> : null}
-            この内容で答える
-          </button>
-        )}
+        <button
+          type="button"
+          class="hwc-dialog-button hwc-dialog-primary"
+          disabled={primary.disabled}
+          onClick={primary.press}
+        >
+          {phase === "sending" ? <Spinner /> : null}
+          {primary.label}
+        </button>
       </div>
       {phase === "sent" ? (
         <p class="hwc-pending-note" role="status">
@@ -389,7 +377,7 @@ function QuestionFields(props: {
         onInput={(event) => props.onType(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key !== "Enter") return;
-          // タッチ端末は改行のまま。物理キーボードのある端末でだけ、本文の入力欄と同じく
+          // 主ポインタが粗い端末は改行のまま。主ポインタが細ければ、本文の入力欄と同じく
           // Enter を主ボタンに重ねる。
           const match = (query: string) => window.matchMedia(query).matches;
           if (!enterSubmits(event, enterInsertsNewline(match))) return;

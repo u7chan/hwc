@@ -2,7 +2,7 @@ import type { ChatContext, ChatMessage, ChatUsage } from "../../server/chat/cont
 import type { PaneState } from "../../server/herdr/state";
 import { attachmentExtFromName, formatFileSize, MAX_ATTACHMENTS } from "../../shared/attachments";
 import type { ProjectEntry } from "../../shared/projects";
-import { attachmentUrl } from "../api";
+import { attachmentUrl } from "../requests/panes";
 import type { AttachedFile } from "../attachment-store";
 import { dropActionFrom } from "../attachments";
 import type { AgentInfo, CacheView, ContextMeterView } from "../chat";

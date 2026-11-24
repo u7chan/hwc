@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import type { Template } from "../../shared/templates";
-import { fetchTemplates } from "../api";
+import { fetchTemplates } from "../requests/settings";
 
 // 入力欄の + メニューが「定型文を引用」を出せるかを決めるためだけに読む。
 // 読めなければ null のままにし、押せる側へ倒す（ダイアログが読み直して失敗を出す）。

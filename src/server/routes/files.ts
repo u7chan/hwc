@@ -1,4 +1,14 @@
 import {
+  attachmentContentType,
+  attachmentKindOfName,
+  decodeAttachmentName,
+  FILENAME_HEADER,
+  isImageAttachmentName,
+  maxAttachmentBytes,
+  sanitizeAttachmentName,
+} from "../../shared/attachments";
+import { readAttachment, saveAttachment } from "../attachments";
+import {
   listDirectory,
   messageFileContentType,
   readMessageFile,
@@ -6,7 +16,7 @@ import {
   resolvePreviewFile,
 } from "../message-files";
 import { isHtmlName, isTextName, looksBinary, previewWarning } from "../../shared/message-files";
-import type { AppContext, IdContext, PreviewContext } from "./context";
+import type { AppContext, IdContext, IdNameContext, PreviewContext } from "./context";
 
 const PREVIEW_CSP = "sandbox allow-scripts";
 
@@ -39,7 +49,65 @@ function previewNotFound(c: PreviewContext, requested: string): Response {
 }
 
 export function createFilesHandlers(ctx: AppContext) {
-  const { store, rootsFor, resolvePane, uploadAttachment, serveAttachment } = ctx;
+  const { store, previewRoots, attachmentsRoot, resolvePane } = ctx;
+
+  // 根の番号は /files と /preview で共通。片方だけ順を変えると、チップと配信が
+  // 別の実体を指す。番号は 0 がチェックアウト、1 以上が追加根（無い場合は 0 から）。
+  const rootsFor = (workspaceRoot: string | null): string[] =>
+    workspaceRoot === null ? previewRoots : [workspaceRoot, ...previewRoots];
+
+  // 画像は 1 枚の生バイトで受ける。保存名はサーバが決め、上書きしない。
+  const uploadAttachment = async (c: IdContext) => {
+    // 種別と上限は元のファイル名の拡張子で決まる。body を読む前に名前を検査する。
+    // ヘッダは ASCII しか運べないので、クライアントは percent-encode して送る。
+    const decoded = decodeAttachmentName(c.req.header(FILENAME_HEADER));
+    const name = decoded === null ? "" : sanitizeAttachmentName(decoded);
+    if (name === "") return c.json({ error: "invalid_request" }, 400);
+    const limit = maxAttachmentBytes(attachmentKindOfName(name));
+
+    const resolved = await resolvePane(c);
+    if (!resolved.ok) return resolved.response;
+    const { paneId, pane } = resolved;
+    if (!pane.chat) return c.json({ error: "no_chat" }, 404);
+
+    // 宣言された長さで先に落とし、読み終えた実バイト数でも見る。
+    const declared = Number(c.req.header("content-length"));
+    if (Number.isFinite(declared) && declared > limit) {
+      return c.json({ error: "attachment_too_large" }, 413);
+    }
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.byteLength > limit) {
+      return c.json({ error: "attachment_too_large" }, 413);
+    }
+    if (bytes.byteLength === 0) return c.json({ error: "invalid_request" }, 400);
+
+    const saved = await saveAttachment({ root: attachmentsRoot, paneId, name, bytes });
+    if (saved === null) return c.json({ error: "invalid_request" }, 400);
+    return c.json({ name: saved });
+  };
+
+  // 保存した画像を返す。配信するのは画像 3 形式だけで、名前の検証とは別に絞る。
+  const serveAttachment = async (c: IdNameContext) => {
+    const resolved = await resolvePane(c);
+    if (!resolved.ok) return resolved.response;
+    const { paneId, pane } = resolved;
+    if (!pane.chat) return c.json({ error: "no_chat" }, 404);
+
+    const name = c.req.param("name") ?? "";
+    if (!isImageAttachmentName(name)) return c.json({ error: "invalid_request" }, 400);
+    const bytes = await readAttachment({ root: attachmentsRoot, paneId, name });
+    if (bytes === null) return c.json({ error: "not_found" }, 404);
+
+    // 保存した名前から決めた型で返し、中身を見て解釈させない。内容は変わらないので
+    // 長く持たせる。認証が無い LAN 公開なので private にする。
+    return new Response(bytes, {
+      headers: {
+        "content-type": attachmentContentType(name) ?? "application/octet-stream",
+        "x-content-type-options": "nosniff",
+        "cache-control": "private, max-age=31536000, immutable",
+      },
+    });
+  };
 
   return {
     uploadAttachment,

@@ -3,7 +3,11 @@ import type { AppState } from "../herdr/state";
 import type { AppContext, PlainContext } from "./context";
 
 export function createStateHandlers(ctx: AppContext) {
-  const { store, revision, sseHeartbeatMs, stateMessage, current, resolveState } = ctx;
+  const { store, revision, sseHeartbeatMs, current, resolveState } = ctx;
+
+  // 「今」は状態ではなく送信時に決める。状態に持たせると、キャッシュされた状態に古い時刻が
+  // 残り、状態が動かない間は経過が止まって見える。クライアントはこの now で時計を合わせる。
+  const stateMessage = (state: AppState) => ({ state, now: Date.now() });
 
   return {
     health: (c: PlainContext) => c.json({ ok: true, service: "hwc", revision }),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { OUTPUT_POLL_MS, readOutput, type OutputRead } from "./api";
+import { OUTPUT_POLL_MS, readOutput, type OutputRead } from "./requests/panes";
 import { startPoll } from "./poll";
 
 // 隠れている間に読み続けても、見る人はいない。復帰したらその場で 1 回取り直す。

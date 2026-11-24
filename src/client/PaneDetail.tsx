@@ -7,14 +7,13 @@ import type { FileTreeEntry } from "../shared/file-tree";
 import type { GitSync } from "../shared/git";
 import { attachmentKindOfFileName } from "../shared/attachments";
 import { activityLabel, activitySnippet, showActivityFrame, usePaneActivity } from "./activity";
-import { OUTPUT_LINES, answerQuestion, editMessage, uploadAttachment } from "./api";
+import { answerQuestion, editMessage, uploadAttachment } from "./requests/panes";
 import { askUserAnswerText } from "./answer";
 import { attachmentStore } from "./attachment-store";
 import { FILE_REFERENCE_TYPE, fileReference } from "./file-reference";
 import type { FileTreeIcons } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
 import type { FileTreeSide } from "./file-tree-side";
-import { OutputText } from "./OutputText";
 import {
   SEND_FAILED_NOTICE,
   SHELL_BUSY_NOTICE,
@@ -25,8 +24,6 @@ import {
   agentInfo,
   cacheView,
   contextMeter,
-  idleEchoExpired,
-  answerEchoReleaseAt,
   isPendingConfirmed,
   latestUserAt,
   newSessionPending,
@@ -34,8 +31,6 @@ import {
   newSessionSnapshot,
   type NewSessionReset,
   paneBody,
-  type PendingMessage,
-  PENDING_TURN_GRACE_MS,
   pendingCard,
   usePaneChat,
 } from "./chat";
@@ -47,8 +42,6 @@ import {
   commandBlockReasonFor,
   commandCandidates,
   commandLabel,
-  commandSendText,
-  commandText,
   COMMAND_BLOCK_NOTES,
   compactAlreadyDone,
   COMPACTED_NOTICE,
@@ -64,18 +57,21 @@ import { modelSwitchBlockReason } from "./model-switch";
 import { NewSessionConfirm } from "./NewSessionConfirm";
 import { ProjectDialog } from "./ProjectDialog";
 import { useProjects } from "./use-projects";
-import { ArrowDownIcon, ChevronLeftIcon, StatusMark } from "./icons";
+import { ArrowDownIcon, StatusMark } from "./icons";
 import { useElementWidth } from "./app/use-element-width";
 import { usePaneOutput } from "./output";
 import { ChatLog } from "./pane/chat-log";
-import { OutputEmpty, OutputSkeleton } from "./pane/empty";
+import { OutputSkeleton } from "./pane/empty";
 import { FilePreview } from "./pane/file-preview";
 import { FileTree } from "./pane/file-tree";
 import { LiveStatus } from "./pane/live-status";
 import { PaneComposer } from "./pane/pane-composer";
 import { PaneHead } from "./pane/pane-head";
+import { TerminalOutput } from "./pane/terminal-output";
 import { useAttachments } from "./pane/use-attachments";
 import { useComposer } from "./pane/use-composer";
+import { type ComposerSend, composerSend } from "./pane/composer-send";
+import { useComposerHeight } from "./pane/use-composer-height";
 import { useFilePreview } from "./pane/use-file-tree";
 import { useFileTreePanel } from "./pane/use-file-tree-panel";
 import { useTemplates } from "./pane/use-templates";
@@ -85,6 +81,7 @@ import { useLaunchModel } from "./pane/use-launch-model";
 import { canEditMessage, editFailureNotice } from "./edit";
 import { useOutputFollow } from "./pane/use-output-follow";
 import { useOutputVersion } from "./pane/use-output-version";
+import { usePendingEcho } from "./pane/use-pending-echo";
 import { usePreviewReplyBadge } from "./pane/use-preview-reply";
 import { useSelectionToolbar } from "./pane/use-selection-toolbar";
 import { usePullRequest } from "./pull-request";
@@ -97,7 +94,6 @@ import { TemplateDialog } from "./TemplateDialog";
 import { selectionCopyText } from "./selection-copy";
 import { type PaneLaunchView } from "./starting";
 
-const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
 
 type PaneDetailProps = {
@@ -108,7 +104,6 @@ type PaneDetailProps = {
   scheme: "light" | "dark";
   // 広いセルでツリーを会話の左右どちらに並べるか。狭いセルでは重ねるので効かない。
   treeSide: FileTreeSide;
-  // 並べるときのツリーの幅（px）。並べるのに要るセルの幅はここから決まる。
   treeWidth: number;
   // 行の左に種類の印を出すか。
   treeIcons: FileTreeIcons;
@@ -214,51 +209,15 @@ export function PaneDetail(props: PaneDetailProps) {
   const previewOpen = previewPath !== null;
   // 会話は DOM に残してスクロール位置を保ち、表示だけを差し替える。
   const chatHidden = treeOverlay || previewOpen;
-  const [expandedOpen, setExpandedOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [switchOpen, setSwitchOpen] = useState(false);
   const { outputVersion, requestOutputRefresh } = useOutputVersion();
-  const [pending, setPending] = useState<PendingMessage[]>([]);
-  // 送った本文や ask_user の回答を、ポーリングが返すまでの控えとして積む。入力欄からの送信と、
-  // 会話の行から送る依頼で形を揃える。
-  const echoPending = (echo: {
-    text: string;
-    at: number;
-    from: number;
-    waiting: boolean;
-    after: number;
-    attachments: ChatAttachment[];
-    answer?: boolean;
-    toolUseId?: string;
-    question?: string;
-  }) => {
-    setPending((items) => [
-      ...items,
-      {
-        id: `pending-${echo.at}-${items.length}`,
-        role: "user",
-        text: echo.text,
-        at: echo.at,
-        from: echo.from,
-        waiting: echo.waiting,
-        after: echo.after,
-        command: false,
-        ...(echo.attachments.length === 0 ? {} : { attachments: echo.attachments }),
-        ...(echo.answer === true ? { answer: true } : {}),
-        ...(echo.toolUseId === undefined ? {} : { toolUseId: echo.toolUseId }),
-        ...(echo.question === undefined ? {} : { question: echo.question }),
-      },
-    ]);
-  };
 
   const [sessionReset, setSessionReset] = useState<NewSessionReset | null>(null);
   // 入力欄の状態と遷移は useComposer が持つ。ここは添付と定型文の取得だけを残す。
   const attachments = useAttachments(pane.id);
   // + メニューの「定型文を引用」を押せるかだけに使う。読めなければ押せる側に倒す。
   const templates = useTemplates(pane.chat);
-
-  // 簡略中は expanded を効かせない。状態は書き換えないので、通常の高さに戻れば再び効く。
-  const expanded = expandedOpen && !compact;
 
   // 要対応の間は端末を見たいので、会話の取得も止める。戻ったらその場で取り直す。
   // ただし Claude と pi の要対応は質問の待ちで、内容は transcript か ask ファイルにある。
@@ -288,6 +247,15 @@ export function PaneDetail(props: PaneDetailProps) {
   const pullRequest = usePullRequest(context.workspaceId, branch, upstreamBranch);
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
+  const replying = pane.agentStatus === "working";
+  // 送った本文や ask_user の回答を、ポーリングが返すまでの控えとして積む。入力欄からの送信と、
+  // 会話の行から送る依頼で形を揃える。
+  const {
+    echoes: pending,
+    add: echoPending,
+    failAnswer: failAnswerEcho,
+    reset: resetPending,
+  } = usePendingEcho({ snapshot, replying });
   // 応答待ちのカードと、そこから切り替える端末出力。どの tool_use に対して開いたかだけを
   // 覚える。pending が変われば会話へ戻り、消えたあとに古い切り替えも残らない。
   const pendingView = pendingCard(snapshot, blocked);
@@ -314,19 +282,10 @@ export function PaneDetail(props: PaneDetailProps) {
         attachments: [],
         answer: true,
         toolUseId: target.toolUseId,
-        question: target.questions[0]?.question,
       });
     }
     const result = await answerQuestion(pane.id, { toolUseId: target.toolUseId, answers });
-    if (!result.ok && text !== null) {
-      setPending((items) => {
-        const next = items.filter(
-          (item) =>
-            !(item.answer === true && item.toolUseId === target.toolUseId && item.at === echoAt),
-        );
-        return next.length === items.length ? items : next;
-      });
-    }
+    if (!result.ok && text !== null) failAnswerEcho(target.toolUseId, echoAt);
     refreshChat();
     return result;
   };
@@ -340,7 +299,7 @@ export function PaneDetail(props: PaneDetailProps) {
   const pendingMessages = pending.filter(
     (item) =>
       (!resetting || sessionReset === null || item.at >= sessionReset.at) &&
-      !isPendingConfirmed(item, snapshot?.messages ?? [], snapshot?.pending?.toolUseId),
+      !isPendingConfirmed(item, snapshot?.messages ?? []),
   );
 
   useEffect(() => {
@@ -389,7 +348,6 @@ export function PaneDetail(props: PaneDetailProps) {
     view === "confirm" && interaction?.kind === "folder-trust" ? interaction : null;
   const output = read?.text ?? null;
   const outputEmpty = output !== null && output.trim() === "";
-  const replying = pane.agentStatus === "working";
   // /compact の開始を観測できたときだけ、完了までの所要時間をログに添える。
   // リロードやペイン切り替えでは失う（永続化は別スコープ）。
   const compactionAt = snapshot?.compaction?.at ?? null;
@@ -448,15 +406,11 @@ export function PaneDetail(props: PaneDetailProps) {
   const cache = cacheView(snapshot?.cacheExpiresAt, now);
   const content = body.kind === "chat" ? body.snapshot.messages : output;
 
-  const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
-  // 引用を足した直後、再描画後の入力欄へカーソルを移す位置。
-  const pendingCaret = useRef<number | null>(null);
-  // 開閉を押した時点の入力欄の高さ。開閉後の高さへ動かす始点にする。
-  const toggleFrom = useRef<number | null>(null);
-  // 実行中の開閉アニメーション。高さを測る前に止める。
-  const heightAnimation = useRef<Animation | null>(null);
+  // 入力欄の高さ・キャレット・開閉は hook が持つ。中身に合わせて測り直す条件も
+  // そこに閉じてある（描画の前に合わせないと、iOS で入力欄が跳ねる）。
+  const height = useComposerHeight({ compact, inputDisabled });
   const { selectionToolbar, quoting, dismissSelection, closeToolbar } = useSelectionToolbar({
     paneId: pane.id,
     scroller,
@@ -469,43 +423,12 @@ export function PaneDetail(props: PaneDetailProps) {
   // iOS は非同期の後にキーボードを出さないことがあるので、焦点だけを合わせる。
   useEffect(() => {
     if (launch === null || launch.phase !== "launching") return;
-    input.current?.focus();
+    height.field.current?.focus();
   }, [launch === null ? null : launch.phase]);
 
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "pane";
   const copyId = () => copy("pane", pane.id);
-
-  // 入力量に合わせて高さを伸ばす。広げている間は CSS の高さに任せる。
-  // 簡略表示では入力欄と情報・送信を同じ行に置くが、折り返して 2 行以上になったら
-  // 入力欄を読み幅いっぱいに広げたい。広い幅で 1 行に戻ると狭い幅で再び折り返し、
-  // 行の往復が起きるので、空にするまで広い側を保つ。
-  const fit = (field: HTMLTextAreaElement | null, open: boolean) => {
-    if (!field) return;
-    // アニメーション中の rect と scrollHeight は途中の高さになる。計測の前に止める。
-    heightAnimation.current?.cancel();
-    heightAnimation.current = null;
-    const form = field.closest(".hwc-input");
-    field.style.height = "";
-    if (open) {
-      form?.removeAttribute("data-wrapped");
-      return;
-    }
-    field.style.height = "auto";
-    const style = getComputedStyle(field);
-    const line = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2;
-    const oneLine = Math.max(
-      line + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom),
-      Number.parseFloat(style.minHeight) || 0,
-    );
-    if (compact && field.value !== "" && field.scrollHeight > oneLine + 1) {
-      form?.setAttribute("data-wrapped", "");
-    } else if (!compact || field.value === "") {
-      form?.removeAttribute("data-wrapped");
-    }
-    // 属性を変えると入力欄の幅も変わるので、その後の高さで合わせる。
-    field.style.height = `${field.scrollHeight}px`;
-  };
 
   // 添付の保存。ペインを切り替えても止めない。送り先が消えたときだけ App が中断する。
   // 失敗したときだけ、入力欄の上に出す文言を返す（表示は composer が持つ）。
@@ -533,7 +456,12 @@ export function PaneDetail(props: PaneDetailProps) {
     sending,
     attachments,
     selection: { toolbar: selectionToolbar, dismiss: dismissSelection },
-    input: { field: input, pendingCaret, fit, expanded },
+    input: {
+      field: height.field,
+      pendingCaret: height.pendingCaret,
+      fit: height.fit,
+      expanded: height.expanded,
+    },
     upload: uploadFile,
   });
   const editTarget =
@@ -611,52 +539,6 @@ export function PaneDetail(props: PaneDetailProps) {
     props.onStartAgent();
   };
 
-  // 送信で空にしたときも、高さを初期状態へ戻す。分割枚数が変わって簡略が切り替わったときも、
-  // 前の inline height を残さない。
-  // 描画の後に高さを直すと、改行した 1 フレームだけ箱が低いままになり、
-  // スクロールバーが一瞬出る。描画の前に合わせる。
-  useLayoutEffect(() => {
-    fit(input.current, expanded);
-  }, [composer.inputText, expanded, compact, inputDisabled]);
-
-  // 高さが変わるのは開閉を押したときだけにする。打鍵に合わせた伸縮まで滑らせると、
-  // 1 文字ごとに箱が動いて入力の手応えが鈍る。
-  useLayoutEffect(() => {
-    const field = input.current;
-    const from = toggleFrom.current;
-    toggleFrom.current = null;
-    if (field === null || from === null) return;
-    const to = field.getBoundingClientRect().height;
-    if (Math.abs(to - from) < 1) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    heightAnimation.current = field.animate(
-      [
-        // min-height / max-height も一緒に動かす。状態ごとの制約が残ると、始点の高さが
-        // その範囲へ切り詰められて 1 フレーム目で跳ぶ（開: 42→64px、閉: 293→220px）。
-        { height: `${from}px`, minHeight: `${from}px`, maxHeight: `${from}px` },
-        { height: `${to}px`, minHeight: `${to}px`, maxHeight: `${to}px` },
-      ],
-      { duration: 200, easing: "cubic-bezier(0.2, 0, 0, 1)" },
-    );
-  }, [expanded]);
-
-  const toggleExpanded = () => {
-    toggleFrom.current = input.current?.getBoundingClientRect().height ?? null;
-    setExpandedOpen((current) => !current);
-  };
-
-  // 引用を足したあと、再描画された入力欄の末尾（引用の後の空行）へカーソルを移す。
-  useLayoutEffect(() => {
-    const caret = pendingCaret.current;
-    if (caret === null) return;
-    pendingCaret.current = null;
-    const field = input.current;
-    if (field === null) return;
-    field.focus();
-    field.setSelectionRange(caret, caret);
-    fit(field, expanded);
-  }, [composer.draft, expanded]);
-
   useLayoutEffect(() => {
     if (confirmation !== null && scroller.current) scroller.current.scrollTop = 0;
   }, [confirmation?.id]);
@@ -676,95 +558,6 @@ export function PaneDetail(props: PaneDetailProps) {
     confirmation,
   });
 
-  useEffect(() => {
-    if (pending.length === 0) return;
-    const messages = snapshot?.messages ?? [];
-    setPending((items) => {
-      const next = items.filter(
-        (item) => !isPendingConfirmed(item, messages, snapshot?.pending?.toolUseId),
-      );
-      return next.length === items.length ? items : next;
-    });
-  }, [snapshot, pending.length]);
-
-  useEffect(() => {
-    const activeToolUseId = snapshot?.pending?.toolUseId;
-    const now = Date.now();
-    setPending((items) => {
-      let changed = false;
-      const next = items.map((item) => {
-        const releaseAt = answerEchoReleaseAt(item, activeToolUseId, now);
-        if (releaseAt === item.answerReleaseAt) return item;
-        changed = true;
-        return { ...item, answerReleaseAt: releaseAt };
-      });
-      return changed ? next : items;
-    });
-  }, [snapshot?.pending?.toolUseId, pending.length]);
-
-  useEffect(() => {
-    const deadlines = pending.flatMap((item) =>
-      item.answerReleaseAt === undefined ? [] : [item.answerReleaseAt],
-    );
-    if (deadlines.length === 0) return;
-    const delay = Math.max(0, Math.min(...deadlines) - Date.now());
-    const timer = window.setTimeout(() => {
-      const now = Date.now();
-      setPending((items) => {
-        const next = items.filter(
-          (item) => item.answerReleaseAt === undefined || item.answerReleaseAt > now,
-        );
-        return next.length === items.length ? items : next;
-      });
-    }, delay);
-    return () => window.clearTimeout(timer);
-  }, [pending]);
-
-  useEffect(() => {
-    if (replying) return;
-    setPending((items) => {
-      const next = items.filter((item) => !item.waiting);
-      return next.length === items.length ? items : next;
-    });
-  }, [replying, pending.length]);
-
-  // 送信したのにエージェントが動き出さない echo は、TUI がコマンドとして処理したか、
-  // 入力を受け取らなかったものとして、ローカルのコマンド控えに切り替える。コマンドは
-  // user 発話を残さないため、セッションを待っても確定しない。
-  useEffect(() => {
-    const idle = pending.filter((item) => !item.waiting && !item.command && item.answer !== true);
-    if (idle.length === 0 || replying) return;
-    const oldest = Math.min(...idle.map((item) => item.at));
-    const delay = Math.max(0, oldest + PENDING_TURN_GRACE_MS - Date.now());
-    const timer = setTimeout(() => {
-      const now = Date.now();
-      setPending((items) => {
-        let changed = false;
-        const next = items.map((item) => {
-          if (item.command || item.answer === true || !idleEchoExpired(item, now)) return item;
-          changed = true;
-          return { ...item, command: true };
-        });
-        return changed ? next : items;
-      });
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [pending, replying]);
-
-  useEffect(() => {
-    const idle = pending.filter((item) => !item.waiting && !item.command);
-    if (idle.length === 0) return;
-    const oldest = Math.min(...idle.map((item) => item.at));
-    const delay = Math.max(0, oldest + PENDING_TIMEOUT_MS - Date.now());
-    const timer = setTimeout(() => {
-      const now = Date.now();
-      setPending((items) =>
-        items.filter((item) => item.command || item.waiting || item.at + PENDING_TIMEOUT_MS > now),
-      );
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [pending]);
-
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
   const removeAttachment = (key: string) => attachmentStore.remove(pane.id, key);
 
@@ -780,12 +573,28 @@ export function PaneDetail(props: PaneDetailProps) {
     const sent = await onSubmit(text, names);
     if (newSession) {
       if (sent) {
-        setPending([]);
+        resetPending();
         resetCompaction();
       } else setSessionReset(null);
       refreshChat();
     }
     return sent;
+  };
+
+  // 入力欄・チップ・メニューからの送信は、この 1 本を通す。前の失敗を消して入力を
+  // 閉じ、送り、送れたら最新へ戻してから、起点ごとの後片付けを呼ぶ。違うのは
+  // 「何を送るか」と「送ったあとの状態」だけ。
+  const deliver = async (send: ComposerSend, sent: (at: number) => void) => {
+    composer.beginSend();
+    if (!(await submitInput(send.text, send.names))) {
+      composer.setNotice(SEND_FAILED_NOTICE);
+      return;
+    }
+    // 猶予は送信が通った時点から測る。POST が遅いときに、届く前の echo を畳まない。
+    const at = Date.now();
+    // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
+    setPinned(true);
+    sent(at);
   };
 
   const sendEdit = async () => {
@@ -821,17 +630,14 @@ export function PaneDetail(props: PaneDetailProps) {
       return;
     }
     if (inputDisabled || launchBlocked || !sendable || sending) return;
-    const names = attachments
-      .map((item) => item.name)
-      .filter((name): name is string => name !== null);
+    const send = composerSend({ kind: "draft", draft: composer.draft, attachments });
     // 控えのチップは手元の File のサイズで描く。次のスナップショットで実バイト数に置き換わる。
     const echoed: ChatAttachment[] = attachments.flatMap((item) =>
       item.name === null ? [] : [{ name: item.name, size: item.size }],
     );
-    const text = composer.draft;
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
-    const compactCommand = attachments.length === 0 && isCompactCommand(text);
-    const newCommand = startsNewSession(text, names);
+    const compactCommand = attachments.length === 0 && isCompactCommand(send.text);
+    const newCommand = startsNewSession(send.text, send.names);
     if (compactCommand && compactDone) {
       composer.setNotice(COMPACTED_NOTICE);
       return;
@@ -840,13 +646,8 @@ export function PaneDetail(props: PaneDetailProps) {
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
     const after = snapshot?.messages.length ?? 0;
-    composer.beginSend();
     // 送れたときだけ空にする。失敗したら本文も添付も残す。
-    if (await submitInput(text, names)) {
-      // 猶予は送信が通った時点から測る。POST が遅いときに、届く前の echo を畳まない。
-      const at = Date.now();
-      // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
-      setPinned(true);
+    await deliver(send, (at) => {
       composer.clearDraft();
       attachmentStore.clear(pane.id);
       // シェルペインには会話が無い。控えを積むと、同じペインで後から起動した
@@ -855,14 +656,12 @@ export function PaneDetail(props: PaneDetailProps) {
         // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
         // 代わりに圧縮中の行を出す。
         if (compactCommand) {
-          markCompaction(baselineAt, text);
+          markCompaction(baselineAt, send.text);
         } else if (!newCommand) {
-          echoPending({ text, at, from, waiting, after, attachments: echoed });
+          echoPending({ text: send.text, at, from, waiting, after, attachments: echoed });
         }
       }
-    } else {
-      composer.setNotice(SEND_FAILED_NOTICE);
-    }
+    });
   };
 
   const stopWorking = async () => {
@@ -895,15 +694,13 @@ export function PaneDetail(props: PaneDetailProps) {
       composer.setNotice(COMPACTED_NOTICE);
       return;
     }
-    const text = commandSendText(id, composer.draft);
+    const send = composerSend({ kind: "chip", id, draft: composer.draft });
     const baselineAt = snapshot?.compaction?.at ?? null;
-    composer.beginSend();
-    if (await submitInput(text, [])) {
-      setPinned(true);
+    await deliver(send, () => {
       composer.setChip(null);
       composer.setDraft("");
-      if (id === "compact") markCompaction(baselineAt, text);
-    } else composer.setNotice(SEND_FAILED_NOTICE);
+      if (id === "compact") markCompaction(baselineAt, send.text);
+    });
   };
 
   // メニューからはコマンド文字列だけを送る。書きかけの draft・添付は次の
@@ -918,14 +715,12 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const runMenuCommand = async (id: CommandId) => {
     if (composer.edit !== null || !menuCommandAvailable(id)) return;
-    const text = commandText(id);
+    const send = composerSend({ kind: "menu", id });
     const baselineAt = snapshot?.compaction?.at ?? null;
-    composer.beginSend();
-    if (await submitInput(text, [])) {
-      setPinned(true);
+    await deliver(send, () => {
       composer.setChip(null);
-      if (id === "compact") markCompaction(baselineAt, text);
-    } else composer.setNotice(SEND_FAILED_NOTICE);
+      if (id === "compact") markCompaction(baselineAt, send.text);
+    });
   };
 
   const menuCommandHint = (id: CommandId): string => {
@@ -1179,41 +974,15 @@ export function PaneDetail(props: PaneDetailProps) {
                     />
                   </>
                 ) : (
-                  <>
-                    {pendingView === null || readOnly ? null : (
-                      // 端末出力を見ている間も、応答待ちであることと戻り先を残す。
-                      <div class="hwc-pending-bar" role="status">
-                        <span>端末で応答してください。</span>
-                        <button
-                          type="button"
-                          class="hwc-pending-toggle hwc-pending-toggle-back"
-                          onClick={() => setTerminalFor(null)}
-                        >
-                          <ChevronLeftIcon size={16} />
-                          会話に戻る
-                        </button>
-                      </div>
-                    )}
-                    {read?.truncated ? (
-                      <p class="hwc-output-notice">最新の {OUTPUT_LINES} 行を表示しています</p>
-                    ) : null}
-                    {failed ? (
-                      <p class="hwc-output-notice" role="status">
-                        出力を取得できません。接続が戻ると自動で更新します。
-                      </p>
-                    ) : null}
-                    {output === null ? (
-                      failed ? null : (
-                        <OutputSkeleton />
-                      )
-                    ) : outputEmpty ? (
-                      <OutputEmpty />
-                    ) : (
-                      <pre class="hwc-output">
-                        <OutputText text={output} scheme={scheme} />
-                      </pre>
-                    )}
-                  </>
+                  <TerminalOutput
+                    waiting={pendingView !== null && !readOnly}
+                    onBack={() => setTerminalFor(null)}
+                    truncated={read?.truncated === true}
+                    failed={failed}
+                    output={output}
+                    empty={outputEmpty}
+                    scheme={scheme}
+                  />
                 )}
               </div>
               {/* 逐次表示の先端を背景へ溶かす。読み返しで上へ離れたら出さない。 */}
@@ -1315,7 +1084,7 @@ export function PaneDetail(props: PaneDetailProps) {
               target={{ pane, context }}
               view={{
                 compact,
-                expanded,
+                expanded: height.expanded,
                 shell,
                 inputDisabled,
                 launchBlocked,
@@ -1345,7 +1114,7 @@ export function PaneDetail(props: PaneDetailProps) {
                 submit,
                 stopWorking,
                 startAgent,
-                toggleExpanded,
+                toggleExpanded: height.toggle,
                 retryLaunch: props.onRetryLaunch,
                 useShell: props.onUseShell,
                 openImage: props.onOpenImage,

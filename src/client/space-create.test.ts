@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { CreateSpaceFailure } from "./api";
+import type { CreateSpaceFailure } from "./requests/panes";
 import { spaceFailureNotice } from "./space-create";
 import { UNKNOWN_NOTICE } from "./worktree-create";
 

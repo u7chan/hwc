@@ -2,12 +2,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import {
-  type ChatReader,
-  ChatUnavailableError,
-  createChatClient as createRealChatClient,
-  readRewindMarker,
-} from "./pi";
+import { ChatUnavailableError } from "./errors";
+import { createChatClient as createRealChatClient } from "./pi";
+import type { ChatReader } from "./pi-reader";
+import { readRewindMarker } from "./pi-rewind";
 
 function createChatClient(options: Parameters<typeof createRealChatClient>[0] = {}) {
   return createRealChatClient({ loadPiModels: async () => [], ...options });
@@ -1725,7 +1723,7 @@ test("a free-text ask has no options and keeps the question newlines", async () 
   const path = await writeSession(header(), user("u1", null, "one"));
   await writeFile(
     `${path}.ask.json`,
-    JSON.stringify({ v: 1, id: ASK_ID, question: "1 行目\n2 行目", options: null }),
+    JSON.stringify({ v: 1, id: ASK_ID, question: "1 行目\n2 行目", options: null, freeText: true }),
   );
 
   const snapshot = await createChatClient().snapshot(path);

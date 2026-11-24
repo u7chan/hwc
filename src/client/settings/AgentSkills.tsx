@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ModelAgentKind } from "../../shared/agents";
 import type { AgentSkill, AgentSkills as AgentSkillsView } from "../../shared/agent-skills";
-import { readAgentSkills } from "../api";
+import { readAgentSkills } from "../requests/settings";
 import { ChevronRightIcon } from "../icons";
 import { groupSkillsBySource } from "./skill-groups";
 

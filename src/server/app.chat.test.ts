@@ -608,7 +608,13 @@ test("GET /api/panes/:id/chat returns 200 as the ask pending appears, changes, o
     store.setChatSource("w1:p1", { agent: "pi", path });
     const { app } = createTestApp({ store, chat: createChatClient() });
     const askFile = (id: string) =>
-      JSON.stringify({ v: 1, id, question: "どれにしますか？", options: ["赤", "青"] });
+      JSON.stringify({
+        v: 1,
+        id,
+        question: "どれにしますか？",
+        options: ["赤", "青"],
+        freeText: true,
+      });
 
     const first = await app.request("/api/panes/w1:p1/chat");
     expect(first.status).toBe(200);

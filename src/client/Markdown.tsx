@@ -403,7 +403,7 @@ function inlineChildren(nodes: MdInline[], context: InlineContextValue): Compone
 }
 
 // 相対パスは、BFF が実在を確かめた表記と一致したときだけリンクにする（docs/adr/client-rendering.md）。
-// 一致しなければ今までどおり原文を等幅で出す。
+// 一致しなければ原文を等幅で出す。
 function linkNode(node: MdLink, context: InlineContextValue) {
   const children = inlineChildren(node.children, context);
   const title = node.title ?? undefined;

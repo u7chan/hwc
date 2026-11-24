@@ -1,7 +1,17 @@
+import { normalizeRestartCommand, type RestartSettings } from "../../shared/restart";
 import type { AppContext, PlainContext } from "./context";
 
 export function createRestartHandlers(ctx: AppContext) {
-  const { restartSettings, restart, scheduleRestart, parseRestartUpdate } = ctx;
+  const { restartSettings, restart, scheduleRestart } = ctx;
+
+  const parseRestartUpdate = (body: unknown): RestartSettings | null => {
+    if (typeof body !== "object" || body === null) return null;
+    const raw = body as { command?: unknown; afterPull?: unknown };
+    if (typeof raw.afterPull !== "boolean") return null;
+    const command = normalizeRestartCommand(raw.command ?? null);
+    if (command === undefined) return null;
+    return { command, afterPull: raw.afterPull };
+  };
 
   return {
     get: (c: PlainContext) => {

@@ -54,7 +54,12 @@ async function fixture(options: { blocked?: boolean; source?: boolean } = {}) {
     id = ID,
     options2: string[] | null = ["赤", "青"],
     question = "どれにしますか？",
-  ) => writeFile(`${path}.ask.json`, JSON.stringify({ v: 1, id, question, options: options2 }));
+    freeText = true,
+  ) =>
+    writeFile(
+      `${path}.ask.json`,
+      JSON.stringify({ v: 1, id, question, options: options2, freeText }),
+    );
   const post = (payload: unknown) =>
     app.request("/api/panes/w1:p1/answer-question", {
       method: "POST",
@@ -155,7 +160,7 @@ test.each([
 
 test("text on an options question and labels on a free-text question are bad requests", async () => {
   const f = await fixture();
-  await f.writePending();
+  await f.writePending(ID, ["赤", "青"], "どれにしますか？", false);
   expect((await f.post(f.textBody("青", "どれにしますか？"))).status).toBe(400);
 
   await f.writePending(ID, null, "自由に書いてください");

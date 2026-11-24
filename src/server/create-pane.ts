@@ -4,14 +4,28 @@ import {
   isAgentPaneBusy,
   type PaneClient,
   restartAgentName,
-  type SplitRequest,
-  type StartRequest,
 } from "./herdr/panes";
 import { planSplit } from "./herdr/split";
-import { supportsModelSelection } from "../shared/agents";
+import { type AgentKind, type AgentModel, supportsModelSelection } from "../shared/agents";
 import type { AgentModelsClient } from "./agent-models";
 import type { ClaudeLaunch } from "./claude-settings";
 import type { PiDefaultsStore } from "./pi-defaults";
+
+export type SplitRequest = {
+  name: string | null;
+  agent: AgentKind | null;
+  model?: AgentModel | null;
+  effort?: string | null;
+};
+
+// 既存のシェルペインで起動する要求。ペインは作らず名前も変えない。
+export type StartRequest = {
+  agent: AgentKind;
+  model: AgentModel | null;
+  effort: string | null;
+  // 分割直後の起動だけ true。シェルが agent.start を受け付けるまで待つ。
+  waitForShell: boolean;
+};
 
 // 起動の前後でだけ預かりを置き引きする。表示の解決は既定モデルの口が持つ。
 export type DefaultLaunchTracker = Pick<PiDefaultsStore, "remember" | "forget">;

@@ -1,4 +1,5 @@
 import { parsePullRequestList, type PullRequest } from "../shared/pull-request";
+import { childEnv } from "./child-process";
 
 // gh はプロセス起動とネットワークを伴う。ブランチ（.git/HEAD の読み取り）と同じ経路に
 // 置くと、状態を取り直すたびに一覧全体が gh 待ちになる。
@@ -95,10 +96,6 @@ function candidateBranches(branches: readonly string[]): string[] {
 }
 
 async function listLatestPullRequests(checkoutPath: string, branch: string): Promise<unknown> {
-  // HERDR_ を継ぐとペイン扱いになる。
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
-  );
   const child = Bun.spawn(
     [
       "gh",
@@ -115,7 +112,7 @@ async function listLatestPullRequests(checkoutPath: string, branch: string): Pro
     ],
     {
       cwd: checkoutPath,
-      env,
+      env: childEnv(),
       stdin: "ignore",
       stdout: "pipe",
       stderr: "ignore",

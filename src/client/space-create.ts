@@ -1,4 +1,4 @@
-import type { CreateSpaceFailure } from "./api";
+import type { CreateSpaceFailure } from "./requests/panes";
 import { INVALID_REQUEST_NOTICE, PANE_NOT_FOUND_NOTICE } from "./failure-text";
 import { UNKNOWN_NOTICE } from "./worktree-create";
 

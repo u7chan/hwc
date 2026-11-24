@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createInterface } from "node:readline";
+import { asRecord } from "../shared/json";
 import { ChatUnavailableError } from "./chat/errors";
+import { childEnv } from "./child-process";
 
 export type CodexRequest = (method: string, params: Record<string, unknown>) => Promise<unknown>;
 export type CodexReader = <T>(
@@ -16,13 +18,12 @@ export async function withCodex<T>(
 ): Promise<T> {
   const [command, ...args] = options.command ?? ["codex", "app-server", "--stdio"];
   if (!command) throw new ChatUnavailableError("codex command is missing");
-  // 読み取り専用のプロセスを、呼び出し元の Herdr ペインや Codex スレッドに結び付けない。
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([key]) => !key.startsWith("HERDR_") && key !== "CODEX_THREAD_ID",
-    ),
-  );
-  const child = spawn(command, args, { cwd: directory, env, stdio: ["pipe", "pipe", "ignore"] });
+  // 読み取り専用のプロセスを、呼び出し元の Codex スレッドに結び付けない。
+  const child = spawn(command, args, {
+    cwd: directory,
+    env: childEnv({ omit: ["CODEX_THREAD_ID"] }),
+    stdio: ["pipe", "pipe", "ignore"],
+  });
   const exited = new Promise<void>((resolve) => child.once("close", () => resolve()));
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   const iterator = lines[Symbol.asyncIterator]();
@@ -83,12 +84,6 @@ export async function withCodex<T>(
     child.kill("SIGKILL");
     await exited;
   }
-}
-
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 export function nextCursor(result: Record<string, unknown>): string | null {

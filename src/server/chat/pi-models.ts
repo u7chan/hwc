@@ -1,4 +1,5 @@
 import { isAgentModel } from "../../shared/agents";
+import { childEnv, readCappedStdout } from "../child-process";
 
 export type PiModelWindow = { provider: string; id: string; window: number };
 
@@ -30,12 +31,9 @@ export function parsePiModelWindows(text: string): PiModelWindow[] {
 }
 
 export async function loadPiModelWindows(agentDir: string): Promise<PiModelWindow[]> {
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
-  );
   const child = Bun.spawn(["pi", "--offline", "--mode", "rpc", "--no-session", "--no-extensions"], {
     cwd: agentDir,
-    env: { ...env, PI_CODING_AGENT_DIR: agentDir, NO_COLOR: "1" },
+    env: childEnv({ set: { PI_CODING_AGENT_DIR: agentDir, NO_COLOR: "1" } }),
     stdin: "pipe",
     stdout: "pipe",
     stderr: "ignore",
@@ -44,19 +42,12 @@ export async function loadPiModelWindows(agentDir: string): Promise<PiModelWindo
   try {
     child.stdin.write('{"type":"get_available_models"}\n');
     child.stdin.end();
-    const reader = child.stdout.getReader();
-    const decoder = new TextDecoder();
-    let text = "";
-    let size = 0;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_OUTPUT_BYTES) throw new Error("Pi model catalog is too large");
-      text += decoder.decode(value, { stream: true });
-    }
+    const text = await readCappedStdout(child.stdout, {
+      maxBytes: MAX_OUTPUT_BYTES,
+      tooLarge: "Pi model catalog is too large",
+    });
     if ((await child.exited) !== 0) throw new Error("Pi model catalog failed");
-    return parsePiModelWindows(text + decoder.decode());
+    return parsePiModelWindows(text);
   } finally {
     child.kill();
     await child.exited;

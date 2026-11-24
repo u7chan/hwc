@@ -1,6 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 import type { AgentModel, ModelAgentKind, ModelLabels } from "../shared/agents";
-import { type AgentModelsRead, readAgentEfforts, readAgentModels, readModelLabels } from "./api";
+import {
+  type AgentModelsRead,
+  readAgentEfforts,
+  readAgentModels,
+  readModelLabels,
+} from "./requests/settings";
 import type { EffortCandidates, ModelCandidates } from "./launch-choice";
 
 type Candidates<T> = { read: T; reload: () => void };

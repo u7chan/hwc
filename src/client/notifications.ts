@@ -1,5 +1,5 @@
 import { normalizeDiscordWebhookUrl } from "../shared/notifications";
-import type { NotificationTestResult } from "./api";
+import type { NotificationTestResult } from "./requests/settings";
 import { INVALID_REQUEST_NOTICE } from "./failure-text";
 
 // 形式が正しいときだけ登録できる。BFF でも同じ検証を通す。

@@ -1,14 +1,7 @@
-import { isStoredAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
+import { asRecord } from "../../shared/json";
 import { IDLE_PANE_PROCESS, type PaneProcess } from "../../shared/panes";
 import { listeningPorts } from "../ports";
-import {
-  type AgentKind,
-  type AgentModel,
-  isAgentKind,
-  isAgentEffort,
-  isAgentModel,
-  supportsModelSelection,
-} from "../../shared/agents";
+import type { AgentKind } from "../../shared/agents";
 import {
   type PaneLayout,
   type PaneRead,
@@ -23,9 +16,6 @@ import { HerdrError, request } from "./socket";
 export const READ_SOURCES = ["visible", "recent", "recent_unwrapped", "detection"] as const;
 export type ReadSource = (typeof READ_SOURCES)[number];
 
-// Herdr の `lines` は uint32。上限を超える値は Herdr 側で弾かれるので、こちらで 400 にする。
-const MAX_LINES = 4_294_967_295;
-
 // ペインへの入力を丸ごとソケットへ流す前に止める。手元の長文プロンプトには十分な大きさ。
 export const MAX_TEXT_BYTES = 16_384;
 
@@ -38,32 +28,11 @@ const AGENT_PANE_RETRY_MS = 150;
 
 export type PaneOutput = PaneRead;
 
-// ペイン名は Herdr のラベルと同じ上限に合わせる。空文字は「名前なし」として null にする。
-export const MAX_PANE_NAME = 80;
-
-export type SplitRequest = {
-  name: string | null;
-  agent: AgentKind | null;
-  model?: AgentModel | null;
-  effort?: string | null;
-};
-
-// 既存のシェルペインで起動する要求。ペインは作らず名前も変えない。
-export type StartRequest = {
-  agent: AgentKind;
-  model: AgentModel | null;
-  effort: string | null;
-  // 分割直後の起動だけ true。シェルが agent.start を受け付けるまで待つ。
-  waitForShell: boolean;
-};
-
 export type SendKeysOptions = { paneId: string; keys: string[] };
 
 export type ReadOptions = { paneId: string; source: ReadSource; lines?: number };
 
 export type SendOptions = { paneId: string; text: string; submit: boolean };
-
-export type InputBody = { text: string; submit: boolean; attachments: string[] };
 
 export type FocusOptions = { paneId: string };
 
@@ -124,185 +93,6 @@ export type PaneClient = {
   rename: (options: RenameOptions) => Promise<void>;
 };
 
-export type Parsed<T> = { ok: true; value: T } | { ok: false; status: 400 | 413; error: string };
-
-function parsePaneName(record: Record<string, unknown>): Parsed<string | null> {
-  const rawName = record.name;
-  if (rawName !== undefined && rawName !== null && typeof rawName !== "string") {
-    return { ok: false, status: 400, error: "name must be a string" };
-  }
-  const name = typeof rawName === "string" ? rawName.trim() : "";
-  if ([...name].length > MAX_PANE_NAME) {
-    return { ok: false, status: 400, error: `name must be at most ${MAX_PANE_NAME} characters` };
-  }
-  return { ok: true, value: name === "" ? null : name };
-}
-
-export function parseSplitBody(body: unknown): Parsed<SplitRequest> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    return { ok: false, status: 400, error: "body must be an object" };
-  }
-
-  const record = body as Record<string, unknown>;
-  const name = parsePaneName(record);
-  if (!name.ok) return name;
-
-  const rawAgent = record.agent;
-  if (rawAgent !== undefined && rawAgent !== null && !isAgentKind(rawAgent)) {
-    return { ok: false, status: 400, error: "agent must be one of pi, claude, codex, opencode" };
-  }
-  const agent = isAgentKind(rawAgent) ? rawAgent : null;
-
-  const selection = parseAgentSelection(record, agent);
-  if (!selection.ok) return selection;
-
-  return {
-    ok: true,
-    value: {
-      name: name.value,
-      agent,
-      ...selection.value,
-    },
-  };
-}
-
-// ワークツリーの作成は root ペインに名前を付けるだけ。起動するエージェントは
-// ペインができた後に /agent で指定する（docs/adr/agent-launch.md）。
-export function parseWorktreeBody(body: unknown): Parsed<{ name: string | null }> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    return { ok: false, status: 400, error: "body must be an object" };
-  }
-  const name = parsePaneName(body as Record<string, unknown>);
-  return name.ok ? { ok: true, value: { name: name.value } } : name;
-}
-
-// フォルダから作るスペース。path はツリーの根からの相対パスで、実在の確認は BFF が
-// realpath で行う。ここでは形だけを見る。根そのもの（空）は受けない。
-export function parseCreateSpaceBody(body: unknown): Parsed<{ path: string; name: string | null }> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    return { ok: false, status: 400, error: "body must be an object" };
-  }
-  const record = body as Record<string, unknown>;
-  const path = record.path;
-  if (
-    typeof path !== "string" ||
-    path === "" ||
-    path.startsWith("/") ||
-    !path.split("/").every((part) => part !== "" && part !== "." && part !== "..")
-  ) {
-    return { ok: false, status: 400, error: "path must be a relative directory path" };
-  }
-  const name = parsePaneName(record);
-  return name.ok ? { ok: true, value: { path, name: name.value } } : name;
-}
-
-// 既存のシェルペインで起動する要求。名前は付け直さないので受け取らない。
-export function parseStartBody(body: unknown): Parsed<StartRequest> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    return { ok: false, status: 400, error: "body must be an object" };
-  }
-
-  const record = body as Record<string, unknown>;
-  const agent = record.agent;
-  if (!isAgentKind(agent)) {
-    return { ok: false, status: 400, error: "agent must be one of pi, claude, codex, opencode" };
-  }
-
-  const selection = parseAgentSelection(record, agent);
-  if (!selection.ok) return selection;
-
-  const waitForShell = record.waitForShell ?? false;
-  if (typeof waitForShell !== "boolean") {
-    return { ok: false, status: 400, error: "waitForShell must be a boolean" };
-  }
-
-  return { ok: true, value: { agent, ...selection.value, waitForShell } };
-}
-
-// モデルと effort の整合は、分割で作る場合と既存のシェルで起動する場合で同じ。
-function parseAgentSelection(
-  record: Record<string, unknown>,
-  agent: AgentKind | null,
-): Parsed<{ model: AgentModel | null; effort: string | null }> {
-  const model = record.model ?? null;
-  if (model !== null && (!supportsModelSelection(agent) || !isAgentModel(model))) {
-    return {
-      ok: false,
-      status: 400,
-      error: "model must identify a Pi, Claude, Codex, or OpenCode model",
-    };
-  }
-
-  const effort = record.effort ?? null;
-  if (effort !== null && (model === null || !isAgentEffort(effort))) {
-    return {
-      ok: false,
-      status: 400,
-      error: "effort requires an explicit model and a non-empty value",
-    };
-  }
-
-  return { ok: true, value: { model, effort } };
-}
-
-export function parseOutputQuery(params: URLSearchParams): Parsed<Omit<ReadOptions, "paneId">> {
-  const rawSource = params.get("source");
-  if (rawSource !== null && !READ_SOURCES.includes(rawSource as ReadSource)) {
-    return { ok: false, status: 400, error: `source must be one of ${READ_SOURCES.join(", ")}` };
-  }
-  const source = (rawSource ?? "recent") as ReadSource;
-
-  const rawLines = params.get("lines");
-  if (rawLines === null) return { ok: true, value: { source } };
-
-  const lines = Number(rawLines);
-  // Herdr は 0 も受理するが、0 行の出力を求める意味は無いので BFF で弾く。
-  if (!/^\d+$/.test(rawLines) || lines < 1 || lines > MAX_LINES) {
-    return { ok: false, status: 400, error: `lines must be an integer between 1 and ${MAX_LINES}` };
-  }
-  return { ok: true, value: { source, lines } };
-}
-
-export function parseInputBody(body: unknown): Parsed<InputBody> {
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    return { ok: false, status: 400, error: "body must be an object" };
-  }
-
-  const record = body as Record<string, unknown>;
-  if (typeof record.text !== "string") {
-    return { ok: false, status: 400, error: "text must be a string" };
-  }
-
-  const attachments = parseAttachments(record.attachments);
-  if (attachments === null) {
-    return { ok: false, status: 400, error: "attachments must be an array of attachment names" };
-  }
-  // 枚数の上限はメッセージ単位。1 枚の大きさはアップロード側で見る。
-  if (attachments.length > MAX_ATTACHMENTS) {
-    return { ok: false, status: 400, error: `attachments must be at most ${MAX_ATTACHMENTS}` };
-  }
-  // 添付は画像に限らない。本文も添付も無いメッセージは送らない。
-  if (record.text.trim() === "" && attachments.length === 0) {
-    return { ok: false, status: 400, error: "text must be a non-empty string" };
-  }
-  if (record.submit !== undefined && typeof record.submit !== "boolean") {
-    return { ok: false, status: 400, error: "submit must be a boolean" };
-  }
-
-  return { ok: true, value: { text: record.text, submit: record.submit === true, attachments } };
-}
-
-function parseAttachments(value: unknown): string[] | null {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) return null;
-  const names: string[] = [];
-  for (const item of value) {
-    if (typeof item !== "string" || !isStoredAttachmentName(item)) return null;
-    names.push(item);
-  }
-  return names;
-}
-
 // 上限は注記を組み立てた後の本文で測る。文字数ではなくバイト数。
 export function exceedsTextLimit(text: string): boolean {
   return new TextEncoder().encode(text).length > MAX_TEXT_BYTES;
@@ -355,12 +145,6 @@ async function reconcileAgentLaunch(call: Caller, paneId: string, path?: string)
 // タブ名に出すので、長いコマンド行はここで切る。表示側の幅は CSS の省略に任せる。
 const MAX_COMMAND_CHARS = 200;
 
-function recordOf(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 // 前景プロセス群のうち最も深い（最後の）コマンド行を表示に使う。`bun run dev` の下に
 // `bun --watch src/server.ts` がいる場合、利用者が知りたいのは後者。待ち受けポートは
 // ここで見つけた pid から引く。
@@ -368,9 +152,9 @@ export type ProcessInfo = { process: PaneProcess; pids: number[] };
 
 export function parseProcessInfo(value: unknown, paneId: string): ProcessInfo {
   const idle: ProcessInfo = { process: IDLE_PANE_PROCESS, pids: [] };
-  const result = recordOf(value);
+  const result = asRecord(value);
   if (result === null || result.type !== "pane_process_info") return idle;
-  const info = recordOf(result.process_info);
+  const info = asRecord(result.process_info);
   if (info === null || info.pane_id !== paneId) return idle;
 
   const shell = info.shell_pid;
@@ -381,11 +165,11 @@ export function parseProcessInfo(value: unknown, paneId: string): ProcessInfo {
 
   const processes = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
   const pids = processes
-    .map((entry) => recordOf(entry)?.pid)
+    .map((entry) => asRecord(entry)?.pid)
     .filter((pid): pid is number => typeof pid === "number" && Number.isInteger(pid) && pid > 0);
 
   for (let index = processes.length - 1; index >= 0; index -= 1) {
-    const cmdline = recordOf(processes[index])?.cmdline;
+    const cmdline = asRecord(processes[index])?.cmdline;
     if (typeof cmdline === "string" && cmdline.trim() !== "") {
       return {
         process: { running: true, command: cmdline.trim().slice(0, MAX_COMMAND_CHARS), ports: [] },

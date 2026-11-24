@@ -3,14 +3,15 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { stripAttachedFiles } from "../../shared/attachments";
+import { asRecord, nonEmptyText } from "../../shared/json";
 import type {
   ChatCompaction,
-  ChatContext,
   ChatMessage,
   ChatSnapshot,
   ChatUsage,
   SessionChatClient,
 } from "./contract";
+import { foldContext } from "./context";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages } from "./limit";
 
@@ -389,24 +390,10 @@ function catalogKey(provider: string, model: string): string {
   return `${provider}\u0000${model}`;
 }
 
-function foldContext(tokens: number | null, window: number | null): ChatContext | null {
-  if (tokens === null && window === null) return null;
-  return { tokens, window };
-}
-
 function etagOf(sessionId: string, body: SnapshotBody): string {
   const prefix = createHash("sha256").update(sessionId).digest("hex").slice(0, 12);
   const content = createHash("sha256").update(JSON.stringify(body)).digest("hex").slice(0, 20);
   return `${prefix}-${content}`;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function nonEmptyText(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
 }
 
 function finiteNumber(value: unknown): number | null {

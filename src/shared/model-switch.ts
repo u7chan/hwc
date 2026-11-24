@@ -5,8 +5,7 @@ import { type AgentModel, isAgentModel, isClaudeAlias } from "./agents";
 // 値を明示して送る（docs/adr/claude-integration.md）。
 export type ModelSwitchRequest = { model: AgentModel; effort: string };
 
-// 送る `/effort` の引数。候補との照合は BFF が行う。ここは、コマンドの文字列に混ぜてよい
-// 形だけを通す。
+// 送る `/effort` の引数。コマンドの文字列に混ぜてよい形だけを通す。
 const EFFORT_WORD = /^[a-z]{1,16}$/;
 
 // 形の検査だけ。候補との照合は BFF が行う。

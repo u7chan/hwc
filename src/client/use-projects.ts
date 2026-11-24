@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ProjectEntry } from "../shared/projects";
-import { readProjects } from "./api";
+import { readProjects } from "./requests/panes";
 
 export type ProjectLoad =
   | { kind: "loading" }
