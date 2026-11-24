@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { stripAttachedFiles } from "../../shared/attachments";
-import { asRecord, type CodexReader, nextCursor, withCodex } from "../codex";
+import { asRecord, nonEmptyText } from "../../shared/json";
+import { type CodexReader, nextCursor, withCodex } from "../codex";
 import type { ChatMessage, ChatSnapshot, SessionChatClient } from "./contract";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages, MAX_CHAT_MESSAGES } from "./limit";
@@ -116,10 +117,6 @@ function userText(content: unknown): string {
     if (part?.type === "image" || part?.type === "localImage") image = true;
   }
   return parts.join("\n\n") || (image ? "[画像]" : "");
-}
-
-function nonEmptyText(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
 }
 
 function finiteNumber(value: unknown): number | null {

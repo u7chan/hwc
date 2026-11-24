@@ -2,6 +2,7 @@ import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { AgentSkills } from "../shared/agent-skills";
 import type { ModelAgentKind } from "../shared/agents";
+import { asRecord } from "../shared/json";
 
 // 一覧の上限。超えたら切ったことを返し、黙って一部だけ見せない。
 const MAX_SKILLS = 200;
@@ -198,12 +199,6 @@ async function readJson(path: string): Promise<unknown> {
   } catch {
     return null;
   }
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 // Pi の packages は `npm:<name>` か `git:<host>/<path>@<ref>`。インストール先は

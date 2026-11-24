@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createInterface } from "node:readline";
+import { asRecord } from "../shared/json";
 import { ChatUnavailableError } from "./chat/errors";
 
 export type CodexRequest = (method: string, params: Record<string, unknown>) => Promise<unknown>;
@@ -83,12 +84,6 @@ export async function withCodex<T>(
     child.kill("SIGKILL");
     await exited;
   }
-}
-
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 export function nextCursor(result: Record<string, unknown>): string | null {

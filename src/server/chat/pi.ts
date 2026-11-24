@@ -3,7 +3,6 @@ import { type FileHandle, open, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type {
   ChatCompaction,
-  ChatContext,
   ChatMessage,
   ChatPending,
   ChatSnapshot,
@@ -11,7 +10,9 @@ import type {
   SessionChatClient,
 } from "./contract";
 import { stripAttachedFiles } from "../../shared/attachments";
+import { asRecord, nonEmptyText } from "../../shared/json";
 import { isRewindCapability, parseRewindMarker, type RewindMarker } from "../../shared/rewind";
+import { foldContext } from "./context";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages, pruneOrphanAskAnswers } from "./limit";
 import { type AskPending, readAsk } from "./pi-ask";
@@ -767,13 +768,6 @@ function compactionWindow(
   };
 }
 
-// 出す材料が無いときだけ context を null にする。{ tokens: null, window: null } は
-// 契約の型では表せるが、BFF はこの形を作らない。
-function foldContext(tokens: number | null, window: number | null): ChatContext | null {
-  if (tokens === null && window === null) return null;
-  return { tokens, window };
-}
-
 // モデルが書いた質問として、Claude の AskUserQuestion と同じカードの形に載せる。
 // ask_user は 1 問だけなので、header と複数選択は持たない。
 function askPending(ask: AskPending): ChatPending {
@@ -963,15 +957,6 @@ function clear(reader: ChatReader): void {
   reader.entries.clear();
   reader.leafId = null;
   reader.canRewind = false;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function nonEmptyText(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
 }
 
 const REWIND_SCAN_BYTES = 256 * 1024;

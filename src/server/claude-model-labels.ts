@@ -1,6 +1,7 @@
 import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { type ModelLabels, claudeModelName, isClaudeAlias, modelKey } from "../shared/agents";
+import { asRecord } from "../shared/json";
 
 export const CLAUDE_LABELS_TTL_MS = 5 * 60_000;
 export const CLAUDE_LABELS_FAILURE_TTL_MS = 30_000;
@@ -21,12 +22,6 @@ export type ClaudeModelLabelsOptions = {
   run?: () => Promise<string>;
   key?: () => Promise<string>;
 };
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 function labelText(value: unknown): string | null {
   return typeof value === "string" && value !== "" && value.length <= 64 && !/\p{Cc}/u.test(value)
