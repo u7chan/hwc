@@ -94,12 +94,32 @@ export function workspaceParam(workspaceId: string) {
 // ここで形を決めて渡す。
 export type InputBody = { text: string; submit: true; attachments?: string[] };
 
+// 同じ理由で、body は変数にしてから渡す。オブジェクト literal のままでは弾かれる。
+function withJson<T>(param: { param: { id: string } }, json: T) {
+  return { ...param, json };
+}
+
 // 304 は本文が無いだけで、手元の会話をそのまま使う。それ以外の失敗は、会話を出せない
 // 応答として扱い、端末出力へ切り替える。
 export function chatOutcome(status: number): ChatRead["kind"] {
   if (status === 304) return "unchanged";
   if (status >= 200 && status < 300) return "snapshot";
   return "unavailable";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+// hc の応答は Response ではなく ClientResponse。どの口も読むのは ok と、本文か status だけ。
+type BodyResponse = { ok: boolean; json: () => Promise<unknown> };
+type StatusResponse = { ok: boolean; status: number };
+
+// 既知のコードだけを通す判定とは別物。本文の error を文言にそのまま使う（通知・再起動・
+// 定型文・編集）。既定は呼び出し側で違う（null / "unknown" / "edit_failed"）ので引数で受ける。
+function toErrorText<F extends string | null>(value: unknown, fallback: F): string | F {
+  const error = asRecord(value)?.error;
+  return typeof error === "string" ? error : fallback;
 }
 
 function isOptionalText(value: unknown): value is string | null {
@@ -193,20 +213,26 @@ function toRootLabel(value: unknown): string | undefined {
   return value;
 }
 
+// 根の番号は配信 URL の一部になる。負数や小数は捨てる。名前も同じく URL の材料なので、
+// 空・絶対パス・根の外を指す値は捨て、リンクも画像も作らない。
+function isFileRef<T extends { name?: unknown; version?: unknown; root?: unknown }>(
+  ref: T,
+): ref is T & { name: string; version: string; root: number } {
+  if (typeof ref.name !== "string" || typeof ref.version !== "string") return false;
+  if (typeof ref.root !== "number" || !Number.isInteger(ref.root) || ref.root < 0) return false;
+  if (ref.name === "" || ref.name.startsWith("/")) return false;
+  return !ref.name.split("/").includes("..");
+}
+
 function toChatFiles(value: unknown): ChatFile[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const files: ChatFile[] = [];
   for (const item of value) {
     if (typeof item !== "object" || item === null) continue;
     const file = item as Partial<ChatFile>;
-    if (typeof file.name !== "string" || typeof file.version !== "string") continue;
+    if (!isFileRef(file)) continue;
     // 見せ方を知らないファイルは出さない。画像とプレビューだけを扱う。
     if (file.kind !== "image" && file.kind !== "html") continue;
-    // 根の番号は配信 URL の一部になる。負数や小数は捨てる。
-    if (typeof file.root !== "number" || !Number.isInteger(file.root) || file.root < 0) continue;
-    // 配信 URL になる。根の外を指す名前は捨て、リンクも画像も作らない。
-    if (file.name === "" || file.name.startsWith("/")) continue;
-    if (file.name.split("/").includes("..")) continue;
     const imageRefs = toImageRefs(file.imageRefs);
     const rootLabel = toRootLabel(file.rootLabel);
     files.push({
@@ -229,12 +255,8 @@ function toChatLinks(value: unknown): ChatLink[] | undefined {
     if (typeof item !== "object" || item === null) continue;
     const link = item as Partial<ChatLink>;
     if (typeof link.href !== "string" || link.href === "") continue;
-    if (typeof link.name !== "string" || typeof link.version !== "string") continue;
+    if (!isFileRef(link)) continue;
     if (link.kind !== "image" && link.kind !== "html" && link.kind !== "text") continue;
-    // 根の番号は配信 URL の一部になる。負数や小数は捨てる。
-    if (typeof link.root !== "number" || !Number.isInteger(link.root) || link.root < 0) continue;
-    if (link.name === "" || link.name.startsWith("/")) continue;
-    if (link.name.split("/").includes("..")) continue;
     const rootLabel = toRootLabel(link.rootLabel);
     links.push({
       href: link.href,
@@ -651,36 +673,33 @@ export function toModelInfo(value: unknown): ModelInfo | null {
   return { model, effort };
 }
 
-export async function readDefaultModel(
-  paneId: string,
+// 会話にモデルが載るまでの表示の補い。エンドポイントと、その意味だけが違う。
+async function readModelInfo(
+  read: (init: { signal: AbortSignal }) => Promise<BodyResponse>,
   signal: AbortSignal,
 ): Promise<ModelInfo | null> {
   try {
-    const response = await client.api.panes[":id"]["default-model"].$get(paneParam(paneId), {
-      init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
-    });
-    if (!response.ok) return null;
-    return toModelInfo(await response.json());
+    const response = await read({ signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) });
+    return response.ok ? toModelInfo(await response.json()) : null;
   } catch {
     return null;
   }
 }
 
+export function readDefaultModel(paneId: string, signal: AbortSignal): Promise<ModelInfo | null> {
+  return readModelInfo(
+    (init) => client.api.panes[":id"]["default-model"].$get(paneParam(paneId), { init }),
+    signal,
+  );
+}
+
 // hwc から起動したときの指定は、会話がまだ読めない間の表示を補う。Claude は最初の
 // メッセージまで transcript を作らないため、その間は会話ではなく端末出力になる。
-export async function readLaunchModel(
-  paneId: string,
-  signal: AbortSignal,
-): Promise<ModelInfo | null> {
-  try {
-    const response = await client.api.panes[":id"]["launch-model"].$get(paneParam(paneId), {
-      init: { signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) },
-    });
-    if (!response.ok) return null;
-    return toModelInfo(await response.json());
-  } catch {
-    return null;
-  }
+export function readLaunchModel(paneId: string, signal: AbortSignal): Promise<ModelInfo | null> {
+  return readModelInfo(
+    (init) => client.api.panes[":id"]["launch-model"].$get(paneParam(paneId), { init }),
+    signal,
+  );
 }
 
 // プロジェクト候補は、入力欄から選ぶときにだけ読む。失敗は候補なしではなく
@@ -735,6 +754,13 @@ export type GitSyncFailure =
   | "git_unavailable"
   | "failed";
 
+const GIT_SYNC_FAILURES: readonly GitSyncFailure[] = [
+  "no_remote",
+  "no_upstream",
+  "not_git_worktree",
+  "git_unavailable",
+];
+
 export type GitSyncOutcome = { ok: true } | { ok: false; error: GitSyncFailure };
 
 // fetch / pull はネットワークと git の走査を伴う。
@@ -750,17 +776,8 @@ export async function syncWorkspace(
       init: { signal: AbortSignal.timeout(GIT_SYNC_TIMEOUT_MS) },
     });
     if (response.ok) return { ok: true };
-    const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-    const error = body?.error;
-    if (
-      error === "no_remote" ||
-      error === "no_upstream" ||
-      error === "not_git_worktree" ||
-      error === "git_unavailable"
-    ) {
-      return { ok: false, error };
-    }
-    return { ok: false, error: "failed" };
+    const body: unknown = await response.json().catch(() => null);
+    return { ok: false, error: toKnownError(body, GIT_SYNC_FAILURES) };
   } catch {
     return { ok: false, error: "failed" };
   }
@@ -793,7 +810,7 @@ export async function editMessage(
     } | null;
     return {
       ok: false,
-      error: typeof body?.error === "string" ? body.error : "edit_failed",
+      error: toErrorText(body, "edit_failed"),
       rewound: body?.rewound === true,
     };
   } catch {
@@ -870,51 +887,51 @@ export async function stopAgent(paneId: string): Promise<void> {
 export const ANSWER_TIMEOUT_MS = 15_000;
 
 // status は失敗の理由を伝えるためだけに返す。0 はネットワークの失敗と打ち切り。
-export type AnswerResult = { ok: true } | { ok: false; status: number };
+type PostStatusResult = { ok: true } | { ok: false; status: number };
 
-function answerRequest(paneId: string, json: AnswerRequest) {
-  return { ...paneParam(paneId), json };
-}
+export type AnswerResult = PostStatusResult;
 
-export async function answerQuestion(
-  paneId: string,
-  request: AnswerRequest,
-): Promise<AnswerResult> {
+// hc の応答を、期限と、失敗を status に畳む形が同じものに使う。何をどこへ送るかと
+// 期限だけを呼び出し側が持つ。
+async function postStatus(
+  send: (signal: AbortSignal) => Promise<StatusResponse>,
+  timeoutMs: number,
+): Promise<PostStatusResult> {
   try {
-    const response = await client.api.panes[":id"]["answer-question"].$post(
-      answerRequest(paneId, request),
-      { init: { signal: AbortSignal.timeout(ANSWER_TIMEOUT_MS) } },
-    );
+    const response = await send(AbortSignal.timeout(timeoutMs));
     return response.ok ? { ok: true } : { ok: false, status: response.status };
   } catch {
     return { ok: false, status: 0 };
   }
+}
+
+export function answerQuestion(paneId: string, request: AnswerRequest): Promise<AnswerResult> {
+  return postStatus(
+    (signal) =>
+      client.api.panes[":id"]["answer-question"].$post(withJson(paneParam(paneId), request), {
+        init: { signal },
+      }),
+    ANSWER_TIMEOUT_MS,
+  );
 }
 
 // BFF は `/model` の完了を最大 8 秒、`/effort` の結果を最大 5 秒待つ。その上限と通信を覆い、
 // 返らない経路でダイアログを回し続けない。
 export const SWITCH_MODEL_TIMEOUT_MS = 20_000;
 
-// status は失敗の理由を伝えるためだけに返す。0 はネットワークの失敗と打ち切り。
-export type SwitchModelResult = { ok: true } | { ok: false; status: number };
+export type SwitchModelResult = PostStatusResult;
 
-function switchRequest(paneId: string, json: ModelSwitchRequest) {
-  return { ...paneParam(paneId), json };
-}
-
-export async function switchModel(
+export function switchModel(
   paneId: string,
   request: ModelSwitchRequest,
 ): Promise<SwitchModelResult> {
-  try {
-    const response = await client.api.panes[":id"]["switch-model"].$post(
-      switchRequest(paneId, request),
-      { init: { signal: AbortSignal.timeout(SWITCH_MODEL_TIMEOUT_MS) } },
-    );
-    return response.ok ? { ok: true } : { ok: false, status: response.status };
-  } catch {
-    return { ok: false, status: 0 };
-  }
+  return postStatus(
+    (signal) =>
+      client.api.panes[":id"]["switch-model"].$post(withJson(paneParam(paneId), request), {
+        init: { signal },
+      }),
+    SWITCH_MODEL_TIMEOUT_MS,
+  );
 }
 
 export async function confirmFolderTrust(paneId: string, id: string): Promise<void> {
@@ -1060,12 +1077,14 @@ const START_FAILURES: readonly StartAgentFailure[] = [
   "invalid_request",
 ];
 
+// 既知の error コードだけを通し、それ以外は既定へ落とす。既知の一覧は応答ごとに違う。
+function toKnownError<F extends string>(value: unknown, known: readonly F[]): F | "failed" {
+  const error = asRecord(value)?.error;
+  return known.find((item) => item === error) ?? "failed";
+}
+
 export function toStartError(value: unknown): StartAgentFailure {
-  if (typeof value !== "object" || value === null) return "failed";
-  const error = (value as { error?: unknown }).error;
-  return typeof error === "string" && START_FAILURES.includes(error as StartAgentFailure)
-    ? (error as StartAgentFailure)
-    : "failed";
+  return toKnownError(value, START_FAILURES);
 }
 
 export function toAgentModels(value: unknown): AgentModel[] | null {
@@ -1229,11 +1248,13 @@ export type CreatePaneOutcome =
   | { ok: true; paneId: string }
   | { ok: false; error: CreatePaneFailure; paneId: string | null };
 
+function toId(value: unknown): string | null {
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
 // 作成の目的は新しいペイン。応答に ID が無いと開けないので、形が違えば失敗にする。
 export function toCreatedPane(value: unknown): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const paneId = (value as { paneId?: unknown }).paneId;
-  return typeof paneId === "string" && paneId !== "" ? paneId : null;
+  return toId(asRecord(value)?.paneId);
 }
 
 const CREATE_FAILURES: readonly CreatePaneFailure[] = [
@@ -1244,15 +1265,29 @@ const CREATE_FAILURES: readonly CreatePaneFailure[] = [
   "invalid_request",
 ];
 
+type CreationFailure<F extends string> = {
+  error: F | "timeout" | "failed";
+  workspaceId: string | null;
+  paneId: string | null;
+};
+
+// 作成の失敗は部分成功した id を伴う。ID の有無で、再送してよい失敗かを見分ける。返る id の
+// 範囲は作る対象で違うので広い形で返し、各関数の戻り値の型で絞る。
+function toCreationFailure<F extends string>(
+  value: unknown,
+  known: readonly F[],
+): CreationFailure<F> {
+  const record = asRecord(value);
+  return {
+    error: toKnownError(value, known),
+    workspaceId: toId(record?.workspaceId),
+    paneId: toId(record?.paneId),
+  };
+}
+
 // 分割の後に失敗した場合は paneId が付く。ペインが既にあるかをこの値で分ける。
 export function toCreateError(value: unknown): { error: CreatePaneFailure; paneId: string | null } {
-  if (typeof value !== "object" || value === null) return { error: "failed", paneId: null };
-  const record = value as { error?: unknown; paneId?: unknown };
-  const error =
-    typeof record.error === "string" && CREATE_FAILURES.includes(record.error as CreatePaneFailure)
-      ? (record.error as CreatePaneFailure)
-      : "failed";
-  const paneId = typeof record.paneId === "string" && record.paneId !== "" ? record.paneId : null;
+  const { error, paneId } = toCreationFailure(value, CREATE_FAILURES);
   return { error, paneId };
 }
 
@@ -1343,34 +1378,16 @@ const WORKTREE_FAILURES: readonly CreateWorktreeFailure[] = [
   "herdr_unavailable",
 ];
 
-function toId(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
-}
-
 // 作成の目的は新しいスペースの最初のペイン。どちらかの id が無いと開けないので失敗にする。
 export function toCreatedSpace(value: unknown): { workspaceId: string; paneId: string } | null {
-  if (typeof value !== "object" || value === null) return null;
-  const record = value as { workspaceId?: unknown; paneId?: unknown };
-  const workspaceId = toId(record.workspaceId);
-  const paneId = toId(record.paneId);
+  const record = asRecord(value);
+  const workspaceId = toId(record?.workspaceId);
+  const paneId = toId(record?.paneId);
   return workspaceId === null || paneId === null ? null : { workspaceId, paneId };
 }
 
-// 部分成功はペインが既にある。ID の有無で、再送してよい失敗かを見分ける。
-function toCreationError<F extends string>(
-  value: unknown,
-  known: readonly F[],
-): { error: F | "failed"; workspaceId: string | null; paneId: string | null } {
-  if (typeof value !== "object" || value === null) {
-    return { error: "failed", workspaceId: null, paneId: null };
-  }
-  const record = value as { error?: unknown; workspaceId?: unknown; paneId?: unknown };
-  const error = known.find((item) => item === record.error) ?? "failed";
-  return { error, workspaceId: toId(record.workspaceId), paneId: toId(record.paneId) };
-}
-
 export function toWorktreeError(value: unknown) {
-  return toCreationError(value, WORKTREE_FAILURES);
+  return toCreationFailure(value, WORKTREE_FAILURES);
 }
 
 // Herdr が作成失敗を明示した場合と、同じチェックアウトへの同時操作だけは待って再送できる。
@@ -1381,25 +1398,27 @@ export function canRetryWorktree(error: CreateWorktreeFailure): boolean {
 
 export type CreateWorktreeRequest = { name: string | null };
 
-export async function createWorktree(
-  workspaceId: string,
-  request: CreateWorktreeRequest,
-): Promise<CreateWorktreeOutcome> {
-  const signal = AbortSignal.timeout(CREATE_WORKTREE_TIMEOUT_MS);
+// 作成系の骨格（要求 → 応答 → 成功 / 失敗 / catch）。スペースとペインの id を返す作成は
+// 同じ形なので、エンドポイント・期限・失敗の読み方・要求の組み立てだけを呼び出し側が持つ。
+async function createWithIds<F extends string>(
+  send: (signal: AbortSignal) => Promise<BodyResponse>,
+  toFailure: (body: unknown) => CreationFailure<F>,
+  timeoutMs: number,
+): Promise<
+  { ok: true; workspaceId: string; paneId: string } | ({ ok: false } & CreationFailure<F>)
+> {
+  const signal = AbortSignal.timeout(timeoutMs);
   try {
-    const input = { ...workspaceParam(workspaceId), json: request };
-    const response = await client.api.workspaces[":id"]["create-worktree"].$post(input, {
-      init: { signal },
-    });
+    const response = await send(signal);
     const body: unknown = await response.json().catch(() => null);
-    if (!response.ok) return { ok: false, ...toWorktreeError(body) };
+    if (!response.ok) return { ok: false, ...toFailure(body) };
     const created = toCreatedSpace(body);
     return created === null
       ? { ok: false, error: "failed", workspaceId: null, paneId: null }
       : { ok: true, ...created };
   } catch {
-    // 応答が返らない・途中で切れた場合は、BFF が作成を終えているか分からない。作成済みの
-    // ワークツリーを残したまま再送すると 2 つ目を作るので、期限切れと同じ結果不明に倒す。
+    // 応答が返らない・途中で切れた場合は、BFF が作成を終えているか分からない。作成済みを
+    // 残したまま再送すると 2 つ目を作るので、期限切れと同じ結果不明に倒す。
     return {
       ok: false,
       error: signal.aborted ? "timeout" : "failed",
@@ -1407,6 +1426,21 @@ export async function createWorktree(
       paneId: null,
     };
   }
+}
+
+export function createWorktree(
+  workspaceId: string,
+  request: CreateWorktreeRequest,
+): Promise<CreateWorktreeOutcome> {
+  return createWithIds(
+    (signal) =>
+      client.api.workspaces[":id"]["create-worktree"].$post(
+        withJson(workspaceParam(workspaceId), request),
+        { init: { signal } },
+      ),
+    toWorktreeError,
+    CREATE_WORKTREE_TIMEOUT_MS,
+  );
 }
 
 export type CreateSpaceFailure =
@@ -1433,35 +1467,22 @@ const SPACE_FAILURES: readonly CreateSpaceFailure[] = [
 ];
 
 export function toSpaceError(value: unknown) {
-  return toCreationError(value, SPACE_FAILURES);
+  return toCreationFailure(value, SPACE_FAILURES);
 }
 
 // ツリーのフォルダを作業ディレクトリにしたスペースを作る。path はツリーの根からの相対パス。
-export async function createSpace(
+export function createSpace(
   paneId: string,
   request: { path: string; name: string | null },
 ): Promise<CreateSpaceOutcome> {
-  const signal = AbortSignal.timeout(CREATE_TIMEOUT_MS);
-  try {
-    const input = { ...paneParam(paneId), json: request };
-    const response = await client.api.panes[":id"]["create-space"].$post(input, {
-      init: { signal },
-    });
-    const body: unknown = await response.json().catch(() => null);
-    if (!response.ok) return { ok: false, ...toSpaceError(body) };
-    const created = toCreatedSpace(body);
-    return created === null
-      ? { ok: false, error: "failed", workspaceId: null, paneId: null }
-      : { ok: true, ...created };
-  } catch {
-    // 作成済みのスペースを残したまま再送すると 2 つ目を作る。結果不明に倒す。
-    return {
-      ok: false,
-      error: signal.aborted ? "timeout" : "failed",
-      workspaceId: null,
-      paneId: null,
-    };
-  }
+  return createWithIds(
+    (signal) =>
+      client.api.panes[":id"]["create-space"].$post(withJson(paneParam(paneId), request), {
+        init: { signal },
+      }),
+    toSpaceError,
+    CREATE_TIMEOUT_MS,
+  );
 }
 
 export type NotificationSaveResult =
@@ -1472,19 +1493,13 @@ export type NotificationSaveResult =
 // 残らないよう、外側にもう少し長い期限を置く。
 export const TEST_NOTIFICATION_TIMEOUT_MS = 15_000;
 
-// hc の応答は Response ではなく ClientResponse。読むのは ok と本文だけ。
-async function toSaveResult(response: {
-  ok: boolean;
-  json: () => Promise<unknown>;
-}): Promise<NotificationSaveResult> {
+async function toSaveResult(response: BodyResponse): Promise<NotificationSaveResult> {
   const body: unknown = await response.json().catch(() => null);
   if (response.ok) {
     const view = parseNotificationView(body);
     return view === null ? { ok: false, error: null } : { ok: true, view };
   }
-  const error =
-    typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
-  return { ok: false, error: typeof error === "string" ? error : null };
+  return { ok: false, error: toErrorText(body, null) };
 }
 
 export async function fetchNotifications(signal?: AbortSignal): Promise<NotificationView> {
@@ -1541,9 +1556,7 @@ export async function testDiscordWebhook(): Promise<NotificationTestResult> {
     );
     const body: unknown = await response.json().catch(() => null);
     if (response.ok) return { ok: true };
-    const error =
-      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
-    return { ok: false, error: typeof error === "string" ? error : "unknown" };
+    return { ok: false, error: toErrorText(body, "unknown") };
   } catch {
     // 期限切れと接続失敗はクライアント側でしか分からない。文言はコードで選ぶ。
     return { ok: false, error: "unreachable" };
@@ -1568,9 +1581,7 @@ export async function saveRestartSettings(input: {
     const response = await client.api.restart.$put({ json: input });
     const body: unknown = await response.json().catch(() => null);
     if (response.ok) return { ok: true, view: parseRestartSettings(body) };
-    const error =
-      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
-    return { ok: false, error: typeof error === "string" ? error : null };
+    return { ok: false, error: toErrorText(body, null) };
   } catch {
     return { ok: false, error: null };
   }
@@ -1585,9 +1596,7 @@ export async function runRestart(): Promise<RunRestartResult> {
     // body は読まれないが、BFF は application/json 以外を 415 で弾く。
     const response = await client.api.restart.$post({ json: {} });
     if (response.ok) return "started";
-    const body: unknown = await response.json().catch(() => null);
-    const error =
-      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
+    const error = toErrorText(await response.json().catch(() => null), null);
     if (error === "command_not_configured") return "not_configured";
     if (error === "command_not_executable") return "not_executable";
     return "unreachable";
@@ -1622,9 +1631,7 @@ export async function saveTemplates(templates: Template[]): Promise<TemplateSave
           : null;
       return parsed === null ? { ok: false, error: null } : { ok: true, templates: parsed };
     }
-    const error =
-      typeof body === "object" && body !== null ? (body as { error?: unknown }).error : null;
-    return { ok: false, error: typeof error === "string" ? error : null };
+    return { ok: false, error: toErrorText(body, null) };
   } catch {
     return { ok: false, error: null };
   }
