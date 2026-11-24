@@ -470,7 +470,6 @@ test("an answer echo leaves only when the same question is synthesized", () => {
     text: "青",
     answer: true,
     toolUseId: "q2",
-    question: "Q2",
   };
   expect(
     isPendingConfirmed(answer, [
@@ -514,99 +513,13 @@ test("an answer echo leaves only when the same question is synthesized", () => {
   expect(
     isPendingConfirmed(answer, [{ id: "a2", role: "user", text: "青", at: pending.from + 1 }]),
   ).toBe(false);
-});
-
-test("an answer echo from an old mypi falls back to the question text", () => {
-  const answer: PendingMessage = {
-    ...pending,
-    waiting: false,
-    text: "Blue",
-    answer: true,
-    question: "Q2",
-  };
+  // 合成した質問と回答でも、askId を持たないもの（askId の無い保存済みセッション）では畳まない。
   expect(
     isPendingConfirmed(answer, [
-      {
-        id: "ask:old-q1:question",
-        role: "agent",
-        text: "Q1",
-        at: pending.from + 1,
-        synthetic: true,
-      },
-      {
-        id: "ask:old-q1:answer",
-        role: "user",
-        text: "Red",
-        at: pending.from + 2,
-        synthetic: true,
-      },
+      { id: "ask:k1:question", role: "agent", text: "Q2", at: pending.from + 1, synthetic: true },
+      { id: "ask:k1:answer", role: "user", text: "青", at: pending.from + 2, synthetic: true },
     ]),
   ).toBe(false);
-  const oldAnswer = [
-    {
-      id: "ask:old-q2:question",
-      role: "agent" as const,
-      text: "Q2",
-      at: pending.from + 1,
-      synthetic: true as const,
-    },
-    {
-      id: "ask:old-q2:answer",
-      role: "user" as const,
-      text: "Blue",
-      at: pending.from + 2,
-      synthetic: true as const,
-    },
-  ];
-  expect(isPendingConfirmed(answer, oldAnswer)).toBe(true);
-  // 同じ質問がまだ pending の間は、古い結果の推測で消さない。
-  expect(isPendingConfirmed({ ...answer, toolUseId: "q2" }, oldAnswer, "q2")).toBe(false);
-  expect(isPendingConfirmed({ ...answer, toolUseId: "q2" }, oldAnswer, "other")).toBe(true);
-});
-
-test("old mypi batch answers pair by synthetic id, not adjacency", () => {
-  const answer: PendingMessage = {
-    ...pending,
-    waiting: false,
-    text: "New",
-    answer: true,
-    toolUseId: "q2",
-    question: "Same?",
-  };
-  const batch = [
-    {
-      id: "ask:k1:question",
-      role: "agent" as const,
-      text: "Same?",
-      at: pending.from - 10,
-      synthetic: true as const,
-    },
-    {
-      id: "ask:k2:question",
-      role: "agent" as const,
-      text: "Same?",
-      at: pending.from - 10,
-      synthetic: true as const,
-    },
-    {
-      id: "ask:k1:answer",
-      role: "user" as const,
-      text: "Old",
-      at: pending.from - 1,
-      synthetic: true as const,
-    },
-    {
-      id: "ask:k2:answer",
-      role: "user" as const,
-      text: "New",
-      at: pending.from + 1,
-      synthetic: true as const,
-    },
-  ];
-  expect(isPendingConfirmed(answer, batch, "q2")).toBe(false);
-  expect(isPendingConfirmed(answer, batch)).toBe(true);
-  // 別の質問の古い回答だけでは消さない。
-  expect(isPendingConfirmed(answer, batch.slice(0, 3))).toBe(false);
 });
 
 test("an answer echo is released when its question is no longer pending", () => {

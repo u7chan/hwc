@@ -168,8 +168,6 @@ export type PendingMessage = ChatMessage & {
   answer?: boolean;
   // どの質問への回答か。pending が消えたあと、その質問の結果が確定したかを照合する。
   toolUseId?: string;
-  // 古い mypi には askId が無い。その場合だけ質問文で照合する。
-  question?: string;
   // pending から外れた時点で決める、控えを畳む期限。次の質問で延長しない。
   answerReleaseAt?: number;
 };
@@ -229,52 +227,18 @@ export function latestUserAt(messages: ChatMessage[]): number {
 
 // 本文は pi 側で trim やテンプレート展開されることがあるため、送信時点の最後の user 発話より後に
 // 新しい user 発話が現れたかで対応付ける。
-export function isPendingConfirmed(
-  pending: PendingMessage,
-  messages: ChatMessage[],
-  activeToolUseId?: string,
-): boolean {
+export function isPendingConfirmed(pending: PendingMessage, messages: ChatMessage[]): boolean {
   if (pending.answer) {
     // ask_user の回答は user 発話としてセッションに無い。BFF が tool result から合成する
-    // user メッセージが届いたら控えを畳む。mypi の pending 質問 id があれば、別の質問の
-    // 回答では消さない。
-    if (pending.toolUseId !== undefined) {
-      const exact = messages.some(
-        (message) =>
-          message.role === "user" &&
-          message.synthetic === true &&
-          message.askId === pending.toolUseId &&
-          message.at > pending.from,
-      );
-      if (exact) return true;
-    }
-    // 古い mypi の結果には askId が無い。合成 ID で質問と回答を対応づけ、質問文と
-    // 対応する回答の到着時刻で照合する。同じ batch の Q1, Q2, A1, A2 は隣接しない。
-    // 同じ文言の別質問を消さないよう、その質問がまだ pending の間は推測しない。
-    if (pending.question === undefined) return false;
-    if (pending.toolUseId !== undefined && activeToolUseId === pending.toolUseId) return false;
-    const questionText = pending.question.trim();
-    for (const question of messages) {
-      if (
-        question.role !== "agent" ||
-        question.synthetic !== true ||
-        question.askId !== undefined ||
-        question.text.trim() !== questionText
-      ) {
-        continue;
-      }
-      const match = /^ask:(.+):question$/.exec(question.id);
-      if (match === null) continue;
-      const answer = messages.find(
-        (message) =>
-          message.id === `ask:${match[1]}:answer` &&
-          message.role === "user" &&
-          message.synthetic === true &&
-          message.askId === undefined,
-      );
-      if (answer !== undefined && answer.at > pending.from) return true;
-    }
-    return false;
+    // user メッセージが届いたら控えを畳む。質問 id を持たない控えは照合できないので残す。
+    if (pending.toolUseId === undefined) return false;
+    return messages.some(
+      (message) =>
+        message.role === "user" &&
+        message.synthetic === true &&
+        message.askId === pending.toolUseId &&
+        message.at > pending.from,
+    );
   }
   if (pending.command) {
     // コマンドの本文は展開されない。位置だけで判定すると、次の通常のメッセージでも
