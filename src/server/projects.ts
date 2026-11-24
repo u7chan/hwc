@@ -1,5 +1,6 @@
 import { isAbsolute, posix } from "node:path";
 import { MAX_PROJECTS, type ProjectList } from "../shared/projects";
+import { childEnv } from "./child-process";
 
 // パッケージ管理ファイルがあるディレクトリをプロジェクトとみなす。言語ごとの
 // ワークスペース定義（pnpm-workspace.yaml など）は読まない。ファイルがあるかだけで
@@ -140,16 +141,10 @@ export function createProjectLister(
 
 async function readProjectFiles(cwd: string): Promise<ProjectCommand> {
   if (!isAbsolute(cwd)) throw new Error("cwd must be absolute");
-  // 調査用プロセスが呼び出し元のペインを自分のものとして報告しないようにする。
-  // env を明示しないと、Bun は起動時の PATH で実行ファイルを探し、E2E の偽 git を通らない。
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
-  );
   // git のエラー文言で非 git を見分けるため、ロケールを固定する。
-  env.LC_ALL = "C";
   const child = Bun.spawn(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
     cwd,
-    env,
+    env: childEnv({ set: { LC_ALL: "C" } }),
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",

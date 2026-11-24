@@ -1,3 +1,5 @@
+import { childEnv, readCappedStdout } from "./child-process";
+
 // pi の RPC は 1 行 1 応答の JSON。表示用の問い合わせは、実セッションと同じく
 // 拡張を読み込んだ一時プロセスで行い、終わったら必ず回収する。
 export const PI_RPC_TIMEOUT_MS = 20_000;
@@ -45,13 +47,9 @@ export async function runPiRpc(
   input: string,
   options: PiRpcOptions,
 ): Promise<string> {
-  // HERDR_ を継ぐとペイン扱いになる。
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("HERDR_")),
-  );
   const child = Bun.spawn([...(options.command ?? ["pi"]), ...args], {
     cwd: directory,
-    env: { ...env, NO_COLOR: "1" },
+    env: childEnv({ set: { NO_COLOR: "1" } }),
     stdin: "pipe",
     stdout: "pipe",
     stderr: "ignore",
@@ -61,20 +59,12 @@ export async function runPiRpc(
   try {
     child.stdin.write(input);
     child.stdin.end();
-    const reader = child.stdout.getReader();
-    const decoder = new TextDecoder();
-    let text = "";
-    let size = 0;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > (options.maxOutputBytes ?? MAX_OUTPUT_BYTES))
-        throw new Error("Pi RPC output is too large");
-      text += decoder.decode(value, { stream: true });
-    }
+    const text = await readCappedStdout(child.stdout, {
+      maxBytes: options.maxOutputBytes ?? MAX_OUTPUT_BYTES,
+      tooLarge: "Pi RPC output is too large",
+    });
     if ((await child.exited) !== 0) throw new Error(options.failure);
-    return text + decoder.decode();
+    return text;
   } finally {
     // 一時セッションの拡張が終了処理で止まっても、調査プロセスを残さない。
     child.kill("SIGKILL");
