@@ -18,6 +18,7 @@ import {
   toChatSnapshot,
   CREATE_TIMEOUT_MS,
   toCreateError,
+  toStartError,
   toCreatedPane,
   toPaneRead,
   toAgentModels,
@@ -793,6 +794,44 @@ test("an agent message keeps the files the server found", () => {
   ]);
 });
 
+test("a link keeps only the refs the client can open", () => {
+  const link = {
+    href: "docs/note.md",
+    name: "docs/note.md",
+    version: "1-2",
+    kind: "text" as const,
+    root: 0,
+  };
+  const linksOf = (links: unknown[]) =>
+    toChatSnapshot({
+      ...chatBody,
+      messages: [{ id: "m1", role: "agent" as const, text: "`docs/note.md`", at: 1_000, links }],
+    })?.messages[0]?.links;
+
+  // 本文の表記と一致したリンクだけを、根と版を保ったまま持つ。
+  expect(linksOf([link])).toEqual([link]);
+  expect(linksOf([{ ...link, root: 1, rootLabel: "mock" }])).toEqual([
+    { ...link, root: 1, rootLabel: "mock" },
+  ]);
+
+  // 配信 URL の材料になる。根の外を指す名前や壊れた版・根の番号、知らない見せ方は捨てる。
+  for (const broken of [
+    { ...link, name: "/etc/passwd.md" },
+    { ...link, name: "../secret.md" },
+    { ...link, name: "" },
+    { ...link, version: 3 },
+    { ...link, version: undefined },
+    { ...link, root: -1 },
+    { ...link, root: 1.5 },
+    { ...link, root: "0" },
+    { ...link, kind: "markdown" },
+    { ...link, href: "" },
+  ]) {
+    expect(linksOf([broken])).toBeUndefined();
+  }
+  expect(linksOf([])).toBeUndefined();
+});
+
 test("an agent message keeps the name of a file outside the roots", () => {
   const message = {
     id: "m1",
@@ -843,6 +882,25 @@ test("a create error keeps the pane id only when the split already happened", ()
   });
   expect(toCreateError({ error: "something_else" })).toEqual({ error: "failed", paneId: null });
   expect(toCreateError(null)).toEqual({ error: "failed", paneId: null });
+  // コードが文字列でなくても、id は読める。既知かどうかと id の有無は別の判断。
+  expect(toCreateError({ error: 3, paneId: "w1:p3" })).toEqual({
+    error: "failed",
+    paneId: "w1:p3",
+  });
+  // ペインの作成では、応答に workspaceId が混ざっていても返さない。
+  expect(toCreateError({ error: "pane_limit", workspaceId: "w1", paneId: "w1:p3" })).toEqual({
+    error: "pane_limit",
+    paneId: "w1:p3",
+  });
+});
+
+test("a start error keeps only the codes the BFF can return", () => {
+  expect(toStartError({ error: "pane_busy" })).toBe("pane_busy");
+  expect(toStartError({ error: "agent_start_failed" })).toBe("agent_start_failed");
+  // 起動の失敗と作成の失敗で、通す一覧は違う。
+  expect(toStartError({ error: "pane_limit" })).toBe("failed");
+  expect(toStartError({ error: 3 })).toBe("failed");
+  expect(toStartError(null)).toBe("failed");
 });
 
 test("the create timeout leaves room for the agent start wait", () => {
