@@ -437,7 +437,7 @@ fixture の `sandbox` は同じ場所を指す 2 スペースで、どちらも�
    入力を残したまま「キャンセル」「作成して起動」が出る。結果不明として `UNKNOWN_NOTICE` になるのは
    `timeout` / `failed` / `herdr_unavailable` だけ。`worktree_open_failed`（502）は、チェックアウトは
    作成されたがスペースを開けなかった失敗で、`canRetryWorktree` が false なので「閉じる」だけになる。
-   文言は「チェックアウトは作成されましたが、スペースを開けませんでした。Herdr のワークツリーを確認してください。」。
+   文言は「チェックアウトは作成されましたが、スペースを開けませんでした。Herdr のワークツリーを確認してください。」
 7. Herdr の worktree 情報を持たない `plain-checkout` でも、メニューに「新しいワークツリー」が出る。
    シェルを選んで作成すると root pane が開き、一覧には `plain-checkout` の配下に新しいワークツリーが増える。
    起点の登録情報は架空 Herdr が補い、BFF の状態では `managed: true` に変わる。事前登録の操作は挟まない。
