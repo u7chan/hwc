@@ -688,8 +688,9 @@ test("a linked worktree drops the generated prefix where the name is short", () 
       "silver-cloud-c4cf",
     ),
   ).toBe("silver-cloud-c4cf");
-  // ラベルの無いペインは端末タイトルがスペース名と同じになる。一覧も名前から場所を落とすが、
-  // 同長なので、タブや見出しのように省略されずに残る（差はこの Issue では残す）。
+  // 端末タイトルが名前に出るのは、ラベルもエージェントも無いシェルだけ。このペインは端末
+  // タイトルがスペース名と同じになる。一覧も名前から場所を落とすが、同長なので、タブや
+  // 見出しのように省略されずに残る（差はこの Issue では残す）。
   expect(activeRowName("worktree-silver-cloud-c4cf", "worktree-silver-cloud-c4cf")).toBe(
     "worktree-silver-cloud-c4cf",
   );
