@@ -25,6 +25,7 @@ import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
 import { Cell, CellTree, PreviewCell, type CellActions, type CellContext } from "./app/cells";
+import { menuView } from "./app/menu";
 import { tabRows } from "./app/tab-rows";
 import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
 import { useFavicon } from "./app/hooks/use-favicon";
@@ -67,14 +68,12 @@ import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import type { PaneOutputHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
-import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { paneCloseAction } from "../shared/pane-close";
 import {
   activeRowName,
   canCloseSpace,
   findPane,
   findPaneRow,
-  groupWorkspaces,
   markedParentPaneIds,
   shortenSpaceName,
   tabDisplayName,
@@ -106,7 +105,6 @@ import {
   type SplitView,
 } from "./split-view";
 import { pendingReadAfter, shouldFocusOnLeave, type ListScope } from "./scope";
-import { moveToTopPlan, orderUnits } from "./order";
 import { decideSnapshotApply } from "./snapshot-apply";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
 import {
@@ -641,6 +639,9 @@ export function App() {
     );
   };
 
+  // 閉じるアニメーションが終わったメニューを落とす。開き直していたら残す。
+  const dropClosedMenu = () => setMenu((current) => (current?.open === false ? null : current));
+
   // fetch / pull の実行中は、背景のタップや Esc でメニューを閉じない。閉じても操作は
   // 続くが、結果の表示先が無くなる。明示的な項目（PR リンクなど）はそのまま閉じられる。
   const dismissMenu = () => {
@@ -941,53 +942,13 @@ export function App() {
 
   const leavingPaneId = leavingTab?.paneId ?? null;
 
-  // 4 枚の判定は BFF と同じタブの枚数で行う。
-  const menuPaneId = menu?.target.kind === "pane" ? menu.target.id : null;
-  const menuRow = state === null ? null : findPaneRow(state, menuPaneId);
-  const menuTab = menuRow?.tab ?? null;
-  const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
-  const menuPane = menuRow?.pane ?? null;
-  const menuCloseAction =
-    state === null || menuPaneId === null ? null : paneCloseAction(state, menuPaneId);
-  const menuWorkspace =
-    menu?.target.kind === "workspace"
-      ? (state?.workspaces.find((workspace) => workspace.id === menu.target.id) ?? null)
-      : null;
-  const menuPullRequest =
-    menuWorkspace === null ? null : (pullRequests.get(menuWorkspace.id) ?? null);
-  const menuRepoUrl = menuWorkspace?.sync?.repoUrl ?? null;
-  const menuGitBusy =
-    menuWorkspace !== null &&
-    gitAction !== null &&
-    gitAction.workspaceId === menuWorkspace.id &&
-    gitAction.phase === "busy"
-      ? gitAction.action
-      : null;
-  const menuGitFailed =
-    menuWorkspace !== null &&
-    gitAction !== null &&
-    gitAction.workspaceId === menuWorkspace.id &&
-    gitAction.phase === "failed"
-      ? { action: gitAction.action, error: gitAction.error }
-      : null;
-  // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする。
-  const menuWorktree = menuWorkspace?.worktree ?? null;
-  const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
-  const menuCanCloseSpace =
-    state !== null && menuWorkspace !== null && canCloseSpace(state, menuWorkspace.id);
-  // 並びの正は Herdr。メニューはその移動を 1 タップで呼ぶだけで、hwc 側に順序は持たない。
-  // 既に先頭の束には項目を出さない。
-  const menuCanMoveToTop =
-    state !== null &&
-    menuWorkspace !== null &&
-    moveToTopPlan(
-      orderUnits(groupWorkspaces(state.workspaces), state.workspaces),
-      menuWorkspace.id,
-    ) !== null;
+  // メニューの中身は、開いている対象とスナップショットから導く。閉じていれば空。
+  const menuItems = menuView({ state, menu, pullRequests, gitAction });
   const moveWorkspaceToTop = () => {
-    if (menuWorkspace === null) return;
+    const workspace = menuItems.workspace;
+    if (workspace === null) return;
     moveToTopSeq.current += 1;
-    setMoveToTop({ workspaceId: menuWorkspace.id, token: moveToTopSeq.current });
+    setMoveToTop({ workspaceId: workspace.id, token: moveToTopSeq.current });
     closeMenu();
   };
 
@@ -998,7 +959,7 @@ export function App() {
     focused,
     parentPaneIds,
     menu,
-    menuPaneId,
+    menuPaneId: menuItems.paneId,
     processes,
     leavingPaneId,
     entering,
@@ -1049,36 +1010,25 @@ export function App() {
   const overlays: AppOverlaysProps = {
     dragging,
     draggingLabel,
-    menu,
-    menuPane,
-    menuWorkspace,
-    menuPaneId,
-    menuRow,
-    menuFull,
-    menuCloseAction,
-    menuPullRequest,
-    menuRepoUrl,
-    menuGitBusy,
-    menuGitFailed,
-    menuCanCloseSpace,
-    menuCanMoveToTop,
-    canCreateWorktree,
-    dismissMenu,
-    closeMenu,
-    setMenu,
-    openCreateDialog,
-    clearOutputForMenu,
-    openCloseConfirm,
-    openCreateWorktreeDialog,
-    openRemoveWorktreeConfirm,
-    openCloseSpaceConfirm,
-    moveWorkspaceToTop,
-    runGitSync,
-    closing,
-    closingPane,
-    removing,
-    removingWorkspace,
-    closingSpace,
+    // メニューは中身と、その項目が呼ぶ操作を 1 つのまとまりで渡す。
+    menu: {
+      ...menuItems,
+      operation: menu,
+      dismiss: dismissMenu,
+      close: closeMenu,
+      exited: dropClosedMenu,
+      openCreate: openCreateDialog,
+      clearOutput: clearOutputForMenu,
+      openCloseConfirm,
+      openCreateWorktree: openCreateWorktreeDialog,
+      openRemoveWorktree: openRemoveWorktreeConfirm,
+      openCloseSpace: openCloseSpaceConfirm,
+      moveToTop: moveWorkspaceToTop,
+      runGitSync,
+    },
+    closing: { flow: closing, pane: closingPane },
+    removing: { flow: removing, workspace: removingWorkspace },
+    closingSpace: { flow: closingSpace },
     creating,
     setCreating,
     // hwc から作ったペインは、自動分割の対象にしない。
@@ -1130,8 +1080,8 @@ export function App() {
               reveal={reveal}
               scrollTo={scrollTo}
               onToggle={toggle}
-              openPaneMenuId={menu?.open === true && menu.fromList ? menuPaneId : null}
-              openWorkspaceMenuId={menu?.open === true ? (menuWorkspace?.id ?? null) : null}
+              openPaneMenuId={menu?.open === true && menu.fromList ? menuItems.paneId : null}
+              openWorkspaceMenuId={menu?.open === true ? (menuItems.workspace?.id ?? null) : null}
               onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
               onWorkspaceMenu={(workspaceId, trigger) =>
                 openWorkspaceMenu(workspaceId, trigger, true)
