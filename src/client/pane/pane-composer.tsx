@@ -8,7 +8,7 @@ import { dropActionFrom } from "../attachments";
 import type { AgentInfo, CacheView, ContextMeterView } from "../chat";
 import { type CommandId, commandText } from "../commands";
 import { ComposerAdd, type ComposerCommand } from "../ComposerAdd";
-import { enterInsertsNewline } from "../input";
+import { enterInsertsNewline, enterSubmits } from "../input";
 import {
   AgentGlyphIcon,
   AgentIcon,
@@ -320,10 +320,11 @@ export function PaneComposer(props: PaneComposerProps) {
               }
               if (event.key !== "Enter") return;
               // シェルは改行を受け取れない。タッチ端末でも Enter で送る。
-              const newline =
-                event.shiftKey ||
-                (!view.shell && enterInsertsNewline((query) => window.matchMedia(query).matches));
-              if (newline) {
+              const sends = enterSubmits(
+                event,
+                !view.shell && enterInsertsNewline((query) => window.matchMedia(query).matches),
+              );
+              if (!sends) {
                 if (view.shell) event.preventDefault();
                 return;
               }
