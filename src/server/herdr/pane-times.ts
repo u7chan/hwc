@@ -43,7 +43,7 @@ function sameRecord(a: Record<string, number>, b: Record<string, number>): boole
   return keys.every((key) => a[key] === b[key]);
 }
 
-// 前回の状態と比べて時刻を進める。遷移の規則はクライアントが持っていたものをそのまま移した。
+// 前回の状態と比べて時刻を進める。規則は次のとおり。
 //   working に入った時点を起点にし、working を離れたら起点を捨てる
 //   working から done / idle へ移ったときだけ終了時刻を記録する
 //   working と blocked に入ったら終了時刻を消す

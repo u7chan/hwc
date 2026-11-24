@@ -3,7 +3,7 @@ import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
 import { dropAnchor, type UnitRect } from "./order";
 
 // タッチは長押しで掴む。マウスは少し動かした時点で掴む。どちらも見出しの開閉と同じ
-// ボタンの上なので、短いタップは今までどおり開閉に残す。
+// ボタンの上なので、短いタップは開閉に残す。
 const LONG_PRESS_MS = 380;
 const MOUSE_THRESHOLD = 5;
 const TOUCH_THRESHOLD = 10;

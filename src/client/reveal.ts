@@ -3,13 +3,13 @@ import type { ChatMessage, ChatSnapshot } from "../server/chat/contract";
 
 // 確定した返答をそのまま描くと、長い返答では先頭がスクロールの外へ流れる。追記された
 // agent メッセージだけを時間で区切って出し、読み始める位置を保つ。生成の進捗ではなく
-// 演出なので、本文が届く前には始められない。会話の正は従来どおりセッションのまま。
+// 演出なので、本文が届く前には始められない。会話の正はセッションに置く。
 export const REVEAL_TICK_MS = 150;
 export const REVEAL_MIN_MS = 2_000;
 export const REVEAL_MAX_MS = 5_000;
 // 2〜3 行の返答は一瞬で読める。演出を挟むと待たされるだけ。
 export const REVEAL_MIN_CHARS = 200;
-// これを超える本文は Markdown の再描画が重い。今までどおり一度に出す。
+// これを超える本文は Markdown の再描画が重いので、一度に出す。
 export const REVEAL_MAX_CHARS = 32_000;
 // 1 文字あたりの時間。短い返答ほど速く終わるが、下限と上限で挟む。
 const REVEAL_MS_PER_CHAR = 6;

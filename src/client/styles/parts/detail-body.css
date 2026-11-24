@@ -164,22 +164,10 @@
   opacity: 0.72;
 }
 
-.hwc-detail-heading {
-  flex: 1;
-  min-width: 0;
-}
-
 .hwc-detail-title {
   margin: 0;
   font-size: var(--text-body);
   font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.hwc-detail-sub {
-  margin: var(--space-1) 0 0;
-  color: var(--color-secondary);
-  font-size: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 

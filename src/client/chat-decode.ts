@@ -234,7 +234,7 @@ function toRetryCount(value: unknown): number | undefined {
 }
 
 // 応答待ちは入力の可否を変えるが、飾りでもある。形が読めない値は捨てて pending 無しにし、
-// blocked の間は今までどおり端末出力へ倒す（誤検知で操作不能にしない）。
+// blocked の間は端末出力へ倒す（誤検知で操作不能にしない）。
 function toChatPending(value: unknown): ChatPending | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const pending = value as Partial<ChatPending>;
@@ -251,7 +251,7 @@ function toChatPending(value: unknown): ChatPending | undefined {
   }
   if (pending.kind !== "question") return undefined;
   // pi の ask_user は 1 問だけで、options が空なら自由入力だけになる。Claude の
-  // AskUserQuestion は今までどおり、空の options を捨てる。
+  // AskUserQuestion は空の options を捨てる。
   const askUser = pending.tool === "ask_user";
   if (pending.tool !== "AskUserQuestion" && !askUser) return undefined;
   if (!Array.isArray(pending.questions)) return undefined;

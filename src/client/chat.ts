@@ -92,7 +92,7 @@ export function paneBody(props: {
   showTerminal: boolean;
 }): PaneBody {
   if (!props.chat || props.failed) return { kind: "output" };
-  // 応答待ちが読めないときは、今までどおり端末出力へ倒す。誤検知で操作不能にしない。
+  // 応答待ちが読めないときは端末出力へ倒す。誤検知で操作不能にしない。
   if (props.blocked && (props.showTerminal || props.snapshot?.pending === undefined)) {
     return { kind: "output" };
   }
@@ -139,14 +139,14 @@ export function splitInlineImages(
   return { images, rest };
 }
 
-// チップとプレビューの見出しに出す名前。根のラベルは表示だけに使い、title は今までどおり
+// チップとプレビューの見出しに出す名前。根のラベルは表示だけに使い、title は
 // 根からの相対パスを出す。同じベース名が別の根にあっても、押す前に見分けられる。
 export function messageFileDisplayName(name: string, rootLabel: string | undefined): string {
   const label = messageFileLabel(name);
   return rootLabel === undefined ? label : `${label} · ${rootLabel}`;
 }
 
-// チップの種別欄。チェックアウトのファイルは既定なので、今までどおり種別だけで足りる。
+// チップの種別欄。チェックアウトのファイルは既定なので、種別だけで足りる。
 export function messageFileKindLabel(rootLabel: string | undefined): string {
   return rootLabel === undefined ? "HTML" : `HTML · ${rootLabel}`;
 }
@@ -523,7 +523,6 @@ export function usePaneChat(
     lastStatus.current = statusRef.current;
 
     const poll = startPoll({
-      // 予約と同じ瞬間に、予約が前提にした状態を控える。
       delay: () => {
         lastStatus.current = statusRef.current;
         return chatPollDelay(statusRef.current, document.visibilityState);

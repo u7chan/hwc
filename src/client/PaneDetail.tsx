@@ -104,7 +104,6 @@ type PaneDetailProps = {
   scheme: "light" | "dark";
   // 広いセルでツリーを会話の左右どちらに並べるか。狭いセルでは重ねるので効かない。
   treeSide: FileTreeSide;
-  // 並べるときのツリーの幅（px）。並べるのに要るセルの幅はここから決まる。
   treeWidth: number;
   // 行の左に種類の印を出すか。
   treeIcons: FileTreeIcons;

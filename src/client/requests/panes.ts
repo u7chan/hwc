@@ -456,7 +456,6 @@ export type StartAgentRequest = {
   agent: AgentKind;
   model: AgentModel | null;
   effort: string | null;
-  // 分割直後のペインは、シェルが起動を受け付けるまで agent.start が busy を返す。
   waitForShell: boolean;
 };
 

@@ -53,7 +53,7 @@ export type WorkspaceGroup = {
 
 // 同じリポジトリのワークスペースは 1 つに束ねる。本体（linked でないもの）を親に置く。
 // Herdr が管理しないスペースは、同じパス・同じラベルの重複だけ場所で束ねる。それ以外は
-// git から補った worktree 情報を含めて、今までどおりリポジトリ束に任せる。
+// git から補った worktree 情報も含めてリポジトリ束に任せる。
 export function groupWorkspaces(workspaces: readonly WorkspaceState[]): WorkspaceGroup[] {
   const groups: WorkspaceGroup[] = [];
   const byRepo = new Map<string, WorkspaceGroup>();
@@ -386,7 +386,7 @@ export function statusTone(status: AgentStatus): StatusTone {
 export type PullRequestTone = "open" | "merged";
 
 // 一覧のチップは open と merged にだけ出す。closed は作業の現在地でも終わりでもないので、
-// 今までどおり何も出さない。
+// 何も出さない。
 export function pullRequestTone(state: PullRequestState): PullRequestTone | null {
   switch (state) {
     case "OPEN":

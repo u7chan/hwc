@@ -7,7 +7,7 @@ export type ListScope = "active" | "all";
 export const LIST_SCOPE_STORAGE_KEY = "hwc-list-scope";
 
 // 既定はすべて。片付けたいスペースが既定で隠れると、消す入口に辿り着けない。
-// 絞り込みは active が担う。旧値の agent などは既定へ倒す。
+// 絞り込みは active が担う。知らない保存値は既定へ倒し、起動を止めない。
 export function parseListScope(raw: string | null): ListScope {
   return raw === "active" ? "active" : "all";
 }
@@ -20,7 +20,6 @@ export function loadListScope(storage: StorageLike | null): ListScope {
   try {
     return parseListScope(storage.getItem(LIST_SCOPE_STORAGE_KEY));
   } catch {
-    // 保存領域が使えない環境では既定に戻す。
     return parseListScope(null);
   }
 }

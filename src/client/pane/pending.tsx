@@ -91,7 +91,7 @@ function QuestionForm(props: {
   const { pending } = props;
   const { questions } = pending;
   const askUser = pending.tool === "ask_user";
-  // Claude は今までどおり常に「その他」を出せる。pi は pending の freeText に従う。
+  // Claude は常に「その他」を出せる。pi は pending の freeText に従う。
   const freeText = pending.tool === "ask_user" ? pending.freeText : true;
   const first = questions[0];
   const optionLabels = askOptionLabelsForQuestions(questions, freeText);
@@ -377,7 +377,7 @@ function QuestionFields(props: {
         onInput={(event) => props.onType(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key !== "Enter") return;
-          // タッチ端末は改行のまま。物理キーボードのある端末でだけ、本文の入力欄と同じく
+          // 主ポインタが粗い端末は改行のまま。主ポインタが細ければ、本文の入力欄と同じく
           // Enter を主ボタンに重ねる。
           const match = (query: string) => window.matchMedia(query).matches;
           if (!enterSubmits(event, enterInsertsNewline(match))) return;

@@ -1,12 +1,9 @@
 // 移植元: u7chan/monorepo の projects/u7agent/client/src/lib/markdown/parse.ts
-/**
- * ブロック (見出し / 段落 / リスト / 引用 / 表 / コードフェンス) の行スキャナ。
- * 例外は投げず、解釈できない行は段落 (原文) として扱う。
- */
+// 例外は投げず、解釈できない行は段落 (原文) として扱う。
 import { parseInline } from "./inline";
 import type { MdAlign, MdBlock, MdHeadingLevel, MdInline, MdListItem } from "./types";
 
-/** これを超える本文は解析せずプレーン表示に落とす */
+// これを超える本文は解析せずプレーン表示に落とす (docs/adr/client-rendering.md)。
 export const MARKDOWN_MAX_LENGTH = 200 * 1024;
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/;
@@ -153,7 +150,7 @@ function indentOf(line: string): number {
   return line.length - line.trimStart().length;
 }
 
-/** 段落を中断する行 (これ以外の行は段落の続きとして連結する) */
+// 段落を中断する行。これ以外の行は段落の続きとして連結する。
 function startsBlock(lines: string[], at: number): boolean {
   const line = lines[at];
   if (
