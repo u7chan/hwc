@@ -433,7 +433,7 @@ fixture の `sandbox` は同じ場所を指す 2 スペースで、どちらも�
    root pane は残り、ペインの入力欄の上に起動失敗の行と「再試行」「シェルとして使う」が出る。
    下書きは残り、「シェルとして使う」で `$ コマンドを入力` のシェルに切り替わる。
 6. `worktree_open_failed`（結果不明）はブラウザのリクエスト差し替えで
-   `/api/workspaces/:id/create-worktree` に 502 を返して確かめる。再送のボタンは出ず、「閉じる」だけになる。
+   `/api/workspaces/:id/create-worktree` に 502 を返して確かめる（手順は下の「応答を差し替える」）。再送のボタンは出ず、「閉じる」だけになる。
 7. Herdr の worktree 情報を持たない `plain-checkout` でも、メニューに「新しいワークツリー」が出る。
    シェルを選んで作成すると root pane が開き、一覧には `plain-checkout` の配下に新しいワークツリーが増える。
    起点の登録情報は架空 Herdr が補い、BFF の状態では `managed: true` に変わる。事前登録の操作は挟まない。
@@ -641,6 +641,8 @@ mypi の `ask_user` は、セッションの隣の pending `<session path>.ask.j
 
 `e2e/fixtures/scenario.ts` を編集する。ワークスペース、タブ、ペイン、端末出力、pi セッション、ブランチはすべてここで作る。`acme-dashboard (checks)`（`w4`）は、別スペースの同名ペイン（`review` と `shell`）を並べるために置いている。`w1` の `review` / `shell` と同じ名前で、スペースだけが違う。
 
+1 回だけ確かめる失敗や空の状態は、fixture を増やさずに `/api/...` の応答を差し替えて作れる（下の「応答を差し替える」）。
+
 実在のユーザー名・ホスト名・リポジトリ名・パスを書かない。スクリーンショットに写る値はすべて架空にする。
 
 ### 実行中のモデルカタログを変える
@@ -684,6 +686,37 @@ fixture の `w2:p2`（`quickstart`）は、mod が書く live ファイル（`<r
 3. カードなし: sidecar のファイルを消す、`pending` を `null` にする、`at` を 24 時間より前にする、`sessionId` を別のものにする、のいずれか。解決済みは、transcript に `toolUseId` が同じ tool_result を持つ user entry を足す（Esc は hook を呼ばないので、sidecar が残っていてもカードは戻らない）。`blocked` のまま pending が無い（末尾が user の本文など）と、カードは出ずに端末出力になる。fixture の `w2:p2`（待機）はカードが出ない。
 4. フォールバック（実機では使われない）: sidecar が無いときは、transcript の active branch の末尾が tool_result を持たない assistant の tool_use ならカードにする。CLI が待ちの間に tool_use を書く版が出たときのための経路で、E2E では `claudePendingTranscript` の末尾にその tool_use を一時的に足し、sidecar を消して確かめる。確認後に戻す。
 5. 表示中に sidecar や transcript を書き換えると、5 秒間隔の取得で次のスナップショットに変わる。実 Herdr では `agent_status` と sidecar がずれる瞬間があるので、カードは `blocked` の間だけ出す。
+
+### 応答を差し替える
+
+失敗の表示や空の状態は、`/api/...` の応答を画面側で差し替えて確かめる。1 回だけ見る確認に使い、何度も見る状態は fixture に移す。URL の `:` は `%3A` にエンコードされるので、ペイン id は `*` で受ける（`**/api/panes/*/chat`）。
+
+1. 決まった応答に差し替えるなら CLI の `route` で足りる。次の例は、Herdr が作成に失敗したときの応答（`worktree_create_failed`）に置き換える。
+
+   ```bash
+   playwright-cli route "**/api/workspaces/*/create-worktree" \
+     --status=502 --body='{"error":"worktree_create_failed"}' --content-type=application/json
+   ```
+
+   この状態で `acme-dashboard` のメニューから「新しいワークツリー」を作ると、ダイアログに「ワークツリーを作成できませんでした。もう一度お試しください。」が出て、「キャンセル」「作成して起動」が残る（`worktreeFailureNotice` の文言）。スペースは増えない。同じ手順を `worktree_open_failed` に変えると、文言は「チェックアウトは作成されましたが、スペースを開けませんでした。Herdr のワークツリーを確認してください。」に変わり、`canRetryWorktree` が false なので「閉じる」だけになる。
+
+2. 実応答の中身だけを変えるなら `run-code` の `page.route` で取り直す。`GET /api/panes/:id/chat` は ETag を返すので、ブラウザが付けた `if-none-match` をそのまま送ると BFF は 304（本文なし）を返し、`json()` が落ちる。**`if-none-match` を外して 200 を取り直す。**
+
+   ```js
+   await page.route("**/api/panes/*/chat", async (route) => {
+     const headers = { ...route.request().headers() };
+     delete headers["if-none-match"];
+     const response = await route.fetch({ headers });
+     const body = await response.json();
+     await route.fulfill({ response, json: { ...body, canRewind: false } });
+   });
+   ```
+
+   最後の行は、ここでは会話の `canRewind` を落としている。変える値を差し替えれば、その応答を使う表示だけが変わる。
+
+3. 確かめ終わったら差し替えを外して実応答に戻す。CLI の `route` は `route-list` で張ったままの URL を確かめて `unroute "<URL>"`、`run-code` の `page.route` は `page.unroute("<URL>")`（まとめて外すなら `page.unrouteAll()`）で外す。`run-code` の実行が終わっても差し替えは残るので、外し忘れると次の確認が偽の応答を見て通る。
+
+   解除してから表示が元に戻るかは、差し替えた応答が実応答と同じ `etag` を持つかで決まる（手順 1 と 2 の違いではない）。クライアントは最後に受け取った本文の `etag` を覚えて次の取得の `if-none-match` に使うので、実応答の `etag` をそのまま持つ本文に差し替えると（実応答をコピーした `route`、`route.fulfill({ response, json })`）、解除後も 304 が返って差し替え後の本文が実応答として残る。このときは、解除してから再読み込みする（ペインを開き直すだけでもよい）。`etag` を持たない応答（502 などのエラー）に差し替えたときは、覚えている `etag` は実応答のままなので、解除だけで元の表示に戻る。
 
 ## 禁止
 

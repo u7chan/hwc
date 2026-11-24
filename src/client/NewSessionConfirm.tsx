@@ -17,15 +17,10 @@ export function NewSessionConfirm(props: NewSessionConfirmProps) {
         <>
           ペイン <span class="hwc-dialog-id">{props.paneId}</span>{" "}
           で新しい会話を始めます。今の会話には hwc から戻れません。下書きと添付は残ります。
-          {props.available ? null : (
-            <span class="hwc-dialog-error" role="status">
-              状態が変わりました。確認を閉じて、もう一度操作してください。
-            </span>
-          )}
         </>
       }
       confirmLabel="始める"
-      disabled={!props.available}
+      available={props.available}
       onConfirm={props.onConfirm}
       onCancel={props.onCancel}
     />
