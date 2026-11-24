@@ -568,7 +568,7 @@ test("the display name uses the Herdr label, then the agent, then the terminal t
   const cases: readonly [string, Partial<PaneState>, string][] = [
     ["label", { label: "impl", agent: "pi", title: "π - hwc" }, "impl"],
     // 端末タイトルは同じリポジトリのペインで同じ値になるので、エージェント名を先に採る。
-    // 以前は端末タイトルを先に見たため、この組み合わせだけが変更を検出できる。
+    // この組み合わせで、エージェント名が端末タイトルより先に来ることを固定する。
     ["agent over the title", { agent: "pi", title: "π - hwc" }, "pi"],
     ["agent without a title", { agent: "claude" }, "claude"],
     ["title without a label or an agent", { title: "π - hwc" }, "hwc"],
@@ -612,7 +612,6 @@ test("a tab shows the display name", () => {
     chat: false,
   };
 
-  // 以前は端末タイトルを先に見たので、このタブは feat-client-api-connection だった。
   expect(tabDisplayName(paneDisplayName(pane), state.workspaces[0]!)).toBe("pi");
 });
 
