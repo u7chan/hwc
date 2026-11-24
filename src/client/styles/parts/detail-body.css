@@ -10,40 +10,35 @@
   }
 }
 
-/* 1 段目はペイン名、2 段目はスペース名。高さは 17px × 1.2 + 13px × 1.2 + 2px = 38px で、
-   タブの 44px に収まる。文字を小さくして詰めるのではなく、行を分けて収める。 */
-.hwc-tab-lines {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  gap: 2px;
-  line-height: var(--line-tight);
-}
-
-/* 行ボックスは line-height（1.2）で、フォントの内容（1.47em）より低い。overflow: hidden が
-   g や y の下を切るので、余白と相殺する負のマージンで、行の位置を変えずに切り取る箱だけ
-   広げる。line-height を広げると 2 段目の行との間隔が変わる。 */
-.hwc-tab-label,
-.hwc-tab-space {
-  padding-block: 2px;
-  margin-block: -2px;
-}
-
+/* タブの名前は 1 行。複数スペースのときだけスペース名を前置きし、幅が足りない
+   ときはスペース名から縮める。名前は末尾まで残す。 */
 .hwc-tab-label {
-  max-width: 9em;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 12em;
   white-space: nowrap;
 }
 
 .hwc-tab-space {
-  max-width: 9em;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   color: var(--color-secondary);
   font-size: var(--text-secondary);
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.hwc-tab-sep {
+  flex: none;
+  margin: 0 0.35em;
+}
+
+.hwc-tab-name {
+  flex: none;
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* グリッドに入っているタブは、スロット位置の色を左端の 3px バーで示す。選択面と

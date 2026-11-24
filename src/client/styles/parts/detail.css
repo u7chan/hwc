@@ -502,9 +502,9 @@ a.hwc-pane-head-repo:focus-visible {
   display: flex;
   align-items: stretch;
   gap: var(--space-2);
-  /* 上に余白を置き、選択中の面が上端に貼り付かないようにする。切り替えの高さを
-     その分だけ縮め、バー全体の高さは --row-head のまま保つ。 */
-  padding: var(--space-2) var(--space-3) var(--space-1);
+  /* 行はタップの下限。上下に余白を置かず、チップの面を行いっぱいに広げる。 */
+  height: var(--row-detail-tab);
+  padding: 0 var(--space-3);
   background: var(--color-bg);
 }
 
@@ -768,7 +768,7 @@ a.hwc-pane-head-repo:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  height: calc(var(--row-head) - var(--space-2) - var(--space-1));
+  height: var(--row-detail-tab);
   padding: 0 var(--space-2) 0 var(--space-3);
   border: 0;
   background: transparent;
@@ -776,6 +776,16 @@ a.hwc-pane-head-repo:focus-visible {
   white-space: nowrap;
   cursor: pointer;
   transition: color var(--duration-hover) ease;
+}
+
+/* 種類の印。エージェントは図形の色をブランドに任せ、シェルは文字色に合わせる。 */
+.hwc-tab-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--space-4);
+  height: var(--space-4);
+  color: var(--color-agent, var(--color-secondary));
 }
 
 /* 切り替えと × を 1 つのまとまりとして扱う。面と角丸はこのまとまりが持つ。 */

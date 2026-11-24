@@ -1,3 +1,4 @@
+import type { PaneState } from "../server/herdr/state";
 import type { FileKind } from "./file-kind";
 import { agentGlyph } from "./select";
 
@@ -472,6 +473,16 @@ export function PaneIcon({ size = 16 }: IconProps) {
       <path d="M7 10l2.5 2L7 14" />
       <path d="M12.5 14.5h4" />
     </Svg>
+  );
+}
+
+// ペインの種類の印。タブとセル見出しで同じ記号を使う。一覧は状態の記号と名前横の
+// glyph を持っているので、ここでは使わない。
+export function paneKindIcon(pane: PaneState): preact.ComponentChildren {
+  return pane.agent === null ? (
+    <PaneIcon size={14} />
+  ) : (
+    <AgentGlyphIcon agent={pane.agent} size={14} />
   );
 }
 

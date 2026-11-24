@@ -297,33 +297,49 @@ export function shortenPaneName(
 }
 
 export type PlaceChip = {
-  // 作成元スペース。開いていない・見出しと同じ名前なら null。
-  parent: string | null;
-  // いまのスペース。
-  space: string;
+  // 作成元スペース。チップを出さないときは placeChip が null を返す。
+  parent: string;
 };
 
-// 分割セルの見出しに出す場所。ワークツリーは作成元のスペースの下にあるので、その順に
-// 並べる。見出しの名前と同じ文字列は繰り返さない。端末タイトルがスペース名と同じペインは
-// 見出しが場所そのものなので、チップを出さない（null）。
+// 分割セルの見出しに出す場所。タブが現在のスペースを言うので、作成元だけを返す。
+// 作成元が無い・空・見出しの名前と同じ・いまのスペースと同じなら、繰り返しになるので
+// チップごと出さない（null）。
 export function placeChip(
   displayName: string,
   parentSpaceName: string | null,
   spaceName: string,
 ): PlaceChip | null {
-  if (spaceName === "" || spaceName === displayName) return null;
-  const parent =
+  if (
     parentSpaceName === null ||
     parentSpaceName === "" ||
     parentSpaceName === displayName ||
     parentSpaceName === spaceName
-      ? null
-      : parentSpaceName;
-  return { parent, space: spaceName };
+  ) {
+    return null;
+  }
+  return { parent: parentSpaceName };
 }
 
 export function tabDisplayName(name: string, workspace: WorkspaceState): string {
   return shortenPaneName(name, workspace.label, shortenSpaceName(workspace));
+}
+
+export type TabLabel = {
+  // 複数スペースのペインが並ぶときだけ、現在のスペース名。1 スペースなら null。
+  space: string | null;
+  name: string;
+};
+
+// タブの名前。複数スペースのペインが並ぶときだけ、現在のスペースを前置きする。
+// 名前がスペース名と同じ（リンクされた worktree の `worktree-foo` → `foo` など）なら
+// 繰り返さない。幅に合わせた省略は、space と name を別の span にした CSS が行う。
+export function tabLabel(space: string, name: string, multiSpace: boolean): TabLabel {
+  return { space: multiSpace && space !== "" && space !== name ? space : null, name };
+}
+
+// タブの 2 つの span と、ドラッグ中のゴーストを同じ 1 本の文字列にする。
+export function tabLabelText(label: TabLabel): string {
+  return label.space === null ? label.name : `${label.space} › ${label.name}`;
 }
 
 // 名前の区切り。帯が場所を言うので、行の名前からは場所の部分と一緒に落とす。

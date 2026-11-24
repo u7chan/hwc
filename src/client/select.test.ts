@@ -36,6 +36,8 @@ import {
   statusLabel,
   statusTone,
   tabDisplayName,
+  tabLabel,
+  tabLabelText,
 } from "./select";
 
 const state: AppState = {
@@ -238,19 +240,18 @@ test("a linked worktree takes the space it was created from", () => {
   });
 });
 
-test("a place chip drops the names the heading already shows", () => {
-  expect(placeChip("Claude Code", "hwc", "silver-harbor-4da7")).toEqual({
-    parent: "hwc",
-    space: "silver-harbor-4da7",
-  });
-  expect(placeChip("Claude Code", null, "hwc")).toEqual({ parent: null, space: "hwc" });
+test("a place chip shows only the space the pane came from", () => {
+  expect(placeChip("Claude Code", "hwc", "silver-harbor-4da7")).toEqual({ parent: "hwc" });
+  // 作成元が無ければ、場所はタブが言うのでチップは出さない。
+  expect(placeChip("Claude Code", null, "hwc")).toBeNull();
+  expect(placeChip("Claude Code", "", "hwc")).toBeNull();
   // 同じ名前のスペースを作成元にしていたら、繰り返さない。
-  expect(placeChip("Claude Code", "hwc", "hwc")).toEqual({ parent: null, space: "hwc" });
-  // 名前の無いペインは見出しが場所そのものなので、チップを出さない。
-  expect(placeChip("silver-harbor-4da7", "hwc", "silver-harbor-4da7")).toBeNull();
-  expect(placeChip("hwc", "hwc", "silver-harbor-4da7")).toEqual({
-    parent: null,
-    space: "silver-harbor-4da7",
+  expect(placeChip("Claude Code", "hwc", "hwc")).toBeNull();
+  // 見出しの名前と同じなら、繰り返さない。
+  expect(placeChip("hwc", "hwc", "silver-harbor-4da7")).toBeNull();
+  // 現在のスペースはタブが言う。見出しの名前と一致しても、作成元は残す。
+  expect(placeChip("silver-harbor-4da7", "hwc", "silver-harbor-4da7")).toEqual({
+    parent: "hwc",
   });
 });
 
@@ -616,6 +617,31 @@ test("a tab shows the display name", () => {
 
   // 以前は端末タイトルを先に見たので、このタブは feat-client-api-connection だった。
   expect(tabDisplayName(paneDisplayName(pane), state.workspaces[0]!)).toBe("pi");
+});
+
+test("a tab prefixes the space name only when spaces are mixed", () => {
+  // 1 スペースだけなら前置きしない。
+  expect(tabLabel("acme-dashboard", "review", false)).toEqual({ space: null, name: "review" });
+  // 複数のスペースが並ぶときは `space › name`。
+  expect(tabLabel("acme-dashboard", "review", true)).toEqual({
+    space: "acme-dashboard",
+    name: "review",
+  });
+  // 名前がスペース名と同じなら、繰り返さない。リンクされた worktree の `worktree-foo` →
+  // `foo` は、この一致で前置きが消える。
+  expect(tabLabel("hwc", "hwc", true)).toEqual({ space: null, name: "hwc" });
+  // 長いスペース名はここでは切らない。幅に合わせた省略は CSS が行う。
+  expect(tabLabel("lucky-meadow-5f6c", "pi", true)).toEqual({
+    space: "lucky-meadow-5f6c",
+    name: "pi",
+  });
+  // 実行中のコマンドは名前として前置きの後ろに出る。
+  expect(tabLabel("acme-dashboard", "bun 30000", true)).toEqual({
+    space: "acme-dashboard",
+    name: "bun 30000",
+  });
+  expect(tabLabelText({ space: null, name: "pi" })).toBe("pi");
+  expect(tabLabelText({ space: "acme-dashboard", name: "review" })).toBe("acme-dashboard › review");
 });
 
 test("a cell header shows the display name", () => {

@@ -2,10 +2,18 @@ import type { ComponentChildren } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import type { PaneProcess } from "../shared/panes";
 import type { TabSide } from "./split-view";
-import { ChevronLeftIcon, CloseIcon, EyeIcon } from "./icons";
-import { ParentMark } from "./ParentMark";
+import { ChevronLeftIcon, CloseIcon, EyeIcon, paneKindIcon } from "./icons";
 import { paneTabName } from "./process";
-import { shortenSpaceName, statusLabel, tabDisplayName, type PaneRow } from "./select";
+import {
+  activeRowName,
+  agentGlyph,
+  shortenSpaceName,
+  statusLabel,
+  tabDisplayName,
+  tabLabel,
+  tabLabelText,
+  type PaneRow,
+} from "./select";
 import { StatusIcon } from "./StatusLabel";
 
 type TabBarProps = {
@@ -14,8 +22,7 @@ type TabBarProps = {
   // 固定ゾーンの並び。タブの左端のバーをスロット色にするためにだけ使う。
   slots: readonly (string | null)[];
   currentPaneId: string | null;
-  // 複数スペースのペインが開いているとき、ペインに固有の名前があるときだけ
-  // 2 段目にスペース名を出す。
+  // 複数スペースのペインが開いているとき、タブの名前へスペース名を前置きする。
   multiSpace: boolean;
   parentPaneIds: ReadonlySet<string>;
   // シェルで動いているコマンド。タブ名をコマンドに差し替えるためだけに使う。
@@ -135,16 +142,18 @@ export function TabBar(props: TabBarProps) {
           const leaving = item.pane.id === props.leavingPaneId;
           const parent = props.parentPaneIds.has(item.pane.id);
           const process = props.processes.get(item.pane.id) ?? null;
-          const name = paneTabName(item.pane, process);
-          // 端末タイトルしか名前の無いペインは、その値がワークツリー名と一致する。狭いタブでは
-          // 前置きを落として 2 段目のスペース名と同じ表記に揃える。
-          const shownSpace = shortenSpaceName(item.workspace);
-          const shownName = tabDisplayName(name, item.workspace);
+          const space = shortenSpaceName(item.workspace);
+          const name = tabDisplayName(
+            activeRowName(item.workspace.label, paneTabName(item.pane, process)),
+            item.workspace,
+          );
+          const label = tabLabel(space, name, props.multiSpace);
+          const shownName = tabLabelText(label);
           // タブにはプログラム名だけを出す。何を動かしているかは、ホバーと読み上げで補う。
           const command = process?.running === true ? process.command : null;
           const detail = command === null ? shownName : `${shownName} (${command})`;
-          const space = `${item.workspace.label} · ${item.tab.label || item.tab.id}`;
-          const description = `${space}、${item.pane.id}、${statusLabel(item.pane.agentStatus)}`;
+          const spaceInfo = `${item.workspace.label} · ${item.tab.label || item.tab.id}`;
+          const description = `${spaceInfo}、${item.pane.id}、${statusLabel(item.pane.agentStatus)}`;
           const slot = props.slots.indexOf(item.pane.id);
           // 分割では固定ゾーンのタブ、1 枚表示ではすべてのタブが落とし先になる。
           // プレビュー中はグリッドが見えないので、レイアウトを
@@ -176,21 +185,26 @@ export function TabBar(props: TabBarProps) {
                 onAuxClick={removeOnAuxClick(() => props.onRemoveTab(item.pane.id))}
                 onClick={() => props.onSelectPane(item.pane.id)}
               >
-                {parent ? <ParentMark /> : null}
-                <span class="hwc-tab-lines">
-                  <span class="hwc-tab-label">{shownName}</span>
-                  {props.multiSpace && shownName !== shownSpace ? (
-                    <span class="hwc-tab-space" title={space}>
-                      {shownSpace}
-                    </span>
-                  ) : null}
+                <span class="hwc-tab-icon" data-agent={agentGlyph(item.pane.agent)}>
+                  {paneKindIcon(item.pane)}
+                </span>
+                <span class="hwc-tab-label">
+                  {label.space === null ? null : (
+                    <>
+                      <span class="hwc-tab-space">{label.space}</span>
+                      <span class="hwc-tab-sep" aria-hidden="true">
+                        ›
+                      </span>
+                    </>
+                  )}
+                  <span class="hwc-tab-name">{label.name}</span>
                 </span>
                 <StatusIcon status={item.pane.agentStatus} />
               </button>
               <button
                 type="button"
                 class="hwc-tab-close"
-                aria-label={`${shownName} をタブから外す`}
+                aria-label={`${label.name} をタブから外す`}
                 title="タブから外す"
                 onClick={() => props.onRemoveTab(item.pane.id)}
               >
@@ -212,7 +226,9 @@ export function TabBar(props: TabBarProps) {
               onAuxClick={removeOnAuxClick(props.onClosePreview)}
             >
               <EyeIcon size={14} />
-              <span class="hwc-tab-label">{props.preview.name}</span>
+              <span class="hwc-tab-label">
+                <span class="hwc-tab-name">{props.preview.name}</span>
+              </span>
             </button>
             <button
               type="button"

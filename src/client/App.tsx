@@ -69,13 +69,17 @@ import type { ConfirmationAttempt } from "./confirmation";
 import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { paneCloseAction } from "../shared/pane-close";
 import {
+  activeRowName,
   canCloseSpace,
   findPane,
   findPaneContext,
   findPaneRow,
   groupWorkspaces,
   markedParentPaneIds,
+  shortenSpaceName,
   tabDisplayName,
+  tabLabel,
+  tabLabelText,
   type PaneContext,
 } from "./select";
 import {
@@ -1091,9 +1095,18 @@ export function App() {
   const draggingLabel =
     draggedRow === null
       ? ""
-      : tabDisplayName(
-          paneTabName(draggedRow.pane, processes.get(draggedRow.pane.id) ?? null),
-          draggedRow.workspace,
+      : tabLabelText(
+          tabLabel(
+            shortenSpaceName(draggedRow.workspace),
+            tabDisplayName(
+              activeRowName(
+                draggedRow.workspace.label,
+                paneTabName(draggedRow.pane, processes.get(draggedRow.pane.id) ?? null),
+              ),
+              draggedRow.workspace,
+            ),
+            multiSpaceTabs,
+          ),
         );
   // タブの落とし先。分割では枠、1 枚表示では差し込みの線で示す。
   const tabDrop =
@@ -1201,6 +1214,8 @@ export function App() {
         current={isCurrent}
         // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
         labeled={splitCells}
+        // 親ペインの印はタブの幅を食うので、セル見出しに出す。
+        parentPaneIds={parentPaneIds}
         // 複数スペースのペインが並ぶときだけ、見出しに場所を添える。
         showSpace={splitCells && multiSpaceTabs}
         // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、

@@ -116,6 +116,8 @@ type PaneDetailProps = {
   current: boolean;
   // 分割セルが並ぶときだけ、セルの名前を出す。チップと同じ文字列の繰り返しを避ける。
   labeled: boolean;
+  // 親ペインの印をセル見出しに出す。タブからは外した。
+  parentPaneIds: ReadonlySet<string>;
   // 複数スペースのペインが並ぶときだけ、見出しに場所を添える。
   showSpace: boolean;
   // スペースのブランチ。分割セルでも PR のチップを引くために渡す。
@@ -172,6 +174,7 @@ export function PaneDetail(props: PaneDetailProps) {
     treeIcons,
     current,
     labeled,
+    parentPaneIds,
     showSpace,
     branch,
     showBranch,
@@ -1098,6 +1101,7 @@ export function PaneDetail(props: PaneDetailProps) {
         pane={pane}
         context={context}
         labeled={labeled}
+        parentPaneIds={parentPaneIds}
         showSpace={showSpace}
         showBranch={showBranch}
         branch={branch}

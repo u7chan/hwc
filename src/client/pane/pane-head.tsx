@@ -3,15 +3,9 @@ import type { PaneState } from "../../server/herdr/state";
 import { gitStatusLabel, type GitSync } from "../../shared/git";
 import type { PullRequest } from "../../shared/pull-request";
 import { GitCount } from "../GitCount";
-import {
-  AgentGlyphIcon,
-  ChevronDownIcon,
-  CopyGlyph,
-  FolderIcon,
-  MoreIcon,
-  PaneIcon,
-} from "../icons";
+import { ChevronDownIcon, CopyGlyph, FolderIcon, MoreIcon, paneKindIcon } from "../icons";
 import { MENU_ID } from "../Menu";
+import { ParentMark } from "../ParentMark";
 import {
   agentGlyph,
   paneDisplayName,
@@ -47,6 +41,8 @@ type PaneHeadProps = {
   context: PaneContext;
   // 分割セルが並ぶときだけ、セルの名前を出す。
   labeled: boolean;
+  // 親ペインの印。タブから外したので、セル見出しと 1 枚表示の見出しに出す。
+  parentPaneIds: ReadonlySet<string>;
   // 複数スペースのペインが並ぶときだけ、見出しに場所を添える。
   showSpace: boolean;
   // 一覧が隠れる狭い画面でだけ、ブランチを名前に代えて出す。
@@ -73,8 +69,8 @@ export function PaneHead(props: PaneHeadProps) {
     context.workspaceLabel,
     context.workspaceName,
   );
-  // セルが並ぶときの場所。作成元のスペース → いまのスペースの順に、見出しの名前と
-  // 同じ文字列は落とす。どちらも残らないならチップを出さない。
+  // セルが並ぶときの場所。タブが現在のスペースを言うので、作成元のスペースだけを出す。
+  // なければチップを出さない。
   const place = placeChip(shownPaneName, context.parentSpaceName, context.workspaceName);
   const placeTitle =
     context.parentSpaceLabel === null
@@ -87,7 +83,7 @@ export function PaneHead(props: PaneHeadProps) {
       <div class="hwc-pane-head-main">
         <div class="hwc-pane-head-content">
           <span class="hwc-pane-head-icon" data-agent={agentGlyph(pane.agent)}>
-            {pane.agent ? <AgentGlyphIcon agent={pane.agent} size={14} /> : <PaneIcon size={14} />}
+            {paneKindIcon(pane)}
           </span>
           {labeled ? (
             <span class="hwc-pane-head-name">{shownPaneName}</span>
@@ -128,19 +124,10 @@ export function PaneHead(props: PaneHeadProps) {
               {context.repoName}
             </a>
           )}
+          {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
           {labeled && showSpace && place !== null ? (
             <span class="hwc-pane-head-space" title={placeTitle}>
-              {place.parent === null ? null : (
-                <span class="hwc-pane-head-place" data-part="parent">
-                  {place.parent}
-                  <span class="hwc-pane-head-sep" aria-hidden="true">
-                    {" ›"}
-                  </span>
-                </span>
-              )}
-              <span class="hwc-pane-head-place" data-part="space">
-                {place.space}
-              </span>
+              <span class="hwc-pane-head-place">{place.parent}</span>
             </span>
           ) : null}
           {labeled || showBranch ? null : <GitCount sync={sync} />}
