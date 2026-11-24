@@ -43,8 +43,6 @@ import {
   commandBlockReasonFor,
   commandCandidates,
   commandLabel,
-  commandSendText,
-  commandText,
   COMMAND_BLOCK_NOTES,
   compactAlreadyDone,
   COMPACTED_NOTICE,
@@ -72,6 +70,7 @@ import { PaneComposer } from "./pane/pane-composer";
 import { PaneHead } from "./pane/pane-head";
 import { useAttachments } from "./pane/use-attachments";
 import { useComposer } from "./pane/use-composer";
+import { type ComposerSend, composerSend } from "./pane/composer-send";
 import { useComposerHeight } from "./pane/use-composer-height";
 import { useFilePreview } from "./pane/use-file-tree";
 import { useFileTreePanel } from "./pane/use-file-tree-panel";
@@ -583,6 +582,22 @@ export function PaneDetail(props: PaneDetailProps) {
     return sent;
   };
 
+  // 入力欄・チップ・メニューからの送信は、この 1 本を通す。前の失敗を消して入力を
+  // 閉じ、送り、送れたら最新へ戻してから、起点ごとの後片付けを呼ぶ。違うのは
+  // 「何を送るか」と「送ったあとの状態」だけ。
+  const deliver = async (send: ComposerSend, sent: (at: number) => void) => {
+    composer.beginSend();
+    if (!(await submitInput(send.text, send.names))) {
+      composer.setNotice(SEND_FAILED_NOTICE);
+      return;
+    }
+    // 猶予は送信が通った時点から測る。POST が遅いときに、届く前の echo を畳まない。
+    const at = Date.now();
+    // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
+    setPinned(true);
+    sent(at);
+  };
+
   const sendEdit = async () => {
     if (composer.edit === null || composer.edit.sending || inputDisabled || launchBlocked) return;
     if (composer.edit.text.trim() === "") return;
@@ -616,17 +631,14 @@ export function PaneDetail(props: PaneDetailProps) {
       return;
     }
     if (inputDisabled || launchBlocked || !sendable || sending) return;
-    const names = attachments
-      .map((item) => item.name)
-      .filter((name): name is string => name !== null);
+    const send = composerSend({ kind: "draft", draft: composer.draft, attachments });
     // 控えのチップは手元の File のサイズで描く。次のスナップショットで実バイト数に置き換わる。
     const echoed: ChatAttachment[] = attachments.flatMap((item) =>
       item.name === null ? [] : [{ name: item.name, size: item.size }],
     );
-    const text = composer.draft;
     // 添付があると BFF が注記を後ろに付けるので、pi では /compact でもコマンドにならない。
-    const compactCommand = attachments.length === 0 && isCompactCommand(text);
-    const newCommand = startsNewSession(text, names);
+    const compactCommand = attachments.length === 0 && isCompactCommand(send.text);
+    const newCommand = startsNewSession(send.text, send.names);
     if (compactCommand && compactDone) {
       composer.setNotice(COMPACTED_NOTICE);
       return;
@@ -635,13 +647,8 @@ export function PaneDetail(props: PaneDetailProps) {
     const from = latestUserAt(snapshot?.messages ?? []);
     const waiting = replying;
     const after = snapshot?.messages.length ?? 0;
-    composer.beginSend();
     // 送れたときだけ空にする。失敗したら本文も添付も残す。
-    if (await submitInput(text, names)) {
-      // 猶予は送信が通った時点から測る。POST が遅いときに、届く前の echo を畳まない。
-      const at = Date.now();
-      // 送れたときだけ最新へ戻す。失敗したら読み返していた位置を保つ。
-      setPinned(true);
+    await deliver(send, (at) => {
       composer.clearDraft();
       attachmentStore.clear(pane.id);
       // シェルペインには会話が無い。控えを積むと、同じペインで後から起動した
@@ -650,14 +657,12 @@ export function PaneDetail(props: PaneDetailProps) {
         // /compact は user メッセージを残さない。送信カードを積むと最大 60 秒残るので、
         // 代わりに圧縮中の行を出す。
         if (compactCommand) {
-          markCompaction(baselineAt, text);
+          markCompaction(baselineAt, send.text);
         } else if (!newCommand) {
-          echoPending({ text, at, from, waiting, after, attachments: echoed });
+          echoPending({ text: send.text, at, from, waiting, after, attachments: echoed });
         }
       }
-    } else {
-      composer.setNotice(SEND_FAILED_NOTICE);
-    }
+    });
   };
 
   const stopWorking = async () => {
@@ -690,15 +695,13 @@ export function PaneDetail(props: PaneDetailProps) {
       composer.setNotice(COMPACTED_NOTICE);
       return;
     }
-    const text = commandSendText(id, composer.draft);
+    const send = composerSend({ kind: "chip", id, draft: composer.draft });
     const baselineAt = snapshot?.compaction?.at ?? null;
-    composer.beginSend();
-    if (await submitInput(text, [])) {
-      setPinned(true);
+    await deliver(send, () => {
       composer.setChip(null);
       composer.setDraft("");
-      if (id === "compact") markCompaction(baselineAt, text);
-    } else composer.setNotice(SEND_FAILED_NOTICE);
+      if (id === "compact") markCompaction(baselineAt, send.text);
+    });
   };
 
   // メニューからはコマンド文字列だけを送る。書きかけの draft・添付は次の
@@ -713,14 +716,12 @@ export function PaneDetail(props: PaneDetailProps) {
 
   const runMenuCommand = async (id: CommandId) => {
     if (composer.edit !== null || !menuCommandAvailable(id)) return;
-    const text = commandText(id);
+    const send = composerSend({ kind: "menu", id });
     const baselineAt = snapshot?.compaction?.at ?? null;
-    composer.beginSend();
-    if (await submitInput(text, [])) {
-      setPinned(true);
+    await deliver(send, () => {
       composer.setChip(null);
-      if (id === "compact") markCompaction(baselineAt, text);
-    } else composer.setNotice(SEND_FAILED_NOTICE);
+      if (id === "compact") markCompaction(baselineAt, send.text);
+    });
   };
 
   const menuCommandHint = (id: CommandId): string => {
