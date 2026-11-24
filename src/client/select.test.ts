@@ -24,8 +24,7 @@ import {
   isShellPane,
   markedParentPaneIds,
   mostUrgentStatus,
-  paneName,
-  paneRowTitle,
+  paneDisplayName,
   placeChip,
   pullRequestLabel,
   pullRequestTone,
@@ -557,77 +556,101 @@ test("a pane without an agent is a shell", () => {
   ).toBe(false);
 });
 
-test("the pane name uses the Herdr label, then the title without the agent mark", () => {
-  const base = {
+// 名前の規則は 1 つ。タブ・セル見出し・一覧の 1 段目は、すべてこの値から作る。
+test("the display name uses the Herdr label, then the agent, then the terminal title", () => {
+  const base: PaneState = {
     id: "w1:p9",
     title: null,
     label: null,
     agent: null,
-    agentStatus: "idle" as const,
+    agentStatus: "idle",
     focused: false,
     chat: false,
   };
+  const cases: readonly [string, Partial<PaneState>, string][] = [
+    ["label", { label: "impl", agent: "pi", title: "π - hwc" }, "impl"],
+    // 端末タイトルは同じリポジトリのペインで同じ値になるので、エージェント名を先に採る。
+    // 以前は端末タイトルを先に見たため、この組み合わせだけが変更を検出できる。
+    ["agent over the title", { agent: "pi", title: "π - hwc" }, "pi"],
+    ["agent without a title", { agent: "claude" }, "claude"],
+    ["title without a label or an agent", { title: "π - hwc" }, "hwc"],
+    ["the Claude mark in the title", { title: "OC | Single letter a" }, "Single letter a"],
+    ["a title that is only the mark", { title: "π - " }, "シェル"],
+    ["a shell without a name", {}, "シェル"],
+  ];
 
-  expect(paneName({ ...base, title: "π - hwc", label: "impl" })).toBe("impl");
-  expect(paneName({ ...base, label: "impl", agent: "pi" })).toBe("impl");
-  expect(paneName({ ...base, title: "π - hwc" })).toBe("hwc");
-  expect(paneName({ ...base, title: "OC | Single letter a" })).toBe("Single letter a");
-  expect(paneName({ ...base, title: "π - " })).toBe("シェル");
-  expect(paneName({ ...base, agent: "pi" })).toBe("pi");
+  for (const [name, pane, expected] of cases) {
+    expect({ name, value: paneDisplayName({ ...base, ...pane }) }).toEqual({
+      name,
+      value: expected,
+    });
+  }
 });
 
 test("a shell without a name is called シェル, not its pane id", () => {
-  const base = {
+  const base: PaneState = {
     id: "w1:p9",
     title: null,
     label: null,
     agent: null,
-    agentStatus: "idle" as const,
+    agentStatus: "idle",
     focused: false,
     chat: false,
   };
 
-  expect(paneName(base)).toBe("シェル");
-  expect(paneName({ ...base, label: "notes" })).toBe("notes");
+  expect(paneDisplayName(base)).toBe("シェル");
+  expect(paneDisplayName({ ...base, label: "notes" })).toBe("notes");
 });
 
-test("the tab chip and the detail header name a pane by its label", () => {
-  const base = {
+// 経路ごとに表示用の変換が違うので、期待値も経路ごとに分けて書く。
+test("a tab shows the display name", () => {
+  const pane: PaneState = {
     id: "w1:p9",
     title: "π - feat-client-api-connection",
     label: null,
     agent: "pi",
-    agentStatus: "idle" as const,
+    agentStatus: "idle",
     focused: false,
     chat: false,
   };
-  const labels = [
-    "orchestrator-issue14",
-    "impl-client-api",
-    "review-client-api",
-    "ui-tester-client-api",
-  ];
 
-  const names = labels.map((label, index) => paneName({ ...base, id: `w1:p${index}`, label }));
-
-  // 4 枚が同じ端末タイトルでも、タブと見出しはラベルで見分けられる。
-  expect(names).toEqual(labels);
+  // 以前は端末タイトルを先に見たので、このタブは feat-client-api-connection だった。
+  expect(tabDisplayName(paneDisplayName(pane), state.workspaces[0]!)).toBe("pi");
 });
 
-test("a row is titled by its name, not by the terminal title", () => {
-  const base = {
-    title: "π - hwc",
-    label: null as string | null,
-    agent: "pi" as string | null,
-    agentStatus: "idle" as const,
+test("a cell header shows the display name", () => {
+  const workspace = state.workspaces[0]!;
+  const pane: PaneState = {
+    id: "w1:p9",
+    title: "π - feat-client-api-connection",
+    label: null,
+    agent: "pi",
+    agentStatus: "idle",
     focused: false,
-    chat: true,
+    chat: false,
   };
 
-  expect(paneRowTitle({ ...base, id: "w1:p1", label: "impl" })).toBe("impl");
-  expect(paneRowTitle({ ...base, id: "w1:p1" })).toBe("pi");
-  expect(paneRowTitle({ ...base, id: "w1:p1", agent: null })).toBe("hwc");
-  expect(paneRowTitle({ ...base, id: "w1:p1", title: null, agent: null })).toBe("シェル");
+  expect(shortenPaneName(paneDisplayName(pane), workspace.label, shortenSpaceName(workspace))).toBe(
+    "pi",
+  );
+});
+
+test("an active row shows the display name without the place", () => {
+  const base: PaneState = {
+    id: "w1:p9",
+    title: "π - hwc",
+    label: null,
+    agent: "pi",
+    agentStatus: "idle",
+    focused: false,
+    chat: false,
+  };
+
+  expect(activeRowName("hwc", paneDisplayName(base))).toBe("pi");
+  // 帯がスペース名を持つので、行では名前の先頭から場所の部分を落とす。
+  expect(
+    activeRowName("hwc", paneDisplayName({ ...base, agent: null, title: "π - hwc-api" })),
+  ).toBe("api");
 });
 
 test("a long path keeps the tail that identifies the place", () => {
@@ -665,6 +688,11 @@ test("a linked worktree drops the generated prefix where the name is short", () 
       "silver-cloud-c4cf",
     ),
   ).toBe("silver-cloud-c4cf");
+  // ラベルの無いペインは端末タイトルがスペース名と同じになる。一覧も名前から場所を落とすが、
+  // 同長なので、タブや見出しのように省略されずに残る（差はこの Issue では残す）。
+  expect(activeRowName("worktree-silver-cloud-c4cf", "worktree-silver-cloud-c4cf")).toBe(
+    "worktree-silver-cloud-c4cf",
+  );
   // ペインに付いた別名はそのまま。
   expect(tabDisplayName("pr-review", linked("worktree-silver-cloud-c4cf"))).toBe("pr-review");
   expect(shortenPaneName("pr-review", "worktree-silver-cloud-c4cf", "silver-cloud-c4cf")).toBe(

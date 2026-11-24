@@ -31,7 +31,7 @@ import {
   groupMembers,
   groupWorkspaces,
   mostUrgentStatus,
-  paneRowTitle,
+  paneDisplayName,
   pullRequestTone,
   soleTab,
   type WorkspaceGroup,
@@ -387,7 +387,7 @@ export function TreePaneList(props: TreePaneListProps) {
                           <AgentGlyphIcon agent={pane.agent} size={14} />
                         </span>
                       )}
-                      <span class="hwc-pane-name">{paneRowTitle(pane)}</span>
+                      <span class="hwc-pane-name">{paneDisplayName(pane)}</span>
                       {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
                     </span>
                     {branch === null ? null : (
