@@ -1,9 +1,6 @@
 import type { ComponentChildren } from "preact";
+import { confirmView } from "./confirm-view";
 import { DialogShell } from "./Dialog";
-
-// 対象が消えた・変わったことを、確認の本文の末尾に出す。どのダイアログでも同じ言い方をする。
-export const CONFIRM_CHANGED_NOTICE =
-  "状態が変わりました。確認を閉じて、もう一度操作してください。";
 
 type ConfirmProps = {
   title: string;
@@ -22,7 +19,7 @@ type ConfirmProps = {
 
 // 破壊的な操作はここで一度止める。ブラウザの確認ダイアログは見た目を揃えられない。
 export function Confirm(props: ConfirmProps) {
-  const available = props.available ?? true;
+  const view = confirmView(props);
   return (
     <DialogShell
       role="alertdialog"
@@ -35,14 +32,14 @@ export function Confirm(props: ConfirmProps) {
       </h2>
       <p class="hwc-dialog-text" id="hwc-dialog-text">
         {props.description}
-        {available ? null : (
+        {view.changedNotice === null ? null : (
           <span class="hwc-dialog-error" role="status">
-            {CONFIRM_CHANGED_NOTICE}
+            {view.changedNotice}
           </span>
         )}
-        {props.failedNotice === undefined ? null : (
+        {view.failedNotice === null ? null : (
           <span class="hwc-dialog-error" role="status">
-            {props.failedNotice}
+            {view.failedNotice}
           </span>
         )}
       </p>
@@ -51,7 +48,7 @@ export function Confirm(props: ConfirmProps) {
           type="button"
           class="hwc-dialog-button hwc-dialog-cancel"
           data-autofocus
-          disabled={props.busy}
+          disabled={view.cancelDisabled}
           onClick={props.onCancel}
         >
           キャンセル
@@ -59,7 +56,7 @@ export function Confirm(props: ConfirmProps) {
         <button
           type="button"
           class="hwc-dialog-button hwc-dialog-confirm"
-          disabled={props.busy || props.disabled || !available}
+          disabled={view.confirmDisabled}
           onClick={props.onConfirm}
         >
           {props.confirmLabel}
