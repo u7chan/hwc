@@ -275,7 +275,8 @@ function findClose(
 }
 
 // 相対パスは配信先が決まっていないので通さず、プロトコル相対 (`//host`) も scheme が無いものとして落とす。
-// http / https / mailto 以外の scheme も同じ理由で落とす。
+// scheme は SAFE_SCHEMES の許可リストだけで通す。`javascript:` や `data:` を href にしないための線で、
+// 相対パスを落とす理由 (配信先が決まらない) とは別。
 function safeUrl(raw: string): string | null {
   const value = raw.trim();
   if (value === "") return null;
