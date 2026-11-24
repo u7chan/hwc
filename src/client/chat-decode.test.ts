@@ -161,7 +161,6 @@ test("a pending prompt that breaks the contract costs the card, not the conversa
     { kind: "tool", toolUseId: "t2", tool: "" },
   ];
   for (const pending of broken) {
-    // 読めない値は pending 無しにし、blocked の間は今までどおり端末出力へ倒す。
     expect(toChatSnapshot({ ...chatBody, pending })).toEqual(chatBody);
   }
 });

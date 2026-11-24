@@ -1302,7 +1302,7 @@ test("a question that was rejected and not answered by the heading is not synthe
     [question("好きな色は？", ["赤", "青"])],
   );
 
-  // 質問も回答も会話の実体ではない。普通の発話は、これまでどおりそのまま残る。
+  // 質問も回答も会話の実体ではない。普通の発話はそのまま残る。
   expect(snapshot.messages.map((message) => message.text)).toEqual([
     "確認してください。",
     "質問します。",

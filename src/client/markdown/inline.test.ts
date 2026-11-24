@@ -63,7 +63,6 @@ test("末尾のバックスラッシュはエスケープせず原文のまま�
   assert.deepEqual(parseInline("Windows のパスは C:\\"), [text("Windows のパスは C:\\")]);
   assert.deepEqual(parseInline("末尾\\"), [text("末尾\\")]);
   assert.deepEqual(parseInline("a\\b"), [text("a\\b")]);
-  // エスケープできる 2 文字は従来どおり記号として扱う
   assert.deepEqual(parseInline("\\\\"), [text("\\")]);
 });
 
