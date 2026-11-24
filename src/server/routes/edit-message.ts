@@ -3,7 +3,7 @@ import { exceedsTextLimit } from "../herdr/panes";
 import { findPane } from "../herdr/state";
 import { supportsFolderTrust } from "../../shared/agents";
 import { isRewindId, type EditMessageBody, type RewindMarker } from "../../shared/rewind";
-import { readRewindMarker } from "../chat/pi";
+import { readRewindMarker } from "../chat/pi-rewind";
 import type { AppContext, IdContext } from "./context";
 
 const TAIL_SNIFF_BYTES = 256 * 1024;
