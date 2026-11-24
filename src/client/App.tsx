@@ -1,12 +1,8 @@
-import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
-import type { AppState, PaneState } from "../server/herdr/state";
-import { messageFileLabel } from "../shared/message-files";
-import { PaneDetail } from "./PaneDetail";
+import type { AppState } from "../server/herdr/state";
 import { attachmentStore } from "./attachment-store";
 import { fileTreeFontSize, fileTreeWidthPx } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
-import { TabBar } from "./TabBar";
 import { PaneList } from "./PaneList";
 import { Settings } from "./settings/Settings";
 import type {
@@ -28,6 +24,9 @@ import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
+import { CellTree, PreviewCell, type CellActions, type CellContext } from "./app/cells";
+import { menuView } from "./app/menu";
+import { tabRows } from "./app/tab-rows";
 import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
 import { useFavicon } from "./app/hooks/use-favicon";
 import { useFileTreeDisplay } from "./app/hooks/use-file-tree-display";
@@ -64,27 +63,22 @@ import { liveUpdateMs } from "./live-update";
 import { allAgentPaneIds, allPaneIds, applyDelegation, newAgentPanes } from "./delegation";
 import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
-import { Preview } from "./Preview";
 import { ChevronLeftIcon, HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import type { PaneOutputHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
-import { MAX_PANES_PER_TAB } from "../shared/panes";
 import { paneCloseAction } from "../shared/pane-close";
 import {
   activeRowName,
   canCloseSpace,
   findPane,
-  findPaneContext,
   findPaneRow,
-  groupWorkspaces,
   markedParentPaneIds,
   shortenSpaceName,
   tabDisplayName,
   tabLabel,
   tabLabelText,
-  type PaneContext,
 } from "./select";
 import {
   defaultPaneOf,
@@ -102,24 +96,17 @@ import {
   layoutKey,
   leafOfPane,
   moveTab,
-  multiSpace,
   openPane,
   openTabs,
   readingOrder,
   removeTab,
   successorTab,
   syncSplitView,
-  type DropZone,
-  type SplitLeaf,
-  type SplitNode,
   type SplitView,
 } from "./split-view";
 import { pendingReadAfter, shouldFocusOnLeave, type ListScope } from "./scope";
-import { moveToTopPlan, orderUnits } from "./order";
 import { decideSnapshotApply } from "./snapshot-apply";
 import { gateSnapshot, type SnapshotOrigin } from "./snapshot";
-import { type PaneLaunchView, launchPhase } from "./starting";
-import { workingMs } from "./time";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
@@ -457,6 +444,10 @@ export function App() {
   const shownLeaves = wide ? leaves : projected === null ? [] : [projected];
   const splitCells = wide && leaves.length > 1;
   const compact = splitCells;
+  // セルに描く木。広い画面は木の全部、狭い画面は 1 枚だけ。どちらも同じ部品へ渡す。
+  // 分岐で部品を変えると、画面幅をまたいだ再描画でセルが作り直され、入力中の本文・
+  // フォーカス・スクロール位置が消える。
+  const cellRoot = wide ? split.layout : projected;
 
   // プレビューは一時タブのまま。対象のペインがどこかの葉にある間だけ、タブと本文に出せる。
   const {
@@ -651,6 +642,9 @@ export function App() {
       current !== null && current === menu ? { ...current, open: false } : current,
     );
   };
+
+  // 閉じるアニメーションが終わったメニューを落とす。開き直していたら残す。
+  const dropClosedMenu = () => setMenu((current) => (current?.open === false ? null : current));
 
   // fetch / pull の実行中は、背景のタップや Esc でメニューを閉じない。閉じても操作は
   // 続くが、結果の表示先が無くなる。明示的な項目（PR リンクなど）はそのまま閉じられる。
@@ -932,14 +926,7 @@ export function App() {
   const draggedLeaf =
     draggedRow === null || state === null ? null : leafOfPane(split.layout, draggedRow.pane.id);
   const draggedMultiSpace =
-    draggedLeaf === null || state === null
-      ? false
-      : multiSpace(
-          draggedLeaf.tabs.flatMap((paneId) => {
-            const row = findPaneRow(state, paneId);
-            return row === null ? [] : [row.workspace.id];
-          }),
-        );
+    draggedLeaf === null || state === null ? false : tabRows(state, draggedLeaf.tabs).multiSpace;
   const draggingLabel =
     draggedRow === null
       ? ""
@@ -959,299 +946,93 @@ export function App() {
 
   const leavingPaneId = leavingTab?.paneId ?? null;
 
-  // 4 枚の判定は BFF と同じタブの枚数で行う。
-  const menuPaneId = menu?.target.kind === "pane" ? menu.target.id : null;
-  const menuRow = state === null ? null : findPaneRow(state, menuPaneId);
-  const menuTab = menuRow?.tab ?? null;
-  const menuFull = menuTab !== null && menuTab.panes.length >= MAX_PANES_PER_TAB;
-  const menuPane = menuRow?.pane ?? null;
-  const menuCloseAction =
-    state === null || menuPaneId === null ? null : paneCloseAction(state, menuPaneId);
-  const menuWorkspace =
-    menu?.target.kind === "workspace"
-      ? (state?.workspaces.find((workspace) => workspace.id === menu.target.id) ?? null)
-      : null;
-  const menuPullRequest =
-    menuWorkspace === null ? null : (pullRequests.get(menuWorkspace.id) ?? null);
-  const menuRepoUrl = menuWorkspace?.sync?.repoUrl ?? null;
-  const menuGitBusy =
-    menuWorkspace !== null &&
-    gitAction !== null &&
-    gitAction.workspaceId === menuWorkspace.id &&
-    gitAction.phase === "busy"
-      ? gitAction.action
-      : null;
-  const menuGitFailed =
-    menuWorkspace !== null &&
-    gitAction !== null &&
-    gitAction.workspaceId === menuWorkspace.id &&
-    gitAction.phase === "failed"
-      ? { action: gitAction.action, error: gitAction.error }
-      : null;
-  // 一般のスペース作成は持たない。worktree.create で開くスペースだけを例外にする。
-  const menuWorktree = menuWorkspace?.worktree ?? null;
-  const canCreateWorktree = menuWorktree !== null && !menuWorktree.isLinkedWorktree;
-  const menuCanCloseSpace =
-    state !== null && menuWorkspace !== null && canCloseSpace(state, menuWorkspace.id);
-  // 並びの正は Herdr。メニューはその移動を 1 タップで呼ぶだけで、hwc 側に順序は持たない。
-  // 既に先頭の束には項目を出さない。
-  const menuCanMoveToTop =
-    state !== null &&
-    menuWorkspace !== null &&
-    moveToTopPlan(
-      orderUnits(groupWorkspaces(state.workspaces), state.workspaces),
-      menuWorkspace.id,
-    ) !== null;
+  // メニューの中身は、開いている対象とスナップショットから導く。閉じていれば空。
+  const menuItems = menuView({ state, menu, pullRequests, gitAction });
   const moveWorkspaceToTop = () => {
-    if (menuWorkspace === null) return;
+    const workspace = menuItems.workspace;
+    if (workspace === null) return;
     moveToTopSeq.current += 1;
-    setMoveToTop({ workspaceId: menuWorkspace.id, token: moveToTopSeq.current });
+    setMoveToTop({ workspaceId: workspace.id, token: moveToTopSeq.current });
     closeMenu();
   };
 
-  const renderPane = (
-    item: PaneState,
-    where: PaneContext,
-    compact: boolean,
-    isCurrent: boolean,
-  ) => {
-    const launch = launches.get(item.id) ?? null;
-    const phase = launchPhase(launch, item, now);
-    const launchView: PaneLaunchView | null =
-      launch === null || phase === null
-        ? null
-        : {
-            phase,
-            agent: launch.agent,
-            model: launch.model,
-            effort: launch.effort,
-            error: launch.request === "failed" ? launch.error : null,
-          };
-    return (
-      <PaneDetail
-        key={item.id}
-        pane={item}
-        context={where}
-        compact={compact}
-        scheme={scheme}
-        treeSide={treeSide}
-        treeWidth={fileTreeWidthPx(treeWidth)}
-        treeIcons={treeIcons}
-        current={isCurrent}
-        // 親ペインの印はセル見出しに出す。
-        parentPaneIds={parentPaneIds}
-        // セル見出しはブランチと作成元スペースだけを出す。名前はタブ列が言う。
-        branch={where.branch}
-        sync={where.sync}
-        // PR を引く鍵はセルでも要る。表示用の sync とは別に渡し、分割表示のまま
-        // push してもチップが引き直せるようにする。
-        upstreamBranch={where.sync?.upstreamBranch ?? null}
-        workspaceMenuOpen={
-          menu?.open === true &&
-          menu.target.kind === "workspace" &&
-          menu.target.id === where.workspaceId
-        }
-        waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
-        now={now}
-        running={processes.get(item.id)?.running === true}
-        sending={inputsInFlight.current.has(item.id)}
-        launch={launchView}
-        dismissedConfirmation={dismissedConfirmations[item.id] ?? null}
-        confirmationAttempts={confirmationAttempts.current}
-        onConfirmFolderTrust={(id) => void confirmPaneFolderTrust(item.id, id)}
-        onDismissConfirmation={(id) =>
-          setDismissedConfirmations((current) => ({ ...current, [item.id]: id }))
-        }
-        menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
-        outputRef={(handle) => {
-          if (handle === null) outputHandles.current.delete(item.id);
-          else outputHandles.current.set(item.id, handle);
-        }}
-        onOpenMenu={openPaneMenu}
-        onOpenWorkspaceMenu={openWorkspaceMenu}
-        onSubmit={(text, attachments) => sendToPane(item.id, text, attachments)}
-        onStop={() => stopPane(item.id)}
-        onStartAgent={() => openStartAgentDialog(item.id)}
-        onCreateSpace={(path) => openCreateSpaceDialog(item.id, path)}
-        onRetryLaunch={() => retryLaunch(item.id)}
-        onUseShell={() => useShell(item.id)}
-        onOpenImage={(url, name) => setViewer({ url, name })}
-        onOpenPreview={(file) => openPreview(item.id, file)}
-      />
-    );
+  const cellContext: CellContext = {
+    state,
+    compact,
+    wide,
+    focused,
+    parentPaneIds,
+    menu,
+    menuPaneId: menuItems.paneId,
+    processes,
+    leavingPaneId,
+    entering,
+    dragging,
+    detailStatus,
+    suppressFocusActivation,
+    clearFocusSuppression,
+    scheme,
+    treeSide,
+    treeWidth: fileTreeWidthPx(treeWidth),
+    treeIcons,
+    launches,
+    now,
+    workingSince,
+    inputsInFlight: inputsInFlight.current,
+    dismissedConfirmations,
+    confirmationAttempts: confirmationAttempts.current,
+    preview: { target: preview, inTab: previewInTab, previewing, leaf: previewLeaf },
   };
-
-  // ドラッグ中のプレビューの文言。中央はセルの末尾への移動、端は分割。
-  const dropLabel = (zone: DropZone): string => {
-    if (zone !== "center") {
-      return { top: "上に追加", bottom: "下に追加", left: "左に追加", right: "右に追加" }[zone];
-    }
-    return "ここへ移動";
+  const cellActions: CellActions = {
+    select,
+    selectFromTab,
+    removeFromTabs,
+    finishTabLeave,
+    showPreview,
+    closePreview,
+    back,
+    startPaneDrag,
+    openPaneMenu,
+    openWorkspaceMenu,
+    send: sendToPane,
+    stop: stopPane,
+    startAgent: openStartAgentDialog,
+    createSpace: openCreateSpaceDialog,
+    retryLaunch,
+    useShell,
+    openImage: (url, name) => setViewer({ url, name }),
+    openPreview,
+    confirmFolderTrust: (paneId, id) => void confirmPaneFolderTrust(paneId, id),
+    dismissConfirmation: (paneId, id) =>
+      setDismissedConfirmations((current) => ({ ...current, [paneId]: id })),
+    outputRef: (paneId, handle) => {
+      if (handle === null) outputHandles.current.delete(paneId);
+      else outputHandles.current.set(paneId, handle);
+    },
   };
-
-  // セルは木の葉。タブ列を上端に置き、active のペインを本文に出す。親の分割軸を
-  // data 属性に置き、ドラッグ中の向き判定に使う。
-  const renderCell = (leaf: SplitLeaf, parentDir: "row" | "col" | null) => {
-    if (state === null) return null;
-    const item = findPane(state, leaf.active);
-    if (item === null) return null;
-    const where = findPaneContext(state, item.id);
-    if (where === null) return null;
-    const rows = leaf.tabs.flatMap((paneId) => {
-      const row = findPaneRow(state, paneId);
-      return row === null ? [] : [row];
-    });
-    const isCurrent = focused !== null && leaf === focused;
-    const multi = multiSpace(rows.map((row) => row.workspace.id));
-    const previewTab =
-      previewInTab && preview !== null && previewLeaf === leaf
-        ? { name: messageFileLabel(preview.file.name), selected: preview.shown }
-        : null;
-    // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
-    // HWC から動かせないセルが current のままになる。
-    const activate = () => {
-      if (!isCurrent) select(item.id);
-    };
-    // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
-    // 操作できる要素へフォーカスが入ったときだけ、そのセルを選ぶ。
-    const activateFromFocus = (event: FocusEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (suppressFocusActivation.current) {
-        clearFocusSuppression();
-        return;
-      }
-      if (
-        target.closest(
-          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-        ) === null
-      ) {
-        return;
-      }
-      activate();
-    };
-    // ドラッグはセルの見出しからだけ始める。出力と入力の選択・操作を奪わない。
-    const dragFromHead = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest(".hwc-pane-head") === null) return;
-      if (
-        target.closest(
-          "button, input, textarea, select, a[href], [contenteditable]:not([contenteditable='false'])",
-        ) !== null
-      ) {
-        return;
-      }
-      startPaneDrag(event, item.id);
-    };
-    const target =
-      dragging?.target?.kind === "cell" && dragging.target.pane === item.id
-        ? dragging.target
-        : null;
-    const tabDrop =
-      dragging?.target?.kind === "tab" && leaf.tabs.includes(dragging.target.pane)
-        ? { pane: dragging.target.pane, side: dragging.target.side }
-        : null;
-    return (
-      <section
-        class="hwc-split-cell"
-        data-compact={compact}
-        data-drop-pane={item.id}
-        data-drop-parent={parentDir ?? undefined}
-        data-flip-cell={leaf.id}
-        data-split-enter={item.id === entering ? "true" : undefined}
-        key={leaf.id}
-        onPointerDown={(event) => {
-          activate();
-          dragFromHead(event);
-        }}
-        onFocusIn={activateFromFocus}
-      >
-        <TabBar
-          leafId={leaf.id}
-          tabs={rows}
-          currentPaneId={leaf.active}
-          focused={isCurrent}
-          multiSpace={multi}
-          parentPaneIds={parentPaneIds}
-          processes={processes}
-          preview={previewTab}
-          status={wide ? null : detailStatus}
-          leavingPaneId={leavingPaneId}
-          droppable={!previewing}
-          onSelectPane={selectFromTab}
-          onRemoveTab={removeFromTabs}
-          onLeaveFinished={finishTabLeave}
-          onSelectPreview={showPreview}
-          onClosePreview={closePreview}
-          onBack={wide ? null : back}
-          onDragStart={startPaneDrag}
-          tabDrop={tabDrop}
-        />
-        <div class="hwc-cell-body" data-leaving={leavingPaneId === item.id ? "true" : undefined}>
-          {renderPane(item, where, compact, isCurrent)}
-        </div>
-        {target === null ? null : (
-          <div class="hwc-drop" data-zone={target.zone} aria-hidden="true">
-            <span>{dropLabel(target.zone)}</span>
-          </div>
-        )}
-      </section>
-    );
-  };
-
-  // 分割は再帰。子の親方向をそのまま渡し、端の向きを決める。
-  const renderSplit = (node: SplitNode, parentDir: "row" | "col" | null): ComponentChildren =>
-    node.kind === "leaf" ? (
-      renderCell(node, parentDir)
-    ) : (
-      <div class="hwc-split" data-dir={node.dir}>
-        {node.children.map((child) => renderSplit(child, node.dir))}
-      </div>
-    );
-
-  const previewRows =
-    state === null || previewLeaf === null
-      ? []
-      : previewLeaf.tabs.flatMap((paneId) => {
-          const row = findPaneRow(state, paneId);
-          return row === null ? [] : [row];
-        });
-  const previewMulti = multiSpace(previewRows.map((row) => row.workspace.id));
 
   const overlays: AppOverlaysProps = {
     dragging,
     draggingLabel,
-    menu,
-    menuPane,
-    menuWorkspace,
-    menuPaneId,
-    menuRow,
-    menuFull,
-    menuCloseAction,
-    menuPullRequest,
-    menuRepoUrl,
-    menuGitBusy,
-    menuGitFailed,
-    menuCanCloseSpace,
-    menuCanMoveToTop,
-    canCreateWorktree,
-    dismissMenu,
-    closeMenu,
-    setMenu,
-    openCreateDialog,
-    clearOutputForMenu,
-    openCloseConfirm,
-    openCreateWorktreeDialog,
-    openRemoveWorktreeConfirm,
-    openCloseSpaceConfirm,
-    moveWorkspaceToTop,
-    runGitSync,
-    closing,
-    closingPane,
-    removing,
-    removingWorkspace,
-    closingSpace,
+    // メニューは中身と、その項目が呼ぶ操作を 1 つのまとまりで渡す。
+    menu: {
+      ...menuItems,
+      operation: menu,
+      dismiss: dismissMenu,
+      close: closeMenu,
+      exited: dropClosedMenu,
+      openCreate: openCreateDialog,
+      clearOutput: clearOutputForMenu,
+      openCloseConfirm,
+      openCreateWorktree: openCreateWorktreeDialog,
+      openRemoveWorktree: openRemoveWorktreeConfirm,
+      openCloseSpace: openCloseSpaceConfirm,
+      moveToTop: moveWorkspaceToTop,
+      runGitSync,
+    },
+    closing: { flow: closing, pane: closingPane },
+    removing: { flow: removing, workspace: removingWorkspace },
+    closingSpace: { flow: closingSpace },
     creating,
     setCreating,
     // hwc から作ったペインは、自動分割の対象にしない。
@@ -1303,8 +1084,8 @@ export function App() {
               reveal={reveal}
               scrollTo={scrollTo}
               onToggle={toggle}
-              openPaneMenuId={menu?.open === true && menu.fromList ? menuPaneId : null}
-              openWorkspaceMenuId={menu?.open === true ? (menuWorkspace?.id ?? null) : null}
+              openPaneMenuId={menu?.open === true && menu.fromList ? menuItems.paneId : null}
+              openWorkspaceMenuId={menu?.open === true ? (menuItems.workspace?.id ?? null) : null}
               onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
               onWorkspaceMenu={(workspaceId, trigger) =>
                 openWorkspaceMenu(workspaceId, trigger, true)
@@ -1417,50 +1198,18 @@ export function App() {
             <Placeholder connection={connection} />
           ) : split.layout !== null && shownLeaves.length > 0 ? (
             <div class="hwc-detail-inner">
-              {previewing && preview !== null && previewLeaf !== null ? (
-                <>
-                  <TabBar
-                    leafId={previewLeaf.id}
-                    tabs={previewRows}
-                    currentPaneId={previewLeaf.active}
-                    focused={previewLeaf === focused}
-                    multiSpace={previewMulti}
-                    parentPaneIds={parentPaneIds}
-                    processes={processes}
-                    preview={{
-                      name: messageFileLabel(preview.file.name),
-                      selected: preview.shown,
-                    }}
-                    status={detailStatus}
-                    leavingPaneId={leavingPaneId}
-                    droppable={false}
-                    onSelectPane={selectFromTab}
-                    onRemoveTab={removeFromTabs}
-                    onLeaveFinished={finishTabLeave}
-                    onSelectPreview={showPreview}
-                    onClosePreview={closePreview}
-                    onBack={wide ? null : back}
-                    onDragStart={startPaneDrag}
-                    tabDrop={null}
-                  />
-                  <div class="hwc-detail-body">
-                    <Preview
-                      key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
-                      paneId={preview.paneId}
-                      file={preview.file}
-                      onClose={closePreview}
-                    />
-                  </div>
-                </>
+              {previewing ? (
+                <PreviewCell context={cellContext} actions={cellActions} />
               ) : (
                 <div class="hwc-detail-grid" data-single={shownLeaves.length === 1}>
-                  {wide
-                    ? split.layout === null
-                      ? null
-                      : renderSplit(split.layout, null)
-                    : projected === null
-                      ? null
-                      : renderCell(projected, null)}
+                  {cellRoot === null ? null : (
+                    <CellTree
+                      node={cellRoot}
+                      parentDir={null}
+                      context={cellContext}
+                      actions={cellActions}
+                    />
+                  )}
                 </div>
               )}
             </div>
