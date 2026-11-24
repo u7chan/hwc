@@ -1,16 +1,18 @@
 import { expect, test } from "bun:test";
 import { HerdrError } from "./socket";
 import {
+  parseInputBody,
+  parseOutputQuery,
+  parseSplitBody,
+  parseStartBody,
+} from "../routes/panes-request";
+import {
   agentNameForPane,
   createPaneClient,
   exceedsTextLimit,
   isInvalidRequest,
   isPaneNotFound,
-  parseInputBody,
-  parseOutputQuery,
   parseProcessInfo,
-  parseSplitBody,
-  parseStartBody,
   restartAgentName,
 } from "./panes";
 
