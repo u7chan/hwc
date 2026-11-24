@@ -8,7 +8,6 @@ type ConfirmProps = {
   confirmLabel: string;
   // 実行中は操作を受け付けない。結果の反映を 1 回に保つ。
   busy?: boolean;
-  disabled?: boolean;
   // 対象がまだあるか。false なら理由を出し、確認を押せなくする。
   available?: boolean;
   // 失敗の文言。渡したときだけ、結果の欄に出す。

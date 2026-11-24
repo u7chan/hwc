@@ -10,7 +10,6 @@ export type ConfirmView = {
 
 export function confirmView(props: {
   busy?: boolean;
-  disabled?: boolean;
   available?: boolean;
   failedNotice?: string;
 }): ConfirmView {
@@ -20,6 +19,6 @@ export function confirmView(props: {
     changedNotice: available ? null : CHANGED_NOTICE,
     failedNotice: props.failedNotice ?? null,
     cancelDisabled: busy,
-    confirmDisabled: busy || (props.disabled ?? false) || !available,
+    confirmDisabled: busy || !available,
   };
 }
