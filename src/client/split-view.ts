@@ -600,7 +600,7 @@ function parseNode(value: unknown): SplitNode | null {
   return compactLayout({ kind: "split", dir, children });
 }
 
-// 旧形式（葉が pane）の木は読めないので null にし、current だけを残す。
+// 読めない木は空にし、current だけを残す。木が壊れていても、開いていたペインは失わない。
 export function parseSplitView(value: string | null): SplitView {
   if (value === null) return EMPTY_SPLIT_VIEW;
   let parsed: unknown;

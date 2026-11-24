@@ -5,9 +5,9 @@ export type ChatFile = {
   // 配信の根（ワークスペースのチェックアウト、またはプレビュー用の追加根）からの
   // 相対パス。絶対パスは渡さない。
   name: string;
-  // 中身の版（mtime とサイズ）。URL のキャッシュ破棄に使う。
+  // mtime とサイズ。URL のキャッシュ破棄に使う。
   version: string;
-  // 見せ方。image はサムネイル、html はプレビュー。
+  // image はサムネイル、html はプレビュー。
   kind: MessageFileKind;
   // 配信の根の番号。0 はチェックアウト、1 は /tmp、2 以上は HWC_PREVIEW_ROOTS の順。
   root: number;
@@ -26,7 +26,7 @@ export type ChatLink = {
   // 配信の根からの相対パス。絶対パスは渡さない（ChatFile と同じく）。
   name: string;
   version: string;
-  // 見せ方。html と image はチップと同じで、text は生の中身を新しいタブで開く。
+  // html と image はチップと同じで、text は生の中身を新しいタブで開く。
   kind: ChatLinkKind;
   root: number;
   rootLabel?: string;

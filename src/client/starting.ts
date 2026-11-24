@@ -15,7 +15,6 @@ export type PaneLaunch = {
   effort: string | null;
   // waiting: 新しいペインがスナップショットに現れるのを待っている。started / failed: 応答済み。
   request: "waiting" | "started" | "failed";
-  // 分割直後のペインは、シェルが起動を受け付けるまで agent.start が busy を返す。
   waitForShell: boolean;
   error: StartAgentFailure | null;
 };
@@ -75,7 +74,7 @@ export function launchPhase(
   return elapsed < STARTING_LIMIT_MS ? "launching" : "unknown";
 }
 
-// 起動できなかった理由。ペインの起動待ちの行に出す。
+// ペインの起動待ちの行に出す。
 export function launchFailureMessage(error: StartAgentFailure | null): string {
   switch (error) {
     case "pane_busy":

@@ -55,11 +55,9 @@ type ComposerOptions = {
 };
 
 export type Composer = {
-  // チップは id だけを持つ。シェルでは見せないので、表示と送信は activeChip を使う。
+  // シェルでは見せないので、表示と送信は activeChip を使う。
   activeChip: CommandId | null;
-  // 編集は対象 id・requestId・本文だけを持つ。下書き (draft) は触らない。
   edit: EditSession | null;
-  // 編集中は入力欄の値を編集本文へ流し、下書きはそのまま残す。
   inputText: string;
   draft: string;
   // 送信・コマンドの成否を出す行。入力欄の外（LiveStatus の下）に描く。
@@ -71,7 +69,6 @@ export type Composer = {
   mentionHighlight: string | null;
   projectDialog: ComposerDialog | null;
   templateDialog: ComposerDialog | null;
-  // メニューからの /new だけ、送る前に確認する。
   confirmNew: boolean;
   dropping: boolean;
   // 入力欄。高さを測る effect からも使うので、要素そのものを返す。
@@ -96,8 +93,6 @@ export type Composer = {
   onBlur: (event: TargetedEvent<HTMLTextAreaElement, FocusEvent>) => void;
   syncCaret: (field: HTMLTextAreaElement) => void;
   onPaste: (event: TargetedEvent<HTMLTextAreaElement, ClipboardEvent>) => void;
-  // ファイルをドラッグしている間だけ composer を光らせる。dragenter / dragleave は
-  // 子要素をまたぐたびに入れ替わるので、深さを数えて枠から出たときだけ消す。
   drag: {
     enter: (event: TargetedEvent<HTMLFormElement, DragEvent>) => void;
     over: (event: TargetedEvent<HTMLFormElement, DragEvent>) => void;
@@ -447,8 +442,6 @@ export function useComposer(options: ComposerOptions): Composer {
     setTemplateDialog({ open: false, caret: next.caret });
   };
 
-  // キャンセル時は DialogShell が開く前の要素（+ ボタン）へ戻す。選んだときだけ、
-  // 閉じるアニメーションの後に本文へフォーカスを移す。
   const templatesExited = () => {
     const nextCaret = templateDialog?.caret ?? null;
     setTemplateDialog(null);

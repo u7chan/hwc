@@ -160,7 +160,6 @@ export function usePaneActivity(
     lastStatus.current = statusRef.current;
 
     const poll = startPoll({
-      // 予約と同じ瞬間に、予約が前提にした状態を控える。
       delay: () => {
         lastStatus.current = statusRef.current;
         return activityPollDelay(statusRef.current, document.visibilityState);

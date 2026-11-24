@@ -523,7 +523,6 @@ export function usePaneChat(
     lastStatus.current = statusRef.current;
 
     const poll = startPoll({
-      // 予約と同じ瞬間に、予約が前提にした状態を控える。
       delay: () => {
         lastStatus.current = statusRef.current;
         return chatPollDelay(statusRef.current, document.visibilityState);
