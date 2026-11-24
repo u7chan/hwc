@@ -38,18 +38,14 @@ export function usePendingEcho(source: PendingEchoSource): PendingEchoHandle {
 
   useEffect(() => {
     const now = Date.now();
-    const settled = reducePending(echoes, { messages, activeToolUseId, replying, now });
-    if (settled !== echoes) {
-      setEchoes(settled);
-      return;
-    }
-    const deadline = nextPendingDeadline(settled, replying);
+    const step = { messages, activeToolUseId, replying, now };
+    // effect は commit の後に走るので、closure の控えを正として書き戻すと、その間に add などが
+    // 進めた state を上書きし得る。setter の引数から最新の控えを計算する。
+    setEchoes((items) => reducePending(items, step));
+    const deadline = nextPendingDeadline(echoes, replying);
     if (deadline === null) return;
     const timer = window.setTimeout(
-      () =>
-        setEchoes((items) =>
-          reducePending(items, { messages, activeToolUseId, replying, now: Date.now() }),
-        ),
+      () => setEchoes((items) => reducePending(items, { ...step, now: Date.now() })),
       Math.max(0, deadline - now),
     );
     return () => window.clearTimeout(timer);
