@@ -10,7 +10,7 @@ const COMPONENT_PATH = fileURLToPath(new URL("../Markdown.tsx", import.meta.url)
 const PANE_DIR = fileURLToPath(new URL("../pane/", import.meta.url));
 const PREVIEW_COMPONENT_PATH = fileURLToPath(new URL("../pane/file-preview.tsx", import.meta.url));
 
-/** DOM 文字列の生成・HTML のパース・DOM の直接操作 */
+// DOM 文字列の生成・HTML のパース・DOM の直接操作。
 const FORBIDDEN = [
   "innerHTML",
   "dangerouslySetInnerHTML",

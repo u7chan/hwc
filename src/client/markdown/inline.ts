@@ -1,33 +1,28 @@
 // 移植元: u7chan/monorepo の projects/u7agent/client/src/lib/markdown/inline.ts
-/**
- * インライン記法 (強調 / コードスパン / リンク / 自動リンク) の解析。
- * 解析できない記法は消さずに literal (原文) へ落とし、例外は投げない。
- */
+// 解析できない記法は消さずに literal (原文) へ落とし、例外は投げない。
 import type { MdImage, MdInline } from "./types";
 
-/** エスケープで文字に戻す記号 */
 const ESCAPABLE = "\\`*_{}[]()#+-.!~|<>$";
 
-/** 1 回の解析で試す区切りの上限。`*` を大量に含む本文でも O(n^2) に落とさないための保険 */
+// `*` を大量に含む本文でも O(n^2) に落とさないための保険。
 const MAX_ATTEMPTS = 2000;
 
-/** 強調の対応を探す範囲。離れすぎた閉じは対応させない (探索コストと誤爆を抑える) */
+// 離れすぎた閉じは対応させない (探索コストと誤爆を抑える)。
 const MAX_EMPHASIS_SPAN = 4096;
 
-/** 入れ子の上限。深い入れ子は原文に落とす (再帰でスタックを食い潰さない) */
+// 深い入れ子は原文に落とす (再帰でスタックを食い潰さない)。
 const MAX_INLINE_DEPTH = 8;
 
 const SAFE_SCHEMES = new Set(["http", "https", "mailto"]);
 
-/** 1 段落内で共有する解析の状態 */
+// 段落内で 1 つを共有する。
 type ScanState = { attempts: number };
 
-/** 解析の入口。段落 1 つ分のテキストをインラインノード列にする */
 export function parseInline(text: string): MdInline[] {
   return scanInline(text, { attempts: MAX_ATTEMPTS }, 0, true);
 }
 
-/** 表示用のテキスト。チェックボックスの名前など、記法を落として読み上げたい場所で使う */
+// チェックボックスの名前など、記法を落として読み上げたい場所で使う。
 export function inlineText(nodes: MdInline[]): string {
   return nodes
     .map((node) => {
@@ -49,10 +44,7 @@ export function inlineText(nodes: MdInline[]): string {
     .join("");
 }
 
-/**
- * 画像記法だけでできた並びなら画像ノードを返す。改行と空白は無視する。
- * 段落を丸ごと横に並べるかどうかの判定に使う。
- */
+// 段落を丸ごと横に並べるかどうかの判定に使う。
 export function imageOnlyNodes(nodes: MdInline[]): MdImage[] | null {
   const images: MdImage[] = [];
   for (const node of nodes) {
@@ -64,7 +56,7 @@ export function imageOnlyNodes(nodes: MdInline[]): MdImage[] | null {
   return images.length === 0 ? null : images;
 }
 
-/** allowLinks=false はリンクのラベル内 (リンクの入れ子を作らない) */
+// allowLinks=false はリンクのラベル内 (リンクの入れ子を作らない)。
 function scanInline(
   text: string,
   state: ScanState,
@@ -157,7 +149,6 @@ function scanInline(
   return nodes;
 }
 
-/** `` `code` `` / ``` ``code`` ```。対応するバックティックが無ければ null */
 function readCodeSpan(text: string, start: number): { text: string; end: number } | null {
   let size = 0;
   while (text[start + size] === "`") size += 1;
@@ -180,10 +171,7 @@ function linkNode(href: string, text: string): MdInline {
   return { kind: "link", href, title: null, children: [{ kind: "text", text }] };
 }
 
-/**
- * `<https://…>` / `<mailto:…>` の自動リンク。生 HTML は解釈しないので、
- * 自動リンクでなければ null を返し、`<` はそのまま本文の文字として扱う。
- */
+// 生 HTML は解釈しない。自動リンクでなければ null を返し、`<` はそのまま本文の文字として扱う。
 function readAngle(
   text: string,
   start: number,
@@ -232,7 +220,7 @@ function readEmphasis(
   return { node, end: close + size };
 }
 
-/** 対応する閉じの位置。単独の `*` を数えて `**bold *em* bold**` の入れ子に対応する */
+// 単独の `*` を数えて `**bold *em* bold**` の入れ子に対応する。
 function findClose(
   text: string,
   from: number,
@@ -286,10 +274,8 @@ function findClose(
   return -1;
 }
 
-/**
- * http / https / mailto だけをそのままリンクにする。相対パスは配信先が決まっていないので通さず、
- * プロトコル相対 (`//host`) も scheme が無いものとして落とす。
- */
+// 相対パスは配信先が決まっていないので通さず、プロトコル相対 (`//host`) も scheme が無いものとして落とす。
+// http / https / mailto 以外の scheme も同じ理由で落とす。
 function safeUrl(raw: string): string | null {
   const value = raw.trim();
   if (value === "") return null;
@@ -301,7 +287,7 @@ function safeUrl(raw: string): string | null {
   return SAFE_SCHEMES.has(scheme[1].toLowerCase()) ? value : null;
 }
 
-/** 相対パスのリンクの候補。BFF が実在を確かめた表記と一致したときだけリンクになる (docs/adr/client-rendering.md) */
+// BFF が実在を確かめた表記と一致したときだけリンクになる (docs/adr/client-rendering.md)。
 function isRelativeUrl(value: string): boolean {
   if (value === "" || value.startsWith("//")) return false;
   return !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value);
@@ -384,7 +370,6 @@ function readLink(
   };
 }
 
-/** `(` から対応する `)` を探す。見つからなければ -1 */
 function findDestinationEnd(text: string, open: number): number {
   let at = open;
   let depth = 0;
@@ -420,7 +405,7 @@ function parseDestination(inner: string): { url: string; title: string | null } 
   return { url, title: match[3] ?? match[4] ?? match[5] ?? null };
 }
 
-/** 裸の URL (直前が語の続きでないときだけ)。文末の句読点はリンクに含めない */
+// 文末の句読点はリンクに含めない。
 function readBareUrl(text: string, start: number): { node: MdInline; end: number } | null {
   const before = text[start - 1];
   // 語の続きの判定は ASCII に限る (日本語の直後の URL もリンクにする)
