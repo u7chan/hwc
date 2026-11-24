@@ -88,3 +88,49 @@ test.each([
   expect(response.status).toBe(status);
   expect(await response.json()).toEqual({ error });
 });
+
+// 対応表は素のオブジェクトなので、表引きが Object.prototype を拾うと status が関数になる。
+// その場合 status が無効値になり、未知のコードが 502 ではなく 200 で返る。close は 2xx を
+// 成功として扱うため、失敗が成功として画面に出てしまう。
+test("answers herdr_unavailable for a code named after Object.prototype", async () => {
+  const unknown = (code: string) => new HerdrError(code, "cannot do it");
+
+  const worktreeApp = createTestApp({
+    state: hostWorktreeState,
+    worktrees: {
+      create: async () => {
+        throw unknown("toString");
+      },
+    },
+  });
+  const worktree = await worktreeApp.app.request("/api/workspaces/w1/create-worktree", post({}));
+  expect(worktree.status).toBe(502);
+  expect(await worktree.json()).toEqual({ error: "herdr_unavailable" });
+
+  const moveApp = createTestApp({
+    state: threeWorkspaces,
+    workspaces: {
+      moveBlock: async () => {
+        throw unknown("constructor");
+      },
+    },
+  });
+  const move = await moveApp.app.request(
+    "/api/workspaces/move",
+    post({ workspaceIds: ["w3"], beforeWorkspaceId: "w1" }),
+  );
+  expect(move.status).toBe(502);
+  expect(await move.json()).toEqual({ error: "herdr_unavailable" });
+
+  const closeApp = createTestApp({
+    state: duplicateState,
+    workspaces: {
+      close: async () => {
+        throw unknown("valueOf");
+      },
+    },
+  });
+  const close = await closeApp.app.request("/api/workspaces/w2/close", post({}));
+  expect(close.status).toBe(502);
+  expect(await close.json()).toEqual({ error: "herdr_unavailable" });
+});

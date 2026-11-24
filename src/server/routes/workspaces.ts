@@ -36,8 +36,11 @@ const herdrFailure = (c: Context, error: unknown, statuses: Record<string, Failu
     if (error.code === "invalid_params" || error.code === "invalid_request") {
       return c.json({ error: "invalid_request" }, 400);
     }
-    const status = statuses[error.code];
-    if (status !== undefined) return c.json({ error: error.code }, status);
+    // 表は素のオブジェクトなので、prototype 由来の名前（toString など）を引くと関数が返る。
+    // 未知のコードは変更前と同じく herdr_unavailable にする。
+    if (Object.hasOwn(statuses, error.code)) {
+      return c.json({ error: error.code }, statuses[error.code]);
+    }
   }
   return c.json({ error: "herdr_unavailable" }, 502);
 };
