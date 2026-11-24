@@ -11,7 +11,7 @@ export type View = { split: SplitView; expanded: ReadonlySet<string> };
 export type PreviewTarget = { paneId: string; file: ChatFile; shown: boolean };
 
 // 閉じる確認。後継は確認を開いた時点で決める。SSE が閉じたペインを落とした後では、
-// 次のペインを引けないため。
+// 次のペインを引けない。後継は同じ葉（セル）の次のタブから選ぶ。
 export type Closing = {
   paneId: string;
   action: PaneCloseAction;
@@ -26,12 +26,13 @@ export type OperationMenu = {
   open: boolean;
 };
 
-// ドラッグの落とし先。中央は入れ替え、端はその方向への分割。
+// ドラッグの落とし先。中央はセルの末尾への移動、端はその方向への分割。
 // kind は落とし先がセルかタブか。枠を出す側を分けるために持つ。
-// タブの side は差し込み位置。2 枚以上の分割では入れ替えなので使わない。
+// タブの side は差し込み位置。gap はタブとタブの間・列の余白で、同じ葉でも
+// 並べ替えたペインを選ぶ。タブの上では並べ替えだけにして選択を動かさない。
 export type DropTarget =
   | { kind: "cell"; pane: string; zone: DropZone }
-  | { kind: "tab"; pane: string; side: TabSide };
+  | { kind: "tab"; pane: string; side: TabSide; gap: boolean };
 
 // メニューを閉じても続く操作。busy はメニューの外に置き、開き直しても実行中を出す。
 export type GitAction =
@@ -53,8 +54,8 @@ export type Removing = {
   phase: "confirm" | "busy" | "leave" | "failed";
 };
 
-// タブから外すアニメーション（TabBar）の対象。完了してから openTabs へ反映する。
-// successor は閉じる確認で決めた後継。× では省略し、removeTab の既定に任せる。
+// タブから外すアニメーション（TabBar）の対象。完了してから葉のタブへ反映する。
+// successor は閉じる確認で決めた同じ葉の後継。× では省略し、removeTab の既定に任せる。
 export type LeavingTab = { paneId: string; successor?: string | null };
 
 // スペースを閉じる確認。フォルダは残るが、実行中のエージェントは終わる。

@@ -301,20 +301,11 @@ export type PlaceChip = {
   parent: string;
 };
 
-// 分割セルの見出しに出す場所。タブが現在のスペースを言うので、作成元だけを返す。
-// 作成元が無い・空・見出しの名前と同じ・いまのスペースと同じなら、繰り返しになるので
-// チップごと出さない（null）。
-export function placeChip(
-  displayName: string,
-  parentSpaceName: string | null,
-  spaceName: string,
-): PlaceChip | null {
-  if (
-    parentSpaceName === null ||
-    parentSpaceName === "" ||
-    parentSpaceName === displayName ||
-    parentSpaceName === spaceName
-  ) {
+// セル見出しに出す場所。現在のスペースはタブ列が言うので、作成元だけを返す。
+// 作成元が無い・空・いまのスペースと同じなら、繰り返しになるのでチップごと出さない
+// （null）。見出しからペイン名を落としたので、親がペイン名と同じでも意味を持つ。
+export function placeChip(parentSpaceName: string | null, spaceName: string): PlaceChip | null {
+  if (parentSpaceName === null || parentSpaceName === "" || parentSpaceName === spaceName) {
     return null;
   }
   return { parent: parentSpaceName };

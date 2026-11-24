@@ -6,7 +6,7 @@ import type { PreviewTarget } from "./types";
 
 export type UsePreview = {
   preview: PreviewTarget | null;
-  // 対象のペインがタブにあるか。開いた履歴にもスロットにも入れないので、
+  // 対象のペインがどこかの葉のタブにあるか。プレビューは tabs に入れないので、
   // タブに出すかはこれで決める。
   previewInTab: boolean;
   // タブから選ばれていて、本文にも出ているか。
@@ -23,8 +23,9 @@ type PreviewOptions = {
   openTabs: readonly string[];
 };
 
-// プレビューは一時タブのまま。開いた履歴にもスロットにも入れず、対象のペインが開いている
-// 間だけタブに出せる。ペインのタブを選んだら閉じずに隠す。閉じるのはプレビュー自身の操作。
+// プレビューは一時タブのまま。どの葉の tabs にも入れず、対象のペインがどこかの葉に
+// ある間だけ、その葉のタブ列の末尾に出せる。ペインのタブを選んだら閉じずに隠す。
+// 閉じるのはプレビュー自身の操作。
 export function usePreview(options: PreviewOptions): UsePreview {
   const { state, openTabs } = options;
   const [preview, setPreview] = useState<PreviewTarget | null>(null);

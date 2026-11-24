@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { AppState, PaneState } from "../server/herdr/state";
 import { messageFileLabel } from "../shared/message-files";
@@ -92,19 +93,21 @@ import {
 } from "./selection";
 import {
   EMPTY_SPLIT_VIEW,
+  activePanes,
   clearCurrent,
   dropOnPane,
-  leafPanes,
+  layoutKey,
+  leafOfPane,
   moveTab,
   multiSpace,
-  nextTabPane,
   openPane,
+  openTabs,
   readingOrder,
   removeTab,
+  successorTab,
   syncSplitView,
-  tabDropMode,
-  tabPanes,
   type DropZone,
+  type SplitLeaf,
   type SplitNode,
   type SplitView,
 } from "./split-view";
@@ -122,8 +125,6 @@ import {
 } from "./layout";
 
 const NO_GROUPS: ReadonlySet<string> = new Set();
-// スロット色を出さないときの並び。狭い画面は 4 色を使わない。
-const NO_SLOTS: readonly string[] = [];
 
 const NO_PARENT_PANE_IDS: ReadonlySet<string> = new Set();
 
@@ -264,7 +265,7 @@ export function App() {
     ) {
       // タブとして開いていないペインはアニメーションできない。保留だけ残すと
       // 次のスナップショットまで一覧が古いままになるので、その場で適用する。
-      if (!splitRef.current.openTabs.includes(closeTarget.paneId)) {
+      if (leafOfPane(splitRef.current.layout, closeTarget.paneId) === null) {
         heldSnapshot.current = null;
         setClosing(null);
         setState(next);
@@ -361,7 +362,7 @@ export function App() {
   const parentPaneIds = state === null ? NO_PARENT_PANE_IDS : markedParentPaneIds(state);
 
   // 選んだペインがスナップショットから消えても id は残す。findPane が null を
-  // 返すので表示は一覧に戻り、戻ってきたときは同じペインを開ける。タブとスロットは
+  // 返すので表示は一覧に戻り、戻ってきたときは同じペインを開ける。タブとセルは
   // スナップショットに合わせて落とす。
   const rememberedView =
     view ??
@@ -379,29 +380,28 @@ export function App() {
   const pane = state ? findPane(state, selectedPaneId) : null;
 
   // タブ・木・選択は 1 つのキーに保存する。同じ内容を書き直さない。
-  const splitKey = `${split.openTabs.join(" ")}\n${split.recent.join(" ")}\n${split.current ?? ""}\n${JSON.stringify(split.layout)}`;
+  // FLIP のキーは木の形とタブの並びだけで作り、active と current では動かさない。
+  const splitKey = layoutKey(split.layout);
+  // 保存は選択（current / active）も含める。FLIP は木の形とタブの並びだけで起こす。
+  const persistKey = JSON.stringify(split);
   useEffect(() => {
     if (state === null) return;
     writeSplitView(split);
-  }, [splitKey]);
+  }, [persistKey]);
 
   // ドロップやタブの反映の直前に位置を控え、変わったセルとタブを前の位置から滑らせる。
   const captureFlip = useFlipLayout(splitKey);
 
-  // セルごとに文脈を引く。1 つの context を共有すると、別スペースを並べたときに
-  // PR のチップや Git のメニューが別スペースの値になる。
-  const context = state ? findPaneContext(state, selectedPaneId) : null;
-  // タブバーは表示順。
-  const tabRows =
-    state === null
-      ? []
-      : tabPanes(split, wide).flatMap((paneId) => {
-          const row = findPaneRow(state, paneId);
-          return row === null ? [] : [row];
-        });
-  const multiSpaceTabs = multiSpace(tabRows.map((row) => row.workspace.id));
+  // 表示する葉。広い画面は木の全部、狭い画面はフォーカス中の葉（無ければ最初）だけを
+  // 1 セルとして投影する。他の葉は状態に残し、広い画面に戻ったときに復元する。
+  const leaves = readingOrder(split.layout);
+  const focused = leafOfPane(split.layout, split.current ?? "");
+  const projected = focused ?? leaves[0] ?? null;
+  const shownLeaves = wide ? leaves : projected === null ? [] : [projected];
+  const splitCells = wide && leaves.length > 1;
+  const compact = splitCells;
 
-  // プレビューは一時タブのまま。対象のペインが開いている間だけ、タブと本文に出せる。
+  // プレビューは一時タブのまま。対象のペインがどこかの葉にある間だけ、タブと本文に出せる。
   const {
     preview,
     previewInTab,
@@ -410,7 +410,8 @@ export function App() {
     show: showPreview,
     hide: hidePreview,
     close: closePreview,
-  } = usePreview({ state, openTabs: split.openTabs });
+  } = usePreview({ state, openTabs: openTabs(split) });
+  const previewLeaf = preview === null ? null : leafOfPane(split.layout, preview.paneId);
 
   // ペインがスナップショットから消えたら、その添付と進行中のアップロードを捨てる。
   // ペインを切り替えただけでは捨てない（戻ってから送れるようにする）。
@@ -791,7 +792,7 @@ export function App() {
     // 縮み終わってからタブ順が変わる。残ったタブをその位置から滑らせる。
     captureFlip();
     setView({
-      split: removeTab(splitRef.current, target.paneId, target.successor, wide),
+      split: removeTab(splitRef.current, target.paneId, target.successor),
       expanded: expandedRef.current,
     });
   };
@@ -802,7 +803,7 @@ export function App() {
       if (pending.paneId === paneId) return;
       finishTabLeave(pending.paneId);
     }
-    if (!splitRef.current.openTabs.includes(paneId)) return;
+    if (leafOfPane(splitRef.current.layout, paneId) === null) return;
     const target = { paneId, successor };
     leavingTabRef.current = target;
     setLeavingTab(target);
@@ -821,7 +822,7 @@ export function App() {
     setClosing({
       paneId,
       action,
-      next: nextTabPane(split, paneId, wide),
+      next: successorTab(split, paneId),
       phase: "confirm",
     });
   };
@@ -1008,16 +1009,13 @@ export function App() {
     }
   };
 
-  // シェルの前景プロセスは Herdr のイベントに載らない。グリッドに入っているペインと
-  // current のシェルだけを読む。開いた履歴の全部を読むと、3 秒ごとの要求が増える。
+  // シェルの前景プロセスは Herdr のイベントに載らない。各セルが表示しているペインと
+  // current のシェルだけを読む。葉の全タブを読むと、3 秒ごとの要求が増える。
   const polledIds =
     state === null
       ? []
       : [
-          ...new Set([
-            ...leafPanes(split.layout),
-            ...(selectedPaneId === null ? [] : [selectedPaneId]),
-          ]),
+          ...new Set([...activePanes(split), ...(selectedPaneId === null ? [] : [selectedPaneId])]),
         ].filter((id) => findPane(state, id)?.agent === null);
   const processes = usePaneProcesses(polledIds);
 
@@ -1066,19 +1064,12 @@ export function App() {
   // 落としたときの選択はレイアウト操作。一覧の行を開いたわけではないので、既読の
   // 保留は作らない（タブからのドラッグと同じ）。
   const applyDrop = (paneId: string, target: DropTarget) => {
-    // ドラッグは広い画面だけで始まる。途中で幅が変わっても開始時の分割として扱う。
-    const mode = target.kind === "tab" ? tabDropMode(split, paneId, target.pane, true) : null;
-    if (target.kind === "tab" && mode === null) return;
+    // ドラッグは広い画面だけで始まる。タブ列への差し込みは移動、セルは端なら分割、
+    // 中央なら末尾への移動。
     const next =
-      target.kind === "tab" && mode === "insert"
-        ? moveTab(split, paneId, target.pane, target.side)
-        : dropOnPane(
-            split,
-            paneId,
-            target.pane,
-            target.kind === "tab" ? "center" : target.zone,
-            true,
-          );
+      target.kind === "tab"
+        ? moveTab(split, paneId, target.pane, target.side, target.gap)
+        : dropOnPane(split, paneId, target.pane, target.zone);
     if (next === split) return;
     captureFlip();
     setView({ split: next, expanded });
@@ -1089,9 +1080,21 @@ export function App() {
     onDrop: applyDrop,
   });
 
-  // 掴んでいるタブの見出し。タブバーと同じ名前を使い、掴んだものがそのまま付いてくるようにする。
+  // 掴んでいるタブの見出し。タブバーと同じ名前と、掴んだペインの葉の
+  // スペース前置きを使い、掴んだものがそのまま付いてくるようにする。
   const draggedRow =
     state === null || dragging === null ? null : findPaneRow(state, dragging.paneId);
+  const draggedLeaf =
+    draggedRow === null || state === null ? null : leafOfPane(split.layout, draggedRow.pane.id);
+  const draggedMultiSpace =
+    draggedLeaf === null || state === null
+      ? false
+      : multiSpace(
+          draggedLeaf.tabs.flatMap((paneId) => {
+            const row = findPaneRow(state, paneId);
+            return row === null ? [] : [row.workspace.id];
+          }),
+        );
   const draggingLabel =
     draggedRow === null
       ? ""
@@ -1105,33 +1108,11 @@ export function App() {
               ),
               draggedRow.workspace,
             ),
-            multiSpaceTabs,
+            draggedMultiSpace,
           ),
         );
-  // タブの落とし先。分割では枠、1 枚表示では差し込みの線で示す。
-  const tabDrop =
-    dragging?.target?.kind === "tab"
-      ? {
-          pane: dragging.target.pane,
-          side:
-            tabDropMode(split, dragging.paneId, dragging.target.pane, wide) === "insert"
-              ? dragging.target.side
-              : null,
-        }
-      : null;
 
-  // 空きの葉は持たない。
-  const layoutPanes = readingOrder(split.layout);
-  const splitCells = wide && layoutPanes.length > 1;
-  const gridOn = wide && pane !== null && split.layout !== null;
-  const compact = splitCells;
-  // 消えるペインが画面に出ているとき、本文側でも同じ時間だけ淡く消す。セルが並ぶ
-  // ときはそのセルだけを対象にし、1 枚表示のときは本文全体を対象にする。
   const leavingPaneId = leavingTab?.paneId ?? null;
-  const leavingInCell =
-    leavingPaneId !== null && !previewing && gridOn && layoutPanes.includes(leavingPaneId);
-  const detailLeaving =
-    leavingPaneId !== null && leavingPaneId === selectedPaneId && !leavingInCell;
 
   // 4 枚の判定は BFF と同じタブの枚数で行う。
   const menuPaneId = menu?.target.kind === "pane" ? menu.target.id : null;
@@ -1212,27 +1193,19 @@ export function App() {
         treeWidth={fileTreeWidthPx(treeWidth)}
         treeIcons={treeIcons}
         current={isCurrent}
-        // 名前はタブのチップと重なる。セルが並ぶときだけ、どのセルかを示すために出す。
-        labeled={splitCells}
-        // 親ペインの印はタブの幅を食うので、セル見出しに出す。
+        // 親ペインの印はセル見出しに出す。
         parentPaneIds={parentPaneIds}
-        // 複数スペースのペインが並ぶときだけ、見出しに場所を添える。
-        showSpace={splitCells && multiSpaceTabs}
-        // ブランチの文字は一覧が隠れる狭い画面でだけ出す。分割セルでも PR のチップを引くため、
-        // 値そのものは常に渡す。
+        // セル見出しはブランチと作成元スペースだけを出す。名前はタブ列が言う。
         branch={where.branch}
-        // 上流との差はワークスペースの属性。セルが並ぶときは同じ値が並ぶので出さない。
-        sync={splitCells ? null : where.sync}
-        // 上流との差はセルでは出さないが、PR を引く鍵はセルでも要る。表示用の sync とは
-        // 別に渡し、分割表示のまま push してもチップが引き直せるようにする。
+        sync={where.sync}
+        // PR を引く鍵はセルでも要る。表示用の sync とは別に渡し、分割表示のまま
+        // push してもチップが引き直せるようにする。
         upstreamBranch={where.sync?.upstreamBranch ?? null}
         workspaceMenuOpen={
           menu?.open === true &&
           menu.target.kind === "workspace" &&
           menu.target.id === where.workspaceId
         }
-        // 広い画面でも PR のチップは見出しに出す。ブランチだけを隠す。
-        showBranch={!wide}
         waitingMs={item.agentStatus === "working" ? workingMs(workingSince, item.id, now) : null}
         now={now}
         running={processes.get(item.id)?.running === true}
@@ -1263,21 +1236,34 @@ export function App() {
     );
   };
 
-  // ドラッグ中のプレビューの文言。中央は木の中なら入れ替え、外のタブなら置換。
-  const dropLabel = (zone: DropZone, moving: string | null): string => {
+  // ドラッグ中のプレビューの文言。中央はセルの末尾への移動、端は分割。
+  const dropLabel = (zone: DropZone): string => {
     if (zone !== "center") {
       return { top: "上に追加", bottom: "下に追加", left: "左に追加", right: "右に追加" }[zone];
     }
-    return moving !== null && layoutPanes.includes(moving) ? "ここで入れ替え" : "この位置に表示";
+    return "ここへ移動";
   };
 
-  // セルは木の葉。親の分割軸を data 属性に置き、ドラッグ中の向き判定に使う。
-  const renderCell = (paneId: string, parentDir: "row" | "col" | null) => {
+  // セルは木の葉。タブ列を上端に置き、active のペインを本文に出す。親の分割軸を
+  // data 属性に置き、ドラッグ中の向き判定に使う。
+  const renderCell = (leaf: SplitLeaf, parentDir: "row" | "col" | null) => {
     if (state === null) return null;
-    const item = findPane(state, paneId);
+    const item = findPane(state, leaf.active);
     if (item === null) return null;
-    const where = findPaneContext(state, paneId);
-    const isCurrent = item.id === pane?.id;
+    const where = findPaneContext(state, item.id);
+    if (where === null) return null;
+    const rows = leaf.tabs.flatMap((paneId) => {
+      const row = findPaneRow(state, paneId);
+      return row === null ? [] : [row];
+    });
+    const isCurrent = focused !== null && leaf === focused;
+    const multi = multiSpace(rows.map((row) => row.workspace.id));
+    const previewTab =
+      previewInTab && preview !== null && previewLeaf === leaf
+        ? { name: messageFileLabel(preview.file.name), selected: preview.shown }
+        : null;
+    // 同じ葉の並べ替えでセルを描き直さないよう、セルの目印はタブ ID の最小値にする。
+    const anchor = leaf.tabs.reduce((min, id) => (id < min ? id : min), leaf.tabs[0] ?? item.id);
     // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
     // HWC から動かせないセルが current のままになる。
     const activate = () => {
@@ -1311,32 +1297,55 @@ export function App() {
       }
       startPaneDrag(event, item.id);
     };
-    // 落とし先が固定タブのときは、セル側に枠を出さない。
     const target =
       dragging?.target?.kind === "cell" && dragging.target.pane === item.id
         ? dragging.target
         : null;
+    const tabDrop =
+      dragging?.target?.kind === "tab" && leaf.tabs.includes(dragging.target.pane)
+        ? { pane: dragging.target.pane, side: dragging.target.side }
+        : null;
     return (
       <section
         class="hwc-split-cell"
-        data-slot={layoutPanes.indexOf(item.id) + 1}
         data-compact={compact}
-        data-current={isCurrent}
         data-drop-pane={item.id}
         data-drop-parent={parentDir ?? undefined}
+        data-flip-cell={anchor}
         data-split-enter={item.id === entering ? "true" : undefined}
-        data-leaving={leavingTab?.paneId === item.id ? "true" : undefined}
-        key={item.id}
+        key={anchor}
         onPointerDown={(event) => {
           activate();
           dragFromHead(event);
         }}
         onFocusIn={activateFromFocus}
       >
-        {where === null ? null : renderPane(item, where, compact, isCurrent)}
+        <TabBar
+          tabs={rows}
+          currentPaneId={leaf.active}
+          focused={isCurrent}
+          multiSpace={multi}
+          parentPaneIds={parentPaneIds}
+          processes={processes}
+          preview={previewTab}
+          status={wide ? null : detailStatus}
+          leavingPaneId={leavingPaneId}
+          droppable={!previewing}
+          onSelectPane={selectFromTab}
+          onRemoveTab={removeFromTabs}
+          onLeaveFinished={finishTabLeave}
+          onSelectPreview={showPreview}
+          onClosePreview={closePreview}
+          onBack={wide ? null : back}
+          onDragStart={startPaneDrag}
+          tabDrop={tabDrop}
+        />
+        <div class="hwc-cell-body" data-leaving={leavingPaneId === item.id ? "true" : undefined}>
+          {renderPane(item, where, compact, isCurrent)}
+        </div>
         {target === null ? null : (
           <div class="hwc-drop" data-zone={target.zone} aria-hidden="true">
-            <span>{dropLabel(target.zone, dragging?.paneId ?? null)}</span>
+            <span>{dropLabel(target.zone)}</span>
           </div>
         )}
       </section>
@@ -1344,14 +1353,23 @@ export function App() {
   };
 
   // 分割は再帰。子の親方向をそのまま渡し、端の向きを決める。
-  const renderSplit = (node: SplitNode, parentDir: "row" | "col" | null) =>
+  const renderSplit = (node: SplitNode, parentDir: "row" | "col" | null): ComponentChildren =>
     node.kind === "leaf" ? (
-      renderCell(node.pane, parentDir)
+      renderCell(node, parentDir)
     ) : (
       <div class="hwc-split" data-dir={node.dir}>
         {node.children.map((child) => renderSplit(child, node.dir))}
       </div>
     );
+
+  const previewRows =
+    state === null || previewLeaf === null
+      ? []
+      : previewLeaf.tabs.flatMap((paneId) => {
+          const row = findPaneRow(state, paneId);
+          return row === null ? [] : [row];
+        });
+  const previewMulti = multiSpace(previewRows.map((row) => row.workspace.id));
 
   const overlays: AppOverlaysProps = {
     dragging,
@@ -1435,8 +1453,6 @@ export function App() {
             <PaneList
               state={state}
               selectedPaneId={selectedPaneId}
-              // スロット色は PC だけ。狭い画面ではタブ履歴と 2 段目だけを出す。
-              slots={wide ? layoutPanes : NO_SLOTS}
               parentPaneIds={parentPaneIds}
               scope={scope}
               onScope={changeScope}
@@ -1557,61 +1573,53 @@ export function App() {
             />
           ) : state === null ? (
             <Placeholder connection={connection} />
-          ) : (wide && tabRows.length > 0) || pane !== null ? (
+          ) : split.layout !== null && shownLeaves.length > 0 ? (
             <div class="hwc-detail-inner">
-              <TabBar
-                tabs={tabRows}
-                slots={wide ? layoutPanes : NO_SLOTS}
-                currentPaneId={selectedPaneId}
-                multiSpace={multiSpaceTabs}
-                parentPaneIds={parentPaneIds}
-                processes={processes}
-                preview={
-                  preview !== null && previewInTab
-                    ? {
-                        name: messageFileLabel(preview.file.name),
-                        selected: preview.shown,
-                      }
-                    : null
-                }
-                status={detailStatus}
-                leavingPaneId={leavingPaneId}
-                onSelectPane={selectFromTab}
-                onRemoveTab={removeFromTabs}
-                onLeaveFinished={finishTabLeave}
-                onSelectPreview={showPreview}
-                onClosePreview={closePreview}
-                onBack={back}
-                onDragStart={startPaneDrag}
-                canReorder={wide && layoutPanes.length <= 1}
-                tabDrop={tabDrop}
-              />
-              <div class="hwc-detail-body" data-leaving={detailLeaving ? "true" : undefined}>
-                {previewing && preview !== null ? (
-                  <Preview
-                    key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
-                    paneId={preview.paneId}
-                    file={preview.file}
-                    onClose={closePreview}
+              {previewing && preview !== null && previewLeaf !== null ? (
+                <>
+                  <TabBar
+                    tabs={previewRows}
+                    currentPaneId={previewLeaf.active}
+                    focused={previewLeaf === focused}
+                    multiSpace={previewMulti}
+                    parentPaneIds={parentPaneIds}
+                    processes={processes}
+                    preview={{
+                      name: messageFileLabel(preview.file.name),
+                      selected: preview.shown,
+                    }}
+                    status={detailStatus}
+                    leavingPaneId={leavingPaneId}
+                    droppable={false}
+                    onSelectPane={selectFromTab}
+                    onRemoveTab={removeFromTabs}
+                    onLeaveFinished={finishTabLeave}
+                    onSelectPreview={showPreview}
+                    onClosePreview={closePreview}
+                    onBack={wide ? null : back}
+                    onDragStart={startPaneDrag}
+                    tabDrop={null}
                   />
-                ) : pane === null || context === null ? (
-                  <div class="hwc-empty hwc-empty--detail">
-                    <div class="hwc-empty-mark hwc-empty-mark--app">
-                      <HwcMark size={40} />
-                    </div>
-                    <h2 class="hwc-empty-title">ペインを選んでください</h2>
-                    <p class="hwc-empty-text">
-                      タブか一覧からペインを選ぶと、出力と入力欄が出ます。
-                    </p>
+                  <div class="hwc-detail-body">
+                    <Preview
+                      key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
+                      paneId={preview.paneId}
+                      file={preview.file}
+                      onClose={closePreview}
+                    />
                   </div>
-                ) : gridOn && split.layout !== null ? (
-                  <div class="hwc-detail-grid" data-single={layoutPanes.length === 1}>
-                    {renderSplit(split.layout, null)}
-                  </div>
-                ) : (
-                  renderPane(pane, context, false, true)
-                )}
-              </div>
+                </>
+              ) : (
+                <div class="hwc-detail-grid" data-single={shownLeaves.length === 1}>
+                  {wide
+                    ? split.layout === null
+                      ? null
+                      : renderSplit(split.layout, null)
+                    : projected === null
+                      ? null
+                      : renderCell(projected, null)}
+                </div>
+              )}
             </div>
           ) : (
             <div class="hwc-empty hwc-empty--detail">

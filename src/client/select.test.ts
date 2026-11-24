@@ -240,19 +240,16 @@ test("a linked worktree takes the space it was created from", () => {
   });
 });
 
-test("a place chip shows only the space the pane came from", () => {
-  expect(placeChip("Claude Code", "hwc", "silver-harbor-4da7")).toEqual({ parent: "hwc" });
-  // 作成元が無ければ、場所はタブが言うのでチップは出さない。
-  expect(placeChip("Claude Code", null, "hwc")).toBeNull();
-  expect(placeChip("Claude Code", "", "hwc")).toBeNull();
+test("a place chip shows only the parent space", () => {
+  expect(placeChip("hwc", "silver-harbor-4da7")).toEqual({ parent: "hwc" });
+  // 作成元が無ければ、場所はタブ列が言うのでチップは出さない。
+  expect(placeChip(null, "hwc")).toBeNull();
+  expect(placeChip("", "hwc")).toBeNull();
   // 同じ名前のスペースを作成元にしていたら、繰り返さない。
-  expect(placeChip("Claude Code", "hwc", "hwc")).toBeNull();
-  // 見出しの名前と同じなら、繰り返さない。
-  expect(placeChip("hwc", "hwc", "silver-harbor-4da7")).toBeNull();
-  // 現在のスペースはタブが言う。見出しの名前と一致しても、作成元は残す。
-  expect(placeChip("silver-harbor-4da7", "hwc", "silver-harbor-4da7")).toEqual({
-    parent: "hwc",
-  });
+  expect(placeChip("hwc", "hwc")).toBeNull();
+  // 見出しからペイン名を落としたので、親がペイン名と同じでも意味を持つ。
+  // 現在のスペースと違えば出す。
+  expect(placeChip("silver-harbor-4da7", "hwc")).toEqual({ parent: "silver-harbor-4da7" });
 });
 
 test("the counts follow the nesting", () => {

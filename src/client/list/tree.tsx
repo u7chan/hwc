@@ -360,7 +360,6 @@ export function TreePaneList(props: TreePaneListProps) {
         {tab.panes.map((pane) => {
           const startedAt = workingSince.get(pane.id);
           const branch = branchOf.get(pane.id) ?? null;
-          const slot = props.slots.indexOf(pane.id);
           return (
             // 狭い行の判定は、行そのものではなくこの枠の幅で行う。
             <li key={pane.id} class="hwc-pane-row">
@@ -368,7 +367,6 @@ export function TreePaneList(props: TreePaneListProps) {
                 class="hwc-pane"
                 data-pane-id={pane.id}
                 data-current={pane.id === selectedPaneId}
-                data-slot={slot >= 0 ? slot + 1 : undefined}
               >
                 <button
                   type="button"
