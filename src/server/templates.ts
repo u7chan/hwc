@@ -16,6 +16,5 @@ export function createTemplatesFile(root: string): TemplatesFile {
 export type TemplatesStore = JsonStore<Template[]>;
 
 export function createTemplatesStore(file: TemplatesFile): TemplatesStore {
-  // 壊れた JSON は空へ落とす。中身を直す入口は設定画面の上書きだけ。
   return createJsonStore(file, [], parseStoredTemplates);
 }

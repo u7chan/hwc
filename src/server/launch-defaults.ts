@@ -24,7 +24,6 @@ export type LaunchDefaultsStore = {
 };
 
 export function createLaunchDefaultsStore(file: LaunchDefaultsFile): LaunchDefaultsStore {
-  // 壊れた JSON は未設定へ落とす。直す入口は設定画面での保存・解除だけ。
   const store: JsonStore<LaunchDefaults> = createJsonStore(file, {}, parseLaunchDefaults);
   return {
     get: () => store.get(),

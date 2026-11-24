@@ -17,7 +17,6 @@ export function createRestartSettingsFile(root: string): RestartSettingsFile {
 export type RestartSettingsStore = JsonStore<RestartSettings>;
 
 export function createRestartSettingsStore(file: RestartSettingsFile): RestartSettingsStore {
-  // 壊れた JSON は既定値へ落とす。中身を直す入口は設定画面の上書きだけ。
   return createJsonStore(file, parseRestartSettings(null), parseRestartSettings);
 }
 

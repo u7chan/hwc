@@ -29,8 +29,7 @@ export type NotificationSettingsStore = JsonStore<NotificationSettings>;
 export function createNotificationSettingsStore(
   file: NotificationSettingsFile,
 ): NotificationSettingsStore {
-  // 壊れた JSON は既定値へ落とす。中身を直す入口は設定画面の上書きだけ。設定はメモリ上にも
-  // 持つので、保存が失敗すれば古い設定が残る。
+  // トグル・scope・URL を同時に触られても食い違わないよう、設定はメモリ上にも持つ。
   return createJsonStore(file, { ...DEFAULT_NOTIFICATION_SETTINGS }, parseNotificationSettings);
 }
 
