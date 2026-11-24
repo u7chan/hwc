@@ -1,4 +1,5 @@
 import { flatText } from "./flat-text";
+import { asRecord } from "./json";
 
 // AskUserQuestion への回答。質問ごとに、選択肢のラベルか自由入力のどちらか一方だけを持つ。
 // クライアントが組み立てて送り、BFF が pending の質問と照合してから本文にする（docs/adr/claude-integration.md）。
@@ -171,9 +172,4 @@ function chosenLabels(question: AnswerQuestion, labels: readonly string[]): stri
 // ようにする。要らないラベルは、そのまま出す。
 function quoteLabel(label: string): string {
   return /[,:"]/.test(label) ? JSON.stringify(label) : label;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
 }

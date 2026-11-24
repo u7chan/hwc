@@ -16,6 +16,7 @@ import {
   stripAttachedFiles,
 } from "../../shared/attachments";
 import { ANSWER_HEADING, parseAnswerText, type QuestionAnswer } from "../../shared/answer";
+import { asRecord, nonEmptyText } from "../../shared/json";
 import { answersFromToolResult, askMessages } from "./claude-ask";
 import { ASK_USER_QUESTION, questionPending, toolPending, toolSummary } from "./claude-pending";
 import { readLive } from "./claude-live";
@@ -1283,13 +1284,4 @@ function timestampOf(value: unknown): number {
   if (typeof value !== "string") return 0;
   const at = Date.parse(value);
   return Number.isFinite(at) ? at : 0;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function nonEmptyText(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
 }

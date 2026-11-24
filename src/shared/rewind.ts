@@ -1,3 +1,5 @@
+import { asRecord } from "./json";
+
 // hwc と mypi の間で共有する rewind の契約。mypi 側の src/hwc-rewind/core.ts と
 // 同じ形を保つ。marker はセッションの custom entry で、PI の LLM 文脈には入らない。
 export const REWIND_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -16,11 +18,6 @@ export type RewindMarker = {
 
 export function isRewindId(value: unknown): value is string {
   return typeof value === "string" && REWIND_ID_PATTERN.test(value);
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
 }
 
 export function isRewindCapability(record: Record<string, unknown>): boolean {

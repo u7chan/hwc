@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { asRecord } from "../../shared/json";
 import {
   ASK_USER_QUESTION,
   parsePending,
@@ -166,9 +167,4 @@ async function pruneStale(root: string, now: number): Promise<void> {
 
 function isNonEmpty(value: unknown): value is string {
   return typeof value === "string" && value !== "";
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
 }

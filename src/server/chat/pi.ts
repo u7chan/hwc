@@ -11,6 +11,7 @@ import type {
   SessionChatClient,
 } from "./contract";
 import { stripAttachedFiles } from "../../shared/attachments";
+import { asRecord, nonEmptyText } from "../../shared/json";
 import { isRewindCapability, parseRewindMarker, type RewindMarker } from "../../shared/rewind";
 import { ChatUnavailableError } from "./errors";
 import { limitMessages, pruneOrphanAskAnswers } from "./limit";
@@ -963,15 +964,6 @@ function clear(reader: ChatReader): void {
   reader.entries.clear();
   reader.leafId = null;
   reader.canRewind = false;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function nonEmptyText(value: unknown): string | null {
-  return typeof value === "string" && value !== "" ? value : null;
 }
 
 const REWIND_SCAN_BYTES = 256 * 1024;

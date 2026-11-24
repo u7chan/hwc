@@ -7,8 +7,9 @@ import {
   isAgentModel,
   modelKey,
 } from "../shared/agents";
+import { asRecord } from "../shared/json";
 import { OpencodeServiceNotRunningError, readServiceFile, requestJson } from "./chat/opencode";
-import { asRecord, type CodexReader, nextCursor, withCodex } from "./codex";
+import { type CodexReader, nextCursor, withCodex } from "./codex";
 import { loadPiEfforts } from "./pi-efforts";
 
 export type AgentModelsClient = {
