@@ -432,8 +432,12 @@ fixture の `sandbox` は同じ場所を指す 2 スペースで、どちらも�
 5. 起動失敗は、モデルに `@demo/start-fails` を選んで作成すると確かめられる。ワークツリーと
    root pane は残り、ペインの入力欄の上に起動失敗の行と「再試行」「シェルとして使う」が出る。
    下書きは残り、「シェルとして使う」で `$ コマンドを入力` のシェルに切り替わる。
-6. `worktree_open_failed`（結果不明）はブラウザのリクエスト差し替えで
-   `/api/workspaces/:id/create-worktree` に 502 を返して確かめる（手順は下の「応答を差し替える」）。再送のボタンは出ず、「閉じる」だけになる。
+6. 失敗の表示は、ブラウザのリクエスト差し替えで確かめる（手順は下の「応答を差し替える」）。
+   `worktree_create_failed`（502）と `worktree_operation_in_progress`（409）は `canRetryWorktree` が true で、
+   入力を残したまま「キャンセル」「作成して起動」が出る。結果不明として `UNKNOWN_NOTICE` になるのは
+   `timeout` / `failed` / `herdr_unavailable` だけ。`worktree_open_failed`（502）は、チェックアウトは
+   作成されたがスペースを開けなかった失敗で、`canRetryWorktree` が false なので「閉じる」だけになる。
+   文言は「チェックアウトは作成されましたが、スペースを開けませんでした。Herdr のワークツリーを確認してください。」
 7. Herdr の worktree 情報を持たない `plain-checkout` でも、メニューに「新しいワークツリー」が出る。
    シェルを選んで作成すると root pane が開き、一覧には `plain-checkout` の配下に新しいワークツリーが増える。
    起点の登録情報は架空 Herdr が補い、BFF の状態では `managed: true` に変わる。事前登録の操作は挟まない。
