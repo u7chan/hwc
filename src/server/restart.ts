@@ -1,84 +1,23 @@
-import {
-  accessSync,
-  constants,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseRestartSettings, type RestartSettings } from "../shared/restart";
+import { createJsonStore, createStateFile, type JsonStore, type StateFile } from "./state-file";
 
-export type RestartSettingsFile = {
-  read: () => string | null;
-  write: (raw: string) => void;
-};
+export type RestartSettingsFile = StateFile;
 
 export function restartSettingsPath(root: string): string {
   return join(root, "restart.json");
 }
 
-// 添付・ペイン時刻と同じ状態ディレクトリ配下の 1 ファイル（docs/adr/state-storage.md）。書式は通知設定に
-// 揃える。固定の tmp 名は並行した書き込みや前回の残骸と衝突するので、一意な名前で作って
-// rename で置き換える。
+// 添付・ペイン時刻と同じ状態ディレクトリ配下の 1 ファイル（docs/adr/state-storage.md）。書式は通知設定に揃える。
 export function createRestartSettingsFile(root: string): RestartSettingsFile {
-  const path = restartSettingsPath(root);
-  let serial = 0;
-  return {
-    read: () => {
-      try {
-        return readFileSync(path, "utf8");
-      } catch {
-        // まだ無い・読めないは既定値で始める。設定を読めないだけで起動は止めない。
-        return null;
-      }
-    },
-    write: (raw) => {
-      mkdirSync(root, { recursive: true });
-      serial += 1;
-      const tmp = `${path}.${process.pid}.${serial}.tmp`;
-      try {
-        writeFileSync(tmp, raw, { flag: "wx" });
-        renameSync(tmp, path);
-      } catch (error) {
-        try {
-          rmSync(tmp, { force: true });
-        } catch {
-          // 後片付けの失敗で元のエラーを隠さない。
-        }
-        throw error;
-      }
-    },
-  };
+  return createStateFile(restartSettingsPath(root));
 }
 
-// 書き込みが成功したときだけメモリを置き換える。失敗すれば古い設定が残る。
-export type RestartSettingsStore = {
-  get: () => RestartSettings;
-  save: (next: RestartSettings) => void;
-};
+export type RestartSettingsStore = JsonStore<RestartSettings>;
 
 export function createRestartSettingsStore(file: RestartSettingsFile): RestartSettingsStore {
-  let current = parseJson(file.read());
-  return {
-    get: () => current,
-    save: (next) => {
-      file.write(JSON.stringify(next));
-      current = next;
-    },
-  };
-}
-
-function parseJson(raw: string | null): RestartSettings {
-  if (raw === null) return parseRestartSettings(null);
-  try {
-    return parseRestartSettings(JSON.parse(raw));
-  } catch {
-    // 壊れた JSON は既定値へ落とす。中身を直す入口は設定画面の上書きだけ。
-    return parseRestartSettings(null);
-  }
+  return createJsonStore(file, parseRestartSettings(null), parseRestartSettings);
 }
 
 export type RestartOutcome = "started" | "not_executable";
