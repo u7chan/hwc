@@ -808,7 +808,8 @@ test("a link keeps only the refs the client can open", () => {
       messages: [{ id: "m1", role: "agent" as const, text: "`docs/note.md`", at: 1_000, links }],
     })?.messages[0]?.links;
 
-  // 本文の表記と一致したリンクだけを、根と版を保ったまま持つ。
+  // 本文との照合は描画側（messageLinks）で、ここは形の検査だけ。通った項目は href・根・
+  // 版・ラベルをそのまま保つ。
   expect(linksOf([link])).toEqual([link]);
   expect(linksOf([{ ...link, root: 1, rootLabel: "mock" }])).toEqual([
     { ...link, root: 1, rootLabel: "mock" },
