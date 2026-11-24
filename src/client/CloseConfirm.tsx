@@ -53,24 +53,11 @@ export function CloseConfirm(props: CloseConfirmProps) {
   return (
     <Confirm
       title={exiting ? "エージェントを終了しますか？" : "ペインを閉じますか？"}
-      description={
-        <>
-          {copy.description}
-          {!props.available ? (
-            <span class="hwc-dialog-error" role="status">
-              状態が変わりました。確認を閉じて、もう一度操作してください。
-            </span>
-          ) : null}
-          {props.failed ? (
-            <span class="hwc-dialog-error" role="status">
-              {closeFailureNotice(props.action)}
-            </span>
-          ) : null}
-        </>
-      }
+      description={copy.description}
       confirmLabel={copy.confirmLabel}
       busy={props.busy}
-      disabled={!props.available}
+      available={props.available}
+      failedNotice={props.failed ? closeFailureNotice(props.action) : undefined}
       onConfirm={props.onConfirm}
       onCancel={props.onCancel}
     />

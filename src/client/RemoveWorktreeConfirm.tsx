@@ -20,21 +20,12 @@ export function RemoveWorktreeConfirm(props: RemoveWorktreeConfirmProps) {
         <>
           チェックアウト <span class="hwc-dialog-id">{props.checkoutPath ?? props.label}</span>{" "}
           を削除し、スペースを閉じます。ブランチは残りますが、未コミット・未追跡のファイルは失われ、実行中のエージェントも終了します。
-          {!props.available ? (
-            <span class="hwc-dialog-error" role="status">
-              状態が変わりました。確認を閉じて、もう一度操作してください。
-            </span>
-          ) : null}
-          {props.failed ? (
-            <span class="hwc-dialog-error" role="status">
-              {REMOVE_WORKTREE_FAILED_NOTICE}
-            </span>
-          ) : null}
         </>
       }
       confirmLabel="削除する"
       busy={props.busy}
-      disabled={!props.available}
+      available={props.available}
+      failedNotice={props.failed ? REMOVE_WORKTREE_FAILED_NOTICE : undefined}
       onConfirm={props.onConfirm}
       onCancel={props.onCancel}
     />
