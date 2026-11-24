@@ -24,7 +24,7 @@ import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
-import { Cell, CellTree, PreviewCell, type CellActions, type CellContext } from "./app/cells";
+import { CellTree, PreviewCell, type CellActions, type CellContext } from "./app/cells";
 import { menuView } from "./app/menu";
 import { tabRows } from "./app/tab-rows";
 import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
@@ -444,6 +444,10 @@ export function App() {
   const shownLeaves = wide ? leaves : projected === null ? [] : [projected];
   const splitCells = wide && leaves.length > 1;
   const compact = splitCells;
+  // セルに描く木。広い画面は木の全部、狭い画面は 1 枚だけ。どちらも同じ部品へ渡す。
+  // 分岐で部品を変えると、画面幅をまたいだ再描画でセルが作り直され、入力中の本文・
+  // フォーカス・スクロール位置が消える。
+  const cellRoot = wide ? split.layout : projected;
 
   // プレビューは一時タブのまま。対象のペインがどこかの葉にある間だけ、タブと本文に出せる。
   const {
@@ -1198,18 +1202,9 @@ export function App() {
                 <PreviewCell context={cellContext} actions={cellActions} />
               ) : (
                 <div class="hwc-detail-grid" data-single={shownLeaves.length === 1}>
-                  {wide ? (
-                    split.layout === null ? null : (
-                      <CellTree
-                        node={split.layout}
-                        parentDir={null}
-                        context={cellContext}
-                        actions={cellActions}
-                      />
-                    )
-                  ) : projected === null ? null : (
-                    <Cell
-                      leaf={projected}
+                  {cellRoot === null ? null : (
+                    <CellTree
+                      node={cellRoot}
                       parentDir={null}
                       context={cellContext}
                       actions={cellActions}

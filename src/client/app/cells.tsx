@@ -225,7 +225,7 @@ function CellTabs(props: CellTabsProps) {
 
 // セルは木の葉。タブ列を上端に置き、active のペインを本文に出す。親の分割軸を
 // data 属性に置き、ドラッグ中の向き判定に使う。
-export function Cell(props: CellProps) {
+function Cell(props: CellProps) {
   const { leaf, parentDir, context, actions } = props;
   const { state, focused, compact, dragging, entering, preview } = context;
   if (state === null) return null;
@@ -318,7 +318,9 @@ export function Cell(props: CellProps) {
   );
 }
 
-// 分割は再帰。子の親方向をそのまま渡し、端の向きを決める。
+// 分割は再帰。子の親方向をそのまま渡し、端の向きを決める。広い画面は木の根を、
+// 狭い画面は 1 枚の葉を渡す。呼ぶ側が同じ部品のままなので、画面幅をまたいでも
+// 同じ位置のセルは作り直されない。
 export function CellTree(props: CellTreeProps): ComponentChildren {
   const { node, parentDir, context, actions } = props;
   return node.kind === "leaf" ? (
