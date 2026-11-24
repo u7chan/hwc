@@ -25,8 +25,6 @@ import {
   agentInfo,
   cacheView,
   contextMeter,
-  idleEchoExpired,
-  answerEchoReleaseAt,
   isPendingConfirmed,
   latestUserAt,
   newSessionPending,
@@ -34,8 +32,6 @@ import {
   newSessionSnapshot,
   type NewSessionReset,
   paneBody,
-  type PendingMessage,
-  PENDING_TURN_GRACE_MS,
   pendingCard,
   usePaneChat,
 } from "./chat";
@@ -85,6 +81,7 @@ import { useLaunchModel } from "./pane/use-launch-model";
 import { canEditMessage, editFailureNotice } from "./edit";
 import { useOutputFollow } from "./pane/use-output-follow";
 import { useOutputVersion } from "./pane/use-output-version";
+import { usePendingEcho } from "./pane/use-pending-echo";
 import { usePreviewReplyBadge } from "./pane/use-preview-reply";
 import { useSelectionToolbar } from "./pane/use-selection-toolbar";
 import { usePullRequest } from "./pull-request";
@@ -97,7 +94,6 @@ import { TemplateDialog } from "./TemplateDialog";
 import { selectionCopyText } from "./selection-copy";
 import { type PaneLaunchView } from "./starting";
 
-const PENDING_TIMEOUT_MS = 60_000;
 const NEW_SESSION_TIMEOUT_MS = 60_000;
 
 type PaneDetailProps = {
@@ -218,36 +214,6 @@ export function PaneDetail(props: PaneDetailProps) {
   const [stopping, setStopping] = useState(false);
   const [switchOpen, setSwitchOpen] = useState(false);
   const { outputVersion, requestOutputRefresh } = useOutputVersion();
-  const [pending, setPending] = useState<PendingMessage[]>([]);
-  // 送った本文や ask_user の回答を、ポーリングが返すまでの控えとして積む。入力欄からの送信と、
-  // 会話の行から送る依頼で形を揃える。
-  const echoPending = (echo: {
-    text: string;
-    at: number;
-    from: number;
-    waiting: boolean;
-    after: number;
-    attachments: ChatAttachment[];
-    answer?: boolean;
-    toolUseId?: string;
-  }) => {
-    setPending((items) => [
-      ...items,
-      {
-        id: `pending-${echo.at}-${items.length}`,
-        role: "user",
-        text: echo.text,
-        at: echo.at,
-        from: echo.from,
-        waiting: echo.waiting,
-        after: echo.after,
-        command: false,
-        ...(echo.attachments.length === 0 ? {} : { attachments: echo.attachments }),
-        ...(echo.answer === true ? { answer: true } : {}),
-        ...(echo.toolUseId === undefined ? {} : { toolUseId: echo.toolUseId }),
-      },
-    ]);
-  };
 
   const [sessionReset, setSessionReset] = useState<NewSessionReset | null>(null);
   // 入力欄の状態と遷移は useComposer が持つ。ここは添付と定型文の取得だけを残す。
@@ -286,6 +252,15 @@ export function PaneDetail(props: PaneDetailProps) {
   const pullRequest = usePullRequest(context.workspaceId, branch, upstreamBranch);
   const resetting = sessionReset !== null && newSessionPending(sessionReset, serverSnapshot);
   const snapshot = resetting ? newSessionSnapshot(serverSnapshot) : serverSnapshot;
+  const replying = pane.agentStatus === "working";
+  // 送った本文や ask_user の回答を、ポーリングが返すまでの控えとして積む。入力欄からの送信と、
+  // 会話の行から送る依頼で形を揃える。
+  const {
+    echoes: pending,
+    add: echoPending,
+    failAnswer: failAnswerEcho,
+    reset: resetPending,
+  } = usePendingEcho({ snapshot, replying });
   // 応答待ちのカードと、そこから切り替える端末出力。どの tool_use に対して開いたかだけを
   // 覚える。pending が変われば会話へ戻り、消えたあとに古い切り替えも残らない。
   const pendingView = pendingCard(snapshot, blocked);
@@ -315,15 +290,7 @@ export function PaneDetail(props: PaneDetailProps) {
       });
     }
     const result = await answerQuestion(pane.id, { toolUseId: target.toolUseId, answers });
-    if (!result.ok && text !== null) {
-      setPending((items) => {
-        const next = items.filter(
-          (item) =>
-            !(item.answer === true && item.toolUseId === target.toolUseId && item.at === echoAt),
-        );
-        return next.length === items.length ? items : next;
-      });
-    }
+    if (!result.ok && text !== null) failAnswerEcho(target.toolUseId, echoAt);
     refreshChat();
     return result;
   };
@@ -386,7 +353,6 @@ export function PaneDetail(props: PaneDetailProps) {
     view === "confirm" && interaction?.kind === "folder-trust" ? interaction : null;
   const output = read?.text ?? null;
   const outputEmpty = output !== null && output.trim() === "";
-  const replying = pane.agentStatus === "working";
   // /compact の開始を観測できたときだけ、完了までの所要時間をログに添える。
   // リロードやペイン切り替えでは失う（永続化は別スコープ）。
   const compactionAt = snapshot?.compaction?.at ?? null;
@@ -673,93 +639,6 @@ export function PaneDetail(props: PaneDetailProps) {
     confirmation,
   });
 
-  useEffect(() => {
-    if (pending.length === 0) return;
-    const messages = snapshot?.messages ?? [];
-    setPending((items) => {
-      const next = items.filter((item) => !isPendingConfirmed(item, messages));
-      return next.length === items.length ? items : next;
-    });
-  }, [snapshot, pending.length]);
-
-  useEffect(() => {
-    const activeToolUseId = snapshot?.pending?.toolUseId;
-    const now = Date.now();
-    setPending((items) => {
-      let changed = false;
-      const next = items.map((item) => {
-        const releaseAt = answerEchoReleaseAt(item, activeToolUseId, now);
-        if (releaseAt === item.answerReleaseAt) return item;
-        changed = true;
-        return { ...item, answerReleaseAt: releaseAt };
-      });
-      return changed ? next : items;
-    });
-  }, [snapshot?.pending?.toolUseId, pending.length]);
-
-  useEffect(() => {
-    const deadlines = pending.flatMap((item) =>
-      item.answerReleaseAt === undefined ? [] : [item.answerReleaseAt],
-    );
-    if (deadlines.length === 0) return;
-    const delay = Math.max(0, Math.min(...deadlines) - Date.now());
-    const timer = window.setTimeout(() => {
-      const now = Date.now();
-      setPending((items) => {
-        const next = items.filter(
-          (item) => item.answerReleaseAt === undefined || item.answerReleaseAt > now,
-        );
-        return next.length === items.length ? items : next;
-      });
-    }, delay);
-    return () => window.clearTimeout(timer);
-  }, [pending]);
-
-  useEffect(() => {
-    if (replying) return;
-    setPending((items) => {
-      const next = items.filter((item) => !item.waiting);
-      return next.length === items.length ? items : next;
-    });
-  }, [replying, pending.length]);
-
-  // 送信したのにエージェントが動き出さない echo は、TUI がコマンドとして処理したか、
-  // 入力を受け取らなかったものとして、ローカルのコマンド控えに切り替える。コマンドは
-  // user 発話を残さないため、セッションを待っても確定しない。
-  useEffect(() => {
-    const idle = pending.filter((item) => !item.waiting && !item.command && item.answer !== true);
-    if (idle.length === 0 || replying) return;
-    const oldest = Math.min(...idle.map((item) => item.at));
-    const delay = Math.max(0, oldest + PENDING_TURN_GRACE_MS - Date.now());
-    const timer = setTimeout(() => {
-      const now = Date.now();
-      setPending((items) => {
-        let changed = false;
-        const next = items.map((item) => {
-          if (item.command || item.answer === true || !idleEchoExpired(item, now)) return item;
-          changed = true;
-          return { ...item, command: true };
-        });
-        return changed ? next : items;
-      });
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [pending, replying]);
-
-  useEffect(() => {
-    const idle = pending.filter((item) => !item.waiting && !item.command);
-    if (idle.length === 0) return;
-    const oldest = Math.min(...idle.map((item) => item.at));
-    const delay = Math.max(0, oldest + PENDING_TIMEOUT_MS - Date.now());
-    const timer = setTimeout(() => {
-      const now = Date.now();
-      setPending((items) =>
-        items.filter((item) => item.command || item.waiting || item.at + PENDING_TIMEOUT_MS > now),
-      );
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [pending]);
-
   // 外した添付は送らない。進行中のアップロードも止める。保存先のファイルは消さない。
   const removeAttachment = (key: string) => attachmentStore.remove(pane.id, key);
 
@@ -775,7 +654,7 @@ export function PaneDetail(props: PaneDetailProps) {
     const sent = await onSubmit(text, names);
     if (newSession) {
       if (sent) {
-        setPending([]);
+        resetPending();
         resetCompaction();
       } else setSessionReset(null);
       refreshChat();
