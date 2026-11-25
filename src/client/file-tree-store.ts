@@ -1,4 +1,4 @@
-import type { FileTreeListing } from "../shared/file-tree";
+import type { FileTreeEntry, FileTreeListing } from "../shared/file-tree";
 import { readFileTree } from "./requests/panes";
 
 // ツリーの開閉・展開・取得済みの子。PaneDetail はペイン切り替えやプレビューで
@@ -19,10 +19,11 @@ export type FileTreeView = {
   menu: FileTreeRowMenu | null;
 };
 
-// フォルダの行から開くメニュー 1 つ分。
+// 行から開くメニュー 1 つ分。フォルダとファイルで項目が変わる（新しいスペースはフォルダだけ）。
 export type FileTreeRowMenu = {
   path: string;
   name: string;
+  kind: FileTreeEntry["kind"];
   // コピーする文字列。開いた時点の根で組み立てて固定する。根が変わってから一覧が
   // 捨てられるまでの 1 フレームで、古い行と新しい根を結合しない。
   copyTarget: string;

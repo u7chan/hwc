@@ -224,7 +224,13 @@ test("opens the row menu in one pane at a time", () => {
   store.open("w1:p2");
 
   const trigger = {} as HTMLElement;
-  const menu = { path: "docs", name: "docs", trigger, copyTarget: "/work/docs/" };
+  const menu = {
+    path: "docs",
+    name: "docs",
+    kind: "dir",
+    trigger,
+    copyTarget: "/work/docs/",
+  } as const;
   store.openRowMenu("w1:p1", menu);
   expect(store.view("w1:p1").menu).toEqual({ ...menu, open: true });
 
@@ -232,6 +238,10 @@ test("opens the row menu in one pane at a time", () => {
   store.openRowMenu("w1:p2", { ...menu, path: "src", name: "src" });
   expect(store.view("w1:p1").menu).toBeNull();
   expect(store.view("w1:p2").menu?.path).toBe("src");
+
+  // ファイルの行も同じように開く。種別はメニューの項目（新しいスペースを出すか）を決める。
+  store.openRowMenu("w1:p2", { ...menu, path: "README.md", name: "README.md", kind: "file" });
+  expect(store.view("w1:p2").menu?.kind).toBe("file");
 });
 
 test("closing keeps the row menu for the fade and clearing drops it", () => {
@@ -240,9 +250,10 @@ test("closing keeps the row menu for the fade and clearing drops it", () => {
   const slot = {
     path: "docs",
     name: "docs",
+    kind: "dir",
     trigger: {} as HTMLElement,
     copyTarget: "/work/docs/",
-  };
+  } as const;
   store.openRowMenu("w1:p1", slot);
 
   store.closeRowMenu("w1:p1", "docs");
@@ -271,6 +282,7 @@ test("a root change drops the open row menu", async () => {
   store.openRowMenu("w1:p1", {
     path: "docs",
     name: "docs",
+    kind: "dir",
     trigger: {} as HTMLElement,
     copyTarget: "/work/scratch/docs/",
   });

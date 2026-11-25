@@ -24,11 +24,7 @@ const ROWS: readonly SampleRow[] = [
 
 function SampleLine({ row, icons }: { row: SampleRow; icons: FileTreeIcons }) {
   const content = (
-    <div
-      class="hwc-tree-row"
-      style={indent(row.depth)}
-      data-selected={row.selected ? "true" : undefined}
-    >
+    <div class="hwc-tree-row" style={indent(row.depth)}>
       {row.kind === "file" ? (
         <span
           class="hwc-tree-mark"
@@ -53,9 +49,8 @@ function SampleLine({ row, icons }: { row: SampleRow; icons: FileTreeIcons }) {
       <span class="hwc-tree-name">{row.name}</span>
     </div>
   );
-  if (row.kind === "file") return content;
   return (
-    <div class="hwc-tree-line">
+    <div class="hwc-tree-line" data-selected={row.selected ? "true" : undefined}>
       {content}
       <span class="hwc-tree-action">
         <MoreIcon />
