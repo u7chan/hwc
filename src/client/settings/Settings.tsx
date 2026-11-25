@@ -173,7 +173,7 @@ export function Settings(props: SettingsProps) {
   const backRef = useRef(back);
   backRef.current = back;
 
-  // Esc は、設定を見ている間だけ ← と同じ動きにする。焦点が一覧のメニューやダイアログへ
+  // Esc は、設定を見ている間だけ上部バーのボタンと同じ動きにする。焦点が一覧のメニューやダイアログへ
   // 移っている間は、そちらが Esc を取る。狭い画面はカテゴリを開いた時点で押した行が
   // 消えるので、焦点の無い body もこの面のものとして扱う。
   useEffect(() => {

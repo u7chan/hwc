@@ -292,6 +292,7 @@ export function PaneList(props: PaneListProps) {
         {props.onCollapse === null ? null : (
           <button
             type="button"
+            id="hwc-sidebar-close"
             class="hwc-sidebar-toggle"
             aria-label="一覧を閉じる"
             aria-controls="hwc-sidebar"

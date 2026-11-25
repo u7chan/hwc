@@ -859,6 +859,20 @@ export function App() {
 
   const { sidebarWidth, setSidebarWidth, saveSidebarWidth, drag } = useSidebarWidth();
   const { sidebarCollapsed, toggleSidebar } = useSidebarCollapsed();
+  // 押したボタンは、閉じる側では inert な一覧の中に残り、開く側では DOM から外れて、焦点が
+  // body に落ちる。ボタンで開閉したあとだけ、いま見えている側のボタンへ焦点を移す。
+  const refocusToggle = useRef(false);
+  const toggleSidebarFromButton = () => {
+    refocusToggle.current = true;
+    toggleSidebar();
+  };
+  useEffect(() => {
+    if (!refocusToggle.current) return;
+    refocusToggle.current = false;
+    document
+      .getElementById(sidebarCollapsed ? "hwc-sidebar-open" : "hwc-sidebar-close")
+      ?.focus({ preventScroll: true });
+  }, [sidebarCollapsed]);
 
   // アクティブの帯から「すべて」のその場所へ移る。スコープと一覧のスクロールは PaneList が
   // 持ち、ここでは代表ペインと開閉だけを決める。狭い画面は一覧と詳細を同時に出せず、
@@ -1104,7 +1118,7 @@ export function App() {
               finishedAt={finishedAt}
               pullRequests={pullRequests}
               now={now}
-              onCollapse={wide ? toggleSidebar : null}
+              onCollapse={wide && !settingsOpen ? toggleSidebarFromButton : null}
             />
           )}
           <div class="hwc-sidebar-foot">
@@ -1161,11 +1175,12 @@ export function App() {
           <div class="hwc-sidebar-edge">
             <button
               type="button"
+              id="hwc-sidebar-open"
               class="hwc-sidebar-toggle"
               aria-label="一覧を開く"
               aria-controls="hwc-sidebar"
               aria-expanded={!sidebarCollapsed}
-              onClick={toggleSidebar}
+              onClick={toggleSidebarFromButton}
             >
               <ChevronRightIcon size={20} />
             </button>
