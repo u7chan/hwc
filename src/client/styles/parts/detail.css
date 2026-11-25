@@ -478,8 +478,19 @@ a.hwc-pane-head-repo:focus-visible {
   background: var(--color-line);
 }
 
+/* 面はチップと同じ高さに揃え、行の上端と下の線から離す。縮めた分は ::after で
+   押せる範囲に戻し、タップの下限（行の高さ）を保つ。 */
 .hwc-tabbar > .hwc-back {
+  position: relative;
   align-self: center;
+  width: calc(var(--tap) - var(--space-1) * 2);
+  height: calc(var(--tap) - var(--space-1) * 2);
+}
+
+.hwc-tabbar > .hwc-back::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--space-1) * -1);
 }
 
 /* 異常のときだけ出る接続の表示。タブの幅を常には奪わない。 */
