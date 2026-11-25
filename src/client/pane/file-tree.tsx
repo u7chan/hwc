@@ -57,7 +57,7 @@ type FileTreeProps = {
 // ツリーの行へ渡すもの。メニューの開閉は store が持ち、行は開く合図だけを送る。
 type TreeContext = FileTreeProps & {
   openMenu: (entry: FileTreeEntry, trigger: HTMLElement) => void;
-  // 開いているメニューのフォルダ。行の「…」の aria-expanded に使う。
+  // 開いているメニューの行。行の「…」の aria-expanded に使う。
   openMenuPath: string | null;
 };
 
@@ -371,13 +371,13 @@ function onTreeKey(event: KeyboardEvent, list: HTMLUListElement, onToggle: (path
   }
 }
 
-// 行 1 つの操作。どの行もパスをコピーでき、フォルダだけ新しいスペースを作れる。
-// コピーする文字列はメニューの中に出す。行が持つのは根からの相対パスだけなので、
-// 行の名前だけでは何がクリップボードに入るか分からない。
+// 行 1 つの操作。どの行もパスをコピーでき、作業ディレクトリにできるフォルダだけ
+// 新しいスペースを作れる。コピーする文字列はメニューの中に出す。行が持つのは根からの
+// 相対パスだけなので、行の名前だけでは何がクリップボードに入るか分からない。
 function RowMenuCard(props: {
   name: string;
   copyTarget: string;
-  dir: boolean;
+  newSpace: boolean;
   onNewSpace: () => void;
 }) {
   const { copiedId, copy } = useCopy();
@@ -401,7 +401,7 @@ function RowMenuCard(props: {
           <CopyGlyph copied={copied} />
         </button>
       </div>
-      {props.dir ? (
+      {props.newSpace ? (
         <button type="button" role="menuitem" class="hwc-menu-item" onClick={props.onNewSpace}>
           <PlusIcon size={14} />
           新しいスペース
@@ -497,7 +497,7 @@ export function FileTree(props: FileTreeProps) {
           <RowMenuCard
             name={menu.name}
             copyTarget={menu.copyTarget}
-            dir={menu.kind === "dir"}
+            newSpace={menu.newSpace}
             onNewSpace={() => {
               props.onCloseMenu(menu.path);
               props.onCreateSpace(menu.path);

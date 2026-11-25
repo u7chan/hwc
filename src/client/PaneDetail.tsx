@@ -852,7 +852,9 @@ export function PaneDetail(props: PaneDetailProps) {
         fileTreeStore.openRowMenu(pane.id, {
           path: entry.path,
           name: entry.name,
-          kind: entry.kind,
+          // 子を持てないフォルダ（根の外を指す symlink）は BFF がパスを解決できない。
+          // その行のメニューからは作れないので、項目を出さない。
+          newSpace: entry.kind === "dir" && entry.expandable,
           trigger,
           // 根はメニューを開いた時点で固める（開いた後の根の変化で文字列を組み直さない）。
           copyTarget: fileReference(props.context.workspacePath, entry.path, entry.kind === "dir"),
