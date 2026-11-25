@@ -19,10 +19,13 @@ export type FileTreeView = {
   menu: FileTreeRowMenu | null;
 };
 
-// フォルダの行から開くメニュー 1 つ分。
+// 行から開くメニュー 1 つ分。
 export type FileTreeRowMenu = {
   path: string;
   name: string;
+  // そのパスを作業ディレクトリにしたスペースを作れるか。根の外を指す symlink など、
+  // 子を持てないフォルダは BFF がパスを解決できないので、作れない。
+  newSpace: boolean;
   // コピーする文字列。開いた時点の根で組み立てて固定する。根が変わってから一覧が
   // 捨てられるまでの 1 フレームで、古い行と新しい根を結合しない。
   copyTarget: string;

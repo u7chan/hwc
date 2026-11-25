@@ -113,8 +113,8 @@
   background: var(--color-content);
 }
 
-/* 本物はポインタの画面では行に乗ったときだけ出す。サンプルは、フォルダの行から引かれる
-   幅が分かるよう常に出す。 */
+/* 本物はポインタの画面では行に乗ったときだけ出す。サンプルは、すべての行がメニューの
+   ぶんだけ名前の幅を失うことが分かるよう常に出す。 */
 .hwc-tree-sample .hwc-tree-action {
   opacity: 1;
 }
@@ -190,8 +190,8 @@
 }
 
 /* 行の面はパネルの端と隣の行から内側へ引く。塗るのは疑似要素だけにして、
-   行の箱・字下げ・当たり判定・角の当たり先は変えない。 */
-.hwc-tree-item > .hwc-tree-row::before,
+   行の箱・字下げ・当たり判定・角の当たり先は変えない。行と右端のメニューを
+   ひとつの面に見せるため、塗るのは行ではなく line にする。 */
 .hwc-tree-line::before {
   content: "";
   position: absolute;
@@ -206,14 +206,12 @@ button.hwc-tree-row {
   cursor: pointer;
 }
 
-/* フォルダの行は右端の操作とひとつの面に見せるため、行ではなく line を塗る。 */
-.hwc-tree-item > button.hwc-tree-row:hover::before,
-.hwc-tree-line:hover::before {
+/* 開けない行は押しても動かないので、乗せても塗らない。 */
+.hwc-tree-line:not([data-blocked="true"]):hover::before {
   background: var(--color-raised);
 }
 
-.hwc-tree-item > button.hwc-tree-row:active::before,
-.hwc-tree-line:active::before {
+.hwc-tree-line:not([data-blocked="true"]):active::before {
   background: var(--color-line);
 }
 
@@ -221,16 +219,18 @@ button.hwc-tree-row {
   outline-offset: -3px;
 }
 
-/* フォルダの行と、その右端の操作。行はボタンなので、操作は入れ子にせず並べる。
-   line は重ね順を 1 つ上げる。main ではフォルダの行（フレックスの項目）が後続の
-   行（ブロック）より上に描かれるので、行の境界 1px の当たり先を合わせるには、
-   line を後続の行より上の層に置く必要がある。 */
+/* 行と、その右端のメニュー。行はボタンなので、メニューは入れ子にせず並べる。
+   line は重ね順を 1 つ上げる。main では行（フレックスの項目）が後続の行（ブロック）より
+   上に描かれるので、行の境界 1px の当たり先を合わせるには、line を後続の行より上の層に
+   置く必要がある。右の余白は、塗った面の端からメニューを離すためのもの
+   （左の字下げの内側と同じ --space-2 にする）。 */
 .hwc-tree-line {
   position: relative;
   isolation: isolate;
   z-index: 1;
   display: flex;
   align-items: center;
+  padding-right: var(--space-2);
 }
 
 .hwc-tree-line > .hwc-tree-row {
@@ -302,13 +302,13 @@ button.hwc-tree-row {
 }
 
 /* 選択中のファイル。会話のプレビューと同じ対象を示す。 */
-.hwc-tree-item > .hwc-tree-row[data-selected="true"]::before {
+.hwc-tree-line[data-selected="true"]::before {
   background: var(--color-selected);
 }
 
 /* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。
    gitignore された行と同じく、地の色相から外したグレーにする。 */
-.hwc-tree-row[data-blocked="true"] {
+.hwc-tree-line[data-blocked="true"] > .hwc-tree-row {
   color: var(--color-muted);
   cursor: default;
 }
@@ -323,38 +323,38 @@ button.hwc-tree-row {
 }
 
 /* 開けない行は、名前と同じ淡色に印も落とす。印だけ濃いと、名前より目に入る。 */
-.hwc-tree-row[data-blocked="true"] .hwc-tree-mark {
+.hwc-tree-line[data-blocked="true"] .hwc-tree-mark {
   color: var(--color-muted);
 }
 
 /* 種類の色。アイコン専用の色を 20 テーマぶん足さず、明暗 2 通りに調整済みの ANSI 色を
    借りる。開けない行は行の淡色をそのまま使い、色で「開ける」と誤解させない。 */
 .hwc-tree[data-icons="color"]
-  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-line:not([data-blocked="true"])
   .hwc-tree-mark[data-kind="code"] {
   color: var(--ansi-12);
 }
 
 .hwc-tree[data-icons="color"]
-  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-line:not([data-blocked="true"])
   .hwc-tree-mark[data-kind="data"] {
   color: var(--ansi-11);
 }
 
 .hwc-tree[data-icons="color"]
-  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-line:not([data-blocked="true"])
   .hwc-tree-mark[data-kind="style"] {
   color: var(--ansi-13);
 }
 
 .hwc-tree[data-icons="color"]
-  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-line:not([data-blocked="true"])
   .hwc-tree-mark[data-kind="image"] {
   color: var(--ansi-2);
 }
 
 .hwc-tree[data-icons="color"]
-  .hwc-tree-row:not([data-blocked="true"])
+  .hwc-tree-line:not([data-blocked="true"])
   .hwc-tree-mark[data-kind="shell"] {
   color: var(--ansi-6);
 }

@@ -1,11 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
-import {
-  FILE_TREE_LIMIT,
-  type FileTreeDir,
-  type FileTreeEntry,
-  type FileTreeListing,
-} from "../../shared/file-tree";
+import { FILE_TREE_LIMIT, type FileTreeEntry, type FileTreeListing } from "../../shared/file-tree";
 import { previewUrl } from "../requests/panes";
 import { useCopy } from "../copy";
 import { fileKind } from "../file-kind";
@@ -53,7 +48,7 @@ type FileTreeProps = {
   // フォルダを作業ディレクトリにした新しいスペースを作る。
   onCreateSpace: (path: string) => void;
   // 開けるメニューは常に 1 つ。分割セルのもう一方が開いていれば、そちらは閉じる。
-  onOpenMenu: (path: string, name: string, trigger: HTMLElement) => void;
+  onOpenMenu: (entry: FileTreeEntry, trigger: HTMLElement) => void;
   onCloseMenu: (path: string) => void;
   // path を渡さないときは、行のボタンごと消えたとしてとにかく捨てる。
   onClearMenu: (path?: string) => void;
@@ -61,8 +56,8 @@ type FileTreeProps = {
 
 // ツリーの行へ渡すもの。メニューの開閉は store が持ち、行は開く合図だけを送る。
 type TreeContext = FileTreeProps & {
-  openMenu: (entry: FileTreeDir, trigger: HTMLElement) => void;
-  // 開いているメニューのフォルダ。行の「…」の aria-expanded に使う。
+  openMenu: (entry: FileTreeEntry, trigger: HTMLElement) => void;
+  // 開いているメニューの行。行の「…」の aria-expanded に使う。
   openMenuPath: string | null;
 };
 
@@ -157,9 +152,51 @@ function renderChildren(props: TreeContext, path: string, depth: number): Compon
   return rows;
 }
 
+// 行の右端のメニュー。行はボタン（または開けない行の div）なので、入れ子にせず
+// 兄弟に置く。矢印キーの移動は行だけを辿る。
+function TreeMenuButton(props: { entry: FileTreeEntry; tree: TreeContext }) {
+  const { entry, tree } = props;
+  return (
+    <button
+      type="button"
+      class="hwc-tree-action"
+      aria-label={`${entry.path} のメニュー`}
+      aria-haspopup="menu"
+      aria-expanded={tree.openMenuPath === entry.path}
+      aria-controls={TREE_MENU_ID}
+      onClick={(event) => tree.openMenu(entry, event.currentTarget)}
+    >
+      <MoreIcon />
+    </button>
+  );
+}
+
+// 行と右端のメニューをひとつの面に見せる。塗るのは line だけにして、行の箱は
+// メニューのぶんだけ狭める（面の塗りは css 側）。
+function TreeLine(props: {
+  entry: FileTreeEntry;
+  blocked: boolean;
+  selected: boolean;
+  row: ComponentChildren;
+  tree: TreeContext;
+}) {
+  const { entry, blocked, selected, row, tree } = props;
+  return (
+    <div
+      class="hwc-tree-line"
+      data-blocked={blocked ? "true" : undefined}
+      data-selected={selected ? "true" : undefined}
+    >
+      {row}
+      <TreeMenuButton entry={entry} tree={tree} />
+    </div>
+  );
+}
+
 function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext }) {
   const { entry, depth, tree } = props;
   const style = indent(depth);
+  const selected = tree.selectedPath === entry.path;
 
   if (entry.kind === "dir") {
     const expanded = tree.view.expanded.has(entry.path);
@@ -173,48 +210,33 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext
         <span class="hwc-tree-name">{entry.name}</span>
       </>
     );
-    if (!entry.expandable) {
-      return (
-        <li class="hwc-tree-item">
-          <div
-            class="hwc-tree-row"
-            style={style}
-            data-blocked="true"
-            title={entry.path}
-            {...dragProps(tree, entry)}
-          >
-            {content}
-          </div>
-        </li>
-      );
-    }
+    // 子を持てないフォルダ（根の外を指す symlink）は開閉しない。パスのコピーは残す。
+    const row = entry.expandable ? (
+      <button
+        type="button"
+        class="hwc-tree-row"
+        style={style}
+        aria-expanded={expanded}
+        title={entry.path}
+        onClick={() => tree.onToggle(entry.path)}
+        {...dragProps(tree, entry)}
+      >
+        {content}
+      </button>
+    ) : (
+      <div class="hwc-tree-row" style={style} title={entry.path} {...dragProps(tree, entry)}>
+        {content}
+      </div>
+    );
     return (
       <li class="hwc-tree-item">
-        {/* 行はボタンなので、操作は入れ子にせず兄弟に置く。矢印キーの移動は行だけを辿る。 */}
-        <div class="hwc-tree-line">
-          <button
-            type="button"
-            class="hwc-tree-row"
-            style={style}
-            aria-expanded={expanded}
-            title={entry.path}
-            onClick={() => tree.onToggle(entry.path)}
-            {...dragProps(tree, entry)}
-          >
-            {content}
-          </button>
-          <button
-            type="button"
-            class="hwc-tree-action"
-            aria-label={`${entry.path} のメニュー`}
-            aria-haspopup="menu"
-            aria-expanded={tree.openMenuPath === entry.path}
-            aria-controls={TREE_MENU_ID}
-            onClick={(event) => tree.openMenu(entry, event.currentTarget)}
-          >
-            <MoreIcon />
-          </button>
-        </div>
+        <TreeLine
+          entry={entry}
+          blocked={!entry.expandable}
+          selected={false}
+          row={row}
+          tree={tree}
+        />
         {expanded || loaded || failed ? (
           <div
             class="hwc-tree-slot"
@@ -237,44 +259,30 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext
   );
 
   // テキストと HTML は、この場でチャット領域に開く。画像だけは既存の拡大ダイアログに任せる。
+  // 開けないファイルは名前だけ出し、押しても何もしない。
+  let row: ComponentChildren;
   if (entry.open === "text" || entry.open === "html") {
-    const selected = tree.selectedPath === entry.path;
-    return (
-      <li class="hwc-tree-item">
-        <button
-          type="button"
-          class="hwc-tree-row"
-          style={style}
-          title={entry.path}
-          data-selected={selected ? "true" : undefined}
-          aria-current={selected ? "true" : undefined}
-          onClick={() => tree.onSelectFile(entry.path)}
-          {...dragProps(tree, entry)}
-        >
-          {content}
-        </button>
-      </li>
+    row = (
+      <button
+        type="button"
+        class="hwc-tree-row"
+        style={style}
+        title={entry.path}
+        aria-current={selected ? "true" : undefined}
+        onClick={() => tree.onSelectFile(entry.path)}
+        {...dragProps(tree, entry)}
+      >
+        {content}
+      </button>
     );
-  }
-
-  if (entry.open === null) {
-    return (
-      <li class="hwc-tree-item">
-        <div
-          class="hwc-tree-row"
-          style={style}
-          data-blocked="true"
-          title={entry.path}
-          {...dragProps(tree, entry)}
-        >
-          {content}
-        </div>
-      </li>
+  } else if (entry.open === null) {
+    row = (
+      <div class="hwc-tree-row" style={style} title={entry.path} {...dragProps(tree, entry)}>
+        {content}
+      </div>
     );
-  }
-
-  return (
-    <li class="hwc-tree-item">
+  } else {
+    row = (
       <button
         type="button"
         class="hwc-tree-row"
@@ -287,6 +295,18 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext
       >
         {content}
       </button>
+    );
+  }
+
+  return (
+    <li class="hwc-tree-item">
+      <TreeLine
+        entry={entry}
+        blocked={entry.open === null}
+        selected={selected}
+        row={row}
+        tree={tree}
+      />
     </li>
   );
 }
@@ -351,10 +371,15 @@ function onTreeKey(event: KeyboardEvent, list: HTMLUListElement, onToggle: (path
   }
 }
 
-// フォルダ 1 つの操作。行の右端にあった「+」の新しいスペースをここへ移し、パスのコピーを並べる。
-// コピーする文字列はメニューの中に出す。行が持つのは根からの相対パスだけなので、
-// 行の名前だけでは何がクリップボードに入るか分からない。
-function RowMenuCard(props: { name: string; copyTarget: string; onNewSpace: () => void }) {
+// 行 1 つの操作。どの行もパスをコピーでき、作業ディレクトリにできるフォルダだけ
+// 新しいスペースを作れる。コピーする文字列はメニューの中に出す。行が持つのは根からの
+// 相対パスだけなので、行の名前だけでは何がクリップボードに入るか分からない。
+function RowMenuCard(props: {
+  name: string;
+  copyTarget: string;
+  newSpace: boolean;
+  onNewSpace: () => void;
+}) {
   const { copiedId, copy } = useCopy();
   const copied = copiedId === "tree-path";
   return (
@@ -376,10 +401,12 @@ function RowMenuCard(props: { name: string; copyTarget: string; onNewSpace: () =
           <CopyGlyph copied={copied} />
         </button>
       </div>
-      <button type="button" role="menuitem" class="hwc-menu-item" onClick={props.onNewSpace}>
-        <PlusIcon size={14} />
-        新しいスペース
-      </button>
+      {props.newSpace ? (
+        <button type="button" role="menuitem" class="hwc-menu-item" onClick={props.onNewSpace}>
+          <PlusIcon size={14} />
+          新しいスペース
+        </button>
+      ) : null}
     </>
   );
 }
@@ -431,7 +458,7 @@ export function FileTree(props: FileTreeProps) {
 
   const tree: TreeContext = {
     ...props,
-    openMenu: (entry, trigger) => props.onOpenMenu(entry.path, entry.name, trigger),
+    openMenu: (entry, trigger) => props.onOpenMenu(entry, trigger),
     openMenuPath: menu?.open === true ? menu.path : null,
   };
 
@@ -470,6 +497,7 @@ export function FileTree(props: FileTreeProps) {
           <RowMenuCard
             name={menu.name}
             copyTarget={menu.copyTarget}
+            newSpace={menu.newSpace}
             onNewSpace={() => {
               props.onCloseMenu(menu.path);
               props.onCreateSpace(menu.path);
