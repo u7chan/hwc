@@ -552,7 +552,7 @@ test("a pane without an agent is a shell", () => {
   ).toBe(false);
 });
 
-// 名前の規則は 1 つ。タブ・セル見出し・一覧の 1 段目は、すべてこの値から作る。
+// 名前の規則は 1 つ。タブと一覧の 1 段目は、すべてこの値から作る。
 test("the display name uses the Herdr label, then the agent, then the terminal title", () => {
   const base: PaneState = {
     id: "w1:p9",
@@ -598,7 +598,7 @@ test("a shell without a name is called シェル, not its pane id", () => {
   expect(paneDisplayName({ ...base, label: "notes" })).toBe("notes");
 });
 
-// 一覧の行・タブ・見出しは、同じペインに同じ名前を出す。経路で違うのは入力だけで、変換は 1 つ。
+// 一覧の行・タブは、同じペインに同じ名前を出す。経路で違うのは入力だけで、変換は 1 つ。
 test("a tab shows the display name", () => {
   const pane: PaneState = {
     id: "w1:p9",
@@ -636,21 +636,6 @@ test("a tab prefixes the space name only when spaces are mixed", () => {
   });
   expect(tabLabelText({ space: null, name: "pi" })).toBe("pi");
   expect(tabLabelText({ space: "acme-dashboard", name: "review" })).toBe("acme-dashboard › review");
-});
-
-test("a cell header shows the display name", () => {
-  const workspace = state.workspaces[0]!;
-  const pane: PaneState = {
-    id: "w1:p9",
-    title: "π - feat-client-api-connection",
-    label: null,
-    agent: "pi",
-    agentStatus: "idle",
-    focused: false,
-    chat: false,
-  };
-
-  expect(shortenPaneName(paneDisplayName(pane), workspace)).toBe("pi");
 });
 
 test("an active row shows the display name without the place", () => {
@@ -703,8 +688,8 @@ test("a linked worktree drops the generated prefix where the name is short", () 
     "silver-cloud-c4cf",
   );
   // 端末タイトルが名前に出るのは、ラベルもエージェントも無いシェルだけ。このペインの端末
-  // タイトルはスペース名と同じになる。一覧の行も、タブや見出しと同じく、帯が持つ
-  // `worktree-` を繰り返さない。
+  // タイトルはスペース名と同じになる。一覧の行も、タブと同じく、帯が持つ `worktree-` を
+  // 繰り返さない。
   const shell: PaneState = {
     id: "w9:p1",
     title: "worktree-silver-cloud-c4cf",

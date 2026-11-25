@@ -253,10 +253,10 @@ function titleText(title: string | null): string | null {
   return text === "" ? null : text;
 }
 
-// タブ・セル見出し・一覧の 1 段目で同じ名前を出す。label は Herdr で付けた作業名、agent は
-// Herdr の検出名、title は端末のタイトル。端末タイトルは同じリポジトリのペインで同じ値に
-// なるので、名前が無いペインだけエージェント種別、それも無ければタイトルに倒す。
-// エージェントのいないペインはシェル。ID は詳細ヘッダと読み上げに任せ、名前には出さない。
+// タブ・一覧の 1 段目で同じ名前を出す。label は Herdr で付けた作業名、agent は Herdr の
+// 検出名、title は端末のタイトル。端末タイトルは同じリポジトリのペインで同じ値になるので、
+// 名前が無いペインだけエージェント種別、それも無ければタイトルに倒す。エージェントの
+// いないペインはシェル。ID は詳細ヘッダと読み上げに任せ、名前には出さない。
 export function paneDisplayName(pane: PaneState): string {
   return pane.label ?? pane.agent ?? titleText(pane.title) ?? "シェル";
 }
@@ -286,9 +286,10 @@ export function shortenBranchName(workspace: WorkspaceState, branch: string): st
   return rest === "" ? branch : rest;
 }
 
-// 一覧の行・タブ・見出しは、同じペインに同じ名前を出す。場所は帯とタブ列が言うので、名前から
-// 場所の部分を落とす。端末タイトルしか名前の無いペインは、その値がワークツリー名そのものに
-// なる。残りが空になったらスペース名の省略形に揃え、別名や関係ない名前はそのまま返す。
+// 一覧の行・タブ・ドラッグ中の見出しは、同じペインに同じ名前を出す。場所は帯とタブ列が
+// 言うので、名前から場所の部分を落とす。端末タイトルしか名前の無いペインは、その値が
+// ワークツリー名そのものになる。残りが空になったらスペース名の省略形に揃え、別名や
+// 関係ない名前はそのまま返す。
 export function shortenPaneName(name: string, workspace: WorkspaceState): string {
   const rest = dropPlace(workspace.label, name);
   return rest === workspace.label ? shortenSpaceName(workspace) : rest;
@@ -332,9 +333,10 @@ const SEPARATOR = /[\s._/·:-]/;
 const LEADING_SEPARATORS = /^[\s._/·:-]+/;
 const TRAILING_SEPARATORS = /[\s._/·:-]+$/;
 
-// 一覧の行・タブ・見出しは、どれも場所の名前を別に持つ。名前の中で同じ場所を繰り返すと、
-// 識別に使える幅が減る。区切りを挟んで始まる / 終わるときだけ落とし、残りが空なら元の
-// ラベルを使う。区切りを要求するのは、同じ文字で始まるだけの別の名前を短くしないため。
+// 一覧の行・タブ・ドラッグ中の見出しは、どれも場所の名前を別に持つ。名前の中で同じ場所を
+// 繰り返すと、識別に使える幅が減る。区切りを挟んで始まる / 終わるときだけ落とし、残りが
+// 空なら元のラベルを使う。区切りを要求するのは、同じ文字で始まるだけの別の名前を短く
+// しないため。
 function dropPlace(label: string, name: string): string {
   const place = label.trim();
   if (place === "" || name.length <= place.length) return name;
