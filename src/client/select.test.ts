@@ -7,7 +7,6 @@ import {
   type WorktreeState,
 } from "../server/herdr/state";
 import {
-  activeRowName,
   agentGlyph,
   canCloseSpace,
   countPanes,
@@ -35,7 +34,6 @@ import {
   soleTab,
   statusLabel,
   statusTone,
-  tabDisplayName,
   tabLabel,
   tabLabelText,
 } from "./select";
@@ -554,7 +552,7 @@ test("a pane without an agent is a shell", () => {
   ).toBe(false);
 });
 
-// 名前の規則は 1 つ。タブ・セル見出し・一覧の 1 段目は、すべてこの値から作る。
+// 名前の規則は 1 つ。タブと一覧の 1 段目は、すべてこの値から作る。
 test("the display name uses the Herdr label, then the agent, then the terminal title", () => {
   const base: PaneState = {
     id: "w1:p9",
@@ -600,7 +598,7 @@ test("a shell without a name is called シェル, not its pane id", () => {
   expect(paneDisplayName({ ...base, label: "notes" })).toBe("notes");
 });
 
-// 経路ごとに表示用の変換が違うので、期待値も経路ごとに分けて書く。
+// 一覧の行・タブは、同じペインに同じ名前を出す。経路で違うのは入力だけで、変換は 1 つ。
 test("a tab shows the display name", () => {
   const pane: PaneState = {
     id: "w1:p9",
@@ -612,7 +610,7 @@ test("a tab shows the display name", () => {
     chat: false,
   };
 
-  expect(tabDisplayName(paneDisplayName(pane), state.workspaces[0]!)).toBe("pi");
+  expect(shortenPaneName(paneDisplayName(pane), state.workspaces[0]!)).toBe("pi");
 });
 
 test("a tab prefixes the space name only when spaces are mixed", () => {
@@ -640,23 +638,6 @@ test("a tab prefixes the space name only when spaces are mixed", () => {
   expect(tabLabelText({ space: "acme-dashboard", name: "review" })).toBe("acme-dashboard › review");
 });
 
-test("a cell header shows the display name", () => {
-  const workspace = state.workspaces[0]!;
-  const pane: PaneState = {
-    id: "w1:p9",
-    title: "π - feat-client-api-connection",
-    label: null,
-    agent: "pi",
-    agentStatus: "idle",
-    focused: false,
-    chat: false,
-  };
-
-  expect(shortenPaneName(paneDisplayName(pane), workspace.label, shortenSpaceName(workspace))).toBe(
-    "pi",
-  );
-});
-
 test("an active row shows the display name without the place", () => {
   const base: PaneState = {
     id: "w1:p9",
@@ -668,10 +649,13 @@ test("an active row shows the display name without the place", () => {
     chat: false,
   };
 
-  expect(activeRowName("hwc", paneDisplayName(base))).toBe("pi");
+  expect(shortenPaneName(paneDisplayName(base), state.workspaces[0]!)).toBe("pi");
   // 帯がスペース名を持つので、行では名前の先頭から場所の部分を落とす。
   expect(
-    activeRowName("hwc", paneDisplayName({ ...base, agent: null, title: "π - hwc-api" })),
+    shortenPaneName(
+      paneDisplayName({ ...base, agent: null, title: "π - hwc-api" }),
+      state.workspaces[0]!,
+    ),
   ).toBe("api");
 });
 
@@ -700,27 +684,26 @@ test("a linked worktree drops the generated prefix where the name is short", () 
   });
 
   expect(shortenSpaceName(linked("worktree-silver-cloud-c4cf"))).toBe("silver-cloud-c4cf");
-  expect(tabDisplayName("worktree-silver-cloud-c4cf", linked("worktree-silver-cloud-c4cf"))).toBe(
+  expect(shortenPaneName("worktree-silver-cloud-c4cf", linked("worktree-silver-cloud-c4cf"))).toBe(
     "silver-cloud-c4cf",
   );
-  expect(
-    shortenPaneName(
-      "worktree-silver-cloud-c4cf",
-      "worktree-silver-cloud-c4cf",
-      "silver-cloud-c4cf",
-    ),
-  ).toBe("silver-cloud-c4cf");
-  // 端末タイトルが名前に出るのは、ラベルもエージェントも無いシェルだけ。このペインは端末
-  // タイトルがスペース名と同じになる。一覧も名前から場所を落とすが、同長なので、タブや
-  // 見出しのように省略されずに残る（差はこの Issue では残す）。
-  expect(activeRowName("worktree-silver-cloud-c4cf", "worktree-silver-cloud-c4cf")).toBe(
-    "worktree-silver-cloud-c4cf",
+  // 端末タイトルが名前に出るのは、ラベルもエージェントも無いシェルだけ。このペインの端末
+  // タイトルはスペース名と同じになる。一覧の行も、タブと同じく、帯が持つ `worktree-` を
+  // 繰り返さない。
+  const shell: PaneState = {
+    id: "w9:p1",
+    title: "worktree-silver-cloud-c4cf",
+    label: null,
+    agent: null,
+    agentStatus: "idle",
+    focused: false,
+    chat: false,
+  };
+  expect(shortenPaneName(paneDisplayName(shell), linked("worktree-silver-cloud-c4cf"))).toBe(
+    "silver-cloud-c4cf",
   );
   // ペインに付いた別名はそのまま。
-  expect(tabDisplayName("pr-review", linked("worktree-silver-cloud-c4cf"))).toBe("pr-review");
-  expect(shortenPaneName("pr-review", "worktree-silver-cloud-c4cf", "silver-cloud-c4cf")).toBe(
-    "pr-review",
-  );
+  expect(shortenPaneName("pr-review", linked("worktree-silver-cloud-c4cf"))).toBe("pr-review");
   // ユーザーが付けた名前、Herdr の生成規則に合わない名前はそのまま。
   expect(shortenSpaceName(linked("review"))).toBe("review");
   expect(shortenSpaceName(linked("worktree-"))).toBe("worktree-");
@@ -752,25 +735,27 @@ test("a long path without a separator in the tail keeps its last characters", ()
   expect(shortenPath(`/${emoji}`)).toBe(`…${emoji.slice(0, 35 * 2)}`);
 });
 
-test("an active row drops the workspace name the band already carries", () => {
-  // 帯が場所を言うので、行は残りだけを出す。区切りは一緒に落とす。
-  expect(activeRowName("demo-live-thinking", "demo-live-thinking-review")).toBe("review");
-  expect(activeRowName("demo-live-thinking", "demo-live-thinking/impl")).toBe("impl");
-  expect(activeRowName("demo-live-thinking", "demo-live-thinking_ui")).toBe("ui");
-  expect(activeRowName("demo-live-thinking", "review-demo-live-thinking")).toBe("review");
-  expect(activeRowName("demo-live-thinking", "review.demo-live-thinking")).toBe("review");
+test("a pane name drops the place the band and the tab column already carry", () => {
+  const space = (label: string): WorkspaceState => ({ ...state.workspaces[0]!, label });
+  // 帯とタブ列が場所を言うので、名前は残りだけを出す。区切りは一緒に落とす。
+  expect(shortenPaneName("demo-live-thinking-review", space("demo-live-thinking"))).toBe("review");
+  expect(shortenPaneName("demo-live-thinking/impl", space("demo-live-thinking"))).toBe("impl");
+  expect(shortenPaneName("demo-live-thinking_ui", space("demo-live-thinking"))).toBe("ui");
+  expect(shortenPaneName("review-demo-live-thinking", space("demo-live-thinking"))).toBe("review");
+  expect(shortenPaneName("review.demo-live-thinking", space("demo-live-thinking"))).toBe("review");
   // 大文字小文字が違っても同じ場所。
-  expect(activeRowName("Demo-Live", "demo-live-review")).toBe("review");
+  expect(shortenPaneName("demo-live-review", space("Demo-Live"))).toBe("review");
 });
 
-test("a row keeps its name when nothing is left after the workspace name", () => {
-  // 落とした結果が空なら元のラベルを使う。行の名前が消えるよりは繰り返す。
-  expect(activeRowName("demo-live", "demo-live")).toBe("demo-live");
-  expect(activeRowName("demo-live", "demo-live-")).toBe("demo-live-");
+test("a pane keeps its name when nothing is left after the space name", () => {
+  const space = (label: string): WorkspaceState => ({ ...state.workspaces[0]!, label });
+  // 落とした結果が空なら元の名前を使う。名前が消えるよりは繰り返す。
+  expect(shortenPaneName("demo-live", space("demo-live"))).toBe("demo-live");
+  expect(shortenPaneName("demo-live-", space("demo-live"))).toBe("demo-live-");
   // 区切りを挟まずに始まるだけの名前は、別の名前として扱う。
-  expect(activeRowName("demo", "demolition")).toBe("demolition");
-  // ワークスペース名が無ければ何も落とさない。
-  expect(activeRowName("", "review")).toBe("review");
+  expect(shortenPaneName("demolition", space("demo"))).toBe("demolition");
+  // スペース名が無ければ何も落とさない。
+  expect(shortenPaneName("review", space(""))).toBe("review");
 });
 
 test("the list shows a chip for open and merged, and none for closed", () => {

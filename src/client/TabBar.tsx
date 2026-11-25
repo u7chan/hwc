@@ -5,11 +5,10 @@ import type { TabSide } from "./split-view";
 import { ChevronLeftIcon, CloseIcon, EyeIcon, paneKindIcon } from "./icons";
 import { paneTabName } from "./process";
 import {
-  activeRowName,
   agentGlyph,
+  shortenPaneName,
   shortenSpaceName,
   statusLabel,
-  tabDisplayName,
   tabLabel,
   tabLabelText,
   type PaneRow,
@@ -152,10 +151,7 @@ export function TabBar(props: TabBarProps) {
           const parent = props.parentPaneIds.has(item.pane.id);
           const process = props.processes.get(item.pane.id) ?? null;
           const space = shortenSpaceName(item.workspace);
-          const name = tabDisplayName(
-            activeRowName(item.workspace.label, paneTabName(item.pane, process)),
-            item.workspace,
-          );
+          const name = shortenPaneName(paneTabName(item.pane, process), item.workspace);
           const label = tabLabel(space, name, props.multiSpace);
           const shownName = tabLabelText(label);
           // タブにはプログラム名だけを出す。何を動かしているかは、ホバーと読み上げで補う。
