@@ -63,7 +63,7 @@ import { liveUpdateMs } from "./live-update";
 import { allAgentPaneIds, allPaneIds, applyDelegation, newAgentPanes } from "./delegation";
 import { splitMotionDuration } from "./split-prefs";
 import { ConnectionChip } from "./ConnectionChip";
-import { ChevronLeftIcon, HwcMark, SettingsIcon } from "./icons";
+import { ChevronRightIcon, HwcMark, SettingsIcon } from "./icons";
 import { paneTabName, usePaneProcesses } from "./process";
 import { useWorkspacePullRequests } from "./pull-request";
 import type { PaneOutputHandle } from "./commands";
@@ -859,6 +859,20 @@ export function App() {
 
   const { sidebarWidth, setSidebarWidth, saveSidebarWidth, drag } = useSidebarWidth();
   const { sidebarCollapsed, toggleSidebar } = useSidebarCollapsed();
+  // 押したボタンは、閉じる側では inert な一覧の中に残り、開く側では DOM から外れて、焦点が
+  // body に落ちる。ボタンで開閉したあとだけ、いま見えている側のボタンへ焦点を移す。
+  const refocusToggle = useRef(false);
+  const toggleSidebarFromButton = () => {
+    refocusToggle.current = true;
+    toggleSidebar();
+  };
+  useEffect(() => {
+    if (!refocusToggle.current) return;
+    refocusToggle.current = false;
+    document
+      .getElementById(sidebarCollapsed ? "hwc-sidebar-open" : "hwc-sidebar-close")
+      ?.focus({ preventScroll: true });
+  }, [sidebarCollapsed]);
 
   // アクティブの帯から「すべて」のその場所へ移る。スコープと一覧のスクロールは PaneList が
   // 持ち、ここでは代表ペインと開閉だけを決める。狭い画面は一覧と詳細を同時に出せず、
@@ -1104,6 +1118,7 @@ export function App() {
               finishedAt={finishedAt}
               pullRequests={pullRequests}
               now={now}
+              onCollapse={wide && !settingsOpen ? toggleSidebarFromButton : null}
             />
           )}
           <div class="hwc-sidebar-foot">
@@ -1153,19 +1168,24 @@ export function App() {
           }}
         />
 
-        {/* タブバーの左端には置かない。設定・空状態・読み込み中はタブバーが無く、畳んだまま開けなくなる。 */}
-        <div class="hwc-sidebar-edge">
-          <button
-            type="button"
-            class="hwc-sidebar-toggle"
-            aria-label={sidebarCollapsed ? "一覧を開く" : "一覧を閉じる"}
-            aria-controls="hwc-sidebar"
-            aria-expanded={!sidebarCollapsed}
-            onClick={toggleSidebar}
-          >
-            <ChevronLeftIcon size={14} />
-          </button>
-        </div>
+        {/* 畳んだ一覧を開くボタン。畳むと足元ごと画面外へ出るので、閉じるボタンとは別に詳細の左上へ出す。
+            タブバーの中には置かない。空状態・読み込み中はタブバーが無く、畳んだまま開けなくなる。
+            設定は左上が戻るボタンなので出さない。戻れば開くボタンがある。 */}
+        {wide && sidebarCollapsed && !settingsOpen ? (
+          <div class="hwc-sidebar-edge">
+            <button
+              type="button"
+              id="hwc-sidebar-open"
+              class="hwc-sidebar-toggle"
+              aria-label="一覧を開く"
+              aria-controls="hwc-sidebar"
+              aria-expanded={!sidebarCollapsed}
+              onClick={toggleSidebarFromButton}
+            >
+              <ChevronRightIcon size={20} />
+            </button>
+          </div>
+        ) : null}
 
         <main class="hwc-detail">
           {settingsOpen ? (

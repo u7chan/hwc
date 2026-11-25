@@ -229,80 +229,57 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   background: var(--color-accent);
 }
 
-/* 一覧と詳細の境目に付く開閉の取っ手。幅 0 の箱を境目に置き、取っ手は詳細側へ張り出す。
-   一覧側へ出すと一覧のスクロールバーと重なる。広い画面だけ出す。
+/* 畳んだ一覧を開くボタンの置き場。幅 0 の箱を一覧の右端（畳むと左端）に置き、ボタンは詳細の左上へ
+   張り出す。畳む動きの間は、境目と一緒に動く。
    ファイルツリーのオーバーレイ（z-index: 3）より手前に置く。同じ値だと DOM で後ろの詳細が勝ち、
-   ツリーを開いている間は取っ手が隠れて、一覧を畳めなくなる。 */
+   ツリーを開いている間はボタンが隠れて、一覧を開けなくなる。 */
 .hwc-sidebar-edge {
-  display: none;
   position: relative;
   flex: none;
   width: 0;
   z-index: 4;
 }
 
+/* 一覧の開閉ボタン。閉じる側（一覧の先頭の行）と開く側（詳細の左上）で同じ見た目にする。
+   面は持たず、触れたときだけ面を出す。 */
 .hwc-sidebar-toggle {
-  position: absolute;
-  top: 50%;
-  left: 0;
+  flex: none;
   display: grid;
   place-items: center;
-  width: var(--sidebar-toggle-width);
-  height: 56px;
+  width: var(--sidebar-toggle-size);
+  height: var(--sidebar-toggle-size);
   padding: 0;
-  border: 1px solid var(--color-line);
-  border-left: 0;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  background: var(--color-surface);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
   color: var(--color-secondary);
   cursor: pointer;
-  transform: translateY(-50%);
-  transition: color var(--duration-hover) ease;
+  transition:
+    background-color var(--duration-hover) ease,
+    color var(--duration-hover) ease;
 }
 
-/* 境目の線を掴んでいる間、取っ手が線の右半分を覆って線が欠ける。線を取っ手より手前へ出すには
-   リサイザの z-index を上げることになるが、掴む面が取っ手の左 8px を奪う。取っ手の側に同じ線を
-   重ねて描く。ドラッグ中もポインタ捕捉でリサイザの :hover は続く。 */
-.hwc-resizer:hover + .hwc-sidebar-edge .hwc-sidebar-toggle::after {
-  content: "";
-  position: absolute;
-  inset: -1px auto -1px -1px;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--color-accent);
-}
-
-/* 触れる範囲は、本文や添付チップが始まる左余白（読み幅の下限 24px）に収まる 4px だけ広げる。
-   44px まで広げると、それらの先頭を覆う。行全体が操作領域の要素（ツリーの行など）は左端が
-   余白より内側から始まり、重なる範囲では取っ手が勝つ。畳むのは一覧の開閉だけで、文字は隠れない。 */
-.hwc-sidebar-toggle::before {
-  content: "";
-  position: absolute;
-  inset: 0 calc(var(--space-1) * -1) 0 0;
+.hwc-sidebar-toggle:hover {
+  background: var(--color-raised);
+  color: var(--color-text);
 }
 
 .hwc-sidebar-toggle:active {
   opacity: 0.72;
 }
 
-.hwc-sidebar-toggle svg {
-  transition: transform var(--hwc-sidebar-duration) ease-out;
+/* 開く側は、タブバーの戻るボタンと同じ位置に置く。面は行の高さより小さくして、
+   縮めた分は ::after で押せる範囲に戻す。 */
+.hwc-sidebar-edge > .hwc-sidebar-toggle {
+  position: absolute;
+  top: calc((var(--row-detail-tab) - var(--sidebar-toggle-size)) / 2);
+  left: var(--space-3);
 }
 
-.hwc-sidebar-toggle[aria-expanded="false"] svg {
-  transform: rotate(180deg);
-}
-
-@media (hover: hover) {
-  .hwc-sidebar-toggle:hover {
-    color: var(--color-text);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hwc-sidebar-toggle svg {
-    transition: none;
-  }
+.hwc-sidebar-edge > .hwc-sidebar-toggle::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--space-1) * -1);
 }
 
 .hwc-body {
@@ -348,12 +325,30 @@ html[data-input-modality="pointer"] :focus-visible:not(input):not(textarea):not(
   touch-action: pan-y pinch-zoom;
 }
 
+/* 閉じるボタンと絞り込みを 1 行に並べる。絞り込みは一覧の行と同じ左右の余白（space-4）で揃え、
+   ボタンだけ左へ張り出して、詳細の開くボタンと同じ左端（space-3）に置く。 */
+.hwc-list-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 var(--space-4) var(--space-2);
+}
+
+.hwc-list-head > .hwc-sidebar-toggle {
+  margin-left: calc(var(--space-3) - var(--space-4));
+}
+
+.hwc-list-head > .hwc-scope {
+  flex: 1;
+  min-width: 0;
+}
+
 /* 出すスペースの切り替え。タブではなく絞り込みなので、下線ではなく面で示す。 */
 .hwc-scope {
   position: relative;
   flex: none;
   display: flex;
-  margin: 0 var(--space-4) var(--space-2);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-control);
   background: var(--color-raised);

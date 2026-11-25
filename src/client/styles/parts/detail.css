@@ -459,9 +459,8 @@ a.hwc-pane-head-repo:focus-visible {
      余白まで広げて、行の高さを保つ。 */
   height: var(--row-detail-tab);
   padding: 0 var(--space-3);
-  /* 広い画面の左端のセルは、一覧の取っ手（縦の中央で詳細側へ張り出す）の下にタブが
-     潜らないよう、取っ手の外から始める。分割で下段に来たタブ列が取っ手と同じ高さに並ぶ。
-     幅の狭いセルでも詰めない。 */
+  /* 一覧を畳んでいる間、左上のセルは、詳細の左上へ張り出す開くボタンの下にタブが
+     潜らないよう、ボタンの右から始める。幅の狭いセルでも詰めない。 */
   padding-left: max(var(--space-3), var(--hwc-tabbar-inset, 0px));
   background: var(--color-content);
 }

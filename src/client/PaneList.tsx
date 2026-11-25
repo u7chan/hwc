@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { ChevronLeftIcon } from "./icons";
 import { ActivePaneList, NoPanes, spaceId } from "./list/active";
 import type { ListFeedback } from "./list/types";
 import { moveToTopPlan, orderUnits, unitIndex } from "./order";
@@ -287,7 +288,22 @@ export function PaneList(props: PaneListProps) {
   // 使い続けるので、つまみが滑り、スクロール枠も作り直されない。
   return (
     <>
-      <ScopeBar scope={props.scope} count={groups.length} onScope={changeScope} />
+      <div class="hwc-list-head">
+        {props.onCollapse === null ? null : (
+          <button
+            type="button"
+            id="hwc-sidebar-close"
+            class="hwc-sidebar-toggle"
+            aria-label="一覧を閉じる"
+            aria-controls="hwc-sidebar"
+            aria-expanded="true"
+            onClick={props.onCollapse}
+          >
+            <ChevronLeftIcon size={20} />
+          </button>
+        )}
+        <ScopeBar scope={props.scope} count={groups.length} onScope={changeScope} />
+      </div>
       <div class="hwc-list-scroll" ref={scroll}>
         <div class="hwc-list-body" ref={body}>
           {notice === null ? null : (
