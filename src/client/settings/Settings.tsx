@@ -5,7 +5,7 @@ import type { FileTreeIcons, FileTreeSize, FileTreeWidth } from "../file-tree-di
 import type { FileTreeSide } from "../file-tree-side";
 import type { ModelLabels } from "../../shared/agents";
 import { useModelLabels } from "../launch-candidates";
-import { ChevronLeftIcon } from "../icons";
+import { ChevronLeftIcon, CloseIcon } from "../icons";
 import type { LiveUpdateInterval } from "../live-update";
 import { SETTINGS_SIDE_MIN_WIDTH } from "../layout";
 import type { SplitPrefs } from "../split-prefs";
@@ -163,9 +163,10 @@ export function Settings(props: SettingsProps) {
     refreshSummary();
   };
   // 広い画面はカテゴリの一覧が常に見えているので、戻る先は元の画面だけ。
+  const leaving = sideBySide || opened === null;
   const back = () => {
     setEditingTitle(null);
-    if (sideBySide || opened === null) props.onClose();
+    if (leaving) props.onClose();
     else setOpened(null);
   };
   // 購読を貼り直さずに、常に最新の back を呼ぶ。
@@ -214,14 +215,15 @@ export function Settings(props: SettingsProps) {
     <div class="hwc-detail-inner" ref={surfaceRef} tabIndex={-1}>
       <header class="hwc-detail-bar hwc-settings-bar">
         {/* 狭い画面では一覧ごと隠れる。広い画面では足元の歯車が遠い。どちらも、
-            設定の左上から元の画面へ戻れるようにする。 */}
+            設定の左上から元の画面へ戻れるようにする。設定を出る操作は ×、設定の中で一つ戻る
+            操作だけ <。広い画面の一覧の開閉（<）と見分けが付くようにする。 */}
         <button
           type="button"
           class="hwc-icon-button"
-          aria-label={sideBySide || opened === null ? "設定を閉じる" : "設定の一覧へ戻る"}
+          aria-label={leaving ? "設定を閉じる" : "設定の一覧へ戻る"}
           onClick={back}
         >
-          <ChevronLeftIcon />
+          {leaving ? <CloseIcon /> : <ChevronLeftIcon />}
         </button>
         <h2 class="hwc-detail-title hwc-settings-title" key={title}>
           {title}
