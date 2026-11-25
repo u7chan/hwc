@@ -66,36 +66,30 @@
     transition: visibility 0s var(--hwc-sidebar-duration);
   }
 
+  /* タブ列の左余白は一覧の動きに合わせて動かす。即座に変えると、一覧が滑っている間にタブだけ先に飛ぶ。 */
+  .hwc-tabbar {
+    transition: padding-left var(--hwc-sidebar-duration) ease-out;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .hwc-list {
       transition: none;
     }
 
-    .hwc-app[data-sidebar="collapsed"] .hwc-resizer {
+    .hwc-app[data-sidebar="collapsed"] .hwc-resizer,
+    .hwc-tabbar {
       transition: none;
     }
   }
 
-  .hwc-sidebar-edge {
-    display: block;
+  /* 畳んでいる間、詳細の左上に開くボタンが張り出す。その行のタブ列は、ボタンの右から始める
+     （戻るボタンと同じ並び）。上端でも左端でもないセルでは解く。 */
+  .hwc-app[data-sidebar="collapsed"] .hwc-detail {
+    --hwc-tabbar-inset: calc(var(--space-3) + var(--sidebar-toggle-size) + var(--space-2));
   }
 
-  /* 取っ手は左端に接するセルの上に張り出す。row の分割で 2 番目以降の子は左端でないので、
-     その配下では解く。col の分割は子がすべて親の左端に接するので何もしない。 */
-  .hwc-detail {
-    --hwc-tabbar-inset: calc(var(--sidebar-toggle-width) + var(--space-1) + var(--space-2));
-  }
-
-  .hwc-split[data-dir="row"] > :not(:first-child) {
+  .hwc-split > :not(:first-child) {
     --hwc-tabbar-inset: 0px;
-  }
-
-  /* 設定を表示している間は、開いている一覧の取っ手を出さない。設定は読んで 1 つ触る画面で、
-     遷移中に一覧を畳む動機がない。取っ手は詳細側へ張り出し、カテゴリ一覧の行の隣に残る。
-     畳んだ一覧は inert でも、狭い画面で設定を開いてから広い画面へ入ると畳んだままになる。
-     その状態で取っ手まで消すと開き直せないので、畳んでいるときは残す。 */
-  .hwc-app[data-view="settings"][data-sidebar="open"] .hwc-sidebar-edge {
-    display: none;
   }
 
   .hwc-sidebar-foot {

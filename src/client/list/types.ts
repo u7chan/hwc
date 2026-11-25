@@ -43,6 +43,8 @@ export type PaneListProps = {
   finishedAt: ReadonlyMap<string, number>;
   pullRequests: ReadonlyMap<string, PullRequest | null>;
   now: number;
+  // 一覧を畳むボタン。畳めない狭い画面では null。
+  onCollapse: (() => void) | null;
 };
 
 export type ListFeedback = {
@@ -50,4 +52,5 @@ export type ListFeedback = {
   onAnnounce: (text: string) => void;
 };
 
-export type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onOpen"> & ListFeedback;
+export type TreePaneListProps = Omit<PaneListProps, "scope" | "onScope" | "onOpen" | "onCollapse"> &
+  ListFeedback;
