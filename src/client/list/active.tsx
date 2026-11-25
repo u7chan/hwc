@@ -14,12 +14,12 @@ import { MENU_ID } from "../Menu";
 import { ParentMark } from "../ParentMark";
 import { showsTabName, type ActiveGroup, type ActiveStatus } from "../scope";
 import {
-  activeRowName,
   agentGlyph,
   paneDisplayName,
   pullRequestLabel,
   pullRequestTone,
   shortenBranchName,
+  shortenPaneName,
   statusLabel,
   statusTone,
 } from "../select";
@@ -269,7 +269,7 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
                             <AgentGlyphIcon agent={pane.agent} size={14} />
                           </span>
                           <span class="hwc-active-name" title={name}>
-                            {activeRowName(group.workspace.label, name)}
+                            {shortenPaneName(name, group.workspace)}
                           </span>
                           {props.parentPaneIds.has(pane.id) ? <ParentMark /> : null}
                         </span>

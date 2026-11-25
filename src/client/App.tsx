@@ -70,13 +70,12 @@ import type { PaneOutputHandle } from "./commands";
 import type { ConfirmationAttempt } from "./confirmation";
 import { paneCloseAction } from "../shared/pane-close";
 import {
-  activeRowName,
   canCloseSpace,
   findPane,
   findPaneRow,
   markedParentPaneIds,
+  shortenPaneName,
   shortenSpaceName,
-  tabDisplayName,
   tabLabel,
   tabLabelText,
 } from "./select";
@@ -933,11 +932,8 @@ export function App() {
       : tabLabelText(
           tabLabel(
             shortenSpaceName(draggedRow.workspace),
-            tabDisplayName(
-              activeRowName(
-                draggedRow.workspace.label,
-                paneTabName(draggedRow.pane, processes.get(draggedRow.pane.id) ?? null),
-              ),
+            shortenPaneName(
+              paneTabName(draggedRow.pane, processes.get(draggedRow.pane.id) ?? null),
               draggedRow.workspace,
             ),
             draggedMultiSpace,

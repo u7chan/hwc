@@ -262,8 +262,8 @@ export function paneDisplayName(pane: PaneState): string {
 }
 
 // Herdr が linked worktree に付ける `worktree-` は、ワークツリーであることを示すだけで、
-// その役目は一覧の記号とリポジトリの束が持つ。狭いタブやセルでは前置きに幅を食われて
-// 呼び名が隠れるので、表示だけ落とす。TUI と照合するフルは title と aria に残す。
+// その役目は一覧の記号とリポジトリの束が持つ。狭いタブやセル、一覧の行では前置きに幅を
+// 食われて呼び名が隠れるので、表示だけ落とす。TUI と照合するフルは title と aria に残す。
 const WORKTREE_PREFIX = "worktree-";
 
 // ブランチも Herdr の linked worktree では `worktree/<name>` になる。スペース名と同じく
@@ -286,14 +286,12 @@ export function shortenBranchName(workspace: WorkspaceState, branch: string): st
   return rest === "" ? branch : rest;
 }
 
-// 端末タイトルしか名前の無いペインは、その値がワークツリー名そのものになる。狭いタブやセル
-// では 2 段目やチップのスペース名と同じ文字列になるので、同じ省略形に揃える。別名はそのまま。
-export function shortenPaneName(
-  name: string,
-  workspaceLabel: string,
-  workspaceName: string,
-): string {
-  return name === workspaceLabel ? workspaceName : name;
+// 一覧の行・タブ・見出しは、同じペインに同じ名前を出す。場所は帯とタブ列が言うので、名前から
+// 場所の部分を落とす。端末タイトルしか名前の無いペインは、その値がワークツリー名そのものに
+// なる。残りが空になったらスペース名の省略形に揃え、別名や関係ない名前はそのまま返す。
+export function shortenPaneName(name: string, workspace: WorkspaceState): string {
+  const rest = dropPlace(workspace.label, name);
+  return rest === workspace.label ? shortenSpaceName(workspace) : rest;
 }
 
 export type PlaceChip = {
@@ -309,10 +307,6 @@ export function placeChip(parentSpaceName: string | null, spaceName: string): Pl
     return null;
   }
   return { parent: parentSpaceName };
-}
-
-export function tabDisplayName(name: string, workspace: WorkspaceState): string {
-  return shortenPaneName(name, workspace.label, shortenSpaceName(workspace));
 }
 
 export type TabLabel = {
@@ -333,26 +327,26 @@ export function tabLabelText(label: TabLabel): string {
   return label.space === null ? label.name : `${label.space} › ${label.name}`;
 }
 
-// 名前の区切り。帯が場所を言うので、行の名前からは場所の部分と一緒に落とす。
+// 名前の区切り。場所の名前は別に出すので、名前からは場所の部分と一緒に落とす。
 const SEPARATOR = /[\s._/·:-]/;
 const LEADING_SEPARATORS = /^[\s._/·:-]+/;
 const TRAILING_SEPARATORS = /[\s._/·:-]+$/;
 
-// アクティブの行は帯がワークスペース名を持つ。行で同じ名前を繰り返すと、識別に使える幅が
-// 減る。区切りを挟んで始まる / 終わるときだけ落とし、残りが空なら元のラベルを使う。
-// 区切りを要求するのは、同じ文字で始まるだけの別の名前を短くしないため。
-export function activeRowName(workspaceLabel: string, name: string): string {
-  const label = workspaceLabel.trim();
-  if (label === "" || name.length <= label.length) return name;
+// 一覧の行・タブ・見出しは、どれも場所の名前を別に持つ。名前の中で同じ場所を繰り返すと、
+// 識別に使える幅が減る。区切りを挟んで始まる / 終わるときだけ落とし、残りが空なら元の
+// ラベルを使う。区切りを要求するのは、同じ文字で始まるだけの別の名前を短くしないため。
+function dropPlace(label: string, name: string): string {
+  const place = label.trim();
+  if (place === "" || name.length <= place.length) return name;
   const lower = name.toLowerCase();
-  const target = label.toLowerCase();
-  if (lower.startsWith(target) && SEPARATOR.test(name.charAt(label.length))) {
-    const rest = name.slice(label.length).replace(LEADING_SEPARATORS, "");
+  const target = place.toLowerCase();
+  if (lower.startsWith(target) && SEPARATOR.test(name.charAt(place.length))) {
+    const rest = name.slice(place.length).replace(LEADING_SEPARATORS, "");
     if (rest !== "") return rest;
   }
-  const before = name.charAt(name.length - label.length - 1);
+  const before = name.charAt(name.length - place.length - 1);
   if (lower.endsWith(target) && SEPARATOR.test(before)) {
-    const rest = name.slice(0, name.length - label.length).replace(TRAILING_SEPARATORS, "");
+    const rest = name.slice(0, name.length - place.length).replace(TRAILING_SEPARATORS, "");
     if (rest !== "") return rest;
   }
   return name;
