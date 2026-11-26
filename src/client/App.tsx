@@ -524,6 +524,7 @@ export function App() {
   // 保留を作るのはアクティブ一覧の行だけ。ツリー・詳細のタブバー・復元では作らない。
   const openActivePane = (paneId: string) => {
     if (consumeDraggedClick()) return;
+    fileTreeStore.clearPreview(paneId);
     moveTo(paneId, true);
   };
 
@@ -532,6 +533,8 @@ export function App() {
   // 一覧のツリーの行。タップは開くだけで、ドラッグの後は開かない。
   const selectFromList = (paneId: string) => {
     if (consumeDraggedClick()) return;
+    // 開いているペインでも、ファイルのプレビューを閉じて会話へ戻す。
+    fileTreeStore.clearPreview(paneId);
     select(paneId);
   };
 
