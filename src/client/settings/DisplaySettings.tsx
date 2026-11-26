@@ -1,3 +1,4 @@
+import { CODE_FONT_SIZES, type CodeFontSize } from "../code-font-size";
 import {
   FILE_TREE_ICONS,
   FILE_TREE_SIZES,
@@ -24,6 +25,8 @@ type DisplaySettingsProps = {
   onTreeWidthChange: (width: FileTreeWidth) => void;
   treeIcons: FileTreeIcons;
   onTreeIconsChange: (icons: FileTreeIcons) => void;
+  codeSize: CodeFontSize;
+  onCodeSizeChange: (size: CodeFontSize) => void;
 };
 
 export function DisplaySettings(props: DisplaySettingsProps) {
@@ -74,6 +77,18 @@ export function DisplaySettings(props: DisplaySettingsProps) {
       />
       <p class="hwc-section-note">
         ファイルとフォルダの行の左に、種類の印を付けます。フォルダは開くと形が変わります。既定の「なし」は今の見た目です。
+      </p>
+
+      <p class="hwc-subtitle">ソースコードの文字の大きさ</p>
+      <Segmented
+        label="ソースコードの文字の大きさ"
+        options={CODE_FONT_SIZES}
+        value={props.codeSize}
+        onChange={props.onCodeSizeChange}
+      />
+      <p class="hwc-section-note">
+        ファイルプレビューでソースを表示するときの大きさです。Markdown
+        の本文、会話、端末出力は変わりません。
       </p>
 
       <p class="hwc-subtitle">サンプル</p>
