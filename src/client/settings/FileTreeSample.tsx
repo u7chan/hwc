@@ -34,7 +34,11 @@ function SampleLine({ row, icons }: { row: SampleRow; icons: FileTreeIcons }) {
           {icons === "none" ? null : <FileKindIcon kind={fileKind(row.name)} />}
         </span>
       ) : (
-        <span class="hwc-tree-mark" aria-hidden="true">
+        <span
+          class="hwc-tree-mark"
+          data-open={row.kind === "open-dir" ? "true" : undefined}
+          aria-hidden="true"
+        >
           {icons === "none" ? (
             <span class="hwc-tree-chevron" data-open={row.kind === "open-dir"}>
               <ChevronRightIcon size={16} />
