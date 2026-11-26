@@ -609,7 +609,7 @@ button.hwc-tree-row {
 .hwc-file-preview-text {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: var(--text-mono);
+  font-size: var(--hwc-code-font-size);
   line-height: var(--line-body);
   tab-size: 2;
   white-space: pre;

@@ -144,6 +144,9 @@
      設定「ファイルツリー」が JS から上書きする。 */
   --hwc-tree-width: 260px;
   --hwc-tree-font-size: var(--text-body);
+
+  /* ファイルプレビューのソース表示の文字。設定「表示」が JS から上書きする。 */
+  --hwc-code-font-size: var(--text-mono);
 }
 
 :root[data-theme="dark"] {

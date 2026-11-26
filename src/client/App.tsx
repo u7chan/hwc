@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { AppState } from "../server/herdr/state";
 import { attachmentStore } from "./attachment-store";
+import { codeFontSize } from "./code-font-size";
 import { fileTreeFontSize, fileTreeWidthPx } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
 import { PaneList } from "./PaneList";
@@ -29,6 +30,7 @@ import { menuView } from "./app/menu";
 import { tabRows } from "./app/tab-rows";
 import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
 import { useFavicon } from "./app/hooks/use-favicon";
+import { useCodeFontSize } from "./app/hooks/use-code-font-size";
 import { useFileTreeDisplay } from "./app/hooks/use-file-tree-display";
 import { useFileTreeSide } from "./app/hooks/use-file-tree-side";
 import { useLaunches } from "./app/hooks/use-launches";
@@ -384,6 +386,7 @@ export function App() {
     changeWidth: changeTreeWidth,
     changeIcons: changeTreeIcons,
   } = useFileTreeDisplay();
+  const { size: codeSize, change: changeCodeSize } = useCodeFontSize();
   const { interval: liveUpdate, change: changeLiveUpdate } = useLiveUpdate();
   useLiveUpdateTick(liveUpdateMs(liveUpdate));
   // 委譲の検知は「エージェントが付いたペインが前回のスナップショットに無かった」で行う。
@@ -1071,6 +1074,7 @@ export function App() {
         "--hwc-split-duration": `${splitMotionDuration(splitPrefs.motion)}ms`,
         "--hwc-tree-width": `${fileTreeWidthPx(treeWidth)}px`,
         "--hwc-tree-font-size": fileTreeFontSize(treeSize),
+        "--hwc-code-font-size": codeFontSize(codeSize),
       }}
     >
       <div class="hwc-body">
@@ -1208,6 +1212,8 @@ export function App() {
               onTreeWidthChange={changeTreeWidth}
               treeIcons={treeIcons}
               onTreeIconsChange={changeTreeIcons}
+              codeSize={codeSize}
+              onCodeSizeChange={changeCodeSize}
               revision={revision}
               connection={connection}
               wide={wide}
