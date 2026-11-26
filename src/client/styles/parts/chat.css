@@ -113,8 +113,11 @@ p.hwc-compaction,
 }
 
 /* 合成した ask_user の質問に残す選択肢。回答済みで押せないので、質問カードの行から
-   枠と面を外し、印とラベルだけの静的な一覧にする。選んだものは塗った印とアクセント
-   文字で示し、選ばなかったものは補助色へ引く。 */
+   枠と面を外す。押せそうに見える一番の手がかりは丸い印の形なので、これも外して
+   選んだ行のチェックだけを残す。選ばなかった行の印は、ラベルの位置を揃える空きにする。
+   アクセント色は操作できる選択中の色なので、記録には使わず本文色の太字で示す。
+   選ばなかった行は opacity ではなく --color-muted で引く。opacity 0.7 ではライトで
+   背景との比が 3:1 前後まで落ち、読めなくなる。 */
 .hwc-ask-options {
   display: flex;
   flex-direction: column;
@@ -128,9 +131,19 @@ p.hwc-compaction,
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  color: var(--color-secondary);
+  color: var(--color-muted);
   font-size: var(--text-supporting);
   line-height: var(--line-body);
+}
+
+.hwc-ask-option-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  /* 1 行目の文字の中央に合わせる。 */
+  margin-top: 2px;
 }
 
 .hwc-ask-option-text {
@@ -148,18 +161,14 @@ p.hwc-compaction,
   line-height: var(--line-tight);
 }
 
+/* 選んだ行は何を選んだかという情報そのものなので、薄くしない。 */
 .hwc-ask-option[data-selected="true"] {
-  color: var(--color-accent);
+  color: var(--color-text);
   font-weight: 600;
 }
 
 .hwc-ask-option[data-selected="true"] .hwc-ask-option-note {
   font-weight: 400;
-}
-
-.hwc-ask-option[data-selected="true"] .hwc-ask-option-mark {
-  border-color: var(--color-accent);
-  background: var(--color-accent);
 }
 
 /* 回答の種別。吹き出しの外の補助情報なので、時刻と同じ文字に並べる。 */
@@ -1345,8 +1354,7 @@ p.hwc-compaction,
   opacity: 0.6;
 }
 
-.hwc-pending-mark,
-.hwc-ask-option-mark {
+.hwc-pending-mark {
   flex: none;
   display: grid;
   place-items: center;

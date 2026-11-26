@@ -121,8 +121,8 @@ function OutsideFileNote(props: { name: string }) {
 }
 
 // 合成した ask_user の質問に、選択肢と選択済み・推奨を残す。履歴だけを読む人にも
-// 何から選んだか分かるようにする。回答済みで押せないので、質問カードの行から枠と面を
-// 外し、押せそうに見えない静的な一覧にする。選択済みは印とラベルで示す。
+// 何から選んだか分かるようにする。回答済みで押せないので、質問カードの行から枠と面と
+// 丸い印を外し、押せそうに見えない記録にする。選択済みはチェックと太字で示す。
 function AskOptions(props: { options: ChatAskOption[] }) {
   return (
     <ul class="hwc-ask-options" aria-label="質問の選択肢">
@@ -133,7 +133,7 @@ function AskOptions(props: { options: ChatAskOption[] }) {
           key={`${option.label}-${index}`}
         >
           <span class="hwc-ask-option-mark" aria-hidden="true">
-            {option.selected ? <CheckIcon size={12} /> : null}
+            {option.selected ? <CheckIcon size={14} /> : null}
           </span>
           <span class="hwc-ask-option-text">
             <span class="hwc-ask-option-label">{option.label}</span>
