@@ -7,9 +7,9 @@ export type CodeFontSize = "small" | "normal" | "large";
 // 標準は従来の --text-mono そのもの。--text-mono を基準の倍率にするのは、ファイルツリーと
 // 同じ理由で、どの画面幅でも標準との比を揃えるため。行間は無次元の --line-body なので追従する。
 const SIZES: Record<CodeFontSize, { label: string; fontSize: string }> = {
-  small: { label: "小", fontSize: "calc(var(--text-mono) * 0.85)" },
+  small: { label: "小", fontSize: "calc(var(--text-mono) * 0.75)" },
   normal: { label: "標準", fontSize: "var(--text-mono)" },
-  large: { label: "大", fontSize: "calc(var(--text-mono) * 1.2)" },
+  large: { label: "大", fontSize: "calc(var(--text-mono) * 1.35)" },
 };
 
 export const CODE_FONT_SIZES = (Object.keys(SIZES) as CodeFontSize[]).map((id) => ({

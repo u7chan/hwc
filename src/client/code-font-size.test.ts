@@ -24,8 +24,8 @@ test("an empty value keeps today's code size", () => {
 });
 
 test("small and large scale the same token, so the ratio holds at any width", () => {
-  expect(codeFontSize("small")).toBe("calc(var(--text-mono) * 0.85)");
-  expect(codeFontSize("large")).toBe("calc(var(--text-mono) * 1.2)");
+  expect(codeFontSize("small")).toBe("calc(var(--text-mono) * 0.75)");
+  expect(codeFontSize("large")).toBe("calc(var(--text-mono) * 1.35)");
   expect(CODE_FONT_SIZES.map((option) => option.id)).toEqual(["small", "normal", "large"]);
 });
 
