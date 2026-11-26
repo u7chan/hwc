@@ -71,12 +71,13 @@ export function indent(depth: number) {
 
 // 行の左の印。アイコンを出すときは開閉をフォルダの形で示し、出さないときは
 // 開閉のシェブロン 1 つにする（印を出さないだけで、開閉の合図は残す）。
+// 開いた行の印は、名前と同じ濃さにして、いま開いている枝を行の色でも示す。
 function TreeMark(props: { entry: FileTreeEntry; expanded: boolean; icons: FileTreeIcons }) {
   const { entry, expanded, icons } = props;
   if (entry.kind === "dir") {
     if (icons === "none") {
       return (
-        <span class="hwc-tree-mark" aria-hidden="true">
+        <span class="hwc-tree-mark" data-open={expanded ? "true" : undefined} aria-hidden="true">
           {entry.expandable ? (
             <span class="hwc-tree-chevron" data-open={expanded}>
               <ChevronRightIcon size={16} />
@@ -86,7 +87,7 @@ function TreeMark(props: { entry: FileTreeEntry; expanded: boolean; icons: FileT
       );
     }
     return (
-      <span class="hwc-tree-mark" aria-hidden="true">
+      <span class="hwc-tree-mark" data-open={expanded ? "true" : undefined} aria-hidden="true">
         {expanded ? <FolderOpenIcon size={16} /> : <FolderIcon size={16} />}
       </span>
     );
@@ -176,15 +177,18 @@ function TreeMenuButton(props: { entry: FileTreeEntry; tree: TreeContext }) {
 function TreeLine(props: {
   entry: FileTreeEntry;
   blocked: boolean;
+  // 押しても開けない行と、git が無視する行。どちらも名前と印を淡色にする。
+  muted: boolean;
   selected: boolean;
   row: ComponentChildren;
   tree: TreeContext;
 }) {
-  const { entry, blocked, selected, row, tree } = props;
+  const { entry, blocked, muted, selected, row, tree } = props;
   return (
     <div
       class="hwc-tree-line"
       data-blocked={blocked ? "true" : undefined}
+      data-muted={muted ? "true" : undefined}
       data-selected={selected ? "true" : undefined}
     >
       {row}
@@ -233,6 +237,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext
         <TreeLine
           entry={entry}
           blocked={!entry.expandable}
+          muted={!entry.expandable || entry.ignored === true}
           selected={false}
           row={row}
           tree={tree}
@@ -303,6 +308,7 @@ function TreeRow(props: { entry: FileTreeEntry; depth: number; tree: TreeContext
       <TreeLine
         entry={entry}
         blocked={entry.open === null}
+        muted={entry.open === null || entry.ignored === true}
         selected={selected}
         row={row}
         tree={tree}

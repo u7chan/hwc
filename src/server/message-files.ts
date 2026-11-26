@@ -19,6 +19,7 @@ import {
   previewContentType,
 } from "../shared/message-files";
 import type { ChatFile, ChatLink, ChatMessage, ChatSnapshot } from "./chat/contract";
+import { readIgnoredPaths } from "./git";
 
 // 1 通の本文から試す候補の上限。実在確認は候補ごとに fs を叩くので、本文が長くても止まるようにする。
 const MAX_CANDIDATES = 20;
@@ -409,11 +410,10 @@ function unreadableFile(name: string, path: string): FileTreeFile {
 async function listEntry(
   rootReal: string,
   parentReal: string,
-  parentPath: string,
+  path: string,
   dirent: Dirent,
 ): Promise<FileTreeEntry> {
   const name = dirent.name;
-  const path = parentPath === "" ? name : `${parentPath}/${name}`;
   const target = join(parentReal, name);
 
   if (dirent.isSymbolicLink()) {
@@ -498,12 +498,27 @@ export async function listDirectory(options: {
     // symlink は dir か file か分からないので file 側に並べる。実体の確認は上限で
     // 切った後だけ行い、巨大なディレクトリでも stat の回数を上限に抑える。
     const selected = [...dirents].sort(compareDirents).slice(0, FILE_TREE_LIMIT);
-    const entries = await Promise.all(
-      selected.map((item) => listEntry(rootReal, real, base, item)),
-    );
+    const targets = selected.map((item) => ({
+      item,
+      path: base === "" ? item.name : `${base}/${item.name}`,
+    }));
+    // git が無視する項目は、子の stat を待たずに並行して調べる。
+    const [entries, ignored] = await Promise.all([
+      Promise.all(targets.map(({ item, path }) => listEntry(rootReal, real, path, item))),
+      readIgnoredPaths(
+        rootReal,
+        targets.map((target) => target.path),
+      ),
+    ]);
     // symlink の解決で dir に変わったものがあるので、dirs first で並べ直す。
     entries.sort(compareEntries);
-    return { entries, total, truncated: total > FILE_TREE_LIMIT };
+    return {
+      entries: entries.map((entry) =>
+        ignored.has(entry.path) ? { ...entry, ignored: true } : entry,
+      ),
+      total,
+      truncated: total > FILE_TREE_LIMIT,
+    };
   } catch {
     return null;
   }

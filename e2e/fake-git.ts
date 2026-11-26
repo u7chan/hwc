@@ -11,6 +11,8 @@ type Entry = {
   hasRemote: boolean;
   // GitHub 以外のリモートを試すときは GitLab などの URL を入れる。
   remoteUrl?: string | null;
+  // .gitignore が無視するパス。実物の git と同じく、その配下も無視する。
+  ignored?: string[];
 };
 
 type State = Record<string, Entry>;
@@ -88,6 +90,20 @@ switch (args[0]) {
   case "ls-files":
     process.stdout.write((projectFiles[cwd] ?? []).join("\0"));
     process.exit(0);
+  case "check-ignore": {
+    // ツリーの行に淡色を付けるため、BFF が 1 ディレクトリぶんの子を NUL 区切りで渡す。
+    // 実物と同じ形で、無視するパスだけを返す（一致が無いときの終了コードも 1）。
+    if (entry === undefined) process.exit(2);
+    const ignored = entry.ignored ?? [];
+    const matched = readFileSync(0, "utf8")
+      .split("\0")
+      .filter(
+        (path) =>
+          path !== "" && ignored.some((item) => path === item || path.startsWith(`${item}/`)),
+      );
+    for (const path of matched) process.stdout.write(`${path}\0`);
+    process.exit(matched.length === 0 ? 1 : 0);
+  }
   default:
     process.exit(2);
 }

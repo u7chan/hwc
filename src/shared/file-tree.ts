@@ -10,6 +10,8 @@ export type FileTreeDir = {
   name: string;
   path: string;
   expandable: boolean;
+  // .gitignore など、git が無視する項目。開けるかどうかとは別で、行を淡色にする。
+  ignored?: boolean;
 };
 
 // 開けないファイルも行としては出す（open が null）。ツリーの穴を空けないため。
@@ -19,6 +21,7 @@ export type FileTreeFile = {
   path: string;
   open: ChatLinkKind | null;
   version: string;
+  ignored?: boolean;
 };
 
 export type FileTreeEntry = FileTreeDir | FileTreeFile;
@@ -48,16 +51,17 @@ function toEntry(value: unknown): FileTreeEntry | null {
   if (typeof name !== "string" || typeof path !== "string") return null;
   if (name === "" || name.includes("/") || !isRelativePath(path)) return null;
   if (path !== name && !path.endsWith(`/${name}`)) return null;
+  const ignored = value.ignored === true ? { ignored: true } : {};
 
   if (value.kind === "dir") {
-    return { kind: "dir", name, path, expandable: value.expandable === true };
+    return { kind: "dir", name, path, expandable: value.expandable === true, ...ignored };
   }
   if (value.kind !== "file") return null;
 
   const open = value.open;
   if (open !== null && open !== "image" && open !== "html" && open !== "text") return null;
   if (typeof value.version !== "string") return null;
-  return { kind: "file", name, path, open, version: value.version };
+  return { kind: "file", name, path, open, version: value.version, ...ignored };
 }
 
 export function parseFileTree(value: unknown): FileTreeListing | null {
