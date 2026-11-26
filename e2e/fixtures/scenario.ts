@@ -531,6 +531,14 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeFile(join(dashboard, "src", "main.ts"), "export const ready = true;\n"),
   ]);
 
+  // .gitignore が無視するフォルダ。ツリーでは出したまま淡色にし、開く道も残す。
+  // 上の Promise.all は並行に走るので、親のフォルダはここで作ってから書く。
+  await mkdir(join(dashboard, "node_modules", "demo"), { recursive: true });
+  await writeFile(
+    join(dashboard, "node_modules", "demo", "package.json"),
+    '{ "name": "demo", "version": "1.0.0" }\n',
+  );
+
   await writeSkillHome(root);
 
   // 添付チップは保存済みファイルの実バイト数を出す。会話の注記は basename しか使わないが、
@@ -608,6 +616,8 @@ export async function createScenario(root: string): Promise<Scenario> {
           behind: 2,
           hasRemote: true,
           remoteUrl: "https://github.com/example/acme-dashboard.git",
+          // .gitignore の `node_modules` に当たる項目。ツリーでは淡色で出る。
+          ignored: ["node_modules"],
         },
         [docs]: {
           upstream: "origin/docs/quickstart",

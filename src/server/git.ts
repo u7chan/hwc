@@ -238,6 +238,42 @@ function gitEnv(): Record<string, string | undefined> {
   return childEnv({ set: { GIT_TERMINAL_PROMPT: "0" } });
 }
 
+// `git check-ignore -z` の出力は、一致したパスを NUL で区切ったもの。末尾の区切りだけが
+// 残るので、空文字は捨てる。
+export function parseIgnoredPaths(output: string): Set<string> {
+  return new Set(output.split("\0").filter((path) => path !== ""));
+}
+
+// ツリーの 1 ディレクトリぶんの子を、git が無視するかどうかまとめて調べる。行ごとに
+// プロセスを起こさないよう、1 回の git に --stdin でまとめて渡す。git が無い・
+// リポジトリでない・時間切れでは空を返し、淡色を付けない（一覧そのものは出し続ける）。
+export async function readIgnoredPaths(
+  root: string,
+  paths: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (paths.length === 0) return new Set();
+  try {
+    const child = Bun.spawn(["git", "check-ignore", "-z", "--stdin"], {
+      cwd: root,
+      env: gitEnv(),
+      // -z は入力を NUL 区切りにする。名前に改行を含められるので、行では区切らない。
+      stdin: new TextEncoder().encode(paths.map((path) => `${path}\0`).join("")),
+      stdout: "pipe",
+      stderr: "ignore",
+      timeout: GIT_READ_TIMEOUT_MS,
+    });
+    const [output, code] = await Promise.all([
+      new Response(child.stdout).arrayBuffer(),
+      child.exited,
+    ]);
+    // 一致が 1 件も無いときは 1、リポジトリの外や git が無いときは 128 が返る。
+    if (code !== 0) return new Set();
+    return parseIgnoredPaths(new TextDecoder().decode(output));
+  } catch {
+    return new Set();
+  }
+}
+
 async function readGit(checkoutPath: string, args: string[]): Promise<string> {
   const child = Bun.spawn(["git", ...args], {
     cwd: checkoutPath,

@@ -954,3 +954,44 @@ test("lists a POSIX file name that contains a backslash", async () => {
     { kind: "file", name: "back\\slash.md", path: "docs/back\\slash.md", open: "text" },
   ]);
 });
+
+test("marks what git ignores without hiding it", async () => {
+  await write(".gitignore", new TextEncoder().encode("node_modules\nsecret.md\n"));
+  await write("node_modules/demo/package.json", new TextEncoder().encode("{}\n"));
+  await write("secret.md", new TextEncoder().encode("x\n"));
+  await write("src/app.ts", new TextEncoder().encode("export {};\n"));
+  const init = Bun.spawn(["git", "init", "-q", root], { stdout: "ignore", stderr: "ignore" });
+  expect(await init.exited).toBe(0);
+
+  const listing = await listDirectory({ root, path: "" });
+  const byName = new Map(listing?.entries.map((entry) => [entry.name, entry]));
+
+  // 隠さずに出す。開けるかどうか（expandable / open）は git と関係がない。
+  expect(byName.get("node_modules")).toMatchObject({
+    kind: "dir",
+    ignored: true,
+    expandable: true,
+  });
+  expect(byName.get("secret.md")).toMatchObject({ kind: "file", ignored: true, open: "text" });
+  expect(byName.get("src")).not.toHaveProperty("ignored");
+  expect(byName.get(".gitignore")).not.toHaveProperty("ignored");
+
+  // 無視されたフォルダの中も、同じように淡色で出す。
+  const nested = await listDirectory({ root, path: "node_modules/demo" });
+  expect(nested?.entries).toMatchObject([
+    { kind: "file", path: "node_modules/demo/package.json", ignored: true },
+  ]);
+
+  // 根の外の symlink は開けないまま。無視とは別の印になる。
+  const outside = await mkdtemp(join(tmpdir(), "hwc-tree-outside-"));
+  try {
+    await symlink(outside, join(root, "outside-dir"));
+    const again = await listDirectory({ root, path: "" });
+    expect(again?.entries.find((entry) => entry.name === "outside-dir")).toMatchObject({
+      kind: "dir",
+      expandable: false,
+    });
+  } finally {
+    await rm(outside, { recursive: true, force: true });
+  }
+});

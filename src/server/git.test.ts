@@ -8,9 +8,11 @@ import {
   parseBranchHead,
   parseGitDirFile,
   parseGitRepo,
+  parseIgnoredPaths,
   parseRemoteUrls,
   pickGitHubRepoUrl,
   readBranch,
+  readIgnoredPaths,
 } from "./git";
 
 const GITHUB_REMOTE = [
@@ -470,4 +472,32 @@ test("fetch and pull use the expected git commands", async () => {
   await client.pull("/repo");
 
   expect(actions).toEqual([["fetch"], ["pull", "--ff-only"]]);
+});
+
+// check-ignore の出力は NUL 区切り。末尾の区切りだけが残る。
+test("ignored paths come from the NUL separated output", () => {
+  expect([...parseIgnoredPaths("node_modules\0dist\0")]).toEqual(["node_modules", "dist"]);
+  expect([...parseIgnoredPaths("")]).toEqual([]);
+});
+
+test("git decides which children of a directory are ignored", async () => {
+  const root = await dir();
+  await mkdir(join(root, "node_modules", "demo"), { recursive: true });
+  await mkdir(join(root, "src"));
+  await writeFile(join(root, ".gitignore"), "node_modules\n*.log\n");
+  await writeFile(join(root, "debug.log"), "x");
+  await writeFile(join(root, "src", "main.ts"), "export {}");
+  const init = Bun.spawn(["git", "init", "-q", root], { stdout: "ignore", stderr: "ignore" });
+  expect(await init.exited).toBe(0);
+
+  // 引数ではなく 1 回の git にまとめて渡す。返るのは無視されるものだけ。
+  expect([
+    ...(await readIgnoredPaths(root, ["node_modules", "debug.log", "src", "src/main.ts"])),
+  ]).toEqual(["node_modules", "debug.log"]);
+});
+
+test("a place without git ignores nothing", async () => {
+  const root = await dir();
+  await mkdir(join(root, "node_modules"));
+  expect([...(await readIgnoredPaths(root, ["node_modules"]))]).toEqual([]);
 });

@@ -306,10 +306,14 @@ button.hwc-tree-row {
   background: var(--color-selected);
 }
 
-/* 開けないファイルと、根の外を指す symlink。名前だけ出し、押しても何もしない。
-   gitignore された行と同じく、地の色相から外したグレーにする。 */
-.hwc-tree-line[data-blocked="true"] > .hwc-tree-row {
+/* 押しても開けないファイル・根の外を指す symlink・git が無視する項目は、名前も印も
+   地の色相から外したグレーにする。前の 2 つは押せないが、無視された項目は開けるので、
+   淡色にするのは色だけにし、当たり判定と乗せたときの塗りは残す。 */
+.hwc-tree-line[data-muted="true"] > .hwc-tree-row {
   color: var(--color-muted);
+}
+
+.hwc-tree-line[data-blocked="true"] > .hwc-tree-row {
   cursor: default;
 }
 
@@ -322,39 +326,45 @@ button.hwc-tree-row {
   color: var(--color-secondary);
 }
 
-/* 開けない行は、名前と同じ淡色に印も落とす。印だけ濃いと、名前より目に入る。 */
-.hwc-tree-line[data-blocked="true"] .hwc-tree-mark {
+/* 開いたフォルダの印は、名前と同じ濃さにする。フォルダの形が開閉を示し、色は
+   「いま開いている枝」を名前の列で目立たせる。 */
+.hwc-tree-mark[data-open="true"] {
+  color: var(--color-text);
+}
+
+/* 淡色の行は、名前と同じ淡色に印も落とす。印だけ濃いと、名前より目に入る。 */
+.hwc-tree-line[data-muted="true"] .hwc-tree-mark {
   color: var(--color-muted);
 }
 
 /* 種類の色。アイコン専用の色を 20 テーマぶん足さず、明暗 2 通りに調整済みの ANSI 色を
-   借りる。開けない行は行の淡色をそのまま使い、色で「開ける」と誤解させない。 */
+   借りる。淡色の行は行の色をそのまま使い、色で「開ける」と誤解させない。 */
 .hwc-tree[data-icons="color"]
-  .hwc-tree-line:not([data-blocked="true"])
+  .hwc-tree-line:not([data-muted="true"])
   .hwc-tree-mark[data-kind="code"] {
   color: var(--ansi-12);
 }
 
 .hwc-tree[data-icons="color"]
-  .hwc-tree-line:not([data-blocked="true"])
+  .hwc-tree-line:not([data-muted="true"])
   .hwc-tree-mark[data-kind="data"] {
   color: var(--ansi-11);
 }
 
 .hwc-tree[data-icons="color"]
-  .hwc-tree-line:not([data-blocked="true"])
+  .hwc-tree-line:not([data-muted="true"])
   .hwc-tree-mark[data-kind="style"] {
   color: var(--ansi-13);
 }
 
 .hwc-tree[data-icons="color"]
-  .hwc-tree-line:not([data-blocked="true"])
+  .hwc-tree-line:not([data-muted="true"])
   .hwc-tree-mark[data-kind="image"] {
   color: var(--ansi-2);
 }
 
 .hwc-tree[data-icons="color"]
-  .hwc-tree-line:not([data-blocked="true"])
+  .hwc-tree-line:not([data-muted="true"])
   .hwc-tree-mark[data-kind="shell"] {
   color: var(--ansi-6);
 }
