@@ -569,10 +569,23 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
   cursor: pointer;
 }
 
+/* 枠の色はキーボードフォーカスの輪郭（accent）と分ける。同じ色だと、フォーカスが開いている行に
+   重なったときに区別できない。 */
 /* 開いている行は面の色だけだと他の行に紛れる。並べ替え中の破線（掴んでいる束）と
    取り違えないよう、内側に実線の枠を引いて形でも示す。 */
 .hwc-pane[data-current="true"] {
   background: var(--color-selected);
+  outline: 2px solid var(--color-text);
+  outline-offset: -2px;
+}
+
+/* 行は帯とカードの内側に詰まっている。既定の外向きの輪郭は隣の帯やカードの外へはみ出して
+   重なるので、選択中の行の枠と同じ太さで内側へ引く。 */
+.hwc-pane-open:focus-visible,
+.hwc-active-open:focus-visible,
+.hwc-group:focus-visible,
+.hwc-tabrow:focus-visible,
+.hwc-pane-more:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
@@ -589,7 +602,7 @@ html[data-drag-ghost="below"] .hwc-drag-ghost {
 
 /* アイコンの枠を残すのはシェルだけ。選択中の行ではアイコンの枠もアクセントで示す。 */
 .hwc-pane[data-current="true"] .hwc-pane-icon {
-  border-color: var(--color-accent);
+  border-color: var(--color-text);
   color: var(--color-accent);
 }
 
