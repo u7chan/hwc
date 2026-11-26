@@ -617,7 +617,7 @@ Herdr がイベントを出さない cwd とブランチを、可視中だけ取
 7. 1280px の幅で `frontend` のファイルツリーを開く。フォルダの行はシェブロンの代わりにフォルダの形になり、開くと形が入れ替わる。`bin` / `docs` / `src` はフォルダ、`.gitignore` と `README.md` は書類、`package.json` と `docs/ci.yml` は中括弧、`bun.lock` は鍵、`src/main.ts` は山括弧で、種類の色が付く。`.gitignore` のような地の色のままの行と、淡色の行には色を付けない。
 8. 再読み込みしても選んだ段階が残る（`localStorage` の `hwc-file-tree-size` / `hwc-file-tree-width` / `hwc-file-tree-icons`）。
 
-### ソースコードの文字の大きさ
+## ソースコードの文字の大きさ
 
 設定の「表示」で、ファイルプレビューのソース表示の文字の大きさ（小 / 標準 / 大）を端末ごとに選ぶ。
 
