@@ -95,6 +95,26 @@ test("send sends the text and Enter in one request when submit is true", async (
   expect(calls[0]?.params).toEqual({ pane_id: "w1:p1", text: "hello", keys: ["enter"] });
 });
 
+test("sendCommand sends the text and a second Enter after the command menu opens", async () => {
+  const { calls, call } = recordingCaller();
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  await client.sendCommand({ paneId: "w1:p1", text: "/compact" });
+
+  expect(calls).toEqual([
+    {
+      method: "pane.send_input",
+      params: { pane_id: "w1:p1", text: "/compact", keys: ["enter"] },
+      options: { path: "/tmp/test.sock" },
+    },
+    {
+      method: "pane.send_keys",
+      params: { pane_id: "w1:p1", keys: ["enter"] },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});
+
 test("send keeps multi-line text as it is and leaves Enter to submit", async () => {
   const { calls, call } = recordingCaller();
   const client = createPaneClient({ call });
@@ -126,6 +146,21 @@ test("stop sends Escape to the pane", async () => {
     {
       method: "pane.send_keys",
       params: { pane_id: "w1:p1", keys: ["esc"] },
+      options: { path: "/tmp/test.sock" },
+    },
+  ]);
+});
+
+test("stop sends Escape twice to OpenCode", async () => {
+  const { calls, call } = recordingCaller();
+  const client = createPaneClient({ path: "/tmp/test.sock", call });
+
+  await client.stop({ paneId: "w1:p1", agent: "opencode" });
+
+  expect(calls).toEqual([
+    {
+      method: "pane.send_keys",
+      params: { pane_id: "w1:p1", keys: ["esc", "esc"] },
       options: { path: "/tmp/test.sock" },
     },
   ]);

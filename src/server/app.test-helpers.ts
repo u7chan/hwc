@@ -293,6 +293,7 @@ export function createFakePanes(overrides: Partial<PaneClient> = {}): PaneClient
   return {
     read: async ({ paneId }) => ({ paneId, text: "hello\n", truncated: false, revision: 3 }),
     send: async () => {},
+    sendCommand: async () => {},
     sendKeys: async () => {},
     focus: async () => {},
     stop: async () => {},

@@ -4,11 +4,17 @@ import { createPaneCloser } from "../close-pane";
 import { createExitCleanup } from "../exit-cleanup";
 import { createPane, startAgentInPane } from "../create-pane";
 import { exceedsTextLimit, TEXT_TOO_LONG, TEXT_WITH_ATTACHMENTS_TOO_LONG } from "../herdr/panes";
-import { parseInputBody, parseOutputQuery, parseSplitBody, parseStartBody } from "./panes-request";
+import {
+  isOpencodeCommand,
+  parseInputBody,
+  parseOutputQuery,
+  parseSplitBody,
+  parseStartBody,
+} from "./panes-request";
 import { type AppState, findPane, type TabState } from "../herdr/state";
 import type { PaneCloseAction } from "../../shared/pane-close";
 import { MAX_PANES_PER_TAB } from "../../shared/panes";
-import { supportsFolderTrust } from "../../shared/agents";
+import { isAgentKind, supportsFolderTrust } from "../../shared/agents";
 import { HerdrError } from "../herdr/socket";
 import type { AppContext, IdContext } from "./context";
 
@@ -124,6 +130,8 @@ export function createPanesHandlers(ctx: AppContext) {
       // 入力は TUI のダイアログへ届く。ペインを確認できないまま送らない。
       if (state === null) return c.json({ error: "herdr_unavailable" }, 502);
       const pane = findPane(state, paneId);
+      // 送信直前の状態で決める。下の fresh で上書きする。
+      let agent = pane?.agent ?? null;
       if (pane !== null && supportsFolderTrust(pane.agent)) {
         try {
           if (await folderTrust.inspect(pane))
@@ -164,6 +172,7 @@ export function createPanesHandlers(ctx: AppContext) {
       try {
         const fresh = await freshPane(paneId);
         if (fresh === null) return c.json({ error: "pane_not_found" }, 404);
+        agent = fresh.agent;
         if (fresh.agent === "pi" && fresh.agentStatus === "blocked") {
           return c.json({ error: "not_waiting" }, 409);
         }
@@ -188,7 +197,15 @@ export function createPanesHandlers(ctx: AppContext) {
       }
 
       try {
-        await panes.send({ paneId, text, submit: input.value.submit });
+        if (
+          input.value.submit &&
+          agent === "opencode" &&
+          isOpencodeCommand(input.value.text, paths.length)
+        ) {
+          await panes.sendCommand({ paneId, text });
+        } else {
+          await panes.send({ paneId, text, submit: input.value.submit });
+        }
       } catch (error) {
         return paneFailure(c, error);
       }
@@ -235,7 +252,7 @@ export function createPanesHandlers(ctx: AppContext) {
         if (supportsFolderTrust(pane.agent) && (await folderTrust.inspect(pane))) {
           return c.json({ error: "confirmation_pending" }, 409);
         }
-        await panes.stop({ paneId });
+        await panes.stop({ paneId, agent: isAgentKind(pane.agent) ? pane.agent : null });
         return c.json({ ok: true });
       } catch (error) {
         return paneFailure(c, error);

@@ -2,7 +2,7 @@
 
 hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 ページで把握するための表。仕様の正は実装と ADR で、この表は俯瞰用。実装や ADR を変えたら、同じ変更でこの表も更新する。
 
-最終確認: 2026-11-23（Herdr 0.9.5、`bun run e2e:serve` の架空 Herdr）。Codex は 2026-11-27 に実 Herdr + Codex CLI 0.172.0（gpt-6-luna）でも確認
+最終確認: 2026-11-23（Herdr 0.9.5、`bun run e2e:serve` の架空 Herdr）。Codex は 2026-11-27 に実 Herdr + Codex CLI 0.172.0（gpt-6-luna）、OpenCode は 2026-11-27 に実 Herdr + OpenCode 2.4.2 で確認
 
 凡例:
 
@@ -71,8 +71,11 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 ### OpenCode
 
 - 会話はローカルサービスの HTTP API から読む（[OpenCode 連携](adr/opencode-integration.md)）。`service.json` が無い、loopback でない、API が失敗するときは端末出力へフォールバックする
+- 停止は Esc を 2 回送る。OpenCode は 1 回目で「esc again to interrupt」の中断確認になる
+- `/new` `/compact` は、TUI の候補メニューを開く Enter と、選んだ項目を確定する Enter の 2 回が必要。hwc は文字列を送った後に少し待って 2 回目を送る（[入力](adr/agent-input.md)）
 - モデルと effort はサービス API の model と variants から選ぶ。サービスが未起動なら、候補を読むときに hwc が `opencode service start` で起動する。起動できなければ候補が出ず、再取得で起動し直す（[起動](adr/agent-launch.md)、[OpenCode 連携](adr/opencode-integration.md)）
 - 添付ファイルの実体は渡さず、本文のパス注記だけを送る
+- `/new` は最初のメッセージを送るまで新しいセッションを作らない。hwc はその間、空の会話を出し、最初の発言で新しい `agent_session` に追従する。新しいセッションの effort は OpenCode の既定（`default`）に戻る
 - 圧縮は完了したものだけを区切りにし、`tokensBefore` は `null`
 
 ### Pi
@@ -101,7 +104,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | Claude のモデルラベル                   | `src/server/claude-model-labels.ts`、`src/client/launch-candidates.ts`                                                                                                                                 |
 | 新しいペインの既定と初期選択            | `src/server/launch-defaults.ts`、`src/client/launch-choice.ts`、`src/client/settings/AgentSettings.tsx`                                                                                                |
 | 既定モデル・effort の遅延表示           | `src/server/pi-defaults.ts`、`src/client/pane/use-default-model.ts`                                                                                                                                    |
-| コマンド候補とガード                    | `src/client/commands.ts`                                                                                                                                                                               |
+| コマンド文字列・候補とガード            | `src/shared/agent-commands.ts`、`src/client/commands.ts`                                                                                                                                               |
 | ライブ activity                         | `src/server/chat/activity.ts`（pi）、`src/server/chat/claude.ts`、`src/server/chat/claude-live.ts`（Claude）                                                                                           |
 | フォルダ信頼確認（Codex / Pi）          | `src/client/confirmation.ts`、`src/server/folder-trust.ts`                                                                                                                                             |
 | 過去の発言の編集                        | `src/server/routes/edit-message.ts`、`src/client/edit.ts`、`src/shared/rewind.ts`                                                                                                                      |

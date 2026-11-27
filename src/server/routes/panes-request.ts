@@ -1,3 +1,4 @@
+import { isCompactCommand, isNewSessionCommand } from "../../shared/agent-commands";
 import { isStoredAttachmentName, MAX_ATTACHMENTS } from "../../shared/attachments";
 import {
   type AgentKind,
@@ -17,6 +18,17 @@ const MAX_LINES = 4_294_967_295;
 export const MAX_PANE_NAME = 80;
 
 export type InputBody = { text: string; submit: boolean; attachments: string[] };
+
+// OpenCode の TUI は先頭 `/` の入力を候補メニューにする。hwc が送る /new と /compact は
+// 候補を開く Enter と確定する Enter の 2 回が必要なので、送信側で分ける。添付の注記が
+// 後ろに付く本文はコマンドにならないため、添付があるときは対象外にする。
+export function isOpencodeCommand(text: string, attachmentCount: number): boolean {
+  if (attachmentCount > 0) return false;
+  // 先頭の空白は TUI では本文の一部になる。コマンドの判定は trim する関数に合わせるが、
+  // 2 回目の Enter は先頭が `/` のときだけ送る（本文の空送信を避ける）。
+  if (!text.startsWith("/")) return false;
+  return isNewSessionCommand(text) || isCompactCommand(text);
+}
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; status: 400 | 413; error: string };
 

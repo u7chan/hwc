@@ -25,6 +25,10 @@ export const TEXT_WITH_ATTACHMENTS_TOO_LONG = `text and the attached files note 
 // 分割直後のペインは、シェルの準備ができるまで agent.start が agent_pane_busy を返す。
 const AGENT_PANE_WAIT_MS = 5_000;
 const AGENT_PANE_RETRY_MS = 150;
+// OpenCode の TUI がスラッシュコマンドの候補メニューを描いてから、確定の Enter を
+// 受け付けるまで。2 回の Enter を同じリクエストで送ると、2 回目がメニューの描画前に
+// 処理されてコマンドが実行されない（opencode 2.4.2 で確認）。
+const OPENCODE_COMMAND_SETTLE_MS = 200;
 
 export type PaneOutput = PaneRead;
 
@@ -34,9 +38,11 @@ export type ReadOptions = { paneId: string; source: ReadSource; lines?: number }
 
 export type SendOptions = { paneId: string; text: string; submit: boolean };
 
+export type SendCommandOptions = { paneId: string; text: string };
+
 export type FocusOptions = { paneId: string };
 
-export type StopOptions = { paneId: string };
+export type StopOptions = { paneId: string; agent?: AgentKind | null };
 
 export type ClearOptions = { paneId: string };
 
@@ -76,6 +82,7 @@ export function restartAgentName(paneId: string, now: number = Date.now()): stri
 export type PaneClient = {
   read: (options: ReadOptions) => Promise<PaneOutput>;
   send: (options: SendOptions) => Promise<void>;
+  sendCommand: (options: SendCommandOptions) => Promise<void>;
   // キーだけを送る。文字は送らない。キー名は Herdr のもの（`esc`、`enter`、`C-c`）。
   sendKeys: (options: SendKeysOptions) => Promise<void>;
   focus: (options: FocusOptions) => Promise<void>;
@@ -229,13 +236,22 @@ export function createPaneClient(options: { path?: string; call?: Caller } = {})
         : { pane_id: paneId, text };
       await call("pane.send_input", params, { path });
     },
+    // コマンド文字列を送り、候補メニューが開いてから確定の Enter を送る。1 リクエストで
+    // 2 回の Enter を送ると、2 回目が候補メニューの描画前に処理されて確定しない。
+    async sendCommand({ paneId, text }) {
+      await call("pane.send_input", { pane_id: paneId, text, keys: ["enter"] }, { path });
+      await new Promise((resolve) => setTimeout(resolve, OPENCODE_COMMAND_SETTLE_MS));
+      await call("pane.send_keys", { pane_id: paneId, keys: ["enter"] }, { path });
+    },
     async focus({ paneId }) {
       // target はエージェント名も受けるが、hwc が持つのはペイン id だけ。
       await call("agent.focus", { target: paneId }, { path });
     },
     sendKeys,
-    // Herdr は Esc を esc として受ける。文字は送らず、キーだけを 1 回送る。
-    stop: ({ paneId }) => sendKeys({ paneId, keys: ["esc"] }),
+    // Herdr は Esc を esc として受ける。文字は送らず、キーだけを送る。OpenCode は
+    // 1 回目で「esc again to interrupt」の中断待ちになり、2 回目で止まる。
+    stop: ({ paneId, agent }) =>
+      sendKeys({ paneId, keys: agent === "opencode" ? ["esc", "esc"] : ["esc"] }),
     // シェルの前景プロセスを止める。Herdr のキー名は C-c で、PTY に SIGINT として届く。
     interrupt: ({ paneId }) => sendKeys({ paneId, keys: ["C-c"] }),
     async process({ paneId }) {
