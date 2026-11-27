@@ -1064,6 +1064,10 @@ export function App() {
     setViewer,
   };
 
+  // 広い画面は詳細側の Placeholder が同じ案内を出すので、状態が届くまで一覧は出さない。
+  // 狭い画面は一覧しか見えないので、そちらに案内を出す。
+  const listHidden = wide && state === null;
+
   return (
     <div
       class="hwc-app"
@@ -1078,107 +1082,111 @@ export function App() {
       }}
     >
       <div class="hwc-body">
-        <aside
-          class="hwc-list"
-          id="hwc-sidebar"
-          aria-label="ペイン一覧"
-          inert={wide && sidebarCollapsed}
-        >
-          {state === null ? (
-            <ListPlaceholder connection={connection} />
-          ) : (
-            <PaneList
-              state={state}
-              selectedPaneId={selectedPaneId}
-              parentPaneIds={parentPaneIds}
-              scope={scope}
-              onScope={changeScope}
-              expanded={expanded}
-              onSelect={selectFromList}
-              onOpen={openActivePane}
-              onDragStart={startListPaneDrag}
-              onRevealWorkspace={revealWorkspace}
-              reveal={reveal}
-              scrollTo={scrollTo}
-              onToggle={toggle}
-              openPaneMenuId={menu?.open === true && menu.fromList ? menuItems.paneId : null}
-              openWorkspaceMenuId={menu?.open === true ? (menuItems.workspace?.id ?? null) : null}
-              onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
-              onWorkspaceMenu={(workspaceId, trigger) =>
-                openWorkspaceMenu(workspaceId, trigger, true)
-              }
-              moveToTop={moveToTop}
-              onMoveToTopHandled={() => setMoveToTop(null)}
-              onMoveWorkspaces={(workspaceIds, beforeWorkspaceId) =>
-                moveWorkspaceBlock(workspaceIds, beforeWorkspaceId)
-              }
-              removal={
-                removing.state === null
-                  ? null
-                  : {
-                      workspaceId: removing.state.target.workspaceId,
-                      phase: removing.state.phase,
-                    }
-              }
-              onRemovalFinished={finishRemoval}
-              workingSince={workingSince}
-              finishedAt={finishedAt}
-              pullRequests={pullRequests}
-              now={now}
-              onCollapse={wide && !settingsOpen ? toggleSidebarFromButton : null}
-            />
-          )}
-          <div class="hwc-sidebar-foot">
-            <span class="hwc-foot-brand">
-              <FooterBrand />
-              {revision === null ? null : <span class="hwc-foot-rev">{revision}</span>}
-            </span>
-            <span class="hwc-foot-actions">{actions}</span>
-          </div>
-        </aside>
+        {listHidden ? null : (
+          <aside
+            class="hwc-list"
+            id="hwc-sidebar"
+            aria-label="ペイン一覧"
+            inert={wide && sidebarCollapsed}
+          >
+            {state === null ? (
+              <ListPlaceholder connection={connection} />
+            ) : (
+              <PaneList
+                state={state}
+                selectedPaneId={selectedPaneId}
+                parentPaneIds={parentPaneIds}
+                scope={scope}
+                onScope={changeScope}
+                expanded={expanded}
+                onSelect={selectFromList}
+                onOpen={openActivePane}
+                onDragStart={startListPaneDrag}
+                onRevealWorkspace={revealWorkspace}
+                reveal={reveal}
+                scrollTo={scrollTo}
+                onToggle={toggle}
+                openPaneMenuId={menu?.open === true && menu.fromList ? menuItems.paneId : null}
+                openWorkspaceMenuId={menu?.open === true ? (menuItems.workspace?.id ?? null) : null}
+                onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
+                onWorkspaceMenu={(workspaceId, trigger) =>
+                  openWorkspaceMenu(workspaceId, trigger, true)
+                }
+                moveToTop={moveToTop}
+                onMoveToTopHandled={() => setMoveToTop(null)}
+                onMoveWorkspaces={(workspaceIds, beforeWorkspaceId) =>
+                  moveWorkspaceBlock(workspaceIds, beforeWorkspaceId)
+                }
+                removal={
+                  removing.state === null
+                    ? null
+                    : {
+                        workspaceId: removing.state.target.workspaceId,
+                        phase: removing.state.phase,
+                      }
+                }
+                onRemovalFinished={finishRemoval}
+                workingSince={workingSince}
+                finishedAt={finishedAt}
+                pullRequests={pullRequests}
+                now={now}
+                onCollapse={wide && !settingsOpen ? toggleSidebarFromButton : null}
+              />
+            )}
+            <div class="hwc-sidebar-foot">
+              <span class="hwc-foot-brand">
+                <FooterBrand />
+                {revision === null ? null : <span class="hwc-foot-rev">{revision}</span>}
+              </span>
+              <span class="hwc-foot-actions">{actions}</span>
+            </div>
+          </aside>
+        )}
 
-        <div
-          class="hwc-resizer"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="一覧の幅"
-          aria-valuenow={sidebarWidth}
-          aria-valuemin={SIDEBAR_MIN_WIDTH}
-          aria-valuemax={SIDEBAR_MAX_WIDTH}
-          tabIndex={0}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            drag.current = { startX: event.clientX, startWidth: sidebarWidth };
-          }}
-          onPointerMove={(event) => {
-            if (!drag.current) return;
-            setSidebarWidth(
-              clampSidebarWidth(
-                drag.current.startWidth + event.clientX - drag.current.startX,
-                window.innerWidth,
-              ),
-            );
-          }}
-          onPointerUp={(event) => {
-            if (!drag.current) return;
-            drag.current = null;
-            event.currentTarget.releasePointerCapture(event.pointerId);
-            saveSidebarWidth(sidebarWidth);
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-            event.preventDefault();
-            saveSidebarWidth(
-              sidebarWidth + (event.key === "ArrowLeft" ? -SIDEBAR_STEP : SIDEBAR_STEP),
-            );
-          }}
-        />
+        {listHidden ? null : (
+          <div
+            class="hwc-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="一覧の幅"
+            aria-valuenow={sidebarWidth}
+            aria-valuemin={SIDEBAR_MIN_WIDTH}
+            aria-valuemax={SIDEBAR_MAX_WIDTH}
+            tabIndex={0}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              drag.current = { startX: event.clientX, startWidth: sidebarWidth };
+            }}
+            onPointerMove={(event) => {
+              if (!drag.current) return;
+              setSidebarWidth(
+                clampSidebarWidth(
+                  drag.current.startWidth + event.clientX - drag.current.startX,
+                  window.innerWidth,
+                ),
+              );
+            }}
+            onPointerUp={(event) => {
+              if (!drag.current) return;
+              drag.current = null;
+              event.currentTarget.releasePointerCapture(event.pointerId);
+              saveSidebarWidth(sidebarWidth);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+              event.preventDefault();
+              saveSidebarWidth(
+                sidebarWidth + (event.key === "ArrowLeft" ? -SIDEBAR_STEP : SIDEBAR_STEP),
+              );
+            }}
+          />
+        )}
 
         {/* 畳んだ一覧を開くボタン。畳むと足元ごと画面外へ出るので、閉じるボタンとは別に詳細の左上へ出す。
             タブバーの中には置かない。空状態・読み込み中はタブバーが無く、畳んだまま開けなくなる。
             設定は左上が戻るボタンなので出さない。戻れば開くボタンがある。 */}
-        {wide && sidebarCollapsed && !settingsOpen ? (
+        {!listHidden && wide && sidebarCollapsed && !settingsOpen ? (
           <div class="hwc-sidebar-edge">
             <button
               type="button"
