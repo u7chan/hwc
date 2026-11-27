@@ -64,6 +64,7 @@ import { ChatLog } from "./pane/chat-log";
 import { OutputSkeleton } from "./pane/empty";
 import { FilePreview } from "./pane/file-preview";
 import { FileTree } from "./pane/file-tree";
+import { FileTreeResizer } from "./pane/file-tree-resizer";
 import { LiveStatus } from "./pane/live-status";
 import { PaneComposer } from "./pane/pane-composer";
 import { PaneHead } from "./pane/pane-head";
@@ -105,6 +106,9 @@ type PaneDetailProps = {
   // 広いセルでツリーを会話の左右どちらに並べるか。狭いセルでは重ねるので効かない。
   treeSide: FileTreeSide;
   treeWidth: number;
+  // 並べたツリーの境目をドラッグしている間と、離したとき。幅は端末ごとの 1 つ。
+  onTreeWidthChange: (width: number) => void;
+  onTreeWidthCommit: (width: number) => void;
   // 行の左に種類の印を出すか。
   treeIcons: FileTreeIcons;
   // 枠線がハイライトしている、操作の対象になっているセルか。キーの対象を 1 つに絞る。
@@ -868,6 +872,17 @@ export function PaneDetail(props: PaneDetailProps) {
   // 並べたツリーの見出し。ツリーの幅と同じ分を、選択中ファイルの在り処に使う。
   // 未選択なら何も指していないので空のままにする。長さは CSS が列幅で詰め、
   // 末尾のファイル名が残る。全文は title に置く。
+  const treeResizer =
+    sideBySide && !treeClosing && frameWidth !== null ? (
+      <FileTreeResizer
+        side={treeSide}
+        width={treeWidth}
+        cellWidth={frameWidth}
+        onChange={props.onTreeWidthChange}
+        onCommit={props.onTreeWidthCommit}
+      />
+    ) : null;
+
   const treeHead = sideBySide ? (
     <span
       class="hwc-pane-head-tree"
@@ -913,6 +928,7 @@ export function PaneDetail(props: PaneDetailProps) {
         data-tree-side={treeSide}
       >
         {sideBySide && treeSide === "left" ? treeView : null}
+        {treeSide === "left" ? treeResizer : null}
         <div class="hwc-chat-column">
           <div class="hwc-output-wrap">
             {sideBySide ? null : treeView}
@@ -1126,6 +1142,7 @@ export function PaneDetail(props: PaneDetailProps) {
             />
           )}
         </div>
+        {treeSide === "right" ? treeResizer : null}
         {sideBySide && treeSide === "right" ? treeView : null}
       </div>
       {composer.projectDialog === null ? null : (

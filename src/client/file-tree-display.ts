@@ -1,9 +1,11 @@
-// ファイルツリーの文字の大きさと幅は端末ごとの見え方。Herdr の状態ではないので localStorage に置き、
-// BFF には送らない（docs/adr/state-storage.md）。幅をドラッグではなく段階で選ぶのは、タブレットで
-// 掴みにくいため。
+// ファイルツリーの文字の大きさ・幅・印は端末ごとの見え方。Herdr の状態ではないので localStorage に置き、
+// BFF には送らない（docs/adr/state-storage.md）。幅だけは設定の段階では選ばず、並べたツリーの境目を
+// ドラッグして決める。段階は粗く、実際のファイル名の切れ方を見ながら合わせられないため。
+
+import type { FileTreeSide } from "./file-tree-side";
+import { treeSideMaxWidth } from "./layout";
 
 export type FileTreeSize = "small" | "normal" | "large";
-export type FileTreeWidth = "narrow" | "normal" | "wide";
 // 行の左に種類の印を出すか。既定は出さない（設定を足す前の見た目）。
 export type FileTreeIcons = "none" | "color";
 
@@ -14,13 +16,6 @@ const SIZES: Record<FileTreeSize, { label: string; fontSize: string }> = {
   small: { label: "小", fontSize: "calc(var(--text-body) * 0.85)" },
   normal: { label: "標準", fontSize: "var(--text-body)" },
   large: { label: "大", fontSize: "calc(var(--text-body) * 1.2)" },
-};
-
-// 並べるときだけ効く。狭いセルでは会話の上に重ねるので、幅はセルいっぱいになる。
-const WIDTHS: Record<FileTreeWidth, { label: string; width: number }> = {
-  narrow: { label: "狭", width: 220 },
-  normal: { label: "標準", width: 260 },
-  wide: { label: "広", width: 340 },
 };
 
 // 印は種類ごとに色を変える 1 通りだけ。色を付けない形だけの案は、テーマ 20 種すべてで
@@ -35,11 +30,15 @@ function options<T extends string>(table: Record<T, { label: string }>) {
 }
 
 export const FILE_TREE_SIZES = options(SIZES);
-export const FILE_TREE_WIDTHS = options(WIDTHS);
 export const FILE_TREE_ICONS = options(ICONS);
 
+// 行の右端のメニューボタンが、名前に数文字を残す幅。これより狭いと名前が潰れる。
+export const FILE_TREE_WIDTH_MIN = 180;
+export const FILE_TREE_WIDTH_MAX = 480;
+export const FILE_TREE_WIDTH_STEP = 16;
+
 export const DEFAULT_FILE_TREE_SIZE: FileTreeSize = "normal";
-export const DEFAULT_FILE_TREE_WIDTH: FileTreeWidth = "normal";
+export const DEFAULT_FILE_TREE_WIDTH = 260;
 export const DEFAULT_FILE_TREE_ICONS: FileTreeIcons = "none";
 
 export const FILE_TREE_SIZE_STORAGE_KEY = "hwc-file-tree-size";
@@ -50,8 +49,19 @@ export function fileTreeFontSize(size: FileTreeSize): string {
   return SIZES[size].fontSize;
 }
 
-export function fileTreeWidthPx(width: FileTreeWidth): number {
-  return WIDTHS[width].width;
+// cellWidth はドラッグしているセルの幅。省略すると、セルに左右されない保存用の範囲で丸める。
+export function clampFileTreeWidth(width: number, cellWidth = Number.POSITIVE_INFINITY): number {
+  if (!Number.isFinite(width)) return DEFAULT_FILE_TREE_WIDTH;
+  const max = Math.max(
+    FILE_TREE_WIDTH_MIN,
+    Math.min(FILE_TREE_WIDTH_MAX, treeSideMaxWidth(cellWidth)),
+  );
+  return Math.min(max, Math.max(FILE_TREE_WIDTH_MIN, Math.round(width)));
+}
+
+// 境目を右へ動かすと、左に並べたツリーは広がり、右に並べたツリーは狭まる。
+export function fileTreeWidthByDrag(start: number, dx: number, side: FileTreeSide): number {
+  return side === "left" ? start + dx : start - dx;
 }
 
 type StorageLike = { getItem: (key: string) => string | null };
@@ -62,19 +72,15 @@ export function parseFileTreeSize(value: string | null): FileTreeSize {
   return FILE_TREE_SIZES.find((option) => option.id === value)?.id ?? DEFAULT_FILE_TREE_SIZE;
 }
 
-export function parseFileTreeWidth(value: string | null): FileTreeWidth {
-  return FILE_TREE_WIDTHS.find((option) => option.id === value)?.id ?? DEFAULT_FILE_TREE_WIDTH;
+export function parseFileTreeWidth(value: string | null): number {
+  return value === null ? DEFAULT_FILE_TREE_WIDTH : clampFileTreeWidth(Number(value));
 }
 
 export function parseFileTreeIcons(value: string | null): FileTreeIcons {
   return FILE_TREE_ICONS.find((option) => option.id === value)?.id ?? DEFAULT_FILE_TREE_ICONS;
 }
 
-function load<T extends string>(
-  storage: StorageLike | null,
-  key: string,
-  parse: (value: string | null) => T,
-): T {
+function load<T>(storage: StorageLike | null, key: string, parse: (value: string | null) => T): T {
   try {
     return parse(storage ? storage.getItem(key) : null);
   } catch {
@@ -96,7 +102,7 @@ export function loadFileTreeSize(storage: StorageLike | null): FileTreeSize {
   return load(storage, FILE_TREE_SIZE_STORAGE_KEY, parseFileTreeSize);
 }
 
-export function loadFileTreeWidth(storage: StorageLike | null): FileTreeWidth {
+export function loadFileTreeWidth(storage: StorageLike | null): number {
   return load(storage, FILE_TREE_WIDTH_STORAGE_KEY, parseFileTreeWidth);
 }
 
@@ -108,8 +114,9 @@ export function saveFileTreeSize(storage: WritableStorage | null, size: FileTree
   save(storage, FILE_TREE_SIZE_STORAGE_KEY, size);
 }
 
-export function saveFileTreeWidth(storage: WritableStorage | null, width: FileTreeWidth): void {
-  save(storage, FILE_TREE_WIDTH_STORAGE_KEY, width);
+// 書く値も clamp する。読む側の parse と範囲を揃え、保存形式に範囲外の数値を残さない。
+export function saveFileTreeWidth(storage: WritableStorage | null, width: number): void {
+  save(storage, FILE_TREE_WIDTH_STORAGE_KEY, String(clampFileTreeWidth(width)));
 }
 
 export function saveFileTreeIcons(storage: WritableStorage | null, icons: FileTreeIcons): void {

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useElementWidth } from "../app/use-element-width";
 import type { ConnectionStatus } from "../connection";
 import type { CodeFontSize } from "../code-font-size";
-import type { FileTreeIcons, FileTreeSize, FileTreeWidth } from "../file-tree-display";
+import type { FileTreeIcons, FileTreeSize } from "../file-tree-display";
 import type { FileTreeSide } from "../file-tree-side";
 import type { ModelLabels } from "../../shared/agents";
 import { useModelLabels } from "../launch-candidates";
@@ -35,8 +35,6 @@ type SettingsProps = {
   onTreeSideChange: (side: FileTreeSide) => void;
   treeSize: FileTreeSize;
   onTreeSizeChange: (size: FileTreeSize) => void;
-  treeWidth: FileTreeWidth;
-  onTreeWidthChange: (width: FileTreeWidth) => void;
   treeIcons: FileTreeIcons;
   onTreeIconsChange: (icons: FileTreeIcons) => void;
   codeSize: CodeFontSize;
@@ -63,8 +61,6 @@ function section(
           onTreeSideChange={props.onTreeSideChange}
           treeSize={props.treeSize}
           onTreeSizeChange={props.onTreeSizeChange}
-          treeWidth={props.treeWidth}
-          onTreeWidthChange={props.onTreeWidthChange}
           treeIcons={props.treeIcons}
           onTreeIconsChange={props.onTreeIconsChange}
           codeSize={props.codeSize}

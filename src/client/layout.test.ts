@@ -13,6 +13,7 @@ import {
   parseSidebarWidth,
   saveSidebarCollapsed,
   saveSidebarWidth,
+  treeSideMaxWidth,
   treeSideMinWidth,
 } from "./layout";
 
@@ -126,4 +127,11 @@ test("the file tree sits beside the chat only when 420px of the chat is left", (
   expect(treeSideMinWidth(260)).toBe(680);
   expect(treeSideMinWidth(220)).toBe(640);
   expect(treeSideMinWidth(340)).toBe(760);
+});
+
+test("the widest tree a cell keeps beside the chat is the inverse of the cell it needs", () => {
+  for (const treeWidth of [180, 260, 480]) {
+    expect(treeSideMaxWidth(treeSideMinWidth(treeWidth))).toBe(treeWidth);
+  }
+  expect(treeSideMaxWidth(900)).toBe(480);
 });

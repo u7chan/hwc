@@ -40,6 +40,8 @@ export type CellContext = {
   scheme: "light" | "dark";
   treeSide: FileTreeSide;
   treeWidth: number;
+  onTreeWidthChange: (width: number) => void;
+  onTreeWidthCommit: (width: number) => void;
   treeIcons: FileTreeIcons;
   launches: ReadonlyMap<string, PaneLaunch>;
   now: number;
@@ -130,6 +132,8 @@ function PaneBody(props: {
       scheme={context.scheme}
       treeSide={context.treeSide}
       treeWidth={context.treeWidth}
+      onTreeWidthChange={context.onTreeWidthChange}
+      onTreeWidthCommit={context.onTreeWidthCommit}
       treeIcons={context.treeIcons}
       current={current}
       // 親ペインの印はセル見出しに出す。

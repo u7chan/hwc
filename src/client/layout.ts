@@ -13,10 +13,16 @@ export const WIDE_LAYOUT_QUERY = "(min-width: 900px)";
 const TREE_BODY_MIN_WIDTH = 420;
 
 // ファイルツリーを会話の左右どちらかに並べる最小のセル幅。ツリーの幅（--hwc-tree-width）を
-// 引いても、本文に 420px 残る幅。狭いセルでは会話の上に重ねる。ツリーの幅は設定で変わるので、
+// 引いても、本文に 420px 残る幅。狭いセルでは会話の上に重ねる。ツリーの幅はドラッグで変わるので、
 // 固定値ではなく幅から導く。
 export function treeSideMinWidth(treeWidth: number): number {
   return treeWidth + TREE_BODY_MIN_WIDTH;
+}
+
+// treeSideMinWidth の逆。セルに並べたままにできるツリーの最大の幅。ドラッグでこれを超えると
+// 重ね表示へ切り替わり、掴んでいる境目ごと消える。
+export function treeSideMaxWidth(cellWidth: number): number {
+  return cellWidth - TREE_BODY_MIN_WIDTH;
 }
 
 // 設定でカテゴリを左に常設するのに要る、詳細側の幅。カテゴリ列（260）と左右の余白（64）を
