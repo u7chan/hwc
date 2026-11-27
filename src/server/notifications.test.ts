@@ -78,6 +78,13 @@ function workingSpace(id = "w1"): WorkspaceState {
   return workspace(id, [pane(`${id}:p1`, "pi", "done"), pane(`${id}:p2`, "codex", "working")]);
 }
 
+// 収束後の会話。親だけが working に戻り、子は done のまま。
+function parentWorkingSpace(id = "w1"): WorkspaceState {
+  return workspace(id, [pane(`${id}:p1`, "pi", "working"), pane(`${id}:p2`, "codex", "done")], {
+    branch: "feat/empty-state",
+  });
+}
+
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "hwc-notifications-"));
 }
@@ -120,12 +127,17 @@ function createStateStore(initial: AppState, paths: Record<string, string> = {})
   };
 }
 
-function openPullRequest(): PullRequest {
+const PULL_HEAD = "0123456789abcdef0123456789abcdef01234567";
+const NEXT_PULL_HEAD = "fedcba9876543210fedcba9876543210fedcba98";
+
+function openPullRequest(overrides: Partial<PullRequest> = {}): PullRequest {
   return {
     number: 481,
     url: PULL_URL,
     title: "Add an empty state to the dashboard",
     state: "OPEN",
+    headRefOid: PULL_HEAD,
+    ...overrides,
   };
 }
 
@@ -811,6 +823,128 @@ test("the PR scope sends only when the latest pull request is open", async () =>
   // PR が無い・gh で確認できないときも送らない。再試行もしない。
   expect((await run(null)).calls).toEqual([]);
   expect((await run(null, true)).calls).toEqual([]);
+});
+
+test("the PR scope does not resend the same pull request head after a conversation", async () => {
+  const settings = createSettings({
+    enabled: true,
+    scope: "pull-request",
+    discordWebhookUrl: WEBHOOK,
+  });
+  const { sender, calls } = createSender({ ok: true });
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+    paths: { w1: "/work/acme" },
+    pullRequests: async () => openPullRequest(),
+  });
+
+  publish(appState([workingSpace()]));
+  publish(appState([settledSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(1);
+
+  // LGTM 収束のあとに会話する。親が working に戻って再び done になっても、同じ PR の
+  // 同じ head ならレビュー対象は変わっていない。
+  publish(appState([parentWorkingSpace()]));
+  publish(appState([settledSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(1);
+});
+
+test("the PR scope sends again when the same pull request gets a new head", async () => {
+  const settings = createSettings({
+    enabled: true,
+    scope: "pull-request",
+    discordWebhookUrl: WEBHOOK,
+  });
+  const { sender, calls } = createSender({ ok: true });
+  let headRefOid = PULL_HEAD;
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+    paths: { w1: "/work/acme" },
+    pullRequests: async () => openPullRequest({ headRefOid }),
+  });
+
+  publish(appState([workingSpace()]));
+  publish(appState([settledSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(1);
+
+  // 修正の push。同じ PR でも head が変われば再レビューしてほしい。
+  headRefOid = NEXT_PULL_HEAD;
+  publish(appState([parentWorkingSpace()]));
+  publish(appState([settledSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(2);
+  expect(calls[1]?.content).toBe(calls[0]?.content);
+});
+
+test("the PR scope sends again for a follow-up pull request in the same space", async () => {
+  const settings = createSettings({
+    enabled: true,
+    scope: "pull-request",
+    discordWebhookUrl: WEBHOOK,
+  });
+  const { sender, calls } = createSender({ ok: true });
+  let pullRequest = openPullRequest();
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+    paths: { w1: "/work/acme" },
+    pullRequests: async () => pullRequest,
+  });
+
+  publish(appState([workingSpace()]));
+  publish(appState([settledSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(1);
+
+  // マージ後に同じワークツリーから別の PR を出した。通知は PR ごとに戻る。
+  const nextUrl = "https://github.com/example/acme-dashboard/pull/482";
+  pullRequest = openPullRequest({ number: 482, url: nextUrl, title: "Follow up" });
+  publish(appState([parentWorkingSpace()]));
+  publish(appState([settledSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(2);
+  expect(calls[1]?.content).toBe(`hwc: PR #482 の作業が完了しました\nFollow up\n${nextUrl}`);
+});
+
+test("a failed PR notification is sent again at the next settlement of the same head", async () => {
+  const settings = createSettings({
+    enabled: true,
+    scope: "pull-request",
+    discordWebhookUrl: WEBHOOK,
+  });
+  let result: DiscordSendResult = { ok: false, error: "discord_unavailable" };
+  const { sender, calls } = createSender(async () => result);
+  const logs: string[] = [];
+  const { publish } = createHarness({
+    initial: appState([workingSpace()]),
+    settings: settings.store,
+    sender,
+    paths: { w1: "/work/acme" },
+    pullRequests: async () => openPullRequest(),
+    log: (message) => logs.push(message),
+  });
+
+  publish(appState([workingSpace()]));
+  publish(appState([settledSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(1);
+  expect(logs).toEqual(["discord notification: discord_unavailable"]);
+
+  // 送れなかった head は、次の収束で送り直す。自動リトライはしない。
+  result = { ok: true };
+  publish(appState([parentWorkingSpace()]));
+  publish(appState([settledSpace()]));
+  await Bun.sleep(0);
+  expect(calls).toHaveLength(2);
+  expect(logs).toHaveLength(1);
 });
 
 test("the PR scope asks for the pushed branch before the local one", async () => {

@@ -221,7 +221,8 @@ export function workspaceNotificationContent(workspace: WorkspaceState): string 
 
 export type NotificationDispatcher = (state: AppState, observed: boolean) => void;
 
-// 収束した瞬間と要対応になった瞬間に 1 回だけ送り、そのまま留まっている間は再送しない。
+// 収束した瞬間と要対応になった瞬間に送り、そのまま留まっている間は再送しない。
+// 完了通知は同じ PR の同じ head でも再送しない（docs/adr/discord-notification.md）。
 // 送信は状態の publish を待たせない（PR の取得と POST は fire-and-forget）。
 export function createNotificationDispatcher(options: {
   store: Pick<StateStore, "get" | "workspacePath">;
@@ -236,12 +237,18 @@ export function createNotificationDispatcher(options: {
   let settled = new Set<string>();
   let blocked = new Set<string>();
   let reportedFailure = false;
+  // 同じ PR の同じ head では送らない。LGTM 収束後に会話で収束と解除を繰り返すだけで、
+  // レビュー対象は変わっていない（docs/adr/discord-notification.md）。新しい head と
+  // 別の PR は送る。
+  const notifiedRevision = new Map<string, string>();
 
   const contentFor = async (
     workspace: WorkspaceState,
     scope: NotificationSettings["scope"],
-  ): Promise<string | null> => {
-    if (scope === "all") return workspaceNotificationContent(workspace);
+  ): Promise<{ content: string; revision: string | null } | null> => {
+    if (scope === "all") {
+      return { content: workspaceNotificationContent(workspace), revision: null };
+    }
     const branch = workspace.branch ?? null;
     const checkoutPath = options.store.workspacePath(workspace.id);
     if (branch === null || checkoutPath === null || options.pullRequests === undefined) return null;
@@ -252,19 +259,24 @@ export function createNotificationDispatcher(options: {
       .catch(() => null);
     // 古い open が残っていても、最新が open でなければ送らない。
     if (pullRequest === null || pullRequest.state !== "OPEN") return null;
-    return pullRequestNotificationContent(pullRequest);
+    return {
+      content: pullRequestNotificationContent(pullRequest),
+      revision: `${pullRequest.number}:${pullRequest.headRefOid}`,
+    };
   };
 
-  const deliver = async (url: string, content: string) => {
+  const deliver = async (url: string, content: string): Promise<boolean> => {
     const result = await options.sender(url, content);
     if (result.ok) {
       reportedFailure = false;
-      return;
+      return true;
     }
-    if (reportedFailure) return;
-    reportedFailure = true;
-    // URL は資格情報。失敗のログにも出さない。
-    log(`discord notification: ${result.error}`);
+    if (!reportedFailure) {
+      reportedFailure = true;
+      // URL は資格情報。失敗のログにも出さない。
+      log(`discord notification: ${result.error}`);
+    }
+    return false;
   };
 
   const notifyWorkspace = async (workspaceId: string) => {
@@ -274,8 +286,10 @@ export function createNotificationDispatcher(options: {
     const workspace = state?.workspaces.find((item) => item.id === workspaceId);
     if (workspace === undefined || !isSettledWorkspace(workspace)) return;
 
-    const content = await contentFor(workspace, settings.scope);
-    if (content === null) return;
+    const resolved = await contentFor(workspace, settings.scope);
+    if (resolved === null) return;
+    const { content, revision } = resolved;
+    if (revision !== null && notifiedRevision.get(workspaceId) === revision) return;
 
     // PR の取得を待つ間に状態か設定が動いていることがある。送信直前に読み直す。
     const latestSettings = options.settings.get();
@@ -285,7 +299,13 @@ export function createNotificationDispatcher(options: {
     const latestWorkspace = latestState?.workspaces.find((item) => item.id === workspaceId);
     if (latestWorkspace === undefined || !isSettledWorkspace(latestWorkspace)) return;
 
-    await deliver(url, content);
+    // 送信を待つ間に同じ head の収束が来ても二重に送らないよう、送信前に記録する。
+    if (revision !== null) notifiedRevision.set(workspaceId, revision);
+    const delivered = await deliver(url, content);
+    if (!delivered && revision !== null && notifiedRevision.get(workspaceId) === revision) {
+      // 送れなかった head は、次の収束で送り直せるようにする。自動リトライはしない。
+      notifiedRevision.delete(workspaceId);
+    }
   };
 
   // scope は完了通知だけに効かせる。要対応は人間が答えるまで止まっているので、

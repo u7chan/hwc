@@ -86,6 +86,7 @@ const PR: PullRequest = {
   url: "https://github.com/example/hwc/pull/12",
   title: "Fix things",
   state: "OPEN",
+  headRefOid: "0123456789abcdef0123456789abcdef01234567",
 };
 
 const paneMenu = (id: string): OperationMenu => ({

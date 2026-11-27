@@ -6,6 +6,7 @@ const pullRequest: PullRequest = {
   url: "https://github.com/example/acme/pull/123",
   title: "Add an empty state",
   state: "OPEN",
+  headRefOid: "0123456789abcdef0123456789abcdef01234567",
 };
 
 test("parsePullRequest accepts a github pull URL that matches its number", () => {
@@ -48,6 +49,22 @@ test("parsePullRequest normalizes the title and accepts every PR state", () => {
   );
   expect(parsePullRequest({ ...pullRequest, state: "MERGED" })?.state).toBe("MERGED");
   expect(parsePullRequest({ ...pullRequest, state: "CLOSED" })?.state).toBe("CLOSED");
+});
+
+test("parsePullRequest requires a SHA-1 or SHA-256 head", () => {
+  for (const headRefOid of [
+    undefined,
+    null,
+    "",
+    "0123456789abcdef0123456789abcdef0123456",
+    "0123456789ABCDEF0123456789ABCDEF01234567",
+    "g123456789abcdef0123456789abcdef01234567",
+    123,
+  ]) {
+    expect(parsePullRequest({ ...pullRequest, headRefOid })).toBeNull();
+  }
+  const sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  expect(parsePullRequest({ ...pullRequest, headRefOid: sha256 })?.headRefOid).toBe(sha256);
 });
 
 test("parsePullRequest rejects an empty title or an unknown state", () => {

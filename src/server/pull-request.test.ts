@@ -7,6 +7,7 @@ const pullRequest: PullRequest = {
   url: "https://github.com/example/acme/pull/123",
   title: "Add an empty state",
   state: "OPEN",
+  headRefOid: "0123456789abcdef0123456789abcdef01234567",
 };
 
 function reader(

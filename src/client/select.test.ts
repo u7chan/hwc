@@ -770,6 +770,7 @@ test("the merged chip says the state when read aloud", () => {
     number: 481,
     url: "https://github.com/example/acme-dashboard/pull/481",
     title: "Add an empty state to the dashboard",
+    headRefOid: "0123456789abcdef0123456789abcdef01234567",
   };
 
   expect(pullRequestLabel({ ...pullRequest, state: "OPEN" })).toBe("PR #481 を GitHub で開く");
