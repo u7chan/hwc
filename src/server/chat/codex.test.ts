@@ -30,7 +30,7 @@ function clientFor(options: { thread?: unknown; pages?: unknown[] } = {}) {
   return { client: createCodexChatClient({ read }), calls };
 }
 
-test("Codex text becomes chat messages without tools, reasoning, system input, or compaction internals", async () => {
+test("Codex text becomes chat messages without tools or reasoning, and compaction keeps only its boundary", async () => {
   const { client, calls } = clientFor({
     pages: [
       {
@@ -58,11 +58,79 @@ test("Codex text becomes chat messages without tools, reasoning, system input, o
     model: "beam",
     effort: "high",
     context: null,
-    compaction: null,
+    compaction: { at: 1000, tokensBefore: null, summary: "", index: 2 },
     truncated: false,
   });
   expect(calls.map((call) => call.method)).toEqual(["thread/read", "thread/turns/list"]);
   expect(calls[1]?.params).toMatchObject({ itemsView: "full", sortDirection: "desc" });
+});
+
+test("Codex keeps the latest compaction and places it at the message boundary", async () => {
+  const { client } = clientFor({
+    pages: [
+      {
+        data: [
+          turn("t2", user("u2", "later")),
+          turn(
+            "t1",
+            user("u1", "before"),
+            { type: "contextCompaction", id: "c1", startedAtMs: 1500, completedAtMs: 1800 },
+            agent("a1", "after"),
+            { type: "contextCompaction", id: "c2", startedAtMs: 2000, completedAtMs: 2400 },
+          ),
+        ],
+        nextCursor: null,
+      },
+    ],
+  });
+  expect((await client.snapshot(thread.id)).compaction).toEqual({
+    at: 2400,
+    tokensBefore: null,
+    summary: "",
+    index: 2,
+  });
+});
+
+test("Codex shifts the compaction boundary when older pages are prepended", async () => {
+  const { client } = clientFor({
+    pages: [
+      {
+        data: [
+          turn("t2", user("u2", "after")),
+          turn("tc", { type: "contextCompaction", id: "c1", completedAtMs: 5000 }),
+        ],
+        nextCursor: "older",
+      },
+      { data: [turn("t1", user("u1", "before"))], nextCursor: null },
+    ],
+  });
+  const snapshot = await client.snapshot(thread.id);
+  expect(snapshot.messages.map((message) => message.text)).toEqual(["before", "after"]);
+  expect(snapshot.compaction).toEqual({ at: 5000, tokensBefore: null, summary: "", index: 1 });
+});
+
+test("Codex drops a compaction boundary that falls outside the retained messages", async () => {
+  const huge = "x".repeat(MAX_CHAT_BYTES);
+  const { client } = clientFor({
+    pages: [
+      {
+        data: [
+          turn(
+            "t1",
+            user("old", huge),
+            { type: "contextCompaction", id: "c1", completedAtMs: 5000 },
+            agent("mid", huge),
+            agent("new", "kept"),
+          ),
+        ],
+        nextCursor: null,
+      },
+    ],
+  });
+  const snapshot = await client.snapshot(thread.id);
+  expect(snapshot.messages.map((message) => message.text)).toEqual(["kept"]);
+  expect(snapshot.compaction).toBeNull();
+  expect(snapshot.truncated).toBe(true);
 });
 
 test("newest-first turn pages are returned in conversation order with unique message ids", async () => {

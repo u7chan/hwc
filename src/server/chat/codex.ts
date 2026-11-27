@@ -20,6 +20,7 @@ export function createCodexChatClient(options: { read?: CodexReader } = {}): Ses
       if (thread?.id !== sessionId) throw new ChatUnavailableError("codex thread is missing");
 
       let messages: ChatMessage[] = [];
+      let compaction: CompactionMarker | null = null;
       let cursor: string | null = null;
       let truncated = false;
       const seen = new Set<string>();
@@ -37,8 +38,19 @@ export function createCodexChatClient(options: { read?: CodexReader } = {}): Ses
         if (!Array.isArray(result?.data)) {
           throw new ChatUnavailableError("codex turns are missing");
         }
-        const older = result.data.toReversed().flatMap(projectTurn);
-        const limited = limitMessages([...older, ...messages]);
+        const older = projectPage(result.data.toReversed());
+        // 既にある区切りは、古いページを前に足した分だけ後ろへずれる。
+        compaction =
+          compaction === null
+            ? older.compaction
+            : { at: compaction.at, index: compaction.index + older.messages.length };
+        const combined = [...older.messages, ...messages];
+        const limited = limitMessages(combined);
+        // 古い側を落としたら、区切りも同じだけ手前へずれる。落ちた区切りは出さない。
+        if (compaction !== null) {
+          const index: number = compaction.index - (combined.length - limited.messages.length);
+          compaction = index < 0 ? null : { at: compaction.at, index };
+        }
         messages = limited.messages;
         cursor = nextCursor(result);
         truncated = limited.truncated || cursor !== null;
@@ -52,9 +64,18 @@ export function createCodexChatClient(options: { read?: CodexReader } = {}): Ses
         model: nonEmptyText(thread.model),
         effort: nonEmptyText(thread.reasoningEffort),
         truncated,
-        // 読み取り API は usage と圧縮要約を返さない。現在の文脈量や要約は推測しない。
+        // 読み取り API は現在の文脈量を返さない。推測しない。
         context: null,
-        compaction: null,
+        // 圧縮は item の有無だけで区切る。要約と圧縮前の tokens は CLI が返さない。
+        compaction:
+          compaction === null
+            ? null
+            : {
+                at: compaction.at,
+                tokensBefore: null,
+                summary: "",
+                index: compaction.index,
+              },
       };
       const etag = createHash("sha256")
         .update(sessionId)
@@ -74,12 +95,38 @@ export function createCodexChatClient(options: { read?: CodexReader } = {}): Ses
   };
 }
 
-function projectTurn(raw: unknown): ChatMessage[] {
+type CompactionMarker = { at: number; index: number };
+
+// ターンを古い順に受け取り、圧縮の区切りは最後に現れた 1 つだけを残す。
+function projectPage(turns: readonly unknown[]): {
+  messages: ChatMessage[];
+  compaction: CompactionMarker | null;
+} {
+  const messages: ChatMessage[] = [];
+  let compaction: CompactionMarker | null = null;
+  for (const raw of turns) {
+    const projected = projectTurn(raw);
+    if (projected.compaction !== null) {
+      compaction = {
+        at: projected.compaction.at,
+        index: messages.length + projected.compaction.index,
+      };
+    }
+    messages.push(...projected.messages);
+  }
+  return { messages, compaction };
+}
+
+function projectTurn(raw: unknown): {
+  messages: ChatMessage[];
+  compaction: CompactionMarker | null;
+} {
   const turn = asRecord(raw);
   if (typeof turn?.id !== "string" || !Array.isArray(turn.items)) {
     throw new ChatUnavailableError("codex turn is invalid");
   }
   const messages: ChatMessage[] = [];
+  let compaction: CompactionMarker | null = null;
   for (const value of turn.items) {
     const item = asRecord(value);
     if (!item || typeof item.id !== "string") continue;
@@ -90,6 +137,15 @@ function projectTurn(raw: unknown): ChatMessage[] {
       (finiteNumber(turn.startedAt) ?? 0) * 1000;
     if (item.type === "agentMessage" && typeof item.text === "string" && item.text !== "") {
       messages.push({ id, role: "agent", text: item.text, at });
+    } else if (item.type === "contextCompaction") {
+      // 会話を切った位置は、その時点までのメッセージ数。ターン内の後続は数えない。
+      compaction = {
+        at:
+          finiteNumber(item.completedAtMs) ??
+          finiteNumber(item.startedAtMs) ??
+          (finiteNumber(turn.startedAt) ?? 0) * 1000,
+        index: messages.length,
+      };
     } else if (item.type === "userMessage") {
       const { text, attachments } = stripAttachedFiles(userText(item.content));
       if (text === "" && attachments.length === 0) continue;
@@ -104,7 +160,7 @@ function projectTurn(raw: unknown): ChatMessage[] {
       });
     }
   }
-  return messages;
+  return { messages, compaction };
 }
 
 function userText(content: unknown): string {

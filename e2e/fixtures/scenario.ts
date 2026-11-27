@@ -561,6 +561,34 @@ export async function createScenario(root: string): Promise<Scenario> {
     writeFile(emptySessionPath, `${JSON.stringify(emptySessionHeader)}\n`),
     writeCodexThread(root, "thread_demo", "beam-small", [
       {
+        id: "turn_older",
+        startedAt: 1767257900,
+        items: [
+          {
+            type: "userMessage",
+            id: "u0",
+            content: [{ type: "text", text: "前回のレビューで確認した点です。" }],
+          },
+          {
+            type: "agentMessage",
+            id: "a0",
+            text: "前回の指摘は反映されています。",
+          },
+        ],
+      },
+      {
+        id: "turn_compaction",
+        startedAt: 1767257950,
+        items: [
+          {
+            type: "contextCompaction",
+            id: "c1",
+            startedAtMs: 1767257950000,
+            completedAtMs: 1767257952000,
+          },
+        ],
+      },
+      {
         id: "turn_demo",
         startedAt: 1767258000,
         items: [
