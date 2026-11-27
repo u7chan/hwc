@@ -2,13 +2,20 @@
 // 架空の PR だけを返し、それ以外のサブコマンドは失敗させる。
 const PULL_REQUESTS: Record<
   string,
-  { number: number; url: string; title: string; state: "OPEN" | "MERGED" | "CLOSED" }
+  {
+    number: number;
+    url: string;
+    title: string;
+    state: "OPEN" | "MERGED" | "CLOSED";
+    headRefOid: string;
+  }
 > = {
   "feat/empty-state": {
     number: 481,
     url: "https://github.com/example/acme-dashboard/pull/481",
     title: "Add an empty state to the dashboard",
     state: "OPEN",
+    headRefOid: "1111111111111111111111111111111111111111",
   },
   // 別スペースのセルには、そのスペースの PR が出る。
   "feat/checks": {
@@ -16,6 +23,7 @@ const PULL_REQUESTS: Record<
     url: "https://github.com/example/acme-dashboard/pull/483",
     title: "Check the empty state on mobile",
     state: "OPEN",
+    headRefOid: "2222222222222222222222222222222222222222",
   },
   // merge 後も概要とチップは残り、チップのマージ記号で区別できることを確かめる。
   "docs/quickstart": {
@@ -23,6 +31,7 @@ const PULL_REQUESTS: Record<
     url: "https://github.com/example/acme-dashboard/pull/482",
     title: "Write the quickstart guide",
     state: "MERGED",
+    headRefOid: "3333333333333333333333333333333333333333",
   },
 };
 

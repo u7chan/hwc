@@ -108,7 +108,7 @@ async function listLatestPullRequests(checkoutPath: string, branch: string): Pro
       "--limit",
       "1",
       "--json",
-      "number,url,title,state",
+      "number,url,title,state,headRefOid",
     ],
     {
       cwd: checkoutPath,

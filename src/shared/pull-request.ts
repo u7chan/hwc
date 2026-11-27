@@ -1,6 +1,8 @@
 // gh の応答も API の応答も、形が違えば PR として扱わない。URL は <a href> にそのまま
 // 入るので、github.com の pull URL だけを受け付ける。
 const PULL_URL = /^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/pull\/([1-9][0-9]*)$/;
+// Git の object id。SHA-256 のリポジトリでも 64 桁になる。
+const HEAD_REF_OID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
 export type PullRequestState = "OPEN" | "MERGED" | "CLOSED";
 
@@ -9,6 +11,9 @@ export type PullRequest = {
   url: string;
   title: string;
   state: PullRequestState;
+  // 通知の重複判定に使う。同じ PR の同じ head で収束を繰り返しても送らない
+  // （docs/adr/discord-notification.md）。
+  headRefOid: string;
 };
 
 function parseState(value: unknown): PullRequestState | null {
@@ -31,11 +36,12 @@ function parseTitle(value: unknown): string | null {
 
 export function parsePullRequest(value: unknown): PullRequest | null {
   if (typeof value !== "object" || value === null) return null;
-  const { number, url, title, state } = value as {
+  const { number, url, title, state, headRefOid } = value as {
     number?: unknown;
     url?: unknown;
     title?: unknown;
     state?: unknown;
+    headRefOid?: unknown;
   };
   if (typeof number !== "number" || !Number.isSafeInteger(number) || number <= 0) return null;
   if (typeof url !== "string") return null;
@@ -45,7 +51,8 @@ export function parsePullRequest(value: unknown): PullRequest | null {
   if (parsedTitle === null) return null;
   const parsedState = parseState(state);
   if (parsedState === null) return null;
-  return { number, url, title: parsedTitle, state: parsedState };
+  if (typeof headRefOid !== "string" || HEAD_REF_OID.exec(headRefOid) === null) return null;
+  return { number, url, title: parsedTitle, state: parsedState, headRefOid };
 }
 
 // gh pr list の応答。最新の PR は 1 件に絞ってあるので、先頭だけを見る。

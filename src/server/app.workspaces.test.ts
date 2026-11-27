@@ -24,6 +24,7 @@ test("GET /api/workspaces/:id/pull-request returns the latest pull request of th
     url: "https://github.com/example/acme/pull/123",
     title: "Add an empty state",
     state: "MERGED" as const,
+    headRefOid: "0123456789abcdef0123456789abcdef01234567",
   };
   const { app } = createTestApp({
     state: pullRequestState,
