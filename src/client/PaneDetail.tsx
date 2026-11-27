@@ -869,9 +869,6 @@ export function PaneDetail(props: PaneDetailProps) {
     />
   ) : null;
 
-  // 並べたツリーの見出し。ツリーの幅と同じ分を、選択中ファイルの在り処に使う。
-  // 未選択なら何も指していないので空のままにする。長さは CSS が列幅で詰め、
-  // 末尾のファイル名が残る。全文は title に置く。
   const treeResizer =
     sideBySide && !treeClosing && frameWidth !== null ? (
       <FileTreeResizer
@@ -883,6 +880,9 @@ export function PaneDetail(props: PaneDetailProps) {
       />
     ) : null;
 
+  // 並べたツリーの見出し。ツリーの幅と同じ分を、選択中ファイルの在り処に使う。
+  // 未選択なら何も指していないので空のままにする。長さは CSS が列幅で詰め、
+  // 末尾のファイル名が残る。全文は title に置く。
   const treeHead = sideBySide ? (
     <span
       class="hwc-pane-head-tree"

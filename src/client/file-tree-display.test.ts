@@ -117,6 +117,8 @@ test("an unknown value falls back to the standard", () => {
   expect(parseFileTreeSize("")).toBe("normal");
   expect(parseFileTreeSize("wide")).toBe("normal");
   expect(parseFileTreeWidth("wide")).toBe(DEFAULT_FILE_TREE_WIDTH);
+  expect(parseFileTreeWidth("")).toBe(DEFAULT_FILE_TREE_WIDTH);
+  expect(parseFileTreeWidth("  ")).toBe(DEFAULT_FILE_TREE_WIDTH);
   expect(parseFileTreeWidth("constructor")).toBe(DEFAULT_FILE_TREE_WIDTH);
   expect(parseFileTreeWidth("9999")).toBe(FILE_TREE_WIDTH_MAX);
   expect(parseFileTreeIcons("mono")).toBe("none");

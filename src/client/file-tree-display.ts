@@ -72,8 +72,11 @@ export function parseFileTreeSize(value: string | null): FileTreeSize {
   return FILE_TREE_SIZES.find((option) => option.id === value)?.id ?? DEFAULT_FILE_TREE_SIZE;
 }
 
+// Number("") は 0 になり、空の値が最小の幅へ丸められる。空は壊れた値として既定へ倒す。
 export function parseFileTreeWidth(value: string | null): number {
-  return value === null ? DEFAULT_FILE_TREE_WIDTH : clampFileTreeWidth(Number(value));
+  return value === null || value.trim() === ""
+    ? DEFAULT_FILE_TREE_WIDTH
+    : clampFileTreeWidth(Number(value));
 }
 
 export function parseFileTreeIcons(value: string | null): FileTreeIcons {
