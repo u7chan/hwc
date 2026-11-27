@@ -95,6 +95,50 @@
   border-left: 1px solid var(--color-line);
 }
 
+/* 並べたツリーと会話の境目。幅を持たせず、ツリーの区切り線そのものを境界にする（一覧との
+   境目 .hwc-resizer と同じ作り）。
+   掴む面は、どちらに並べても境目から右へ広げる。左のツリーでは会話の余白に、右のツリーでは
+   ツリーの行の左端に入る。逆へ広げると、ツリーや会話のスクロールバーと重なる。 */
+.hwc-tree-resizer {
+  position: relative;
+  flex: none;
+  width: 0;
+  cursor: col-resize;
+  /* ドラッグ中に、指の縦の動きで面がスクロールしないようにする。 */
+  touch-action: none;
+  /* 本文の面より上に置く。flex の子は z-index: auto だと後の兄弟に隠れる。 */
+  z-index: 2;
+}
+
+.hwc-tree-resizer::before {
+  content: "";
+  position: absolute;
+  inset: 0 calc(var(--space-1) * -2) 0 0;
+}
+
+/* 指は線より太い。ポインタの画面より広く取る。 */
+@media (pointer: coarse) {
+  .hwc-tree-resizer::before {
+    inset: 0 calc(var(--space-1) * -5) 0 0;
+  }
+}
+
+/* 区切り線は、並べた側のツリーが引いている。ここでは掴めることを示す帯だけを、その線の上に重ねる。
+   ホバーのない指の画面では、掴んでいる間だけ出る。 */
+.hwc-tree-resizer::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -1px;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.hwc-tree-resizer:hover::after,
+.hwc-tree-resizer:active::after {
+  background: var(--color-accent);
+}
+
 .hwc-tree,
 .hwc-tree-group {
   margin: 0;

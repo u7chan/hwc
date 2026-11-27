@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact
 import type { AppState } from "../server/herdr/state";
 import { attachmentStore } from "./attachment-store";
 import { codeFontSize } from "./code-font-size";
-import { fileTreeFontSize, fileTreeWidthPx } from "./file-tree-display";
+import { fileTreeFontSize } from "./file-tree-display";
 import { fileTreeStore } from "./file-tree-store";
 import { PaneList } from "./PaneList";
 import { Settings } from "./settings/Settings";
@@ -384,6 +384,7 @@ export function App() {
     icons: treeIcons,
     changeSize: changeTreeSize,
     changeWidth: changeTreeWidth,
+    saveWidth: saveTreeWidth,
     changeIcons: changeTreeIcons,
   } = useFileTreeDisplay();
   const { size: codeSize, change: changeCodeSize } = useCodeFontSize();
@@ -989,7 +990,9 @@ export function App() {
     clearFocusSuppression,
     scheme,
     treeSide,
-    treeWidth: fileTreeWidthPx(treeWidth),
+    treeWidth,
+    onTreeWidthChange: changeTreeWidth,
+    onTreeWidthCommit: saveTreeWidth,
     treeIcons,
     launches,
     now,
@@ -1076,7 +1079,7 @@ export function App() {
       style={{
         "--hwc-sidebar-width": `${sidebarWidth}px`,
         "--hwc-split-duration": `${splitMotionDuration(splitPrefs.motion)}ms`,
-        "--hwc-tree-width": `${fileTreeWidthPx(treeWidth)}px`,
+        "--hwc-tree-width": `${treeWidth}px`,
         "--hwc-tree-font-size": fileTreeFontSize(treeSize),
         "--hwc-code-font-size": codeFontSize(codeSize),
       }}
@@ -1216,8 +1219,6 @@ export function App() {
               onTreeSideChange={changeTreeSide}
               treeSize={treeSize}
               onTreeSizeChange={changeTreeSize}
-              treeWidth={treeWidth}
-              onTreeWidthChange={changeTreeWidth}
               treeIcons={treeIcons}
               onTreeIconsChange={changeTreeIcons}
               codeSize={codeSize}
