@@ -65,6 +65,38 @@ test("Codex candidates use API model slugs and the effective provider, not picke
   expect(calls[2]?.params.cursor).toBe("more");
 });
 
+test("candidate order follows the CLI, not the model key", async () => {
+  const { read } = codexReader({
+    pages: [
+      {
+        data: [
+          { model: "z-model", hidden: false },
+          { model: "a-model", hidden: false },
+        ],
+        nextCursor: null,
+      },
+    ],
+  });
+  expect(
+    (await createAgentModelsClient({ codex: read }).list("codex", "/project")).map(
+      (candidate) => candidate.id,
+    ),
+  ).toEqual(["z-model", "a-model"]);
+  expect(
+    parsePiModels(`provider  model  context  max-out  thinking  images
+example   zeta   1        1        yes       no
+example   alpha  1        1        yes       no`).map((candidate) => candidate.id),
+  ).toEqual(["zeta", "alpha"]);
+  expect(
+    parseOpencodeModels({
+      data: [
+        { providerID: "example", id: "zeta", enabled: true },
+        { providerID: "example", id: "alpha", enabled: true },
+      ],
+    }).map((candidate) => candidate.id),
+  ).toEqual(["zeta", "alpha"]);
+});
+
 test("Codex uses OpenAI when config leaves the provider unset", async () => {
   const { read } = codexReader();
   expect(await createAgentModelsClient({ codex: read }).list("codex", "/project")).toEqual([

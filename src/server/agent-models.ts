@@ -79,10 +79,10 @@ export function parseOpencodeModels(raw: unknown): AgentModel[] {
   return uniqueModels(models);
 }
 
+// 並びは CLI が返した順を保つ。新しいモデルほど先頭に来る CLI があり、hwc が並べ替えると
+// 既定として見せたいモデルが選択肢の末尾へ沈む（docs/adr/agent-launch.md）。
 function uniqueModels<T extends AgentModel>(models: T[]): T[] {
-  return [...new Map(models.map((model) => [modelKey(model), model])).values()].sort((a, b) =>
-    modelKey(a).localeCompare(modelKey(b)),
-  );
+  return [...new Map(models.map((model) => [modelKey(model), model])).values()];
 }
 
 async function listPiModels(directory: string): Promise<string> {
