@@ -2,7 +2,7 @@
 
 hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 ページで把握するための表。仕様の正は実装と ADR で、この表は俯瞰用。実装や ADR を変えたら、同じ変更でこの表も更新する。
 
-最終確認: 2026-11-23（Herdr 0.9.5、`bun run e2e:serve` の架空 Herdr）
+最終確認: 2026-11-23（Herdr 0.9.5、`bun run e2e:serve` の架空 Herdr）。Codex は 2026-11-27 に実 Herdr + Codex CLI 0.172.0（gpt-6-luna）でも確認
 
 凡例:
 
@@ -22,7 +22,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 実行中のモデル・effort の切り替え        | ×                        | ○（hwc 起動）           | ×             | ×               |
 | コンテキスト使用量・usage                | ○                        | △（hwc 起動）           | ×             | ○               |
 | 1h プロンプトキャッシュの残り時間        | –                        | △（transcript）         | –             | –               |
-| 圧縮の区切り                             | ○                        | ×                       | ×             | ○               |
+| 圧縮の区切り                             | ○                        | ×                       | ○（要約なし） | ○               |
 | 添付ファイル（画像以外も可）             | ○                        | △                       | △             | △               |
 | メッセージ内の画像プレビュー             | ○                        | ○                       | ○             | ○               |
 | 引用返信                                 | ○                        | ○                       | ○             | ○               |
@@ -39,11 +39,11 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - Claude の質問・承認の応答待ちは、hwc から起動したペインだけ、`blocked` の間に会話の末尾へカードを出す（[Claude 連携](adr/claude-integration.md)）。hwc が起動時に渡す hook が待ちを状態ディレクトリへ書き、会話を読むときに重ねる。待ちが読めれば会話を維持し、入力欄・引用・添付・コマンドを閉じる。質問は、カードの選択肢か「その他（自由入力）」で全問に答えて「この内容で答える」を押す。質問が 2 つ以上のときは 1 問ずつのページ（タブ）に分かれ、最後の「確認」ページで答えを見直してから押す。単一選択は選ぶと次のページへ自動で進み、確認から直したときは確認へ戻る。hwc は Esc でダイアログを閉じ、transcript に tool_result が現れてから、選んだ内容を通常の発言として送る（[Claude 連携](adr/claude-integration.md)）。閉じたと確かめられなければ本文は送らず、「端末で答えてください」を出す。承認は hwc からは送らない。カードの「端末出力を見る」で端末の画面を見て、「会話に戻る」で戻る。待ちが読めないとき（hwc 外で起動した Claude など）は今までどおり端末出力になり、応答は端末で行う。回答後は、Web でも TUI でも、質問と回答が会話のバブルとして残る。質問には選択肢と選択済みが付き、回答には選択肢か自由入力かの種別が付く。
 - pi の `ask_user` は、mypi 拡張があるペインで、セッションの隣の pending ファイル（`<session path>.ask.json`）を会話の末尾のカードにする（[pi 連携](adr/pi-integration.md)）。Herdr が `blocked` の間だけカードを出し、入力欄・引用・添付・コマンド・過去発言の編集を閉じる。選択肢は推奨を先頭に並べ、その説明に `推奨💡` を付ける。選択肢がある質問は 1 つ選ぶか、`freeText` が true なら「その他（自由入力）」から textarea に答え、自由入力だけの質問は最初から textarea に答える。「この内容で答える」を押すと、押した間だけスピナーを出し、pending が消えるまでカードを無効のまま残す。hwc はキーも本文も送らず、answer ファイル（`<session path>.ask.answer.json`）を書く。pending が消えるとカードが閉じる。`blocked` が解けると入力欄が戻る。pending が消えても `blocked` のままなら端末出力になり、入力欄は戻らない。回答を書けなかったときはカードに失敗を出し、端末で答える。mypi の無いペインは pending が無いので、このカードは出ない。回答後は、セッションの ask_user の tool call / tool result から、質問と回答が会話のバブルとして残る。質問には選択肢・選択済み・推奨が付き、回答には選択肢か自由入力かの種別が付く。
 - Claude のモデルと effort は、入力欄の + メニューの「モデルとエフォートを変更」から、会話を読める待機中のペインで切り替えられる。確認ダイアログを許可する hook を持つのは hwc 起動のペインだけで、hwc 外で起動した Claude は、キャッシュが温かいと確認ダイアログで止まり、8 秒待って失敗する。選んだ値を BFF が `/model` と `/effort` にして送り、確認ダイアログは hwc の確認を通ったものだけ hook が許可する（[Claude 連携](adr/claude-integration.md)）。モデルを変えるときは「次の応答は会話全体を読み直すため、遅く、使用量も増える」を出す。Claude は選んだ値を自分の既定にも保存するので、端末から起動する `claude` の既定も変わる（hwc から起動するペインは起動時に指定するので影響を受けない）。`PreModelSwitch` の hook を足す前に起動したペインも同じで、作り直すまで失敗し得る。
-- Codex の会話表示は、hwc が `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインだけ。既に起動している Codex や hwc 外で起動した Codex は端末出力になる（[Codex 連携](adr/codex-integration.md)）。
+- Codex の会話表示は、hwc が `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインだけ。既に起動している Codex や hwc 外で起動した Codex は端末出力になる。SessionStart フックは最初のターンで走るため、起動直後は端末出力で、最初のメッセージを送ると会話ビューに切り替わる（[Codex 連携](adr/codex-integration.md)）。
 - ライブ activity は、pi は拡張がセッションの隣に sidecar を書く場合だけ（[pi 連携](adr/pi-integration.md)）、Claude は transcript の進行行から導く（[Claude 連携](adr/claude-integration.md)）。pi は拡張が無いペイン、Claude は形式が読めない版のペインでは表示されない。Claude の生成中の `tok/s` は、hwc が `--plugin-dir` で渡す mod が状態ディレクトリへ書いた速度を重ねる（hwc 起動のペインだけ。[Claude 連携](adr/claude-integration.md)）。
 - Claude のコンテキスト使用量は、同じ mod が書く `{ tokens, window }` を会話のスナップショットに重ねる（hwc 起動のペインだけ。usage の内訳は出さない。[Claude 連携](adr/claude-integration.md)）。1h プロンプトキャッシュの残り時間は、transcript の完了応答から導く（hwc 起動・hwc 外を問わない。[Claude 連携](adr/claude-integration.md)）。入力欄のモデル・エフォートの隣に出す（幅ごとの表示と出さない条件は [Claude の要点](#claude)）
 - 過去の発言の編集は、mypi がセッションに `hwc-capabilities` を残した pi ペインだけ。対象はテキストだけの発言で、添付付き・最後の発言は編集できない（[pi 連携](adr/pi-integration.md)）。
-- コマンド候補のガードは会話スナップショットに依存する。Codex は context と compaction が無いため、履歴の小ささと圧縮済みの判定が効かない。Claude は hwc 起動時だけ context があるので履歴の小ささは効くが、compaction が無いので圧縮済みの判定は効かない。空の会話では `/new` と `/compact` の候補が消える。OpenCode は圧縮済みの判定がほぼ効かない（[pi 連携](adr/pi-integration.md)、[Claude 連携](adr/claude-integration.md)）。
+- コマンド候補のガードは会話スナップショットに依存する。Codex は context が無いため履歴の小ささは効かないが、compaction の区切りは取れるので圧縮済みの判定は効く。Claude は hwc 起動時だけ context があるので履歴の小ささは効くが、compaction が無いので圧縮済みの判定は効かない。空の会話では `/new` と `/compact` の候補が消える。OpenCode は圧縮済みの判定がほぼ効かない（[pi 連携](adr/pi-integration.md)、[Claude 連携](adr/claude-integration.md)）。
 
 ## エージェント別の要点
 
@@ -64,7 +64,8 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 ### Codex
 
 - 会話は App Server の `thread/read` と `thread/turns/list` から読む（[Codex 連携](adr/codex-integration.md)）。hwc から `--no-daemon` で起動し、SessionStart フックが session id を報告できたペインが対象。既存の Codex や hwc 外で起動した Codex は端末出力になる
-- 読み取り API が context と compaction を返さないため、使用量と圧縮の区切りは `null`。モデルと effort は表示できる
+- 読み取り API がコンテキスト使用量を返さないため、使用量は `null`。圧縮は `contextCompaction` の item を区切りにし、要約と圧縮前の tokens は出さない。モデルと effort は表示できる
+- 起動直後は SessionStart フックがまだ session id を報告しないため、最初のメッセージを送るまで端末出力になる
 - フォルダ信頼確認だけ専用ビューへ切り替える（[Codex 連携](adr/codex-integration.md)）
 
 ### OpenCode
