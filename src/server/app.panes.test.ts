@@ -28,6 +28,23 @@ function piState(agentStatus: "idle" | "blocked"): AppState {
   };
 }
 
+function opencodeState(agentStatus: "idle" | "working"): AppState {
+  return {
+    ...chatState,
+    workspaces: chatState.workspaces.map((workspace) => ({
+      ...workspace,
+      tabs: workspace.tabs.map((tab) => ({
+        ...tab,
+        panes: tab.panes.map((pane) => ({
+          ...pane,
+          agent: "opencode" as const,
+          agentStatus,
+        })),
+      })),
+    })),
+  };
+}
+
 function codexState(agentStatus: "idle" | "blocked"): AppState {
   return {
     ...chatState,
@@ -341,6 +358,76 @@ test("POST /api/panes/:id/input sends the text and submits it", async () => {
   expect(seen).toEqual([{ paneId: "w1:p1", text: "ls -la", submit: true }]);
 });
 
+test("POST /api/panes/:id/input sends an OpenCode command with the extra Enter", async () => {
+  const sent: unknown[] = [];
+  const commands: unknown[] = [];
+  const { app } = createTestApp({
+    state: opencodeState("idle"),
+    panes: {
+      send: async (options) => {
+        sent.push(options);
+      },
+      sendCommand: async (options) => {
+        commands.push(options);
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "/compact focus on the API", submit: true }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(commands).toEqual([{ paneId: "w1:p1", text: "/compact focus on the API" }]);
+  expect(sent).toEqual([]);
+});
+
+test("POST /api/panes/:id/input sends OpenCode text that is not a command normally", async () => {
+  const sent: unknown[] = [];
+  const commands: unknown[] = [];
+  const { app } = createTestApp({
+    state: opencodeState("idle"),
+    panes: {
+      send: async (options) => {
+        sent.push(options);
+      },
+      sendCommand: async (options) => {
+        commands.push(options);
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/input", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "/home/user", submit: true }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(sent).toEqual([{ paneId: "w1:p1", text: "/home/user", submit: true }]);
+  expect(commands).toEqual([]);
+});
+
+test("POST /api/panes/:id/stop passes the agent to the pane client", async () => {
+  const seen: unknown[] = [];
+  const { app } = createTestApp({
+    state: opencodeState("working"),
+    panes: {
+      stop: async (options) => {
+        seen.push(options);
+      },
+    },
+  });
+  const response = await app.request("/api/panes/w1:p1/stop", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+
+  expect(response.status).toBe(200);
+  expect(seen).toEqual([{ paneId: "w1:p1", agent: "opencode" }]);
+});
+
 test("POST /api/panes/:id/input refuses a blocked pi pane", async () => {
   const seen: unknown[] = [];
   const { app } = createTestApp({
@@ -632,7 +719,7 @@ test("POST /api/panes/:id/stop sends Escape to a working pane", async () => {
 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ ok: true });
-  expect(seen).toEqual([{ paneId: "w1:p1" }]);
+  expect(seen).toEqual([{ paneId: "w1:p1", agent: "pi" }]);
 });
 
 test("POST /api/panes/:id/stop does not send Escape to a pane that is not working", async () => {

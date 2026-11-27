@@ -12,9 +12,10 @@ Herdr は最後のタブの最後のペインを閉じると、スペースご�
 
 ## Decision
 
-- 入力欄の文字列は解釈せず、そのまま Herdr の送信で送る。hwc は各 CLI の TUI コマンドの一覧を持たない。例外は hwc が存在を知っている会話コマンド `/new` と `/compact` だけで、送り方は通常の文字列送信と同じ。送る文字列は `src/client/commands.ts` の表に固定する。もう 1 つの例外は Claude のモデルと effort の切り替えで、BFF が候補にある値だけから `/model <alias>` と `/effort <level>` を組み立てて、同じ送信で送る（[Claude](claude-integration.md)）
+- 入力欄の文字列は解釈せず、そのまま Herdr の送信で送る。hwc は各 CLI の TUI コマンドの一覧を持たない。例外は hwc が存在を知っている会話コマンド `/new` と `/compact` だけで、送る文字列は `src/shared/agent-commands.ts` の表に固定する。OpenCode は入力した `/` を候補メニューにするため、文字列を送った後に候補が開くのを待って Enter をもう 1 回送る。もう 1 つの例外は Claude のモデルと effort の切り替えで、BFF が候補にある値だけから `/model <alias>` と `/effort <level>` を組み立てて、同じ送信で送る（[Claude](claude-integration.md)）
 - 任意のキーを送る機能は持たない。hwc が送るキーは次に限り、いずれも BFF が直前の状態を確かめてから送る
-  - 停止: エージェントには Esc を、`agentStatus === "working"` のときだけ送る。シェルには C-c を、前景プロセスがシェルと別のときだけ送る。条件を満たさない要求はキーを送らずに成功として返す
+  - 停止: エージェントには Esc を、`agentStatus === "working"` のときだけ送る。OpenCode は 1 回目の Esc で「esc again to interrupt」の中断確認になるため、2 回送る。シェルには C-c を、前景プロセスがシェルと別のときだけ送る。条件を満たさない要求はキーを送らずに成功として返す
+  - OpenCode の `/new` `/compact` の確定: 文字列と Enter を送り、TUI が候補メニューを描くのを待ってから Enter を 1 回だけ送る。候補が開かなかった場合に本文を二重に送らないよう、確定の Enter は候補が出るコマンドにだけ送る
   - 既知のフォルダ信頼確認への回答: Enter を 1 回だけ送る。BFF が `pane.read` の `detection` から確認画面を照合して識別子を発行し、回答 API は識別子だけを受ける。照合の条件はエージェントごとの ADR（[Codex](codex-integration.md)、[pi](pi-integration.md)）が定める。同じペインの判定と回答は直列化し、送信結果が不明でも再送しない
   - Claude の AskUserQuestion への回答: Esc でダイアログを閉じ、閉じたことを transcript で確かめてから本文を送る（[Claude](claude-integration.md)）
   - pi の `ask_user` への回答: キーも本文も送らず、`<session path>.ask.answer.json` だけを書く。`blocked` の pi への通常入力と過去発言の編集は 409 で拒否する（[pi](pi-integration.md)）
@@ -29,6 +30,7 @@ Herdr は最後のタブの最後のペインを閉じると、スペースご�
 ## Consequences
 
 - TUI 固有の操作（ピッカー、`/tree`、承認、信頼確認の既定以外の選択肢）は端末で行う
+- OpenCode のコマンド確定は候補メニューの描画を固定時間だけ待つ。TUI の描画が遅い環境ではメニューが開いたまま残り得る。そのときは端末で Enter を押す
 - 画面の文言や選択記号が変わると、信頼確認には答えられなくなり、端末表示へ戻る。推測では送らない
 - 読み取りと送信の間に Herdr 本体で同時に操作されると競合し得る。直前の再照合と二重送信の抑止で窓を狭めるだけで、無くせない
 - 新しいキーや送り方を足すときは、この ADR を書き換える

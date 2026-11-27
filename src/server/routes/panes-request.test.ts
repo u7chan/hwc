@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { parseInputBody, parseOutputQuery, parseSplitBody, parseStartBody } from "./panes-request";
+import {
+  isOpencodeCommand,
+  parseInputBody,
+  parseOutputQuery,
+  parseSplitBody,
+  parseStartBody,
+} from "./panes-request";
 
 test("parseOutputQuery defaults to the recent output", () => {
   expect(parseOutputQuery(new URLSearchParams())).toEqual({
@@ -38,6 +44,19 @@ test("parseOutputQuery rejects lines that are out of range", () => {
     ok: true,
     value: { source: "recent", lines: 4294967295 },
   });
+});
+
+test("isOpencodeCommand matches only the commands hwc sends", () => {
+  expect(isOpencodeCommand("/new", 0)).toBe(true);
+  expect(isOpencodeCommand("/new ", 0)).toBe(true);
+  expect(isOpencodeCommand(" /new", 0)).toBe(false);
+  expect(isOpencodeCommand("/compact", 0)).toBe(true);
+  expect(isOpencodeCommand("/compact focus on the API", 0)).toBe(true);
+  expect(isOpencodeCommand("/compact\n続きをまとめる", 0)).toBe(false);
+  expect(isOpencodeCommand("/new\nhello", 0)).toBe(false);
+  expect(isOpencodeCommand("/home/user", 0)).toBe(false);
+  // 添付の注記が後ろに付く本文はコマンドにならない。
+  expect(isOpencodeCommand("/compact", 1)).toBe(false);
 });
 
 test("parseInputBody accepts text with an optional submit", () => {

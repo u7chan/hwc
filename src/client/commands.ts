@@ -1,16 +1,23 @@
+import {
+  type AgentCommandId,
+  commandText,
+  isCompactCommand,
+  isNewSessionCommand,
+} from "../shared/agent-commands";
 import type { ChatContext, ChatSnapshot } from "../server/chat/contract";
 import type { PaneState } from "../server/herdr/state";
 import { agentGlyph } from "./select";
 
-export type CommandId = "new" | "compact";
+export type CommandId = AgentCommandId;
+
+export { commandText, isCompactCommand, isNewSessionCommand };
 
 type AgentCommand = { label: string; text: string };
 
-// ペインへ送る文字列を持つのはここだけ。増やすときは、4 つの CLI が同じ名前で
-// 受け付けることを確かめてから 1 行足す。
+// ペインへ送る文字列は shared が持つ。ここは画面に出すラベルだけを足す。
 export const AGENT_COMMANDS: Readonly<Record<CommandId, AgentCommand>> = {
-  new: { label: "新しい会話", text: "/new" },
-  compact: { label: "会話を圧縮", text: "/compact" },
+  new: { label: "新しい会話", text: commandText("new") },
+  compact: { label: "会話を圧縮", text: commandText("compact") },
 };
 
 const COMMAND_IDS: readonly CommandId[] = ["new", "compact"];
@@ -29,23 +36,6 @@ export type PaneOutputHandle = {
 
 export function isCommandPane(pane: PaneState): boolean {
   return COMMAND_AGENTS.has(agentGlyph(pane.agent));
-}
-
-export function commandText(id: CommandId): string {
-  return AGENT_COMMANDS[id].text;
-}
-
-export function isNewSessionCommand(text: string): boolean {
-  return text.trim() === commandText("new");
-}
-
-// 直接入力の /compact を、チップを通さない経路でも圧縮として扱うための判定。
-// pi は trim 後に `/compact` と完全一致するか、`/compact `（半角空白）で始まるときだけ
-// コマンドにする。改行で指示を続けた本文や、添付注記が後ろに付く本文はコマンドにならない。
-export function isCompactCommand(text: string): boolean {
-  const trimmed = text.trim();
-  const command = commandText("compact");
-  return trimmed === command || trimmed.startsWith(`${command} `);
 }
 
 // pi は直前のエントリが compaction のとき、手動 /compact を Already compacted で即失敗する。
