@@ -22,7 +22,7 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 | 実行中のモデル・effort の切り替え        | ×                        | ○（hwc 起動）           | ×             | ×               |
 | コンテキスト使用量・usage                | ○                        | △（hwc 起動）           | ×             | ○               |
 | 1h プロンプトキャッシュの残り時間        | –                        | △（transcript）         | –             | –               |
-| 圧縮の区切り                             | ○                        | ×                       | ○（要約なし） | ○               |
+| 圧縮の区切り                             | ○                        | ○（要約あり）           | ○（要約なし） | ○               |
 | 添付ファイル（画像以外も可）             | ○                        | △                       | △             | △               |
 | メッセージ内の画像プレビュー             | ○                        | ○                       | ○             | ○               |
 | 引用返信                                 | ○                        | ○                       | ○             | ○               |
@@ -43,17 +43,17 @@ hwc が各エージェント CLI のどこまでを Web から扱えるかを 1 
 - ライブ activity は、pi は拡張がセッションの隣に sidecar を書く場合だけ（[pi 連携](adr/pi-integration.md)）、Claude は transcript の進行行から導く（[Claude 連携](adr/claude-integration.md)）。pi は拡張が無いペイン、Claude は形式が読めない版のペインでは表示されない。Claude の生成中の `tok/s` は、hwc が `--plugin-dir` で渡す mod が状態ディレクトリへ書いた速度を重ねる（hwc 起動のペインだけ。[Claude 連携](adr/claude-integration.md)）。
 - Claude のコンテキスト使用量は、同じ mod が書く `{ tokens, window }` を会話のスナップショットに重ねる（hwc 起動のペインだけ。usage の内訳は出さない。[Claude 連携](adr/claude-integration.md)）。1h プロンプトキャッシュの残り時間は、transcript の完了応答から導く（hwc 起動・hwc 外を問わない。[Claude 連携](adr/claude-integration.md)）。入力欄のモデル・エフォートの隣に出す（幅ごとの表示と出さない条件は [Claude の要点](#claude)）
 - 過去の発言の編集は、mypi がセッションに `hwc-capabilities` を残した pi ペインだけ。対象はテキストだけの発言で、添付付き・最後の発言は編集できない（[pi 連携](adr/pi-integration.md)）。
-- コマンド候補のガードは会話スナップショットに依存する。Codex は context が無いため履歴の小ささは効かないが、compaction の区切りは取れるので圧縮済みの判定は効く。Claude は hwc 起動時だけ context があるので履歴の小ささは効くが、compaction が無いので圧縮済みの判定は効かない。空の会話では `/new` と `/compact` の候補が消える。OpenCode は圧縮済みの判定がほぼ効かない（[pi 連携](adr/pi-integration.md)、[Claude 連携](adr/claude-integration.md)）。
+- コマンド候補のガードは会話スナップショットに依存する。Codex は context が無いため履歴の小ささは効かないが、compaction の区切りは取れるので圧縮済みの判定は効く。Claude は compaction の区切りが取れるので圧縮済みの判定が効き、hwc 起動時だけ context があるので履歴の小ささも効く。空の会話では `/new` と `/compact` の候補が消える。OpenCode は圧縮済みの判定がほぼ効かない（[pi 連携](adr/pi-integration.md)、[Claude 連携](adr/claude-integration.md)）。
 
 ## エージェント別の要点
 
 ### Claude
 
-- 会話は `CLAUDE_CONFIG_DIR`（既定 `~/.claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[Claude 連携](adr/claude-integration.md)）。Herdr が返す `agent_session` の id から transcript を引き、`parentUuid` を辿った active branch を射影する。hwc 外で起動した Claude も、同じユーザー・同じホストなら履歴が出る
+- 会話は `CLAUDE_CONFIG_DIR`（既定 `~/.claude`）配下の `projects/<project>/<session uuid>.jsonl` を読む（[Claude 連携](adr/claude-integration.md)）。Herdr が返す `agent_session` の id から transcript を引き、`parentUuid` を辿った active branch を射影する。圧縮の境界では `logicalParentUuid` を辿り直し、圧縮前の会話も並べる。hwc 外で起動した Claude も、同じユーザー・同じホストなら履歴が出る
 - 出すのは user の本文と assistant の text だけ。tool_use / tool_result / thinking / 内部エントリ / サブエージェントは出さない。例外は、回答済みの AskUserQuestion で、tool_use の質問と答えから、質問と回答のバブルを合成して出す（[Claude 連携](adr/claude-integration.md)）。`<attached_files>` の注記は strip して名前だけのチップにする。Claude Code が貼り付けに付ける `<pasted_content>` の包みは、開きと閉じの id が揃った組だけを外す（[Claude 連携](adr/claude-integration.md)）
 - 実行中の段階（「考えています」「Read を実行中」など）と方向は、transcript の `api-request` / `tool_use` / `tool_result` から導く（[Claude 連携](adr/claude-integration.md)）。要求と応答の対応が取れない版・形のときは出さない。方向はターン内の最後の assistant 本文（無ければ thinking の末尾）で、ツールのときは対象を 1 行目、方向を 2 行目に置く。方向は会話に載っても帯から外さず、次の本文が来るかターンが終わるまで残す。`input.command` は出さない
 - 生成中の `tok/s` は、hwc が `claude-mod/` を `--plugin-dir` で渡して起動したペインだけ。`--plugin-dir` は 2.1.265 以降、mod は 2.1.287 以降。2.1.265〜2.1.286 は起動できるが速度だけ出ない。2.1.265 未満では起動自体が失敗する。mod が `turn.step` の差分から見えている出力の速度を推定し、`<state root>/claude/live/<session id>.json` に書く。段階が `thinking` / `writing` / `tool-call` で、書き込みが 2.5 秒以内のときだけ BFF が段階に重ねる（[Claude 連携](adr/claude-integration.md)）。数字は画面に流れている出力の推定で、`usage.output_tokens` とは一致しない。thinking が隠れるモデル・設定では請求上の output より小さく出る
-- コンテキスト使用量は、同じ mod が `$.session.usage()` から `{ tokens, window }` を読んで live ファイルへ書き、BFF が会話のスナップショットに重ねる（[Claude 連携](adr/claude-integration.md)）。`window` は CLI が解決した値（1M など）で、hwc はモデル別の表を持たない。速度の鮮度（2.5 秒）が切れても使用量は残る。hwc 外で起動したペインでは出ない。usage の内訳と圧縮の区切りは `null` のまま
+- コンテキスト使用量は、同じ mod が `$.session.usage()` から `{ tokens, window }` を読んで live ファイルへ書き、BFF が会話のスナップショットに重ねる（[Claude 連携](adr/claude-integration.md)）。`window` は CLI が解決した値（1M など）で、hwc はモデル別の表を持たない。速度の鮮度（2.5 秒）が切れても使用量は残るが、圧縮より前に書かれた値は出さない（次のターンが終わるまで不明）。hwc 外で起動したペインでは出ない。usage の内訳は `null` のまま
 - 1h プロンプトキャッシュの残り時間は、transcript の完了応答の `usage` と、対応する `api-request` の送信時刻から導く（[Claude 連携](adr/claude-integration.md)）。入力欄にタイマーのアイコンと `42:18`、満了後は `切れ` と出し、狭い幅では `42m` / `切れ` に縮める（アイコンは変えず、満了後は色で示す）。入力を 1 行に畳む分割セルでは、入力欄に出さずモデル詳細パネルにだけ残す。1h の全量書き込みを確かめられない場合、圧縮やモデル・エフォートの変更より前、未確認・失効済みのときは出さない。hwc 外で起動した Claude でも transcript を読めれば対象。表示は残り時間の目安で、次の要求がヒットする保証ではない
 - 質問（AskUserQuestion）と権限確認の応答待ちは、`blocked` の間だけ会話の末尾にカードで出す。実機の Claude Code 2.1.328 は待ちの間 transcript に tool_use を書かないので、hwc が `--settings` で渡す hook（`PreToolUse` / `PermissionRequest` など）が `claude/pending/<session id>.json` へ書いた質問・選択肢・複数選択を読む。それ以外のツールは名前と 1 行の要約だけにする。Esc で閉じても hook は呼ばれないので、解決は transcript の `tool_result` で知る。質問にはカードから答え、承認は端末で行う（[Claude 連携](adr/claude-integration.md)）。hook は hwc から起動したペインにだけ入る
 - モデルと effort は transcript の `model` と `perTurnEffort` から出す。hwc から起動したペインは必ずモデルを指定しているので、最初の assistant が現れるまで起動時の指定で補う（[起動](adr/agent-launch.md)）。hwc 以外から起動したペインは、最初の応答まで出ない。入力欄は `Opus` / `Opus 5.5` のように表示名で出し、パネルに識別子（エイリアスまたは `claude-opus-5-5`）を出す。エイリアスの間は「起動時の指定」と注記する（[Claude 連携](adr/claude-integration.md)）。モデルは CLI のエイリアス（`fable` / `opus` / `sonnet` / `haiku`）、effort は `low` / `medium` / `high` / `xhigh` / `max` から選ぶ（[Claude 連携](adr/claude-integration.md)）

@@ -62,6 +62,17 @@ export function parseLive(value: unknown, sessionId: string, now: number): Claud
   return rate === undefined ? null : { tokPerSecond: rate, context, at };
 }
 
+// 圧縮は文脈を切り詰める。圧縮より前に書かれた使用量は圧縮前の量なので、次のターンまで出さない。
+// 不明を 0% とも書かない（docs/adr/claude-integration.md）。
+export function contextSince(
+  live: ClaudeLive | null,
+  compactedAt: number | null,
+): ChatContext | null {
+  if (live === null || live.context === null) return null;
+  if (compactedAt !== null && live.at <= compactedAt) return null;
+  return live.context;
+}
+
 // 形の合わない値は「無い」として扱う。使用量が壊れていても、速度まで捨てない。
 function parseContext(value: unknown): ChatContext | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;

@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseTranscript, readTranscript } from "./claude-transcript";
+import {
+  activeBranch,
+  conversationBranch,
+  parseTranscript,
+  readTranscript,
+} from "./claude-transcript";
 import { ChatUnavailableError } from "./errors";
 
 const AT = "2026-02-01T09:00:00.000Z";
@@ -64,6 +69,72 @@ test("a timestamp that cannot be read becomes zero", () => {
   const { entries } = parseTranscript(raw, false);
 
   expect(entries[0]?.at).toBe(0);
+});
+
+test("a compaction boundary cuts the branch used for waits but not the conversation", () => {
+  const raw = [
+    JSON.stringify(record({ type: "user", uuid: "u1", message: { content: "最初" } })),
+    JSON.stringify(
+      record({ type: "assistant", uuid: "a1", parentUuid: "u1", message: { content: [] } }),
+    ),
+    JSON.stringify(
+      record({
+        type: "system",
+        subtype: "compact_boundary",
+        uuid: "b1",
+        parentUuid: null,
+        logicalParentUuid: "a1",
+        compactMetadata: { trigger: "auto", preTokens: 790_236 },
+      }),
+    ),
+    JSON.stringify(
+      record({
+        type: "user",
+        uuid: "s1",
+        parentUuid: "b1",
+        isCompactSummary: true,
+        message: { content: "要約" },
+      }),
+    ),
+    JSON.stringify(
+      record({ type: "user", uuid: "u2", parentUuid: "s1", message: { content: "続き" } }),
+    ),
+  ].join("\n");
+
+  const { entries } = parseTranscript(raw, false);
+
+  expect(entries.find((entry) => entry.uuid === "b1")).toMatchObject({
+    logicalParentUuid: "a1",
+    preTokens: 790_236,
+  });
+  expect(activeBranch(entries).map((entry) => entry.uuid)).toEqual(["b1", "s1", "u2"]);
+  expect(conversationBranch(entries).map((entry) => entry.uuid)).toEqual([
+    "u1",
+    "a1",
+    "b1",
+    "s1",
+    "u2",
+  ]);
+});
+
+// logicalParentUuid は圧縮の境界だけが持つ。他の行で辿り直すと枝を取り違えかねない。
+test("a logical parent on another entry is not followed", () => {
+  const raw = [
+    JSON.stringify(record({ type: "user", uuid: "u1", message: { content: "最初" } })),
+    JSON.stringify(
+      record({
+        type: "user",
+        uuid: "u2",
+        parentUuid: null,
+        logicalParentUuid: "u1",
+        message: { content: "続き" },
+      }),
+    ),
+  ].join("\n");
+
+  const { entries } = parseTranscript(raw, false);
+
+  expect(conversationBranch(entries).map((entry) => entry.uuid)).toEqual(["u2"]);
 });
 
 test("a path that is not a file is unavailable", async () => {

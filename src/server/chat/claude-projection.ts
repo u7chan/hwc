@@ -12,6 +12,7 @@ import {
   activeBranch,
   assistantText,
   blocksOf,
+  conversationBranch,
   INTERRUPT_MARKERS,
   isLocalCommandEcho,
   stripPastedContent,
@@ -20,7 +21,7 @@ import {
   type TranscriptContent,
   type TranscriptEntry,
 } from "./claude-transcript";
-import type { ChatMessage, ChatPending, ChatSnapshot } from "./contract";
+import type { ChatCompaction, ChatMessage, ChatPending, ChatSnapshot } from "./contract";
 import { limitMessages, pruneOrphanAskAnswers } from "./limit";
 
 type AssistantGroup = { id: string; at: number; text: string; error: string | null };
@@ -32,29 +33,34 @@ export function snapshotOf(
   entries: readonly TranscriptEntry[],
   clipped: boolean,
 ): { snapshot: ChatSnapshot; resolved: ReadonlySet<string> } {
+  // 待ちと段階は圧縮後の枝だけで判定する。圧縮前の tool_result を今の待ちと取り違えない。
   const branch = activeBranch(entries);
+  // 会話は圧縮を跨ぐ。境界は parentUuid を切るので、logicalParentUuid でつなぎ直す。
+  const conversation = conversationBranch(entries);
   const resolved = resolvedToolUseIds(branch);
   let model: string | null = null;
   let effort: string | null = null;
-  for (const entry of branch) {
+  for (const entry of conversation) {
     if (entry.type !== "assistant" || entry.sidechain) continue;
     const entryModel = entry.message?.model ?? null;
     if (entryModel !== null && entryModel !== SYNTHETIC_MODEL) model = entryModel;
     if (entry.effort !== null) effort = entry.effort;
   }
 
-  const limited = limitMessages(projectMessages(branch));
+  const projected = projectMessages(conversation);
+  const limited = limitMessages(projected.messages);
+  const messages = pruneOrphanAskAnswers(limited.messages);
   const pending = projectPending(branch, resolved);
   const cacheExpiresAt = promptCacheExpiry(entries, branch);
   const body: Omit<ChatSnapshot, "etag"> = {
-    messages: pruneOrphanAskAnswers(limited.messages),
+    messages,
     model,
     effort,
     truncated: clipped || limited.truncated,
     // 使用量は transcript に無いので、ここでは null のままにする。mod の live ファイルから
-    // snapshot に重ねる（docs/adr/claude-integration.md）。圧縮の区切りは別 Issue で扱う。
+    // snapshot に重ねる（docs/adr/claude-integration.md）。
     context: null,
-    compaction: null,
+    compaction: compactionOf(conversation, projected.dividerIndex, projected.messages, messages),
     ...(cacheExpiresAt === null ? {} : { cacheExpiresAt }),
     ...(pending === null ? {} : { pending }),
   };
@@ -136,7 +142,11 @@ function toolUses(content: TranscriptContent | undefined): PendingTool[] {
   return tools;
 }
 
-function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {
+function projectMessages(branch: readonly TranscriptEntry[]): {
+  messages: ChatMessage[];
+  // 最後の圧縮の区切りが、messages の何件目の前に来るか。圧縮が無ければ null。
+  dividerIndex: number | null;
+} {
   // Claude は 1 つの API メッセージを block ごとに複数の entry へ分けて書く。text を
   // ファイル順に連結して 1 行にする。id は最初の entry の uuid で、message.id は使わない
   // （同じ組の複数 entry が同じ id になり、クライアントの key が衝突する）。
@@ -162,8 +172,13 @@ function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {
   const asks = askExchanges(branch);
   const messages: ChatMessage[] = [];
   const emitted = new Set<string>();
+  let dividerIndex: number | null = null;
   for (const entry of branch) {
     if (entry.sidechain) continue;
+    // 区切りは、その行より前の会話が何件あるかで位置を決める。
+    if (entry.type === "system" && entry.subtype === "compact_boundary") {
+      dividerIndex = messages.length;
+    }
     if (entry.type === "user") {
       if (entry.uuid !== null && asks.consumed.has(entry.uuid)) continue;
       const message = projectUser(entry);
@@ -181,7 +196,60 @@ function projectMessages(branch: readonly TranscriptEntry[]): ChatMessage[] {
     const exchange = entry.uuid === null ? undefined : asks.byEntry.get(entry.uuid);
     if (exchange !== undefined) messages.push(...exchange);
   }
-  return messages;
+  return { messages, dividerIndex };
+}
+
+// 圧縮の区切り。今の文脈を作った最後の 1 本だけを出す（contract の compaction は 1 本）。
+// 区切りの位置は messages の件数で返す。
+function compactionOf(
+  conversation: readonly TranscriptEntry[],
+  dividerIndex: number | null,
+  rows: readonly ChatMessage[],
+  kept: readonly ChatMessage[],
+): ChatCompaction | null {
+  if (dividerIndex === null) return null;
+  let boundary: TranscriptEntry | null = null;
+  for (const entry of conversation) {
+    if (entry.type === "system" && entry.subtype === "compact_boundary") boundary = entry;
+  }
+  if (boundary === null) return null;
+  return {
+    at: boundary.at,
+    tokensBefore: boundary.preTokens,
+    summary: compactSummaryAfter(conversation, boundary.index),
+    index: keptBefore(dividerIndex, rows, kept),
+  };
+}
+
+function compactSummaryAfter(conversation: readonly TranscriptEntry[], index: number): string {
+  for (const entry of conversation) {
+    if (entry.index <= index || !entry.compactSummary) continue;
+    return compactSummaryText(userText(entry.message?.content));
+  }
+  return "";
+}
+
+// 要約の前には、モデル向けの定型文と内部の注記が付く。画面に出す本文ではないので落とす。
+// 文面が変わった版では前置きごと出す（読みにくいより、要約が出ないほうが困る）。
+const COMPACT_SUMMARY_PREAMBLE =
+  /^This session is being continued from a previous conversation that ran out of context\.\s*The summary below covers the earlier portion of the conversation\.\s*(?:<system-reminder>[\s\S]*?<\/system-reminder>\s*)?/;
+
+function compactSummaryText(raw: string): string {
+  return raw.replace(COMPACT_SUMMARY_PREAMBLE, "").trim();
+}
+
+// 古い側を切り捨てると区切りも前へずれる。残った行だけを数え直す。
+function keptBefore(
+  index: number,
+  rows: readonly ChatMessage[],
+  kept: readonly ChatMessage[],
+): number {
+  const ids = new Set(kept.map((message) => message.id));
+  let count = 0;
+  for (let position = 0; position < index && position < rows.length; position += 1) {
+    if (ids.has(rows[position]!.id)) count += 1;
+  }
+  return Math.min(count, kept.length);
 }
 
 function projectAssistant(group: AssistantGroup | undefined): ChatMessage | null {
@@ -279,8 +347,8 @@ function groupKey(entry: TranscriptEntry): string {
 }
 
 function projectUser(entry: TranscriptEntry): ChatMessage | null {
-  // isMeta は hwc の画面に出ないシステム寄りの記録。圧縮の要約は本文ではないので出さない。
-  // TBD: 圧縮済みセッションで、要約と区切りを会話の行としてどこまで見せるか。
+  // isMeta は hwc の画面に出ないシステム寄りの記録。圧縮の要約は行にせず、区切りに添える
+  // （compactionOf）。圧縮前の会話は conversationBranch で並べる。
   if (entry.meta || entry.compactSummary) return null;
   const raw = userText(entry.message?.content);
   if (raw === "") return null;

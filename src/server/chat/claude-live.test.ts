@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LIVE_TTL_MS, livePath, parseLive, readLive } from "./claude-live";
+import { contextSince, LIVE_TTL_MS, livePath, parseLive, readLive } from "./claude-live";
 
 const SESSION = "6b1d7a44-2f3c-4e5b-8a19-7c2d3e4f5a6b";
 const NOW = 1_800_000_000_000;
@@ -126,4 +126,15 @@ test("a broken context is no context, but a broken rate still voids the file", (
     });
   }
   expect(parseLive(JSON.parse(body({ tokPerSecond: "fast", context })), SESSION, NOW)).toBeNull();
+});
+
+// 圧縮で文脈は切り詰められる。圧縮より前に書かれた値は、今の量ではない。
+test("a context written before the compaction is not shown", () => {
+  const live = { tokPerSecond: null, context, at: NOW };
+
+  expect(contextSince(live, NOW)).toBeNull();
+  expect(contextSince(live, NOW - 1)).toEqual(context);
+  expect(contextSince(live, null)).toEqual(context);
+  expect(contextSince(null, NOW)).toBeNull();
+  expect(contextSince({ tokPerSecond: 1, context: null, at: NOW }, null)).toBeNull();
 });
