@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
+import type { ChatFile } from "../server/chat/contract";
 import type { AppState } from "../server/herdr/state";
+import { messageFileLabel } from "../shared/message-files";
 import { attachmentStore } from "./attachment-store";
 import { codeFontSize } from "./code-font-size";
 import { fileTreeFontSize } from "./file-tree-display";
@@ -25,7 +27,7 @@ import { defaultView } from "./app/default-view";
 import { toTimes } from "./app/times";
 import { FooterBrand, ListPlaceholder, Placeholder } from "./app/Placeholders";
 import { AppOverlays, type AppOverlaysProps } from "./app/AppOverlays";
-import { CellTree, PreviewCell, type CellActions, type CellContext } from "./app/cells";
+import { CellTree, type CellActions, type CellContext } from "./app/cells";
 import { menuView } from "./app/menu";
 import { tabRows } from "./app/tab-rows";
 import { useConfirmFlow } from "./app/hooks/use-confirm-flow";
@@ -92,15 +94,19 @@ import {
 } from "./selection";
 import {
   EMPTY_SPLIT_VIEW,
+  PREVIEW_TAB,
+  activatePreviewTab,
   activePanes,
   clearCurrent,
   dropOnPane,
+  isPreviewTab,
   layoutKey,
   leafOfPane,
   moveTab,
   openPane,
-  openTabs,
+  openPreviewTab,
   readingOrder,
+  removePreviewTab,
   removeTab,
   successorTab,
   syncSplitView,
@@ -415,7 +421,8 @@ export function App() {
   const rememberedView =
     view ??
     (state === null ? null : (initialView.current ??= defaultView(state, openGroups.current)));
-  const exists = (paneId: string) => state !== null && findPane(state, paneId) !== null;
+  const exists = (paneId: string) =>
+    isPreviewTab(paneId) || (state !== null && findPane(state, paneId) !== null);
   const split: SplitView =
     state === null || rememberedView === null
       ? (rememberedView?.split ?? EMPTY_SPLIT_VIEW)
@@ -453,17 +460,37 @@ export function App() {
   // フォーカス・スクロール位置が消える。
   const cellRoot = wide ? split.layout : projected;
 
-  // プレビューは一時タブのまま。対象のペインがどこかの葉にある間だけ、タブと本文に出せる。
-  const {
-    preview,
-    previewInTab,
-    previewing,
-    open: openPreview,
-    show: showPreview,
-    hide: hidePreview,
-    close: closePreview,
-  } = usePreview({ state, openTabs: openTabs(split) });
-  const previewLeaf = preview === null ? null : leafOfPane(split.layout, preview.paneId);
+  // プレビューの中身だけを hook が持つ。葉のどこに出すかは分割ビューの PREVIEW_TAB。
+  const { preview, open: openPreviewFile, close: closePreviewFile } = usePreview({ state });
+  const previewInTree = leafOfPane(split.layout, PREVIEW_TAB) !== null;
+  const previewPaneOpen = preview !== null && leafOfPane(split.layout, preview.paneId) !== null;
+
+  // プレビューだけが残ったときは、中身とタブの両方を片付ける。対象のペインが
+  // 閉じた（スナップショットから消えた）ときと、タブから外したときの両方を通る。
+  useEffect(() => {
+    if (preview === null) {
+      if (!previewInTree) return;
+      setView({ split: removePreviewTab(splitRef.current), expanded: expandedRef.current });
+      return;
+    }
+    if (previewPaneOpen) return;
+    closePreviewFile();
+    setView({ split: removePreviewTab(splitRef.current), expanded: expandedRef.current });
+  }, [preview, previewInTree, previewPaneOpen]);
+
+  // 広い画面は利用者が置いた葉を保ち、狭い画面は対象ペインの葉へ寄せる。
+  const openPreview = (paneId: string, file: ChatFile) => {
+    openPreviewFile(paneId, file);
+    setView({ split: openPreviewTab(split, paneId, !wide), expanded });
+  };
+  const showPreview = () => {
+    if (preview === null) return;
+    setView({ split: activatePreviewTab(split), expanded });
+  };
+  const closePreview = () => {
+    closePreviewFile();
+    setView({ split: removePreviewTab(split), expanded });
+  };
 
   // ペインがスナップショットから消えたら、その添付と進行中のアップロードを捨てる。
   // ペインを切り替えただけでは捨てない（戻ってから送れるようにする）。
@@ -507,7 +534,6 @@ export function App() {
     }
     pendingRead.current = pendingReadAfter(pending, paneId, opened);
     setPendingSelect(null);
-    hidePreview();
     if (paneId === null) {
       setView({ split: clearCurrent(split), expanded: explicitExpanded ?? expanded });
       setSettingsOpen(false);
@@ -939,8 +965,10 @@ export function App() {
         ? moveTab(split, paneId, target.pane, target.side, target.gap)
         : dropOnPane(split, paneId, target.pane, target.zone);
     if (next === split) return;
+    // current はペインの ID。プレビューを動かしたときは、選んでいたペインを保つ。
+    const current = isPreviewTab(paneId) ? split.current : next.current;
     captureFlip();
-    setView({ split: next, expanded });
+    setView({ split: { ...next, current }, expanded });
   };
   const { dragging, startPaneDrag, startListPaneDrag, consumeDraggedClick } = usePaneDrag({
     wide,
@@ -956,8 +984,12 @@ export function App() {
     draggedRow === null || state === null ? null : leafOfPane(split.layout, draggedRow.pane.id);
   const draggedMultiSpace =
     draggedLeaf === null || state === null ? false : tabRows(state, draggedLeaf.tabs).multiSpace;
-  const draggingLabel =
-    draggedRow === null
+  const draggingPreview = dragging?.paneId === PREVIEW_TAB;
+  const draggingLabel = draggingPreview
+    ? preview === null
+      ? ""
+      : messageFileLabel(preview.file.name)
+    : draggedRow === null
       ? ""
       : tabLabelText(
           tabLabel(
@@ -1009,7 +1041,7 @@ export function App() {
     inputsInFlight: inputsInFlight.current,
     dismissedConfirmations,
     confirmationAttempts: confirmationAttempts.current,
-    preview: { target: preview, inTab: previewInTab, previewing, leaf: previewLeaf },
+    preview,
   };
   const cellActions: CellActions = {
     select,
@@ -1244,20 +1276,16 @@ export function App() {
             <Placeholder connection={connection} />
           ) : split.layout !== null && shownLeaves.length > 0 ? (
             <div class="hwc-detail-inner">
-              {previewing ? (
-                <PreviewCell context={cellContext} actions={cellActions} />
-              ) : (
-                <div class="hwc-detail-grid" data-single={shownLeaves.length === 1}>
-                  {cellRoot === null ? null : (
-                    <CellTree
-                      node={cellRoot}
-                      parentDir={null}
-                      context={cellContext}
-                      actions={cellActions}
-                    />
-                  )}
-                </div>
-              )}
+              <div class="hwc-detail-grid" data-single={shownLeaves.length === 1}>
+                {cellRoot === null ? null : (
+                  <CellTree
+                    node={cellRoot}
+                    parentDir={null}
+                    context={cellContext}
+                    actions={cellActions}
+                  />
+                )}
+              </div>
             </div>
           ) : (
             <div class="hwc-empty hwc-empty--detail">

@@ -12,7 +12,7 @@ const WARNING_TEXT =
 // 案内を出さないよう、今のキーと一致するものだけを描く。
 type Probe = { key: string; warning: PreviewWarning };
 
-// プレビューはタブの 1 つとして detail を占有する。会話へ戻るのはタブの切り替え。
+// プレビューはタブの 1 つとしてセルを占有する。会話へ戻るのはタブの切り替え。
 // 再読み込みは同じ URL を作り直すだけ。配信は no-store なので常に最新が出る。
 export function Preview(props: { paneId: string; file: ChatFile; onClose: () => void }) {
   const [reload, setReload] = useState(0);

@@ -2,8 +2,8 @@ import type { AppState } from "../../server/herdr/state";
 import { findPaneRow, type PaneRow } from "../select";
 import { multiSpace } from "../split-view";
 
-// セルのタブ列に出す行と、タブ名にスペース名を前置きするか。葉の tabs はペイン id だけを
-// 並びの正として持つので、表示に要る行はここで引く。
+// セルのタブ列に出すペインの行と、タブ名にスペース名を前置きするか。葉の tabs は
+// ペイン id とプレビューの予約 ID を並びの正として持つので、表示に要る行はここで引く。
 export type TabRows = {
   rows: PaneRow[];
   multiSpace: boolean;
@@ -11,7 +11,7 @@ export type TabRows = {
 
 const NO_TABS: TabRows = { rows: [], multiSpace: false };
 
-// 消えたペインは行に出さない。並びは葉の tabs のまま。
+// 消えたペインとプレビューの予約 ID は行に出さない。並びは葉の tabs のまま。
 export function tabRows(state: AppState, paneIds: readonly string[]): TabRows {
   const rows = paneIds.flatMap((paneId) => {
     const row = findPaneRow(state, paneId);

@@ -8,9 +8,9 @@ import type { CreateTarget } from "../CreatePane";
 
 export type View = { split: SplitView; expanded: ReadonlySet<string> };
 
-// 開いているプレビュー。Herdr のペインではないので、状態には載せない。shown は
-// タブの選択と同じで、ペインのタブを選ぶと false に戻る。
-export type PreviewTarget = { paneId: string; file: ChatFile; shown: boolean };
+// 開いているプレビューの中身。Herdr のペインではないので、タブの位置は分割ビュー側の
+// PREVIEW_TAB が持つ。ここには配信の根になるペインと、表示するファイルだけを置く。
+export type PreviewTarget = { paneId: string; file: ChatFile };
 
 // 閉じる確認。後継は確認を開いた時点で決める。SSE が閉じたペインを落とした後では、
 // 次のペインを引けない。後継は同じ葉（セル）の次のタブから選ぶ。
