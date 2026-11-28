@@ -64,12 +64,21 @@
 /* 外すペインの本文は、タブが縮む間に淡く消す。タブ列は残し、どのタブが消えるかを
    見せる。消えたあとは残りのセルが広がる。 */
 .hwc-cell-body {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   transition: opacity 180ms ease-out;
+}
+
+/* プレビューの iframe は別の文書なので、ドラッグ中の pointermove が親に届かない。
+   本文の上に透明な面を置き、セルへのドロップを拾えるようにする。 */
+.hwc-cell-drag {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
 }
 
 .hwc-cell-body[data-leaving="true"] {
@@ -154,9 +163,10 @@
   display: flex;
 }
 
-/* プレビューはタブの 1 つ。分割は止め、detail の残りをそのまま iframe に渡す。 */
+/* プレビューはセルのタブの 1 つ。分割のセルと同じく、その葉の残りを iframe に渡す。 */
 .hwc-preview {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;

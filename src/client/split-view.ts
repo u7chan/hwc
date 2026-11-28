@@ -2,6 +2,14 @@
 // 方向つきの二分木（layout）だけを持ち、Herdr の状態は持たない。
 export const MAX_LEAVES = 4;
 
+// プレビューは Herdr のペインではないが、タブの 1 つとして葉に置く。ペイン ID は
+// `<workspace>:<pane>` なので、その形にならない値を予約する。
+export const PREVIEW_TAB = "hwc:preview";
+
+export function isPreviewTab(id: string): boolean {
+  return id === PREVIEW_TAB;
+}
+
 export type SplitDir = "row" | "col";
 
 export type SplitLeaf = {
@@ -119,7 +127,9 @@ export function openTabs(view: SplitView): string[] {
 
 // 各セルが表示しているペイン。プロセスの取得対象に使う。
 export function activePanes(view: SplitView): string[] {
-  return readingOrder(view.layout).map((leaf) => leaf.active);
+  return readingOrder(view.layout)
+    .map((leaf) => leaf.active)
+    .filter((id) => !isPreviewTab(id));
 }
 
 export function leafOfPane(node: SplitNode | null, paneId: string): SplitLeaf | null {
@@ -332,6 +342,60 @@ export function dropOnPane(
   return { current: source, layout };
 }
 
+// プレビューのタブを、対象のペインの葉へ出す。既にあるときは利用者が置いた葉を
+// 動かさず、そちらを選ぶ。狭い画面（move）では分割が見えないので、対象の葉へ移す。
+// current はプレビューではなく、対象のペインを指したままにする。
+export function openPreviewTab(view: SplitView, paneId: string, move = false): SplitView {
+  const shown = openPane(view, paneId);
+  if (shown.layout === null) return shown;
+  let base = shown;
+  if (move && leafOfPane(shown.layout, PREVIEW_TAB) !== null) {
+    base = removePreviewTab(shown);
+    if (base.layout === null) return shown;
+  }
+  const leaf = leafOfPane(base.layout, PREVIEW_TAB) ?? leafOfPane(base.layout, paneId);
+  if (leaf === null) return shown;
+  const tabs = leaf.tabs.includes(PREVIEW_TAB) ? leaf.tabs : [...leaf.tabs, PREVIEW_TAB];
+  return {
+    current: shown.current,
+    layout: replaceLeaf(base.layout as SplitNode, leaf, makeLeaf(tabs, PREVIEW_TAB, leaf.id)),
+  };
+}
+
+// プレビューのタブを選ぶ。その葉にペインがあれば current もその葉へ寄せ、無ければ
+// 他の葉の current を動かさない。
+export function activatePreviewTab(view: SplitView): SplitView {
+  const leaf = leafOfPane(view.layout, PREVIEW_TAB);
+  if (leaf === null || view.layout === null || leaf.active === PREVIEW_TAB) return view;
+  const current =
+    view.current !== null && leaf.tabs.includes(view.current)
+      ? view.current
+      : (leaf.tabs.find((id) => !isPreviewTab(id)) ?? view.current);
+  return {
+    current,
+    layout: replaceLeaf(view.layout, leaf, makeLeaf(leaf.tabs, PREVIEW_TAB, leaf.id)),
+  };
+}
+
+// プレビューのタブだけを外す。葉にペインが残ればその葉は残し、無ければ畳む。
+// current はペインの ID のまま動かさない。
+export function removePreviewTab(view: SplitView): SplitView {
+  const leaf = leafOfPane(view.layout, PREVIEW_TAB);
+  if (leaf === null || view.layout === null) return view;
+  const tabs = leaf.tabs.filter((id) => id !== PREVIEW_TAB);
+  if (tabs.length === 0) return { current: view.current, layout: removeLeaf(view.layout, leaf) };
+  const active =
+    leaf.active === PREVIEW_TAB
+      ? view.current !== null && tabs.includes(view.current)
+        ? view.current
+        : (tabs[0] ?? "")
+      : leaf.active;
+  return {
+    current: view.current,
+    layout: replaceLeaf(view.layout, leaf, makeLeaf(tabs, active, leaf.id)),
+  };
+}
+
 // 一覧・タブからペインを開く。すでにどこかの葉にあればその葉を active にする。
 // 無ければフォーカス中の葉（無ければ最初の葉）の末尾へ足す。
 export function openPane(view: SplitView, paneId: string): SplitView {
@@ -446,8 +510,10 @@ export function clearCurrent(view: SplitView): SplitView {
 export function successorTab(view: SplitView, paneId: string): string | null {
   const leaf = leafOfPane(view.layout, paneId);
   if (leaf === null) return null;
-  const at = leaf.tabs.indexOf(paneId);
-  return leaf.tabs[at + 1] ?? leaf.tabs[at - 1] ?? null;
+  const tabs = leaf.tabs.filter((id) => !isPreviewTab(id));
+  const at = tabs.indexOf(paneId);
+  if (at < 0) return null;
+  return tabs[at + 1] ?? tabs[at - 1] ?? null;
 }
 
 // タブから外す。ペインは閉じない。空になった葉は畳み、current を外したときだけ
@@ -459,19 +525,28 @@ export function removeTab(view: SplitView, paneId: string, successor?: string | 
   const at = leaf.tabs.indexOf(paneId);
   const tabs = leaf.tabs.filter((id) => id !== paneId);
   // 閉じる確認で決めた同じ葉の後継があれば、それを使う。並びが変わっていても
-  // 実在するタブだけを採る。
+  // 実在するタブだけを採る。プレビューはペインの後継にしない。
   const preferred =
     successor != null && successor !== paneId && tabs.includes(successor) ? successor : null;
-  const active =
-    leaf.active === paneId ? (preferred ?? tabs[at] ?? tabs[at - 1] ?? tabs[0] ?? "") : leaf.active;
+  const nextPane =
+    leaf.tabs.slice(at + 1).find((id) => id !== paneId && !isPreviewTab(id)) ??
+    leaf.tabs
+      .slice(0, at)
+      .reverse()
+      .find((id) => id !== paneId && !isPreviewTab(id)) ??
+    null;
+  const active = leaf.active === paneId ? (preferred ?? nextPane ?? tabs[0] ?? "") : leaf.active;
   const layout =
     tabs.length === 0
       ? removeLeaf(view.layout as SplitNode, leaf)
       : updateLeaf(view.layout as SplitNode, leaf, () => makeLeaf(tabs, active, leaf.id));
   if (view.current !== paneId) return { current: view.current, layout };
-  if (tabs.length > 0) return { current: active, layout };
+  // current はペインの ID だけ。プレビューだけが残った葉は、次の葉のペインへ移す。
+  if (tabs.length > 0 && !isPreviewTab(active)) return { current: active, layout };
   const atLeaf = order.indexOf(leaf);
-  const nextLeaf = order.slice(atLeaf + 1).find((item) => item !== leaf);
+  const nextLeaf = order
+    .slice(atLeaf + 1)
+    .find((item) => item !== leaf && !isPreviewTab(item.active));
   return { current: nextLeaf?.active ?? null, layout };
 }
 
@@ -541,9 +616,14 @@ function enforceCurrent(
   current: string | null,
   exists: (paneId: string) => boolean,
 ): SplitView {
-  if (current === null || !exists(current)) return { current, layout };
+  // current はペインを指す。プレビューはタブであってフォーカスの対象ではない。
+  if (current === null || isPreviewTab(current)) return { current: null, layout };
+  if (!exists(current)) return { current, layout };
   const at = leafOfPane(layout, current);
-  if (at !== null && at.active === current) return { current, layout };
+  // プレビューを選んでいる葉も、current はその葉のペインを指したままでよい。
+  if (at !== null && (at.active === current || isPreviewTab(at.active))) {
+    return { current, layout };
+  }
   if (at !== null && layout !== null) {
     return { current, layout: replaceLeaf(layout, at, makeLeaf(at.tabs, current, at.id)) };
   }

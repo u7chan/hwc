@@ -5,13 +5,20 @@ import { messageFileLabel } from "../../shared/message-files";
 import type { PaneProcess } from "../../shared/panes";
 import { PaneDetail } from "../PaneDetail";
 import { Preview } from "../Preview";
-import { TabBar } from "../TabBar";
+import { TabBar, type TabItem } from "../TabBar";
 import type { PaneOutputHandle } from "../commands";
 import type { ConfirmationAttempt } from "../confirmation";
 import type { FileTreeIcons } from "../file-tree-display";
 import type { FileTreeSide } from "../file-tree-side";
 import { findPane, findPaneContext, type PaneContext } from "../select";
-import { type DropZone, type SplitLeaf, type SplitNode, type TabSide } from "../split-view";
+import {
+  PREVIEW_TAB,
+  isPreviewTab,
+  type DropZone,
+  type SplitLeaf,
+  type SplitNode,
+  type TabSide,
+} from "../split-view";
 import { launchPhase, type PaneLaunch, type PaneLaunchView } from "../starting";
 import { workingMs } from "../time";
 import { tabRows, type TabRows } from "./tab-rows";
@@ -49,13 +56,8 @@ export type CellContext = {
   inputsInFlight: ReadonlySet<string>;
   dismissedConfirmations: Record<string, string>;
   confirmationAttempts: ReadonlyMap<string, ConfirmationAttempt>;
-  // 一時タブのプレビュー。タブ列に出すかは inTab、本文も出ているかは previewing。
-  preview: {
-    target: PreviewTarget | null;
-    inTab: boolean;
-    previewing: boolean;
-    leaf: SplitLeaf | null;
-  };
+  // 一時タブのプレビュー。どの葉に出すかは葉の tabs の PREVIEW_TAB が持つ。
+  preview: PreviewTarget | null;
 };
 
 // セルの中の操作。対象のペインは呼ぶ側が決める。
@@ -191,30 +193,37 @@ type CellTabsProps = {
   leaf: SplitLeaf;
   tabs: TabRows;
   focused: boolean;
-  preview: { name: string; selected: boolean } | null;
   status: ComponentChildren;
-  droppable: boolean;
   tabDrop: { pane: string; side: TabSide } | null;
   context: CellContext;
   actions: CellActions;
 };
 
-// タブ列の props の組み立て。セルとプレビューの 2 箇所で同じ値を渡すので、ここに 1 度だけ書く。
+// タブ列の props の組み立て。葉の tabs の並びのまま、ペイン行とプレビューを混ぜる。
 function CellTabs(props: CellTabsProps) {
-  const { leaf, tabs, focused, preview, status, droppable, tabDrop, context, actions } = props;
+  const { leaf, tabs, focused, status, tabDrop, context, actions } = props;
+  const target = context.preview;
+  const rows = new Map(tabs.rows.map((row) => [row.pane.id, row]));
+  const items: TabItem[] = leaf.tabs.flatMap((id): TabItem[] => {
+    if (isPreviewTab(id)) {
+      return target === null
+        ? []
+        : [{ kind: "preview" as const, name: messageFileLabel(target.file.name) }];
+    }
+    const row = rows.get(id);
+    return row === undefined ? [] : [{ kind: "pane" as const, row }];
+  });
   return (
     <TabBar
       leafId={leaf.id}
-      tabs={tabs.rows}
+      tabs={items}
       currentPaneId={leaf.active}
       focused={focused}
       multiSpace={tabs.multiSpace}
       parentPaneIds={context.parentPaneIds}
       processes={context.processes}
-      preview={preview}
       status={status}
       leavingPaneId={context.leavingPaneId}
-      droppable={droppable}
       onSelectPane={actions.selectFromTab}
       onRemoveTab={actions.removeFromTabs}
       onLeaveFinished={actions.finishTabLeave}
@@ -227,25 +236,27 @@ function CellTabs(props: CellTabsProps) {
   );
 }
 
-// セルは木の葉。タブ列を上端に置き、active のペインを本文に出す。親の分割軸を
-// data 属性に置き、ドラッグ中の向き判定に使う。
+// セルは木の葉。タブ列を上端に置き、active のペイン（プレビューならファイル）を
+// 本文に出す。親の分割軸を data 属性に置き、ドラッグ中の向き判定に使う。
 function Cell(props: CellProps) {
   const { leaf, parentDir, context, actions } = props;
   const { state, focused, compact, dragging, entering, preview } = context;
   if (state === null) return null;
-  const item = findPane(state, leaf.active);
-  if (item === null) return null;
-  const where = findPaneContext(state, item.id);
-  if (where === null) return null;
+  const previewing = leaf.active === PREVIEW_TAB;
+  const item = previewing ? null : findPane(state, leaf.active);
+  if (!previewing && item === null) return null;
+  const where = item === null ? null : findPaneContext(state, item.id);
+  if (!previewing && where === null) return null;
+  // 落とし先はセルそのもの。選んでいるタブを印にすると、プレビューだけのセルも
+  // 同じ落とし先の決め方で扱える。
+  const dropId = leaf.active;
   const tabs = tabRows(state, leaf.tabs);
   const isCurrent = focused !== null && leaf === focused;
-  const previewTab =
-    preview.inTab && preview.target !== null && preview.leaf === leaf
-      ? { name: messageFileLabel(preview.target.file.name), selected: preview.target.shown }
-      : null;
   // クリックしたセルを current にする。Herdr のフォーカスに追従させると、
-  // HWC から動かせないセルが current のままになる。
+  // HWC から動かせないセルが current のままになる。プレビューだけの面は
+  // ペインを持たないので、クリックで active を戻さない。
   const activate = () => {
+    if (item === null) return;
     if (!isCurrent) actions.select(item.id);
   };
   // 見出しの focus() などプログラム的なフォーカスで current を動かさない。
@@ -266,10 +277,10 @@ function Cell(props: CellProps) {
     if (!(target instanceof Element)) return;
     if (target.closest(".hwc-pane-head") === null) return;
     if (target.closest(OPERABLE_ELEMENTS) !== null) return;
-    actions.startPaneDrag(event, item.id);
+    actions.startPaneDrag(event, item?.id ?? dropId);
   };
   const target =
-    dragging?.target?.kind === "cell" && dragging.target.pane === item.id ? dragging.target : null;
+    dragging?.target?.kind === "cell" && dragging.target.pane === dropId ? dragging.target : null;
   const tabDrop =
     dragging?.target?.kind === "tab" && leaf.tabs.includes(dragging.target.pane)
       ? { pane: dragging.target.pane, side: dragging.target.side }
@@ -278,10 +289,10 @@ function Cell(props: CellProps) {
     <section
       class="hwc-split-cell"
       data-compact={compact}
-      data-drop-pane={item.id}
+      data-drop-pane={dropId}
       data-drop-parent={parentDir ?? undefined}
       data-flip-cell={leaf.id}
-      data-split-enter={item.id === entering ? "true" : undefined}
+      data-split-enter={dropId === entering ? "true" : undefined}
       key={leaf.id}
       onPointerDown={(event) => {
         activate();
@@ -293,25 +304,39 @@ function Cell(props: CellProps) {
         leaf={leaf}
         tabs={tabs}
         focused={isCurrent}
-        preview={previewTab}
         status={context.wide ? null : context.detailStatus}
-        droppable={!preview.previewing}
         tabDrop={tabDrop}
         context={context}
         actions={actions}
       />
       <div
         class="hwc-cell-body"
-        data-leaving={context.leavingPaneId === item.id ? "true" : undefined}
+        data-leaving={
+          context.leavingPaneId !== null && context.leavingPaneId === leaf.active
+            ? "true"
+            : undefined
+        }
       >
-        <PaneBody
-          pane={item}
-          where={where}
-          compact={compact}
-          current={isCurrent}
-          context={context}
-          actions={actions}
-        />
+        {previewing ? (
+          preview === null ? null : (
+            <Preview
+              key={`${preview.paneId}:${preview.file.name}@${preview.file.version}`}
+              paneId={preview.paneId}
+              file={preview.file}
+              onClose={actions.closePreview}
+            />
+          )
+        ) : item !== null && where !== null ? (
+          <PaneBody
+            pane={item}
+            where={where}
+            compact={compact}
+            current={isCurrent}
+            context={context}
+            actions={actions}
+          />
+        ) : null}
+        {dragging === null ? null : <div class="hwc-cell-drag" aria-hidden="true" />}
       </div>
       {target === null ? null : (
         <div class="hwc-drop" data-zone={target.zone} aria-hidden="true">
@@ -336,38 +361,5 @@ export function CellTree(props: CellTreeProps): ComponentChildren {
         <CellTree node={child} parentDir={node.dir} context={context} actions={actions} />
       ))}
     </div>
-  );
-}
-
-// プレビューは一時タブのまま。対象のペインがある葉のタブ列の末尾に 1 枚だけ出し、
-// 本文だけをファイルの表示に差し替える。
-export function PreviewCell(props: { context: CellContext; actions: CellActions }) {
-  const { context, actions } = props;
-  const { state, preview, focused } = context;
-  const leaf = preview.leaf;
-  const target = preview.target;
-  if (state === null || leaf === null || target === null || !preview.previewing) return null;
-  return (
-    <>
-      <CellTabs
-        leaf={leaf}
-        tabs={tabRows(state, leaf.tabs)}
-        focused={leaf === focused}
-        preview={{ name: messageFileLabel(target.file.name), selected: target.shown }}
-        status={context.detailStatus}
-        droppable={false}
-        tabDrop={null}
-        context={context}
-        actions={actions}
-      />
-      <div class="hwc-detail-body">
-        <Preview
-          key={`${target.paneId}:${target.file.name}@${target.file.version}`}
-          paneId={target.paneId}
-          file={target.file}
-          onClose={actions.closePreview}
-        />
-      </div>
-    </>
   );
 }

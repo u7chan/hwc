@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import {
   EMPTY_SPLIT_VIEW,
   MAX_LEAVES,
+  PREVIEW_TAB,
+  activatePreviewTab,
   activePanes,
   canDrop,
   clearCurrent,
@@ -14,9 +16,11 @@ import {
   multiSpace,
   normalizeSplitView,
   openPane,
+  openPreviewTab,
   openTabs,
   parseSplitView,
   readingOrder,
+  removePreviewTab,
   removeTab,
   serializeSplitView,
   startSplitView,
@@ -579,4 +583,114 @@ test("a list drag on touch starts only toward the cell", () => {
   expect(startsPaneDrag("touch", true, 10, 2)).toBe(true);
   // 一覧以外（タブ・セルの見出し）は縦の移動でも始められる。
   expect(startsPaneDrag("touch", false, 0, 10)).toBe(true);
+});
+
+test("the preview opens at the end of its pane's leaf and stays a tab there", () => {
+  const shown = openPreviewTab(view("a", leaf(["a"], "a")), "a");
+  expect(plainNode(shown.layout)).toEqual(plainNode(leaf(["a", PREVIEW_TAB], PREVIEW_TAB)));
+  expect(shown.current).toBe("a");
+  // もう一度開いても、置いた葉を動かさずに選び直す。
+  expect(plainNode(openPreviewTab(shown, "a").layout)).toEqual(plainNode(shown.layout));
+});
+
+test("the preview stays where it was split when opened from another pane", () => {
+  const layout = row(leaf(["a"], "a"), leaf(["b", PREVIEW_TAB], PREVIEW_TAB));
+  const next = openPreviewTab(view("a", layout), "a");
+  expect(plainNode(next.layout)).toEqual(plainNode(layout));
+  expect(next.current).toBe("a");
+  expect(leafOfPane(next.layout, "a")?.active).toBe("a");
+  expect(leafOfPane(next.layout, PREVIEW_TAB)?.active).toBe(PREVIEW_TAB);
+});
+
+test("a narrow screen moves the preview into the pane's leaf", () => {
+  const layout = row(leaf(["a"], "a"), leaf(["b", PREVIEW_TAB], PREVIEW_TAB));
+  const next = openPreviewTab(view("a", layout), "a", true);
+  expect(plainNode(next.layout)).toEqual(
+    plainNode(row(leaf(["a", PREVIEW_TAB], PREVIEW_TAB), leaf(["b"]))),
+  );
+  expect(next.current).toBe("a");
+});
+
+test("selecting the preview moves current into its leaf only when a pane is there", () => {
+  const split = row(leaf(["a", PREVIEW_TAB], "a"), leaf(["b"], "b"));
+  const next = activatePreviewTab(view("b", split));
+  expect(leafOfPane(next.layout, PREVIEW_TAB)?.active).toBe(PREVIEW_TAB);
+  expect(next.current).toBe("a");
+  // プレビューだけの葉にはペインが無いので、current は他の葉のまま。
+  const alone = activatePreviewTab(
+    view("b", row(leaf([PREVIEW_TAB], PREVIEW_TAB), leaf(["b"], "b"))),
+  );
+  expect(alone.current).toBe("b");
+  expect(leafOfPane(alone.layout, PREVIEW_TAB)?.active).toBe(PREVIEW_TAB);
+});
+
+test("closing the preview keeps the pane's leaf and its active tab", () => {
+  const shown = view("a", leaf(["a", PREVIEW_TAB], PREVIEW_TAB));
+  const next = removePreviewTab(shown);
+  expect(plainNode(next.layout)).toEqual(plainNode(leaf(["a"], "a")));
+  expect(next.current).toBe("a");
+});
+
+test("closing a preview-only leaf collapses it and leaves current elsewhere", () => {
+  const shown = view("a", row(leaf(["a"], "a"), leaf([PREVIEW_TAB], PREVIEW_TAB)));
+  const next = removePreviewTab(shown);
+  expect(plainNode(next.layout)).toEqual(plainNode(leaf(["a"], "a")));
+  expect(next.current).toBe("a");
+});
+
+test("the preview tab can be dragged to a new leaf", () => {
+  const shown = openPreviewTab(view("a", leaf(["a"], "a")), "a");
+  const next = dropOnPane(shown, PREVIEW_TAB, "a", "right");
+  expect(plainNode(next.layout)).toEqual(
+    plainNode(row(leaf(["a"], "a"), leaf([PREVIEW_TAB], PREVIEW_TAB))),
+  );
+  // 分割の直後はプレビューが current になるので、App が元のペインへ戻す。
+  expect(next.current).toBe(PREVIEW_TAB);
+});
+
+test("the preview tab can receive a pane at an edge or in the center", () => {
+  const shown = view("a", row(leaf(["a"], "a"), leaf(["b", PREVIEW_TAB], "b")));
+  const split = dropOnPane(shown, "a", PREVIEW_TAB, "right");
+  expect(plainNode(split.layout)).toEqual(
+    plainNode(row(leaf(["b", PREVIEW_TAB], "b"), leaf(["a"], "a"))),
+  );
+  const center = dropOnPane(shown, "a", PREVIEW_TAB, "center");
+  expect(plainNode(center.layout)).toEqual(plainNode(leaf(["b", PREVIEW_TAB, "a"], "a")));
+});
+
+test("activePanes skips the preview tab", () => {
+  const shown = view("a", row(leaf(["a", PREVIEW_TAB], PREVIEW_TAB), leaf(["b"], "b")));
+  expect(activePanes(shown)).toEqual(["b"]);
+  expect(openTabs(shown)).toEqual(["a", PREVIEW_TAB, "b"]);
+});
+
+test("a restored preview tab is kept only while the caller knows it", () => {
+  const saved = parseSplitView(
+    `{"current":"a","layout":{"kind":"leaf","tabs":["a","${PREVIEW_TAB}"],"active":"${PREVIEW_TAB}"}}`,
+  );
+  expect(leafOfPane(saved.layout, PREVIEW_TAB)).not.toBeNull();
+  expect(plainNode(normalizeSplitView(saved, () => true).layout)).toEqual(
+    plainNode(leaf(["a", PREVIEW_TAB], PREVIEW_TAB)),
+  );
+  expect(plainNode(normalizeSplitView(saved, (id) => id !== PREVIEW_TAB).layout)).toEqual(
+    plainNode(leaf(["a"], "a")),
+  );
+});
+
+test("current keeps a preview selected in its leaf", () => {
+  const shown = view("a", leaf(["a", PREVIEW_TAB], PREVIEW_TAB));
+  expect(plainNode(normalizeSplitView(shown, () => true).layout)).toEqual(
+    plainNode(leaf(["a", PREVIEW_TAB], PREVIEW_TAB)),
+  );
+});
+
+test("the close confirmation successor skips the preview", () => {
+  expect(successorTab(view("a", leaf(["a", PREVIEW_TAB], "a")), "a")).toBeNull();
+  expect(successorTab(view("a", leaf(["a", "b", PREVIEW_TAB], "a")), "a")).toBe("b");
+});
+
+test("removing the current pane does not make the preview current", () => {
+  const next = removeTab(view("a", leaf(["a", PREVIEW_TAB], "a")), "a");
+  expect(plainNode(next.layout)).toEqual(plainNode(leaf([PREVIEW_TAB], PREVIEW_TAB)));
+  expect(next.current).toBeNull();
 });
