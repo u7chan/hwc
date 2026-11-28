@@ -132,6 +132,15 @@
   white-space: nowrap;
 }
 
+/* 省略しない。末尾が分かれ目になるので、切らずに折り返して全文を読ませる。 */
+.hwc-menu-space-branch {
+  color: var(--color-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-secondary);
+  line-height: var(--line-body);
+  overflow-wrap: anywhere;
+}
+
 .hwc-menu-space-path {
   overflow: hidden;
   color: var(--color-secondary);
