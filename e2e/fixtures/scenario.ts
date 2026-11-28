@@ -70,6 +70,8 @@ function claudeEntries(
     assistant: (messageId: string, blocks: unknown[], extra?: ClaudeEntry) => void;
     // uuid を持たない api-request の行。parentUuid は直前の entry のまま。
     request: (id: string, at: string) => void;
+    // 圧縮の境界と、その子の要約。実機と同じく、境界は parentUuid を持たない。
+    compact: (preTokens: number, summary: string) => void;
     other: (entry: ClaudeEntry) => void;
   }) => void,
 ): ClaudeEntry[] {
@@ -98,6 +100,23 @@ function claudeEntries(
     user(content, extra = {}) {
       push({ ...next(), type: "user", message: { role: "user", content }, ...extra });
     },
+    compact(preTokens, summary) {
+      const previous = parentUuid;
+      push({
+        ...next(),
+        type: "system",
+        subtype: "compact_boundary",
+        parentUuid: null,
+        logicalParentUuid: previous,
+        compactMetadata: { trigger: "auto", preTokens },
+      });
+      push({
+        ...next(),
+        type: "user",
+        isCompactSummary: true,
+        message: { role: "user", content: summary },
+      });
+    },
     assistant(messageId, blocks, extra = {}) {
       push({
         ...next(),
@@ -124,7 +143,7 @@ function claudeEntries(
 }
 
 function claudeChatTranscript(): ClaudeEntry[] {
-  return claudeEntries(({ user, assistant, request, other }) => {
+  return claudeEntries(({ user, assistant, request, other, compact }) => {
     // 500 件の上限を超える長い履歴。先頭が truncated になり、末尾だけが Web に出る。
     for (let index = 1; index <= 248; index += 1) {
       user(`確認 ${index} の結果をまとめてください。`);
@@ -224,6 +243,21 @@ function claudeChatTranscript(): ClaudeEntry[] {
     assistant("msg-review-3", [
       { type: "text", text: "2 点を反映しました。手順の差分は次のとおりです。" },
     ]);
+    // ここで 1 回圧縮している。区切りの後ろは、キャッシュを確かめる最後の 1 往復だけになる。
+    // 要約の前置きは実物と同じ形にして、hwc が落とすことを目で確かめられるようにする。
+    compact(
+      412_000,
+      [
+        "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.",
+        "",
+        "<system-reminder>",
+        "<tools-used-before-summary>Read</tools-used-before-summary>",
+        "</system-reminder>",
+        "Summary:",
+        "1. クイックスタートの手順を見直している。",
+        "2. 依頼は「セットアップ」から直すこと。",
+      ].join("\n"),
+    );
     // 1h キャッシュの残り時間を確かめるための、直近の完了応答（[E2E](../e2e.md)）。
     // 要求は 5 分前に送った形にして、開いたときにおよそ 55 分から始まるようにする。
     request("api-quickstart-cache", new Date(Date.now() - 5 * 60_000).toISOString());
