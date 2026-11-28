@@ -59,6 +59,12 @@ const removeOnAuxClick =
     remove();
   };
 
+// タブ列は横にあふれるとスクロール容器になり、その上の中クリックはブラウザの
+// オートスクロールを始める。始まると auxclick が届かず外せないので、mousedown で止める。
+const suppressAutoscroll = (event: MouseEvent): void => {
+  if (event.button === 1) event.preventDefault();
+};
+
 // セルの上端のタブ列。開いたペインの履歴を並べ、タブから外す入口を添える。
 export function TabBar(props: TabBarProps) {
   const tabList = useRef<HTMLDivElement>(null);
@@ -143,6 +149,7 @@ export function TabBar(props: TabBarProps) {
         data-tab-list={props.leafId}
         data-drop-list={props.droppable ? "true" : undefined}
         data-drop-leaf={props.tabs[0]?.pane.id}
+        onMouseDown={suppressAutoscroll}
         ref={tabList}
       >
         {props.tabs.map((item) => {
