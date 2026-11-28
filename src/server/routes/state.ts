@@ -1,9 +1,10 @@
 import { streamSSE } from "hono/streaming";
+import { parseActiveOrderBody } from "../active-order";
 import type { AppState } from "../herdr/state";
 import type { AppContext, PlainContext } from "./context";
 
 export function createStateHandlers(ctx: AppContext) {
-  const { store, revision, sseHeartbeatMs, current, resolveState } = ctx;
+  const { store, revision, sseHeartbeatMs, current, resolveState, activeOrder } = ctx;
 
   // 「今」は状態ではなく送信時に決める。状態に持たせると、キャッシュされた状態に古い時刻が
   // 残り、状態が動かない間は経過が止まって見える。クライアントはこの now で時計を合わせる。
@@ -24,6 +25,21 @@ export function createStateHandlers(ctx: AppContext) {
       } catch {
         return c.json({ error: "herdr_unavailable" }, 502);
       }
+      return c.json({ ok: true });
+    },
+    // アクティブ一覧の並びは Herdr の状態ではなく hwc の見え方。保存したら手元の状態を
+    // 配り直し、全端末を同じ順にする（docs/adr/state-storage.md）。
+    setActiveOrder: async (c: PlainContext) => {
+      const body = await c.req.json().catch(() => null);
+      const parsed = parseActiveOrderBody(body);
+      if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+      try {
+        activeOrder.save(parsed.value);
+      } catch {
+        // 保存できなければ並びは変えない。画面には古い順が残る。
+        return c.json({ error: "settings_unavailable" }, 500);
+      }
+      store.republish();
       return c.json({ ok: true });
     },
     events: (c: PlainContext) =>

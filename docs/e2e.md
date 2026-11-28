@@ -14,22 +14,22 @@ bun run e2e:serve
 
 ## 実環境との分離
 
-| 対象                                                               | 実環境                                              | E2E                                                                                                                                                                                                           |
-| ------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Herdr ソケット                                                     | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                                                                                                                |
-| pi セッション                                                      | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                                                                                                           |
-| pi モデルカタログ                                                  | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                                                                                                              |
-| pi モデル・effort・上限                                            | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                                                                                                                |
-| GitHub の PR                                                       | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                                                                                                                  |
-| Codex App Server                                                   | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない                                                                                            |
-| OpenCode サービス                                                  | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける。`<root>/bin/opencode` が `e2e/fake-opencode-cli.ts` を起動し、`service start` だけを受けて架空サービスの接続情報を戻す。実 OpenCode のサービスは起動しない |
-| Claude の transcript                                               | `~/.claude/projects/<project>/<session uuid>.jsonl` | `CLAUDE_CONFIG_DIR` を `<root>/claude` へ向け、fixture が架空の transcript と添付を書く                                                                                                                       |
-| Claude のモデルラベル                                              | `claude --print` の `list_models`                   | `<root>/bin/claude` が `e2e/fake-claude.ts` を起動し、架空の alias 解決だけを返す。実 CLI は起動しない                                                                                                        |
-| ブランチ                                                           | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                                                                                                |
-| git のリモートと差                                                 | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す                                                                                |
-| 状態ディレクトリ（添付・ペイン時刻・通知設定・新しいペインの既定） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                                                                                                    |
-| Discord Webhook（通知のテスト・自動送信）                          | 実 Discord のチャンネル                             | `HWC_E2E_DISCORD_WEBHOOK_SINK` を一時ファイルへ向け、POST せず送信内容を追記する                                                                                                                              |
-| ポート                                                             | 30000                                               | 31000                                                                                                                                                                                                         |
+| 対象                                                                                     | 実環境                                              | E2E                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Herdr ソケット                                                                           | `~/.config/herdr/herdr.sock`                        | `HERDR_SOCKET_PATH` を一時ディレクトリへ向ける                                                                                                                                                                |
+| pi セッション                                                                            | 実セッションの JSONL                                | `e2e/fixtures/scenario.ts` が一時ディレクトリへ書く                                                                                                                                                           |
+| pi モデルカタログ                                                                        | 各 agent dir の `models-store.json` / `models.json` | 同 fixture が `<root>/agent/models-store.json` へ書く。上書き設定もこの架空 agent dir だけに置く                                                                                                              |
+| pi モデル・effort・上限                                                                  | `pi --offline --list-models` / RPC                  | `<root>/bin/pi` が `e2e/fake-pi.ts` を起動する。E2E の `PATH` の先頭に置き、実 Pi は起動しない                                                                                                                |
+| GitHub の PR                                                                             | 実リポジトリの remote と `gh` の認証                | `<root>/bin/gh` が `e2e/fake-gh.ts` を起動し、ブランチごとの架空の PR を返す                                                                                                                                  |
+| Codex App Server                                                                         | `codex app-server --stdio`                          | `<root>/bin/codex` が `e2e/fake-codex.ts` を起動する。`CODEX_HOME` も `<root>/codex` に向け、実 Codex は起動しない                                                                                            |
+| OpenCode サービス                                                                        | `~/.local/state/opencode/service.json`              | `HWC_OPENCODE_SERVICE` を一時ディレクトリへ向ける。`<root>/bin/opencode` が `e2e/fake-opencode-cli.ts` を起動し、`service start` だけを受けて架空サービスの接続情報を戻す。実 OpenCode のサービスは起動しない |
+| Claude の transcript                                                                     | `~/.claude/projects/<project>/<session uuid>.jsonl` | `CLAUDE_CONFIG_DIR` を `<root>/claude` へ向け、fixture が架空の transcript と添付を書く                                                                                                                       |
+| Claude のモデルラベル                                                                    | `claude --print` の `list_models`                   | `<root>/bin/claude` が `e2e/fake-claude.ts` を起動し、架空の alias 解決だけを返す。実 CLI は起動しない                                                                                                        |
+| ブランチ                                                                                 | 実リポジトリの `.git/HEAD`                          | 一時ディレクトリの `.git/HEAD`                                                                                                                                                                                |
+| git のリモートと差                                                                       | 実リポジトリの remote と認証                        | `<root>/bin/git` が `e2e/fake-git.ts` を起動し、`<root>/git-state.json` の架空の remote URL / upstream / ahead / behind を返す                                                                                |
+| 状態ディレクトリ（添付・ペイン時刻・通知設定・新しいペインの既定・アクティブ一覧の並び） | `~/.local/state/hwc`                                | `HWC_STATE_DIR` を一時ディレクトリへ向ける                                                                                                                                                                    |
+| Discord Webhook（通知のテスト・自動送信）                                                | 実 Discord のチャンネル                             | `HWC_E2E_DISCORD_WEBHOOK_SINK` を一時ファイルへ向け、POST せず送信内容を追記する                                                                                                                              |
+| ポート                                                                                   | 30000                                               | 31000                                                                                                                                                                                                         |
 
 `e2e/serve.ts` が架空 Herdr を起動してから `src/server.ts` を読み込む。BFF とクライアントは本番コードのままで、ソケット経路・状態同期・チャット読み取りを通る。実 Herdr のソケットには接続しない。
 
@@ -333,7 +333,7 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 ### 帯からすべてへ移る
 
 1. `すべて` で `acme-dashboard` のリポジトリ束を畳む。
-2. `アクティブ` に切り替える。帯の名前・ブランチ・件数を押しても何も起きず、`すべて` に切り替わらない。`すべて` へ移れるのは右端の → だけ。
+2. `アクティブ` に切り替える。帯の名前・ブランチ・件数を押しても（動かさなければ）何も起きず、`すべて` に切り替わらない。`すべて` へ移れるのは右端の → だけ。
 3. → にポインタを載せると、矢印の 32px の枠だけが塗られ、矢印が `accent` になる。名前とブランチは変わらない。
 4. `acme-dashboard (docs)` の帯の → を押す。
 5. `すべて` に切り替わり、リポジトリ束・`acme-dashboard (docs)` のスペース・代表タブが開き、`docs` の見出しが見える。見出し行には `accent` の枠が付く。一覧の終わりが近くて見出しを上端まで送れないときも、上端で行を半分に切らず、切れていた行の先頭から見せる。
@@ -378,15 +378,29 @@ PC 幅で会話本文を選ぶと、選択範囲の上に「返信」と「コ�
 2. `scratch` の見出しを長押しする（PC は見出しを少しドラッグする）。掴んだ束のカードが破線の青い枠で囲まれ、見出しは読める濃さのまま中身が淡くなり、指の近くに束の名前が出る。落とし先の境界に「ここに移動」の線が出る。破線はカードの角丸に沿う。ラベルは指の反対側に出て、追従するガイドと重なっても手前に残る。
 3. `acme-dashboard` の上へ落とす。`scratch` が新しい位置へ動くアニメーションが見え、先頭へ移る。架空 Herdr の並びも変わる。
 4. `acme-dashboard` の見出しにフォーカスし、`↓` を押すと 1 つ下がる。`↑` で戻る。
-5. 同じ位置へ落としても通信しない。`アクティブ` に切り替えても、同じ Herdr の順で帯が並ぶ。
+5. 同じ位置へ落としても通信しない。`アクティブ` に切り替える。並びを変えていなければ、同じ Herdr の順で帯が並ぶ。
 6. 失敗時は `/api/workspaces/move` に 502 を返して確かめる。一覧は Herdr の順のままで、上部に「並べ替えを保存できませんでした。」が出る。
 7. 動きを減らす設定（`prefers-reduced-motion: reduce`）では、落とした後のアニメーションが出ないことを確かめる。
+
+### アクティブの帯を並べ替える
+
+アクティブ一覧の帯の順は Herdr の並びではなく、hwc が持つ読み順。順は BFF の状態ディレクトリに残り、全端末で同じになる。
+
+1. `アクティブ` を開く。並べ替えていなければ、帯は Herdr の順（`acme-dashboard` の 3 スペース、`scratch`、`plain-checkout`）で並ぶ。
+2. 先頭の帯の見出しを長押しする（PC は見出しを少しドラッグする）。その帯の行だけが淡くなり、帯の見出しは読める濃さのまま、指の近くに帯の名前（PR があればタイトル）が出る。落とし先の境界に「ここに移動」の線が出る。リポジトリ名と PR のチップはリンクなので、そこからは掴まない（押すとリンクが開く）。
+3. `scratch` の上へ落とす。帯が行ごと新しい位置へ動くアニメーションが見え、動いた帯はしばらく影で浮かぶ。
+4. 同じ位置へ落としても通信しない。
+5. 再読み込みする。並びは変わらない。`localStorage` を共有しない別のブラウザ（シークレットウィンドウなど）で `アクティブ` を開いても同じ順で、片方で並べ替えるともう片方も読み直さずに同じ順へ変わる。
+6. `すべて` に切り替えても、ツリーの並びは Herdr のままで変わらない。`すべて` で並べ替えても、`アクティブ` の順は変わらない。
+7. 並べ替えたあとにワークツリーを作る。新しい帯は並びの末尾に入る。
+8. 失敗時は `/api/active-order` に 500 を返して確かめる。並びは変わらず、上部に「並べ替えを保存できませんでした。」が出る。
+9. `prefers-reduced-motion: reduce` では、落とした後のアニメーションが出ない。
 
 ### メニューから先頭へ移動
 
 1. `すべて` を開き、先頭以外の束の見出しメニューを開く。「先頭へ移動」があり、先頭の束のメニューには出ない。
-2. 押すとメニューが閉じ、その束が先頭へ 220ms で滑り、動いた束はしばらく影で浮かぶ。`アクティブ` に切り替えても同じ先頭にある。
-3. `アクティブ` の帯のアイコンから同じメニューを開いても同じ。`acme-dashboard (checks)` の帯で押すと、同じリポジトリの `acme-dashboard` と `acme-dashboard (docs)` も束ごと先頭へ上がる。
+2. 押すとメニューが閉じ、その束が先頭へ 220ms で滑り、動いた束はしばらく影で浮かぶ。`アクティブ` の並びを変えていなければ、`アクティブ` でも同じ先頭にある。
+3. `アクティブ` の帯のアイコンから開くメニューには「先頭へ移動」が無い（並べ替えはドラッグで行う）。`すべて` の `acme-dashboard (checks)` の見出しメニューから押すと、同じリポジトリの `acme-dashboard` と `acme-dashboard (docs)` も束ごと先頭へ上がる。
 4. 一覧を下までスクロールしてから押すと、先頭へ寄せて移動先の帯が見える。
 5. 失敗時は `/api/workspaces/move` に 502 を返して確かめる。「並べ替えを保存できませんでした。」が出て、並びは変わらない。
 6. `prefers-reduced-motion: reduce` では滑らないが、位置は先頭へ変わる。

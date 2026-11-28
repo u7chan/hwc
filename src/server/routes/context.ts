@@ -31,6 +31,7 @@ import type { ClaudeModelLabelsReader } from "../claude-model-labels";
 import { createModelSwitcher, hasLocalCommandOutputs } from "../model-switch";
 import type { ClaudeSettingsProvider } from "../create-pane";
 import { defaultAttachmentsRoot } from "../attachments";
+import { createActiveOrderStore, type ActiveOrderStore } from "../active-order";
 
 // Bun.serve は 10 秒間何も書かれない chunked 応答を打ち切る。状態が変わらない間も接続を
 // 保つため、これより短い間隔でハートビートを送る。
@@ -98,6 +99,8 @@ export type CreateAppOptions = {
   templates?: TemplatesStore;
   // 新しいペインの既定モデル・effort の保存先。テストでは実ファイルへ書かないよう差し替える。
   launchDefaults?: LaunchDefaultsStore;
+  // アクティブ一覧の並び。全端末で共有するので BFF が状態ディレクトリに持つ。
+  activeOrder?: ActiveOrderStore;
   // 設定画面の候補を読むディレクトリ。テストでは実ホームを渡さないよう差し替える。
   homeDirectory?: string;
   // グローバルスキルを探すホーム。E2E では架空のホームへ振り向け、実ホームのスキルを画面に出さない。
@@ -133,6 +136,7 @@ export function createAppContext(options: CreateAppOptions) {
     editMarkerTimeoutMs = 10_000,
     templates = createTemplatesStore({ read: () => null, write: () => {} }),
     launchDefaults = createLaunchDefaultsStore({ read: () => null, write: () => {} }),
+    activeOrder = createActiveOrderStore({ read: () => null, write: () => {} }),
     homeDirectory = homedir(),
     skillsHome = homeDirectory,
     loadPiDefaults: readPiDefaults = loadPiDefaults,
@@ -231,6 +235,7 @@ export function createAppContext(options: CreateAppOptions) {
     editMarkerTimeoutMs,
     templates,
     launchDefaults,
+    activeOrder,
     homeDirectory,
     skillsHome,
     current,

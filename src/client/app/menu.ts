@@ -26,7 +26,8 @@ export type MenuView = {
   canCreateWorktree: boolean;
   canCloseSpace: boolean;
   // 並びの正は Herdr。メニューはその移動を 1 タップで呼ぶだけで、hwc 側に順序は持たない。
-  // 既に先頭の束には項目を出さない。
+  // 既に先頭の束には項目を出さない。ただしアクティブ一覧は hwc の並びが正なので、
+  // そこから開いたメニューには出さない（並べ替えはドラッグで行う）。
   canMoveToTop: boolean;
 };
 
@@ -82,6 +83,7 @@ export function menuView(input: MenuViewInput): MenuView {
     canCreateWorktree: worktree !== null && !worktree.isLinkedWorktree,
     canCloseSpace: workspace !== null && canCloseSpace(state, workspace.id),
     canMoveToTop:
+      menu.listScope !== "active" &&
       workspace !== null &&
       moveToTopPlan(
         orderUnits(groupWorkspaces(state.workspaces), state.workspaces),

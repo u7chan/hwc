@@ -43,6 +43,7 @@ function app(...workspaces: WorkspaceState[]): AppState {
     focusedWorkspaceId: null,
     focusedTabId: null,
     focusedPaneId: null,
+    activeOrder: [],
     workspaces,
     times: NO_TIMES,
   };

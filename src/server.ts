@@ -30,16 +30,20 @@ import {
 import { createRestartSettingsFile, createRestartSettingsStore } from "./server/restart";
 import { createTemplatesFile, createTemplatesStore } from "./server/templates";
 import { createLaunchDefaultsFile, createLaunchDefaultsStore } from "./server/launch-defaults";
+import { createActiveOrderFile, createActiveOrderStore } from "./server/active-order";
 import index from "../index.html";
 
 const stateRoot = defaultStateRoot();
 const git = createGitClient();
+// アクティブ一覧の並びは Herdr の状態ではない。SSE の状態と保存の両方から同じものを読む。
+const activeOrder = createActiveOrderStore(createActiveOrderFile(stateRoot));
 const store = createStateStore({
   load: () => loadSnapshot(),
   branch: createBranchReader(),
   git,
   // 添付と同じ状態ディレクトリ。実ホームを汚さないよう E2E では HWC_STATE_DIR で振り向ける。
   times: createPaneTimesFile(stateRoot),
+  activeOrder,
 });
 
 const pullRequests = createPullRequestReader();
@@ -97,6 +101,7 @@ const app = createApp({
   restartSettings,
   templates,
   launchDefaults,
+  activeOrder,
   // E2E 専用。実ホームのスキルを画面に出さず、架空のホームを読む（docs/e2e.md）。
   skillsHome: process.env.HWC_SKILLS_HOME,
 });

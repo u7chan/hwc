@@ -932,3 +932,59 @@ test("a break marked while a load runs still applies to the reload that follows"
   expect(times?.workingSince).toEqual({});
   expect(times?.finishedAt).toEqual({});
 });
+
+test("the saved active order rides on the state, limited to spaces that still exist", async () => {
+  const store = createStateStore({
+    load: async () => snapshot,
+    activeOrder: { get: () => ["w2", "gone", "w1"] },
+  });
+
+  await store.refresh();
+
+  // 閉じたスペースの id は載せない。並びのファイルには残っても、一覧は state で描ける。
+  expect(store.get()?.activeOrder).toEqual(["w2", "w1"]);
+});
+
+test("an unsaved order leaves the bands in the Herdr order", async () => {
+  const store = createStateStore({ load: async () => snapshot, activeOrder: { get: () => [] } });
+
+  await store.refresh();
+
+  expect(store.get()?.activeOrder).toEqual([]);
+});
+
+test("republish shares a new order without reading Herdr again", async () => {
+  let order: readonly string[] = [];
+  let loads = 0;
+  const store = createStateStore({
+    load: async () => {
+      loads += 1;
+      return snapshot;
+    },
+    activeOrder: { get: () => order },
+  });
+  const seen: Array<{ order: readonly string[]; observed: boolean }> = [];
+  store.onChange((state, observed) => seen.push({ order: state.activeOrder, observed }));
+  await store.refresh();
+
+  order = ["w2", "w1"];
+  store.republish();
+
+  expect(loads).toBe(1);
+  expect(store.get()?.activeOrder).toEqual(["w2", "w1"]);
+  // 並びだけの変化は遷移ではない。終了時刻や通知の判定に観測済みとして渡さない。
+  expect(seen).toEqual([
+    { order: [], observed: false },
+    { order: ["w2", "w1"], observed: false },
+  ]);
+});
+
+test("republish does nothing before the first state arrives", () => {
+  const { store } = createControlledStore();
+  const seen: unknown[] = [];
+  store.onChange((state) => seen.push(state));
+
+  store.republish();
+
+  expect(seen).toEqual([]);
+});

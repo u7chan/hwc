@@ -18,6 +18,7 @@ function stateFor(tabs: PaneState[][]): AppState {
     focusedWorkspaceId: null,
     focusedTabId: null,
     focusedPaneId: null,
+    activeOrder: [],
     times: NO_TIMES,
     workspaces: [
       {

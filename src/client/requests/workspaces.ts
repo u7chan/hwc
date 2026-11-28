@@ -166,6 +166,21 @@ export async function moveWorkspaceBlock(
   }
 }
 
+// 並びは Herdr の状態ではなく hwc の見え方。保存先は BFF なので、全端末で同じ順になる。
+export const ACTIVE_ORDER_TIMEOUT_MS = 10_000;
+
+export async function saveActiveOrder(workspaceIds: readonly string[]): Promise<boolean> {
+  try {
+    const response = await client.api["active-order"].$put(
+      { json: { workspaceIds: [...workspaceIds] } },
+      { init: { signal: AbortSignal.timeout(ACTIVE_ORDER_TIMEOUT_MS) } },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ワークツリー作成は worktree.create の待ちを含む。ここを短くすると、作成済みの
 // ワークツリーを見失って再送してしまう。エージェントの起動はこの応答に含めない。
 export const CREATE_WORKTREE_TIMEOUT_MS = 120_000;

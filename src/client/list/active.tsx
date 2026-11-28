@@ -1,5 +1,7 @@
-import type { PaneState } from "../../server/herdr/state";
+import type { PaneState, WorkspaceState } from "../../server/herdr/state";
 import type { PullRequest } from "../../shared/pull-request";
+import { useLayoutEffect, useRef } from "preact/hooks";
+import { DragGhost } from "../DragGhost";
 import {
   AgentGlyphIcon,
   AgentIcon,
@@ -11,6 +13,8 @@ import {
 } from "../icons";
 import { GitCount } from "../GitCount";
 import { MENU_ID } from "../Menu";
+import { isOrderChange, reorderKeys } from "../order";
+import { useOrderDrag, useOrderDropGuide } from "../order-drag";
 import { ParentMark } from "../ParentMark";
 import { showsTabName, type ActiveGroup, type ActiveStatus } from "../scope";
 import {
@@ -26,7 +30,7 @@ import {
 import { StatusIcon } from "../StatusLabel";
 import { finishedClock, formatElapsed, workingMs } from "../time";
 import { WorkspaceGlyph } from "./groups";
-import type { PaneListProps } from "./types";
+import type { ListFeedback, PaneListProps } from "./types";
 
 export function NoPanes() {
   return (
@@ -84,18 +88,35 @@ function ActiveCount(props: { status: ActiveStatus; count: number }) {
   );
 }
 
+type BandDragProps = {
+  onPointerDown: (event: PointerEvent) => void;
+  onPointerMove: (event: PointerEvent) => void;
+  onPointerUp: (event: PointerEvent) => void;
+  onPointerCancel: (event: PointerEvent) => void;
+  onLostPointerCapture: (event: PointerEvent) => void;
+  onClickCapture: (event: MouseEvent) => void;
+  onContextMenu: (event: MouseEvent) => void;
+};
+
+// 帯の見出し。PR があればタイトルを先頭に置き、名前は矢印の読み上げとツリーに残す。
+function bandHeading(workspace: WorkspaceState, pullRequest: PullRequest | null): string {
+  return pullRequest?.title ?? workspace.label;
+}
+
 // 帯は場所。行はペイン。同じワークツリーの行を束ね、スクロール中も場所を見失わないよう
 // 上端に貼り付ける。状態の件数は束全体の量で、行の右端はそのペインの時刻。
 // 場所の記号は行の親を示す目印にする。子の段はこのアイコンの中心から線でつなぐ。
 // 帯は「すべて」のその場所へ移る入口だが、`すべて` へ移れるのは右端の矢印だけにする。帯の大半は
 // 読むための面なので、触れただけで移ると誤操作になる。ツリーの行末は同じ向きのシェブロンで
 // 開閉するため、同じ記号にするとどちらも「進む／開く」に見えて意味が重なる。
+// 帯の見出しは掴んで動かす面。行（ペイン）は開く面なので、ドラッグの対象にしない。
 function ActiveBand(props: {
   group: ActiveGroup;
   pullRequest: PullRequest | null;
   onOpen: () => void;
   onWorkspaceMenu: (trigger: HTMLElement) => void;
   menuOpen: boolean;
+  dragProps: BandDragProps;
 }) {
   const { workspace, counts } = props.group;
   const branch = workspace.branch ?? null;
@@ -111,7 +132,7 @@ function ActiveBand(props: {
   const repoUrl = sync?.repoUrl ?? null;
   // ワークツリー名はランダムで、タスクを思い出す手がかりにならない。PR があれば
   // タイトルを先頭に置き、名前は矢印の読み上げとツリーに残す。
-  const heading = pullRequest?.title ?? workspace.label;
+  const heading = bandHeading(workspace, pullRequest);
   const pullRequestState = pullRequest === null ? null : pullRequestTone(pullRequest.state);
   // 件数は最後の行の右端に置く。タイトルの幅を件数に削らせない。
   const countsNode = (
@@ -137,7 +158,7 @@ function ActiveBand(props: {
           <WorkspaceGlyph worktree={workspace.worktree} />
         </span>
       </button>
-      <div class="hwc-active-band-main">
+      <div class="hwc-active-band-main" {...props.dragProps}>
         <div class="hwc-active-band-title">
           <h2 class="hwc-active-band-name" id={bandId(workspace.id)} title={heading}>
             {heading}
@@ -212,9 +233,112 @@ export function spaceId(workspaceId: string): string {
 }
 
 // ワークスペース（ワークツリー）ごとに束ねた行を並べる（activeGroups）。
-// 開いた時点では既読を送らない。
-export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveGroup[] }) {
-  const { groups } = props;
+// 開いた時点では既読を送らない。帯の順はドラッグで変えられ、BFF が持つので全端末で揃う。
+export function ActivePaneList(
+  props: PaneListProps & ListFeedback & { groups: readonly ActiveGroup[] },
+) {
+  const { groups, onNotice, onAnnounce } = props;
+  const headingOf = (group: ActiveGroup): string =>
+    bandHeading(group.workspace, props.pullRequests.get(group.workspace.id) ?? null);
+  const units = groups.map((group) => ({
+    key: group.workspace.id,
+    label: headingOf(group),
+  }));
+  const orderKey = units.map((unit) => unit.key).join("\n");
+
+  // 状態が新しい順で描かれる前の位置。落とした後の入れ替えを滑らせて見せる。
+  const pending = useRef<{
+    order: string;
+    liftedKey: string;
+    offsets: ReadonlyMap<string, number>;
+  } | null>(null);
+  const moving = useRef(false);
+
+  const commit = (key: string, beforeKey: string | null, offsets: ReadonlyMap<string, number>) => {
+    if (moving.current || !isOrderChange(units, key, beforeKey)) return;
+    const keys = units.map((unit) => unit.key);
+    const next = reorderKeys(keys, key, beforeKey);
+    const label = units.find((unit) => unit.key === key)?.label ?? key;
+
+    pending.current = { order: orderKey, liftedKey: key, offsets };
+    moving.current = true;
+    onNotice(null);
+    void props.onReorderActive(next).then(
+      (ok) => {
+        if (ok) onAnnounce(`${label} を ${next.indexOf(key) + 1} 番目に移動しました`);
+        else {
+          pending.current = null;
+          onNotice("並べ替えを保存できませんでした。");
+        }
+        moving.current = false;
+      },
+      () => {
+        pending.current = null;
+        onNotice("並べ替えを保存できませんでした。");
+        moving.current = false;
+      },
+    );
+  };
+
+  const orderDrag = useOrderDrag({
+    units,
+    onDrop: (drop) => commit(drop.key, drop.beforeKey, drop.offsets),
+  });
+  const drag = orderDrag.drag;
+  const guide = useOrderDropGuide({ units, drag, orderKey });
+
+  // 新しい並びで描き直された直後、落とす前の位置との差分を transform で戻す。
+  // 位置は offsetTop なのでスクロール位置に影響されない。
+  useLayoutEffect(() => {
+    const pendingMove = pending.current;
+    if (pendingMove === null || pendingMove.order === orderKey) return;
+    pending.current = null;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    for (const node of document.querySelectorAll<HTMLElement>("[data-order-key]")) {
+      const key = node.dataset.orderKey;
+      if (key === undefined) continue;
+      const before = pendingMove.offsets.get(key);
+      if (before === undefined) continue;
+      const delta = before - node.offsetTop;
+      if (Math.abs(delta) < 1 || typeof node.animate !== "function") continue;
+
+      const lifted = key === pendingMove.liftedKey;
+      node.style.position = "relative";
+      node.style.zIndex = lifted ? "2" : "1";
+      if (lifted) node.dataset.reorderLifted = "true";
+      const cleanup = () => {
+        node.style.position = "";
+        node.style.zIndex = "";
+        delete node.dataset.reorderLifted;
+      };
+      const animation = node.animate(
+        [{ transform: `translateY(${delta}px)` }, { transform: "none" }],
+        { duration: 220, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+      );
+      animation.onfinish = cleanup;
+      animation.oncancel = cleanup;
+    }
+  });
+
+  // リンクは押せるままにする。帯の見出しのうち、リンク以外を掴んだときだけ動かす。
+  const dragPropsFor = (key: string, label: string): BandDragProps => {
+    const start = orderDrag.begin(key, label);
+    return {
+      onPointerDown: (event) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest("a") !== null) return;
+        start(event);
+      },
+      onPointerMove: orderDrag.move,
+      onPointerUp: orderDrag.up,
+      onPointerCancel: orderDrag.cancel,
+      onLostPointerCapture: orderDrag.lostCapture,
+      onClickCapture: orderDrag.clickCapture,
+      onContextMenu: orderDrag.contextMenu,
+    };
+  };
+
   if (groups.length === 0) {
     return (
       <div class="hwc-list-note">
@@ -234,8 +358,9 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
         <section
           key={group.workspace.id}
           class="hwc-active-group"
-          // 先頭へ移動したとき、束と行を動かす前の位置から滑らせる目印（PaneList）。
+          // 並べ替えの目印。落とし先の判定と、落とす前の位置を控えるのに使う。
           data-order-key={group.workspace.id}
+          data-dragging={drag?.key === group.workspace.id ? "true" : undefined}
           aria-labelledby={bandId(group.workspace.id)}
           data-removal={
             props.removal?.workspaceId === group.workspace.id ? props.removal.phase : undefined
@@ -247,6 +372,7 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
             onOpen={() => props.onRevealWorkspace(group.workspace.id)}
             onWorkspaceMenu={(trigger) => props.onWorkspaceMenu(group.workspace.id, trigger)}
             menuOpen={props.openWorkspaceMenuId === group.workspace.id}
+            dragProps={dragPropsFor(group.workspace.id, headingOf(group))}
           />
           <ul class="hwc-active-rows">
             {group.rows.map(({ tab, pane }) => {
@@ -302,6 +428,15 @@ export function ActivePaneList(props: PaneListProps & { groups: readonly ActiveG
           </ul>
         </section>
       ))}
+      {guide === null ? null : (
+        <>
+          <div class="hwc-order-drop" style={{ top: `${guide.top}px` }} aria-hidden="true" />
+          <span class="hwc-order-drop-label" style={{ top: `${guide.top}px` }} aria-hidden="true">
+            ここに移動
+          </span>
+        </>
+      )}
+      {drag === null ? null : <DragGhost label={drag.label} />}
     </div>
   );
 }

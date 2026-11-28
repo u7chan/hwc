@@ -42,6 +42,7 @@ const state: AppState = {
   focusedWorkspaceId: "w1",
   focusedTabId: "w1:t1",
   focusedPaneId: "w1:p1",
+  activeOrder: [],
   times: NO_TIMES,
   workspaces: [
     {
@@ -817,6 +818,7 @@ test("the parent mark is only needed when the space has more than one agent", ()
     focusedWorkspaceId: null,
     focusedTabId: null,
     focusedPaneId: null,
+    activeOrder: [],
     times: NO_TIMES,
     workspaces: [
       parentWorkspace("w1", [

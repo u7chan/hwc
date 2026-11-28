@@ -158,7 +158,7 @@ function PaneBody(props: {
       confirmationAttempts={context.confirmationAttempts}
       onConfirmFolderTrust={(id) => actions.confirmFolderTrust(item.id, id)}
       onDismissConfirmation={(id) => actions.dismissConfirmation(item.id, id)}
-      menuOpen={menu?.open === true && !menu.fromList && menuPaneId === item.id}
+      menuOpen={menu?.open === true && menu.listScope === null && menuPaneId === item.id}
       outputRef={(handle) => actions.outputRef(item.id, handle)}
       onOpenMenu={actions.openPaneMenu}
       onOpenWorkspaceMenu={actions.openWorkspaceMenu}

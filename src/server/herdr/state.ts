@@ -21,8 +21,12 @@ export type { PaneState, SnapshotState, TabState, WorkspaceState, WorktreeState 
 export type { PaneTimes };
 export { NO_TIMES };
 
-// 経過時間と終了時刻はスナップショットから作れない。store が足す。
-export type AppState = SnapshotState & { times: PaneTimes };
+// 経過時間と終了時刻、アクティブ一覧の並びはスナップショットから作れない。store が足す。
+export type AppState = SnapshotState & {
+  times: PaneTimes;
+  // アクティブ一覧の帯の表示順。空なら Herdr の順で並ぶ。全端末で共有する hwc の状態。
+  activeOrder: readonly string[];
+};
 
 // BFF の複数のモジュールから引くので、状態の型の隣に置く。
 export function findPane(state: AppState | null, paneId: string): PaneState | null {
@@ -129,6 +133,8 @@ export function toAppState(
 export type StateStore = {
   get: () => AppState | null;
   refresh: () => Promise<AppState>;
+  // アクティブ一覧の並びだけが変わったときに配り直す。Herdr は読み直さない。
+  republish: () => void;
   // 観測の切れ目を立てる。次の publish が 1 回だけ消費し、その遷移は記録しない。
   // 購読が切れた後と取得に失敗した後に、落ちた遷移を観測したことにしないために使う。
   breakObservation: () => void;
@@ -263,6 +269,8 @@ export function createStateStore(options: {
   git?: GitClient;
   // 経過時間の起点と終了時刻の保存先。無ければメモリ上だけで動く。
   times?: PaneTimesFile;
+  // アクティブ一覧の並び。Herdr の並びとは別に hwc が持つ表示順。
+  activeOrder?: { get: () => readonly string[] };
 }): StateStore {
   const retryDelayMs = options.retryDelayMs ?? 1_000;
   const listeners = new Set<(state: AppState, observed: boolean) => void>();
@@ -318,6 +326,15 @@ export function createStateStore(options: {
     }
   };
 
+  // 一覧に出ていないスペースの id は載せない。閉じたスペースを並びに残したままでも、
+  // 一覧は state にあるものだけで描ける。
+  const readOrder = (state: SnapshotState): readonly string[] => {
+    const order = options.activeOrder?.get() ?? [];
+    if (order.length === 0) return order;
+    const known = new Set(state.workspaces.map((workspace) => workspace.id));
+    return order.filter((id) => known.has(id));
+  };
+
   const publish = async (): Promise<AppState> => {
     // 切れ目は取得の前に消費する。取得中に立った切れ目は、次の取得が消費する。
     const observing = !breakPending;
@@ -336,7 +353,11 @@ export function createStateStore(options: {
     saveTimes(next);
     const repo = await withRepo(next, options.git, roots);
     const branched = await withBranches(repo, options.branch, roots);
-    const state: AppState = { ...(await withSync(branched, options.git, roots)), times };
+    const state: AppState = {
+      ...(await withSync(branched, options.git, roots)),
+      times,
+      activeOrder: readOrder(next),
+    };
     if (retryTimer) {
       clearTimeout(retryTimer);
       retryTimer = null;
@@ -387,6 +408,16 @@ export function createStateStore(options: {
   return {
     get: () => current,
     refresh,
+    republish: () => {
+      if (current === null) return;
+      // 中身は同じで並びだけが変わる。遷移を観測していないものとして流す。
+      const state: AppState = { ...current, activeOrder: readOrder(current) };
+      const serialized = JSON.stringify(state);
+      if (serialized === published) return;
+      current = state;
+      published = serialized;
+      for (const listener of listeners) listener(state, false);
+    },
     breakObservation: () => {
       breakPending = true;
     },

@@ -28,6 +28,7 @@ const state = (panes: PaneState[]): AppState => ({
   focusedWorkspaceId: "w1",
   focusedTabId: "w1:t1",
   focusedPaneId: panes[0]?.id ?? null,
+  activeOrder: [],
   times: NO_TIMES,
   workspaces: [
     {
