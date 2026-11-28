@@ -1,6 +1,11 @@
-// 選択した本文を、描画に使った Markdown の記法ごとクリップボードへ戻す。
+// コピーは描画に使った Markdown の記法ごとクリップボードへ戻す。
 // 元の Markdown は持っていないので、描画した DOM のタグ・クラス・data 属性から組み立てる。
 // ブロックの一部だけを選んだときは、そのブロックの印（見出し・項目・フェンス）を付けない。
+// 引用は同じ走査で記法だけを落とす。箇条書きの点・番号・字下げは残す。
+// 印は user-select: none で選択文字列から外れるので、拾わないと項目の区切りも
+// 番号付きかどうかも分からない。
+
+type Mode = "copy" | "quote";
 
 const CONTENT_ROOT_SELECTOR =
   ".hwc-md, .hwc-msg-body, .hwc-output, .hwc-error-text, .hwc-command-echo, .hwc-compaction-body";
@@ -15,6 +20,14 @@ const SKIP_SELECTOR = [
 ].join(", ");
 
 export function selectionCopyText(scroller: HTMLElement, range: Range): string {
+  return contentParts(scroller, range, "copy");
+}
+
+export function selectionQuoteText(scroller: HTMLElement, range: Range): string {
+  return contentParts(scroller, range, "quote");
+}
+
+function contentParts(scroller: HTMLElement, range: Range, mode: Mode): string {
   const roots = [...scroller.querySelectorAll(CONTENT_ROOT_SELECTOR)].filter(
     (root) => root instanceof HTMLElement && intersects(root, range),
   );
@@ -23,7 +36,7 @@ export function selectionCopyText(scroller: HTMLElement, range: Range): string {
   const parts = roots
     .map((root) =>
       root.matches(".hwc-md") && !root.hasAttribute("data-plain")
-        ? serializeMarkdown(root, range)
+        ? serializeMarkdown(root, range, mode)
         : textWithin(root, range),
     )
     .map(trimNewlines)
@@ -61,110 +74,120 @@ export function listMarker(ordered: boolean, number: number, task: boolean | nul
   return ordered ? `${number}. ` : "- ";
 }
 
-function serializeMarkdown(root: Element, range: Range): string {
-  return trimNewlines(serializeChildren(root, range, 0));
+function serializeMarkdown(root: Element, range: Range, mode: Mode): string {
+  return trimNewlines(serializeChildren(root, range, 0, mode));
 }
 
-function serializeChildren(parent: Node, range: Range, depth: number): string {
+function serializeChildren(parent: Node, range: Range, depth: number, mode: Mode): string {
   let out = "";
   for (const child of parent.childNodes) {
     if (!intersects(child, range)) continue;
-    out += serializeNode(child, range, depth);
+    out += serializeNode(child, range, depth, mode);
   }
   return out;
 }
 
-function serializeNode(node: Node, range: Range, depth: number): string {
+function serializeNode(node: Node, range: Range, depth: number, mode: Mode): string {
   if (node.nodeType === Node.TEXT_NODE) return selectedText(node as Text, range);
   if (!(node instanceof Element)) return "";
   if (!intersects(node, range)) return "";
   if (node.matches(SKIP_SELECTOR)) return "";
-  if (node.matches("button.hwc-md-image")) return imageMarkdown(node);
+  if (node.matches("button.hwc-md-image")) return mode === "copy" ? imageMarkdown(node) : "";
   if (node.matches("button, svg, input, script, style")) return "";
-  if (node.matches(".hwc-md-figure")) return serializeFigure(node, range, depth);
+  if (node.matches(".hwc-md-figure")) return serializeFigure(node, range, depth, mode);
   if (node.matches(".hwc-md-table-wrap")) {
     const table = node.querySelector("table");
     return table === null
-      ? serializeChildren(node, range, depth)
-      : serializeTable(table, range, depth);
+      ? serializeChildren(node, range, depth, mode)
+      : serializeTable(table, range, depth, mode);
   }
 
   switch (node.tagName) {
     case "BR":
       return "\n";
     case "HR":
-      return "---\n\n";
+      return mode === "copy" ? "---\n\n" : "";
     case "H3":
     case "H4":
     case "H5":
     case "H6":
-      return serializeHeading(node, range, depth);
+      return serializeHeading(node, range, depth, mode);
     case "P":
-      return `${trimNewlines(serializeChildren(node, range, depth))}\n\n`;
+      return `${trimNewlines(serializeChildren(node, range, depth, mode))}\n\n`;
     case "STRONG":
     case "B":
-      return wrapInline("**", node, range, depth);
+      return wrapInline("**", node, range, depth, mode);
     case "EM":
     case "I":
-      return wrapInline("*", node, range, depth);
+      return wrapInline("*", node, range, depth, mode);
     case "DEL":
     case "S":
-      return wrapInline("~~", node, range, depth);
+      return wrapInline("~~", node, range, depth, mode);
     case "CODE": {
-      if (node.closest("pre") !== null || node.classList.contains("hwc-md-literal")) {
-        return serializeChildren(node, range, depth);
-      }
-      return inlineCode(serializeChildren(node, range, depth));
+      const inner = serializeChildren(node, range, depth, mode);
+      if (mode === "quote" || node.closest("pre") !== null) return inner;
+      if (node.classList.contains("hwc-md-literal")) return inner;
+      return inlineCode(inner);
     }
     case "PRE":
-      return serializeCodeBlock(node, range);
+      return serializeCodeBlock(node, range, mode);
     case "BLOCKQUOTE":
-      return serializeQuote(node, range, depth);
+      return serializeQuote(node, range, depth, mode);
     case "UL":
     case "OL":
-      return serializeList(node, range, depth);
+      return serializeList(node, range, depth, mode);
     case "TABLE":
-      return serializeTable(node, range, depth);
+      return mode === "copy" ? serializeTable(node, range, depth, mode) : textWithin(node, range);
     case "A":
-      return serializeLink(node, range, depth);
+      return serializeLink(node, range, depth, mode);
     case "IMG": {
       const alt = node.getAttribute("alt") ?? "";
       return alt;
     }
     default:
-      return serializeChildren(node, range, depth);
+      return serializeChildren(node, range, depth, mode);
   }
 }
 
-function serializeHeading(node: Element, range: Range, depth: number): string {
-  const inner = trimNewlines(serializeChildren(node, range, depth));
+function serializeHeading(node: Element, range: Range, depth: number, mode: Mode): string {
+  const inner = trimNewlines(serializeChildren(node, range, depth, mode));
   if (inner === "") return "";
   const level =
     node.tagName === "H3" ? 1 : node.tagName === "H4" ? 2 : node.tagName === "H5" ? 3 : 4;
-  const marker = coversContents(range, node) ? `${"#".repeat(level)} ` : "";
-  return `${marker}${inner}\n\n`;
+  const marked = mode === "copy" && coversContents(range, node);
+  return `${marked ? `${"#".repeat(level)} ` : ""}${inner}\n\n`;
 }
 
-function wrapInline(marker: string, node: Element, range: Range, depth: number): string {
-  const inner = serializeChildren(node, range, depth);
-  return inner === "" ? "" : `${marker}${inner}${marker}`;
+function wrapInline(
+  marker: string,
+  node: Element,
+  range: Range,
+  depth: number,
+  mode: Mode,
+): string {
+  const inner = serializeChildren(node, range, depth, mode);
+  if (inner === "" || mode === "quote") return inner;
+  return `${marker}${inner}${marker}`;
 }
 
-function serializeLink(node: Element, range: Range, depth: number): string {
-  const label = serializeChildren(node, range, depth);
-  if (label === "") return "";
+function serializeLink(node: Element, range: Range, depth: number, mode: Mode): string {
+  const label = serializeChildren(node, range, depth, mode);
+  if (label === "" || mode === "quote") return label;
   return markdownLink(label, node.getAttribute("href") ?? "", node.getAttribute("title"));
 }
 
-function serializeFigure(node: Element, range: Range, depth: number): string {
+function serializeFigure(node: Element, range: Range, depth: number, mode: Mode): string {
   const pre = node.querySelector("pre");
-  return pre === null ? serializeChildren(node, range, depth) : serializeCodeBlock(pre, range);
+  return pre === null
+    ? serializeChildren(node, range, depth, mode)
+    : serializeCodeBlock(pre, range, mode);
 }
 
-function serializeCodeBlock(pre: Element, range: Range): string {
+function serializeCodeBlock(pre: Element, range: Range, mode: Mode): string {
   const code = pre.querySelector("code") ?? pre;
   if (!intersects(code, range)) return "";
   const text = textWithin(code, range);
+  if (mode === "quote") return `${trimNewlines(text)}\n\n`;
   if (!coversContents(range, code) && !coversContents(range, pre)) return text;
   const figure = pre.closest(".hwc-md-figure");
   const lang = figure?.querySelector(".hwc-md-lang")?.textContent?.trim() ?? "";
@@ -172,10 +195,9 @@ function serializeCodeBlock(pre: Element, range: Range): string {
   return `${fence}${lang}\n${text.replace(/\n$/, "")}\n${fence}\n\n`;
 }
 
-function serializeQuote(node: Element, range: Range, depth: number): string {
-  const inner = trimNewlines(serializeChildren(node, range, depth));
-  if (inner === "") return "";
-  if (!coversContents(range, node)) return `${inner}\n\n`;
+function serializeQuote(node: Element, range: Range, depth: number, mode: Mode): string {
+  const inner = trimNewlines(serializeChildren(node, range, depth, mode));
+  if (inner === "" || mode === "quote" || !coversContents(range, node)) return `${inner}\n\n`;
   const quoted = inner
     .split("\n")
     .map((line) => (line === "" ? ">" : `> ${line}`))
@@ -183,7 +205,7 @@ function serializeQuote(node: Element, range: Range, depth: number): string {
   return `${quoted}\n\n`;
 }
 
-function serializeList(node: Element, range: Range, depth: number): string {
+function serializeList(node: Element, range: Range, depth: number, mode: Mode): string {
   const ordered = node.tagName === "OL";
   const start = ordered ? Number(node.getAttribute("start") ?? "1") : 1;
   // 番号は選択に含まれる項目だけで数え直さない。先頭の項目を選ばなくても、
@@ -200,7 +222,7 @@ function serializeList(node: Element, range: Range, depth: number): string {
     );
     const task = taskButton === null ? null : taskButton.getAttribute("aria-checked") === "true";
     const marker = coversContents(range, item) ? listMarker(ordered, start + index, task) : "";
-    const body = trimNewlines(serializeListItemBody(item, range, depth));
+    const body = trimNewlines(serializeListItemBody(item, range, depth, mode));
     const bodyLines = body.split("\n");
     if (bodyLines.length === 0 || (bodyLines.length === 1 && bodyLines[0] === "")) continue;
 
@@ -215,25 +237,25 @@ function serializeList(node: Element, range: Range, depth: number): string {
   return lines.length === 0 ? "" : `${lines.join("\n")}\n\n`;
 }
 
-function serializeListItemBody(item: Element, range: Range, depth: number): string {
+function serializeListItemBody(item: Element, range: Range, depth: number, mode: Mode): string {
   const body = item.querySelector(":scope > .hwc-md-li-body");
-  if (body !== null) return serializeChildren(body, range, depth + 1);
+  if (body !== null) return serializeChildren(body, range, depth + 1, mode);
   let out = "";
   for (const child of item.childNodes) {
     if (child instanceof Element && child.matches(".hwc-md-marker, .hwc-md-task")) continue;
     if (!intersects(child, range)) continue;
-    out += serializeNode(child, range, depth + 1);
+    out += serializeNode(child, range, depth + 1, mode);
   }
   return out;
 }
 
-function serializeTable(table: Element, range: Range, depth: number): string {
+function serializeTable(table: Element, range: Range, depth: number, mode: Mode): string {
   if (!coversContents(range, table)) return textWithin(table, range);
   const headers = [...table.querySelectorAll("thead th")];
   if (headers.length === 0) return textWithin(table, range);
 
   const cellText = (cell: Element) =>
-    serializeChildren(cell, range, depth).replace(/\n+/g, " ").trim().replaceAll("|", "\\|");
+    serializeChildren(cell, range, depth, mode).replace(/\n+/g, " ").trim().replaceAll("|", "\\|");
   const aligns = headers.map((cell) => {
     const align = cell.getAttribute("data-align");
     if (align === "center") return ":---:";
