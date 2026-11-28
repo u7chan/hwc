@@ -25,9 +25,14 @@ test("a whitespace only selection is empty", () => {
   expect(normaliseQuote("  \n\t\n")).toBe("");
 });
 
-test("whitespace at the edges of the selection is dropped", () => {
-  expect(normaliseQuote("  前 ")).toBe("前");
+test("trailing whitespace of the selection is dropped", () => {
+  expect(normaliseQuote("前 ")).toBe("前");
   expect(normaliseQuote("前 \n後 ")).toBe("前 \n後");
+});
+
+test("leading indentation of the first line stays", () => {
+  expect(normaliseQuote("  前")).toBe("  前");
+  expect(normaliseQuote("  - 子1\n  - 子2")).toBe("  - 子1\n  - 子2");
 });
 
 test("every line is prefixed and blank lines become a bare marker", () => {
@@ -58,6 +63,10 @@ test("a comment between quotes keeps both quotes", () => {
   const second = appendQuote(`${first.text}コメント`, "引用2");
   expect(second.text).toBe("> 引用1\n\nコメント\n\n> 引用2\n\n");
   expect(second.caret).toBe(second.text.length);
+});
+
+test("a nested list item keeps its indentation in the quote", () => {
+  expect(appendQuote("", "  - 子1\n  - 子2").text).toBe(">   - 子1\n>   - 子2\n\n");
 });
 
 const idle = {

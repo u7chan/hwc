@@ -1,4 +1,5 @@
 import { normaliseQuote } from "./reply";
+import { selectionQuoteText } from "./selection-copy";
 
 // 選択ツールバーの位置は .hwc-output-wrap を基準にした px。center は範囲の横の
 // 真ん中で、高さは CSS の最小高に合わせる。ツールバー自身の幅は描画後に測って寄せる。
@@ -25,7 +26,9 @@ export function readSelectionAnchor(
   if (!scroller.contains(range.startContainer) || !scroller.contains(range.endContainer)) {
     return null;
   }
-  const text = normaliseQuote(selection.toString());
+  // 選択文字列だけでは、user-select: none の箇条書きの点・番号が抜けて項目が 1 行に
+  // つながる。引用には画面の見た目を渡したいので、コピーと同じく描画した DOM から組み立てる。
+  const text = normaliseQuote(selectionQuoteText(scroller, range));
   if (text === "") return null;
 
   const rect = range.getBoundingClientRect();

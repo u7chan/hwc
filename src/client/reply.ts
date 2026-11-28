@@ -2,14 +2,18 @@ import type { CommandId } from "./commands";
 import { agentGlyph } from "./select";
 
 // 選択範囲は trim 済みの生テキストで受け取り、引用の記号を付けて入力欄の下書きへ足す。
-// 前後の空行を落とし、最初と最後の行の端の空白だけを整える。行の中の空白は本文の一部なので残す。
+// 前後の空行を落とし、末尾の空白だけを整える。行頭の空白は Markdown の入れ子リストの
+// 深さを表すので残す（引用の 1 行目が子項目でも、引用元と同じ親子関係で読める）。
 export function normaliseQuote(raw: string): string {
   const lines = raw.replace(/\r\n/g, "\n").split("\n");
   let start = 0;
   let end = lines.length;
   while (start < end && lines[start].trim() === "") start += 1;
   while (end > start && lines[end - 1].trim() === "") end -= 1;
-  return lines.slice(start, end).join("\n").trim();
+  return lines
+    .slice(start, end)
+    .join("\n")
+    .replace(/[ \t]+$/, "");
 }
 
 export function quoteLines(quote: string): string {
