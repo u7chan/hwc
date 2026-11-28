@@ -53,6 +53,19 @@
   opacity: 0.55;
 }
 
+/* アクティブの帯も同じ。場所（帯）は読める濃さのまま、下の行だけを淡くする。 */
+.hwc-active-group[data-dragging="true"] > * {
+  opacity: 0.55;
+}
+
+.hwc-active-group[data-dragging="true"] > .hwc-active-band {
+  opacity: 1;
+}
+
+.hwc-active-group[data-dragging="true"] .hwc-active-band-main {
+  cursor: grabbing;
+}
+
 .hwc-group-block[data-dragging="true"] > .hwc-group-row {
   opacity: 1;
 }

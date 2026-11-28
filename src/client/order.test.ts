@@ -7,6 +7,7 @@ import {
   isOrderChange,
   moveToTopPlan,
   orderUnits,
+  reorderKeys,
   unitIndex,
   type OrderUnit,
 } from "./order";
@@ -165,4 +166,23 @@ test("unitIndex tells whether the pending move already landed", () => {
   expect(unitIndex(units, "w1")).toBe(0);
   expect(unitIndex(units, "w3")).toBe(2);
   expect(unitIndex(units, "missing")).toBeNull();
+});
+
+test("reorderKeys puts the grabbed band before the drop target", () => {
+  const keys = ["w1", "w2", "w3", "w4"];
+
+  expect(reorderKeys(keys, "w3", "w1")).toEqual(["w3", "w1", "w2", "w4"]);
+  expect(reorderKeys(keys, "w1", null)).toEqual(["w2", "w3", "w4", "w1"]);
+  expect(reorderKeys(keys, "w4", "w2")).toEqual(["w1", "w4", "w2", "w3"]);
+  // 落とし先が無い・掴んだ key が無いときは元の並びのまま。
+  expect(reorderKeys(keys, "w2", "missing")).toEqual(keys);
+  expect(reorderKeys(keys, "missing", "w1")).toEqual(keys);
+});
+
+test("isOrderChange looks only at the keys, so it also fits the active bands", () => {
+  // アクティブの带は id を持たない。並べ替えの判定に要るのは key だけ。
+  const bands = [{ key: "w1" }, { key: "w2" }];
+
+  expect(isOrderChange(bands, "w2", "w1")).toBe(true);
+  expect(isOrderChange(bands, "w1", "w2")).toBe(false);
 });

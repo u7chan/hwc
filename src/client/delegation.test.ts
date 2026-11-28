@@ -51,6 +51,7 @@ function stateWith(tabs: readonly (readonly PaneState[])[]): AppState {
     focusedWorkspaceId: "w1",
     focusedTabId: "w1:t1",
     focusedPaneId: tabs[0]?.[0]?.id ?? null,
+    activeOrder: [],
     workspaces: [
       {
         id: "w1",

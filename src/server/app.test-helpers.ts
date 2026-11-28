@@ -30,6 +30,7 @@ export const state: AppState = {
   focusedWorkspaceId: "w1",
   focusedTabId: "w1:t1",
   focusedPaneId: "w1:p1",
+  activeOrder: [],
   times: NO_TIMES,
   workspaces: [
     {
@@ -218,6 +219,7 @@ export type FakeStore = StateStore & {
   fireOnSubscribe: (state: AppState) => void;
   setChatSource: (paneId: string, source: ChatSource | null) => void;
   refreshCount: () => number;
+  republishCount: () => number;
 };
 
 export function createFakeStore(
@@ -230,6 +232,7 @@ export function createFakeStore(
   let current = initial;
   let pendingOnSubscribe: AppState | null = null;
   let refreshes = 0;
+  let republishes = 0;
 
   return {
     get: () => current,
@@ -240,6 +243,11 @@ export function createFakeStore(
       return current;
     },
     breakObservation: () => {},
+    republish: () => {
+      republishes += 1;
+      if (current === null) return;
+      for (const listener of listeners) listener(current, false);
+    },
     chatSource: (paneId) => sources.get(paneId) ?? null,
     workspaceRoot: () => null,
     workspacePath: () => workspacePath,
@@ -258,6 +266,7 @@ export function createFakeStore(
     },
     listenerCount: () => listeners.size,
     refreshCount: () => refreshes,
+    republishCount: () => republishes,
     fireOnSubscribe: (state) => {
       pendingOnSubscribe = state;
     },
@@ -378,6 +387,7 @@ export type TestAppOptions = {
     | "restartSettings"
     | "restart"
     | "launchDefaults"
+    | "activeOrder"
     | "homeDirectory"
     | "skillsHome"
     | "restartDelayMs"

@@ -19,6 +19,7 @@ function stateWith(agent: string | null): AppState {
     focusedWorkspaceId: "w1",
     focusedTabId: "w1:t1",
     focusedPaneId: "w1:p1",
+    activeOrder: [],
     times: NO_TIMES,
     workspaces: [
       {
@@ -45,6 +46,7 @@ const empty: AppState = {
   focusedWorkspaceId: null,
   focusedTabId: null,
   focusedPaneId: null,
+  activeOrder: [],
   times: NO_TIMES,
   workspaces: [],
 };

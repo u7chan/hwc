@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 import type { AppState, PaneState, TabState } from "../../server/herdr/state";
 import type { GitSync } from "../../shared/git";
 import type { PullRequest } from "../../shared/pull-request";
@@ -21,7 +21,7 @@ import {
   orderUnits,
   type OrderUnit,
 } from "../order";
-import { useOrderDrag } from "../order-drag";
+import { useOrderDrag, useOrderDropGuide } from "../order-drag";
 import { ParentMark } from "../ParentMark";
 import {
   agentGlyph,
@@ -87,7 +87,6 @@ export function TreePaneList(props: TreePaneListProps) {
   const units = orderUnits(groups, state.workspaces);
   const unitByKey = new Map(units.map((unit) => [unit.key, unit]));
 
-  const [dropGuide, setDropGuide] = useState<{ top: number } | null>(null);
   const moving = useRef(false);
   const pendingAnimation = useRef<{
     order: string;
@@ -188,42 +187,8 @@ export function TreePaneList(props: TreePaneListProps) {
     onDrop: (drop) => commit(drop.key, drop.beforeKey, drop.offsets),
   });
   const dragged = orderDrag.drag;
-  const lastRemainingKey =
-    dragged === null
-      ? null
-      : (units.filter((unit) => unit.key !== dragged.key).at(-1)?.key ?? null);
   // 「ここに移動」の線を、落とし先のブロックの境界に置く。無変化なら出さない。
-  useLayoutEffect(() => {
-    if (dragged === null || dragged.anchor === undefined) {
-      setDropGuide(null);
-      return;
-    }
-    if (!isOrderChange(units, dragged.key, dragged.anchor)) {
-      setDropGuide(null);
-      return;
-    }
-
-    const targetKey = dragged.anchor ?? lastRemainingKey;
-    if (targetKey === null) {
-      setDropGuide(null);
-      return;
-    }
-    const node = Array.from(document.querySelectorAll<HTMLElement>("[data-order-key]")).find(
-      (item) => item.dataset.orderKey === targetKey,
-    );
-    if (node === undefined) {
-      setDropGuide(null);
-      return;
-    }
-
-    const edge = dragged.anchor === null ? "after" : "before";
-    // 先頭の前へ落とすときは、ラベルがスクロール領域の上端で切れないよう少し下げる。
-    const top = Math.max(
-      12,
-      edge === "before" ? node.offsetTop - 8 : node.offsetTop + node.offsetHeight + 8,
-    );
-    setDropGuide((current) => (current !== null && current.top === top ? current : { top }));
-  }, [dragged, lastRemainingKey, orderKey, units]);
+  const dropGuide = useOrderDropGuide({ units, drag: dragged, orderKey });
 
   function renderHeader(props2: {
     id: string;

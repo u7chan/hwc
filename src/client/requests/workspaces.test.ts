@@ -11,6 +11,7 @@ const state = {
   focusedWorkspaceId: null,
   focusedTabId: null,
   focusedPaneId: null,
+  activeOrder: [],
   times: { workingSince: {}, finishedAt: {} },
   workspaces: [],
 };

@@ -82,6 +82,7 @@ function app(...workspaces: WorkspaceState[]): AppState {
     focusedWorkspaceId: null,
     focusedTabId: null,
     focusedPaneId: null,
+    activeOrder: [],
     times: NO_TIMES,
     workspaces,
   };
@@ -326,4 +327,27 @@ test("a space with only shells makes no group", () => {
 
   // シェルだけのスペースは「すべて」で見る。
   expect(activeGroups(state)).toEqual([]);
+});
+
+test("the saved order rules the bands and spaces it does not know follow the state order", () => {
+  const state: AppState = {
+    ...app(
+      workspace("w1", [pane("w1:p1", "pi", "idle")]),
+      workspace("w2", [pane("w2:p1", "pi", "idle")]),
+      workspace("w3", [pane("w3:p1", "pi", "idle")]),
+    ),
+    // 閉じたスペースの id が残っていても、一覧には出ているスペースだけを並べる。
+    activeOrder: ["w3", "gone", "w1"],
+  };
+
+  expect(activeGroups(state).map((group) => group.workspace.id)).toEqual(["w3", "w1", "w2"]);
+});
+
+test("without a saved order the bands keep the order Herdr gives", () => {
+  const state = app(
+    workspace("w2", [pane("w2:p1", "pi", "idle")]),
+    workspace("w1", [pane("w1:p1", "pi", "idle")]),
+  );
+
+  expect(activeGroups(state).map((group) => group.workspace.id)).toEqual(["w2", "w1"]);
 });

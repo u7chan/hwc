@@ -36,7 +36,7 @@ export function PaneList(props: PaneListProps) {
   const positions = useRef(new Map<ListScope, number>());
 
   // 一覧の知らせは両方のスコープで 1 か所に出す。並べ替えの失敗も先頭移動の失敗も
-  // 同じ面に落とす。ツリーはドラッグから、ここはメニューから書く。
+  // 同じ面に落とす。ツリーもアクティブもドラッグから書く。
   const [notice, setNotice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const feedback: ListFeedback = { onNotice: setNotice, onAnnounce: setAnnouncement };
@@ -325,7 +325,7 @@ export function PaneList(props: PaneListProps) {
 function renderList(props: PaneListProps, groups: readonly ActiveGroup[], feedback: ListFeedback) {
   switch (props.scope) {
     case "active":
-      return <ActivePaneList {...props} groups={groups} />;
+      return <ActivePaneList {...props} groups={groups} {...feedback} />;
     case "all":
       return <TreePaneList {...props} {...feedback} />;
   }

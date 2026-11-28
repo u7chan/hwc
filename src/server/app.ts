@@ -66,6 +66,8 @@ export function createApp(options: CreateAppOptions) {
       .get("/api/state", stateHandlers.state)
       // 状態を取り直す契機だけを返す。新しい状態は SSE で配る（docs/adr/herdr-socket.md）。
       .post("/api/state/refresh", requireJson, stateHandlers.refresh)
+      // アクティブ一覧の帯の並び。Herdr ではなく hwc の見え方として保存する。
+      .put("/api/active-order", requireJson, stateHandlers.setActiveOrder)
       .get("/api/events", stateHandlers.events)
       .get("/api/workspaces/:id/pull-request", workspacesHandlers.pullRequest)
       .post("/api/workspaces/:id/git", requireJson, workspacesHandlers.git)

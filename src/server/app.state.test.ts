@@ -211,3 +211,76 @@ test("GET /api/events unsubscribes when the client is gone before the initial st
 
   await waitFor(() => store.listenerCount() === 0);
 });
+
+test("PUT /api/active-order saves the order and shares it with every client", async () => {
+  const saved: Array<readonly string[]> = [];
+  const activeOrder = {
+    get: () => [] as string[],
+    save: (ids: string[]) => saved.push(ids),
+  };
+  const { app, store } = createTestApp({ activeOrder });
+  const response = await app.request("/api/active-order", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ workspaceIds: ["w2", "w1"] }),
+  });
+
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ ok: true });
+  expect(saved).toEqual([["w2", "w1"]]);
+  // Herdr の状態ではないので読み直さず、手元の状態を配り直す。
+  expect(store.republishCount()).toBe(1);
+  expect(store.refreshCount()).toBe(0);
+});
+
+test("PUT /api/active-order rejects an order it cannot store", async () => {
+  const saved: Array<readonly string[]> = [];
+  const { app, store } = createTestApp({
+    activeOrder: { get: () => [], save: (ids: string[]) => saved.push(ids) },
+  });
+  const put = (body: string) =>
+    app.request("/api/active-order", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+
+  for (const body of [
+    '{"workspaceIds":[]}',
+    '{"workspaceIds":["w1","w1"]}',
+    '{"workspaceIds":3}',
+  ]) {
+    expect((await put(body)).status).toBe(400);
+  }
+  // JSON でない本文は side effect の前に止める。
+  expect((await put("workspaceIds=w1")).status).toBe(400);
+  const notJson = await app.request("/api/active-order", {
+    method: "PUT",
+    headers: { "content-type": "text/plain" },
+    body: "{}",
+  });
+  expect(notJson.status).toBe(415);
+
+  expect(saved).toEqual([]);
+  expect(store.republishCount()).toBe(0);
+});
+
+test("PUT /api/active-order keeps the old order when the file cannot be written", async () => {
+  const { app, store } = createTestApp({
+    activeOrder: {
+      get: () => ["w1", "w2"],
+      save: () => {
+        throw new Error("read-only");
+      },
+    },
+  });
+  const response = await app.request("/api/active-order", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ workspaceIds: ["w2", "w1"] }),
+  });
+
+  expect(response.status).toBe(500);
+  expect(await response.json()).toEqual({ error: "settings_unavailable" });
+  expect(store.republishCount()).toBe(0);
+});

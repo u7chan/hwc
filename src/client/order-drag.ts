@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { clearDragGhostPoint, setDragGhostPoint } from "./DragGhost";
-import { dropAnchor, type UnitRect } from "./order";
+import { dropAnchor, isOrderChange, type UnitRect } from "./order";
 
 // タッチは長押しで掴む。マウスは少し動かした時点で掴む。どちらも見出しの開閉と同じ
 // ボタンの上なので、短いタップは開閉に残す。
@@ -289,4 +289,52 @@ export function useOrderDrag(options: {
       if (pending.current?.active === true) event.preventDefault();
     },
   };
+}
+
+// 「ここに移動」の線を出す位置。offsetTop なのでスクロール位置に影響されない。
+// 同じ位置へ戻るときと、落とし先のブロックが無いときは出さない。
+// 一覧は同時に 1 つしか描かないので、目印は文書全体から探す。
+export function useOrderDropGuide(options: {
+  units: readonly { key: string }[];
+  drag: OrderDrag | null;
+  orderKey: string;
+}): { top: number } | null {
+  const { units, drag, orderKey } = options;
+  const [guide, setGuide] = useState<{ top: number } | null>(null);
+  const lastRemainingKey =
+    drag === null ? null : (units.filter((unit) => unit.key !== drag.key).at(-1)?.key ?? null);
+
+  useLayoutEffect(() => {
+    if (drag === null || drag.anchor === undefined) {
+      setGuide(null);
+      return;
+    }
+    if (!isOrderChange(units, drag.key, drag.anchor)) {
+      setGuide(null);
+      return;
+    }
+
+    const targetKey = drag.anchor ?? lastRemainingKey;
+    if (targetKey === null) {
+      setGuide(null);
+      return;
+    }
+    const node = Array.from(document.querySelectorAll<HTMLElement>("[data-order-key]")).find(
+      (item) => item.dataset.orderKey === targetKey,
+    );
+    if (node === undefined) {
+      setGuide(null);
+      return;
+    }
+
+    const edge = drag.anchor === null ? "after" : "before";
+    // 先頭の前へ落とすときは、ラベルがスクロール領域の上端で切れないよう少し下げる。
+    const top = Math.max(
+      12,
+      edge === "before" ? node.offsetTop - 8 : node.offsetTop + node.offsetHeight + 8,
+    );
+    setGuide((current) => (current !== null && current.top === top ? current : { top }));
+  }, [drag, lastRemainingKey, orderKey, units]);
+
+  return guide;
 }

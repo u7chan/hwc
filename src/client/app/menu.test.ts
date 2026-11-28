@@ -59,6 +59,7 @@ const state: AppState = {
   focusedWorkspaceId: "w1",
   focusedTabId: "w1:t1",
   focusedPaneId: "w1:p1",
+  activeOrder: [],
   times: NO_TIMES,
   workspaces: [
     workspace("w1", [tab("w1:t1", ["w1:p1", "w1:p2"])], {
@@ -92,14 +93,14 @@ const PR: PullRequest = {
 const paneMenu = (id: string): OperationMenu => ({
   target: { kind: "pane", id },
   trigger: null as unknown as HTMLElement,
-  fromList: false,
+  listScope: null,
   open: true,
 });
 
 const workspaceMenu = (id: string): OperationMenu => ({
   target: { kind: "workspace", id },
   trigger: null as unknown as HTMLElement,
-  fromList: true,
+  listScope: "all",
   open: true,
 });
 

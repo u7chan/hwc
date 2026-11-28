@@ -65,7 +65,7 @@ export function dropBeforeId(units: readonly OrderUnit[], beforeKey: string | nu
 
 // 残りだけにしたときの挿入位置が、移動前と同じなら送らない。
 export function isOrderChange(
-  units: readonly OrderUnit[],
+  units: readonly { key: string }[],
   movedKey: string,
   beforeKey: string | null,
 ): boolean {
@@ -90,4 +90,18 @@ export function adjacentBeforeKey(
   const to = from + direction;
   if (to < 0 || to > rest.length) return undefined;
   return rest[to]?.key ?? null;
+}
+
+// アクティブ一覧の帯を、掴んだ key を beforeKey の前（null は末尾）へ動かした並びにする。
+// 表示している全 key を上からそのまま並べ、落とし先が無ければ元の並びを返す。
+export function reorderKeys(
+  keys: readonly string[],
+  movedKey: string,
+  beforeKey: string | null,
+): string[] {
+  const rest = keys.filter((key) => key !== movedKey);
+  const to = beforeKey === null ? rest.length : rest.indexOf(beforeKey);
+  if (rest.length === keys.length || to < 0) return [...keys];
+  rest.splice(to, 0, movedKey);
+  return rest;
 }

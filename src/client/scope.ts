@@ -74,8 +74,10 @@ export type ActiveGroup = {
 // 先頭に固定する。王冠は状態ではなく役割の印で、位置が状態で動くと戻り先を探すコストと
 // 押し間違いにつながる。
 //
-// 並びは state の順で固定する。状態で入れ替えると、働き始め・終わり・既読のたびに
+// 状態では並べ替えない。状態で入れ替えると、働き始め・終わり・既読のたびに
 // 行や束が指の下から動き、位置でペインを覚えられない。状態は行の記号と時刻、帯の件数で読む。
+// 帯の順は利用者がドラッグで決めた並び（activeOrder）を先に使い、知らないスペースは
+// 状態の順で後ろに置く。並びは BFF が持つので全端末で同じになる。
 export function activeGroups(state: AppState): readonly ActiveGroup[] {
   const buckets = new Map<string, { workspace: WorkspaceState; rows: PaneRow[] }>();
   for (const row of activePanes(state)) {
@@ -88,14 +90,18 @@ export function activeGroups(state: AppState): readonly ActiveGroup[] {
   }
 
   // bucket は state を先頭から走査して作るので、挿入順がそのままワークスペース順になる。
-  // 並べ替えは持たない。親を先頭にする分だけ、安定ソートで残りの state 順を保つ。
-  return [...buckets.values()].map((bucket) => {
-    const parentId = parentPaneOf(bucket.workspace)?.id ?? null;
-    const rows = [...bucket.rows].sort(
-      (a, b) => Number(b.pane.id === parentId) - Number(a.pane.id === parentId),
-    );
-    return { workspace: bucket.workspace, rows, counts: countRows(rows) };
-  });
+  // 親を先頭にする分だけ、安定ソートで残りの state 順を保つ。
+  const rank = new Map((state.activeOrder ?? []).map((id, at) => [id, at]));
+  const unknown = Number.MAX_SAFE_INTEGER;
+  return [...buckets.values()]
+    .sort((a, b) => (rank.get(a.workspace.id) ?? unknown) - (rank.get(b.workspace.id) ?? unknown))
+    .map((bucket) => {
+      const parentId = parentPaneOf(bucket.workspace)?.id ?? null;
+      const rows = [...bucket.rows].sort(
+        (a, b) => Number(b.pane.id === parentId) - Number(a.pane.id === parentId),
+      );
+      return { workspace: bucket.workspace, rows, counts: countRows(rows) };
+    });
 }
 
 function countRows(rows: readonly PaneRow[]): Record<ActiveStatus, number> {

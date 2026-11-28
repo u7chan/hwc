@@ -1,4 +1,5 @@
 import type { ChatFile } from "../../server/chat/contract";
+import type { ListScope } from "../scope";
 import type { PaneCloseAction } from "../../shared/pane-close";
 import type { ConfirmPhase } from "./confirm";
 import type { GitSyncFailure } from "../requests/workspaces";
@@ -22,7 +23,8 @@ export type Closing = {
 export type OperationMenu = {
   target: { kind: "pane" | "workspace"; id: string };
   trigger: HTMLElement;
-  fromList: boolean;
+  // 一覧から開いたときのスコープ。一覧以外（セル・タブ・詳細）は null。
+  listScope: ListScope | null;
   open: boolean;
 };
 

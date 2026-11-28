@@ -98,7 +98,7 @@ export function AppOverlays(props: AppOverlaysProps) {
           open={operation.open}
           onClose={menu.dismiss}
           onExited={menu.exited}
-          closeOnScroll={operation.fromList}
+          closeOnScroll={operation.listScope !== null}
         >
           {menuPane === null ? null : (
             <PaneMenu

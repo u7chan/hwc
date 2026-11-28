@@ -39,6 +39,8 @@ export type PaneListProps = {
   // メニューの「先頭へ移動」。token が変わるたびに 1 回だけ処理する。
   moveToTop: { workspaceId: string; token: number } | null;
   onMoveToTopHandled: () => void;
+  // アクティブ一覧の带の並び。ドラッグで決めた順を BFF に預け、全端末で揃える。
+  onReorderActive: (workspaceIds: readonly string[]) => Promise<boolean>;
   workingSince: ReadonlyMap<string, number>;
   finishedAt: ReadonlyMap<string, number>;
   pullRequests: ReadonlyMap<string, PullRequest | null>;

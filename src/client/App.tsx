@@ -50,6 +50,7 @@ import {
   moveWorkspaceBlock,
   parseAppState,
   removeWorktree,
+  saveActiveOrder,
   syncWorkspace,
 } from "./requests/workspaces";
 import {
@@ -623,15 +624,23 @@ export function App() {
     });
   }, [entering]);
 
-  const openPaneMenu = (paneId: string, trigger: HTMLElement, fromList = false) => {
-    setMenu({ target: { kind: "pane", id: paneId }, trigger, fromList, open: true });
+  const openPaneMenu = (
+    paneId: string,
+    trigger: HTMLElement,
+    listScope: ListScope | null = null,
+  ) => {
+    setMenu({ target: { kind: "pane", id: paneId }, trigger, listScope, open: true });
   };
 
   // スペースの状態表示と見出しの「…」は同じメニューを開く。操作の入口を 1 つに保つ。
-  const openWorkspaceMenu = (workspaceId: string, trigger: HTMLElement, fromList = false) => {
+  const openWorkspaceMenu = (
+    workspaceId: string,
+    trigger: HTMLElement,
+    listScope: ListScope | null = null,
+  ) => {
     // 前回の失敗を今回の結果として見せない。開き直したときは空の状態から始める。
     setGitAction((current) => (current?.phase === "failed" ? null : current));
-    setMenu({ target: { kind: "workspace", id: workspaceId }, trigger, fromList, open: true });
+    setMenu({ target: { kind: "workspace", id: workspaceId }, trigger, listScope, open: true });
   };
 
   // 開始時に表示していなくても、応答時点で表示されている詳細には読み直しを伝える。
@@ -1109,17 +1118,20 @@ export function App() {
                 reveal={reveal}
                 scrollTo={scrollTo}
                 onToggle={toggle}
-                openPaneMenuId={menu?.open === true && menu.fromList ? menuItems.paneId : null}
+                openPaneMenuId={
+                  menu?.open === true && menu.listScope !== null ? menuItems.paneId : null
+                }
                 openWorkspaceMenuId={menu?.open === true ? (menuItems.workspace?.id ?? null) : null}
-                onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, true)}
+                onPaneMenu={(paneId, trigger) => openPaneMenu(paneId, trigger, scope)}
                 onWorkspaceMenu={(workspaceId, trigger) =>
-                  openWorkspaceMenu(workspaceId, trigger, true)
+                  openWorkspaceMenu(workspaceId, trigger, scope)
                 }
                 moveToTop={moveToTop}
                 onMoveToTopHandled={() => setMoveToTop(null)}
                 onMoveWorkspaces={(workspaceIds, beforeWorkspaceId) =>
                   moveWorkspaceBlock(workspaceIds, beforeWorkspaceId)
                 }
+                onReorderActive={(workspaceIds) => saveActiveOrder(workspaceIds)}
                 removal={
                   removing.state === null
                     ? null

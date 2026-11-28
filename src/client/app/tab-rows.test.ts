@@ -24,6 +24,7 @@ const state = (workspaces: { id: string; paneIds: string[] }[]): AppState => ({
   focusedWorkspaceId: workspaces[0]?.id ?? null,
   focusedTabId: null,
   focusedPaneId: null,
+  activeOrder: [],
   times: NO_TIMES,
   workspaces: workspaces.map((workspace) => ({
     id: workspace.id,
