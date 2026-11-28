@@ -33,6 +33,7 @@ test("a fresh file gives the rate", async () => {
     expect(await readLive(root, SESSION, NOW)).toEqual({
       tokPerSecond: 68.4,
       context: null,
+      contextAt: null,
       at: NOW,
     });
   });
@@ -56,6 +57,7 @@ test("a cleared rate keeps the file valid without a number", () => {
   expect(parseLive(JSON.parse(body({ tokPerSecond: null })), SESSION, NOW)).toEqual({
     tokPerSecond: null,
     context: null,
+    contextAt: null,
     at: NOW,
   });
 });
@@ -73,6 +75,7 @@ test("a rate above the activity limit is clamped", () => {
   expect(parseLive(JSON.parse(body({ tokPerSecond: 99_999 })), SESSION, NOW)).toEqual({
     tokPerSecond: 10_000,
     context: null,
+    contextAt: null,
     at: NOW,
   });
 });
@@ -94,23 +97,39 @@ test("a session id that could leave the directory has no path", () => {
 
 const context = { tokens: 122_600, window: 1_000_000 };
 
-test("the context is read with the rate", () => {
-  expect(parseLive(JSON.parse(body({ context })), SESSION, NOW)).toEqual({
+test("the context is read with the rate and the time it was read", () => {
+  expect(parseLive(JSON.parse(body({ context, contextAt: NOW - 1_000 })), SESSION, NOW)).toEqual({
     tokPerSecond: 68.4,
     context,
+    contextAt: NOW - 1_000,
     at: NOW,
   });
   // /context と同じで、まだ要求が無いセッションは window だけになる。
-  expect(parseLive(JSON.parse(body({ context: { window: 200_000 } })), SESSION, NOW)).toEqual({
+  expect(
+    parseLive(JSON.parse(body({ context: { window: 200_000 }, contextAt: NOW })), SESSION, NOW),
+  ).toEqual({
     tokPerSecond: 68.4,
     context: { tokens: null, window: 200_000 },
+    contextAt: NOW,
+    at: NOW,
+  });
+  // 読んだ時刻を書かない版のファイルは、いつ読んだか分からないので null にする。
+  expect(parseLive(JSON.parse(body({ context })), SESSION, NOW)).toEqual({
+    tokPerSecond: 68.4,
+    context,
+    contextAt: null,
     at: NOW,
   });
 });
 
 test("an old file keeps its context but loses the rate", () => {
-  const stale = JSON.parse(body({ at: NOW - LIVE_TTL_MS - 1, context }));
-  expect(parseLive(stale, SESSION, NOW)).toEqual({ tokPerSecond: null, context, at: stale.at });
+  const stale = JSON.parse(body({ at: NOW - LIVE_TTL_MS - 1, context, contextAt: NOW - 5_000 }));
+  expect(parseLive(stale, SESSION, NOW)).toEqual({
+    tokPerSecond: null,
+    context,
+    contextAt: NOW - 5_000,
+    at: stale.at,
+  });
 });
 
 test("an old file without context is still a leftover", () => {
@@ -119,22 +138,33 @@ test("an old file without context is still a leftover", () => {
 
 test("a broken context is no context, but a broken rate still voids the file", () => {
   for (const broken of [{ tokens: -1 }, { tokens: "many", window: 0 }, [], null]) {
-    expect(parseLive(JSON.parse(body({ context: broken })), SESSION, NOW)).toEqual({
+    expect(parseLive(JSON.parse(body({ context: broken, contextAt: NOW })), SESSION, NOW)).toEqual({
       tokPerSecond: 68.4,
       context: null,
+      contextAt: null,
       at: NOW,
     });
   }
   expect(parseLive(JSON.parse(body({ tokPerSecond: "fast", context })), SESSION, NOW)).toBeNull();
 });
 
-// 圧縮で文脈は切り詰められる。圧縮より前に書かれた値は、今の量ではない。
-test("a context written before the compaction is not shown", () => {
-  const live = { tokPerSecond: null, context, at: NOW };
+// 圧縮で文脈は切り詰められる。圧縮より前に読んだ値は、今の量ではない。
+test("a context read before the compaction is not shown", () => {
+  const live = { tokPerSecond: null, context, contextAt: NOW, at: NOW };
 
   expect(contextSince(live, NOW)).toBeNull();
   expect(contextSince(live, NOW - 1)).toEqual(context);
   expect(contextSince(live, null)).toEqual(context);
   expect(contextSince(null, NOW)).toBeNull();
-  expect(contextSince({ tokPerSecond: 1, context: null, at: NOW }, null)).toBeNull();
+  expect(
+    contextSince({ tokPerSecond: 1, context: null, contextAt: null, at: NOW }, null),
+  ).toBeNull();
+});
+
+// 書いた時刻 at はターン中にも進む。読んだ時刻が分からない値は、圧縮後も出さない。
+test("a context without the time it was read is not shown after a compaction", () => {
+  const live = { tokPerSecond: 68.4, context, contextAt: null, at: NOW + 60_000 };
+
+  expect(contextSince(live, NOW)).toBeNull();
+  expect(contextSince(live, null)).toEqual(context);
 });

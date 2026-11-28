@@ -349,6 +349,8 @@ function claudeLive(): Record<string, unknown> {
     at: Date.now(),
     tokPerSecond: null,
     context: { tokens: 122_600, window: 1_000_000 },
+    // 圧縮の境界より後に読んだ値であること。境界は会話の fixture の時刻（2026-01-01）。
+    contextAt: Date.now(),
   };
 }
 

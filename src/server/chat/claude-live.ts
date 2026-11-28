@@ -17,6 +17,8 @@ export type ClaudeLive = {
   tokPerSecond: number | null;
   // ターンの終わりにしか動かないので、鮮度では捨てない。無ければ null。
   context: ChatContext | null;
+  // 使用量を読んだ時刻。書き込みの時刻（at）とは別。読んだ時刻を書かない版では null。
+  contextAt: number | null;
   at: number;
 };
 
@@ -56,20 +58,28 @@ export function parseLive(value: unknown, sessionId: string, now: number): Claud
   // 使用量はターンの終わりにしか変わらない。2.5 秒を過ぎたファイルでも、次のターンまで
   // 同じ値を持ち続けるので、速度の鮮度とは切り離して読む。
   const context = parseContext(record.context);
+  const contextAt = contextAtOf(record.contextAt, context);
   const fresh = Math.abs(now - at) <= LIVE_TTL_MS;
-  if (!fresh) return context === null ? null : { tokPerSecond: null, context, at };
+  if (!fresh) return context === null ? null : { tokPerSecond: null, context, contextAt, at };
   const rate = parseRate(record.tokPerSecond);
-  return rate === undefined ? null : { tokPerSecond: rate, context, at };
+  return rate === undefined ? null : { tokPerSecond: rate, context, contextAt, at };
 }
 
-// 圧縮は文脈を切り詰める。圧縮より前に書かれた使用量は圧縮前の量なので、次のターンまで出さない。
+function contextAtOf(value: unknown, context: ChatContext | null): number | null {
+  if (context === null) return null;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+// 圧縮は文脈を切り詰める。圧縮より前に読んだ使用量は圧縮後の量ではないので、次のターンまで出さない。
+// 読んだ時刻を確かめられない版のファイルも出さない（書いた時刻 at はターン中にも進む）。
 // 不明を 0% とも書かない（docs/adr/claude-integration.md）。
 export function contextSince(
   live: ClaudeLive | null,
   compactedAt: number | null,
 ): ChatContext | null {
   if (live === null || live.context === null) return null;
-  if (compactedAt !== null && live.at <= compactedAt) return null;
+  if (compactedAt === null) return live.context;
+  if (live.contextAt === null || live.contextAt <= compactedAt) return null;
   return live.context;
 }
 

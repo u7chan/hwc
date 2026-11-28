@@ -8,7 +8,7 @@ hwc は起動時に `--plugin-dir` でこのディレクトリを渡し、設定
 transcript から導くので、このファイルは速度と使用量だけを持つ。環境変数が無い（hwc 以外が
 起動した）ときは何もしない。
 
-使用量は `session.start` と `turn.complete` で `$.session.usage()` から読む。値は CLI の
+使用量は `session.start` と `turn.complete` で `$.session.usage()` から読み、読んだ時刻を `contextAt`（書き込みの時刻は `at`）として書く。hwc は圧縮の前後を `contextAt` で判定する。値は CLI の
 `/context` と同じ計算で、`window` は CLI が解決したモデルの context window（200k のモデルも
 1M のモデルもある）。hwc はモデル別の表を持たない。読めない版では使用量を書かないだけで、
 速度と会話はそのまま動く。

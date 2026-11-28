@@ -1051,6 +1051,7 @@ test("the context the mod recorded is shown and is part of the etag", async () =
         at: BASE,
         tokPerSecond: null,
         context: { tokens: 122_600, window: 1_000_000 },
+        contextAt: BASE,
       }),
     );
 
@@ -1077,6 +1078,7 @@ test("an old live file still supplies the context", async () => {
         at: BASE,
         tokPerSecond: 68.4,
         context: { tokens: 40_000, window: 200_000 },
+        contextAt: BASE,
       }),
     );
 
@@ -1089,8 +1091,8 @@ test("an old live file still supplies the context", async () => {
   });
 });
 
-// 圧縮は文脈を切り詰める。圧縮より前に書かれた使用量は、圧縮前の量。
-test("a context recorded before a compaction is not shown", async () => {
+// 圧縮は文脈を切り詰める。圧縮より前に読んだ使用量は、圧縮前の量。
+test("a context read before a compaction is not shown", async () => {
   await withRoot(async (root) => {
     const first = user("u1", null, "本文です。");
     const answer = assistant("a1", "u1", "msg_1", [text("返事です。")]);
@@ -1104,9 +1106,11 @@ test("a context recorded before a compaction is not shown", async () => {
       JSON.stringify({
         v: 1,
         sessionId: SESSION,
-        at: Date.parse(cut.timestamp) - 1,
-        tokPerSecond: null,
+        // ターン中の publish は、圧縮前の context に新しい at を付けて書く。
+        at: Date.parse(cut.timestamp) + 60_000,
+        tokPerSecond: 68.4,
         context: { tokens: 790_032, window: 1_000_000 },
+        contextAt: Date.parse(cut.timestamp) - 60_000,
       }),
     );
 
@@ -1116,7 +1120,7 @@ test("a context recorded before a compaction is not shown", async () => {
   });
 });
 
-test("a context recorded after the compaction is shown", async () => {
+test("a context read after the compaction is shown", async () => {
   await withRoot(async (root) => {
     const first = user("u1", null, "本文です。");
     const answer = assistant("a1", "u1", "msg_1", [text("返事です。")]);
@@ -1133,6 +1137,7 @@ test("a context recorded after the compaction is shown", async () => {
         at: Date.parse(cut.timestamp) + 1,
         tokPerSecond: null,
         context: { tokens: 13_804, window: 1_000_000 },
+        contextAt: Date.parse(cut.timestamp) + 1,
       }),
     );
 
@@ -1155,6 +1160,7 @@ test("another session's live file adds no context", async () => {
         at: BASE,
         tokPerSecond: null,
         context: { tokens: 122_600, window: 1_000_000 },
+        contextAt: BASE,
       }),
     );
 
