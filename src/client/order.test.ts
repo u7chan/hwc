@@ -180,7 +180,7 @@ test("reorderKeys puts the grabbed band before the drop target", () => {
 });
 
 test("isOrderChange looks only at the keys, so it also fits the active bands", () => {
-  // アクティブの带は id を持たない。並べ替えの判定に要るのは key だけ。
+  // アクティブの帯は id を持たない。並べ替えの判定に要るのは key だけ。
   const bands = [{ key: "w1" }, { key: "w2" }];
 
   expect(isOrderChange(bands, "w2", "w1")).toBe(true);
