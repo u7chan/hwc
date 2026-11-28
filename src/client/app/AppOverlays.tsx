@@ -114,7 +114,11 @@ export function AppOverlays(props: AppOverlaysProps) {
           )}
           {menuWorkspace === null ? null : (
             <>
-              <WorkspaceMenuHead label={menuWorkspace.label} path={menuWorkspace.path ?? null} />
+              <WorkspaceMenuHead
+                label={menuWorkspace.label}
+                branch={menuWorkspace.branch ?? null}
+                path={menuWorkspace.path ?? null}
+              />
               {menuWorkspace.tabs.map((tab) => {
                 const source = tab.panes[0];
                 const full = tab.panes.length >= MAX_PANES_PER_TAB;
