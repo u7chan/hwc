@@ -1,4 +1,6 @@
-/* 名前は 1 行に保つ。狭い画面で 1 文字ずつ折れると読めなくなる。 */
+/* 名前は 1 行に保つ。狭い画面で 1 文字ずつ折れると読めなくなる。
+   行間は本文と同じものにする。Noto Sans JP の文字面は 1 行の行間（1.2）に収まらず、
+   overflow: hidden が g や p の降下部分を切ってしまう。 */
 .hwc-pane-name,
 .hwc-pane-sub,
 .hwc-active-band-name,
@@ -14,6 +16,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: var(--line-body);
 }
 
 /* 経過と終了時刻は目安。数字が揺れないよう等幅の数字で出す。 */
@@ -119,7 +122,6 @@
   margin: 0;
   font-size: var(--text-body);
   font-weight: 600;
-  line-height: var(--line-tight);
 }
 
 /* 場所の所属とブランチをまとめる。ブランチは残り幅を取り、足りないときはリポジトリ名より
@@ -181,7 +183,6 @@ a.hwc-active-band-repo-link:focus-visible {
   color: var(--color-text);
   font-size: var(--text-secondary);
   font-weight: 600;
-  line-height: var(--line-tight);
 }
 
 /* GitHub のリモートがあることを、リポジトリ名の左の記号で示す。ローカルのみの
@@ -202,7 +203,6 @@ a.hwc-active-band-repo-link:focus-visible {
   color: var(--color-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-secondary);
-  line-height: var(--line-tight);
 }
 
 /* 帯の幅が狭いときはリポジトリ名を優先し、ブランチを隠す。ブランチはこの幅では

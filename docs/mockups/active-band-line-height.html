@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="ja" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>アクティブ帯の行間と見切れ — 比較モック</title>
+    <style>
+      @font-face {
+        font-family: "Noto Sans JP";
+        src: url("../../src/client/assets/fonts/NotoSansJP-Variable.woff2") format("woff2");
+        font-weight: 100 900;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Nerd Symbols Mono";
+        src: url("../../src/client/assets/fonts/NerdSymbolsMono.woff2") format("woff2");
+        font-display: swap;
+      }
+
+      :root {
+        --color-bg: #f4f5f7;
+        --color-surface: #ffffff;
+        --color-raised: #eef0f3;
+        --color-text: #18212f;
+        --color-secondary: #5d6878;
+        --color-accent: #255cd6;
+        --color-danger: #b3333c;
+        --color-line: #dce0e7;
+        --font-ui:
+          "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+          "Yu Gothic UI", "Noto Sans", sans-serif;
+        --font-mono:
+          ui-monospace, "SFMono-Regular", Consolas, "BIZ UDGothic", "Nerd Symbols Mono", monospace;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-8: 32px;
+        --radius-sm: 8px;
+        --radius-icon: 10px;
+        --radius-control: 12px;
+        --radius-panel: 16px;
+        --text-body: 1.0625rem;
+        --text-secondary: 0.8125rem;
+        --line-tight: 1.2;
+        --line-body: 1.5;
+        --tap: 44px;
+        --row-head: 56px;
+        --row-pane: 64px;
+        --icon-frame: 32px;
+      }
+
+      :root[data-theme="dark"] {
+        --color-bg: #101215;
+        --color-surface: #1b1e23;
+        --color-raised: #262a31;
+        --color-text: #f2f4f7;
+        --color-secondary: #a3aab5;
+        --color-accent: #94baff;
+        --color-danger: #ff9ca4;
+        --color-line: #32373f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-ui);
+        font-size: var(--text-body);
+        line-height: var(--line-body);
+      }
+
+      .page {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 40px 32px 80px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 32px;
+      }
+
+      .hero h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.25;
+      }
+
+      .hero p {
+        max-width: 900px;
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 15px;
+      }
+
+      .theme-toggle {
+        flex: none;
+        min-height: 44px;
+        padding: 0 16px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-control);
+        background: var(--color-surface);
+        color: var(--color-text);
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .frames {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 28px;
+      }
+
+      .frame {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 390px;
+      }
+
+      .frame-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+
+      .frame-head h2 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.3;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--color-raised);
+        color: var(--color-secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .frame-note {
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .sample-label {
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 11px;
+      }
+
+      .sample {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .measure {
+        margin: 0;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .measure strong {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      /* ---- アプリの .hwc-active-band まわりをそのまま持ってくる ---- */
+
+      .hwc-active-group {
+        background: var(--color-surface);
+        border-radius: var(--radius-panel);
+      }
+
+      .hwc-active-band {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        min-height: var(--row-head);
+        padding: var(--space-2) var(--space-4);
+        background: var(--color-bg);
+      }
+
+      .hwc-active-band::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background: var(--color-raised);
+        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        box-shadow: inset 0 -1px 0 var(--color-line);
+      }
+
+      .hwc-space-icon {
+        position: relative;
+        z-index: 2;
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--tap);
+        height: var(--tap);
+        margin: 0 -6px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      .hwc-active-band-icon {
+        display: grid;
+        place-items: center;
+        width: var(--icon-frame);
+        height: var(--icon-frame);
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-icon);
+        color: var(--color-secondary);
+      }
+
+      .hwc-active-band-main {
+        flex: 1;
+        min-width: 0;
+        container-type: inline-size;
+      }
+
+      .hwc-active-band-title {
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        min-width: 0;
+      }
+
+      .hwc-active-band-name {
+        margin: 0;
+        font-size: var(--text-body);
+        font-weight: 600;
+      }
+
+      .hwc-active-band-pr {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        min-height: 32px;
+        padding: 0 var(--space-1);
+        border-radius: var(--radius-sm);
+        color: var(--color-accent);
+        font-variant-numeric: tabular-nums;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .hwc-active-band-line {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        min-width: 0;
+        margin: 0;
+      }
+
+      .hwc-active-band-place {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        gap: var(--space-2);
+        min-width: 0;
+      }
+
+      .hwc-active-band-repo-link {
+        flex: 0 1 auto;
+        display: flex;
+        align-items: center;
+        gap: var(--space-1);
+        min-width: 0;
+        margin: 0 calc(-1 * var(--space-1));
+        padding: 0 var(--space-1);
+        border-radius: var(--radius-sm);
+        color: var(--color-text);
+        text-decoration: none;
+      }
+
+      .hwc-active-band-repo {
+        flex: 0 1 auto;
+        color: var(--color-text);
+        font-size: var(--text-secondary);
+        font-weight: 600;
+      }
+
+      .hwc-active-band-remote {
+        flex: none;
+        display: grid;
+        place-items: center;
+        color: var(--color-secondary);
+      }
+
+      .hwc-active-band-branch {
+        flex: 1 1 0;
+        margin: 0;
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: var(--text-secondary);
+      }
+
+      @container (max-width: 250px) {
+        .hwc-active-band-branch {
+          display: none;
+        }
+      }
+
+      .hwc-git-count {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        color: var(--color-secondary);
+        font-family: var(--font-mono);
+        font-size: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .hwc-active-band-counts {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: var(--space-2);
+      }
+
+      .hwc-active-band-line .hwc-active-band-counts {
+        margin-left: auto;
+      }
+
+      .hwc-active-count {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+        color: var(--color-accent);
+        font-size: var(--text-secondary);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+
+      .hwc-active-band-jump {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: var(--space-8);
+        height: var(--space-8);
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--color-secondary);
+        cursor: pointer;
+      }
+
+      /* 1 行に保つラベルは、アプリと同じく overflow: hidden で省略する。 */
+      .hwc-active-band-name,
+      .hwc-active-band-repo,
+      .hwc-active-band-branch {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* 案ごとの差はここだけ。 */
+      .v-now .hwc-active-band-name,
+      .v-now .hwc-active-band-repo,
+      .v-now .hwc-active-band-branch {
+        line-height: var(--line-tight);
+      }
+
+      .v-lh .hwc-active-band-name,
+      .v-lh .hwc-active-band-repo,
+      .v-lh .hwc-active-band-branch {
+        line-height: var(--line-body);
+      }
+
+      .v-lh-tight .hwc-active-band-name,
+      .v-lh-tight .hwc-active-band-repo,
+      .v-lh-tight .hwc-active-band-branch {
+        line-height: var(--line-body);
+      }
+
+      .v-lh-tight .hwc-active-band {
+        padding: var(--space-1) var(--space-4);
+      }
+
+      /* 帯の下に 1 行だけ置いて、帯の高さを行と比べられるようにする。 */
+      .hwc-active-rows {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .hwc-active-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        min-height: var(--row-pane);
+        padding: var(--space-3) var(--space-4) var(--space-3) var(--space-8);
+        border-top: 1px solid var(--color-line);
+        color: var(--color-secondary);
+        font-size: var(--text-secondary);
+      }
+
+      .row-dot {
+        flex: none;
+        width: 15px;
+        height: 15px;
+        border: 1.5px solid var(--color-accent);
+        border-top-color: transparent;
+        border-radius: 50%;
+      }
+
+      /* 拡大。文字の下端がどこで切れるかを 2 倍で見る。破線が行ボックスの下端＝切る位置。 */
+      .zoom {
+        position: relative;
+        overflow: hidden;
+        height: 210px;
+        border: 1px solid var(--color-line);
+        border-radius: var(--radius-sm);
+        background: var(--color-raised);
+      }
+
+      .zoom-scale {
+        position: relative;
+        padding: 10px var(--space-4);
+        transform: scale(4);
+        transform-origin: 0 0;
+      }
+
+      .clip-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 0;
+        border-top: 1px dashed var(--color-danger);
+        pointer-events: none;
+      }
+
+      .zoom-note {
+        margin: 0;
+        color: var(--color-secondary);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <h1>アクティブ帯の行間と見切れ</h1>
+          <p>
+            帯の見出し・リポジトリ名・ブランチは 1 行省略のため <code>overflow: hidden</code>
+            を持ちます。行間が 1.2 だと Noto Sans JP
+            の文字面が行ボックスに収まらず、英字の降下部分（g / p / y / j の下）が切れます。下の 3
+            案は、切る位置と帯の高さのどちらを取るかの違いです。
+          </p>
+        </div>
+        <button class="theme-toggle" id="theme-toggle" type="button">テーマ切替</button>
+      </header>
+
+      <div class="frames">
+        <section class="frame v-now">
+          <div class="frame-head">
+            <h2>現状</h2>
+            <span class="badge">line-height 1.2</span>
+          </div>
+          <p class="frame-note">
+            破線（見出しの行ボックスの下端）が g
+            の降下部分にかかり、下端が平らになる。帯の高さは今のまま。
+          </p>
+          <div class="samples"></div>
+          <div class="zoom"></div>
+          <p class="zoom-note">
+            破線は見出しの行ボックスの下端（ここで切り取られる）。4 倍で表示。
+          </p>
+        </section>
+
+        <section class="frame v-lh">
+          <div class="frame-head">
+            <h2>案 1</h2>
+            <span class="badge">line-height 1.5</span>
+          </div>
+          <p class="frame-note">
+            破線が文字の下へ抜け、切れない。余白はそのままなので、帯は行間の増えたぶんだけ高くなる（PR
+            の無い帯で 1px 程度、PR チップのある帯は数 px）。
+          </p>
+          <div class="samples"></div>
+          <div class="zoom"></div>
+          <p class="zoom-note">
+            破線は見出しの行ボックスの下端（ここで切り取られる）。4 倍で表示。
+          </p>
+        </section>
+
+        <section class="frame v-lh-tight">
+          <div class="frame-head">
+            <h2>案 2</h2>
+            <span class="badge">line-height 1.5 + 余白 4px</span>
+          </div>
+          <p class="frame-note">
+            切れない。上下の余白を 8px から 4px に詰めるので、帯は今より PR の無い帯で約 4px、PR
+            チップのある帯でも約 4px 低くなる。
+          </p>
+          <div class="samples"></div>
+          <div class="zoom"></div>
+          <p class="zoom-note">
+            破線は見出しの行ボックスの下端（ここで切り取られる）。4 倍で表示。
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <template id="band-template">
+      <div class="sample">
+        <p class="sample-label"></p>
+        <div class="hwc-active-group">
+          <div class="hwc-active-band">
+            <button class="hwc-space-icon" type="button" aria-label="メニュー">
+              <span class="hwc-active-band-icon">
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="5" cy="4" r="2" fill="none" stroke="currentColor" />
+                  <circle cx="5" cy="12" r="2" fill="none" stroke="currentColor" />
+                  <circle cx="11" cy="8" r="2" fill="none" stroke="currentColor" />
+                  <path d="M5 6v4M7 8h2" stroke="currentColor" />
+                </svg>
+              </span>
+            </button>
+            <div class="hwc-active-band-main">
+              <div class="hwc-active-band-title">
+                <h2 class="hwc-active-band-name">docs(agents): コミットメッセージを整える</h2>
+                <a class="hwc-active-band-pr" href="#" data-pr>#2802</a>
+              </div>
+              <p class="hwc-active-band-line">
+                <span class="hwc-active-band-place">
+                  <a class="hwc-active-band-repo-link" href="#">
+                    <span class="hwc-active-band-remote" aria-hidden="true">
+                      <svg width="13" height="13" viewBox="0 0 16 16">
+                        <path
+                          fill="currentColor"
+                          d="M8 0a8 8 0 0 0-2.5 15.6c.4.1.5-.2.5-.4v-1.4c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.2 1.9.9 2.3.7.1-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-4 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.6 7.6 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.5 1.1.2 1.9.1 2.1.5.5.8 1.2.8 2.1 0 3.1-1.9 3.8-3.6 4 .3.2.5.7.5 1.5v2.2c0 .2.1.5.5.4A8 8 0 0 0 8 0Z"
+                        />
+                      </svg>
+                    </span>
+                    <span class="hwc-active-band-repo">monorepo</span>
+                  </a>
+                  <span class="hwc-active-band-branch">docs/agents-commit-message</span>
+                </span>
+                <span class="hwc-git-count">↑1</span>
+                <span class="hwc-active-band-counts">
+                  <span class="hwc-active-count"><span class="row-dot"></span>2</span>
+                </span>
+              </p>
+            </div>
+            <button class="hwc-active-band-jump" type="button" aria-label="すべての一覧で開く">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M2 8h11M9 4l4 4-4 4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+              </svg>
+            </button>
+          </div>
+          <ul class="hwc-active-rows">
+            <li class="hwc-active-row"><span class="row-dot"></span>エージェントの行</li>
+          </ul>
+        </div>
+        <p class="measure"></p>
+      </div>
+    </template>
+
+    <script>
+      const root = document.documentElement;
+      document.getElementById("theme-toggle").addEventListener("click", () => {
+        root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+      });
+
+      const template = document.getElementById("band-template");
+      const frames = [...document.querySelectorAll(".frame")];
+
+      for (const frame of frames) {
+        const samples = frame.querySelector(".samples");
+        for (const hasPr of [true, false]) {
+          const sample = template.content.firstElementChild.cloneNode(true);
+          if (!hasPr) sample.querySelector("[data-pr]").remove();
+          sample.querySelector(".sample-label").textContent = hasPr
+            ? "PR チップのある帯"
+            : "PR チップの無い帯";
+          samples.append(sample);
+        }
+      }
+
+      const round = (value) => Math.round(value * 10) / 10;
+
+      for (const frame of frames) {
+        for (const sample of frame.querySelectorAll(".sample")) {
+          const band = sample.querySelector(".hwc-active-band");
+          const name = sample.querySelector(".hwc-active-band-name");
+          const repo = sample.querySelector(".hwc-active-band-repo");
+          const height = round(band.getBoundingClientRect().height);
+          const overflowName = name.scrollHeight - name.clientHeight;
+          const overflowRepo = repo.scrollHeight - repo.clientHeight;
+          sample.querySelector(".measure").innerHTML =
+            `帯 <strong>${height}px</strong> ／ 見出し ${round(
+              name.getBoundingClientRect().height,
+            )}px ／ 切れ ${overflowName + overflowRepo}px`;
+        }
+      }
+
+      // 拡大図は PR のある帯の見出し行を使う。破線は見出しの行ボックスの下端。
+      for (const frame of frames) {
+        const source = frame.querySelector(".sample .hwc-active-band-title");
+        const zoom = frame.querySelector(".zoom");
+        const scale = document.createElement("div");
+        scale.className = "zoom-scale";
+        scale.append(source.cloneNode(true));
+        const line = document.createElement("span");
+        line.className = "clip-line";
+        scale.append(line);
+        zoom.append(scale);
+        const name = scale.querySelector(".hwc-active-band-name");
+        line.style.top = `${name.offsetTop + name.offsetHeight}px`;
+      }
+    </script>
+  </body>
+</html>
