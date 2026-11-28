@@ -137,7 +137,7 @@ function serializeNode(node: Node, range: Range, depth: number, mode: Mode): str
     case "OL":
       return serializeList(node, range, depth, mode);
     case "TABLE":
-      return mode === "copy" ? serializeTable(node, range, depth, mode) : textWithin(node, range);
+      return serializeTable(node, range, depth, mode);
     case "A":
       return serializeLink(node, range, depth, mode);
     case "IMG": {
@@ -250,7 +250,8 @@ function serializeListItemBody(item: Element, range: Range, depth: number, mode:
 }
 
 function serializeTable(table: Element, range: Range, depth: number, mode: Mode): string {
-  if (!coversContents(range, table)) return textWithin(table, range);
+  // 表の記法は画面に出ていない。引用は選択文字列と同じく、セルの文字を並べるだけにする。
+  if (mode === "quote" || !coversContents(range, table)) return textWithin(table, range);
   const headers = [...table.querySelectorAll("thead th")];
   if (headers.length === 0) return textWithin(table, range);
 
