@@ -250,8 +250,8 @@ function serializeListItemBody(item: Element, range: Range, depth: number, mode:
 }
 
 function serializeTable(table: Element, range: Range, depth: number, mode: Mode): string {
-  // 表の記法は画面に出ていない。引用は選択文字列と同じく、セルの文字を並べるだけにする。
-  if (mode === "quote" || !coversContents(range, table)) return textWithin(table, range);
+  if (mode === "quote") return quoteTable(table, range, depth);
+  if (!coversContents(range, table)) return textWithin(table, range);
   const headers = [...table.querySelectorAll("thead th")];
   if (headers.length === 0) return textWithin(table, range);
 
@@ -271,6 +271,26 @@ function serializeTable(table: Element, range: Range, depth: number, mode: Mode)
     lines.push(`| ${cells.map(cellText).join(" | ")} |`);
   }
   return `${lines.join("\n")}\n\n`;
+}
+
+// 表の記法は画面に出ていないので引用には入れない。ただセルをそのまま連結すると
+// 「画面状態一覧空」と読めなくなるため、セルをタブ、行を改行で区切って画面の並びに寄せる。
+function quoteTable(table: Element, range: Range, depth: number): string {
+  const lines: string[] = [];
+  for (const row of table.querySelectorAll("tr")) {
+    if (!intersects(row, range)) continue;
+    const cells = [...row.children].filter(
+      (cell) => cell.tagName === "TH" || cell.tagName === "TD",
+    );
+    const parts: string[] = [];
+    for (const cell of cells) {
+      if (!intersects(cell, range)) continue;
+      parts.push(serializeChildren(cell, range, depth, "quote").replace(/\n+/g, " ").trim());
+    }
+    if (parts.length === 0) continue;
+    lines.push(parts.join("\t"));
+  }
+  return lines.length === 0 ? "" : `${lines.join("\n")}\n\n`;
 }
 
 function imageMarkdown(button: Element): string {
