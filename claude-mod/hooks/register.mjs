@@ -10,6 +10,9 @@ const WRITE_EVERY_MS = 500;
 let liveDir = "";
 let sessionId = "";
 let context = null;
+// 使用量を読んだ時刻。書いた時刻（at）とは別に持つ。ターン中は同じ値と新しい at を書き
+// 続けるので、at では圧縮の前後を判定できない（docs/adr/claude-integration.md）。
+let contextAt = 0;
 
 function estimateTokens(text) {
   let tokens = 0;
@@ -40,12 +43,25 @@ function count(value, min) {
 
 async function publish($, rate) {
   if (liveDir === "" || sessionId === "") return;
-  const body = JSON.stringify({ v: 1, sessionId, at: Date.now(), tokPerSecond: rate, context });
+  const body = JSON.stringify({
+    v: 1,
+    sessionId,
+    at: Date.now(),
+    tokPerSecond: rate,
+    context,
+    contextAt: context === null ? null : contextAt,
+  });
   try {
     await $.fs.write(`${liveDir}/${sessionId}.json`, body);
   } catch {
     // 速度と使用量は表示のためだけ。書けなくてもターンを止めない。
   }
+}
+
+// 使用量を読み直し、読んだ時刻も残す。値が読めない版では contextAt を書かない。
+async function loadContext($) {
+  context = await readContext($);
+  contextAt = context === null ? 0 : Date.now();
 }
 
 export function register(on) {
@@ -57,7 +73,7 @@ export function register(on) {
         liveDir = dir.replace(/\/+$/, "");
         sessionId = id;
         // 再開したセッションは、次のターンまで使用量が動かない。開いた時点で書いておく。
-        context = await readContext($);
+        await loadContext($);
         await publish($, null);
       }
     } catch {
@@ -114,7 +130,7 @@ export function register(on) {
   // 中断では stop が来ないことがある。ターンの終わりに消し、使用量を更新する。
   on("turn.complete", async ($, e, next) => {
     if (e.agentId === undefined) {
-      context = await readContext($);
+      await loadContext($);
       await publish($, null);
     }
     return next(e);

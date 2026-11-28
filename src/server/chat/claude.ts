@@ -2,7 +2,7 @@ import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { ACTIVITY_RATE_PHASES } from "../../shared/activity";
-import { readLive } from "./claude-live";
+import { contextSince, readLive } from "./claude-live";
 import { etagOf, snapshotOf } from "./claude-projection";
 import { readSidecar, SESSION_ID, SIDECAR_TTL_MS } from "./claude-sidecar";
 import { sessionActivityOf } from "./claude-session-activity";
@@ -147,14 +147,15 @@ export function createClaudeChatClient(
   };
 
   // 使用量は mod がターンの終わりに書く。transcript の射影はファイルが増えたときしか
-  // 作り直さないので、射影のキャッシュとは別に毎回読んで重ねる。
+  // 作り直さないので、射影のキャッシュとは別に毎回読んで重ねる。圧縮より前の値は、圧縮で
+  // 文脈が切り詰められた後の量ではないので出さない（docs/adr/claude-integration.md）。
   const withLiveContext = async (
     snapshot: ChatSnapshot,
     sessionId: string,
   ): Promise<ChatSnapshot> => {
     if (options.liveRoot === undefined) return snapshot;
     const live = await readLive(options.liveRoot, sessionId, now());
-    const context = live?.context ?? null;
+    const context = contextSince(live, snapshot.compaction?.at ?? null);
     if (context === null) return snapshot;
     const { etag: _etag, ...body } = snapshot;
     return { ...body, context, etag: etagOf(sessionId, { ...body, context }) };

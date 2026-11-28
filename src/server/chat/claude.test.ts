@@ -132,8 +132,8 @@ function reply(
 }
 
 // 実物と同じく、圧縮の境界は新しい枝の根になる。parentUuid は null で、元の枝は
-// logicalParentUuid にだけ残る。active branch は logicalParentUuid を辿らない。
-function boundary(logicalParentUuid: string | null) {
+// logicalParentUuid にだけ残る。待ちと段階はこの枝で切り、会話だけ辿り直す。
+function boundary(logicalParentUuid: string | null, compactMetadata?: unknown) {
   return {
     type: "system",
     subtype: "compact_boundary",
@@ -142,8 +142,20 @@ function boundary(logicalParentUuid: string | null) {
     logicalParentUuid,
     timestamp: timestamp(),
     version: "2.1.328",
+    ...(compactMetadata === undefined ? {} : { compactMetadata }),
   };
 }
+
+// 実物の要約は、モデル向けの定型文と内部の注記から始まる。
+const SUMMARY_RAW = [
+  "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.",
+  "",
+  "<system-reminder>",
+  "<tools-used-before-summary>Bash, Read</tools-used-before-summary>",
+  "</system-reminder>",
+  "Summary:",
+  "1. 最初の依頼",
+].join("\n");
 
 async function withRoot(run: (root: string) => Promise<void>): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "hwc-claude-"));
@@ -262,6 +274,68 @@ test("user entries marked isMeta or isCompactSummary are not part of the convers
       "本文です。",
       "わかりました。",
     ]);
+  });
+});
+
+test("a compacted session keeps the conversation before the boundary and marks it", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "最初の依頼です。");
+    const answer = assistant("a1", "u1", "msg_1", [text("対応します。")]);
+    const cut = boundary("a1", { trigger: "auto", preTokens: 790_236 });
+    const summary = user("s1", "boundary-1", SUMMARY_RAW, { isCompactSummary: true });
+    await writeTranscript(root, [first, answer, cut, summary]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.messages.map((message) => message.text)).toEqual([
+      "最初の依頼です。",
+      "対応します。",
+    ]);
+    expect(snapshot.compaction).toEqual({
+      at: Date.parse(cut.timestamp),
+      tokensBefore: 790_236,
+      summary: "Summary:\n1. 最初の依頼",
+      index: 2,
+    });
+    // 圧縮後の応答がまだ無くても、モデルと effort は最後の応答から出す。
+    expect(snapshot).toMatchObject({ model: MODEL, effort: "xhigh" });
+  });
+});
+
+test("the divider sits between the messages before and after compaction", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "最初の依頼です。");
+    const answer = assistant("a1", "u1", "msg_1", [text("対応します。")]);
+    const cut = boundary("a1");
+    const summary = user("s1", "boundary-1", "これまでの要約です。", { isCompactSummary: true });
+    const later = user("u2", "s1", "続きをお願いします。");
+    await writeTranscript(root, [first, answer, cut, summary, later]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.messages.map((message) => message.text)).toEqual([
+      "最初の依頼です。",
+      "対応します。",
+      "続きをお願いします。",
+    ]);
+    expect(snapshot.compaction?.index).toBe(2);
+  });
+});
+
+// 圧縮前の未解決の tool_use は、終わったターンのもの。今の待ちとして出さない。
+test("an unresolved tool_use before a compaction is not a pending card", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "配色を決めてください。");
+    const ask = assistant("a1", "u1", "msg_1", [
+      askUse("t1", [question("好きな色は？", ["赤", "青"])]),
+    ]);
+    const cut = boundary("a1");
+    const summary = user("s1", "boundary-1", "これまでの要約です。", { isCompactSummary: true });
+    await writeTranscript(root, [first, ask, cut, summary]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.pending).toBeUndefined();
   });
 });
 
@@ -682,6 +756,29 @@ test("only the newest messages within the chat limit are returned", async () => 
   });
 });
 
+// 区切りも、古い側を落とした分だけ前へ動く。
+test("the divider follows the messages dropped by the limit", async () => {
+  await withRoot(async (root) => {
+    let parent: string | null = null;
+    const entries = Array.from({ length: MAX_CHAT_MESSAGES + 1 }, (_, index) => {
+      const entry = user(`u${index}`, parent, `本文 ${index}`);
+      parent = `u${index}`;
+      return entry;
+    });
+    const cut = boundary(parent, { preTokens: 400_000 });
+    const summary = user("s1", "boundary-1", "これまでの要約です。", { isCompactSummary: true });
+    const later = user("u-last", "s1", "圧縮後の発言です。");
+    await writeTranscript(root, [...entries, cut, summary, later]);
+
+    const snapshot = await createClaudeChatClient().snapshot(SESSION);
+
+    expect(snapshot.messages).toHaveLength(MAX_CHAT_MESSAGES);
+    expect(snapshot.messages.at(-1)?.text).toBe("圧縮後の発言です。");
+    // 502 件のうち前の 2 件を落としたので、区切りは末尾の 1 件前へ動く。
+    expect(snapshot.compaction?.index).toBe(MAX_CHAT_MESSAGES - 1);
+  });
+});
+
 test("an unresolved AskUserQuestion at the end of the branch becomes a question card", async () => {
   await withRoot(async (root) => {
     const first = user("u1", null, "配色を決めてください。");
@@ -954,6 +1051,7 @@ test("the context the mod recorded is shown and is part of the etag", async () =
         at: BASE,
         tokPerSecond: null,
         context: { tokens: 122_600, window: 1_000_000 },
+        contextAt: BASE,
       }),
     );
 
@@ -980,6 +1078,7 @@ test("an old live file still supplies the context", async () => {
         at: BASE,
         tokPerSecond: 68.4,
         context: { tokens: 40_000, window: 200_000 },
+        contextAt: BASE,
       }),
     );
 
@@ -989,6 +1088,62 @@ test("an old live file still supplies the context", async () => {
     }).snapshot(SESSION);
 
     expect(snapshot.context).toEqual({ tokens: 40_000, window: 200_000 });
+  });
+});
+
+// 圧縮は文脈を切り詰める。圧縮より前に読んだ使用量は、圧縮前の量。
+test("a context read before a compaction is not shown", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "本文です。");
+    const answer = assistant("a1", "u1", "msg_1", [text("返事です。")]);
+    const cut = boundary("a1");
+    const summary = user("s1", "boundary-1", "これまでの要約です。", { isCompactSummary: true });
+    await writeTranscript(root, [first, answer, cut, summary]);
+    const liveRoot = join(root, "live");
+    await mkdir(liveRoot, { recursive: true });
+    await writeFile(
+      join(liveRoot, `${SESSION}.json`),
+      JSON.stringify({
+        v: 1,
+        sessionId: SESSION,
+        // ターン中の publish は、圧縮前の context に新しい at を付けて書く。
+        at: Date.parse(cut.timestamp) + 60_000,
+        tokPerSecond: 68.4,
+        context: { tokens: 790_032, window: 1_000_000 },
+        contextAt: Date.parse(cut.timestamp) - 60_000,
+      }),
+    );
+
+    const snapshot = await createClaudeChatClient({ liveRoot, now: () => BASE }).snapshot(SESSION);
+
+    expect(snapshot.context).toBeNull();
+  });
+});
+
+test("a context read after the compaction is shown", async () => {
+  await withRoot(async (root) => {
+    const first = user("u1", null, "本文です。");
+    const answer = assistant("a1", "u1", "msg_1", [text("返事です。")]);
+    const cut = boundary("a1");
+    const summary = user("s1", "boundary-1", "これまでの要約です。", { isCompactSummary: true });
+    await writeTranscript(root, [first, answer, cut, summary]);
+    const liveRoot = join(root, "live");
+    await mkdir(liveRoot, { recursive: true });
+    await writeFile(
+      join(liveRoot, `${SESSION}.json`),
+      JSON.stringify({
+        v: 1,
+        sessionId: SESSION,
+        at: Date.parse(cut.timestamp) + 1,
+        tokPerSecond: null,
+        context: { tokens: 13_804, window: 1_000_000 },
+        contextAt: Date.parse(cut.timestamp) + 1,
+      }),
+    );
+
+    const snapshot = await createClaudeChatClient({ liveRoot, now: () => BASE }).snapshot(SESSION);
+
+    expect(snapshot.context).toEqual({ tokens: 13_804, window: 1_000_000 });
   });
 });
 
@@ -1005,6 +1160,7 @@ test("another session's live file adds no context", async () => {
         at: BASE,
         tokPerSecond: null,
         context: { tokens: 122_600, window: 1_000_000 },
+        contextAt: BASE,
       }),
     );
 

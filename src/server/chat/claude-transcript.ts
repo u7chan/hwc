@@ -83,6 +83,10 @@ export type TranscriptEntry = {
   } | null;
   // system 行の種類。圧縮の区切り（compact_boundary）を拾う。
   subtype: string | null;
+  // 圧縮の境界は parentUuid を持たず、圧縮前の枝の葉をここにだけ残す。
+  logicalParentUuid: string | null;
+  // 圧縮の直前の文脈量。区切りの表示に使う。
+  preTokens: number | null;
   // 要求と応答の対応。api-request の id と assistant の requestRef が一致する。
   requestId: string | null;
   querySource: string | null;
@@ -194,11 +198,17 @@ function toEntry(record: Record<string, unknown>, index: number): TranscriptEntr
             usage: usageOf(message),
           },
     subtype: nonEmptyText(record.subtype),
+    logicalParentUuid: nonEmptyText(record.logicalParentUuid),
+    preTokens: compactPreTokensOf(record),
     requestId: type === "api-request" ? nonEmptyText(record.id) : null,
     querySource: type === "api-request" ? nonEmptyText(record.querySource) : null,
     requestRef: nonEmptyText(record.requestRef),
     askAnswers: askAnswersOf(record.toolUseResult),
   };
+}
+
+function compactPreTokensOf(record: Record<string, unknown>): number | null {
+  return tokenCount(asRecord(record.compactMetadata)?.preTokens);
 }
 
 function askAnswersOf(value: unknown): Record<string, string> | null {
@@ -232,7 +242,23 @@ function tokenCount(value: unknown): number | null {
 
 // 分岐（`/rewind` や resume）で古い枝を混ぜない。
 // サブエージェントの記録（isSidechain）は本流ではないので、葉にも起点にもしない。
+// 圧縮の境界で枝が切れるので、待ち・段階・キャッシュはこの枝だけで判定する。
+// 会話を出すときは conversationBranch を使う。
 export function activeBranch(entries: readonly TranscriptEntry[]): TranscriptEntry[] {
+  return walkBranch(entries, false);
+}
+
+// 会話に出す枝。圧縮の境界は parentUuid を持たず、圧縮前の葉を logicalParentUuid にだけ
+// 残す。ここでその 1 本を辿り直して、圧縮の前後を 1 本の枝として扱う。辿ると、境界の
+// 要約も普通の行として混ざるので、射影の側で isCompactSummary を外す。
+export function conversationBranch(entries: readonly TranscriptEntry[]): TranscriptEntry[] {
+  return walkBranch(entries, true);
+}
+
+function walkBranch(
+  entries: readonly TranscriptEntry[],
+  crossCompaction: boolean,
+): TranscriptEntry[] {
   const byUuid = new Map<string, TranscriptEntry>();
   let leaf: TranscriptEntry | undefined;
   for (const entry of entries) {
@@ -247,9 +273,17 @@ export function activeBranch(entries: readonly TranscriptEntry[]): TranscriptEnt
   while (current !== undefined && current.uuid !== null && !seen.has(current.uuid)) {
     seen.add(current.uuid);
     branch.push(current);
-    current = current.parentUuid === null ? undefined : byUuid.get(current.parentUuid);
+    const parent = parentOf(current, crossCompaction);
+    current = parent === null ? undefined : byUuid.get(parent);
   }
   return branch.reverse();
+}
+
+function parentOf(entry: TranscriptEntry, crossCompaction: boolean): string | null {
+  if (entry.parentUuid !== null) return entry.parentUuid;
+  if (!crossCompaction) return null;
+  if (entry.type !== "system" || entry.subtype !== "compact_boundary") return null;
+  return entry.logicalParentUuid;
 }
 
 // Claude Code は貼り付けた入力を `<pasted_content id="…">…</pasted_content id="…">` で

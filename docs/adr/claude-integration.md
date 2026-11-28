@@ -29,10 +29,18 @@ transcript だけでは足りないものがある。
 ### 会話
 
 - 会話は transcript の JSONL を読み取り専用で射影する。`projects/*/<session uuid>.jsonl` を id で探し、cwd からプロジェクト名を組み立てない（エンコードは CLI の内部形式）。同じ id が複数のプロジェクトにあれば、どれが会話か決められないので `chat_unavailable` にする
-- 最後の entry から `parentUuid` を辿って active branch を作る。assistant は `message.id` ごとに束ねて text block を連結し、`thinking` と `tool_use` は捨てる（回答済みの AskUserQuestion だけは下の項で Q&A にする）。サブエージェント（`isSidechain`）、`isMeta`、圧縮の要約、TUI のローカルコマンドの記録は行にしない
-- `model` は branch の最後の assistant の `message.model`、`effort` は最後の非 null の `perTurnEffort`
+- 会話の枝は、最後の entry から `parentUuid` を辿り、圧縮の境界（`compact_boundary`）で `logicalParentUuid` へ乗り換えて作る。境界は `parentUuid` を持たず、圧縮前の葉を `logicalParentUuid` にだけ残すので、乗り換えなければ圧縮で会話が消える。待ち・段階・キャッシュは乗り換えない枝（圧縮後）だけで判定する（圧縮前の未解決の `tool_use` を今の待ちと取り違えないため）
+- assistant は `message.id` ごとに束ねて text block を連結し、`thinking` と `tool_use` は捨てる（回答済みの AskUserQuestion だけは下の項で Q&A にする）。サブエージェント（`isSidechain`）、`isMeta`、TUI のローカルコマンドの記録は行にしない。圧縮の要約も行にしない（下の「圧縮」）
+- `model` は会話の枝の最後の assistant の `message.model`、`effort` は最後の非 null の `perTurnEffort`
 - transcript が見つからない・読めないときは端末出力へフォールバックする。pi と違い、ENOENT を空の会話にしない（セッション参照はあるのにファイルが無い状態と取り違えない）。見つからなかった結果は短い期限（4 秒）だけ覚え、ENTER 付きの送信を通したら捨てる。最初の送信まで transcript は存在しないため
 - ファイルは全読みし、16MB を超えるときは末尾 16MB だけ読んで `truncated` を立てる
+
+### 圧縮
+
+- 会話の枝にある最後の `compact_boundary` を区切りにする。`at` は境界の時刻、`tokensBefore` は `compactMetadata.preTokens`、`summary` は境界の子の `isCompactSummary` の本文から先頭の定型文と `<system-reminder>` を落としたもの、`index` は境界より前の会話の行数
+- 複数回の圧縮は最後の 1 本だけを出す。行数の上限で古い側を落としたら `index` も同じだけ手前へ動かし、区切りより前が残らなければ 0 に置く
+- 定型文の文面が変わった版では、落とさずにそのまま出す（前置きが見えるほうが、要約が出ないより害が小さい）
+- `compact_boundary` が読めない版では、今までどおり会話だけになる
 
 ### 起動
 
@@ -62,7 +70,7 @@ transcript だけでは足りないものがある。
 ### 実行中の様子と使用量
 
 - 段階（考えている・ツール実行中）は transcript から導く。現在のターンの起点（最後の prompt）より後ろの `api-request` と assistant の `requestRef`、`tool_use` と `tool_result` の `tool_use_id` を突き合わせる。ターンはファイルの位置で切り、時刻では切らない
-- 生成速度と使用量は、同梱の mod が状態ディレクトリの `claude/live/<session id>.json` に書く。速度は `turn.step` の差分から推定した見えている出力の tok/s（pi の sidecar と同じ意味）、使用量は `$.session.usage()` の `{ tokens, window }`。速度は 2.5 秒より古ければ捨て、使用量は鮮度で捨てない
+- 生成速度と使用量は、同梱の mod が状態ディレクトリの `claude/live/<session id>.json` に書く。速度は `turn.step` の差分から推定した見えている出力の tok/s（pi の sidecar と同じ意味）、使用量は `$.session.usage()` の `{ tokens, window }`。速度は 2.5 秒より古ければ捨て、使用量は鮮度で捨てない。使用量は読んだ時刻（`contextAt`）も一緒に書き、最後の圧縮がその時刻以後なら出さない（圧縮後の量ではなく、次の `turn.complete` まで分からない。不明を 0% とも書かない）。書いた時刻（`at`）はターン中にも進むので、圧縮の前後は判定できない。`contextAt` を書かない版の mod では、圧縮後に使用量を出さない
 - 読めない版・形の違うファイルは無いものとして扱い、会話・段階・端末出力は止めない
 
 ### プロンプトキャッシュの期限
@@ -79,7 +87,9 @@ transcript だけでは足りないものがある。
 
 - 会話・段階・待ちの表示は transcript と hook の内部形式に依存する。版で形が変われば読めなくなり、端末出力や段階なしの表示へ戻る。理由は画面に出ない
 - 待ちのカード・速度・使用量は hwc から起動したペインだけで出る。hwc の外で起動した Claude は会話だけになる
-- ツール実行・thinking・サブエージェントは会話に出ない。圧縮済みセッションは要約の行が出ないまま前後が並ぶ
+- ツール実行・thinking・サブエージェントは会話に出ない。圧縮の区切りには要約を畳んで添える。CLI の文脈からは圧縮で消えた行も transcript には残っているので、hwc は圧縮前の会話も並べる（モデルは読めない行が表示に残る）
+- 圧縮直後の使用量は、次のターンが終わるまで出ない。モデルと effort は、圧縮後に応答が無い間は圧縮前の最後の応答から出すので、端末で切り替えた直後は次の応答まで古い値を出し得る
+- 使用量を読んだ時刻（`contextAt`）を書かない版の mod で起動済みのペインは、圧縮後に使用量を出さない。`--plugin-dir` は起動時に読むので、hwc から作り直すと戻る
 - Web からの回答は「質問を拒否したうえで、選んだ内容を次の発言として送る」ことになる。Esc と本文の送信は 1 つの操作ではない
 - エイリアスは CLI が最新モデルへ解決するので、hwc はリリースごとの対応表を持たない。CLI がエイリアスや段階を変えたら hwc も更新する
 - `--plugin-dir` を知らない古い CLI（2.1.265 未満）では hwc からの起動が失敗する。段階の導出は 2.1.327 以降を前提にする
@@ -103,3 +113,6 @@ transcript だけでは足りないものがある。
 - **切り替えの後に、書き換わった既定を元へ戻す**: hwc がユーザーの `~/.claude` の設定を書き換えることになる。ユーザーの設定は書き換えない
 - **`ConfigChange` の hook で既定の保存を止める**: `/model` の保存では呼ばれなかった
 - **statusline や mod が書くキャッシュ情報を読む**: 端末の設定と CLI の版に依存し、hwc 外で起動した Claude では読めない。transcript には要求の時刻と `usage` が残るので、同じ記録から導ける
+- **圧縮前の会話を出さない**: モデルの文脈に無い行を出さないで済むが、端末の scrollback には残っているので、Web だけ履歴が消えたように見える
+- **要約を会話の行にする**: 要約はモデル向けの定型文と内部の注記を含み、会話の流れを切る。区切りの畳んだ本文に置く
+- **圧縮直後の使用量を `compactMetadata.postTokens` から出す**: 圧縮直後の量は分かるが、内部メタへの依存が増え、次の発話までの値を古いまま出す。不明として出さない
